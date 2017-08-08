@@ -1,0 +1,734 @@
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize default
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 2cm
+\topmargin 2cm
+\rightmargin 2cm
+\bottommargin 2cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Standard
+
+\lang british
+\begin_inset FormulaMacro
+\newcommand{\tht}{\vartheta}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\ph}{\varphi}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\balpha}{\boldsymbol{\alpha}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\btheta}{\boldsymbol{\theta}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bJ}{\boldsymbol{J}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bGamma}{\boldsymbol{\Gamma}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bOmega}{\boldsymbol{\Omega}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\d}{\text{d}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\t}[1]{\text{#1}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\m}{\text{m}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bm}{\text{\textbf{m}}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\k}{\text{k}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\i}{\text{i}}
+\end_inset
+
+
+\end_layout
+
+\begin_layout Title
+Numerical solution of magnetic differential equations
+\end_layout
+
+\begin_layout Standard
+Magnetic differential equations arise from a number of problems in plasma
+ physics.
+ We consider for example the magnetohydrodynamic equilibrium
+\begin_inset Formula 
+\begin{align}
+\nabla p & =\boldsymbol{J}\times\boldsymbol{B},
+\end{align}
+
+\end_inset
+
+with pressure 
+\begin_inset Formula $p$
+\end_inset
+
+, current 
+\begin_inset Formula $\boldsymbol{J}$
+\end_inset
+
+ and magnetic field 
+\begin_inset Formula $\boldsymbol{B}$
+\end_inset
+
+.
+ Scalar multiplication with 
+\begin_inset Formula $\boldsymbol{B}$
+\end_inset
+
+ yields the homogenous magnetic differential equation
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{B}\cdot\nabla p & =0\,.
+\end{align}
+
+\end_inset
+
+In the linear perturbation theory, a source term enters the right-hand side
+ with
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{B}\cdot\nabla p & =q\,.
+\end{align}
+
+\end_inset
+
+For an axisymmetric plasma in a tokamak, we reduce the dimensionality by
+ introducing cylindrical coordinates and an expansion in 
+\begin_inset Formula $\varphi$
+\end_inset
+
+,
+\begin_inset Formula 
+\begin{align}
+p(R,Z,\ph) & =\sum_{n}p_{n}(R,Z)e^{in\ph}\,.
+\end{align}
+
+\end_inset
+
+The remaining equation in the poloidal 
+\begin_inset Formula $RZ$
+\end_inset
+
+ plane for each harmonic are
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{B}\cdot\nabla_{RZ}p_{n}+inB^{\varphi}p_{n} & =q_{n}\,.
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section*
+Finite Difference Method
+\end_layout
+
+\begin_layout Standard
+or in components of coordinates 
+\begin_inset Formula $x^{k}$
+\end_inset
+
+ with 
+\begin_inset Formula $k=1,2$
+\end_inset
+
+ in the poloidal plans,
+\begin_inset Formula 
+\begin{align}
+B^{k}\frac{\partial}{\partial x^{k}}p_{n}+inB^{\varphi}p_{n} & =q_{n}\,.
+\end{align}
+
+\end_inset
+
+Generating 
+\begin_inset Formula $B$
+\end_inset
+
+ from the stream function 
+\begin_inset Formula $\psi=A_{\ph}$
+\end_inset
+
+ we obtain
+\begin_inset Formula 
+\begin{align}
+B^{1} & =-\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{2}}\\
+B^{2} & =\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{1}}
+\end{align}
+
+\end_inset
+
+Here, 
+\begin_inset Formula $g_{p}$
+\end_inset
+
+ is the metric determinant of the 2D metric tensor in the poloidal plane.
+ Using 
+\begin_inset Formula $\psi$
+\end_inset
+
+ as one coordinate 
+\begin_inset Formula $x^{1}$
+\end_inset
+
+, and the distance 
+\begin_inset Formula $s$
+\end_inset
+
+ in the poloidal direction with 
+\begin_inset Formula $ds=\sqrt{dR^{2}+dZ^{2}}$
+\end_inset
+
+ yields
+\begin_inset Formula 
+\begin{align}
+\frac{1}{R\sqrt{g_{p}}}\frac{\partial p_{n}}{\partial s}+inB^{\varphi}p_{n} & =q_{n}\,.
+\end{align}
+
+\end_inset
+
+This is a one-dimensional problem along the poloidal 
+\begin_inset Formula $\boldsymbol{B}$
+\end_inset
+
+ direction.
+ Multplying by 
+\begin_inset Formula $-iR\sqrt{g_{p}}$
+\end_inset
+
+ and using (TODO 
+\begin_inset Formula $\sqrt{g_{p}}$
+\end_inset
+
+) the central difference formula around the 
+\begin_inset Formula $k$
+\end_inset
+
+-th point 
+\begin_inset Formula $p_{n}^{k}$
+\end_inset
+
+,
+\begin_inset Formula 
+\begin{align}
+nR\sqrt{g_{p}}B^{\varphi k}p_{n}^{k}-ip_{H}^{\prime} & =-iR\sqrt{g_{p}}q_{n}^{k}\,
+\end{align}
+
+\end_inset
+
+we use the finite difference scheme
+\begin_inset Formula 
+\begin{align*}
+p_{H}^{\prime} & =\frac{\Delta s^{k-1}}{\Delta s^{k}(\Delta s^{k}+\Delta s^{k-1})}p^{k+1}+\frac{\Delta s^{k}-\Delta s^{k-1}}{\Delta s^{k}\Delta s^{k-1}}p^{k}-\frac{\Delta s^{k}}{\Delta s^{k-1}(\Delta s^{k}+\Delta s^{k-1})}p^{k-1}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+We need to solve
+\begin_inset Formula 
+\begin{align}
+A\boldsymbol{p} & =\boldsymbol{q}
+\end{align}
+
+\end_inset
+
+Vectors 
+\begin_inset Formula $\boldsymbol{p}$
+\end_inset
+
+ and 
+\begin_inset Formula $\boldsymbol{q}$
+\end_inset
+
+ contain values 
+\begin_inset Formula $p_{n}^{k}$
+\end_inset
+
+ and 
+\begin_inset Formula $q_{n}^{k}$
+\end_inset
+
+ at the nodes.
+ With our choice of variables, we have an orthogonal system with
+\begin_inset Formula 
+\begin{align*}
+\hat{g}_{P} & =\left(\begin{array}{cc}
+g_{\psi\psi}\\
+ & 1
+\end{array}\right)
+\end{align*}
+
+\end_inset
+
+This means that 
+\begin_inset Formula $\sqrt{g_{p}}=\sqrt{g_{\psi\psi}}=1/|\nabla\psi|$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Section*
+Analytical solution
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+i(mB^{\vartheta}+nB^{\varphi})p_{mn} & =q_{mn}\\
+p_{mn} & =\frac{q_{mn}}{i(mB^{\vartheta}+nB^{\varphi})}\,.
+\end{align*}
+
+\end_inset
+
+We take circular flux surfaces in the large aspect ratio limit, such that
+ the scaling with 
+\begin_inset Formula $R$
+\end_inset
+
+ vanishes and as coordinates minor 
+\begin_inset Formula $r$
+\end_inset
+
+ and 
+\begin_inset Formula $\vartheta$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+In this case
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+B^{\tht} & =\frac{1}{R_{0}\sqrt{g_{P}}}\frac{\partial\psi}{\partial r}\,.
+\end{align*}
+
+\end_inset
+
+We set 
+\begin_inset Formula $\psi=r^{2}/4$
+\end_inset
+
+ so 
+\begin_inset Formula $\frac{\partial\psi}{\partial r}=|\nabla\psi|=r/2$
+\end_inset
+
+.
+ Due to the circular flux surfaces, we have a orthogonal system and 
+\begin_inset Formula $\sqrt{g_{P}}=r$
+\end_inset
+
+, so 
+\begin_inset Formula $B^{\tht}=1/(2R_{0})$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Section*
+Finite Volume Method
+\end_layout
+
+\begin_layout Standard
+Now we solve the same problem using a FVM scheme.
+ We write the conservative form
+\begin_inset Formula 
+\begin{align*}
+\nabla\cdot(\boldsymbol{h}j_{\parallel n})+inh^{\varphi}j_{\parallel n} & =-\nabla\cdot\boldsymbol{j}_{\perp}^{\text{pol}}-inj_{\perp n}^{\varphi}\,.
+\end{align*}
+
+\end_inset
+
+The divergence operator is defined via
+\begin_inset Formula 
+\begin{align*}
+\nabla\cdot\boldsymbol{u} & =\frac{1}{R\sqrt{g_{p}}}\frac{\partial}{\partial x^{k}}(R\sqrt{g_{p}}u^{k})\,.
+\end{align*}
+
+\end_inset
+
+When working with 
+\begin_inset Formula $R,Z$
+\end_inset
+
+ as coordinates in the poloidal plane, 
+\begin_inset Formula $\sqrt{g_{p}}=1$
+\end_inset
+
+.
+ We multiply by 
+\begin_inset Formula $R$
+\end_inset
+
+ to obtain
+\begin_inset Formula 
+\begin{align*}
+\frac{\partial}{\partial x^{k}}(Rh^{k}j_{\parallel n})+inRh^{\varphi}j_{\parallel n} & =-\frac{\partial}{\partial x^{k}}(Rj_{\perp n}^{k})-inRj_{\perp n}^{\varphi}\,.
+\end{align*}
+
+\end_inset
+
+Integration over a triangle yields
+\begin_inset Formula 
+\begin{align}
+\oint\,Rj_{\parallel n}\boldsymbol{h}\cdot d\boldsymbol{\Gamma}+in\int Rh^{\varphi}j_{\parallel n}d\Omega & =-\oint\,R\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot d\boldsymbol{\Gamma}-in\int Rh^{\varphi}j_{\perp n}d\Omega\label{eq:fvmj}
+\end{align}
+
+\end_inset
+
+where scalar products with 
+\begin_inset Formula $d\boldsymbol{\Gamma}$
+\end_inset
+
+ pointing towards the outer normal vector of the edge are taken component-wise
+ in 
+\begin_inset Formula $R$
+\end_inset
+
+ and 
+\begin_inset Formula $Z$
+\end_inset
+
+.
+ We assume a field-aligned mesh with 
+\begin_inset Formula $\boldsymbol{h}$
+\end_inset
+
+ parallel to edge no.
+\begin_inset space ~
+\end_inset
+
+3.
+ The in- and outflux are over edges 1 and 2.
+\end_layout
+
+\begin_layout Section*
+General Finite Volume Method
+\end_layout
+
+\begin_layout Standard
+Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:fvmj"
+
+\end_inset
+
+ is of the form
+\begin_inset Formula 
+\begin{align*}
+\oint\,u\,\boldsymbol{h}\cdot d\boldsymbol{\Gamma}+in\int u\,h^{\varphi}d\Omega & =-\oint\,\boldsymbol{v}\cdot d\boldsymbol{\Gamma}-in\int v\,h^{\varphi}d\Omega
+\end{align*}
+
+\end_inset
+
+with 
+\begin_inset Formula $u=Rj_{\parallel n}$
+\end_inset
+
+, 
+\begin_inset Formula $\boldsymbol{v}=R\boldsymbol{j}_{\perp n}^{\text{pol}}$
+\end_inset
+
+ and 
+\begin_inset Formula $v=j_{\perp n}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Section*
+Old
+\end_layout
+
+\begin_layout Standard
+In harmonics in 
+\begin_inset Formula $\varphi$
+\end_inset
+
+ this becomes
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{B}\cdot\nabla_{RZ}p_{n}+inB^{\varphi}p_{n} & =s_{n}\,.
+\end{align}
+
+\end_inset
+
+If we take no toroidicity and harmonic RHS term with poloidal harmonic 
+\begin_inset Formula $m$
+\end_inset
+
+ we obtain
+\begin_inset Formula 
+\begin{align*}
+i(mB^{\vartheta}+nB^{\varphi})p_{mn} & =s_{mn}\\
+p_{mn} & =\frac{s_{mn}}{i(mB^{\vartheta}+nB^{\varphi})}\,.
+\end{align*}
+
+\end_inset
+
+Without toroidicity:
+\begin_inset Formula 
+\begin{align*}
+\sqrt{g} & =r\\
+B^{\vartheta} & =\frac{1}{r}\partial_{r}A_{\varphi}
+\end{align*}
+
+\end_inset
+
+So for 
+\begin_inset Formula $A_{\varphi}=r^{2}/4$
+\end_inset
+
+ we get 
+\begin_inset Formula $B^{\vartheta}=1/2$
+\end_inset
+
+.
+ Furthermore, we choose 
+\begin_inset Formula $B^{\varphi}=1$
+\end_inset
+
+.
+ We have
+\begin_inset Formula 
+\begin{align*}
+R & =R_{0}+r\cos\vartheta\\
+Z & =r\sin\vartheta\\
+\\
+\frac{\partial R}{\partial r} & =(R-R_{0})/r\\
+\frac{\partial Z}{\partial r} & =Z/r\\
+\\
+\frac{\partial R}{\partial\vartheta} & =-z\\
+\frac{\partial Z}{\partial\vartheta} & =R-R_{0}\\
+\\
+B^{R} & =\frac{\partial R}{\partial\vartheta}B^{\vartheta}=-z/2\\
+B^{Z} & =\frac{\partial Z}{\partial\vartheta}B^{\vartheta}=(R-R_{0})/2
+\end{align*}
+
+\end_inset
+
+In real and imaginary parts this is
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{B}\cdot\nabla_{RZ}(\Re p_{n}+i\Im p_{n})+inB^{\varphi}(\Re p_{n}+i\Im p_{n}) & =(\Re s_{n}+i\Im s_{n})\,\\
+\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n}-nB^{\varphi}\Im p_{n} & =\Re s_{n}\,\\
+\boldsymbol{B}\cdot\nabla_{RZ}\Im p_{n}+nB^{\varphi}\Re p_{n} & =\Im s_{n}\,
+\end{align}
+
+\end_inset
+
+Combining
+\begin_inset Formula 
+\begin{align*}
+\boldsymbol{B}\cdot\nabla_{RZ}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n})-nB^{\varphi}(\Im s_{n}-nB^{\varphi}\Re p_{n}) & =\boldsymbol{B}\cdot\nabla_{RZ}\cdot\Re s_{n}\,\\
+\boldsymbol{B}\cdot\nabla_{RZ}(\boldsymbol{B}\cdot\nabla_{RZ}\Im p_{n})+nB^{\varphi}(\Re s_{n}+nB^{\varphi}\Im p_{n}) & =\boldsymbol{B}\cdot\nabla_{RZ}\cdot\Im s_{n}\,
+\end{align*}
+
+\end_inset
+
+In Flat space:
+\begin_inset Formula 
+\begin{align*}
+B^{R}\partial_{R}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n})+B^{Z}\partial_{Z}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n}) & \,\\
+=(B^{R}\partial_{R}+B^{Z}\partial_{Z})(B^{R}\partial_{R}+B^{Z}\partial_{Z})\Re p_{n}\\
+=\left((B^{R})^{2}\partial_{R}^{2}+2B^{R}B^{Z}\partial_{R}\partial_{Z}+\left(B^{Z}\right)^{2}\partial_{Z}^{2}\right)\Re p_{n}
+\end{align*}
+
+\end_inset
+
+This equation is parabolic and not, as such, suited for FEM.
+\end_layout
+
+\begin_layout Standard
+New:
+\begin_inset Formula 
+\begin{align*}
+\boldsymbol{B}\cdot\nabla_{RZ}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n}) & =\nabla_{RZ}\cdot(\boldsymbol{B}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n}))\\
+ & =\nabla_{RZ}\cdot(\boldsymbol{B}\nabla_{RZ}\cdot(\boldsymbol{B}\Re p_{n}))
+\end{align*}
+
+\end_inset
+
+In real and imaginary parts this is
+\begin_inset Formula 
+\begin{align*}
+i(mB^{\vartheta}+nB^{\varphi})(\Re p_{mn}+i\Im p_{mn}) & =(\Re s_{mn}+i\Im s_{mn})\\
+\Im p_{mn} & =-\Re s_{mn}/(mB^{\vartheta}+nB^{\varphi})\\
+\Re p_{mn} & =\Im s_{mn}/(mB^{\vartheta}+nB^{\varphi})
+\end{align*}
+
+\end_inset
+
+We have
+\begin_inset Formula 
+\begin{align*}
+s & =\sum_{n}s_{n}(\vartheta)e^{in\varphi}=\sum_{mn}s_{mn}e^{i(m\vartheta+n\varphi)}\\
+\\
+ & =\sum_{n}(\Re s_{n}+i\Im s_{n})(\cos n\varphi+i\sin n\varphi)\\
+ & =\sum_{n}(\Re s_{n}\cos n\varphi-\Im s_{n}\sin n\varphi)+i(\Re s_{n}\sin n\varphi+\Im s_{n}\cos n\varphi)\\
+\\
+ & =\sum_{mn}(\Re s_{mn}+i\Im s_{mn})(\cos(m\vartheta+n\varphi)+i\sin(m\vartheta+n\varphi))\\
+ & =\sum_{mn}(\Re s_{mn}\cos(m\vartheta+n\varphi)-\Im s_{mn}\sin(m\vartheta+n\varphi))\\
+ & +i(\Re s_{mn}\sin(m\vartheta+n\varphi)+\Im s_{mn}\cos(m\vartheta+n\varphi))\\
+\\
+s_{n} & =s_{mn}e^{im\vartheta}=(\Re s_{mn}+i\Im s_{mn})(\cos m\vartheta+i\sin m\vartheta)\\
+ & =\Re s_{mn}\cos m\vartheta-\Im s_{mn}\sin m\vartheta+i(\Re s_{mn}\sin m\vartheta+\Im s_{mn}\cos m\vartheta)
+\end{align*}
+
+\end_inset
+
+Test:
+\begin_inset Formula 
+\begin{align*}
+s & =\Im s_{mn}(\cos(m\vartheta+n\varphi)-i\sin(m\vartheta+n\varphi))\\
+s_{n} & =s_{mn}e^{im\vartheta}=\Im s_{mn}(-\sin m\vartheta+i\cos m\vartheta)\\
+ & =\\
+\\
+\Re p_{mn} & =\Im s_{mn}/(mB^{\vartheta}+nB^{\varphi})\\
+\\
+p_{n} & =\Re p_{mn}(\cos m\vartheta+i\sin m\vartheta)
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section*
+Pseudotoroidal coordinates
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+R & =R_{0}+r\cos\vartheta\\
+Z & =r\sin\tht\\
+\\
+\boldsymbol{e}_{r} & =\frac{\partial R}{\partial r}\boldsymbol{e}_{R}+\frac{\partial Z}{\partial r}\boldsymbol{e}_{Z}\\
+ & =\boldsymbol{e}_{R}\cos\vartheta+\boldsymbol{e}_{Z}\sin\tht\\
+\\
+\boldsymbol{e}_{\tht} & =\frac{\partial R}{\partial\tht}\boldsymbol{e}_{R}+\frac{\partial Z}{\partial\tht}\boldsymbol{e}_{Z}\\
+ & =-\boldsymbol{e}_{R}r\sin\vartheta+\boldsymbol{e}_{Z}r\cos\tht
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document

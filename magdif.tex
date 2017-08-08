@@ -1,0 +1,259 @@
+%% LyX 2.2.2 created this file.  For more info, see http://www.lyx.org/.
+%% Do not edit unless you really know what you are doing.
+\documentclass[british,english]{article}
+\usepackage[T1]{fontenc}
+\usepackage[latin9]{inputenc}
+\usepackage{geometry}
+\geometry{verbose,tmargin=2cm,bmargin=2cm,lmargin=2cm,rmargin=2cm}
+\usepackage{amsmath}
+\usepackage{esint}
+\usepackage{babel}
+\begin{document}
+\selectlanguage{british}%
+\global\long\def\tht{\vartheta}
+\global\long\def\ph{\varphi}
+\global\long\def\balpha{\boldsymbol{\alpha}}
+\global\long\def\btheta{\boldsymbol{\theta}}
+\global\long\def\bJ{\boldsymbol{J}}
+\global\long\def\bGamma{\boldsymbol{\Gamma}}
+\global\long\def\bOmega{\boldsymbol{\Omega}}
+\global\long\def\d{\text{d}}
+\global\long\def\t#1{\text{#1}}
+\global\long\def\m{\text{m}}
+\global\long\def\bm{\text{\textbf{m}}}
+\global\long\def\k{\text{k}}
+\global\long\def\i{\text{i}}
+
+\selectlanguage{english}%
+
+\title{Numerical solution of magnetic differential equations}
+
+\maketitle
+Magnetic differential equations arise from a number of problems in
+plasma physics. We consider for example the magnetohydrodynamic equilibrium
+\begin{align}
+\nabla p & =\boldsymbol{J}\times\boldsymbol{B},
+\end{align}
+with pressure $p$, current $\boldsymbol{J}$ and magnetic field $\boldsymbol{B}$.
+Scalar multiplication with $\boldsymbol{B}$ yields the homogenous
+magnetic differential equation
+\begin{align}
+\boldsymbol{B}\cdot\nabla p & =0\,.
+\end{align}
+In the linear perturbation theory, a source term enters the right-hand
+side with
+\begin{align}
+\boldsymbol{B}\cdot\nabla p & =q\,.
+\end{align}
+For an axisymmetric plasma in a tokamak, we reduce the dimensionality
+by introducing cylindrical coordinates and an expansion in $\varphi$,
+\begin{align}
+p(R,Z,\ph) & =\sum_{n}p_{n}(R,Z)e^{in\ph}\,.
+\end{align}
+The remaining equation in the poloidal $RZ$ plane for each harmonic
+are
+\begin{align}
+\boldsymbol{B}\cdot\nabla_{RZ}p_{n}+inB^{\varphi}p_{n} & =q_{n}\,.
+\end{align}
+
+
+\section*{Finite Difference Method}
+
+or in components of coordinates $x^{k}$ with $k=1,2$ in the poloidal
+plans,
+\begin{align}
+B^{k}\frac{\partial}{\partial x^{k}}p_{n}+inB^{\varphi}p_{n} & =q_{n}\,.
+\end{align}
+Generating $B$ from the stream function $\psi=A_{\ph}$ we obtain
+\begin{align}
+B^{1} & =-\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{2}}\\
+B^{2} & =\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{1}}
+\end{align}
+Here, $g_{p}$ is the metric determinant of the 2D metric tensor in
+the poloidal plane. Using $\psi$ as one coordinate $x^{1}$, and
+the distance $s$ in the poloidal direction with $ds=\sqrt{dR^{2}+dZ^{2}}$
+yields
+\begin{align}
+\frac{1}{R\sqrt{g_{p}}}\frac{\partial p_{n}}{\partial s}+inB^{\varphi}p_{n} & =q_{n}\,.
+\end{align}
+This is a one-dimensional problem along the poloidal $\boldsymbol{B}$
+direction. Multplying by $-iR\sqrt{g_{p}}$ and using (TODO $\sqrt{g_{p}}$)
+the central difference formula around the $k$-th point $p_{n}^{k}$,
+\begin{align}
+nR\sqrt{g_{p}}B^{\varphi k}p_{n}^{k}-ip_{H}^{\prime} & =-iR\sqrt{g_{p}}q_{n}^{k}\,
+\end{align}
+we use the finite difference scheme
+\begin{align*}
+p_{H}^{\prime} & =\frac{\Delta s^{k-1}}{\Delta s^{k}(\Delta s^{k}+\Delta s^{k-1})}p^{k+1}+\frac{\Delta s^{k}-\Delta s^{k-1}}{\Delta s^{k}\Delta s^{k-1}}p^{k}-\frac{\Delta s^{k}}{\Delta s^{k-1}(\Delta s^{k}+\Delta s^{k-1})}p^{k-1}
+\end{align*}
+
+We need to solve
+\begin{align}
+A\boldsymbol{p} & =\boldsymbol{q}
+\end{align}
+Vectors $\boldsymbol{p}$ and $\boldsymbol{q}$ contain values $p_{n}^{k}$
+and $q_{n}^{k}$ at the nodes. With our choice of variables, we have
+an orthogonal system with
+\begin{align*}
+\hat{g}_{P} & =\left(\begin{array}{cc}
+g_{\psi\psi}\\
+ & 1
+\end{array}\right)
+\end{align*}
+This means that $\sqrt{g_{p}}=\sqrt{g_{\psi\psi}}=1/|\nabla\psi|$.
+
+\section*{Analytical solution}
+
+\begin{align*}
+i(mB^{\vartheta}+nB^{\varphi})p_{mn} & =q_{mn}\\
+p_{mn} & =\frac{q_{mn}}{i(mB^{\vartheta}+nB^{\varphi})}\,.
+\end{align*}
+We take circular flux surfaces in the large aspect ratio limit, such
+that the scaling with $R$ vanishes and as coordinates minor $r$
+and $\vartheta$.
+
+In this case
+
+\begin{align*}
+B^{\tht} & =\frac{1}{R_{0}\sqrt{g_{P}}}\frac{\partial\psi}{\partial r}\,.
+\end{align*}
+We set $\psi=r^{2}/4$ so $\frac{\partial\psi}{\partial r}=|\nabla\psi|=r/2$.
+Due to the circular flux surfaces, we have a orthogonal system and
+$\sqrt{g_{P}}=r$, so $B^{\tht}=1/(2R_{0})$.
+
+\section*{Finite Volume Method}
+
+Now we solve the same problem using a FVM scheme. We write the conservative
+form
+\begin{align*}
+\nabla\cdot(\boldsymbol{h}j_{\parallel n})+inh^{\varphi}j_{\parallel n} & =-\nabla\cdot\boldsymbol{j}_{\perp}^{\text{pol}}-inj_{\perp n}^{\varphi}\,.
+\end{align*}
+The divergence operator is defined via
+\begin{align*}
+\nabla\cdot\boldsymbol{u} & =\frac{1}{R\sqrt{g_{p}}}\frac{\partial}{\partial x^{k}}(R\sqrt{g_{p}}u^{k})\,.
+\end{align*}
+When working with $R,Z$ as coordinates in the poloidal plane, $\sqrt{g_{p}}=1$.
+We multiply by $R$ to obtain
+\begin{align*}
+\frac{\partial}{\partial x^{k}}(Rh^{k}j_{\parallel n})+inRh^{\varphi}j_{\parallel n} & =-\frac{\partial}{\partial x^{k}}(Rj_{\perp n}^{k})-inRj_{\perp n}^{\varphi}\,.
+\end{align*}
+Integration over a triangle yields
+\begin{align}
+\oint\,Rj_{\parallel n}\boldsymbol{h}\cdot d\boldsymbol{\Gamma}+in\int Rh^{\varphi}j_{\parallel n}d\Omega & =-\oint\,R\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot d\boldsymbol{\Gamma}-in\int Rh^{\varphi}j_{\perp n}d\Omega\label{eq:fvmj}
+\end{align}
+where scalar products with $d\boldsymbol{\Gamma}$ pointing towards
+the outer normal vector of the edge are taken component-wise in $R$
+and $Z$. We assume a field-aligned mesh with $\boldsymbol{h}$ parallel
+to edge no.~3. The in- and outflux are over edges 1 and 2.
+
+\section*{General Finite Volume Method}
+
+Eq.~(\ref{eq:fvmj}) is of the form
+\begin{align*}
+\oint\,u\,\boldsymbol{h}\cdot d\boldsymbol{\Gamma}+in\int u\,h^{\varphi}d\Omega & =-\oint\,\boldsymbol{v}\cdot d\boldsymbol{\Gamma}-in\int v\,h^{\varphi}d\Omega
+\end{align*}
+with $u=Rj_{\parallel n}$, $\boldsymbol{v}=R\boldsymbol{j}_{\perp n}^{\text{pol}}$
+and $v=j_{\perp n}$.
+
+\section*{Old}
+
+In harmonics in $\varphi$ this becomes
+\begin{align}
+\boldsymbol{B}\cdot\nabla_{RZ}p_{n}+inB^{\varphi}p_{n} & =s_{n}\,.
+\end{align}
+If we take no toroidicity and harmonic RHS term with poloidal harmonic
+$m$ we obtain
+\begin{align*}
+i(mB^{\vartheta}+nB^{\varphi})p_{mn} & =s_{mn}\\
+p_{mn} & =\frac{s_{mn}}{i(mB^{\vartheta}+nB^{\varphi})}\,.
+\end{align*}
+Without toroidicity:
+\begin{align*}
+\sqrt{g} & =r\\
+B^{\vartheta} & =\frac{1}{r}\partial_{r}A_{\varphi}
+\end{align*}
+So for $A_{\varphi}=r^{2}/4$ we get $B^{\vartheta}=1/2$. Furthermore,
+we choose $B^{\varphi}=1$. We have
+\begin{align*}
+R & =R_{0}+r\cos\vartheta\\
+Z & =r\sin\vartheta\\
+\\
+\frac{\partial R}{\partial r} & =(R-R_{0})/r\\
+\frac{\partial Z}{\partial r} & =Z/r\\
+\\
+\frac{\partial R}{\partial\vartheta} & =-z\\
+\frac{\partial Z}{\partial\vartheta} & =R-R_{0}\\
+\\
+B^{R} & =\frac{\partial R}{\partial\vartheta}B^{\vartheta}=-z/2\\
+B^{Z} & =\frac{\partial Z}{\partial\vartheta}B^{\vartheta}=(R-R_{0})/2
+\end{align*}
+In real and imaginary parts this is
+\begin{align}
+\boldsymbol{B}\cdot\nabla_{RZ}(\Re p_{n}+i\Im p_{n})+inB^{\varphi}(\Re p_{n}+i\Im p_{n}) & =(\Re s_{n}+i\Im s_{n})\,\\
+\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n}-nB^{\varphi}\Im p_{n} & =\Re s_{n}\,\\
+\boldsymbol{B}\cdot\nabla_{RZ}\Im p_{n}+nB^{\varphi}\Re p_{n} & =\Im s_{n}\,
+\end{align}
+Combining
+\begin{align*}
+\boldsymbol{B}\cdot\nabla_{RZ}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n})-nB^{\varphi}(\Im s_{n}-nB^{\varphi}\Re p_{n}) & =\boldsymbol{B}\cdot\nabla_{RZ}\cdot\Re s_{n}\,\\
+\boldsymbol{B}\cdot\nabla_{RZ}(\boldsymbol{B}\cdot\nabla_{RZ}\Im p_{n})+nB^{\varphi}(\Re s_{n}+nB^{\varphi}\Im p_{n}) & =\boldsymbol{B}\cdot\nabla_{RZ}\cdot\Im s_{n}\,
+\end{align*}
+In Flat space:
+\begin{align*}
+B^{R}\partial_{R}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n})+B^{Z}\partial_{Z}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n}) & \,\\
+=(B^{R}\partial_{R}+B^{Z}\partial_{Z})(B^{R}\partial_{R}+B^{Z}\partial_{Z})\Re p_{n}\\
+=\left((B^{R})^{2}\partial_{R}^{2}+2B^{R}B^{Z}\partial_{R}\partial_{Z}+\left(B^{Z}\right)^{2}\partial_{Z}^{2}\right)\Re p_{n}
+\end{align*}
+This equation is parabolic and not, as such, suited for FEM.
+
+New:
+\begin{align*}
+\boldsymbol{B}\cdot\nabla_{RZ}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n}) & =\nabla_{RZ}\cdot(\boldsymbol{B}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n}))\\
+ & =\nabla_{RZ}\cdot(\boldsymbol{B}\nabla_{RZ}\cdot(\boldsymbol{B}\Re p_{n}))
+\end{align*}
+In real and imaginary parts this is
+\begin{align*}
+i(mB^{\vartheta}+nB^{\varphi})(\Re p_{mn}+i\Im p_{mn}) & =(\Re s_{mn}+i\Im s_{mn})\\
+\Im p_{mn} & =-\Re s_{mn}/(mB^{\vartheta}+nB^{\varphi})\\
+\Re p_{mn} & =\Im s_{mn}/(mB^{\vartheta}+nB^{\varphi})
+\end{align*}
+We have
+\begin{align*}
+s & =\sum_{n}s_{n}(\vartheta)e^{in\varphi}=\sum_{mn}s_{mn}e^{i(m\vartheta+n\varphi)}\\
+\\
+ & =\sum_{n}(\Re s_{n}+i\Im s_{n})(\cos n\varphi+i\sin n\varphi)\\
+ & =\sum_{n}(\Re s_{n}\cos n\varphi-\Im s_{n}\sin n\varphi)+i(\Re s_{n}\sin n\varphi+\Im s_{n}\cos n\varphi)\\
+\\
+ & =\sum_{mn}(\Re s_{mn}+i\Im s_{mn})(\cos(m\vartheta+n\varphi)+i\sin(m\vartheta+n\varphi))\\
+ & =\sum_{mn}(\Re s_{mn}\cos(m\vartheta+n\varphi)-\Im s_{mn}\sin(m\vartheta+n\varphi))\\
+ & +i(\Re s_{mn}\sin(m\vartheta+n\varphi)+\Im s_{mn}\cos(m\vartheta+n\varphi))\\
+\\
+s_{n} & =s_{mn}e^{im\vartheta}=(\Re s_{mn}+i\Im s_{mn})(\cos m\vartheta+i\sin m\vartheta)\\
+ & =\Re s_{mn}\cos m\vartheta-\Im s_{mn}\sin m\vartheta+i(\Re s_{mn}\sin m\vartheta+\Im s_{mn}\cos m\vartheta)
+\end{align*}
+Test:
+\begin{align*}
+s & =\Im s_{mn}(\cos(m\vartheta+n\varphi)-i\sin(m\vartheta+n\varphi))\\
+s_{n} & =s_{mn}e^{im\vartheta}=\Im s_{mn}(-\sin m\vartheta+i\cos m\vartheta)\\
+ & =\\
+\\
+\Re p_{mn} & =\Im s_{mn}/(mB^{\vartheta}+nB^{\varphi})\\
+\\
+p_{n} & =\Re p_{mn}(\cos m\vartheta+i\sin m\vartheta)
+\end{align*}
+
+
+\section*{Pseudotoroidal coordinates}
+
+\begin{align*}
+R & =R_{0}+r\cos\vartheta\\
+Z & =r\sin\tht\\
+\\
+\boldsymbol{e}_{r} & =\frac{\partial R}{\partial r}\boldsymbol{e}_{R}+\frac{\partial Z}{\partial r}\boldsymbol{e}_{Z}\\
+ & =\boldsymbol{e}_{R}\cos\vartheta+\boldsymbol{e}_{Z}\sin\tht\\
+\\
+\boldsymbol{e}_{\tht} & =\frac{\partial R}{\partial\tht}\boldsymbol{e}_{R}+\frac{\partial Z}{\partial\tht}\boldsymbol{e}_{Z}\\
+ & =-\boldsymbol{e}_{R}r\sin\vartheta+\boldsymbol{e}_{Z}r\cos\tht
+\end{align*}
+
+\end{document}
