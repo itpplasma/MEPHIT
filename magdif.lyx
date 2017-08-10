@@ -26,7 +26,7 @@
 \output_sync 0
 \bibtex_command default
 \index_command default
-\paperfontsize default
+\paperfontsize 12
 \spacing single
 \use_hyperref false
 \papersize default
@@ -149,6 +149,83 @@
 Numerical solution of magnetic differential equations
 \end_layout
 
+\begin_layout Section*
+Simple Example
+\end_layout
+
+\begin_layout Standard
+We would like to solve an equation of the type
+\begin_inset Formula 
+\begin{align}
+\dot{p}_{n}+inp_{n} & =q_{n}
+\end{align}
+
+\end_inset
+
+for 
+\begin_inset Formula $p(s)$
+\end_inset
+
+ with periodic boundary conditions at 
+\begin_inset Formula $s=0\dots2\pi$
+\end_inset
+
+.
+ With the ansatz 
+\begin_inset Formula $p_{n}=\sum_{m}p_{mn}e^{ims}$
+\end_inset
+
+ and the same for 
+\begin_inset Formula $q_{n}$
+\end_inset
+
+ we obtain the analytical solution
+\begin_inset Formula 
+\begin{align}
+p_{mn} & =\frac{q_{mn}}{i(m+n)}.
+\end{align}
+
+\end_inset
+
+A finite difference scheme yields
+\begin_inset Formula 
+\begin{align}
+\frac{p_{n}^{k+1}-p_{n}^{k}}{\Delta s}+\frac{1}{2}in(p_{n}^{k+1}+p_{n}^{k}) & =q_{n}^{k}.
+\end{align}
+
+\end_inset
+
+A corresponding matrix with periodic boundary conditions is
+\begin_inset Formula 
+\begin{align*}
+\left(\begin{array}{cccc}
+in/2-1/\Delta s & in/2+1/\Delta s\\
+ & in/2-1/\Delta s & in/2+1/\Delta s\\
+ &  & \dots\\
+in/2+1/\Delta s &  &  & in/2-1/\Delta s
+\end{array}\right)\boldsymbol{p} & =\boldsymbol{q}
+\end{align*}
+
+\end_inset
+
+
+\begin_inset Formula 
+\begin{align*}
+\left(\begin{array}{cccc}
+in/2-1/\Delta s & in/2+1/\Delta s\\
+in/2+1/\Delta s & in/2-1/\Delta s
+\end{array}\right)\boldsymbol{p} & =\boldsymbol{q}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section*
+Magnetic Differential Equation
+\end_layout
+
 \begin_layout Standard
 Magnetic differential equations arise from a number of problems in plasma
  physics.
@@ -222,10 +299,6 @@ The remaining equation in the poloidal
 
 \end_layout
 
-\begin_layout Section*
-Finite Difference Method
-\end_layout
-
 \begin_layout Standard
 or in components of coordinates 
 \begin_inset Formula $x^{k}$
@@ -243,8 +316,12 @@ B^{k}\frac{\partial}{\partial x^{k}}p_{n}+inB^{\varphi}p_{n} & =q_{n}\,.
 
 \end_inset
 
+
+\end_layout
+
+\begin_layout Standard
 Generating 
-\begin_inset Formula $B$
+\begin_inset Formula $\boldsymbol{B}$
 \end_inset
 
  from the stream function 
@@ -281,7 +358,23 @@ Here,
 \begin_inset Formula $ds=\sqrt{dR^{2}+dZ^{2}}$
 \end_inset
 
- yields
+, we have an orthogonal system with
+\begin_inset Formula 
+\begin{align}
+\hat{g}_{P} & =\left(\begin{array}{cc}
+g_{\psi\psi}\\
+ & 1
+\end{array}\right)
+\end{align}
+
+\end_inset
+
+This means that 
+\begin_inset Formula $\sqrt{g_{p}}=\sqrt{g_{\psi\psi}}=1/|\nabla\psi|$
+\end_inset
+
+.
+ The transport law becomes
 \begin_inset Formula 
 \begin{align}
 \frac{1}{R\sqrt{g_{p}}}\frac{\partial p_{n}}{\partial s}+inB^{\varphi}p_{n} & =q_{n}\,.
@@ -294,83 +387,39 @@ This is a one-dimensional problem along the poloidal
 \end_inset
 
  direction.
- Multplying by 
-\begin_inset Formula $-iR\sqrt{g_{p}}$
-\end_inset
+ 
+\end_layout
 
- and using (TODO 
-\begin_inset Formula $\sqrt{g_{p}}$
-\end_inset
-
-) the central difference formula around the 
-\begin_inset Formula $k$
-\end_inset
-
--th point 
-\begin_inset Formula $p_{n}^{k}$
-\end_inset
-
-,
-\begin_inset Formula 
-\begin{align}
-nR\sqrt{g_{p}}B^{\varphi k}p_{n}^{k}-ip_{H}^{\prime} & =-iR\sqrt{g_{p}}q_{n}^{k}\,
-\end{align}
-
-\end_inset
-
-we use the finite difference scheme
-\begin_inset Formula 
-\begin{align*}
-p_{H}^{\prime} & =\frac{\Delta s^{k-1}}{\Delta s^{k}(\Delta s^{k}+\Delta s^{k-1})}p^{k+1}+\frac{\Delta s^{k}-\Delta s^{k-1}}{\Delta s^{k}\Delta s^{k-1}}p^{k}-\frac{\Delta s^{k}}{\Delta s^{k-1}(\Delta s^{k}+\Delta s^{k-1})}p^{k-1}
-\end{align*}
-
-\end_inset
-
-
+\begin_layout Section*
+Finite Difference Method
 \end_layout
 
 \begin_layout Standard
-We need to solve
+Multiplying by 
+\begin_inset Formula $-iR\sqrt{g_{p}}$
+\end_inset
+
+ we obtain
 \begin_inset Formula 
 \begin{align}
-A\boldsymbol{p} & =\boldsymbol{q}
+nR\sqrt{g_{p}}B^{\varphi}p_{n}-i\dot{p}_{n} & =-iR\sqrt{g_{p}}q_{n}\,.
 \end{align}
 
 \end_inset
 
-Vectors 
-\begin_inset Formula $\boldsymbol{p}$
-\end_inset
-
- and 
-\begin_inset Formula $\boldsymbol{q}$
-\end_inset
-
- contain values 
-\begin_inset Formula $p_{n}^{k}$
-\end_inset
-
- and 
-\begin_inset Formula $q_{n}^{k}$
-\end_inset
-
- at the nodes.
- With our choice of variables, we have an orthogonal system with
+Discretizing with a forward Euler method and evaluating averages at the
+ midpoints we obtain
 \begin_inset Formula 
-\begin{align*}
-\hat{g}_{P} & =\left(\begin{array}{cc}
-g_{\psi\psi}\\
- & 1
-\end{array}\right)
-\end{align*}
+\begin{align}
+\frac{n}{2}\left(R^{k}\sqrt{g_{p}^{k}}B^{\varphi k}p_{n}^{k}+R^{k+1}\sqrt{g_{p}^{k+1}}B^{\varphi k+1}p_{n}^{k+1}\right) & -i\frac{p_{n}^{k+1}-p_{n}^{k}}{\Delta s^{k}}\\
+ & =-\frac{1}{2}i\left(R^{k}\sqrt{g_{p}^{k}}q_{n}^{k}+R^{k+1}\sqrt{g_{p}^{k+1}}q_{n}^{k+1}\right)\,.
+\end{align}
 
 \end_inset
 
-This means that 
-\begin_inset Formula $\sqrt{g_{p}}=\sqrt{g_{\psi\psi}}=1/|\nabla\psi|$
-\end_inset
-
-.
+Coefficients should be filled into a sparse matrix and the discrete equations
+ solved e.g.
+ by UMFPACK.
 \end_layout
 
 \begin_layout Section*
@@ -435,19 +484,131 @@ We set
 \end_layout
 
 \begin_layout Section*
-Finite Volume Method
+Perturbation in current density
 \end_layout
 
 \begin_layout Standard
-Now we solve the same problem using a FVM scheme.
- We write the conservative form
+First variant: Use linear perturbation
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{j}\times\boldsymbol{B} & \approx\boldsymbol{j}_{0}\times\boldsymbol{B}_{0}+\delta\boldsymbol{j}\times\boldsymbol{B}_{0}+\boldsymbol{j}_{0}\times\delta\boldsymbol{B}=c(\nabla p_{0}+\nabla\delta p),
+\end{align}
+
+\end_inset
+
+resulting in
+\begin_inset Formula 
+\begin{align}
+\delta\boldsymbol{j}\times\boldsymbol{B}_{0} & =\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0}=c\nabla\delta p-\boldsymbol{j}_{0}\times\delta\boldsymbol{B}.\label{eq:j times B0}
+\end{align}
+
+\end_inset
+
+Second variant: Use derived expresion for 
+\begin_inset Formula $\delta\boldsymbol{j}_{\perp}$
+\end_inset
+
+ with
+\begin_inset Formula 
+\begin{align}
+\delta\boldsymbol{j}_{\perp} & =j_{0\parallel}\frac{\delta\boldsymbol{B}_{\perp}}{B_{0}}-\frac{c\boldsymbol{h}_{0}\cdot\delta\boldsymbol{B}}{B_{0}^{2}}\boldsymbol{h}_{0}\times\nabla p_{0}+\frac{c}{B_{0}}\boldsymbol{h}_{0}\times\nabla\delta p.
+\end{align}
+
+\end_inset
+
+Take cross product with 
+\begin_inset Formula $\boldsymbol{B}_{0}$
+\end_inset
+
+.
+ 
+\end_layout
+
+\begin_layout Itemize
+First term
+\begin_inset Formula 
+\begin{align}
+j_{0\parallel}\frac{\delta\boldsymbol{B}_{\perp}}{B_{0}}\times\boldsymbol{B}_{0} & =\delta\boldsymbol{B}_{\perp}\times(j_{0\parallel}\boldsymbol{h}_{0})=\delta\boldsymbol{B}_{\perp}\times\boldsymbol{j}_{0\parallel}.
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Itemize
+Second term
+\begin_inset Formula 
+\begin{align}
+-\frac{c\boldsymbol{h}_{0}\cdot\delta\boldsymbol{B}}{B_{0}^{2}}(\boldsymbol{h}_{0}\times\nabla p_{0})\times\boldsymbol{B}_{0} & =-\frac{\delta B_{\parallel}}{B_{0}}(\boldsymbol{h}_{0}\times(\boldsymbol{j}_{0}\times\boldsymbol{B}_{0}))\times\boldsymbol{h}_{0}\nonumber \\
+ & =-\delta B_{\parallel}(\boldsymbol{j}_{0\perp}\times\boldsymbol{h}_{0})=\delta\boldsymbol{B}_{\parallel}\times\boldsymbol{j}_{0\perp}.
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Itemize
+Third term
 \begin_inset Formula 
 \begin{align*}
-\nabla\cdot(\boldsymbol{h}j_{\parallel n})+inh^{\varphi}j_{\parallel n} & =-\nabla\cdot\boldsymbol{j}_{\perp}^{\text{pol}}-inj_{\perp n}^{\varphi}\,.
+\frac{c}{B_{0}}(\boldsymbol{h}_{0}\times\nabla\delta p)\times\boldsymbol{B}_{0} & =c(\nabla\delta p-(\boldsymbol{h}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0})
 \end{align*}
 
 \end_inset
 
+
+\end_layout
+
+\begin_layout Standard
+Summed up this yields
+\begin_inset Formula 
+\begin{align}
+\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0} & =c\nabla\delta p-c(\boldsymbol{h}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0}-\boldsymbol{j}_{0}\times\delta\boldsymbol{B},
+\end{align}
+
+\end_inset
+
+which contains an extra term 
+\begin_inset Formula $c(\boldsymbol{h}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0}$
+\end_inset
+
+ compared to Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:j times B0"
+
+\end_inset
+
+.
+ 
+\series bold
+TODO: WHY?
+\end_layout
+
+\begin_layout Section*
+Finite Volume Methode
+\end_layout
+
+\begin_layout Standard
+Now we a similar problem using a FVM scheme.
+ We write the conservative form
+\begin_inset Formula 
+\begin{align*}
+\nabla\cdot(\boldsymbol{h}_{0}j_{\parallel n})+inh_{0}^{\varphi}j_{\parallel n} & =-\nabla\cdot\boldsymbol{j}_{\perp}^{\text{pol}}-inj_{\perp n}^{\varphi}\,.
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
 The divergence operator is defined via
 \begin_inset Formula 
 \begin{align*}
@@ -480,13 +641,342 @@ When working with
 Integration over a triangle yields
 \begin_inset Formula 
 \begin{align}
-\oint\,Rj_{\parallel n}\boldsymbol{h}\cdot d\boldsymbol{\Gamma}+in\int Rh^{\varphi}j_{\parallel n}d\Omega & =-\oint\,R\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot d\boldsymbol{\Gamma}-in\int Rh^{\varphi}j_{\perp n}d\Omega\label{eq:fvmj}
+\oint\,Rj_{\parallel n}\boldsymbol{h}_{0}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+in\int Rh_{0}^{\varphi}j_{\parallel n}d\Omega & =-\oint\,R\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma-in\int Rj_{\perp n}^{\ph}d\Omega\label{eq:fvmj-1}
 \end{align}
 
 \end_inset
 
 where scalar products with 
-\begin_inset Formula $d\boldsymbol{\Gamma}$
+\begin_inset Formula $\boldsymbol{n}$
+\end_inset
+
+ pointing towards the outer normal vector of the edge are taken component-wise
+ in 
+\begin_inset Formula $R$
+\end_inset
+
+ and 
+\begin_inset Formula $Z$
+\end_inset
+
+.
+ We assume a field-aligned mesh with 
+\begin_inset Formula $\boldsymbol{h}_{0}$
+\end_inset
+
+ parallel to edge no.
+\begin_inset space ~
+\end_inset
+
+3.
+ In- and outflux of the parallel current are only over edges 1 and 2.
+\end_layout
+
+\begin_layout Standard
+On edges 1 and 2 we sum up the flux from left- and right hand side of Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:fvmj-1"
+
+\end_inset
+
+ to use the flux of the total perturbed current harmonic in the poloidal
+ plane,
+\begin_inset Formula 
+\begin{align*}
+\boldsymbol{j}_{n}^{\text{pol}} & =j_{\parallel n}\boldsymbol{h}_{0}^{\text{pol}}+\boldsymbol{j}_{\perp n}^{\text{pol}},
+\end{align*}
+
+\end_inset
+
+as an unknown:
+\begin_inset Formula 
+\begin{align}
+\int_{1,2}\,R\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+in\int Rh_{0}^{\varphi}j_{\parallel n}d\Omega & =-\int_{3}\,R\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma-in\int Rj_{\perp n}^{\ph}d\Omega.
+\end{align}
+
+\end_inset
+
+In addition, we add terms with 
+\begin_inset Formula $j_{n}^{\ph}=h_{0}^{\varphi}j_{\parallel n}+j_{\perp n}^{\ph}$
+\end_inset
+
+ together again to obtain
+\begin_inset Formula 
+\begin{align}
+\int_{1,2}\,R\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+in\int Rj_{n}^{\varphi}d\Omega & =-\int_{3}\,R\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma.
+\end{align}
+
+\end_inset
+
+On edge 3 we use
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{j}_{n}\times\boldsymbol{B}_{0} & =c(\nabla p_{n}+in\,p_{n}\nabla\varphi)-\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}.
+\end{align}
+
+\end_inset
+
+Scalar multiplication by 
+\series bold
+
+\begin_inset Formula $\boldsymbol{e}_{\ph}=\frac{\partial\boldsymbol{R}}{\partial\ph}$
+\end_inset
+
+ 
+\series default
+yields
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{e}_{\ph}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}) & =\boldsymbol{j}_{n}\cdot(\boldsymbol{B}_{0}\times\boldsymbol{e}_{\ph})=RB_{0}^{\text{pol}}\boldsymbol{j}_{n}\cdot\boldsymbol{n}
+\end{align}
+
+\end_inset
+
+This results in
+\begin_inset Formula 
+\begin{align*}
+\boldsymbol{j}_{n}\cdot\boldsymbol{n} & =\frac{1}{RB_{0}^{\text{pol}}}\left(in\,p_{n}-\boldsymbol{j}_{0}\cdot(\boldsymbol{B}_{n}\times\boldsymbol{e}_{\ph})\right)\\
+ & =\frac{1}{RB_{0}^{\text{pol}}}\left(in\,p_{n}+R\boldsymbol{j}_{0}\cdot\boldsymbol{B}_{n}^{\text{pol}}\right).
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+
+\series bold
+TODO: 
+\end_layout
+
+\begin_layout Itemize
+Unit vector:
+\begin_inset Formula 
+\begin{align*}
+\boldsymbol{h} & \approx\boldsymbol{h}_{0}+\frac{\delta\boldsymbol{B}_{\perp}}{B_{0}}\\
+\delta\boldsymbol{B}_{\perp} & =\delta\boldsymbol{B}-\boldsymbol{h}_{0}(\boldsymbol{h}_{0}\cdot\delta\boldsymbol{B})
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Itemize
+Current density:
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{j}-\boldsymbol{j}_{0} & =(j_{0\parallel}+\delta j_{\parallel}^{\prime})\boldsymbol{h}+\boldsymbol{j}_{\perp}-j_{0\parallel}\boldsymbol{h}_{0}-\boldsymbol{j}_{0\perp}\nonumber \\
+ & =\delta j_{\parallel}^{\prime}\boldsymbol{h}_{0}+j_{0\parallel}\frac{\delta\boldsymbol{B}_{\perp}}{B_{0}}+\delta\boldsymbol{j}_{\perp}^{\prime}\equiv\delta\boldsymbol{j}.
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Itemize
+More:
+\end_layout
+
+\begin_deeper
+\begin_layout Itemize
+Take from above
+\end_layout
+
+\begin_layout Itemize
+More:
+\begin_inset Formula 
+\begin{align*}
+(\boldsymbol{h}_{0}\times(\boldsymbol{j}_{0}\times\boldsymbol{B}_{0}))\times\boldsymbol{B}_{0} & =B_{0}(\boldsymbol{j}_{0}\times\boldsymbol{B}_{0})\\
+(\boldsymbol{h}_{0}\times\nabla\delta p)\times\boldsymbol{B}_{0} & =B_{0}\nabla\delta p-(\boldsymbol{B}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Itemize
+Put together:
+\begin_inset Formula 
+\begin{align*}
+\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0} & =c\nabla\delta p-(\boldsymbol{h}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0}-\boldsymbol{j}_{0}\times\delta\boldsymbol{B}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\end_deeper
+\begin_layout Itemize
+Currents
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{j}_{0}\times\boldsymbol{B}_{0}+\boldsymbol{j}_{0}\times\delta\boldsymbol{B}+\delta\boldsymbol{j}\times\boldsymbol{B}_{0} & =c(\nabla p_{0}+\nabla p_{1})
+\end{align}
+
+\end_inset
+
+
+\begin_inset Formula 
+\begin{align}
+\delta\boldsymbol{B}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{0}) & =c(\delta\boldsymbol{B}\cdot\nabla p_{0}+\delta\boldsymbol{B}\cdot\nabla p_{1})
+\end{align}
+
+\end_inset
+
+
+\begin_inset Formula 
+\begin{align}
+\delta\boldsymbol{B}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{0}) & =c(\delta\boldsymbol{B}\cdot\nabla p_{0}+\delta\boldsymbol{B}\cdot\nabla p_{1})
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+On edge 3 we evaluate
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n} & =j_{0\parallel}\frac{B_{\perp n}^{\text{pol}}}{B_{0}}+\frac{c}{B_{0}}\boldsymbol{n}\cdot(\boldsymbol{h}_{0}\times(\nabla p_{n}+inp_{n}\nabla\ph)).
+\end{align}
+
+\end_inset
+
+Rotating the triple product and using the fact that both, 
+\begin_inset Formula $\boldsymbol{n}$
+\end_inset
+
+ and 
+\begin_inset Formula $\nabla p_{n}$
+\end_inset
+
+ are in the poloidal plane, yields
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{n}\cdot\boldsymbol{h}_{0}\times(\nabla p_{n}+inp_{n}\nabla\ph) & =inp_{n}\boldsymbol{h}_{0}\cdot\nabla\ph\times\boldsymbol{n}=\frac{in}{R}p_{n}
+\end{align}
+
+\end_inset
+
+on edge 3.
+\end_layout
+
+\begin_layout Part*
+Old
+\end_layout
+
+\begin_layout Standard
+We need to solve
+\begin_inset Formula 
+\begin{align}
+\nabla\cdot\delta\boldsymbol{j} & =0,\\
+\nabla\delta p & =\frac{1}{c}\left(\delta\boldsymbol{j}\times\boldsymbol{B}_{0}+\boldsymbol{j}_{0}\times\delta\boldsymbol{B}\right)
+\end{align}
+
+\end_inset
+
+for 
+\begin_inset Formula $\delta\boldsymbol{j}$
+\end_inset
+
+.
+ Splitting into toroidal and poloidal parts for a single harmonic in 
+\begin_inset Formula $\varphi$
+\end_inset
+
+ we obtain
+\begin_inset Formula 
+\begin{align}
+\nabla\cdot\boldsymbol{j}_{n}^{\text{pol}}+in\,j_{n}^{\ph} & =0.
+\end{align}
+
+\end_inset
+
+The second equation reads
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{j}_{n}\times\boldsymbol{B}_{0} & =c(\nabla p_{n}+in\,p_{n}\nabla\varphi)-\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}.
+\end{align}
+
+\end_inset
+
+The toroidal part of the cross product is
+\begin_inset Formula 
+\begin{align}
+(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0})_{\ph} & =R(j_{n}^{Z}B_{0}^{R}-j_{n}^{R}B_{0}^{Z})=R\sqrt{g_{P}}j_{n}^{\psi}B_{0}^{\text{pol}}\\
+ & =in\,p_{n}-(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n})_{\varphi}\\
+\Rightarrow j_{n}^{\psi} & \text{on flux surface edge}\nonumber 
+\end{align}
+
+\end_inset
+
+On one triangle edge
+\begin_inset Formula 
+\begin{align*}
+(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0})_{\parallel} & =R(j_{n\perp}B_{0}^{\ph}-j_{n}^{\ph}B_{0}^{\perp})\\
+ & \approx c\frac{p_{2}-p_{1}}{l}-(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n})_{\parallel}
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section*
+Finite Volume Method
+\end_layout
+
+\begin_layout Standard
+The divergence operator is defined via
+\begin_inset Formula 
+\begin{align*}
+\nabla\cdot\boldsymbol{u} & =\frac{1}{R\sqrt{g_{p}}}\frac{\partial}{\partial x^{k}}(R\sqrt{g_{p}}u^{k})\,.
+\end{align*}
+
+\end_inset
+
+When working with 
+\begin_inset Formula $R,Z$
+\end_inset
+
+ as coordinates in the poloidal plane, 
+\begin_inset Formula $\sqrt{g_{p}}=1$
+\end_inset
+
+.
+ We multiply by 
+\begin_inset Formula $R$
+\end_inset
+
+ to obtain
+\begin_inset Formula 
+\begin{align*}
+\frac{\partial}{\partial x^{k}}(Rh^{k}j_{\parallel n})+inRh^{\varphi}j_{\parallel n} & =-\frac{\partial}{\partial x^{k}}(Rj_{\perp n}^{k})-inRj_{\perp n}^{\varphi}\,.
+\end{align*}
+
+\end_inset
+
+Integration over a triangle yields
+\begin_inset Formula 
+\begin{align}
+\oint\,Rj_{\parallel n}\boldsymbol{h}\cdot\boldsymbol{n}d\Gamma+in\int Rh^{\varphi}j_{\parallel n}d\Omega & =-\oint\,R\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma-in\int Rj_{\perp n}^{\ph}d\Omega\label{eq:fvmj}
+\end{align}
+
+\end_inset
+
+where scalar products with 
+\begin_inset Formula $\boldsymbol{n}$
 \end_inset
 
  pointing towards the outer normal vector of the edge are taken component-wise
@@ -530,7 +1020,7 @@ reference "eq:fvmj"
  is of the form
 \begin_inset Formula 
 \begin{align*}
-\oint\,u\,\boldsymbol{h}\cdot d\boldsymbol{\Gamma}+in\int u\,h^{\varphi}d\Omega & =-\oint\,\boldsymbol{v}\cdot d\boldsymbol{\Gamma}-in\int v\,h^{\varphi}d\Omega
+\oint\,u\,\boldsymbol{h}\cdot\boldsymbol{n}d\Gamma+in\int u\,h^{\varphi}d\Omega & =-\oint\,\boldsymbol{v}\cdot\boldsymbol{n}d\Gamma-in\int w\,d\Omega
 \end{align*}
 
 \end_inset
@@ -544,14 +1034,72 @@ with
 \end_inset
 
  and 
-\begin_inset Formula $v=j_{\perp n}$
+\begin_inset Formula $w=Rj_{\perp n}^{\ph}$
 \end_inset
 
 .
+ We approximate the flux by a flux value times edge length.
+ Since the mesh is field-aligned, only two of the three triangle edges play
+ a role for fluxes and we can write
+\begin_inset Formula 
+\begin{align}
+\oint\,u\,\boldsymbol{h}\cdot\boldsymbol{n}d\Gamma & \approx U_{1}+U_{2}=u_{1}l_{1}+u_{2}l_{2},
+\end{align}
+
+\end_inset
+
+where
+\begin_inset Formula 
+\begin{align}
+U_{1} & =\int_{1}u\boldsymbol{h}\cdot\boldsymbol{n}\d\Gamma_{1}.
+\end{align}
+
+\end_inset
+
+and so on.
+ In the second term we can use
+\begin_inset Formula 
+\begin{align*}
+\int u\,h^{\varphi}d\Omega & \approx\frac{u_{1}+u_{2}}{2}h^{\varphi}S
+\end{align*}
+
+\end_inset
+
+where 
+\begin_inset Formula $S$
+\end_inset
+
+ is the surface of the triangle.
 \end_layout
 
-\begin_layout Section*
-Old
+\begin_layout Standard
+For 
+\begin_inset Formula $\boldsymbol{v}$
+\end_inset
+
+ the normal components to the edges (fluxes through edges) are required
+ via
+\begin_inset Formula 
+\begin{align}
+\oint\,\boldsymbol{v}\cdot\boldsymbol{n}d\Gamma & \approx V_{1}+V_{2}+V_{3}\nonumber \\
+ & =\boldsymbol{v}_{1}\cdot\boldsymbol{n}_{1}l_{1}+\boldsymbol{v}_{2}\cdot\boldsymbol{n}_{2}l_{2}+\boldsymbol{v}_{3}\cdot\boldsymbol{n}_{3}l_{3}
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Central difference scheme:
+\begin_inset Formula 
+\begin{align*}
+\dot{p}_{H} & =\frac{\Delta s^{k-1}}{\Delta s^{k}(\Delta s^{k}+\Delta s^{k-1})}p^{k+1}+\frac{\Delta s^{k}-\Delta s^{k-1}}{\Delta s^{k}\Delta s^{k-1}}p^{k}-\frac{\Delta s^{k}}{\Delta s^{k-1}(\Delta s^{k}+\Delta s^{k-1})}p^{k-1}
+\end{align*}
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Standard
