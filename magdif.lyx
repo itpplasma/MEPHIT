@@ -565,16 +565,12 @@ Third term
 Summed up this yields
 \begin_inset Formula 
 \begin{align}
-\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0} & =c\nabla\delta p-c(\boldsymbol{h}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0}-\boldsymbol{j}_{0}\times\delta\boldsymbol{B},
+\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0} & =\delta\boldsymbol{B}\times\boldsymbol{j}_{0}-\delta\boldsymbol{B}_{\perp}\times\boldsymbol{j}_{0\perp}+c\nabla\delta p-c(\boldsymbol{h}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0}.\label{eq:jperp}
 \end{align}
 
 \end_inset
 
-which contains an extra term 
-\begin_inset Formula $c(\boldsymbol{h}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0}$
-\end_inset
-
- compared to Eq.
+If Eq.
 \begin_inset space ~
 \end_inset
 
@@ -585,10 +581,35 @@ reference "eq:j times B0"
 
 \end_inset
 
-.
- 
-\series bold
-TODO: WHY?
+ is fulfilled, the two extra terms must cancel each other.
+ Without the mentioned restriction
+\begin_inset Formula 
+\begin{align}
+(\delta\boldsymbol{B}\times\boldsymbol{j}_{0})_{\parallel} & =c\nabla_{\parallel}\delta p,
+\end{align}
+
+\end_inset
+
+Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:jperp"
+
+\end_inset
+
+ restricts only perpendicular components with
+\begin_inset Formula 
+\begin{align}
+\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0} & =(\delta\boldsymbol{B}\times\boldsymbol{j}_{0})_{\perp}+c\nabla_{\perp}\delta p.
+\end{align}
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Section*
