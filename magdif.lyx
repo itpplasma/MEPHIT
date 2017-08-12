@@ -753,18 +753,77 @@ Scalar multiplication by
 yields
 \begin_inset Formula 
 \begin{align}
-\boldsymbol{e}_{\ph}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}) & =\boldsymbol{j}_{n}\cdot(\boldsymbol{B}_{0}\times\boldsymbol{e}_{\ph})=RB_{0}^{\text{pol}}\boldsymbol{j}_{n}\cdot\boldsymbol{n}
+\boldsymbol{e}_{\ph}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}) & =\boldsymbol{j}_{n}\cdot(\boldsymbol{B}_{0}^{\text{pol}}\times\boldsymbol{e}_{\ph})
 \end{align}
 
 \end_inset
 
-This results in
+
+\end_layout
+
+\begin_layout Standard
+The poloidal part of the equilibrium field follows from the poloidal flux
+ (stream function) 
+\begin_inset Formula $\psi$
+\end_inset
+
+ with
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{B}_{0}^{\text{pol}} & =\nabla\psi\times\nabla\varphi.
+\end{align}
+
+\end_inset
+
+We can use the double cross product
+\begin_inset Formula 
+\begin{align}
+(\nabla\psi\times\nabla\varphi)\times\boldsymbol{e}_{\ph} & =(\boldsymbol{e}_{\ph}\cdot\nabla\psi)\nabla\varphi-(\boldsymbol{e}_{\ph}\cdot\nabla\varphi)\nabla\psi=-\nabla\psi,
+\end{align}
+
+\end_inset
+
+since the first term vanishes due to axisymmetry and the second term yields
+ unity for the inner product between basis vector and its reciprocal vector.
+\end_layout
+
+\begin_layout Standard
+This results in (
+\series bold
+TODO: check sign of 
+\begin_inset Formula $\boldsymbol{A}_{n}$
+\end_inset
+
+
+\series default
+)
 \begin_inset Formula 
 \begin{align*}
-\boldsymbol{j}_{n}\cdot\boldsymbol{n} & =\frac{1}{RB_{0}^{\text{pol}}}\left(in\,p_{n}-\boldsymbol{j}_{0}\cdot(\boldsymbol{B}_{n}\times\boldsymbol{e}_{\ph})\right)\\
- & =\frac{1}{RB_{0}^{\text{pol}}}\left(in\,p_{n}+R\boldsymbol{j}_{0}\cdot\boldsymbol{B}_{n}^{\text{pol}}\right).
+\boldsymbol{j}_{n}\cdot\nabla\psi & =-\left(in\,p_{n}-\boldsymbol{j}_{0}\cdot(\boldsymbol{B}_{n}\times\boldsymbol{e}_{\ph})\right)\\
+ & =-\left(p_{n}+\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right),
 \end{align*}
 
+\end_inset
+
+where 
+\begin_inset Formula $\boldsymbol{A}_{n}$
+\end_inset
+
+ is the fully poloidal vector potential producing the non-axisymmetric harmonic
+ 
+\begin_inset Formula $\boldsymbol{B}_{n}$
+\end_inset
+
+ via
+\begin_inset Formula 
+\begin{align}
+B_{n}^{R}=\frac{in}{R}A_{nZ},\quad B_{n}^{Z} & =-\frac{in}{R}A_{nR}.
+\end{align}
+
+\end_inset
+
+
+\begin_inset Formula $\boldsymbol{B}_{0}$
 \end_inset
 
 
@@ -774,32 +833,6 @@ This results in
 
 \series bold
 TODO: 
-\end_layout
-
-\begin_layout Itemize
-Unit vector:
-\begin_inset Formula 
-\begin{align*}
-\boldsymbol{h} & \approx\boldsymbol{h}_{0}+\frac{\delta\boldsymbol{B}_{\perp}}{B_{0}}\\
-\delta\boldsymbol{B}_{\perp} & =\delta\boldsymbol{B}-\boldsymbol{h}_{0}(\boldsymbol{h}_{0}\cdot\delta\boldsymbol{B})
-\end{align*}
-
-\end_inset
-
-
-\end_layout
-
-\begin_layout Itemize
-Current density:
-\begin_inset Formula 
-\begin{align}
-\boldsymbol{j}-\boldsymbol{j}_{0} & =(j_{0\parallel}+\delta j_{\parallel}^{\prime})\boldsymbol{h}+\boldsymbol{j}_{\perp}-j_{0\parallel}\boldsymbol{h}_{0}-\boldsymbol{j}_{0\perp}\nonumber \\
- & =\delta j_{\parallel}^{\prime}\boldsymbol{h}_{0}+j_{0\parallel}\frac{\delta\boldsymbol{B}_{\perp}}{B_{0}}+\delta\boldsymbol{j}_{\perp}^{\prime}\equiv\delta\boldsymbol{j}.
-\end{align}
-
-\end_inset
-
-
 \end_layout
 
 \begin_layout Itemize
@@ -837,34 +870,6 @@ Put together:
 \end_layout
 
 \end_deeper
-\begin_layout Itemize
-Currents
-\begin_inset Formula 
-\begin{align}
-\boldsymbol{j}_{0}\times\boldsymbol{B}_{0}+\boldsymbol{j}_{0}\times\delta\boldsymbol{B}+\delta\boldsymbol{j}\times\boldsymbol{B}_{0} & =c(\nabla p_{0}+\nabla p_{1})
-\end{align}
-
-\end_inset
-
-
-\begin_inset Formula 
-\begin{align}
-\delta\boldsymbol{B}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{0}) & =c(\delta\boldsymbol{B}\cdot\nabla p_{0}+\delta\boldsymbol{B}\cdot\nabla p_{1})
-\end{align}
-
-\end_inset
-
-
-\begin_inset Formula 
-\begin{align}
-\delta\boldsymbol{B}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{0}) & =c(\delta\boldsymbol{B}\cdot\nabla p_{0}+\delta\boldsymbol{B}\cdot\nabla p_{1})
-\end{align}
-
-\end_inset
-
-
-\end_layout
-
 \begin_layout Standard
 On edge 3 we evaluate
 \begin_inset Formula 
