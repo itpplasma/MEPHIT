@@ -60,8 +60,8 @@
 \bottommargin 2cm
 \secnumdepth 3
 \tocdepth 3
-\paragraph_separation indent
-\paragraph_indentation default
+\paragraph_separation skip
+\defskip smallskip
 \quotes_language english
 \papercolumns 1
 \papersides 1
@@ -729,12 +729,13 @@ In addition, we add terms with
  together again to obtain
 \begin_inset Formula 
 \begin{align}
-\int_{1,2}\,R\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+in\int Rj_{n}^{\varphi}d\Omega & =-\int_{3}\,R\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma.
+\int_{1,2}\,R\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+\int_{3}\,R\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+in\int Rj_{n}^{\varphi}d\Omega & =0.
 \end{align}
 
 \end_inset
 
-On edge 3 we use
+To compute known quantities we use the linear equation of the perturbation
+ given by
 \begin_inset Formula 
 \begin{align}
 \boldsymbol{j}_{n}\times\boldsymbol{B}_{0} & =c(\nabla p_{n}+in\,p_{n}\nabla\varphi)-\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}.
@@ -742,7 +743,28 @@ On edge 3 we use
 
 \end_inset
 
-Scalar multiplication by 
+Again 
+\begin_inset Formula $\boldsymbol{B}_{n}$
+\end_inset
+
+ is known from the last iteration of the field solver, 
+\begin_inset Formula $p_{n}$
+\end_inset
+
+ has been computed in the earlier step and 
+\begin_inset Formula $\boldsymbol{j}_{n}$
+\end_inset
+
+ is unknown.
+\end_layout
+
+\begin_layout Subsection*
+Cross-field term on edge 3
+\end_layout
+
+\begin_layout Standard
+For the term with the integral over edge 3 we use scalar multiplication
+ by 
 \series bold
 
 \begin_inset Formula $\boldsymbol{e}_{\ph}=\frac{\partial\boldsymbol{R}}{\partial\ph}$
@@ -750,10 +772,10 @@ Scalar multiplication by
 
  
 \series default
-yields
+that yields
 \begin_inset Formula 
 \begin{align}
-\boldsymbol{e}_{\ph}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}) & =\boldsymbol{j}_{n}\cdot(\boldsymbol{B}_{0}^{\text{pol}}\times\boldsymbol{e}_{\ph})
+\boldsymbol{e}_{\ph}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}) & =\boldsymbol{j}_{n}\cdot(\boldsymbol{B}_{0}^{\text{pol}}\times\boldsymbol{e}_{\ph}).
 \end{align}
 
 \end_inset
@@ -785,121 +807,155 @@ We can use the double cross product
 
 since the first term vanishes due to axisymmetry and the second term yields
  unity for the inner product between basis vector and its reciprocal vector.
-\end_layout
-
-\begin_layout Standard
-This results in (
-\series bold
-TODO: check sign of 
+ In addition we the fully poloidal vector potential 
 \begin_inset Formula $\boldsymbol{A}_{n}$
 \end_inset
 
-
-\series default
-)
-\begin_inset Formula 
-\begin{align*}
-\boldsymbol{j}_{n}\cdot\nabla\psi & =-\left(in\,p_{n}-\boldsymbol{j}_{0}\cdot(\boldsymbol{B}_{n}\times\boldsymbol{e}_{\ph})\right)\\
- & =-\left(p_{n}+\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right),
-\end{align*}
-
-\end_inset
-
-where 
-\begin_inset Formula $\boldsymbol{A}_{n}$
-\end_inset
-
- is the fully poloidal vector potential producing the non-axisymmetric harmonic
- 
+ producing the non-axisymmetric harmonic 
 \begin_inset Formula $\boldsymbol{B}_{n}$
 \end_inset
 
  via
 \begin_inset Formula 
 \begin{align}
-B_{n}^{R}=\frac{in}{R}A_{nZ},\quad B_{n}^{Z} & =-\frac{in}{R}A_{nR}.
+B_{n}^{R}=\frac{in}{R}A_{nZ},\quad B_{n}^{Z} & =-\frac{in}{R}A_{nR},
 \end{align}
 
 \end_inset
 
+and
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{B}_{n}\times\boldsymbol{e}_{\ph} & =\frac{in}{R}(A_{nZ}\boldsymbol{e}_{R}\times\boldsymbol{e}_{\ph}-A_{nR}\boldsymbol{e}_{Z}\times\boldsymbol{e}_{\ph})\nonumber \\
+ & =in(A_{nZ}\nabla Z+A_{nR}\nabla R)=in\boldsymbol{A}_{n}.
+\end{align}
 
-\begin_inset Formula $\boldsymbol{B}_{0}$
 \end_inset
 
 
 \end_layout
 
 \begin_layout Standard
-
-\series bold
-TODO: 
-\end_layout
-
-\begin_layout Itemize
-More:
-\end_layout
-
-\begin_deeper
-\begin_layout Itemize
-Take from above
-\end_layout
-
-\begin_layout Itemize
-More:
+This results in 
 \begin_inset Formula 
-\begin{align*}
-(\boldsymbol{h}_{0}\times(\boldsymbol{j}_{0}\times\boldsymbol{B}_{0}))\times\boldsymbol{B}_{0} & =B_{0}(\boldsymbol{j}_{0}\times\boldsymbol{B}_{0})\\
-(\boldsymbol{h}_{0}\times\nabla\delta p)\times\boldsymbol{B}_{0} & =B_{0}\nabla\delta p-(\boldsymbol{B}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0}
-\end{align*}
+\begin{align}
+\boldsymbol{j}_{n}\cdot\nabla\psi & =-\left(in\,p_{n}-\boldsymbol{j}_{0}\cdot(\boldsymbol{B}_{n}\times\boldsymbol{e}_{\ph})\right)\nonumber \\
+ & =-in\left(p_{n}-\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right).
+\end{align}
 
 \end_inset
 
-
-\end_layout
-
-\begin_layout Itemize
-Put together:
-\begin_inset Formula 
-\begin{align*}
-\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0} & =c\nabla\delta p-(\boldsymbol{h}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0}-\boldsymbol{j}_{0}\times\delta\boldsymbol{B}
-\end{align*}
-
+Via normalisation via 
+\begin_inset Formula $|\nabla\psi|$
 \end_inset
 
-
+, its orientation, and the edge length/orientation, this term describing
+ currents across flux surfaces can be computed right away.
 \end_layout
 
-\end_deeper
+\begin_layout Subsection*
+Volumetric source term
+\end_layout
+
 \begin_layout Standard
-On edge 3 we evaluate
+For the computation of toroidal 
+\begin_inset Formula $j_{n}^{\varphi}$
+\end_inset
+
+ in the element volume we start again with
 \begin_inset Formula 
 \begin{align}
-\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n} & =j_{0\parallel}\frac{B_{\perp n}^{\text{pol}}}{B_{0}}+\frac{c}{B_{0}}\boldsymbol{n}\cdot(\boldsymbol{h}_{0}\times(\nabla p_{n}+inp_{n}\nabla\ph)).
+\boldsymbol{j}_{n}\times\boldsymbol{B}_{0} & =c(\nabla p_{n}+in\,p_{n}\nabla\varphi)-\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}.
 \end{align}
 
 \end_inset
 
-Rotating the triple product and using the fact that both, 
-\begin_inset Formula $\boldsymbol{n}$
-\end_inset
-
- and 
-\begin_inset Formula $\nabla p_{n}$
-\end_inset
-
- are in the poloidal plane, yields
+with
 \begin_inset Formula 
 \begin{align}
-\boldsymbol{n}\cdot\boldsymbol{h}_{0}\times(\nabla p_{n}+inp_{n}\nabla\ph) & =inp_{n}\boldsymbol{h}_{0}\cdot\nabla\ph\times\boldsymbol{n}=\frac{in}{R}p_{n}
+\boldsymbol{B}_{0} & =\nabla\psi\times\nabla\varphi+B_{0\ph}\nabla\ph.
 \end{align}
 
 \end_inset
 
-on edge 3.
+
+\end_layout
+
+\begin_layout Standard
+By taking the inner product with 
+\begin_inset Formula $\boldsymbol{e}_{\psi}$
+\end_inset
+
+ we obtain
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{e}_{\psi}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0})=\boldsymbol{e}_{\psi}\cdot(\boldsymbol{j}_{n}\times(\nabla\psi\times\nabla\varphi)) & =\boldsymbol{j}_{n}\cdot((\nabla\psi\times\nabla\varphi)\times\boldsymbol{e}_{\psi})\nonumber \\
+ & =\boldsymbol{j}_{n}\cdot\nabla\varphi=j_{n}^{\ph}
+\end{align}
+
+\end_inset
+
+on the left-hand side.
+ The right-hand side yields:
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{e}_{\psi}\cdot(\nabla p_{n}+in\,p_{n}\nabla\varphi) & =\boldsymbol{e}_{\psi}\cdot\nabla p_{n}=\frac{\partial p_{n}}{\partial\psi}\\
+\boldsymbol{e}_{\psi}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}) & =\frac{\nabla\psi}{|\nabla\psi|^{2}}\cdot(B_{n\ph}\boldsymbol{j}_{0}^{\text{pol}}\times\nabla\ph-j_{0\ph}\boldsymbol{B}_{n}^{\text{pol}}\times\nabla\ph)\nonumber \\
+ & =\frac{\boldsymbol{B}_{0}^{\text{pol}}}{|\nabla\psi|^{2}}\cdot(j_{0\ph}\boldsymbol{B}_{n}^{\text{pol}}-B_{n\ph}\boldsymbol{j}_{0}^{\text{pol}}).
+\end{align}
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Part*
 Old
+\end_layout
+
+\begin_layout Standard
+Cross product with 
+\begin_inset Formula $\boldsymbol{e}_{\ph}$
+\end_inset
+
+ yields
+\begin_inset Formula 
+\begin{align}
+B_{0\ph}\boldsymbol{e}_{\ph}\times(\boldsymbol{j}_{n}\times\nabla\ph) & =\boldsymbol{j}_{n}-j_{n\ph}\nabla\ph\\
+\boldsymbol{e}_{\ph}\times(\boldsymbol{j}_{n}\times(\nabla\psi\times\nabla\varphi)) & =\boldsymbol{e}_{\ph}\times(j_{n}^{\ph}\nabla\psi-j_{n}^{\psi}\nabla\varphi)=j_{n}^{\ph}\boldsymbol{e}_{\ph}\times\nabla\psi\nonumber \\
+ & =j_{n\ph}\nabla\ph\times\nabla\psi\nonumber 
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Itemize
+Scalar product with 
+\begin_inset Formula $\boldsymbol{B}_{0}^{\text{pol}}=\nabla\psi\times\nabla\ph$
+\end_inset
+
+ yields
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{B}_{0}^{\text{pol}}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}^{\text{pol}}) & =0\\
+B_{0\ph}(\nabla\psi\times\nabla\ph)\cdot(\boldsymbol{j}_{n}\times\nabla\ph) & =\frac{B_{0\ph}}{R^{2}}\boldsymbol{j}_{n}\cdot\nabla\psi
+\end{align}
+
+\end_inset
+
+Right-hand side:
+\begin_inset Formula 
+\begin{align*}
+\boldsymbol{B}_{0}^{\text{pol}}\cdot(\nabla p_{n}+in\,p_{n}\nabla\varphi) & =\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}\\
+\boldsymbol{B}_{0}^{\text{pol}}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}) & =(\nabla\psi\times\nabla\ph)\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n})\\
+ & =(\boldsymbol{j}_{0}\cdot\nabla\psi)(\boldsymbol{B}_{n}\cdot\nabla\ph)-(\boldsymbol{B}_{n}\cdot\psi)(\boldsymbol{j}_{0}\cdot\nabla\ph)
+\end{align*}
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Standard
