@@ -1,4 +1,4 @@
-%% LyX 2.2.2 created this file.  For more info, see http://www.lyx.org/.
+%% LyX 2.2.3 created this file.  For more info, see http://www.lyx.org/.
 %% Do not edit unless you really know what you are doing.
 \documentclass[12pt,british,english]{article}
 \usepackage[T1]{fontenc}
@@ -25,7 +25,6 @@
 \global\long\def\bm{\text{\textbf{m}}}
 \global\long\def\k{\text{k}}
 \global\long\def\i{\text{i}}
-
 \selectlanguage{english}%
 
 \title{Numerical solution of magnetic differential equations}
@@ -62,7 +61,6 @@ in/2-1/\Delta s & in/2+1/\Delta s\\
 in/2+1/\Delta s & in/2-1/\Delta s
 \end{array}\right)\boldsymbol{p} & =\boldsymbol{q}
 \end{align*}
-
 
 \section*{Magnetic Differential Equation}
 
@@ -202,7 +200,6 @@ Eq.~(\ref{eq:jperp}) restricts only perpendicular components with
 \delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0} & =(\delta\boldsymbol{B}\times\boldsymbol{j}_{0})_{\perp}+c\nabla_{\perp}\delta p.
 \end{align}
 
-
 \section*{Finite Volume Methode}
 
 Now we a similar problem using a FVM scheme. We write the conservative
@@ -287,8 +284,8 @@ and
 
 This results in 
 \begin{align}
-\boldsymbol{j}_{n}\cdot\nabla\psi & =-\left(in\,p_{n}-\boldsymbol{j}_{0}\cdot(\boldsymbol{B}_{n}\times\boldsymbol{e}_{\ph})\right)\nonumber \\
- & =-in\left(p_{n}-\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right).
+\boldsymbol{j}_{n}\cdot\nabla\psi & =-\left(in\,cp_{n}-\boldsymbol{j}_{0}\cdot(\boldsymbol{B}_{n}\times\boldsymbol{e}_{\ph})\right)\nonumber \\
+ & =-in\left(cp_{n}-\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right).
 \end{align}
 Via normalisation via $|\nabla\psi|$, its orientation, and the edge
 length/orientation, this term describing currents across flux surfaces
@@ -299,17 +296,67 @@ can be computed right away.
 For the computation of toroidal $j_{n}^{\varphi}$ in the element
 volume we start again with
 \begin{align}
-\boldsymbol{j}_{n}\times\boldsymbol{B}_{0} & =c(\nabla p_{n}+in\,p_{n}\nabla\varphi)-\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}.
+\boldsymbol{j}_{n}\times\boldsymbol{B}_{0} & =c(\nabla p_{n}+in\,p_{n}\nabla\varphi)-\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}.\label{eq:jnxB0}
 \end{align}
 with
 \begin{align}
 \boldsymbol{B}_{0} & =\nabla\psi\times\nabla\varphi+B_{0\ph}\nabla\ph.
 \end{align}
+We use a local orthonormal coordinate system on each triangle edge
+with $\boldsymbol{e}_{1}$ the unit vector along the edge in counter-clockwise
+orientation, $\boldsymbol{e}_{2}=\boldsymbol{n}$ the outward unit
+normal and $\boldsymbol{e}_{3}=R\nabla\ph$ pointing inside the plane.
+Taking a scalar product of $\boldsymbol{e}_{1}$ with Eq.~(\ref{eq:jnxB0})
+yields
+\begin{align}
+\boldsymbol{e}_{1}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}) & =\boldsymbol{e}_{1}\cdot(\boldsymbol{j}_{n}\times(\nabla\psi\times\nabla\varphi+B_{0\ph}\nabla\ph))\nonumber \\
+ & =\boldsymbol{j}_{n}\cdot((\nabla\psi\times\nabla\varphi)\times\boldsymbol{e}_{1}+B_{0(\ph)}\boldsymbol{e}_{3}\times\boldsymbol{e}_{1})\\
+ & =\boldsymbol{j}_{n}\cdot\left((\boldsymbol{e}_{1}\cdot\nabla\psi)\nabla\varphi+B_{0(\ph)}\boldsymbol{e}_{2}\right)=(\boldsymbol{e}_{1}\cdot\nabla\psi)j_{n}^{\ph}+B_{0(\ph)}\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}
+\end{align}
+The right-hand side yields:
+\begin{align}
+\boldsymbol{e}_{1}\cdot(\nabla p_{n}+in\,p_{n}\nabla\varphi) & =\boldsymbol{e}_{1}\cdot\nabla p_{n}\\
+\boldsymbol{e}_{1}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}) & =\boldsymbol{e}_{1}\cdot(B_{n\ph}\boldsymbol{j}_{0}^{\text{pol}}\times\nabla\ph-j_{0\ph}\boldsymbol{B}_{n}^{\text{pol}}\times\nabla\ph).
+\end{align}
+
+We use the fact that $\nabla p_{0}$ is parallel to $\nabla\psi$,
+so the cross product in the equilibrium is purely radial,
+\begin{align}
+\boldsymbol{j}_{0}\times\boldsymbol{B}_{0} & =c\nabla p_{0}\nonumber \\
+ & =\boldsymbol{j}_{0}^{\text{pol}}\times(B_{0\ph}\nabla\ph)+j_{0}^{\ph}\nabla\ph\times(\nabla\psi\times\nabla\varphi)\nonumber \\
+ & =\boldsymbol{j}_{0}^{\text{pol}}\times(B_{0\ph}\nabla\ph)+j_{0\ph}\nabla\psi.
+\end{align}
+So
+\begin{align}
+\boldsymbol{j}_{0}^{\text{pol}}\times\nabla\ph & =\frac{1}{B_{0\ph}}\left(c\nabla p_{0}-j_{0\ph}\nabla\psi\right),
+\end{align}
+and
+\begin{align}
+\boldsymbol{e}_{1}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}) & =\frac{B_{n\ph}}{B_{0\ph}}\boldsymbol{e}_{1}\cdot\left(c\nabla p_{0}-j_{0\ph}\nabla\psi\right)-j_{0(\ph)}\boldsymbol{e}_{1}\cdot(\boldsymbol{B}_{n}^{\text{pol}}\times\boldsymbol{e}_{3})\nonumber \\
+ & =\frac{B_{n(\ph)}}{B_{0(\ph)}}\boldsymbol{e}_{1}\cdot\left(c\nabla p_{0}-\frac{j_{0(\ph)}}{R}\nabla\psi\right)-j_{0(\ph)}\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}.
+\end{align}
+Thus, with the notation $\boldsymbol{e}_{1}\cdot\nabla\equiv\partial_{1}$
+we obtain on each edge
+\begin{align}
+j_{n}^{\ph}\partial_{1}\psi & =-B_{0(\ph)}\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}+c\partial_{1}p_{n}-\frac{B_{n(\ph)}}{B_{0(\ph)}}\left(c\partial_{1}p_{0}-\frac{j_{0(\ph)}}{R}\partial_{1}\psi\right)+j_{0(\ph)}\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}.
+\end{align}
+For the discretisation we take values such as $B_{0(\ph)}$ constant
+on the whole triangle and compute the mean from edges 1 and 2 weighted
+by the edge length of the remaining quantities. The first term on
+the right-hand side will contribute to the vector of unknowns. Derivatives
+$\partial_{1}$ are then computed as differences between values on
+the two nodes of each edge. \textbf{TODO: edge 3, shall we use it
+or not? Problem is that psi is constant there.}
+
+\part*{Old}
+
+\subsection*{Volumetric source term}
 
 By taking the inner product with $\boldsymbol{e}_{\psi}$ we obtain
 \begin{align}
-\boldsymbol{e}_{\psi}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0})=\boldsymbol{e}_{\psi}\cdot(\boldsymbol{j}_{n}\times(\nabla\psi\times\nabla\varphi)) & =\boldsymbol{j}_{n}\cdot((\nabla\psi\times\nabla\varphi)\times\boldsymbol{e}_{\psi})\nonumber \\
- & =\boldsymbol{j}_{n}\cdot\nabla\varphi=j_{n}^{\ph}
+\boldsymbol{e}_{\psi}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}) & =\boldsymbol{e}_{\psi}\cdot(\boldsymbol{j}_{n}\times(\nabla\psi\times\nabla\varphi+B_{0\ph}\nabla\ph))\nonumber \\
+ & =\boldsymbol{j}_{n}\cdot((\nabla\psi\times\nabla\varphi)\times\boldsymbol{e}_{\psi}+B_{0\ph}\nabla\ph\times\boldsymbol{e}_{\psi})\\
+ & =\boldsymbol{j}_{n}\cdot\left(\nabla\varphi+\frac{B_{0\ph}}{|\nabla\psi|^{2}}\nabla s\right)=j_{n}^{\ph}\pm\frac{B_{0\ph}}{|\nabla\psi|^{2}}j_{n\parallel}
 \end{align}
 on the left-hand side. The right-hand side yields:
 \begin{align}
@@ -317,9 +364,17 @@ on the left-hand side. The right-hand side yields:
 \boldsymbol{e}_{\psi}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}) & =\frac{\nabla\psi}{|\nabla\psi|^{2}}\cdot(B_{n\ph}\boldsymbol{j}_{0}^{\text{pol}}\times\nabla\ph-j_{0\ph}\boldsymbol{B}_{n}^{\text{pol}}\times\nabla\ph)\nonumber \\
  & =\frac{\boldsymbol{B}_{0}^{\text{pol}}}{|\nabla\psi|^{2}}\cdot(j_{0\ph}\boldsymbol{B}_{n}^{\text{pol}}-B_{n\ph}\boldsymbol{j}_{0}^{\text{pol}}).
 \end{align}
-
-
-\part*{Old}
+can use
+\begin{align*}
+\frac{\nabla\psi}{|\nabla\psi|^{2}}\cdot(B_{n\ph}\boldsymbol{j}_{0}^{\text{pol}}\times\nabla\ph-j_{0\ph}\boldsymbol{B}_{n}^{\text{pol}}\times\nabla\ph) & =\frac{B_{n\ph}}{B_{0\ph}}\frac{\nabla\psi}{|\nabla\psi|^{2}}\cdot(c\nabla p_{0}-j_{0\ph}\nabla\psi)+j_{0\ph}\frac{\left(B_{n}^{\text{pol}}\right)^{2}}{|\nabla\psi|^{2}}\\
+ & =
+\end{align*}
+Take scalar product with $\nabla\psi$ to obtain
+\begin{align}
+\nabla\psi\cdot(\boldsymbol{j}_{0}^{\text{pol}}\times(B_{0\ph}\nabla\ph)) & =-B_{0\ph}\boldsymbol{j}_{0}^{\text{pol}}\cdot(\nabla\psi\times\nabla\ph)=-B_{0\ph}\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{B}_{0}^{\text{pol}}\\
+\nonumber \\
+\nabla\psi\cdot\nonumber 
+\end{align}
 
 Cross product with $\boldsymbol{e}_{\ph}$ yields
 \begin{align}
@@ -327,7 +382,6 @@ B_{0\ph}\boldsymbol{e}_{\ph}\times(\boldsymbol{j}_{n}\times\nabla\ph) & =\boldsy
 \boldsymbol{e}_{\ph}\times(\boldsymbol{j}_{n}\times(\nabla\psi\times\nabla\varphi)) & =\boldsymbol{e}_{\ph}\times(j_{n}^{\ph}\nabla\psi-j_{n}^{\psi}\nabla\varphi)=j_{n}^{\ph}\boldsymbol{e}_{\ph}\times\nabla\psi\nonumber \\
  & =j_{n\ph}\nabla\ph\times\nabla\psi\nonumber 
 \end{align}
-
 \begin{itemize}
 \item Scalar product with $\boldsymbol{B}_{0}^{\text{pol}}=\nabla\psi\times\nabla\ph$
 yields
@@ -367,7 +421,6 @@ On one triangle edge
 (\boldsymbol{j}_{n}\times\boldsymbol{B}_{0})_{\parallel} & =R(j_{n\perp}B_{0}^{\ph}-j_{n}^{\ph}B_{0}^{\perp})\\
  & \approx c\frac{p_{2}-p_{1}}{l}-(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n})_{\parallel}
 \end{align*}
-
 
 \section*{Finite Volume Method}
 
@@ -508,7 +561,6 @@ s_{n} & =s_{mn}e^{im\vartheta}=\Im s_{mn}(-\sin m\vartheta+i\cos m\vartheta)\\
 \\
 p_{n} & =\Re p_{mn}(\cos m\vartheta+i\sin m\vartheta)
 \end{align*}
-
 
 \section*{Pseudotoroidal coordinates}
 
