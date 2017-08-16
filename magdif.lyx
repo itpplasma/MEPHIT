@@ -146,7 +146,8 @@
 \end_layout
 
 \begin_layout Title
-Numerical solution of magnetic differential equations
+Magnetic differential equations in stationary linear ideal MHD and their
+ numerical solution
 \end_layout
 
 \begin_layout Section*
@@ -157,7 +158,7 @@ Simple Example
 We would like to solve an equation of the type
 \begin_inset Formula 
 \begin{align}
-\dot{p}_{n}+inp_{n} & =q_{n}
+\dot{p}_{n}(s)+inp_{n}(s) & =q_{n}(s)
 \end{align}
 
 \end_inset
@@ -187,35 +188,34 @@ p_{mn} & =\frac{q_{mn}}{i(m+n)}.
 
 \end_inset
 
-A finite difference scheme yields
+The "natural" lowest order finite difference scheme using midpoint values
+ where needed and with equidistant points in 
+\begin_inset Formula $s$
+\end_inset
+
+ yields
 \begin_inset Formula 
 \begin{align}
-\frac{p_{n}^{k+1}-p_{n}^{k}}{\Delta s}+\frac{1}{2}in(p_{n}^{k+1}+p_{n}^{k}) & =q_{n}^{k}.
+\frac{p_{n}^{(k+1)}-p_{n}^{(k)}}{\Delta s}+\frac{1}{2}in(p_{n}^{(k+1)}+p_{n}^{(k)}) & =\frac{1}{2}(q_{n}^{(k+1)}+q_{n}^{(k)}).\label{eq:fd3}
 \end{align}
 
 \end_inset
 
 A corresponding matrix with periodic boundary conditions is
 \begin_inset Formula 
-\begin{align*}
+\begin{align}
 \left(\begin{array}{cccc}
 in/2-1/\Delta s & in/2+1/\Delta s\\
  & in/2-1/\Delta s & in/2+1/\Delta s\\
  &  & \dots\\
 in/2+1/\Delta s &  &  & in/2-1/\Delta s
-\end{array}\right)\boldsymbol{p} & =\boldsymbol{q}
-\end{align*}
-
-\end_inset
-
-
-\begin_inset Formula 
-\begin{align*}
-\left(\begin{array}{cccc}
-in/2-1/\Delta s & in/2+1/\Delta s\\
-in/2+1/\Delta s & in/2-1/\Delta s
-\end{array}\right)\boldsymbol{p} & =\boldsymbol{q}
-\end{align*}
+\end{array}\right)\boldsymbol{p} & =\left(\begin{array}{cccc}
+1/2 & 1/2\\
+ & 1/2 & 1/2\\
+ &  & \dots\\
+1/2 &  &  & 1/2
+\end{array}\right)\boldsymbol{q}.
+\end{align}
 
 \end_inset
 
@@ -223,7 +223,7 @@ in/2+1/\Delta s & in/2-1/\Delta s
 \end_layout
 
 \begin_layout Section*
-Magnetic Differential Equation
+Magnetic differential equation for pressure
 \end_layout
 
 \begin_layout Standard
@@ -232,7 +232,7 @@ Magnetic differential equations arise from a number of problems in plasma
  We consider for example the magnetohydrodynamic equilibrium
 \begin_inset Formula 
 \begin{align}
-\nabla p & =\boldsymbol{J}\times\boldsymbol{B},
+c\nabla p & =\boldsymbol{J}\times\boldsymbol{B},
 \end{align}
 
 \end_inset
@@ -257,16 +257,35 @@ with pressure
  yields the homogenous magnetic differential equation
 \begin_inset Formula 
 \begin{align}
-\boldsymbol{B}\cdot\nabla p & =0\,.
+\boldsymbol{B}\cdot\nabla p & =0.
 \end{align}
 
 \end_inset
 
-In the linear perturbation theory, a source term enters the right-hand side
- with
+We consider an axisymmetric equilibrium field 
+\begin_inset Formula $\boldsymbol{B}_{0}$
+\end_inset
+
+ given by
 \begin_inset Formula 
 \begin{align}
-\boldsymbol{B}\cdot\nabla p & =q\,.
+\boldsymbol{B}_{0} & =\nabla\psi\times\nabla\varphi+B_{0\ph}\nabla\ph.
+\end{align}
+
+\end_inset
+
+Within linear perturbation theory where 
+\begin_inset Formula $\boldsymbol{B}=\boldsymbol{B}_{0}+\delta\boldsymbol{B}$
+\end_inset
+
+ and 
+\begin_inset Formula $p=p_{0}+\delta p$
+\end_inset
+
+, a source term enters the right-hand side with
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{B}_{0}\cdot\nabla\delta p & =-\delta\boldsymbol{B}\cdot\nabla p_{0}=\delta B^{\psi}p_{0}^{\prime}(\psi).
 \end{align}
 
 \end_inset
@@ -276,22 +295,97 @@ For an axisymmetric plasma in a tokamak, we reduce the dimensionality by
 \begin_inset Formula $\varphi$
 \end_inset
 
-,
+, such as
 \begin_inset Formula 
 \begin{align}
-p(R,Z,\ph) & =\sum_{n}p_{n}(R,Z)e^{in\ph}\,.
+\delta p(R,Z,\ph) & =\sum_{n}p_{n}(R,Z)e^{in\ph}.
 \end{align}
 
 \end_inset
 
-The remaining equation in the poloidal 
+The remaining equations in the poloidal 
 \begin_inset Formula $RZ$
 \end_inset
 
  plane for each harmonic are
 \begin_inset Formula 
 \begin{align}
-\boldsymbol{B}\cdot\nabla_{RZ}p_{n}+inB^{\varphi}p_{n} & =q_{n}\,.
+\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}+inB_{0}^{\varphi}p_{n} & =B_{n}^{\psi}p_{0}^{\prime}(\psi),\label{eq:magdifp}
+\end{align}
+
+\end_inset
+
+where the superscript 
+\emph on
+pol
+\emph default
+ marks the projection into the 
+\begin_inset Formula $RZ$
+\end_inset
+
+ plane.
+\end_layout
+
+\begin_layout Section*
+Finite difference method to treat pressure perturbation
+\end_layout
+
+\begin_layout Standard
+To solve equations of the type of Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:magdifp"
+
+\end_inset
+
+ we use the lowest order scheme with forward differences in the gradient,
+ midpoint values for the remaining terms, and periodic boundary conditions.
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{B}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}}(p_{n}^{(k+1)}-p_{n}^{(k)})+\frac{inB_{0}^{\varphi}}{2}(p_{n}^{(k+1)}+p_{n}^{(k)}) & =\frac{p_{0}^{\prime}(\psi)}{2}(B_{n}^{\psi(k+1)}+B_{n}^{\psi(k)}).\label{eq:magdifp-1}
+\end{align}
+
+\end_inset
+
+This equation has the general form
+\begin_inset Formula 
+\begin{align}
+\left(a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k+1)}+\left(-a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k)} & =\frac{c_{k}}{2}(B_{n}^{\psi(k+1)}+B_{n}^{\psi(k)}),
+\end{align}
+
+\end_inset
+
+with
+\begin_inset Formula 
+\begin{align}
+a_{k} & =\boldsymbol{B}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}},\\
+b_{k} & =inB_{0}^{\varphi},\\
+c_{k} & =p_{0}^{\prime}(\psi).
+\end{align}
+
+\end_inset
+
+In our simple example of Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:fd3"
+
+\end_inset
+
+ we can identify
+\begin_inset Formula 
+\begin{align}
+a_{k} & =\frac{1}{\Delta s},\\
+b_{k} & =in,\nonumber \\
+c_{k} & =q_{n}^{(k)}.
 \end{align}
 
 \end_inset
@@ -300,187 +394,56 @@ The remaining equation in the poloidal
 \end_layout
 
 \begin_layout Standard
-or in components of coordinates 
-\begin_inset Formula $x^{k}$
-\end_inset
-
- with 
-\begin_inset Formula $k=1,2$
-\end_inset
-
- in the poloidal plans,
+In general matrix form such a scheme is written as
 \begin_inset Formula 
 \begin{align}
-B^{k}\frac{\partial}{\partial x^{k}}p_{n}+inB^{\varphi}p_{n} & =q_{n}\,.
+A_{jk}p_{n}^{(k)} & =M_{jk}B_{n}^{\psi(k)},
 \end{align}
 
 \end_inset
 
-
-\end_layout
-
-\begin_layout Standard
-Generating 
-\begin_inset Formula $\boldsymbol{B}$
+where the elements of the stiffness matrix 
+\begin_inset Formula $A$
 \end_inset
 
- from the stream function 
-\begin_inset Formula $\psi=A_{\ph}$
-\end_inset
-
- we obtain
+ are
 \begin_inset Formula 
 \begin{align}
-B^{1} & =-\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{2}}\\
-B^{2} & =\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{1}}
+A_{jk} & =\left(a_{j}+\frac{b_{j}}{2}\right)\delta_{(j-1)k}+\left(-a_{j}+\frac{b_{j}}{2}\right)\delta_{jk},
 \end{align}
 
 \end_inset
 
-Here, 
-\begin_inset Formula $g_{p}$
+and elements of the mass matrix 
+\begin_inset Formula $M$
 \end_inset
 
- is the metric determinant of the 2D metric tensor in the poloidal plane.
- Using 
-\begin_inset Formula $\psi$
-\end_inset
-
- as one coordinate 
-\begin_inset Formula $x^{1}$
-\end_inset
-
-, and the distance 
-\begin_inset Formula $s$
-\end_inset
-
- in the poloidal direction with 
-\begin_inset Formula $ds=\sqrt{dR^{2}+dZ^{2}}$
-\end_inset
-
-, we have an orthogonal system with
+ are
 \begin_inset Formula 
 \begin{align}
-\hat{g}_{P} & =\left(\begin{array}{cc}
-g_{\psi\psi}\\
- & 1
-\end{array}\right)
+M_{jk} & =\frac{c_{j}}{2}(\delta_{(j-1)k}+\delta_{jk}).
 \end{align}
 
 \end_inset
 
-This means that 
-\begin_inset Formula $\sqrt{g_{p}}=\sqrt{g_{\psi\psi}}=1/|\nabla\psi|$
+At 
+\begin_inset Formula $k=N$
 \end_inset
 
-.
- The transport law becomes
-\begin_inset Formula 
-\begin{align}
-\frac{1}{R\sqrt{g_{p}}}\frac{\partial p_{n}}{\partial s}+inB^{\varphi}p_{n} & =q_{n}\,.
-\end{align}
-
+, with 
+\begin_inset Formula $N$
 \end_inset
 
-This is a one-dimensional problem along the poloidal 
-\begin_inset Formula $\boldsymbol{B}$
+ the number of rows, one should replace 
+\begin_inset Formula $\delta_{(j-1)k}$
 \end_inset
 
- direction.
+ by 
+\begin_inset Formula $\delta_{j1}$
+\end_inset
+
+ for periodic boundary conditions.
  
-\end_layout
-
-\begin_layout Section*
-Finite Difference Method
-\end_layout
-
-\begin_layout Standard
-Multiplying by 
-\begin_inset Formula $-iR\sqrt{g_{p}}$
-\end_inset
-
- we obtain
-\begin_inset Formula 
-\begin{align}
-nR\sqrt{g_{p}}B^{\varphi}p_{n}-i\dot{p}_{n} & =-iR\sqrt{g_{p}}q_{n}\,.
-\end{align}
-
-\end_inset
-
-Discretizing with a forward Euler method and evaluating averages at the
- midpoints we obtain
-\begin_inset Formula 
-\begin{align}
-\frac{n}{2}\left(R^{k}\sqrt{g_{p}^{k}}B^{\varphi k}p_{n}^{k}+R^{k+1}\sqrt{g_{p}^{k+1}}B^{\varphi k+1}p_{n}^{k+1}\right) & -i\frac{p_{n}^{k+1}-p_{n}^{k}}{\Delta s^{k}}\\
- & =-\frac{1}{2}i\left(R^{k}\sqrt{g_{p}^{k}}q_{n}^{k}+R^{k+1}\sqrt{g_{p}^{k+1}}q_{n}^{k+1}\right)\,.
-\end{align}
-
-\end_inset
-
-Coefficients should be filled into a sparse matrix and the discrete equations
- solved e.g.
- by UMFPACK.
-\end_layout
-
-\begin_layout Section*
-Analytical solution
-\end_layout
-
-\begin_layout Standard
-\begin_inset Formula 
-\begin{align*}
-i(mB^{\vartheta}+nB^{\varphi})p_{mn} & =q_{mn}\\
-p_{mn} & =\frac{q_{mn}}{i(mB^{\vartheta}+nB^{\varphi})}\,.
-\end{align*}
-
-\end_inset
-
-We take circular flux surfaces in the large aspect ratio limit, such that
- the scaling with 
-\begin_inset Formula $R$
-\end_inset
-
- vanishes and as coordinates minor 
-\begin_inset Formula $r$
-\end_inset
-
- and 
-\begin_inset Formula $\vartheta$
-\end_inset
-
-.
-\end_layout
-
-\begin_layout Standard
-In this case
-\end_layout
-
-\begin_layout Standard
-\begin_inset Formula 
-\begin{align*}
-B^{\tht} & =\frac{1}{R_{0}\sqrt{g_{P}}}\frac{\partial\psi}{\partial r}\,.
-\end{align*}
-
-\end_inset
-
-We set 
-\begin_inset Formula $\psi=r^{2}/4$
-\end_inset
-
- so 
-\begin_inset Formula $\frac{\partial\psi}{\partial r}=|\nabla\psi|=r/2$
-\end_inset
-
-.
- Due to the circular flux surfaces, we have a orthogonal system and 
-\begin_inset Formula $\sqrt{g_{P}}=r$
-\end_inset
-
-, so 
-\begin_inset Formula $B^{\tht}=1/(2R_{0})$
-\end_inset
-
-.
 \end_layout
 
 \begin_layout Section*
@@ -582,15 +545,7 @@ reference "eq:j times B0"
 \end_inset
 
  is fulfilled, the two extra terms must cancel each other.
- Without the mentioned restriction
-\begin_inset Formula 
-\begin{align}
-(\delta\boldsymbol{B}\times\boldsymbol{j}_{0})_{\parallel} & =c\nabla_{\parallel}\delta p,
-\end{align}
-
-\end_inset
-
-Eq.
+ Eq.
 \begin_inset space ~
 \end_inset
 
@@ -609,15 +564,27 @@ reference "eq:jperp"
 
 \end_inset
 
+In addition, the restriction
+\begin_inset Formula 
+\begin{align}
+(\delta\boldsymbol{B}\times\boldsymbol{j}_{0})_{\parallel} & =c\nabla_{\parallel}\delta p
+\end{align}
 
+\end_inset
+
+follows from the linear perturbation in 
+\begin_inset Formula $p$
+\end_inset
+
+ made before.
 \end_layout
 
 \begin_layout Section*
-Finite Volume Methode
+Finite volume method to treat current density perturbation
 \end_layout
 
 \begin_layout Standard
-Now we a similar problem using a FVM scheme.
+Now we solve the linearised current balance in an FVM scheme.
  We write the conservative form
 \begin_inset Formula 
 \begin{align*}
@@ -991,13 +958,194 @@ For the discretisation we take values such as
 
  are then computed as differences between values on the two nodes of each
  edge.
- 
-\series bold
-TODO: edge 3, shall we use it or not? Problem is that psi is constant there.
 \end_layout
 
 \begin_layout Part*
 Old
+\end_layout
+
+\begin_layout Standard
+or in components of coordinates 
+\begin_inset Formula $x^{k}$
+\end_inset
+
+ with 
+\begin_inset Formula $k=1,2$
+\end_inset
+
+ in the poloidal plans,
+\begin_inset Formula 
+\begin{align}
+B^{k}\frac{\partial}{\partial x^{k}}p_{n}+inB^{\varphi}p_{n} & =q_{n}\,.
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Generating 
+\begin_inset Formula $\boldsymbol{B}$
+\end_inset
+
+ from the stream function 
+\begin_inset Formula $\psi=A_{\ph}$
+\end_inset
+
+ we obtain
+\begin_inset Formula 
+\begin{align}
+B^{1} & =-\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{2}}\\
+B^{2} & =\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{1}}
+\end{align}
+
+\end_inset
+
+Here, 
+\begin_inset Formula $g_{p}$
+\end_inset
+
+ is the metric determinant of the 2D metric tensor in the poloidal plane.
+ Using 
+\begin_inset Formula $\psi$
+\end_inset
+
+ as one coordinate 
+\begin_inset Formula $x^{1}$
+\end_inset
+
+, and the distance 
+\begin_inset Formula $s$
+\end_inset
+
+ in the poloidal direction with 
+\begin_inset Formula $ds=\sqrt{dR^{2}+dZ^{2}}$
+\end_inset
+
+, we have an orthogonal system with
+\begin_inset Formula 
+\begin{align}
+\hat{g}_{P} & =\left(\begin{array}{cc}
+g_{\psi\psi}\\
+ & 1
+\end{array}\right)
+\end{align}
+
+\end_inset
+
+This means that 
+\begin_inset Formula $\sqrt{g_{p}}=\sqrt{g_{\psi\psi}}=1/|\nabla\psi|$
+\end_inset
+
+.
+ The transport law becomes
+\begin_inset Formula 
+\begin{align}
+\frac{1}{R\sqrt{g_{p}}}\frac{\partial p_{n}}{\partial s}+inB^{\varphi}p_{n} & =q_{n}\,.
+\end{align}
+
+\end_inset
+
+This is a one-dimensional problem along the poloidal 
+\begin_inset Formula $\boldsymbol{B}$
+\end_inset
+
+ direction.
+ 
+\end_layout
+
+\begin_layout Section*
+Finite Difference Method
+\end_layout
+
+\begin_layout Standard
+Multiplying by 
+\begin_inset Formula $-iR\sqrt{g_{p}}$
+\end_inset
+
+ we obtain
+\begin_inset Formula 
+\begin{align}
+nR\sqrt{g_{p}}B^{\varphi}p_{n}-i\dot{p}_{n} & =-iR\sqrt{g_{p}}q_{n}\,.
+\end{align}
+
+\end_inset
+
+Discretizing with a forward Euler method and evaluating averages at the
+ midpoints we obtain
+\begin_inset Formula 
+\begin{align}
+\frac{n}{2}\left(R^{k}\sqrt{g_{p}^{k}}B^{\varphi k}p_{n}^{k}+R^{k+1}\sqrt{g_{p}^{k+1}}B^{\varphi k+1}p_{n}^{k+1}\right) & -i\frac{p_{n}^{k+1}-p_{n}^{k}}{\Delta s^{k}}\\
+ & =-\frac{1}{2}i\left(R^{k}\sqrt{g_{p}^{k}}q_{n}^{k}+R^{k+1}\sqrt{g_{p}^{k+1}}q_{n}^{k+1}\right)\,.
+\end{align}
+
+\end_inset
+
+Coefficients should be filled into a sparse matrix and the discrete equations
+ solved e.g.
+ by UMFPACK.
+\end_layout
+
+\begin_layout Section*
+Analytical solution
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+i(mB^{\vartheta}+nB^{\varphi})p_{mn} & =q_{mn}\\
+p_{mn} & =\frac{q_{mn}}{i(mB^{\vartheta}+nB^{\varphi})}\,.
+\end{align*}
+
+\end_inset
+
+We take circular flux surfaces in the large aspect ratio limit, such that
+ the scaling with 
+\begin_inset Formula $R$
+\end_inset
+
+ vanishes and as coordinates minor 
+\begin_inset Formula $r$
+\end_inset
+
+ and 
+\begin_inset Formula $\vartheta$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+In this case
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align*}
+B^{\tht} & =\frac{1}{R_{0}\sqrt{g_{P}}}\frac{\partial\psi}{\partial r}\,.
+\end{align*}
+
+\end_inset
+
+We set 
+\begin_inset Formula $\psi=r^{2}/4$
+\end_inset
+
+ so 
+\begin_inset Formula $\frac{\partial\psi}{\partial r}=|\nabla\psi|=r/2$
+\end_inset
+
+.
+ Due to the circular flux surfaces, we have a orthogonal system and 
+\begin_inset Formula $\sqrt{g_{P}}=r$
+\end_inset
+
+, so 
+\begin_inset Formula $B^{\tht}=1/(2R_{0})$
+\end_inset
+
+.
 \end_layout
 
 \begin_layout Subsection*

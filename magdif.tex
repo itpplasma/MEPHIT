@@ -27,14 +27,15 @@
 \global\long\def\i{\text{i}}
 \selectlanguage{english}%
 
-\title{Numerical solution of magnetic differential equations}
+\title{Magnetic differential equations in stationary linear ideal MHD and
+their numerical solution}
 \maketitle
 
 \section*{Simple Example}
 
 We would like to solve an equation of the type
 \begin{align}
-\dot{p}_{n}+inp_{n} & =q_{n}
+\dot{p}_{n}(s)+inp_{n}(s) & =q_{n}(s)
 \end{align}
 for $p(s)$ with periodic boundary conditions at $s=0\dots2\pi$.
 With the ansatz $p_{n}=\sum_{m}p_{mn}e^{ims}$ and the same for $q_{n}$
@@ -42,118 +43,104 @@ we obtain the analytical solution
 \begin{align}
 p_{mn} & =\frac{q_{mn}}{i(m+n)}.
 \end{align}
-A finite difference scheme yields
+The \textquotedbl{}natural\textquotedbl{} lowest order finite difference
+scheme using midpoint values where needed and with equidistant points
+in $s$ yields
 \begin{align}
-\frac{p_{n}^{k+1}-p_{n}^{k}}{\Delta s}+\frac{1}{2}in(p_{n}^{k+1}+p_{n}^{k}) & =q_{n}^{k}.
+\frac{p_{n}^{(k+1)}-p_{n}^{(k)}}{\Delta s}+\frac{1}{2}in(p_{n}^{(k+1)}+p_{n}^{(k)}) & =\frac{1}{2}(q_{n}^{(k+1)}+q_{n}^{(k)}).\label{eq:fd3}
 \end{align}
 A corresponding matrix with periodic boundary conditions is
-\begin{align*}
+\begin{align}
 \left(\begin{array}{cccc}
 in/2-1/\Delta s & in/2+1/\Delta s\\
  & in/2-1/\Delta s & in/2+1/\Delta s\\
  &  & \dots\\
 in/2+1/\Delta s &  &  & in/2-1/\Delta s
-\end{array}\right)\boldsymbol{p} & =\boldsymbol{q}
-\end{align*}
-\begin{align*}
-\left(\begin{array}{cccc}
-in/2-1/\Delta s & in/2+1/\Delta s\\
-in/2+1/\Delta s & in/2-1/\Delta s
-\end{array}\right)\boldsymbol{p} & =\boldsymbol{q}
-\end{align*}
+\end{array}\right)\boldsymbol{p} & =\left(\begin{array}{cccc}
+1/2 & 1/2\\
+ & 1/2 & 1/2\\
+ &  & \dots\\
+1/2 &  &  & 1/2
+\end{array}\right)\boldsymbol{q}.
+\end{align}
 
-\section*{Magnetic Differential Equation}
+\section*{Magnetic differential equation for pressure}
 
 Magnetic differential equations arise from a number of problems in
 plasma physics. We consider for example the magnetohydrodynamic equilibrium
 \begin{align}
-\nabla p & =\boldsymbol{J}\times\boldsymbol{B},
+c\nabla p & =\boldsymbol{J}\times\boldsymbol{B},
 \end{align}
 with pressure $p$, current $\boldsymbol{J}$ and magnetic field $\boldsymbol{B}$.
 Scalar multiplication with $\boldsymbol{B}$ yields the homogenous
 magnetic differential equation
 \begin{align}
-\boldsymbol{B}\cdot\nabla p & =0\,.
+\boldsymbol{B}\cdot\nabla p & =0.
 \end{align}
-In the linear perturbation theory, a source term enters the right-hand
-side with
+We consider an axisymmetric equilibrium field $\boldsymbol{B}_{0}$
+given by
 \begin{align}
-\boldsymbol{B}\cdot\nabla p & =q\,.
+\boldsymbol{B}_{0} & =\nabla\psi\times\nabla\varphi+B_{0\ph}\nabla\ph.
+\end{align}
+Within linear perturbation theory where $\boldsymbol{B}=\boldsymbol{B}_{0}+\delta\boldsymbol{B}$
+and $p=p_{0}+\delta p$, a source term enters the right-hand side
+with
+\begin{align}
+\boldsymbol{B}_{0}\cdot\nabla\delta p & =-\delta\boldsymbol{B}\cdot\nabla p_{0}=\delta B^{\psi}p_{0}^{\prime}(\psi).
 \end{align}
 For an axisymmetric plasma in a tokamak, we reduce the dimensionality
 by introducing cylindrical coordinates and an expansion in $\varphi$,
+such as
 \begin{align}
-p(R,Z,\ph) & =\sum_{n}p_{n}(R,Z)e^{in\ph}\,.
+\delta p(R,Z,\ph) & =\sum_{n}p_{n}(R,Z)e^{in\ph}.
 \end{align}
-The remaining equation in the poloidal $RZ$ plane for each harmonic
+The remaining equations in the poloidal $RZ$ plane for each harmonic
 are
 \begin{align}
-\boldsymbol{B}\cdot\nabla_{RZ}p_{n}+inB^{\varphi}p_{n} & =q_{n}\,.
+\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}+inB_{0}^{\varphi}p_{n} & =B_{n}^{\psi}p_{0}^{\prime}(\psi),\label{eq:magdifp}
 \end{align}
+where the superscript \emph{pol} marks the projection into the $RZ$
+plane.
 
-or in components of coordinates $x^{k}$ with $k=1,2$ in the poloidal
-plans,
+\section*{Finite difference method to treat pressure perturbation}
+
+To solve equations of the type of Eq.~(\ref{eq:magdifp}) we use
+the lowest order scheme with forward differences in the gradient,
+midpoint values for the remaining terms, and periodic boundary conditions.
 \begin{align}
-B^{k}\frac{\partial}{\partial x^{k}}p_{n}+inB^{\varphi}p_{n} & =q_{n}\,.
+\boldsymbol{B}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}}(p_{n}^{(k+1)}-p_{n}^{(k)})+\frac{inB_{0}^{\varphi}}{2}(p_{n}^{(k+1)}+p_{n}^{(k)}) & =\frac{p_{0}^{\prime}(\psi)}{2}(B_{n}^{\psi(k+1)}+B_{n}^{\psi(k)}).\label{eq:magdifp-1}
 \end{align}
-
-Generating $\boldsymbol{B}$ from the stream function $\psi=A_{\ph}$
-we obtain
+This equation has the general form
 \begin{align}
-B^{1} & =-\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{2}}\\
-B^{2} & =\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{1}}
+\left(a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k+1)}+\left(-a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k)} & =\frac{c_{k}}{2}(B_{n}^{\psi(k+1)}+B_{n}^{\psi(k)}),
 \end{align}
-Here, $g_{p}$ is the metric determinant of the 2D metric tensor in
-the poloidal plane. Using $\psi$ as one coordinate $x^{1}$, and
-the distance $s$ in the poloidal direction with $ds=\sqrt{dR^{2}+dZ^{2}}$,
-we have an orthogonal system with
+with
 \begin{align}
-\hat{g}_{P} & =\left(\begin{array}{cc}
-g_{\psi\psi}\\
- & 1
-\end{array}\right)
+a_{k} & =\boldsymbol{B}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}},\\
+b_{k} & =inB_{0}^{\varphi},\\
+c_{k} & =p_{0}^{\prime}(\psi).
 \end{align}
-This means that $\sqrt{g_{p}}=\sqrt{g_{\psi\psi}}=1/|\nabla\psi|$.
-The transport law becomes
+In our simple example of Eq.~(\ref{eq:fd3}) we can identify
 \begin{align}
-\frac{1}{R\sqrt{g_{p}}}\frac{\partial p_{n}}{\partial s}+inB^{\varphi}p_{n} & =q_{n}\,.
+a_{k} & =\frac{1}{\Delta s},\\
+b_{k} & =in,\nonumber \\
+c_{k} & =q_{n}^{(k)}.
 \end{align}
-This is a one-dimensional problem along the poloidal $\boldsymbol{B}$
-direction. 
 
-\section*{Finite Difference Method}
-
-Multiplying by $-iR\sqrt{g_{p}}$ we obtain
+In general matrix form such a scheme is written as
 \begin{align}
-nR\sqrt{g_{p}}B^{\varphi}p_{n}-i\dot{p}_{n} & =-iR\sqrt{g_{p}}q_{n}\,.
+A_{jk}p_{n}^{(k)} & =M_{jk}B_{n}^{\psi(k)},
 \end{align}
-Discretizing with a forward Euler method and evaluating averages at
-the midpoints we obtain
+where the elements of the stiffness matrix $A$ are
 \begin{align}
-\frac{n}{2}\left(R^{k}\sqrt{g_{p}^{k}}B^{\varphi k}p_{n}^{k}+R^{k+1}\sqrt{g_{p}^{k+1}}B^{\varphi k+1}p_{n}^{k+1}\right) & -i\frac{p_{n}^{k+1}-p_{n}^{k}}{\Delta s^{k}}\\
- & =-\frac{1}{2}i\left(R^{k}\sqrt{g_{p}^{k}}q_{n}^{k}+R^{k+1}\sqrt{g_{p}^{k+1}}q_{n}^{k+1}\right)\,.
+A_{jk} & =\left(a_{j}+\frac{b_{j}}{2}\right)\delta_{(j-1)k}+\left(-a_{j}+\frac{b_{j}}{2}\right)\delta_{jk},
 \end{align}
-Coefficients should be filled into a sparse matrix and the discrete
-equations solved e.g. by UMFPACK.
-
-\section*{Analytical solution}
-
-\begin{align*}
-i(mB^{\vartheta}+nB^{\varphi})p_{mn} & =q_{mn}\\
-p_{mn} & =\frac{q_{mn}}{i(mB^{\vartheta}+nB^{\varphi})}\,.
-\end{align*}
-We take circular flux surfaces in the large aspect ratio limit, such
-that the scaling with $R$ vanishes and as coordinates minor $r$
-and $\vartheta$.
-
-In this case
-
-\begin{align*}
-B^{\tht} & =\frac{1}{R_{0}\sqrt{g_{P}}}\frac{\partial\psi}{\partial r}\,.
-\end{align*}
-We set $\psi=r^{2}/4$ so $\frac{\partial\psi}{\partial r}=|\nabla\psi|=r/2$.
-Due to the circular flux surfaces, we have a orthogonal system and
-$\sqrt{g_{P}}=r$, so $B^{\tht}=1/(2R_{0})$.
+and elements of the mass matrix $M$ are
+\begin{align}
+M_{jk} & =\frac{c_{j}}{2}(\delta_{(j-1)k}+\delta_{jk}).
+\end{align}
+At $k=N$, with $N$ the number of rows, one should replace $\delta_{(j-1)k}$
+by $\delta_{j1}$ for periodic boundary conditions. 
 
 \section*{Perturbation in current density}
 
@@ -191,19 +178,21 @@ Summed up this yields
 \delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0} & =\delta\boldsymbol{B}\times\boldsymbol{j}_{0}-\delta\boldsymbol{B}_{\perp}\times\boldsymbol{j}_{0\perp}+c\nabla\delta p-c(\boldsymbol{h}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0}.\label{eq:jperp}
 \end{align}
 If Eq.~(\ref{eq:j times B0}) is fulfilled, the two extra terms must
-cancel each other. Without the mentioned restriction
-\begin{align}
-(\delta\boldsymbol{B}\times\boldsymbol{j}_{0})_{\parallel} & =c\nabla_{\parallel}\delta p,
-\end{align}
-Eq.~(\ref{eq:jperp}) restricts only perpendicular components with
+cancel each other. Eq.~(\ref{eq:jperp}) restricts only perpendicular
+components with
 \begin{align}
 \delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0} & =(\delta\boldsymbol{B}\times\boldsymbol{j}_{0})_{\perp}+c\nabla_{\perp}\delta p.
 \end{align}
+In addition, the restriction
+\begin{align}
+(\delta\boldsymbol{B}\times\boldsymbol{j}_{0})_{\parallel} & =c\nabla_{\parallel}\delta p
+\end{align}
+follows from the linear perturbation in $p$ made before.
 
-\section*{Finite Volume Methode}
+\section*{Finite volume method to treat current density perturbation}
 
-Now we a similar problem using a FVM scheme. We write the conservative
-form
+Now we solve the linearised current balance in an FVM scheme. We write
+the conservative form
 \begin{align*}
 \nabla\cdot(\boldsymbol{h}_{0}j_{\parallel n})+inh_{0}^{\varphi}j_{\parallel n} & =-\nabla\cdot\boldsymbol{j}_{\perp}^{\text{pol}}-inj_{\perp n}^{\varphi}\,.
 \end{align*}
@@ -345,10 +334,73 @@ on the whole triangle and compute the mean from edges 1 and 2 weighted
 by the edge length of the remaining quantities. The first term on
 the right-hand side will contribute to the vector of unknowns. Derivatives
 $\partial_{1}$ are then computed as differences between values on
-the two nodes of each edge. \textbf{TODO: edge 3, shall we use it
-or not? Problem is that psi is constant there.}
+the two nodes of each edge.
 
 \part*{Old}
+
+or in components of coordinates $x^{k}$ with $k=1,2$ in the poloidal
+plans,
+\begin{align}
+B^{k}\frac{\partial}{\partial x^{k}}p_{n}+inB^{\varphi}p_{n} & =q_{n}\,.
+\end{align}
+
+Generating $\boldsymbol{B}$ from the stream function $\psi=A_{\ph}$
+we obtain
+\begin{align}
+B^{1} & =-\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{2}}\\
+B^{2} & =\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{1}}
+\end{align}
+Here, $g_{p}$ is the metric determinant of the 2D metric tensor in
+the poloidal plane. Using $\psi$ as one coordinate $x^{1}$, and
+the distance $s$ in the poloidal direction with $ds=\sqrt{dR^{2}+dZ^{2}}$,
+we have an orthogonal system with
+\begin{align}
+\hat{g}_{P} & =\left(\begin{array}{cc}
+g_{\psi\psi}\\
+ & 1
+\end{array}\right)
+\end{align}
+This means that $\sqrt{g_{p}}=\sqrt{g_{\psi\psi}}=1/|\nabla\psi|$.
+The transport law becomes
+\begin{align}
+\frac{1}{R\sqrt{g_{p}}}\frac{\partial p_{n}}{\partial s}+inB^{\varphi}p_{n} & =q_{n}\,.
+\end{align}
+This is a one-dimensional problem along the poloidal $\boldsymbol{B}$
+direction. 
+
+\section*{Finite Difference Method}
+
+Multiplying by $-iR\sqrt{g_{p}}$ we obtain
+\begin{align}
+nR\sqrt{g_{p}}B^{\varphi}p_{n}-i\dot{p}_{n} & =-iR\sqrt{g_{p}}q_{n}\,.
+\end{align}
+Discretizing with a forward Euler method and evaluating averages at
+the midpoints we obtain
+\begin{align}
+\frac{n}{2}\left(R^{k}\sqrt{g_{p}^{k}}B^{\varphi k}p_{n}^{k}+R^{k+1}\sqrt{g_{p}^{k+1}}B^{\varphi k+1}p_{n}^{k+1}\right) & -i\frac{p_{n}^{k+1}-p_{n}^{k}}{\Delta s^{k}}\\
+ & =-\frac{1}{2}i\left(R^{k}\sqrt{g_{p}^{k}}q_{n}^{k}+R^{k+1}\sqrt{g_{p}^{k+1}}q_{n}^{k+1}\right)\,.
+\end{align}
+Coefficients should be filled into a sparse matrix and the discrete
+equations solved e.g. by UMFPACK.
+
+\section*{Analytical solution}
+
+\begin{align*}
+i(mB^{\vartheta}+nB^{\varphi})p_{mn} & =q_{mn}\\
+p_{mn} & =\frac{q_{mn}}{i(mB^{\vartheta}+nB^{\varphi})}\,.
+\end{align*}
+We take circular flux surfaces in the large aspect ratio limit, such
+that the scaling with $R$ vanishes and as coordinates minor $r$
+and $\vartheta$.
+
+In this case
+
+\begin{align*}
+B^{\tht} & =\frac{1}{R_{0}\sqrt{g_{P}}}\frac{\partial\psi}{\partial r}\,.
+\end{align*}
+We set $\psi=r^{2}/4$ so $\frac{\partial\psi}{\partial r}=|\nabla\psi|=r/2$.
+Due to the circular flux surfaces, we have a orthogonal system and
+$\sqrt{g_{P}}=r$, so $B^{\tht}=1/(2R_{0})$.
 
 \subsection*{Volumetric source term}
 
