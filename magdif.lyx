@@ -909,8 +909,8 @@ We use the fact that
 \begin_inset Formula 
 \begin{align}
 \boldsymbol{j}_{0}\times\boldsymbol{B}_{0} & =c\nabla p_{0}\nonumber \\
- & =\boldsymbol{j}_{0}^{\text{pol}}\times(B_{0\ph}\nabla\ph)+j_{0}^{\ph}\nabla\ph\times(\nabla\psi\times\nabla\varphi)\nonumber \\
- & =\boldsymbol{j}_{0}^{\text{pol}}\times(B_{0\ph}\nabla\ph)+j_{0\ph}\nabla\psi.
+ & =\boldsymbol{j}_{0}^{\text{pol}}\times(B_{0\ph}\nabla\ph)+j_{0\ph}\nabla\ph\times(\nabla\psi\times\nabla\varphi)\nonumber \\
+ & =\boldsymbol{j}_{0}^{\text{pol}}\times(B_{0\ph}\nabla\ph)+\frac{j_{0\ph}}{R^{2}}\nabla\psi.
 \end{align}
 
 \end_inset
@@ -918,7 +918,7 @@ We use the fact that
 So
 \begin_inset Formula 
 \begin{align}
-\boldsymbol{j}_{0}^{\text{pol}}\times\nabla\ph & =\frac{1}{B_{0\ph}}\left(c\nabla p_{0}-j_{0\ph}\nabla\psi\right),
+\boldsymbol{j}_{0}^{\text{pol}}\times\nabla\ph & =\frac{1}{B_{0\ph}}\left(c\nabla p_{0}-\frac{j_{0\ph}}{R^{2}}\nabla\psi\right),
 \end{align}
 
 \end_inset
@@ -926,7 +926,7 @@ So
 and
 \begin_inset Formula 
 \begin{align}
-\boldsymbol{e}_{1}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}) & =\frac{B_{n\ph}}{B_{0\ph}}\boldsymbol{e}_{1}\cdot\left(c\nabla p_{0}-j_{0\ph}\nabla\psi\right)-j_{0(\ph)}\boldsymbol{e}_{1}\cdot(\boldsymbol{B}_{n}^{\text{pol}}\times\boldsymbol{e}_{3})\nonumber \\
+\boldsymbol{e}_{1}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}) & =\frac{B_{n\ph}}{B_{0\ph}}\boldsymbol{e}_{1}\cdot\left(c\nabla p_{0}-\frac{j_{0\ph}}{R^{2}}\nabla\psi\right)-j_{0(\ph)}\boldsymbol{e}_{1}\cdot(\boldsymbol{B}_{n}^{\text{pol}}\times\boldsymbol{e}_{3})\nonumber \\
  & =\frac{B_{n(\ph)}}{B_{0(\ph)}}\boldsymbol{e}_{1}\cdot\left(c\nabla p_{0}-\frac{j_{0(\ph)}}{R}\nabla\psi\right)-j_{0(\ph)}\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}.
 \end{align}
 
