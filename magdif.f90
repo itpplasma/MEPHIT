@@ -10,8 +10,18 @@ module magdif
     complex(8), intent(out) :: d(n)            ! diagonal of stiffness matrix
     complex(8), intent(out) :: du(n-1)         ! superdiagonal of stiffness matrix
     complex(8), intent(out) :: alpha           ! single entry in stiffness matrix to be periodic
-    complex(8), intent(out) :: Mq              ! right-hand side with mass matrix applied
-    ! TODO: implement
+    complex(8), intent(out) :: Mq(:)           ! right-hand side with mass matrix applied
+
+    integer :: k
+
+    do k=1,n-1
+       d(k) = -a(k) + b(k)/2d0
+       du(k) = a(k) + b(k)/2d0
+       Mq(k) = (c(k+1)*q(k+1)+c(k)*q(k))/2d0
+    end do
+    d(n) = -a(n) + b(n)/2d0
+    Mq(n) = (c(1)*q(1)+c(n)*q(n))/2d0
+    alpha = a(1) + b(1)/2d0
   end subroutine assemble_system
 
   subroutine solve_full(n, d, du, alpha, Mq)

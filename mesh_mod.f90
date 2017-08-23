@@ -1,6 +1,7 @@
 module mesh_mod
   use from_nrtype
   use constants, only : nsorts
+
   integer(i4b), parameter :: n_owners_max=16, legs=3, npqq=4 ! 5 for version with barycenter
   integer(i4b) :: ntri, npoint ! number of trs. & vertices
   integer(i4b) :: ntri_inbou ! number of trs. building inner boundary 

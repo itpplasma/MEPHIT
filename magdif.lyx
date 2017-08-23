@@ -385,7 +385,7 @@ reference "eq:fd3"
 \begin{align}
 a_{k} & =\frac{1}{\Delta s},\\
 b_{k} & =in,\nonumber \\
-c_{k} & =q_{n}^{(k)}.
+c_{k} & =1.
 \end{align}
 
 \end_inset
