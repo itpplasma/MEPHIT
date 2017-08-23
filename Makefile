@@ -1,27 +1,28 @@
 # compiler
 
-TOOLCHAIN = intel
+TOOLCHAIN = gnu
+PROJLIBS = $(HOME)/CODE/Libs
 
 ifeq ($(TOOLCHAIN),intel)
 	FC := ifort
 	CC := icc
-	FCFLAGS = -c -g -O0 -mkl
+	FCFLAGS = -c -g -O0 -mkl -check bounds -implicitnone
 	CCFLAGS = -c -g -O0 -mkl
 else ifeq ($(TOOLCHAIN),gnu)
 	FC := gfortran
 	CC := gcc
-	FCFLAGS = -c -g -Og -Wall -fbacktrace
+	FCFLAGS = -c -g -Og -Wall -fbacktrace -fcheck=bounds -fimplicit-none
 	CCFLAGS = -c -g -Og -Wall
+	PROJLIBS := $(PROJLIBS)/GNU
 endif
 
-PROJLIBS = $(HOME)/CODE/Libs
 
 SUPERLU_DIR = $(PROJLIBS)/SuperLU_5.2.1
 SUPERLU_LIB = $(SUPERLU_DIR)/lib
 SUPERLU_HDR = $(SUPERLU_DIR)/SRC
 SUPERLU_F90 = $(SUPERLU_DIR)/FORTRAN
 
-SUITESPARSE_DIR = $(PROJLIBS)/SuiteSparse-4.5.3
+SUITESPARSE_DIR = $(PROJLIBS)/SuiteSparse-4.5.5
 SUITESPARSE_LIB = $(SUITESPARSE_DIR)/lib
 SUITESPARSE_HDR = $(SUITESPARSE_DIR)/include
 SUITESPARSE_F90 = $(SUITESPARSE_DIR)/UMFPACK/Demo
@@ -31,7 +32,7 @@ LDFLAGS = -L $(SUITESPARSE_LIB) -L $(SUPERLU_LIB) -lsuperlu -lumfpack -lamd -lch
           -lcolamd -lcamd -lmetis -lccolamd  
 
 ifeq ($(TOOLCHAIN),intel)
-	LDFLAGS += -limf -lirc
+	LDFLAGS += -limf -lirc -mkl
 else ifeq ($(TOOLCHAIN),gnu)
 	LDFLAGS += -lopenblas -lpthread
 endif

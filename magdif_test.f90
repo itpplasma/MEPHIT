@@ -1,23 +1,15 @@
 program magdif_test
-  
+
   use from_nrtype
-  use constants,     only : pi, clight, amass, echarge, ev2erg, erg2ev, nsorts, charge,       &
-                            one3rd, isort1, isort2
-  use mesh_mod,      only : n_owners_max, legs, ntri, npoint, ntri_inbou, bphicovar,          &
-                            mesh_point, mesh_element, inbou_list, grad_PhiovB2,               &
-                            i_pfz, i_dpr, i_sol, i_dpl, i_inb, R_bou, Z_bou, S_bou,           &
-                            mesh_element_rmp
-  use sparse_mod,    only : sparse_example
+  use constants,     only : pi
+  use mesh_mod,      only : ntri, npoint, mesh_point, mesh_element
+      
   use magdif,        only : assemble_system
+  use sparse_mod,    only : column_full2pointer, column_pointer2full, full2sparse, remap_rc, &
+       sparse2full, sparse_matmul, sparse_solve
 
   implicit none
 
-  integer :: k, npmin, npmax, n
-  complex(8), allocatable, dimension(:) :: a, b, c, q, d, du, Mq
-  complex(8) :: alpha
-  
-  print *, "MAGDIF test start"
-  
   open(1,file='points.dat',form='unformatted')
   read(1) npoint
   print *, npoint
@@ -31,35 +23,77 @@ program magdif_test
   read(1) mesh_element
   close(1)
 
-  npmin = 52
-  npmax = 101
-  open(1,file='points.out')
-  do k=npmin,npmax
-     write(1,*) mesh_point(k)%rcoord, mesh_point(k)%zcoord
-  end do
-  close(1)
+  call test_linear_system()
 
-  n = 2
-  
-  allocate(a(npmax-npmin+1), b(npmax-npmin+1), c(npmax-npmin+1), q(npmax-npmin+1))
-  allocate(d(npmax-npmin+1), du(npmax-npmin), Mq(npmax-npmin+1))
-  do k=npmin, npmax
-     a(k-npmin+1) = 1d0/sqrt(mesh_point(k)%rcoord**2 + mesh_point(k)%zcoord**2)
-  end do
+contains
 
-  b = (0d0,1d0)*n
-  c = 1d0
-  q = 1d0
+  subroutine test_linear_system()
 
-  call assemble_system(npmax-npmin+1, a, b, c, q, d, du, alpha, Mq)
+    integer :: k, npmin, npmax, n, nrow
+    complex(8), allocatable, dimension(:) :: a, b, c, q, d, du, rhs, xvec
+    complex(8) :: alpha
 
-  !print *, d
-  !print *, du
-  !print *, alpha
-  !print *, Mq
+    integer, allocatable, dimension(:) :: irow, icol, pcol
+    complex(8), allocatable, dimension(:) :: aval
+    complex(8), allocatable, dimension(:,:) :: Amat
+    integer :: ncol, nz
+    
+    npmin = 52
+    npmax = 101
+    nrow = npmax-npmin+1
+    
+    open(1,file='points.out')
+    do k=npmin,npmax
+       write(1,*) mesh_point(k)%rcoord, mesh_point(k)%zcoord
+    end do
+    close(1)
 
-  call sparse_example(1)
-  
-  deallocate(a,b,c,q,d,du,Mq)
-  print *, "MAGDIF test end"
+    n = 2
+
+    allocate(a(nrow), b(nrow), c(nrow), q(nrow))
+    allocate(d(nrow), du(nrow-1), rhs(nrow), xvec(nrow))
+    
+    do k=npmin, npmax
+       a(k-npmin+1) = 1d0/sqrt(mesh_point(k)%rcoord**2 + mesh_point(k)%zcoord**2)
+    end do
+
+    b = (0d0,1d0)*n
+    c = 1d0
+    q = 1d0
+
+    call assemble_system(nrow, a, b, c, q, d, du, alpha, rhs)
+   
+    allocate(irow(2*nrow), icol(2*nrow), aval(2*nrow))
+    allocate(Amat(nrow,nrow))
+    do k = 1,nrow-1
+       ! diagonal entries
+       irow(2*k-1) = k
+       icol(2*k-1) = k
+       aval(2*k-1) = d(k)
+
+       ! off-diagonal upper
+       irow(2*k) = k
+       icol(2*k) = k+1
+       aval(2*k) = du(k)
+    end do
+    ! off-diagonal last entry
+    irow(2*nrow-1) = nrow
+    icol(2*nrow-1) = 1
+    aval(2*nrow-1) = alpha
+    
+    ! diagonal last entry
+    irow(2*nrow) = nrow
+    icol(2*nrow) = nrow
+    aval(2*nrow) = d(nrow)
+
+    call remap_rc(2*nrow,nz,irow,icol,aval)
+    call sparse_solve(nrow,nrow,nz,irow,icol,aval,rhs)
+
+    ! Test numerical error
+    !call sparse_matmul(nrow,nrow,irow,icol,aval,rhs,xvec)
+    !print *, xvec
+    
+    deallocate(a,b,c,q,d,du,rhs,xvec)
+    deallocate(irow,icol,aval)
+  end subroutine test_linear_system
 end program magdif_test
