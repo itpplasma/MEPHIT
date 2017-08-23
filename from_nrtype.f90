@@ -1,4 +1,5 @@
 module from_nrtype
+  implicit none
 ! Symbolic names for kind types of 4-, 2-, and 1-byte integers:
   INTEGER, PARAMETER :: I4B = SELECTED_INT_KIND(9)
   INTEGER, PARAMETER :: I2B = SELECTED_INT_KIND(4)

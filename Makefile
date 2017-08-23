@@ -1,40 +1,71 @@
 # compiler
-FC := gfortran
-CC := gcc
 
-PROJLIBS = $(HOME)/CODE/Libs/
-SUITESPARSE_DIR = $(PROJLIBS)SuiteSparse-4.5.3/
-SUITESPARSE_LIB = $(SUITESPARSE_DIR)lib/
-SUITESPARSE_HDR = $(SUITESPARSE_DIR)include/
-SUITESPARSE_F90 = $(SUITESPARSE_DIR)UMFPACK/Demo/
-SUITESPARSE_CFLAGS = -I $(SUITESPARSE_HDR)
+TOOLCHAIN = intel
 
-# compile flags
-FCFLAGS = -g -c -fdefault-real-8 -fbacktrace -fno-align-commons -fbounds-check
-CFLAGS = 
+ifeq ($(TOOLCHAIN),intel)
+	FC := ifort
+	CC := icc
+	FCFLAGS = -c -g -O0 -mkl
+	CCFLAGS = -c -g -O0 -mkl
+else ifeq ($(TOOLCHAIN),gnu)
+	FC := gfortran
+	CC := gcc
+	FCFLAGS = -c -g -Og -Wall -fbacktrace
+	CCFLAGS = -c -g -Og -Wall
+endif
+
+PROJLIBS = $(HOME)/CODE/Libs
+
+SUPERLU_DIR = $(PROJLIBS)/SuperLU_5.2.1
+SUPERLU_LIB = $(SUPERLU_DIR)/lib
+SUPERLU_HDR = $(SUPERLU_DIR)/SRC
+SUPERLU_F90 = $(SUPERLU_DIR)/FORTRAN
+
+SUITESPARSE_DIR = $(PROJLIBS)/SuiteSparse-4.5.3
+SUITESPARSE_LIB = $(SUITESPARSE_DIR)/lib
+SUITESPARSE_HDR = $(SUITESPARSE_DIR)/include
+SUITESPARSE_F90 = $(SUITESPARSE_DIR)/UMFPACK/Demo
+
 # link flags
-FLFLAGS = -L $(SUITESPARSE_DIR)/lib -lumfpack
+LDFLAGS = -L $(SUITESPARSE_LIB) -L $(SUPERLU_LIB) -lsuperlu -lumfpack -lamd -lcholmod \
+          -lcolamd -lcamd -lmetis -lccolamd  
+
+ifeq ($(TOOLCHAIN),intel)
+	LDFLAGS += -limf -lirc
+else ifeq ($(TOOLCHAIN),gnu)
+	LDFLAGS += -lopenblas -lpthread
+endif
+
 
 # source files and objects
-SRCS = $(patsubst %.f90, %.o, $(wildcard *.f90))
-#       $(patsubst %.h, %.mod, $(wildcard *.h))
+SRC = from_nrtype.f90 orbit_mod.f90 mesh_mod.f90 \
+      sparse_mod.f90 magdif.f90 magdif_test.f90
+SRCS = $(patsubst %.f90, %.o, $(SRC))
 
 # program name
 PROGRAM = magdif_test
 
+.PHONY: all clean
+
 all: $(PROGRAM)
 
-$(PROGRAM): $(SRCS) umf4_f77wrapper.o umf4_f77zwrapper.o
-	$(FC) $(FLFLAGS) -o $@ $^
+$(PROGRAM): $(SRCS) c_fortran_dgssv.o c_fortran_zgssv.o umf4_f77wrapper.o umf4_f77zwrapper.o
+	$(FC) -o $@ $^ $(LDFLAGS)
 
 %.o: %.f90
-	$(FC) $(FCFLAGS) -o $@ $<
+	$(FC) -o $@ $< $(FCFLAGS) 
 
-umf4_f77wrapper.o: $(SUITESPARSE_F90)umf4_f77wrapper.c
-	$(CC) $(CFLAGS) -c $(SUITESPARSE_CFLAGS) -o $@ $^ -DDLONG
+c_fortran_dgssv.o: $(SUPERLU_F90)/c_fortran_dgssv.c
+	$(CC) $(CCFLAGS) -I $(SUPERLU_HDR) -o $@ $^
 
-umf4_f77zwrapper.o: $(SUITESPARSE_F90)umf4_f77zwrapper.c
-	$(CC) $(CFLAGS) -c $(SUITESPARSE_CFLAGS) -o $@ $^ -DZLONG
+c_fortran_zgssv.o: $(SUPERLU_F90)/c_fortran_zgssv.c
+	$(CC) $(CCFLAGS) -I $(SUPERLU_HDR) -o $@ $^
+
+umf4_f77wrapper.o: $(SUITESPARSE_F90)/umf4_f77wrapper.c
+	$(CC) $(CCFLAGS) -I $(SUITESPARSE_HDR) -DDLONG -o $@ $^
+
+umf4_f77zwrapper.o: $(SUITESPARSE_F90)/umf4_f77zwrapper.c
+	$(CC) $(CCFLAGS) -I $(SUITESPARSE_HDR) -DZLONG -o $@ $^
 
 clean:
 	rm -f *.o *.mod
