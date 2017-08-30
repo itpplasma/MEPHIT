@@ -34,7 +34,7 @@ program axis
 !  integer, parameter :: iterat=200, nt_core=100, nr_core_max=100, nr_pfr=30, nt_pfr=20, nr_sol=60
 ! case: "fine":
 !  integer, parameter :: iterat=200, nt_core=200, nr_core_max=200, nr_pfr=30, nt_pfr=20, nr_sol=60
-! case: "extracourse":
+! case: "extracoarse":
 integer, parameter :: iterat=200, nt_core=50, nr_core_max=30, nr_pfr=30, nt_pfr=20, nr_sol=20  
   
   integer, parameter :: nt_sol=nt_core+2*nt_pfr+1

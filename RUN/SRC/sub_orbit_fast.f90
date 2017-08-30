@@ -9,7 +9,7 @@ subroutine reg_step_fast(isort, ind_tri, iedge_ent, R, phi, Z, vperp, vpar, dt, 
   use constants,         only : one3rd, charge, amass, echarge
   use accuracy_mod,      only : eps_newt, eps_cell
   use mesh_mod,          only : legs, mesh_point, mesh_element, cell_linint,        &      
-                                mesh_element_rmp
+                                mesh_element_rmp, bphicovar
   use reg_step_tria_mod, only : abr,abz,aphir,aphiz,apsir,apsiz,                    &
                                 binv_vert1,phiovb2_vert1,Rcell,sizmax,              &
                                 deltatri,R_vert,Z_vert
@@ -35,7 +35,8 @@ use esche_hujnja
 !
   double complex :: cdummy,expon,countden,countpres,countparcurr
 !
-
+  double precision :: bphicovar_interp, psival(3), psi, psi_h
+  
   ierr = 0
   ierr_tri = 0
 !
@@ -67,7 +68,13 @@ use esche_hujnja
     countparcurr=wpart_rmp*conjg(expon)*vpar/R
   endif
 !
-  call reg_step_tria(isort, leg_exit, iedge_ent, R, phi, Z, vperp, vpar, dt, ierr)
+  psival(:) = mesh_point(mesh_element(ind_tri)%i_knot(:))%psi_pol
+  psi = cell_linint(ind_tri, R, Z, psival)
+  psi_h = psival(mesh_element(ind_tri)%knot_h)
+  bphicovar_interp = bphicovar + mesh_element(ind_tri)%dbphicovdpsi*(psi-psi_h)
+       
+  call reg_step_tria(isort, leg_exit, iedge_ent, R, phi, Z, vperp, vpar, &
+       bphicovar_interp, dt, ierr)
 !
   damp_prob=0.5d0*wdamp_rate*dt            !damping of the weight (wdamp_rate=$\nu_0$)
 !  wpart_rmp=wpart_rmp+0.5d0*dt*cdummy
@@ -229,10 +236,11 @@ end subroutine reg_step_fast
 !!$end subroutine check_boundary
 !=============================================================================
 !
-  subroutine reg_step_tria(isort, leg_exit, iedge_ent, R, phi, Z, vperp, vpar, dt, ierr)
+subroutine reg_step_tria(isort, leg_exit, iedge_ent, R, phi, Z, vperp, vpar, &
+     bphicovar_interp, dt, ierr)
 !
   use constants,         only : pi
-  use mesh_mod,          only : bphicovar 
+  use mesh_mod,          only : bphicovar
   use accuracy_mod,      only : eps_newt
   use renorm_mod,        only : vref, rhoref, elpref
   use reg_step_tria_mod, only : abr,abz,aphir,aphiz,apsir,apsiz,        &
@@ -256,6 +264,7 @@ end subroutine reg_step_fast
   double precision :: coint,siint,phinew
   double precision :: expon1,expon2,sc
   double precision, dimension(4) :: varphi
+  double precision :: bphicovar_interp
 integer :: jjj, j
 !
   ierr=0
@@ -332,7 +341,7 @@ integer :: jjj, j
 !   
     phinew=(vpar*binv0+(apsir_pt*acoef_r+apsiz_pt*acoef_z)*dt**2/6.d0 &
           -0.5d0*(apsir_pt*bcoef_r+apsiz_pt*bcoef_z)*dt)*dt
-    phinew=phi+phinew*bphicovar/Rcell**2
+    phinew=phi+phinew*bphicovar_interp*(2d0/(R+Rnew))**2
 !
     binv=binv_vert1+abr*(Rnew-R_vert(1))+abz*(Znew-Z_vert(1))
 !
@@ -445,8 +454,14 @@ integer :: jjj, j
 !
   phinew=(vpar*binv0+apsir_pt*(R-R_a)+apsiz_pt*(Z-Z_a))*dt   &
         -(apsir_pt*R_c+apsiz_pt*Z_c)*coint-(apsir_pt*R_s+apsiz_pt*Z_s)*siint
-!phinew=(vpar*binv0*dt)
-  phinew=phi+phinew*bphicovar/Rcell**2
+  !phinew=(vpar*binv0*dt)
+  !phinew=phi+2d0*phase
+
+  !do k=1,3
+  !   phival(k) = 
+  !end do
+  
+  phinew=phi+phinew*bphicovar_interp*(2d0/(R+Rnew))**2
 !
   binv=binv_vert1+abr*(Rnew-R_vert(1))+abz*(Znew-Z_vert(1))
   vperp=vperp*sqrt(binv0/binv)
