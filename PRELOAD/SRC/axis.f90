@@ -30,8 +30,12 @@ program axis
 !
 ! case: "finer":
 !  integer, parameter :: iterat=200, nt_core=200, nr_core_max=150, nr_pfr=30, nt_pfr=20, nr_sol=60 
-
-  integer, parameter :: iterat=200, nt_core=100, nr_core_max=100, nr_pfr=30, nt_pfr=20, nr_sol=60
+! case: "coarse":
+!  integer, parameter :: iterat=200, nt_core=100, nr_core_max=100, nr_pfr=30, nt_pfr=20, nr_sol=60
+! case: "fine":
+!  integer, parameter :: iterat=200, nt_core=200, nr_core_max=200, nr_pfr=30, nt_pfr=20, nr_sol=60
+! case: "extracourse":
+integer, parameter :: iterat=200, nt_core=50, nr_core_max=30, nr_pfr=30, nt_pfr=20, nr_sol=20  
   
   integer, parameter :: nt_sol=nt_core+2*nt_pfr+1
   real*8, dimension(1:nt_sol) :: R_sep, Z_sep
@@ -41,7 +45,8 @@ program axis
   real*8, dimension(1:nt_core) :: delta_theta
   logical :: out_of_cw, wall_touch
   integer :: ibou_b2_pfr, ibou_b2_sol, number_of_points
-  integer, parameter :: n_rational = 5 ! for refinement at rational surfaces
+  integer, parameter :: n_rational = 0
+!  integer, parameter :: n_rational = 5 ! for refinement at rational surfaces
   real*8 :: d_rational(n_rational) ! TODO: don't hardcode this
   real*8 :: tau_rad, tau_rad_old
   integer :: nr_core
@@ -61,10 +66,10 @@ program axis
   !  d_rational(10) = .997d0 ! q=6
   
   d_rational(1) = .335d0  ! q=1.5
-  d_rational(2) = .444d0  ! q=2 
-  d_rational(3) = .505d0  ! q=2.5
-  d_rational(4) = .558d0  ! q=3
-  d_rational(5) = .608d0  ! q=3.5
+  d_rational(2) = .445d0  ! q=2 
+  d_rational(3) = .506d0  ! q=2.5
+  d_rational(4) = .561d0  ! q=3
+  d_rational(5) = .611d0  ! q=3.5
   ! d_rational(6) = .667d0 ! q=4.0
   
   open(11, file='flt.inp')
@@ -222,6 +227,9 @@ program axis
        R_coord(nt_core,nr_core_max+1), Z_coord(nt_core,nr_core_max+1), ipoi_core(nt_core+1,nr_core_max+1))
 ! nt_core+1 to close the array ipoint after period
 
+!
+  open(112,file='RZpsirho.dat')
+!
   do i=1,nr_core_max
      if (i==1) then
         tau_rad = 0.0
