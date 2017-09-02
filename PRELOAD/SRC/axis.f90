@@ -29,13 +29,13 @@ program axis
 !  integer, parameter :: iterat=200, nt_core=100, nr_core=20, nr_pfr=30, nt_pfr=20, nr_sol=20 
 !
 ! case: "finer":
-!  integer, parameter :: iterat=200, nt_core=200, nr_core_max=150, nr_pfr=30, nt_pfr=20, nr_sol=60 
+  integer, parameter :: iterat=200, nt_core=200, nr_core_max=150, nr_pfr=30, nt_pfr=20, nr_sol=60 
 ! case: "coarse":
 !  integer, parameter :: iterat=200, nt_core=100, nr_core_max=100, nr_pfr=30, nt_pfr=20, nr_sol=60
 ! case: "fine":
 !  integer, parameter :: iterat=200, nt_core=200, nr_core_max=200, nr_pfr=30, nt_pfr=20, nr_sol=60
 ! case: "extracoarse":
-integer, parameter :: iterat=200, nt_core=50, nr_core_max=30, nr_pfr=30, nt_pfr=20, nr_sol=20  
+!integer, parameter :: iterat=200, nt_core=50, nr_core_max=30, nr_pfr=30, nt_pfr=20, nr_sol=20  
   
   integer, parameter :: nt_sol=nt_core+2*nt_pfr+1
   real*8, dimension(1:nt_sol) :: R_sep, Z_sep

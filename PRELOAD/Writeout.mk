@@ -4,7 +4,8 @@ FC       = gfortran
 
 #OPTS= -O0 --chk a,e,s,u,x --trace --trap -g -M OBJS
 #OPTS= -O -M OBJS
-OPTS= -O -J OBJS
+#OPTS= -O -J OBJS
+OPTS = -Og -g -fbacktrace -fimplicit-none
 #OPTS = -O0 -check all -check noarg_temp_created -check uninit -g -traceback -fpe0 -module OBJS
 
 OBJS =  OBJS/from_nrtype.o \

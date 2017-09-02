@@ -610,9 +610,7 @@ subroutine gen_dbphicovdpsi(ktri)
   real(dp) :: absgradpsi1, absgradpsi2 ! absolute values of grad psi
   real(dp) :: deltab, deltapsi1, deltapsi2
 
-  do k=1,3
-     kno(k) = mesh_element(ktri)%i_knot(k)
-  end do
+  kno(:) = mesh_element(ktri)%i_knot(:)
   
   ! find point for which edges are not on the same flux surface
   do k=1,3
@@ -640,9 +638,7 @@ subroutine gen_dbphicovdpsi(ktri)
 
   if (cmatch < 2) return
 
-  do k=1,3
-     kno2(k) = mesh_element(ktri2)%i_knot(k)
-  end do
+  kno2(:) = mesh_element(ktri2)%i_knot(:)  
 
   ! find far knot of adjacent triangle
   do kfar2=1,3
@@ -650,16 +646,20 @@ subroutine gen_dbphicovdpsi(ktri)
   end do  
 
   absgradpsi1 = sqrt(mesh_element(ktri)%dPsi_dR**2 + mesh_element(ktri)%dPsi_dZ**2)
-  absgradpsi2 = sqrt(mesh_element(k)%dPsi_dR**2 + mesh_element(k)%dPsi_dZ**2)
+  absgradpsi2 = sqrt(mesh_element(ktri2)%dPsi_dR**2 + mesh_element(ktri2)%dPsi_dZ**2)
   
-  deltab = bphicovar*(absgradpsi1-absgradpsi2)/(absgradpsi1+absgradpsi2)
+  deltab = bphicovar*(absgradpsi1-absgradpsi2)/(absgradpsi1+absgradpsi2)  
   deltapsi1 = mesh_point(kno(mod(kfar,3)+1))%psi_pol - mesh_point(kno(kfar))%psi_pol
   deltapsi2 = mesh_point(kno2(kfar2))%psi_pol - mesh_point(kno2(mod(kfar2,3)+1))%psi_pol
 
+!print *, ktri, deltab/bphicovar, absgradpsi1, absgradpsi2
+  
   mesh_element(ktri)%knot_h  = kfar
   mesh_element(ktri2)%knot_h = kfar2
-  mesh_element(ktri)%dbphicovdpsi = -deltab/deltapsi1
+  mesh_element(ktri)%dbphicovdpsi = deltab/deltapsi1
   mesh_element(ktri2)%dbphicovdpsi = deltab/deltapsi2
+!print *, ktri, mesh_element(ktri)%dbphicovdpsi
+!print *, ktri2, mesh_element(ktri2)%dbphicovdpsi
 
 end subroutine gen_dbphicovdpsi
 

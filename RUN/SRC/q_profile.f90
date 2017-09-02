@@ -52,7 +52,7 @@ program q_profile
   double complex   :: bnorm_vac,bnorm_plas
 
   ! TODO: get this from axis.f90
-  integer :: nr_core=1000
+  integer :: nr_core=5000
   double precision :: R_o=172.74461503599866, Z_o=10.313710665604722
   double precision :: R_x=142.27640211007648, Z_x=-95.294670798084724
   double precision :: delta_xo
@@ -60,6 +60,8 @@ program q_profile
   double precision :: dt, vpar, vperp
   integer :: ind_tri, ind_tri_orig, iedge_ent
   logical :: intri, check_in_tri
+
+  double precision :: psi, psi_h, bphicovar_interp
 
   external  ran_u_01, check_in_tri
 !#ifdef PARALLEL
@@ -228,13 +230,13 @@ program q_profile
 
 
   ! Q profile generation
-  delta_xo = 1.d0/dfloat(nr_core-1)
+  delta_xo = 0.95*1.d0/dfloat(nr_core-1)
   
   do i=1,nr_core-1
      !R = R_x + sqrt(1.d0-delta_xo*dfloat(i-1))*(R_o - R_x)
      !Z = Z_x + sqrt(1.d0-delta_xo*dfloat(i-1))*(Z_o - Z_x)
 
-     R = R_o + delta_xo*dfloat(i-1)*(R_x-R_o)
+     R = R_o + delta_xo*dfloat(i-1)*(R_x-R_o)*1.1
      Z = Z_o + delta_xo*dfloat(i-1)*(Z_x-Z_o)
      
      do ind_tri=1,ntri
@@ -266,8 +268,12 @@ program q_profile
      end do
 
      !dummy_re = 1.d0/3.d0*sum(mesh_point(mesh_element(ind_tri)%i_knot(:))%psi_pol)
-     dummy_re = interp_psi(ind_tri, R, Z)
-     print *, delta_xo*dfloat(i-1), dummy_re, phi/(2.d0*pi)
+     psi = interp_psi(ind_tri, R, Z)
+     psi_h = mesh_point(mesh_element(ind_tri)%i_knot(mesh_element(ind_tri)%knot_h))%psi_pol
+     !print *, ind_tri, psi_h
+     bphicovar_interp = bphicovar + mesh_element(ind_tri)%dbphicovdpsi*(psi-psi_h)
+     print *, delta_xo*dfloat(i-1), phi/(2.d0*pi), psi_h, psi, bphicovar, bphicovar_interp
+     !print *, ind_tri, mesh_element(ind_tri)%dbphicovdpsi
   end do
 
 contains
@@ -279,12 +285,9 @@ real(dp) function interp_psi(ind_tri, R, Z)
 
   integer(i4b), intent(in) :: ind_tri
   real(dp),     intent(in) :: R, Z
-  integer(i4b) :: k
   real(dp) :: psival(3)
   
-  do k=1,3
-     psival(k) =  mesh_point(mesh_element(ind_tri)%i_knot(k))%psi_pol
-  end do
+  psival(:) =  mesh_point(mesh_element(ind_tri)%i_knot(:))%psi_pol
   
   interp_psi = cell_linint(ind_tri, R, Z, psival)
 end function interp_psi
