@@ -324,6 +324,45 @@ pol
 \end_inset
 
  plane.
+ This can also be written as
+\begin_inset Formula 
+\begin{align}
+(\nabla\psi\times\nabla\varphi)\cdot\nabla p_{n}+\frac{in}{R^{2}}B_{0\varphi}p_{n} & =B_{n}^{r}p_{0}^{\prime}(r),\label{eq:magdifp-2}
+\end{align}
+
+\end_inset
+
+where 
+\begin_inset Formula $r$
+\end_inset
+
+ is any flux surface label.
+ In cylindrical coordinates we have
+\begin_inset Formula 
+\begin{align}
+B_{0}^{R}=(\nabla\psi\times\nabla\varphi)^{R} & =\frac{1}{R}\frac{\partial\psi}{\partial Z},\\
+B_{0}^{Z}=(\nabla\psi\times\nabla\varphi)^{Z} & =-\frac{1}{R}\frac{\partial\psi}{\partial R}.
+\end{align}
+
+\end_inset
+
+Finally, we write the form
+\begin_inset Formula 
+\begin{align}
+R\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}+inB_{0(\varphi)}p_{n} & =RB_{n}^{r}p_{0}^{\prime}(r).\label{eq:magdifp-2-1}
+\end{align}
+
+\end_inset
+
+Or normalized
+\begin_inset Formula 
+\begin{align}
+R\boldsymbol{h}_{0}^{\text{pol}}\cdot\nabla p_{n}+inh_{0(\varphi)}p_{n} & =Rh_{n}^{r}p_{0}^{\prime}(r).\label{eq:magdifp-2-1-1}
+\end{align}
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Section*
@@ -346,7 +385,7 @@ reference "eq:magdifp"
  midpoint values for the remaining terms, and periodic boundary conditions.
 \begin_inset Formula 
 \begin{align}
-\boldsymbol{B}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}}(p_{n}^{(k+1)}-p_{n}^{(k)})+\frac{inB_{0}^{\varphi}}{2}(p_{n}^{(k+1)}+p_{n}^{(k)}) & =\frac{p_{0}^{\prime}(\psi)}{2}(B_{n}^{\psi(k+1)}+B_{n}^{\psi(k)}).\label{eq:magdifp-1}
+\boldsymbol{h}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}}(p_{n}^{(k+1)}-p_{n}^{(k)})+\frac{inh_{0}^{\varphi}}{2}(p_{n}^{(k+1)}+p_{n}^{(k)}) & =\frac{p_{0}^{\prime}(\psi)}{2}(h_{n}^{\psi(k+1)}+h_{n}^{\psi(k)}).\label{eq:magdifp-1}
 \end{align}
 
 \end_inset
@@ -354,7 +393,7 @@ reference "eq:magdifp"
 This equation has the general form
 \begin_inset Formula 
 \begin{align}
-\left(a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k+1)}+\left(-a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k)} & =\frac{c_{k}}{2}(B_{n}^{\psi(k+1)}+B_{n}^{\psi(k)}),
+\left(a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k+1)}+\left(-a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k)} & =\frac{c_{k}}{2}(h_{n}^{\psi(k+1)}+h_{n}^{\psi(k)}),
 \end{align}
 
 \end_inset
@@ -362,8 +401,8 @@ This equation has the general form
 with
 \begin_inset Formula 
 \begin{align}
-a_{k} & =\boldsymbol{B}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}},\\
-b_{k} & =inB_{0}^{\varphi},\\
+a_{k} & =\boldsymbol{h}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}},\\
+b_{k} & =inh_{0}^{\varphi},\\
 c_{k} & =p_{0}^{\prime}(\psi).
 \end{align}
 
@@ -397,7 +436,7 @@ c_{k} & =1.
 In general matrix form such a scheme is written as
 \begin_inset Formula 
 \begin{align}
-A_{jk}p_{n}^{(k)} & =M_{jk}B_{n}^{\psi(k)},
+A_{jk}p_{n}^{(k)} & =M_{jk}h_{n}^{\psi(k)},
 \end{align}
 
 \end_inset
@@ -818,6 +857,16 @@ Via normalisation via
 
 , its orientation, and the edge length/orientation, this term describing
  currents across flux surfaces can be computed right away.
+ Unperturbed currents are
+\begin_inset Formula 
+\begin{align}
+j_{0}^{R} & =\frac{1}{R}\frac{\partial B_{0\ph}}{\partial Z},\\
+j_{0}^{Z} & =-\frac{1}{R}\frac{\partial B_{0\ph}}{\partial R}.
+\end{align}
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Subsection*

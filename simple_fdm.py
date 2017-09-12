@@ -1,8 +1,8 @@
 import numpy as np
 import matplotlib.pyplot as plt
 
-ns = 100
-ds = 2*np.pi/(ns+1)
+ns = 10
+ds = 2*np.pi/ns
 
 s = np.linspace(0,2*np.pi-ds,ns)
 n = 1
@@ -25,7 +25,11 @@ pnnum = np.linalg.solve(A,qnnum)
 plt.figure()
 plt.plot(pn)
 plt.plot(qn)
-plt.plot(pnnum)
+plt.plot(pnnum, 'x')
+
+x = np.loadtxt('test_fdm_simple_x.out')
+plt.plot(x[:,0], 'o')
 plt.show()
 
-
+rtri = np.loadtxt('test_triangle_strip.out')
+plt.plot(rtri[:,0],rtri[:,1],'x')
