@@ -285,7 +285,7 @@ Within linear perturbation theory where
 , a source term enters the right-hand side with
 \begin_inset Formula 
 \begin{align}
-\boldsymbol{B}_{0}\cdot\nabla\delta p & =-\delta\boldsymbol{B}\cdot\nabla p_{0}=\delta B^{\psi}p_{0}^{\prime}(\psi).
+\boldsymbol{B}_{0}\cdot\nabla\delta p & =-\delta\boldsymbol{B}\cdot\nabla p_{0}=-\delta B^{\psi}p_{0}^{\prime}(\psi).
 \end{align}
 
 \end_inset
@@ -310,7 +310,7 @@ The remaining equations in the poloidal
  plane for each harmonic are
 \begin_inset Formula 
 \begin{align}
-\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}+inB_{0}^{\varphi}p_{n} & =B_{n}^{\psi}p_{0}^{\prime}(\psi),\label{eq:magdifp}
+\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}+inB_{0}^{\varphi}p_{n} & =-B_{n}^{\psi}p_{0}^{\prime}(\psi),\label{eq:magdifp}
 \end{align}
 
 \end_inset
@@ -327,7 +327,7 @@ pol
  This can also be written as
 \begin_inset Formula 
 \begin{align}
-(\nabla\psi\times\nabla\varphi)\cdot\nabla p_{n}+\frac{in}{R^{2}}B_{0\varphi}p_{n} & =B_{n}^{r}p_{0}^{\prime}(r),\label{eq:magdifp-2}
+(\nabla\psi\times\nabla\varphi)\cdot\nabla p_{n}+\frac{in}{R^{2}}B_{0\varphi}p_{n} & =-B_{n}^{r}p_{0}^{\prime}(r),\label{eq:magdifp-2}
 \end{align}
 
 \end_inset
@@ -349,7 +349,7 @@ B_{0}^{Z}=(\nabla\psi\times\nabla\varphi)^{Z} & =-\frac{1}{R}\frac{\partial\psi}
 Finally, we write the form
 \begin_inset Formula 
 \begin{align}
-R\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}+inB_{0(\varphi)}p_{n} & =RB_{n}^{r}p_{0}^{\prime}(r).\label{eq:magdifp-2-1}
+R\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}+inB_{0(\varphi)}p_{n} & =-RB_{n}^{r}p_{0}^{\prime}(r).\label{eq:magdifp-2-1}
 \end{align}
 
 \end_inset
@@ -357,7 +357,7 @@ R\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}+inB_{0(\varphi)}p_{n} & =RB_{n
 Or normalized
 \begin_inset Formula 
 \begin{align}
-R\boldsymbol{h}_{0}^{\text{pol}}\cdot\nabla p_{n}+inh_{0(\varphi)}p_{n} & =Rh_{n}^{r}p_{0}^{\prime}(r).\label{eq:magdifp-2-1-1}
+R\boldsymbol{h}_{0}^{\text{pol}}\cdot\nabla p_{n}+inh_{0(\varphi)}p_{n} & =-Rh_{n}^{r}p_{0}^{\prime}(r).\label{eq:magdifp-2-1-1}
 \end{align}
 
 \end_inset
@@ -627,7 +627,7 @@ Now we solve the linearised current balance in an FVM scheme.
  We write the conservative form
 \begin_inset Formula 
 \begin{align*}
-\nabla\cdot(\boldsymbol{h}_{0}j_{\parallel n})+inh_{0}^{\varphi}j_{\parallel n} & =-\nabla\cdot\boldsymbol{j}_{\perp}^{\text{pol}}-inj_{\perp n}^{\varphi}\,.
+\nabla\cdot\boldsymbol{J}_{\parallel n}^{{\rm pol}}+inh_{0}^{\varphi}j_{\parallel n} & =-\nabla\cdot\boldsymbol{j}_{\perp}^{\text{pol}}-inj_{\perp n}^{\varphi}\,.
 \end{align*}
 
 \end_inset
@@ -866,6 +866,42 @@ j_{0}^{Z} & =-\frac{1}{R}\frac{\partial B_{0\ph}}{\partial R}.
 
 \end_inset
 
+Comparison to Sergei:
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{equation}
+\boldsymbol{j}_{\perp n}=j_{0\parallel}\frac{\boldsymbol{B}_{\perp n}}{B_{0}}-\frac{cB_{\parallel n}}{B_{0}^{2}}\boldsymbol{h}_{0}\times\nabla p_{0}+\frac{c}{B_{0}}\boldsymbol{h}_{0}\times(\nabla p_{n}+inp_{n}\nabla\ph).
+\end{equation}
+
+\end_inset
+
+We take 
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{j}_{\perp n}\cdot\nabla\psi & =j_{0\parallel}\frac{\boldsymbol{B}_{\perp n}}{B_{0}}\cdot\nabla\psi+\frac{c}{B_{0}}(\boldsymbol{h}_{0}\times(\nabla p_{n}+inp_{n}\nabla\ph))\cdot\nabla\psi.
+\end{align}
+
+\end_inset
+
+We have
+\begin_inset Formula 
+\begin{align}
+\nabla\psi\cdot(\boldsymbol{h}_{0}\times\nabla\ph) & =-\boldsymbol{h}_{0}\cdot(\nabla\psi\times\nabla\ph)=-\boldsymbol{h}_{0}\cdot\boldsymbol{B}_{0}^{\text{pol}},
+\end{align}
+
+\end_inset
+
+and
+\begin_inset Formula 
+\begin{align}
+\nabla\psi\cdot(\boldsymbol{h}_{0}\times\nabla p_{n}) & =\nabla p_{n}\cdot(\nabla\psi\times\boldsymbol{h}_{0})=\nabla p_{n}\cdot(\nabla\psi\times(h_{0\ph}\nabla\ph+\boldsymbol{h}_{0}^{\text{pol}}))\\
+ & =h_{0\ph}\nabla p_{n}\cdot(h_{0\ph}\boldsymbol{B}_{0}^{\text{pol}}+\nabla\psi\times\boldsymbol{h}_{0}^{\text{pol}})
+\end{align}
+
+\end_inset
+
 
 \end_layout
 
@@ -1007,6 +1043,235 @@ For the discretisation we take values such as
 
  are then computed as differences between values on the two nodes of each
  edge.
+\end_layout
+
+\begin_layout Part*
+Basics
+\end_layout
+
+\begin_layout Standard
+With the convention of outwards pointing normals and counter-clockwise ordering
+ of vertices in triangles, we have vectors along and across edges:
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{l} & =l^{R}\boldsymbol{e}_{R}+l^{Z}\boldsymbol{e}_{Z},\\
+\boldsymbol{n} & =l^{Z}\boldsymbol{e}_{R}-l^{R}\boldsymbol{e}_{Z}=\hat{T}\boldsymbol{l},
+\end{align}
+
+\end_inset
+
+with the transformation 
+\begin_inset Formula $\hat{T}$
+\end_inset
+
+ of a 90 degree rotation to the right.
+ 
+\end_layout
+
+\begin_layout Part*
+Implementation
+\end_layout
+
+\begin_layout Standard
+We start with
+\begin_inset Formula 
+\begin{align}
+\int_{1,2}\,\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+\int_{3}\,\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+in\int j_{n}^{\varphi}d\Omega & =0
+\end{align}
+
+\end_inset
+
+Taking 
+\begin_inset Formula $R\approx\text{const.}$
+\end_inset
+
+ in one element.
+\end_layout
+
+\begin_layout Standard
+Approximation of constant fluxes across each edge yields
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align}
+I_{1}+I_{2}-\frac{inl_{3}}{|\nabla\psi|^{2}}\left(cp_{n}-\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right)\boldsymbol{n}_{3}\cdot\nabla\psi+\frac{inS_{\Omega}}{2}(j_{n1}^{\ph}+j_{n2}^{\ph}) & =0.
+\end{align}
+
+\end_inset
+
+with 
+\begin_inset Formula 
+\begin{align*}
+I_{1} & =\int_{1,2}\,\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma.
+\end{align*}
+
+\end_inset
+
+Taking
+\begin_inset Formula 
+\begin{align}
+j_{n}^{\ph} & =-\frac{B_{0(\ph)}}{\partial_{1}\psi}\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}+c\frac{\partial_{1}p_{n}}{\partial_{1}\psi}-\frac{B_{n(\ph)}}{B_{0(\ph)}}\left(c\frac{\partial_{1}p_{0}}{\partial_{1}\psi}-\frac{j_{0(\ph)}}{R}\right)+\frac{j_{0(\ph)}}{\partial_{1}\psi}\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n},
+\end{align}
+
+\end_inset
+
+we get on edge 1 (and similar on edge 2)
+\begin_inset Formula 
+\begin{align}
+j_{n1}^{\ph} & =-\frac{B_{0(\ph)}}{\Delta\psi}I_{1}+c\frac{\Delta p_{n}}{\Delta\psi}-\frac{B_{n(\ph)}}{B_{0(\ph)}}\left(c\frac{\Delta p_{0}}{\Delta\psi}-\frac{j_{0(\ph)}}{R}\right)+\frac{j_{0(\ph)}}{\Delta\psi}l_{1}\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}.
+\end{align}
+
+\end_inset
+
+Here 
+\begin_inset Formula $\Delta\psi=(\psi_{1e}-\psi_{1a})=\boldsymbol{l}_{1}\cdot\nabla\psi=l_{1}\partial_{1}\psi$
+\end_inset
+
+ marks a difference between the two vertices, which is constant for flux
+ surface quantities such as 
+\begin_inset Formula $\psi$
+\end_inset
+
+ or 
+\begin_inset Formula $p_{0}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Standard
+Finally the equation in 
+\begin_inset Formula $I_{1}$
+\end_inset
+
+ and 
+\begin_inset Formula $I_{2}$
+\end_inset
+
+ as unknowns is
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align}
+\left(1-\frac{inS_{\Omega}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)I_{1}+\left(1-\frac{inS_{\Omega}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)I_{2} & =b.\label{eq:I1I2}
+\end{align}
+
+\end_inset
+
+With all the other terms moved to the right-hand side.
+\end_layout
+
+\begin_layout Standard
+In general matrix form, we call the ingoing current into triangle Nr.
+ 
+\begin_inset Formula $(k)$
+\end_inset
+
+ counted in clockwise direction 
+\begin_inset Formula $I^{(k)}$
+\end_inset
+
+.
+ In triangle 
+\begin_inset Formula $(k)$
+\end_inset
+
+, this is equal to 
+\begin_inset Formula $I_{1}=-I^{(k)}$
+\end_inset
+
+ and 
+\begin_inset Formula $I_{2}=I^{(k+1)}$
+\end_inset
+
+.
+ The matrix form of Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:I1I2"
+
+\end_inset
+
+ is then
+\begin_inset Formula 
+\[
+A_{jk}I^{(k)}=\boldsymbol{b}
+\]
+
+\end_inset
+
+where the elements of the stiffness matrix 
+\begin_inset Formula $A$
+\end_inset
+
+ are
+\begin_inset Formula 
+\begin{align}
+A_{jk} & =\left(1-\frac{inS_{\Omega k}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)\delta_{(j-1)k}+\left(-1-\frac{inS_{\Omega k}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)\delta_{jk},
+\end{align}
+
+\end_inset
+
+and the 
+\begin_inset Formula $k$
+\end_inset
+
+th entry of vector 
+\begin_inset Formula $\boldsymbol{b}$
+\end_inset
+
+ is 
+\begin_inset Formula 
+\begin{align*}
+b_{k} & =b_{k}^{1}+b_{k}^{2}+b_{k}^{3}
+\end{align*}
+
+\end_inset
+
+where
+\begin_inset Formula 
+\begin{align}
+b_{k}^{1} & =\frac{in}{|\nabla\psi|^{2}}\left(cp_{n}-\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right)l_{3}\boldsymbol{n}_{3}\cdot\nabla\psi
+\end{align}
+
+\end_inset
+
+is evaluated on edge Nr.
+ 3 (mean value for 
+\begin_inset Formula $p_{n}$
+\end_inset
+
+ there),
+\begin_inset Formula 
+\begin{equation}
+b_{k}^{2}=\frac{B_{n(\ph)}}{B_{0(\ph)}}\left(c\frac{\Delta p_{0}}{\Delta\psi}-\frac{j_{0(\ph)}}{R}\right)
+\end{equation}
+
+\end_inset
+
+is evaluated with constant values inside triangle 
+\begin_inset Formula $k$
+\end_inset
+
+, and 
+\begin_inset Formula 
+\begin{equation}
+b_{k}^{3}=-c\frac{\Delta p_{n}}{\Delta\psi}-\frac{j_{0(\ph)}}{\Delta\psi}l\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n},
+\end{equation}
+
+\end_inset
+
+is an average over edge 1 and 2 of triangle 
+\begin_inset Formula $k$
+\end_inset
+
+.
 \end_layout
 
 \begin_layout Part*
