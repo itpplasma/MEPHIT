@@ -1,0 +1,672 @@
+#LyX 2.2 created this file. For more info see http://www.lyx.org/
+\lyxformat 508
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\begin_preamble
+\usepackage{tikz}
+\end_preamble
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize default
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 2cm
+\topmargin 2cm
+\rightmargin 2cm
+\bottommargin 2cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\quotes_language english
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Standard
+
+\lang british
+\begin_inset FormulaMacro
+\newcommand{\tht}{\vartheta}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\ph}{\varphi}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\balpha}{\boldsymbol{\alpha}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\btheta}{\boldsymbol{\theta}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bJ}{\boldsymbol{J}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bGamma}{\boldsymbol{\Gamma}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bOmega}{\boldsymbol{\Omega}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\d}{\text{d}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\t}[1]{\text{#1}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\m}{\text{m}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bm}{\text{\textbf{m}}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\k}{\text{k}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\i}{\text{i}}
+\end_inset
+
+
+\end_layout
+
+\begin_layout Title
+Magnetic differential equations for stationary linear ideal MHD and their
+ numerical solution
+\end_layout
+
+\begin_layout Section*
+Stationary linear perturbation of ideal MHD equilibrium
+\end_layout
+
+\begin_layout Standard
+For the intended application on stationary (compared to MHD mode eigenfrequencie
+s) non-axisymmetric magnetic perturbations by external coils, we consider
+ a perturbed ideal MHD equilibrium for pressure 
+\begin_inset Formula $p$
+\end_inset
+
+, currents 
+\begin_inset Formula $\boldsymbol{J}$
+\end_inset
+
+ and magnetic field 
+\begin_inset Formula $\boldsymbol{B}$
+\end_inset
+
+ fulfilling
+\begin_inset Formula 
+\begin{align}
+\nabla p & =\frac{1}{c}\boldsymbol{j}\times\boldsymbol{B},\label{eq:mhd-1}\\
+\nabla\times\boldsymbol{B} & =\frac{4\pi}{c}\boldsymbol{j},\label{eq:ampere-1}\\
+\nabla\cdot\boldsymbol{B} & =0.\label{eq:divfree-1}
+\end{align}
+
+\end_inset
+
+Starting with a given MHD equilibrium fulfilling Eqs.
+\begin_inset space ~
+\end_inset
+
+(
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:mhd-1"
+
+\end_inset
+
+-
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:divfree-1"
+
+\end_inset
+
+) denoted by subscripts 
+\begin_inset Quotes eld
+\end_inset
+
+
+\begin_inset Formula $0$
+\end_inset
+
+
+\begin_inset Quotes erd
+\end_inset
+
+, linear order equations for an external magnetic perturbation (denoted
+ by 
+\begin_inset Formula $\delta$
+\end_inset
+
+) split into a vacuum and a plasma part (subscript 
+\begin_inset Formula $v$
+\end_inset
+
+ and 
+\begin_inset Formula $p$
+\end_inset
+
+, respectively) are
+\begin_inset Formula 
+\begin{align}
+\nabla\delta p & =\frac{1}{c}\left(\boldsymbol{j}_{0}\times\delta\boldsymbol{B}+\delta\boldsymbol{j}\times\boldsymbol{B}_{0}\right),\label{eq:mhd}\\
+\delta\boldsymbol{B} & =\delta\boldsymbol{B}_{v}+\delta\boldsymbol{B}_{p},\label{eq:vecpot}\\
+\delta\boldsymbol{B}_{v} & =\frac{1}{c}\oint\frac{I_{c}(\boldsymbol{r}^{\prime})\d\boldsymbol{l}^{\prime}\times\boldsymbol{r}}{|\boldsymbol{r}-\boldsymbol{r}^{\prime}|^{3}},\\
+\delta\boldsymbol{B}_{p} & =\nabla\times\delta\boldsymbol{A},\\
+\nabla\times(\nabla\times\delta\boldsymbol{A}) & =\frac{4\pi}{c}\delta\boldsymbol{j},\label{eq:ampere}\\
+\Rightarrow\nabla\cdot\delta\boldsymbol{B} & =\nabla\cdot\delta\boldsymbol{j}=0.\label{eq:divfree}
+\end{align}
+
+\end_inset
+
+Here the perturbation field in vacuum, 
+\begin_inset Formula $\delta\boldsymbol{B}_{v}$
+\end_inset
+
+, is pre-evaluated by a Biot-Savart integral over external coil currents
+ 
+\begin_inset Formula $I_{c}(\boldsymbol{r}^{\prime})$
+\end_inset
+
+ and the perturbation field in plasma 
+\begin_inset Formula $\delta\boldsymbol{B}_{p}$
+\end_inset
+
+ is computed from Ampère's law 
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:ampere"
+
+\end_inset
+
+ from the plasma current density 
+\begin_inset Formula $\delta\boldsymbol{j}$
+\end_inset
+
+ using a vector potential formulation.
+ To find a consistent solution for the system, Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:mhd"
+
+\end_inset
+
+ and Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:ampere"
+
+\end_inset
+
+ are treated individually in an iterative way.
+ The linearized force balance equation
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:mhd"
+
+\end_inset
+
+ is used to compute 
+\begin_inset Formula $\delta\boldsymbol{j}$
+\end_inset
+
+ for given 
+\begin_inset Formula $\delta\boldsymbol{B}$
+\end_inset
+
+ whereas Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:ampere"
+
+\end_inset
+
+ yields 
+\begin_inset Formula $\delta\boldsymbol{B}_{p}$
+\end_inset
+
+ for given 
+\begin_inset Formula $\delta\boldsymbol{j}$
+\end_inset
+
+.
+ In the first iteration, 
+\begin_inset Formula $\delta\boldsymbol{B}$
+\end_inset
+
+ is set equal to 
+\begin_inset Formula $\delta\boldsymbol{B}_{v}$
+\end_inset
+
+ in Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:mhd"
+
+\end_inset
+
+.
+ Then, Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:ampere"
+
+\end_inset
+
+ and Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:mhd"
+
+\end_inset
+
+ are solved in an alternating way until convergence is reached.
+ In addition a preconditioner is used to enhance convergence.
+ Here we limit the analysis to an axisymmetric unperturbed equilibrium and
+ a single toroidal perturbation harmonic 
+\begin_inset Formula $\delta\boldsymbol{B}=\mathrm{Re}(\boldsymbol{B}_{n}e^{in\ph})$
+\end_inset
+
+ with a similar notation for other perturbed quantities.
+ As all equations are linear, a superposition of multiple harmonics is easily
+ possible.
+\end_layout
+
+\begin_layout Section*
+Linearized MHD force balance
+\end_layout
+
+\begin_layout Standard
+The solution of Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:mhd"
+
+\end_inset
+
+ can further be split into two steps: First the pressure perturbation 
+\begin_inset Formula $\delta p$
+\end_inset
+
+ is found, and then the plasma current density 
+\begin_inset Formula $\delta\boldsymbol{j}$
+\end_inset
+
+ is computed using the condition 
+\begin_inset Formula $\nabla\cdot\delta\boldsymbol{j}=0$
+\end_inset
+
+.
+ For an unperturbed equilibrium with nested flux surfaces, both steps can
+ be performed in a radially local manner if a field-aligned computational
+ grid is used, what will become clear below.
+ Radial coupling happens by the combination of the two individual steps
+ since their effective radial locations of computation are shifted by a
+ half-step in radial grid distance.
+\end_layout
+
+\begin_layout Standard
+In axisymmetric coordinate systems, such as cylindrical 
+\begin_inset Formula $(R,\ph,Z)$
+\end_inset
+
+, the equations to solve for harmonics in the toroidal angle 
+\begin_inset Formula $\ph$
+\end_inset
+
+ are
+\begin_inset Formula 
+\begin{align}
+\nabla p_{n}+inp_{n}\nabla\ph & =\frac{1}{c}\left(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}+\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}\right),\label{eq:mhd-2}\\
+\nabla\cdot\boldsymbol{j}_{n}^{\text{pol}}+inj_{n}^{\ph} & =0.\label{eq:divfree-2}
+\end{align}
+
+\end_inset
+
+now with a 2D 
+\begin_inset Formula $\nabla$
+\end_inset
+
+ operator acting in the poloidal (
+\begin_inset Formula $RZ$
+\end_inset
+
+) plane.
+ The divergence operator is defined via
+\begin_inset Formula 
+\begin{align*}
+\nabla\cdot\boldsymbol{u} & =\frac{1}{R\sqrt{g_{p}}}\frac{\partial}{\partial x^{k}}(R\sqrt{g_{p}}u^{k}),
+\end{align*}
+
+\end_inset
+
+where 
+\begin_inset Formula $\sqrt{g_{p}}$
+\end_inset
+
+ is the metric tensor of the coordinates in the poloidal plane, which is
+ equal to one for cylindrical coordinates (
+\begin_inset Formula $RZ$
+\end_inset
+
+).
+\end_layout
+
+\begin_layout Subsection*
+Representation of equilibrium field
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula $\boldsymbol{B}_{0}$
+\end_inset
+
+ is given by
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{B}_{0} & =\boldsymbol{B}_{0}^{\text{pol}}+\boldsymbol{B}_{0}^{\text{tor}},
+\end{align}
+
+\end_inset
+
+where 
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{B}_{0}^{\text{pol}} & =\nabla\psi\times\nabla\ph,\\
+\boldsymbol{B}_{0}^{\text{tor}} & =B_{0\ph}\nabla\ph.
+\end{align}
+
+\end_inset
+
+In particular
+\begin_inset Formula 
+\begin{align}
+|\boldsymbol{B}_{0}^{\text{pol}}| & =\frac{|\nabla\psi|}{R},
+\end{align}
+
+\end_inset
+
+and the poloidal unit vector
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{h}_{0}^{\text{pol}} & =\frac{\boldsymbol{B}_{0}^{\text{pol}}}{|\boldsymbol{B}_{0}^{\text{pol}}|}=R\frac{\boldsymbol{B}_{0}^{\text{pol}}}{|\nabla\psi|}.
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection*
+Pressure perturbation
+\end_layout
+
+\begin_layout Standard
+Taking an inner product of Eq.
+\begin_inset space ~
+\end_inset
+
+TODO
+\end_layout
+
+\begin_layout Subsection*
+Current perturbation
+\end_layout
+
+\begin_layout Standard
+Multiplying Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:divfree-2"
+
+\end_inset
+
+ by 
+\begin_inset Formula $R$
+\end_inset
+
+ yields
+\begin_inset Formula 
+\begin{align}
+\frac{\partial}{\partial x^{k}}(Rj_{n}^{k})+inRj_{n}^{\ph} & =0.
+\end{align}
+
+\end_inset
+
+Using the divergence theorem this can also be written in integral form in
+ a specific triangular mesh element 
+\begin_inset Formula $\Omega_{i}$
+\end_inset
+
+ as
+\begin_inset Formula 
+\begin{align}
+\oint_{\partial\Omega_{i}}\d l\,R\boldsymbol{j}_{n}\cdot\boldsymbol{n}+in\int_{\Omega_{i}}\d R\d Z\,Rj_{n}^{\ph} & =0.
+\end{align}
+
+\end_inset
+
+Here the first integral is performed over the 1-dimensional element boundary
+ 
+\begin_inset Formula $\partial\Omega_{i}$
+\end_inset
+
+.
+ The first term is split into three contributions,
+\begin_inset Formula 
+\begin{align}
+\oint_{\partial\Omega_{i}}\d l\,R\boldsymbol{j}_{n}\cdot\boldsymbol{n} & =\int_{1,2}\d l\,R\boldsymbol{j}_{n}\cdot\boldsymbol{n}+\int_{3}\d l\,R\boldsymbol{j}_{n}\cdot\boldsymbol{n},\label{eq:integral law}
+\end{align}
+
+\end_inset
+
+where edge 
+\begin_inset Formula $3$
+\end_inset
+
+ is tangential to an adjacent flux surface and edges 
+\begin_inset Formula $1$
+\end_inset
+
+ and 
+\begin_inset Formula $2$
+\end_inset
+
+ are not.
+\end_layout
+
+\begin_layout Subsubsection*
+Cross-field currents on edge 3
+\end_layout
+
+\begin_layout Standard
+It can be shown (writeup gyrokinetics.pdf) that
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{j}_{\perp n} & =\boldsymbol{j}_{n}-(\boldsymbol{j}_{n}\cdot\boldsymbol{h}_{0})\boldsymbol{h}_{0}\nonumber \\
+ & =j_{0\parallel}\frac{\boldsymbol{B}_{\perp n}}{B_{0}}-\frac{cB_{\parallel n}}{B_{0}^{2}}\boldsymbol{h}_{0}\times\nabla p_{0}+\frac{c}{B_{0}}\boldsymbol{h}_{0}\times(\nabla p_{n}+inp_{n}\nabla\ph).
+\end{align}
+
+\end_inset
+
+Scalar multiplication with 
+\begin_inset Formula $\boldsymbol{n}_{3}\parallel\nabla p_{0}\parallel\nabla\psi\perp\boldsymbol{h}_{0}$
+\end_inset
+
+ and setting 
+\begin_inset Formula $j_{0\parallel}\approx0$
+\end_inset
+
+ yields
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{j}_{\perp n}\cdot\boldsymbol{n}_{3} & =\frac{c}{B_{0}}\boldsymbol{n}_{3}\cdot(\boldsymbol{h}_{0}\times(\nabla p_{n}+inp_{n}\nabla\ph))\nonumber \\
+ & =\frac{c}{B_{0}}\boldsymbol{n}_{3}\cdot(h_{0\ph}\nabla\ph\times\nabla p_{n}+inp_{n}\boldsymbol{h}_{0}^{\text{pol}}\times\nabla\ph)\nonumber \\
+ & =\frac{c}{B_{0}}(h_{0\ph}\nabla p_{n}\cdot(\boldsymbol{n}_{3}\times\nabla\ph)+inp_{n}\boldsymbol{h}_{0}^{\text{pol}}(\nabla\ph\times\boldsymbol{n}_{3}))\nonumber \\
+ & =\frac{c}{RB_{0}}\boldsymbol{l}_{3}\cdot(h_{0\ph}\nabla p_{n}-inp_{n}\boldsymbol{h}_{0}^{\text{pol}})\nonumber \\
+ & =\frac{c}{B_{0}^{2}}\boldsymbol{l}_{3}\cdot\left(B_{0(\ph)}\nabla p_{n}-\frac{in}{R}p_{n}\boldsymbol{B}_{0}^{\text{pol}}\right).
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection*
+Details
+\end_layout
+
+\begin_layout Standard
+For each edge
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{l}\times\boldsymbol{n} & =l^{2}R\nabla\ph.\\
+\boldsymbol{n}\times\nabla\ph & =\boldsymbol{l}/R,\\
+\nabla\ph\times\boldsymbol{l} & =\boldsymbol{n}/R.
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection*
+Implementation
+\end_layout
+
+\begin_layout Standard
+\begin_inset CommandInset include
+LatexCommand input
+filename "grid0.tpx"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset CommandInset include
+LatexCommand input
+filename "grid1.tpx"
+
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document
