@@ -501,7 +501,7 @@ First variant: Use linear perturbation
 resulting in
 \begin_inset Formula 
 \begin{align}
-\delta\boldsymbol{j}\times\boldsymbol{B}_{0} & =\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0}=c\nabla\delta p-\boldsymbol{j}_{0}\times\delta\boldsymbol{B}.\label{eq:j times B0}
+\delta\boldsymbol{j}\times\boldsymbol{B}_{0} & =\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0}=c\nabla\delta p-\boldsymbol{j}_{0}\times\delta\boldsymbol{B}.\label{eq:jxB0}
 \end{align}
 
 \end_inset
@@ -579,7 +579,7 @@ If Eq.
 
 \begin_inset CommandInset ref
 LatexCommand eqref
-reference "eq:j times B0"
+reference "eq:jxB0"
 
 \end_inset
 
@@ -769,103 +769,6 @@ Cross-field term on edge 3
 \end_layout
 
 \begin_layout Standard
-For the term with the integral over edge 3 we use scalar multiplication
- by 
-\series bold
-
-\begin_inset Formula $\boldsymbol{e}_{\ph}=\frac{\partial\boldsymbol{R}}{\partial\ph}$
-\end_inset
-
- 
-\series default
-that yields
-\begin_inset Formula 
-\begin{align}
-\boldsymbol{e}_{\ph}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}) & =\boldsymbol{j}_{n}\cdot(\boldsymbol{B}_{0}^{\text{pol}}\times\boldsymbol{e}_{\ph}).
-\end{align}
-
-\end_inset
-
-
-\end_layout
-
-\begin_layout Standard
-The poloidal part of the equilibrium field follows from the poloidal flux
- (stream function) 
-\begin_inset Formula $\psi$
-\end_inset
-
- with
-\begin_inset Formula 
-\begin{align}
-\boldsymbol{B}_{0}^{\text{pol}} & =\nabla\psi\times\nabla\varphi.
-\end{align}
-
-\end_inset
-
-We can use the double cross product
-\begin_inset Formula 
-\begin{align}
-(\nabla\psi\times\nabla\varphi)\times\boldsymbol{e}_{\ph} & =(\boldsymbol{e}_{\ph}\cdot\nabla\psi)\nabla\varphi-(\boldsymbol{e}_{\ph}\cdot\nabla\varphi)\nabla\psi=-\nabla\psi,
-\end{align}
-
-\end_inset
-
-since the first term vanishes due to axisymmetry and the second term yields
- unity for the inner product between basis vector and its reciprocal vector.
- In addition we the fully poloidal vector potential 
-\begin_inset Formula $\boldsymbol{A}_{n}$
-\end_inset
-
- producing the non-axisymmetric harmonic 
-\begin_inset Formula $\boldsymbol{B}_{n}$
-\end_inset
-
- via
-\begin_inset Formula 
-\begin{align}
-B_{n}^{R}=\frac{in}{R}A_{nZ},\quad B_{n}^{Z} & =-\frac{in}{R}A_{nR},
-\end{align}
-
-\end_inset
-
-and
-\begin_inset Formula 
-\begin{align}
-\boldsymbol{B}_{n}\times\boldsymbol{e}_{\ph} & =\frac{in}{R}(A_{nZ}\boldsymbol{e}_{R}\times\boldsymbol{e}_{\ph}-A_{nR}\boldsymbol{e}_{Z}\times\boldsymbol{e}_{\ph})\nonumber \\
- & =in(A_{nZ}\nabla Z+A_{nR}\nabla R)=in\boldsymbol{A}_{n}.
-\end{align}
-
-\end_inset
-
-
-\end_layout
-
-\begin_layout Standard
-This results in 
-\begin_inset Formula 
-\begin{align}
-\boldsymbol{j}_{n}\cdot\nabla\psi & =-\left(in\,cp_{n}-\boldsymbol{j}_{0}\cdot(\boldsymbol{B}_{n}\times\boldsymbol{e}_{\ph})\right)\nonumber \\
- & =-in\left(cp_{n}-\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right).
-\end{align}
-
-\end_inset
-
-Via normalisation via 
-\begin_inset Formula $|\nabla\psi|$
-\end_inset
-
-, its orientation, and the edge length/orientation, this term describing
- currents across flux surfaces can be computed right away.
- Unperturbed currents are
-\begin_inset Formula 
-\begin{align}
-j_{0}^{R} & =\frac{1}{R}\frac{\partial B_{0\ph}}{\partial Z},\\
-j_{0}^{Z} & =-\frac{1}{R}\frac{\partial B_{0\ph}}{\partial R}.
-\end{align}
-
-\end_inset
-
 Comparison to Sergei:
 \end_layout
 
@@ -1155,12 +1058,16 @@ Finally the equation in
 \begin_layout Standard
 \begin_inset Formula 
 \begin{align}
-\left(1-\frac{inS_{\Omega}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)I_{1}+\left(1-\frac{inS_{\Omega}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)I_{2} & =b.\label{eq:I1I2}
+\left(1-\frac{inS_{\Omega}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)I_{1}+\left(1-\frac{inS_{\Omega}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)I_{2} & =q,\label{eq:I1I2}
 \end{align}
 
 \end_inset
 
-With all the other terms moved to the right-hand side.
+with all the other terms moved to the right-hand side 
+\begin_inset Formula $q$
+\end_inset
+
+.
 \end_layout
 
 \begin_layout Standard
@@ -1201,7 +1108,7 @@ reference "eq:I1I2"
  is then
 \begin_inset Formula 
 \[
-A_{jk}I^{(k)}=\boldsymbol{b}
+A_{jk}I^{(k)}=\boldsymbol{q}
 \]
 
 \end_inset
@@ -1223,13 +1130,13 @@ and the
 \end_inset
 
 th entry of vector 
-\begin_inset Formula $\boldsymbol{b}$
+\begin_inset Formula $\boldsymbol{q}$
 \end_inset
 
  is 
 \begin_inset Formula 
 \begin{align*}
-b_{k} & =b_{k}^{1}+b_{k}^{2}+b_{k}^{3}
+q_{k} & =q_{k}^{1}+q_{k}^{2}+q_{k}^{3}
 \end{align*}
 
 \end_inset
@@ -1237,7 +1144,7 @@ b_{k} & =b_{k}^{1}+b_{k}^{2}+b_{k}^{3}
 where
 \begin_inset Formula 
 \begin{align}
-b_{k}^{1} & =\frac{in}{|\nabla\psi|^{2}}\left(cp_{n}-\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right)l_{3}\boldsymbol{n}_{3}\cdot\nabla\psi
+q_{k}^{1} & =\frac{in}{|\nabla\psi|^{2}}\left(cp_{n}-\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right)l_{3}\boldsymbol{n}_{3}\cdot\nabla\psi
 \end{align}
 
 \end_inset
@@ -1250,7 +1157,7 @@ is evaluated on edge Nr.
  there),
 \begin_inset Formula 
 \begin{equation}
-b_{k}^{2}=\frac{B_{n(\ph)}}{B_{0(\ph)}}\left(c\frac{\Delta p_{0}}{\Delta\psi}-\frac{j_{0(\ph)}}{R}\right)
+q_{k}^{2}=\frac{B_{n(\ph)}}{B_{0(\ph)}}\left(c\frac{\Delta p_{0}}{\Delta\psi}-\frac{j_{0(\ph)}}{R}\right)
 \end{equation}
 
 \end_inset
@@ -1262,7 +1169,7 @@ is evaluated with constant values inside triangle
 , and 
 \begin_inset Formula 
 \begin{equation}
-b_{k}^{3}=-c\frac{\Delta p_{n}}{\Delta\psi}-\frac{j_{0(\ph)}}{\Delta\psi}l\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n},
+q_{k}^{3}=-c\frac{\Delta p_{n}}{\Delta\psi}-\frac{j_{0(\ph)}}{\Delta\psi}l\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n},
 \end{equation}
 
 \end_inset
@@ -1272,6 +1179,30 @@ is an average over edge 1 and 2 of triangle
 \end_inset
 
 .
+\end_layout
+
+\begin_layout Standard
+In the usual notation:
+\begin_inset Formula 
+\begin{align}
+A_{jk} & =\left(a_{j}+\frac{b_{j}}{2}\right)\delta_{(j-1)k}+\left(-a_{j}+\frac{b_{j}}{2}\right)\delta_{jk},
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align}
+a_{j} & =1\\
+b_{j} & =-inS_{\Omega k}\frac{B_{0(\ph)}}{\Delta\psi}
+\end{align}
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Part*
