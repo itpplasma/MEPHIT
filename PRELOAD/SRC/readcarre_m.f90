@@ -292,8 +292,8 @@ program readcarre_m
      mesh_element(i)%T_part(1:nsorts) = temp_prof
      mesh_element(i)%ePhi_tri = ePhi_prof
 !
-     mesh_element(i)%thermforces(1,:)=ddens_dpsi/dens_prof-1.5d0*dtemp_dpsi/temp_prof &
-                                     +charge*dePhi_dpsi/temp_prof
+     mesh_element(i)%thermforces(1,:)=ddens_dpsi/dens_prof-1.5d0*dtemp_dpsi/temp_prof !&
+!TODO uncomment again                                     +charge*dePhi_dpsi/temp_prof
      mesh_element(i)%thermforces(2,:)=dtemp_dpsi/temp_prof*vt2inv
 ! Caution: thermodynamic force A_2 has been divided by v_T^2 here
                                       
