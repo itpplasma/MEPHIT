@@ -1,4 +1,4 @@
-%% LyX 2.2.3 created this file.  For more info, see http://www.lyx.org/.
+%% LyX 2.2.2 created this file.  For more info, see http://www.lyx.org/.
 %% Do not edit unless you really know what you are doing.
 \documentclass[12pt,british,english]{article}
 \usepackage[T1]{fontenc}
@@ -25,6 +25,7 @@
 \global\long\def\bm{\text{\textbf{m}}}
 \global\long\def\k{\text{k}}
 \global\long\def\i{\text{i}}
+
 \selectlanguage{english}%
 
 \title{Magnetic differential equations in stationary linear ideal MHD and
@@ -64,6 +65,7 @@ in/2+1/\Delta s &  &  & in/2-1/\Delta s
 \end{array}\right)\boldsymbol{q}.
 \end{align}
 
+
 \section*{Magnetic differential equation for pressure}
 
 Magnetic differential equations arise from a number of problems in
@@ -86,7 +88,7 @@ Within linear perturbation theory where $\boldsymbol{B}=\boldsymbol{B}_{0}+\delt
 and $p=p_{0}+\delta p$, a source term enters the right-hand side
 with
 \begin{align}
-\boldsymbol{B}_{0}\cdot\nabla\delta p & =-\delta\boldsymbol{B}\cdot\nabla p_{0}=\delta B^{\psi}p_{0}^{\prime}(\psi).
+\boldsymbol{B}_{0}\cdot\nabla\delta p & =-\delta\boldsymbol{B}\cdot\nabla p_{0}=-\delta B^{\psi}p_{0}^{\prime}(\psi).
 \end{align}
 For an axisymmetric plasma in a tokamak, we reduce the dimensionality
 by introducing cylindrical coordinates and an expansion in $\varphi$,
@@ -97,10 +99,28 @@ such as
 The remaining equations in the poloidal $RZ$ plane for each harmonic
 are
 \begin{align}
-\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}+inB_{0}^{\varphi}p_{n} & =B_{n}^{\psi}p_{0}^{\prime}(\psi),\label{eq:magdifp}
+\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}+inB_{0}^{\varphi}p_{n} & =-B_{n}^{\psi}p_{0}^{\prime}(\psi),\label{eq:magdifp}
 \end{align}
 where the superscript \emph{pol} marks the projection into the $RZ$
-plane.
+plane. This can also be written as
+\begin{align}
+(\nabla\psi\times\nabla\varphi)\cdot\nabla p_{n}+\frac{in}{R^{2}}B_{0\varphi}p_{n} & =-B_{n}^{r}p_{0}^{\prime}(r),\label{eq:magdifp-2}
+\end{align}
+where $r$ is any flux surface label. In cylindrical coordinates we
+have
+\begin{align}
+B_{0}^{R}=(\nabla\psi\times\nabla\varphi)^{R} & =\frac{1}{R}\frac{\partial\psi}{\partial Z},\\
+B_{0}^{Z}=(\nabla\psi\times\nabla\varphi)^{Z} & =-\frac{1}{R}\frac{\partial\psi}{\partial R}.
+\end{align}
+Finally, we write the form
+\begin{align}
+R\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}+inB_{0(\varphi)}p_{n} & =-RB_{n}^{r}p_{0}^{\prime}(r).\label{eq:magdifp-2-1}
+\end{align}
+Or normalized
+\begin{align}
+R\boldsymbol{h}_{0}^{\text{pol}}\cdot\nabla p_{n}+inh_{0(\varphi)}p_{n} & =-Rh_{n}^{r}p_{0}^{\prime}(r).\label{eq:magdifp-2-1-1}
+\end{align}
+
 
 \section*{Finite difference method to treat pressure perturbation}
 
@@ -108,28 +128,28 @@ To solve equations of the type of Eq.~(\ref{eq:magdifp}) we use
 the lowest order scheme with forward differences in the gradient,
 midpoint values for the remaining terms, and periodic boundary conditions.
 \begin{align}
-\boldsymbol{B}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}}(p_{n}^{(k+1)}-p_{n}^{(k)})+\frac{inB_{0}^{\varphi}}{2}(p_{n}^{(k+1)}+p_{n}^{(k)}) & =\frac{p_{0}^{\prime}(\psi)}{2}(B_{n}^{\psi(k+1)}+B_{n}^{\psi(k)}).\label{eq:magdifp-1}
+\boldsymbol{h}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}}(p_{n}^{(k+1)}-p_{n}^{(k)})+\frac{inh_{0}^{\varphi}}{2}(p_{n}^{(k+1)}+p_{n}^{(k)}) & =\frac{p_{0}^{\prime}(\psi)}{2}(h_{n}^{\psi(k+1)}+h_{n}^{\psi(k)}).\label{eq:magdifp-1}
 \end{align}
 This equation has the general form
 \begin{align}
-\left(a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k+1)}+\left(-a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k)} & =\frac{c_{k}}{2}(B_{n}^{\psi(k+1)}+B_{n}^{\psi(k)}),
+\left(a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k+1)}+\left(-a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k)} & =\frac{c_{k}}{2}(h_{n}^{\psi(k+1)}+h_{n}^{\psi(k)}),
 \end{align}
 with
 \begin{align}
-a_{k} & =\boldsymbol{B}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}},\\
-b_{k} & =inB_{0}^{\varphi},\\
+a_{k} & =\boldsymbol{h}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}},\\
+b_{k} & =inh_{0}^{\varphi},\\
 c_{k} & =p_{0}^{\prime}(\psi).
 \end{align}
 In our simple example of Eq.~(\ref{eq:fd3}) we can identify
 \begin{align}
 a_{k} & =\frac{1}{\Delta s},\\
 b_{k} & =in,\nonumber \\
-c_{k} & =q_{n}^{(k)}.
+c_{k} & =1.
 \end{align}
 
 In general matrix form such a scheme is written as
 \begin{align}
-A_{jk}p_{n}^{(k)} & =M_{jk}B_{n}^{\psi(k)},
+A_{jk}p_{n}^{(k)} & =M_{jk}h_{n}^{\psi(k)},
 \end{align}
 where the elements of the stiffness matrix $A$ are
 \begin{align}
@@ -150,7 +170,7 @@ First variant: Use linear perturbation
 \end{align}
 resulting in
 \begin{align}
-\delta\boldsymbol{j}\times\boldsymbol{B}_{0} & =\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0}=c\nabla\delta p-\boldsymbol{j}_{0}\times\delta\boldsymbol{B}.\label{eq:j times B0}
+\delta\boldsymbol{j}\times\boldsymbol{B}_{0} & =\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0}=c\nabla\delta p-\boldsymbol{j}_{0}\times\delta\boldsymbol{B}.\label{eq:jxB0}
 \end{align}
 Second variant: Use derived expresion for $\delta\boldsymbol{j}_{\perp}$
 with
@@ -177,9 +197,9 @@ Summed up this yields
 \begin{align}
 \delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0} & =\delta\boldsymbol{B}\times\boldsymbol{j}_{0}-\delta\boldsymbol{B}_{\perp}\times\boldsymbol{j}_{0\perp}+c\nabla\delta p-c(\boldsymbol{h}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0}.\label{eq:jperp}
 \end{align}
-If Eq.~(\ref{eq:j times B0}) is fulfilled, the two extra terms must
-cancel each other. Eq.~(\ref{eq:jperp}) restricts only perpendicular
-components with
+If Eq.~(\ref{eq:jxB0}) is fulfilled, the two extra terms must cancel
+each other. Eq.~(\ref{eq:jperp}) restricts only perpendicular components
+with
 \begin{align}
 \delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0} & =(\delta\boldsymbol{B}\times\boldsymbol{j}_{0})_{\perp}+c\nabla_{\perp}\delta p.
 \end{align}
@@ -189,152 +209,81 @@ In addition, the restriction
 \end{align}
 follows from the linear perturbation in $p$ made before.
 
-\section*{Finite volume method to treat current density perturbation}
+\part*{Implementation}
 
-Now we solve the linearised current balance in an FVM scheme. We write
-the conservative form
+We start with
+\begin{align}
+\int_{1,2}\,\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+\int_{3}\,\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+in\int j_{n}^{\varphi}d\Omega & =0
+\end{align}
+Taking $R\approx\text{const.}$ in one element.
+
+Approximation of constant fluxes across each edge yields
+
+\begin{align}
+I_{1}+I_{2}-\frac{inl_{3}}{|\nabla\psi|^{2}}\left(cp_{n}-\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right)\boldsymbol{n}_{3}\cdot\nabla\psi+\frac{inS_{\Omega}}{2}(j_{n1}^{\ph}+j_{n2}^{\ph}) & =0.
+\end{align}
+with 
 \begin{align*}
-\nabla\cdot(\boldsymbol{h}_{0}j_{\parallel n})+inh_{0}^{\varphi}j_{\parallel n} & =-\nabla\cdot\boldsymbol{j}_{\perp}^{\text{pol}}-inj_{\perp n}^{\varphi}\,.
+I_{1} & =\int_{1,2}\,\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma.
 \end{align*}
+Taking
+\begin{align}
+j_{n}^{\ph} & =-\frac{B_{0(\ph)}}{\partial_{1}\psi}\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}+c\frac{\partial_{1}p_{n}}{\partial_{1}\psi}-\frac{B_{n(\ph)}}{B_{0(\ph)}}\left(c\frac{\partial_{1}p_{0}}{\partial_{1}\psi}-\frac{j_{0(\ph)}}{R}\right)+\frac{j_{0(\ph)}}{\partial_{1}\psi}\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n},
+\end{align}
+we get on edge 1 (and similar on edge 2)
+\begin{align}
+j_{n1}^{\ph} & =-\frac{B_{0(\ph)}}{\Delta\psi}I_{1}+c\frac{\Delta p_{n}}{\Delta\psi}-\frac{B_{n(\ph)}}{B_{0(\ph)}}\left(c\frac{\Delta p_{0}}{\Delta\psi}-\frac{j_{0(\ph)}}{R}\right)+\frac{j_{0(\ph)}}{\Delta\psi}l_{1}\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}.
+\end{align}
+Here $\Delta\psi=(\psi_{1e}-\psi_{1a})=\boldsymbol{l}_{1}\cdot\nabla\psi=l_{1}\partial_{1}\psi$
+marks a difference between the two vertices, which is constant for
+flux surface quantities such as $\psi$ or $p_{0}$.
 
-The divergence operator is defined via
+Finally the equation in $I_{1}$ and $I_{2}$ as unknowns is
+
+\begin{align}
+\left(1-\frac{inS_{\Omega}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)I_{1}+\left(1-\frac{inS_{\Omega}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)I_{2} & =q,\label{eq:I1I2}
+\end{align}
+with all the other terms moved to the right-hand side $q$.
+
+In general matrix form, we call the ingoing current into triangle
+Nr. $(k)$ counted in clockwise direction $I^{(k)}$. In triangle
+$(k)$, this is equal to $I_{1}=-I^{(k)}$ and $I_{2}=I^{(k+1)}$.
+The matrix form of Eq.~(\ref{eq:I1I2}) is then
+\[
+A_{jk}I^{(k)}=\boldsymbol{q}
+\]
+where the elements of the stiffness matrix $A$ are
+\begin{align}
+A_{jk} & =\left(1-\frac{inS_{\Omega k}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)\delta_{(j-1)k}+\left(-1-\frac{inS_{\Omega k}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)\delta_{jk},
+\end{align}
+and the $k$th entry of vector $\boldsymbol{q}$ is 
 \begin{align*}
-\nabla\cdot\boldsymbol{u} & =\frac{1}{R\sqrt{g_{p}}}\frac{\partial}{\partial x^{k}}(R\sqrt{g_{p}}u^{k})\,.
+q_{k} & =q_{k}^{1}+q_{k}^{2}+q_{k}^{3}
 \end{align*}
-When working with $R,Z$ as coordinates in the poloidal plane, $\sqrt{g_{p}}=1$.
-We multiply by $R$ to obtain
-\begin{align*}
-\frac{\partial}{\partial x^{k}}(Rh^{k}j_{\parallel n})+inRh^{\varphi}j_{\parallel n} & =-\frac{\partial}{\partial x^{k}}(Rj_{\perp n}^{k})-inRj_{\perp n}^{\varphi}\,.
-\end{align*}
-Integration over a triangle yields
+where
 \begin{align}
-\oint\,Rj_{\parallel n}\boldsymbol{h}_{0}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+in\int Rh_{0}^{\varphi}j_{\parallel n}d\Omega & =-\oint\,R\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma-in\int Rj_{\perp n}^{\ph}d\Omega\label{eq:fvmj-1}
+q_{k}^{1} & =\frac{in}{|\nabla\psi|^{2}}\left(cp_{n}-\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right)l_{3}\boldsymbol{n}_{3}\cdot\nabla\psi
 \end{align}
-where scalar products with $\boldsymbol{n}$ pointing towards the
-outer normal vector of the edge are taken component-wise in $R$ and
-$Z$. We assume a field-aligned mesh with $\boldsymbol{h}_{0}$ parallel
-to edge no.~3. In- and outflux of the parallel current are only over
-edges 1 and 2.
+is evaluated on edge Nr. 3 (mean value for $p_{n}$ there),
+\begin{equation}
+q_{k}^{2}=\frac{B_{n(\ph)}}{B_{0(\ph)}}\left(c\frac{\Delta p_{0}}{\Delta\psi}-\frac{j_{0(\ph)}}{R}\right)
+\end{equation}
+is evaluated with constant values inside triangle $k$, and 
+\begin{equation}
+q_{k}^{3}=-c\frac{\Delta p_{n}}{\Delta\psi}-\frac{j_{0(\ph)}}{\Delta\psi}l\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n},
+\end{equation}
+is an average over edge 1 and 2 of triangle $k$.
 
-On edges 1 and 2 we sum up the flux from left- and right hand side
-of Eq.~\ref{eq:fvmj-1} to use the flux of the total perturbed current
-harmonic in the poloidal plane,
-\begin{align*}
-\boldsymbol{j}_{n}^{\text{pol}} & =j_{\parallel n}\boldsymbol{h}_{0}^{\text{pol}}+\boldsymbol{j}_{\perp n}^{\text{pol}},
-\end{align*}
-as an unknown:
+In the usual notation:
 \begin{align}
-\int_{1,2}\,R\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+in\int Rh_{0}^{\varphi}j_{\parallel n}d\Omega & =-\int_{3}\,R\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma-in\int Rj_{\perp n}^{\ph}d\Omega.
-\end{align}
-In addition, we add terms with $j_{n}^{\ph}=h_{0}^{\varphi}j_{\parallel n}+j_{\perp n}^{\ph}$
-together again to obtain
-\begin{align}
-\int_{1,2}\,R\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+\int_{3}\,R\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+in\int Rj_{n}^{\varphi}d\Omega & =0.
-\end{align}
-To compute known quantities we use the linear equation of the perturbation
-given by
-\begin{align}
-\boldsymbol{j}_{n}\times\boldsymbol{B}_{0} & =c(\nabla p_{n}+in\,p_{n}\nabla\varphi)-\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}.
-\end{align}
-Again $\boldsymbol{B}_{n}$ is known from the last iteration of the
-field solver, $p_{n}$ has been computed in the earlier step and $\boldsymbol{j}_{n}$
-is unknown.
-
-\subsection*{Cross-field term on edge 3}
-
-For the term with the integral over edge 3 we use scalar multiplication
-by \textbf{$\boldsymbol{e}_{\ph}=\frac{\partial\boldsymbol{R}}{\partial\ph}$
-}that yields
-\begin{align}
-\boldsymbol{e}_{\ph}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}) & =\boldsymbol{j}_{n}\cdot(\boldsymbol{B}_{0}^{\text{pol}}\times\boldsymbol{e}_{\ph}).
+A_{jk} & =\left(a_{j}+\frac{b_{j}}{2}\right)\delta_{(j-1)k}+\left(-a_{j}+\frac{b_{j}}{2}\right)\delta_{jk},
 \end{align}
 
-The poloidal part of the equilibrium field follows from the poloidal
-flux (stream function) $\psi$ with
 \begin{align}
-\boldsymbol{B}_{0}^{\text{pol}} & =\nabla\psi\times\nabla\varphi.
-\end{align}
-We can use the double cross product
-\begin{align}
-(\nabla\psi\times\nabla\varphi)\times\boldsymbol{e}_{\ph} & =(\boldsymbol{e}_{\ph}\cdot\nabla\psi)\nabla\varphi-(\boldsymbol{e}_{\ph}\cdot\nabla\varphi)\nabla\psi=-\nabla\psi,
-\end{align}
-since the first term vanishes due to axisymmetry and the second term
-yields unity for the inner product between basis vector and its reciprocal
-vector. In addition we the fully poloidal vector potential $\boldsymbol{A}_{n}$
-producing the non-axisymmetric harmonic $\boldsymbol{B}_{n}$ via
-\begin{align}
-B_{n}^{R}=\frac{in}{R}A_{nZ},\quad B_{n}^{Z} & =-\frac{in}{R}A_{nR},
-\end{align}
-and
-\begin{align}
-\boldsymbol{B}_{n}\times\boldsymbol{e}_{\ph} & =\frac{in}{R}(A_{nZ}\boldsymbol{e}_{R}\times\boldsymbol{e}_{\ph}-A_{nR}\boldsymbol{e}_{Z}\times\boldsymbol{e}_{\ph})\nonumber \\
- & =in(A_{nZ}\nabla Z+A_{nR}\nabla R)=in\boldsymbol{A}_{n}.
+a_{j} & =1\\
+b_{j} & =-inS_{\Omega k}\frac{B_{0(\ph)}}{\Delta\psi}
 \end{align}
 
-This results in 
-\begin{align}
-\boldsymbol{j}_{n}\cdot\nabla\psi & =-\left(in\,cp_{n}-\boldsymbol{j}_{0}\cdot(\boldsymbol{B}_{n}\times\boldsymbol{e}_{\ph})\right)\nonumber \\
- & =-in\left(cp_{n}-\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right).
-\end{align}
-Via normalisation via $|\nabla\psi|$, its orientation, and the edge
-length/orientation, this term describing currents across flux surfaces
-can be computed right away.
-
-\subsection*{Volumetric source term}
-
-For the computation of toroidal $j_{n}^{\varphi}$ in the element
-volume we start again with
-\begin{align}
-\boldsymbol{j}_{n}\times\boldsymbol{B}_{0} & =c(\nabla p_{n}+in\,p_{n}\nabla\varphi)-\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}.\label{eq:jnxB0}
-\end{align}
-with
-\begin{align}
-\boldsymbol{B}_{0} & =\nabla\psi\times\nabla\varphi+B_{0\ph}\nabla\ph.
-\end{align}
-We use a local orthonormal coordinate system on each triangle edge
-with $\boldsymbol{e}_{1}$ the unit vector along the edge in counter-clockwise
-orientation, $\boldsymbol{e}_{2}=\boldsymbol{n}$ the outward unit
-normal and $\boldsymbol{e}_{3}=R\nabla\ph$ pointing inside the plane.
-Taking a scalar product of $\boldsymbol{e}_{1}$ with Eq.~(\ref{eq:jnxB0})
-yields
-\begin{align}
-\boldsymbol{e}_{1}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}) & =\boldsymbol{e}_{1}\cdot(\boldsymbol{j}_{n}\times(\nabla\psi\times\nabla\varphi+B_{0\ph}\nabla\ph))\nonumber \\
- & =\boldsymbol{j}_{n}\cdot((\nabla\psi\times\nabla\varphi)\times\boldsymbol{e}_{1}+B_{0(\ph)}\boldsymbol{e}_{3}\times\boldsymbol{e}_{1})\\
- & =\boldsymbol{j}_{n}\cdot\left((\boldsymbol{e}_{1}\cdot\nabla\psi)\nabla\varphi+B_{0(\ph)}\boldsymbol{e}_{2}\right)=(\boldsymbol{e}_{1}\cdot\nabla\psi)j_{n}^{\ph}+B_{0(\ph)}\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}
-\end{align}
-The right-hand side yields:
-\begin{align}
-\boldsymbol{e}_{1}\cdot(\nabla p_{n}+in\,p_{n}\nabla\varphi) & =\boldsymbol{e}_{1}\cdot\nabla p_{n}\\
-\boldsymbol{e}_{1}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}) & =\boldsymbol{e}_{1}\cdot(B_{n\ph}\boldsymbol{j}_{0}^{\text{pol}}\times\nabla\ph-j_{0\ph}\boldsymbol{B}_{n}^{\text{pol}}\times\nabla\ph).
-\end{align}
-
-We use the fact that $\nabla p_{0}$ is parallel to $\nabla\psi$,
-so the cross product in the equilibrium is purely radial,
-\begin{align}
-\boldsymbol{j}_{0}\times\boldsymbol{B}_{0} & =c\nabla p_{0}\nonumber \\
- & =\boldsymbol{j}_{0}^{\text{pol}}\times(B_{0\ph}\nabla\ph)+j_{0}^{\ph}\nabla\ph\times(\nabla\psi\times\nabla\varphi)\nonumber \\
- & =\boldsymbol{j}_{0}^{\text{pol}}\times(B_{0\ph}\nabla\ph)+j_{0\ph}\nabla\psi.
-\end{align}
-So
-\begin{align}
-\boldsymbol{j}_{0}^{\text{pol}}\times\nabla\ph & =\frac{1}{B_{0\ph}}\left(c\nabla p_{0}-j_{0\ph}\nabla\psi\right),
-\end{align}
-and
-\begin{align}
-\boldsymbol{e}_{1}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}) & =\frac{B_{n\ph}}{B_{0\ph}}\boldsymbol{e}_{1}\cdot\left(c\nabla p_{0}-j_{0\ph}\nabla\psi\right)-j_{0(\ph)}\boldsymbol{e}_{1}\cdot(\boldsymbol{B}_{n}^{\text{pol}}\times\boldsymbol{e}_{3})\nonumber \\
- & =\frac{B_{n(\ph)}}{B_{0(\ph)}}\boldsymbol{e}_{1}\cdot\left(c\nabla p_{0}-\frac{j_{0(\ph)}}{R}\nabla\psi\right)-j_{0(\ph)}\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}.
-\end{align}
-Thus, with the notation $\boldsymbol{e}_{1}\cdot\nabla\equiv\partial_{1}$
-we obtain on each edge
-\begin{align}
-j_{n}^{\ph}\partial_{1}\psi & =-B_{0(\ph)}\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}+c\partial_{1}p_{n}-\frac{B_{n(\ph)}}{B_{0(\ph)}}\left(c\partial_{1}p_{0}-\frac{j_{0(\ph)}}{R}\partial_{1}\psi\right)+j_{0(\ph)}\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}.
-\end{align}
-For the discretisation we take values such as $B_{0(\ph)}$ constant
-on the whole triangle and compute the mean from edges 1 and 2 weighted
-by the edge length of the remaining quantities. The first term on
-the right-hand side will contribute to the vector of unknowns. Derivatives
-$\partial_{1}$ are then computed as differences between values on
-the two nodes of each edge.
 
 \part*{Old}
 
@@ -434,6 +383,7 @@ B_{0\ph}\boldsymbol{e}_{\ph}\times(\boldsymbol{j}_{n}\times\nabla\ph) & =\boldsy
 \boldsymbol{e}_{\ph}\times(\boldsymbol{j}_{n}\times(\nabla\psi\times\nabla\varphi)) & =\boldsymbol{e}_{\ph}\times(j_{n}^{\ph}\nabla\psi-j_{n}^{\psi}\nabla\varphi)=j_{n}^{\ph}\boldsymbol{e}_{\ph}\times\nabla\psi\nonumber \\
  & =j_{n\ph}\nabla\ph\times\nabla\psi\nonumber 
 \end{align}
+
 \begin{itemize}
 \item Scalar product with $\boldsymbol{B}_{0}^{\text{pol}}=\nabla\psi\times\nabla\ph$
 yields
@@ -473,6 +423,7 @@ On one triangle edge
 (\boldsymbol{j}_{n}\times\boldsymbol{B}_{0})_{\parallel} & =R(j_{n\perp}B_{0}^{\ph}-j_{n}^{\ph}B_{0}^{\perp})\\
  & \approx c\frac{p_{2}-p_{1}}{l}-(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n})_{\parallel}
 \end{align*}
+
 
 \section*{Finite Volume Method}
 
@@ -613,6 +564,7 @@ s_{n} & =s_{mn}e^{im\vartheta}=\Im s_{mn}(-\sin m\vartheta+i\cos m\vartheta)\\
 \\
 p_{n} & =\Re p_{mn}(\cos m\vartheta+i\sin m\vartheta)
 \end{align*}
+
 
 \section*{Pseudotoroidal coordinates}
 
