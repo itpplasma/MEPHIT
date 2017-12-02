@@ -9,8 +9,11 @@ ifeq ($(TOOLCHAIN),intel)
 	FCFLAGS = -c -g -O0 -mkl -traceback -check bounds #-implicitnone
 	CCFLAGS = -c -g -O0 -mkl -traceback 
 else ifeq ($(TOOLCHAIN),gnu)
-	FC := gfortran
-	CC := gcc
+	#FC := gfortran
+	FC := x86_64-pc-cygwin-gfortran
+	#CC := gcc
+	CC :=  x86_64-pc-cygwin-gcc
+	#LD := i686-w64-mingw32-ld
 	FCFLAGS = -c -g -Og -Wall -fbacktrace -fcheck=bounds -JOBJS #-fimplicit-none
 	CCFLAGS = -c -g -Og -Wall
 	PROJLIBS := $(PROJLIBS)/GNU
@@ -35,7 +38,7 @@ SUITESPARSE_HDR = $(SUITESPARSE_DIR)/include
 SUITESPARSE_F90 = $(SUITESPARSE_DIR)/UMFPACK/Demo
 
 ifeq ($(OS),Windows_NT)
-	SUPERLU_DIR     = /home/chral/src/SuperLU_5.2.1
+	SUPERLU_DIR     = $(HOME)/src/SuperLU_5.2.1
 	SUITESPARSE_LIB = /usr/lib
 	SUITESPARSE_HDR = /usr/include/suitesparse
 	SUITESPARSE_F90 = /usr/src/umfpack-5.7.4-1.src/umfpack-5.7.4/Demo
@@ -43,7 +46,7 @@ endif
 
 # link flags
 LDFLAGS = -L $(SUITESPARSE_LIB) -L $(SUPERLU_LIB) -lsuperlu -lumfpack -lamd -lcholmod \
-          -lcolamd -lcamd -lccolamd  
+          -lcolamd -lcamd -lccolamd
 
 ifeq ($(TOOLCHAIN),intel)
 	LDFLAGS += -limf -lirc -mkl
@@ -71,22 +74,22 @@ PROGRAM = magdif_test.x
 
 all: $(PROGRAM)
 
-$(PROGRAM): $(addprefix OBJS/, $(OBJS)) c_fortran_dgssv.o c_fortran_zgssv.o umf4_f77wrapper.o umf4_f77zwrapper.o
+$(PROGRAM): $(addprefix OBJS/, $(OBJS)) OBJS/c_fortran_dgssv.o OBJS/c_fortran_zgssv.o OBJS/umf4_f77wrapper.o OBJS/umf4_f77zwrapper.o
 	$(FC) -o $@ $^ $(LDFLAGS)
 
 $(addprefix OBJS/, %.o): $(addprefix SRC/, %.f90)
 	$(FC) -o $@ $< $(FCFLAGS) 
 
-c_fortran_dgssv.o: $(SUPERLU_F90)/c_fortran_dgssv.c
+OBJS/c_fortran_dgssv.o: $(SUPERLU_F90)/c_fortran_dgssv.c
 	$(CC) $(CCFLAGS) -I $(SUPERLU_HDR) -o $@ $^
 
-c_fortran_zgssv.o: $(SUPERLU_F90)/c_fortran_zgssv.c
+OBJS/c_fortran_zgssv.o: $(SUPERLU_F90)/c_fortran_zgssv.c
 	$(CC) $(CCFLAGS) -I $(SUPERLU_HDR) -o $@ $^
 
-umf4_f77wrapper.o: $(SUITESPARSE_F90)/umf4_f77wrapper.c
+OBJS/umf4_f77wrapper.o: $(SUITESPARSE_F90)/umf4_f77wrapper.c
 	$(CC) $(CCFLAGS) -I $(SUITESPARSE_HDR) -DDLONG -o $@ $^
 
-umf4_f77zwrapper.o: $(SUITESPARSE_F90)/umf4_f77zwrapper.c
+OBJS/umf4_f77zwrapper.o: $(SUITESPARSE_F90)/umf4_f77zwrapper.c
 	$(CC) $(CCFLAGS) -I $(SUITESPARSE_HDR) -DZLONG -o $@ $^
 
 clean:
