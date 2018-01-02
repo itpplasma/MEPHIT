@@ -29,7 +29,7 @@
 \output_sync 0
 \bibtex_command default
 \index_command default
-\paperfontsize default
+\paperfontsize 12
 \spacing single
 \use_hyperref false
 \papersize default
@@ -1168,46 +1168,65 @@ w^{k} & =\frac{cR}{\Delta\psi}\left(\Delta p_{n}-\frac{B_{n\ph}}{B_{0\ph}}\Delta
 \end_layout
 
 \begin_layout Subsection*
-Test field
+Generating a non-resonant test field
 \end_layout
 
 \begin_layout Standard
-We can take
-\end_layout
-
-\begin_layout Standard
-\begin_inset Formula 
-\[
-B_{n}^{\varphi}=B_{n}^{\psi}F(\psi)
-\]
-
-\end_inset
-
-where 
-\begin_inset Formula 
-\[
-F(\psi)=\frac{iR_{0}}{nq}\frac{\partial q}{\partial\psi}
-\]
-
-\end_inset
-
-and (reminder) the normal component has been chosen as 
-\begin_inset Formula 
-\[
-B_{n}^{\psi}=\frac{B_{0\varphi}R_{0}}{R^{2}}.
-\]
-
-\end_inset
-
-For derivation one uses the Jacobian of symmetry flux coordinates 
+For derivation we use symmetry flux coordinates 
 \begin_inset Formula $(\psi,\vartheta,\varphi)$
 \end_inset
 
- 
+ with Jacobian
 \begin_inset Formula 
-\[
-\sqrt{g}=\frac{1}{B_{0}^{\vartheta}}=\frac{q}{B_{0}^{\varphi}}=\frac{q}{R^{2}B_{0\varphi}}.
-\]
+\begin{equation}
+\sqrt{g}=\frac{1}{B_{0}^{\vartheta}}=\frac{q}{B_{0}^{\varphi}}=\frac{qR^{2}}{B_{0\varphi}}.
+\end{equation}
+
+\end_inset
+
+We would like to have a completely non-resonant field with 
+\begin_inset Formula $B_{n}^{\tht}=0$
+\end_inset
+
+.
+ As an ansatz we take
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{equation}
+B_{n}^{\varphi}=B_{n}^{\psi}F(\psi).
+\end{equation}
+
+\end_inset
+
+and the normal component of the test field
+\begin_inset Formula 
+\begin{equation}
+B_{n}^{\psi}=\frac{B_{0\varphi}R_{0}}{R^{2}}.
+\end{equation}
+
+\end_inset
+
+Divergence-freeness of 
+\begin_inset Formula $\boldsymbol{B}_{n}$
+\end_inset
+
+ yields
+\begin_inset Formula 
+\begin{align}
+0 & =\frac{\partial}{\partial\psi}(\sqrt{g}B_{n}^{\psi})+in\sqrt{g}B_{n}^{\psi}F(\psi)\nonumber \\
+ & =\frac{\partial}{\partial\psi}\left(\frac{qR^{2}}{B_{0\varphi}}\frac{B_{0\varphi}R_{0}}{R^{2}}\right)+inF(\psi)\frac{qR^{2}}{B_{0\varphi}}\frac{B_{0\varphi}R_{0}}{R^{2}}\nonumber \\
+ & =R_{0}\left(\frac{\partial q}{\partial\psi}+inF(\psi)q\right).
+\end{align}
+
+\end_inset
+
+To fulfill this, we take
+\begin_inset Formula 
+\begin{equation}
+F(\psi)=\frac{i}{nq}\frac{\partial q}{\partial\psi}.
+\end{equation}
 
 \end_inset
 
