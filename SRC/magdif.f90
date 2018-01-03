@@ -78,7 +78,7 @@ contains
     
     open(1,file='VACFIELD/Bn_flux.dat')
     do k=1,ntri
-       read(1,*) dummy8
+       !read(1,*) dummy8
        !     Bnflux(k,1) = dummy8(1) + (0d0,1d0)*dummy8(2)
        !     Bnflux(k,2) = dummy8(3) + (0d0,1d0)*dummy8(4)
        !     Bnflux(k,3) = dummy8(5) + (0d0,1d0)*dummy8(6)
@@ -502,15 +502,23 @@ contains
           h0p1 = Bp(1)/Bmod(1)
           h0p2 = Bp(2)/Bmod(2)
 
-          a1(kt) = r(1)*h0n1
-          a2(kt) = r(2)*h0n2
-          b1(kt) = (0d0,1d0)*n*elem%det_3/4d0*h0p1
-          b2(kt) = (0d0,1d0)*n*elem%det_3/4d0*h0p2
+          if (minval(elem%i_knot) == elem%i_knot(elem%knot_h)) then
+             ! type 1 triangle
+             a1(kt) = -r(2)*h0n2
+             a2(kt) = r(1)*h0n1
+             b1(kt) = -(0d0,1d0)*n*elem%det_3/4d0*h0p2
+             b2(kt) = (0d0,1d0)*n*elem%det_3/4d0*h0p1
+          else
+             a1(kt) = -r(1)*h0n1
+             a2(kt) = r(2)*h0n2
+             b1(kt) = -(0d0,1d0)*n*elem%det_3/4d0*h0p1
+             b2(kt) = (0d0,1d0)*n*elem%det_3/4d0*h0p2
+          end if
 
-          c1 = (lr(2)**2+lz(2)**2+lr(1)*lr(1)+lz(1)*lz(2))
-          c2 = (lr(1)**2+lz(1)**2+lr(1)*lr(1)+lz(1)*lz(2))
+          c1 = (lr(2)**2+lz(2)**2+lr(1)*lr(2)+lz(1)*lz(2))
+          c2 = (lr(1)**2+lz(1)**2+lr(1)*lr(2)+lz(1)*lz(2))
 
-          det = (lr(1)**2+lz(1)**2)*(lr(2)**2+lz(2)**2)-(lr(1)*lr(1)+lz(1)*lz(2))**2
+          det = (lr(1)**2+lz(1)**2)*(lr(2)**2+lz(2)**2)-(lr(1)*lr(2)+lz(1)*lz(2))**2
           gradpsi1 = c1*(knots_s(2)%psi_pol-knots_s(1)%psi_pol)/det
           gradpsi2 = c2*(knots_s(3)%psi_pol-knots_s(2)%psi_pol)/det
           gradpsisq = gradpsi1**2*(lr(1)**2+lz(1)**2)+&
@@ -518,7 +526,7 @@ contains
                gradpsi2**2*(lr(2)**2+lz(2)**2)
           !gradpsisq = ((absgrpsi(1)+absgrpsi(2))/2d0)**2
           !print *, gradpsisq, ((absgrpsi(1)+absgrpsi(2))/2d0)**2
-          stop 'TODO: grad psi'
+          !stop 'TODO: grad psi'
           
           x(kt) = -(0d0,1d0)*elem%det_3/2d0*clight*(&
                (presn(iknot_s(2))-presn(iknot_s(1)))*&
@@ -537,8 +545,9 @@ contains
                3d0/sum(r*Bmod**3)
 
           !x(kt) = 1d0
+          !x(kt) = source2
           x(kt) = x(kt) + source2
-
+          
           !print *, a1(kt), a2(kt)
           !print *, b1(kt), b2(kt)
        end do ! kt = 1,nt_loop
@@ -547,8 +556,28 @@ contains
             b1(1:nt_loop), b2(1:nt_loop), d(1:nt_loop), du(1:nt_loop))
        call assemble_sparse(nt_loop, d(1:nt_loop), du(1:nt_loop), nz,&
             irow(1:2*nt_loop), icol(1:2*nt_loop), aval(1:2*nt_loop))
+
+
+if(kl == 5) then
+do kt = 1, nt_loop             
+write(1000,*) real(d(kt)), aimag(d(kt))
+write(1001,*) real(du(kt)), aimag(du(kt))
+write(1002,*) real(x(kt)), aimag(x(kt))
+write(1003,*) real(a1(kt)), aimag(a1(kt))
+write(1004,*) real(a2(kt)), aimag(a2(kt))
+write(1005,*) real(b1(kt)), aimag(b1(kt))
+write(1006,*) real(b2(kt)), aimag(b2(kt))
+end do
+end if
+
        call sparse_solve(nt_loop,nt_loop,nz,irow(1:2*nt_loop),icol(1:2*nt_loop),&
             aval(1:2*nt_loop),x(1:nt_loop))
+
+if(kl == 5) then
+do kt = 1, nt_loop             
+write(1007,*) real(x(kt)), aimag(x(kt))
+end do
+end if
 
        do kt = 1, nt_loop-1
           write(1,*) real((x(kt)+x(kt+1))/2d0), aimag((x(kt)+x(kt+1))/2d0)
