@@ -21,7 +21,7 @@ module magdif
   real(dp), allocatable :: B2avg(:)
   complex(dp), allocatable :: presn(:)
   complex(dp), allocatable :: curr(:,:)
-  complex(dp), allocatable :: Bnflux(:,:), Bnp(:)
+  complex(dp), allocatable :: Bnflux(:,:), Bnp(:) ! fluxes R*Bn*n and physical toroidal comp.
 
   complex(dp), parameter :: imun = (0d0,1d0)
   real(dp), parameter :: R0 = 172.74467899999999
@@ -62,7 +62,19 @@ contains
     
     call read_hpsi
 
-    call set_Bnfluxes_notheta()
+    allocate(B2avg(nr_max))
+    allocate(q(nr_max))
+    allocate(dqdpsi(nr_max))
+
+    call init_safety_factor
+
+    open(1,file='q.out')
+    do k=2,nr_max-1
+       write(1,*) (psi(k+1)+psi(k))/2d0, q(k), dqdpsi(k),(q(k+1)-q(k))/((psi(k+1)-psi(k-1))/2d0)
+    end do
+    close(1)
+    
+    call set_Bnfluxes_test_notheta
     
     open(1,file='VACFIELD/Bn_flux.dat')
     do k=1,ntri
@@ -89,22 +101,7 @@ contains
             real(Bnp(k)), aimag(Bnp(k))
     end do
     close(1)
-
-
-    allocate(B2avg(nr_max))
-    allocate(q(nr_max))
-    allocate(dqdpsi(nr_max))
-
-    call init_safety_factor
-
-    open(1,file='q.out')
-    do k=1,nr_max
-       write(1,*) (psi(k+1)+psi(k))/2d0, q(k)
-    end do
-    close(1)
   end subroutine init
-
-  
 
   subroutine test_fdm_simple
     integer, parameter :: ns = 10
@@ -380,7 +377,6 @@ contains
        !write(1,*) psi_inner+dpsi, dpsi, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
     end do
 
-    ! TODO: usual triangle loops
     psi_inner = mesh_point(nt_core+2)%psi_pol
     do kl = 2, nr_max
        call gen_B2avg(kl)
@@ -447,32 +443,6 @@ contains
     close(1)
   end subroutine test_current
 
-  subroutine test_dpsidr
-    integer :: kt
-
-    real(dp) :: r,p,z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ         &
-         ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
-
-    type(triangle) :: elem
-    type(knot) :: knots(3)
-
-    open(1,file='test_dpsidr.out', recl=1024)
-    do kt=1,ntri
-       elem = mesh_element(kt)
-       knots = mesh_point(elem%i_knot)
-       !r = (sum(knots%rcoord)+knots(elem%knot_h)%rcoord)/4d0
-       r = sum(knots%rcoord)/3d0
-       p = 0d0
-       !z = (sum(knots%zcoord)+knots(elem%knot_h)%zcoord)/4d0
-       z = sum(knots%zcoord)/3d0
-       call field(r,p,z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ          &
-            ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ)
-
-       write(1,*) abs(dpsidr(kt)), sqrt((r*Br)**2+(r*Bz)**2)
-    end do
-    close(1)
-  end subroutine test_dpsidr
-
   subroutine test_current_new
     integer :: kl, kt, k, nt_loop
     type(triangle) :: elem
@@ -491,7 +461,7 @@ contains
     complex(dp) :: source2, Bnpar
 
     real(dp) :: c1, c2, det, h0n1, h0n2, h0p1, h0p2, gradpsi1, gradpsi2,&
-         gradpsisq
+         gradpsisq, absgrpsi(3)
 
     integer :: it
 
@@ -523,6 +493,7 @@ contains
                   dBrdp(k),dBrdZ(k),dBpdR(k),dBpdp(k),dBpdZ(k),&
                   dBzdR(k),dBzdp(k),dBzdZ(k))
              Bmod(k) = sqrt(Br(k)**2+Bp(k)**2+Bz(k)**2)
+             absgrpsi(k) = sqrt(r(k)**2*(Br(k)**2+Bz(k)**2))
           end do
 
           h0n1 = (-Br(1)*lz(1)+Bz(1)*lr(1))/Bmod(1)
@@ -545,7 +516,10 @@ contains
           gradpsisq = gradpsi1**2*(lr(1)**2+lz(1)**2)+&
                2*gradpsi1*gradpsi2*(lr(1)*lr(2)+lz(1)*lz(2))+&
                gradpsi2**2*(lr(2)**2+lz(2)**2)
-
+          !gradpsisq = ((absgrpsi(1)+absgrpsi(2))/2d0)**2
+          !print *, gradpsisq, ((absgrpsi(1)+absgrpsi(2))/2d0)**2
+          stop 'TODO: grad psi'
+          
           x(kt) = -(0d0,1d0)*elem%det_3/2d0*clight*(&
                (presn(iknot_s(2))-presn(iknot_s(1)))*&
                gradpsi1/(r(1)*Bmod(1)**2)&
@@ -566,6 +540,7 @@ contains
           x(kt) = x(kt) + source2
 
           !print *, a1(kt), a2(kt)
+          !print *, b1(kt), b2(kt)
        end do ! kt = 1,nt_loop
 
        call assemble_system2(nt_loop, a1(1:nt_loop), a2(1:nt_loop),&
@@ -654,32 +629,32 @@ subroutine assemble_system2(nrow, a1, a2, b1, b2, d, du)
     nz = 2*nrow
   end subroutine assemble_sparse
 
-  subroutine solve_full(n, d, du, alpha, Mq)
-    integer, intent(in) :: n                   ! number of system rows
-    complex(8), intent(in) :: d(:)             ! diagonal of stiffness matrix
-    complex(8), intent(in) :: du(:)            ! superdiagonal of stiffness matrix
-    complex(8), intent(in) :: alpha            ! single entry in stiffness matrix to be periodic
-    complex(8), intent(in) :: Mq(:)            ! right-hand side with mass matrix applied
-    ! TODO: implement
-  end subroutine solve_full
-  
-  subroutine solve_cycl_tridiag(n, d, du, alpha, Mq)
-    integer, intent(in) :: n                   ! number of system rows
-    complex(8), intent(in) :: d(:)             ! diagonal of stiffness matrix
-    complex(8), intent(in) :: du(:)            ! superdiagonal of stiffness matrix
-    complex(8), intent(in) :: alpha            ! single entry in stiffness matrix to be periodic
-    complex(8), intent(in) :: Mq(:)            ! right-hand side with mass matrix applied
-    ! TODO: implement
-  end subroutine solve_cycl_tridiag
-
-  subroutine solve_sparse(n, d, du, alpha, Mq)
-    integer, intent(in) :: n                   ! number of system rows
-    complex(8), intent(in) :: d(:)             ! diagonal of stiffness matrix
-    complex(8), intent(in) :: du(:)            ! superdiagonal of stiffness matrix
-    complex(8), intent(in) :: alpha            ! single entry in stiffness matrix to be periodic
-    complex(8), intent(in) :: Mq(:)            ! right-hand side with mass matrix applied
-    ! TODO: implement
-  end subroutine solve_sparse
+!!$  subroutine solve_full(n, d, du, alpha, Mq)
+!!$    integer, intent(in) :: n                   ! number of system rows
+!!$    complex(8), intent(in) :: d(:)             ! diagonal of stiffness matrix
+!!$    complex(8), intent(in) :: du(:)            ! superdiagonal of stiffness matrix
+!!$    complex(8), intent(in) :: alpha            ! single entry in stiffness matrix to be periodic
+!!$    complex(8), intent(in) :: Mq(:)            ! right-hand side with mass matrix applied
+!!$    ! TODO: implement
+!!$  end subroutine solve_full
+!!$  
+!!$  subroutine solve_cycl_tridiag(n, d, du, alpha, Mq)
+!!$    integer, intent(in) :: n                   ! number of system rows
+!!$    complex(8), intent(in) :: d(:)             ! diagonal of stiffness matrix
+!!$    complex(8), intent(in) :: du(:)            ! superdiagonal of stiffness matrix
+!!$    complex(8), intent(in) :: alpha            ! single entry in stiffness matrix to be periodic
+!!$    complex(8), intent(in) :: Mq(:)            ! right-hand side with mass matrix applied
+!!$    ! TODO: implement
+!!$  end subroutine solve_cycl_tridiag
+!!$
+!!$  subroutine solve_sparse(n, d, du, alpha, Mq)
+!!$    integer, intent(in) :: n                   ! number of system rows
+!!$    complex(8), intent(in) :: d(:)             ! diagonal of stiffness matrix
+!!$    complex(8), intent(in) :: du(:)            ! superdiagonal of stiffness matrix
+!!$    complex(8), intent(in) :: alpha            ! single entry in stiffness matrix to be periodic
+!!$    complex(8), intent(in) :: Mq(:)            ! right-hand side with mass matrix applied
+!!$    ! TODO: implement
+!!$  end subroutine solve_sparse
 
   subroutine common_triangles(knot1, knot2, common_tri)
     type(knot), intent(in) :: knot1, knot2
@@ -733,7 +708,7 @@ subroutine assemble_system2(nrow, a1, a2, b1, b2, d, du)
          ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
     real(dp) :: B2, j0parB
     
-    integer :: k, indl3
+    integer :: indl3
 
     elem = mesh_element(ktri)
     knots = mesh_point(elem%i_knot)
@@ -783,38 +758,19 @@ subroutine assemble_system2(nrow, a1, a2, b1, b2, d, du)
     end if
   end subroutine assign_currents
 
-  function dpsidr(ktri)
-    integer, intent(in) :: ktri
-    real(8) dpsidr
+  function absgradpsi(r,z)
+    real(dp) , intent(in) :: r,z
+    real(dp) absgradpsi
+    
+    real(dp) :: p,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ &
+         ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
 
-    type(triangle) :: elem, elem2
-    type(knot) :: knots(3), knots2(3)
-    real(8) :: rdist
-    integer :: neigh
-    
-    elem = mesh_element(ktri)
-    knots = mesh_point(elem%i_knot)
-    
-    neigh = elem%neighbour(mod(elem%knot_h,3)+1)
-    
-    if (neigh<0 .OR. elem%knot_h==0) then
-       dpsidr = 0
-       return
-    end if
-    
-    elem2 = mesh_element(neigh)
-    knots2 = mesh_point(elem2%i_knot)
-    rdist = sqrt((knots2(elem2%knot_h)%rcoord-knots(elem%knot_h)%rcoord)**2+&
-         (knots2(elem2%knot_h)%zcoord-knots(elem%knot_h)%zcoord)**2)
-    
-    if (minval(elem%i_knot) == elem%i_knot(elem%knot_h)) then
-       ! type 1 triangle
-       dpsidr = (knots2(elem2%knot_h)%psi_pol - knots(elem%knot_h)%psi_pol)/rdist
-    else       
-       ! type 2 triangle
-       dpsidr = (knots(elem%knot_h)%psi_pol - knots2(elem2%knot_h)%psi_pol)/rdist
-    end if
-  end function dpsidr
+    p = 0d0
+    call field(r,p,z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ &
+         ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ)
+
+    absgradpsi = sqrt((Br**2+Bz**2)*r**2)
+  end function absgradpsi
 
   function get_source(ktri,kl)
     integer, intent(in) :: ktri,kl
@@ -939,96 +895,13 @@ subroutine assemble_system2(nrow, a1, a2, b1, b2, d, du)
     end if
   end function get_layer
   
-  subroutine set_Bnfluxes_notheta()
+  subroutine set_Bnflux3_Bp_notheta(ktri)
     ! generates Bnflux and Bnp without theta component
     ! based on mesh_element_rmp(k)%bnorm_vac
-    integer :: ktri
-    type(triangle) :: elem, elem2
-    type(knot), dimension(3) :: knots, knots_s
-    integer, dimension(3) :: iknot_s
-    complex(dp) :: Bnflux3
-    real(dp), dimension(3) :: r, z, lr, lz
-    integer :: common_tri(2)
-    integer :: kl
-    integer :: neigh2
-    complex(dp) :: Bnfluxavg, Bnflux2
-    integer :: ntrimax
-
-
-    do ktri=1,ntri
-       elem = mesh_element(ktri)
-       knots = mesh_point(elem%i_knot)
-
-       if(elem%knot_h==0) then
-          ntrimax = ktri-1
-          Bnflux(ktri,:) = 0d0
-          Bnp(ktri) = 0d0
-          exit
-       end if
-
-       iknot_s(1) = elem%i_knot(mod(elem%knot_h+1,3)+1)
-       iknot_s(2) = elem%i_knot(elem%knot_h)
-       iknot_s(3) = elem%i_knot(mod(elem%knot_h,3)+1)
-
-       knots_s = mesh_point(iknot_s) ! sorted knots
-
-       call get_edge_coord(knots_s, r, z, lr, lz)
-       kl = get_layer(ktri)
-
-       call common_triangles(knots_s(1), knots_s(3), common_tri)
-
-       Bnflux3 = sqrt(lr(3)**2+lz(3)**2)*r(3)*(knots_s(1)%b_mod+knots_s(3)%b_mod)/2d0*&
-            (mesh_element_rmp(common_tri(1))%bnorm_vac/dpsidr(common_tri(1))+&
-            mesh_element_rmp(common_tri(2))%bnorm_vac/dpsidr(common_tri(2)))/2d0
-
-       ! type 2 triangle
-       if (.not. (minval(elem%i_knot) == elem%i_knot(elem%knot_h))) then
-          Bnflux3 = -Bnflux3
-       end if
-
-       Bnflux(ktri,mod(elem%knot_h+1,3)+1) = &
-            r(1)/r(3)*Bnflux3*(lr(1)*lr(3)+lz(1)*lz(3))/sqrt(lr(3)**2+lz(3)**2)
-       Bnflux(ktri,elem%knot_h) = &
-            r(2)/r(3)*Bnflux3*(lr(2)*lr(3)+lz(2)*lz(3))/sqrt(lr(3)**2+lz(3)**2)
-       Bnflux(ktri,mod(elem%knot_h,3)+1) = Bnflux3    
-
-    end do
-
-    do ktri=1,ntrimax
-       elem = mesh_element(ktri)
-       neigh2 = elem%neighbour(elem%knot_h)
-       if(neigh2==-1) exit
-       elem2 = mesh_element(neigh2)
-       if (ktri<=nt_core) then
-          Bnflux2 = -Bnflux(neigh2,mod(elem2%knot_h+1,3)+1)
-          Bnfluxavg = 0.5d0*(Bnflux(ktri,elem%knot_h)+Bnflux2)
-          Bnflux(ktri,elem%knot_h) = Bnfluxavg
-          Bnflux(neigh2,mod(elem2%knot_h+1,3)+1) = -Bnfluxavg
-       else
-          Bnflux2 = -Bnflux(neigh2,elem2%knot_h)
-          Bnfluxavg = 0.5d0*(Bnflux(ktri,elem%knot_h)+Bnflux2)
-          Bnflux(ktri,elem%knot_h) = Bnfluxavg
-          Bnflux(neigh2,elem2%knot_h) = -Bnfluxavg
-          
-          neigh2 = elem%neighbour(mod(elem%knot_h+1,3)+1)
-          Bnflux2 = -Bnflux(neigh2,mod(elem2%knot_h+1,3)+1)
-          Bnfluxavg = 0.5d0*(Bnflux(ktri,mod(elem%knot_h+1,3)+1)+Bnflux2)
-          Bnflux(ktri,mod(elem%knot_h+1,3)+1) = Bnfluxavg
-          Bnflux(neigh2,mod(elem2%knot_h+1,3)+1) = -Bnfluxavg
-       end if
-    end do
-    do ktri=1,ntri
-       Bnp(ktri) = -1d0/((0d0,1d0)*n)*sum(Bnflux(ktri,:))/(mesh_element(ktri)%det_3/2d0)
-    end do
-  end subroutine set_Bnfluxes_notheta
-  
-  subroutine set_Bnflux_notheta_old(ktri)
-    ! generates Bnflux and Bnp without theta component
-    ! based on mesh_element_rmp(k)%bnorm_vac
-    integer :: ktri
+    integer :: ktri, kl
     type(triangle) :: elem
-    type(knot), dimension(3) :: knots, knots_s
     integer, dimension(3) :: iknot_s
+    type(knot), dimension(3) :: knots, knots_s
     complex(dp) :: Bnflux3
     real(dp), dimension(3) :: r, z, lr, lz
     integer :: common_tri(2)
@@ -1036,48 +909,119 @@ subroutine assemble_system2(nrow, a1, a2, b1, b2, d, du)
     elem = mesh_element(ktri)
     knots = mesh_point(elem%i_knot)
 
-    if(elem%knot_h==0) then
-       Bnflux(ktri,:) = 0d0
-       Bnp(ktri) = 0d0
-       return
-    end if
-    
     iknot_s(1) = elem%i_knot(mod(elem%knot_h+1,3)+1)
     iknot_s(2) = elem%i_knot(elem%knot_h)
     iknot_s(3) = elem%i_knot(mod(elem%knot_h,3)+1)
 
-    knots_s = mesh_point(iknot_s)
-    
+    knots_s = mesh_point(iknot_s) ! sorted knots
+
     call get_edge_coord(knots_s, r, z, lr, lz)
+    kl = get_layer(ktri)
 
+    call common_triangles(knots_s(1), knots_s(3), common_tri)
 
-    
-!    call common_triangles(knots_s(1), knots_s(3), common_tri)
-    
-!    Bnflux3 = r(3)*(knots_s(1)%b_mod+knots_s(3)%b_mod)/2d0&
-!         *1d0/(knots_s(1)%psi_pol-knots_s(2)%psi_pol)*&
-!         (mesh_element_rmp(common_tri(1))%bnorm_vac+&
-!         mesh_element_rmp(common_tri(2))%bnorm_vac)/2d0
+    Bnflux3 = -sqrt(lr(3)**2+lz(3)**2)*r(3)*(knots_s(1)%b_mod+knots_s(3)%b_mod)/2d0&
+         *(mesh_element_rmp(common_tri(1))%bnorm_vac&
+         +mesh_element_rmp(common_tri(2))%bnorm_vac)/2d0&
+         *1d0/absgradpsi(r(3),z(3))
 
-!    Bnflux(ktri,mod(elem%knot_h+1,3)+1) = r(1)/r(3)*Bnflux3*(lr(1)*lr(3)+lz(1)*lz(3))/sqrt(lr(3)**2+lz(3)**2)
-!    Bnflux(ktri,elem%knot_h) = r(2)/r(3)*Bnflux3*(lr(2)*lr(3)+lz(2)*lz(3))/sqrt(lr(3)**2+lz(3)**2)
-!    Bnflux(ktri,mod(elem%knot_h,3)+1) = Bnflux3
-!    Bnflux(ktri,mod(elem%knot_h,3)+1) = 1d0
-!    Bnflux(ktri,mod(elem%knot_h+1,3)+1) = 0d0
-!    Bnflux(ktri,elem%knot_h) = 0d0
-!if (ktri<200) then
-!   print *, knots_s(1)%psi_pol-knots_s(2)%psi_pol
-!   print *, knots_s(3)%psi_pol-knots_s(2)%psi_pol
-!   print *, knots_s(1)%psi_pol-knots_s(3)%psi_pol
-!   print *, '...'
-!end if
-!    
-!    Bnp(ktri) = -1d0/((0d0,1d0)*n)*sum(Bnflux(ktri,:))/(elem%det_3/2d0)
+    ! type 2 triangle
+    if (.not. (minval(elem%i_knot) == elem%i_knot(elem%knot_h))) then
+       Bnflux3 = -Bnflux3
+    end if
+
+    Bnflux(ktri,mod(elem%knot_h,3)+1) = Bnflux3
+    Bnp(ktri) = mesh_element_rmp(ktri)%bnorm_vac*sum(knots%b_mod)/3d0&
+         *(0d0,1d0)/(n*q(kl))*dqdpsi(kl)*sum(knots%rcoord)/3d0
+  end subroutine set_Bnflux3_Bp_notheta
+      
+  subroutine set_Bnfluxes_test_notheta()
+    integer :: kl, kt, nt_loop, it
+    type(triangle) :: elem
     
-  end subroutine set_Bnflux_notheta_old
+    integer :: nz
+    complex(dp), dimension(2*nt_core) :: d, du, x       
+    integer, dimension(4*nt_core) :: irow, icol
+    complex(dp), dimension(4*nt_core) :: aval
+
+    complex(dp) :: flux_total
+    complex(dp) :: flux_pol(2*nt_core)
+
+    nt_loop = nt_core
+    
+    do kl = 1,nr_max
+       flux_total = 0d0 ! total flux through loop
+       
+       do kt = 1,nt_loop
+          it = nt_core+(kl-2)*2*nt_core+kt
+          if(kl==1) it = kt
+          
+          call set_Bnflux3_Bp_notheta(it)
+          flux_total = flux_total&
+               +Bnflux(it,mod(mesh_element(it)%knot_h,3)+1)&
+               +(0d0,1d0)*n*Bnp(it)*mesh_element(it)%det_3/2d0
+       end do
+
+       do kt = 1,nt_loop
+          it = nt_core+(kl-2)*2*nt_core+kt
+          if(kl==1) it = kt
+
+          Bnp(it) = Bnp(it) - flux_total/((0d0,1d0)*n*mesh_element(it)%det_3/2d0*nt_loop)       
+       end do
+
+       ! check
+       flux_total = 0d0
+       do kt = 1,nt_loop
+          it = nt_core+(kl-2)*2*nt_core+kt
+          if(kl==1) it = kt
+          
+          flux_total = flux_total&
+               +Bnflux(it,mod(mesh_element(it)%knot_h,3)+1)&
+               +(0d0,1d0)*n*Bnp(it)*mesh_element(it)%det_3/2d0
+       end do
+       if (abs(flux_total) > 1d-12) then
+          stop 'abs of total flux through triangle loop nonzero'
+       end if
+
+       flux_pol = 0d0
+       do kt = 1,nt_loop-1
+          it = nt_core+(kl-2)*2*nt_core+kt
+          if(kl==1) it = kt
+          elem = mesh_element(it)
+          
+          flux_pol(kt+1) = flux_pol(kt) - Bnflux(it,mod(elem%knot_h,3)+1)&
+               -(0d0,1d0)*n*Bnp(it)*elem%det_3/2d0 ! counted in counter-clockwise direction
+          
+          ! type 1 triangle
+          if (minval(elem%i_knot) == elem%i_knot(elem%knot_h)) then
+             Bnflux(it, elem%knot_h) = flux_pol(kt+1)
+             Bnflux(it, mod(elem%knot_h,3)+2) = -flux_pol(kt)
+          else ! type 2
+             Bnflux(it, elem%knot_h) = -flux_pol(kt)
+             Bnflux(it, mod(elem%knot_h,3)+2) = flux_pol(kt+1)
+          end if
+       end do
+
+       ! last triangle
+       kt = nt_loop
+       it = nt_core+(kl-2)*2*nt_core+kt
+       if(kl==1) it = kt
+       elem = mesh_element(it)
+       ! type 1 triangle
+       if (minval(elem%i_knot) == elem%i_knot(elem%knot_h)) then
+          Bnflux(it, elem%knot_h) = flux_pol(1)
+          Bnflux(it, mod(elem%knot_h,3)+2) = -flux_pol(kt)
+       else ! type 2
+          Bnflux(it, elem%knot_h) = -flux_pol(kt)
+          Bnflux(it, mod(elem%knot_h,3)+2) = flux_pol(1)
+       end if
+       
+       if(kl==1) nt_loop = 2*nt_core
+    end do
+  end subroutine set_Bnfluxes_test_notheta
   
   subroutine init_safety_factor
-    integer :: kl, kt, k, nt_loop
+    integer :: kl, kt, nt_loop
     type(triangle) :: elem
     type(knot), dimension(3) :: knots
     real(dp) :: r, z, Br,Bp,Bz,dBrdR,dBrdp,dBrdZ         &
@@ -1165,7 +1109,7 @@ subroutine assemble_system2(nrow, a1, a2, b1, b2, d, du)
        kl = get_layer(ktri)
        if(kl > nr_max) exit
        Bnp_test = (0d0,1d0)/(n*q(kl))*dqdpsi(kl)*mesh_element_rmp(ktri)%bnorm_vac*&
-            sum(mesh_point(elem%i_knot)%b_mod)/3d0
+            sum(mesh_point(elem%i_knot)%b_mod)/3d0*sum(mesh_point(elem%i_knot)%rcoord)/3d0
        write(1,*) real(Bnp(ktri)), aimag(Bnp(ktri)), real(Bnp_test), aimag(Bnp_test) 
        write(2,*) real(Bnflux(ktri,mod(elem%knot_h+1,3)+1)),&
             real(Bnflux(ktri,elem%knot_h)), real(Bnflux(ktri,mod(elem%knot_h,3)+1))
@@ -1173,8 +1117,4 @@ subroutine assemble_system2(nrow, a1, a2, b1, b2, d, du)
     close(2)
     close(1)
   end subroutine test_Bnp
-
-  subroutine gen_nonres_Bn
-  end subroutine gen_nonres_Bn
 end module magdif
-
