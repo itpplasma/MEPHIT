@@ -452,11 +452,12 @@ contains
     real(dp), dimension(3) :: Br,Bp,Bz,dBrdR,dBrdp,dBrdZ         &
          ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ,Bmod
 
-    complex(dp), dimension(2*nt_core) :: a1, a2, b1, b2, d, du, x
+    complex(dp), dimension(2*nt_core) :: a1, a2, b1, b2, q
 
     integer :: nz
-    integer, dimension(4*nt_core) :: irow, icol
-    complex(dp), dimension(4*nt_core) :: aval
+    integer, dimension(2*nt_core) :: irow, icol
+    complex(dp), dimension(2*nt_core) :: aval
+    complex(dp), dimension(nt_core) :: x, d, du
 
     complex(dp) :: source2, Bnpar
 
@@ -528,7 +529,7 @@ contains
           !print *, gradpsisq, ((absgrpsi(1)+absgrpsi(2))/2d0)**2
           !stop 'TODO: grad psi'
           
-          x(kt) = -(0d0,1d0)*elem%det_3/2d0*clight*(&
+          q(kt) = -(0d0,1d0)*elem%det_3/2d0*clight*(&
                (presn(iknot_s(2))-presn(iknot_s(1)))*&
                gradpsi1/(r(1)*Bmod(1)**2)&
                +(presn(iknot_s(3))-presn(iknot_s(2)))*&
@@ -546,20 +547,31 @@ contains
 
           !x(kt) = 1d0
           !x(kt) = source2
-          x(kt) = x(kt) + source2
+          !q(kt) = q(kt) + source2
+          q(kt) = source2
           
           !print *, a1(kt), a2(kt)
           !print *, b1(kt), b2(kt)
        end do ! kt = 1,nt_loop
 
-       call assemble_system2(nt_loop, a1(1:nt_loop), a2(1:nt_loop),&
-            b1(1:nt_loop), b2(1:nt_loop), d(1:nt_loop), du(1:nt_loop))
-       call assemble_sparse(nt_loop, d(1:nt_loop), du(1:nt_loop), nz,&
-            irow(1:2*nt_loop), icol(1:2*nt_loop), aval(1:2*nt_loop))
+       if(kl==1) then
+          d = a1(1:nt_core) + b1(1:nt_core)/2d0
+          du(1:(nt_core-1)) = a2(1:(nt_core-1)) + b2(1:(nt_core-1))/2d0
+          du(nt_core) = a2(1) + b2(1)/2d0
+          x = q(1:nt_core)
+       else
+          d = a1(1:2*nt_core:2) + b1(1:2*nt_core:2)/2d0
+          du(1:(nt_core-1)) = a2(1:(2*nt_core-2):2) + b2(1:(2*nt_core-2):2)/2d0
+          du(nt_core) = a2(1) + b2(1)/2d0
+          x = q(1:(2*nt_core-1):2) + q(2:(2*nt_core):2)
+          x(nt_core) = (x(1) + x(nt_core-1))/2d0 ! TODO: bugfix why??
+       end if
+       
+       call assemble_sparse(nt_core, d, du, nz, irow, icol, aval)
 
 
 if(kl == 5) then
-do kt = 1, nt_loop             
+do kt = 1, nt_core            
 write(1000,*) real(d(kt)), aimag(d(kt))
 write(1001,*) real(du(kt)), aimag(du(kt))
 write(1002,*) real(x(kt)), aimag(x(kt))
@@ -570,19 +582,20 @@ write(1006,*) real(b2(kt)), aimag(b2(kt))
 end do
 end if
 
-       call sparse_solve(nt_loop,nt_loop,nz,irow(1:2*nt_loop),icol(1:2*nt_loop),&
-            aval(1:2*nt_loop),x(1:nt_loop))
+       call sparse_solve(nt_core,nt_core,nz,irow,icol,aval,x)
 
 if(kl == 5) then
-do kt = 1, nt_loop             
+do kt = 1, nt_core            
 write(1007,*) real(x(kt)), aimag(x(kt))
 end do
 end if
 
-       do kt = 1, nt_loop-1
+       do kt = 1, nt_core-1
           write(1,*) real((x(kt)+x(kt+1))/2d0), aimag((x(kt)+x(kt+1))/2d0)
+          if (kl>1) write(1,*) real((x(kt)+x(kt+1))/2d0), aimag((x(kt)+x(kt+1))/2d0)
        end do
-       write(1,*) real((x(nt_loop)+x(1))/2d0), aimag((x(nt_loop)+x(1))/2d0)
+       write(1,*) real((x(nt_core)+x(1))/2d0), aimag((x(nt_core)+x(1))/2d0)
+       if (kl>1) write(1,*) real((x(nt_core)+x(1))/2d0), aimag((x(nt_core)+x(1))/2d0)
 
        if(kl==1) nt_loop = 2*nt_core
        !exit
