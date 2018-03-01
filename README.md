@@ -11,7 +11,7 @@ Prepare mesh
     
     ./prepare_mesh.sh
 
-Prepare vacuum perturbation field: e
+Prepare vacuum perturbation field:
 edit `VACFIELD/field_divB0.inp` to point to correct field.dat
 (e.g. copied from `/proj/plasma/RMP/DATA/ASDEX/MESH3D_30835/`)
     
