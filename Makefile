@@ -9,13 +9,13 @@ ifeq ($(TOOLCHAIN),intel)
 	FCFLAGS = -c -g -O0 -mkl -traceback -check bounds #-implicitnone
 	CCFLAGS = -c -g -O0 -mkl -traceback 
 else ifeq ($(TOOLCHAIN),gnu)
-	#FC := gfortran
-	FC := x86_64-pc-cygwin-gfortran
-	#CC := gcc
-	CC :=  x86_64-pc-cygwin-gcc
+	FC := gfortran
+	#FC := x86_64-pc-cygwin-gfortran
+	CC := gcc
+	#CC :=  x86_64-pc-cygwin-gcc
 	#LD := i686-w64-mingw32-ld
-	FCFLAGS = -c -g -Og -Wall -fbacktrace -fcheck=bounds -JOBJS #-fimplicit-none
-	CCFLAGS = -c -g -Og -Wall
+	FCFLAGS = -c -g -Og -Wall -fbacktrace -fcheck=bounds -JOBJS #-shared -fPIC #-fimplicit-none
+	CCFLAGS = -c -g -Og -Wall #-shared -fPIC
 	PROJLIBS := $(PROJLIBS)/GNU
 else ifeq ($(TOOLCHAIN),sgi)
 	FC := gfortran #f90
@@ -76,6 +76,7 @@ all: $(PROGRAM)
 
 $(PROGRAM): $(addprefix OBJS/, $(OBJS)) OBJS/c_fortran_dgssv.o OBJS/c_fortran_zgssv.o OBJS/umf4_f77wrapper.o OBJS/umf4_f77zwrapper.o
 	$(FC) -o $@ $^ $(LDFLAGS)
+#	$(FC) -shared -o libmagdif.so OBJS/*.o $(LDFLAGS)
 
 $(addprefix OBJS/, %.o): $(addprefix SRC/, %.f90)
 	$(FC) -o $@ $< $(FCFLAGS) 
@@ -93,4 +94,4 @@ OBJS/umf4_f77zwrapper.o: $(SUITESPARSE_F90)/umf4_f77zwrapper.c
 	$(CC) $(CCFLAGS) -I $(SUITESPARSE_HDR) -DZLONG -o $@ $^
 
 clean:
-	rm -f OBJS/*.o OBJS/*.mod magdif_test.x
+	rm -f OBJS/*.o OBJS/*.a OBJS/*.mod magdif_test.x

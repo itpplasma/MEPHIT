@@ -19,7 +19,7 @@ absgradpsi = r/2.0 # psi = r**2/4
 Bph = 1.0/R0
 m = 2        # poloidal mode number
 n = 1        # toroidal mode number
-N = 1000
+N = 100
 
 th = np.linspace(0,2*np.pi,N+1)[:-1]
 th[1:-1] = th[1:-1] + 2*np.pi/(N+1)*0.5*(np.random.rand(len(th)-2)-0.5)

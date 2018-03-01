@@ -545,9 +545,7 @@ contains
                (pres0(kl+1)-pres0(kl))/(psi(kl+1)-psi(kl))*gradpsisq*&
                3d0/sum(r*Bmod**3)
 
-          !x(kt) = 1d0
-          !x(kt) = source2
-          !q(kt) = q(kt) + source2
+          q(kt) = q(kt) + source2
           q(kt) = source2
           
           !print *, a1(kt), a2(kt)
