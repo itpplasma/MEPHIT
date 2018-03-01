@@ -1,11 +1,11 @@
-0                                            ipert        ! 0=eq only, 1=vac, 2,3=vac+plas
+1                                            ipert        ! 0=eq only, 1=vac, 2,3=vac+plas
 1                                            iequil       ! 0=pert. alone, 1=with equil.
 0.00                                         ampl         ! amplitude of perturbation, a.u.
 81                                           ntor         ! number of toroidal harmonics
 0.99                                         cutoff       ! inner cutoff in psi/psi_a units
 4                                            icftype      ! type of coil file
 'FIELD/17151.3800.AUGD.EQI.00.efit'          gfile        ! equilibrium file
-'FROMQQ/MESH3D/field.dat'                    pfile        ! coil        file (not used now, 12.07.16)
+'/proj/plasma/RMP/DATA/ASDEX/MESH3D_30835/field.dat'                    pfile        ! coil        file (not used now, 12.07.16)
 'FIELD/convexwall.asdex'                     convexfile   ! convex file for stretchcoords
 'FROMQQ/FLUXDATA'                            fluxdatapath ! directory with data in flux coord.(not used now, 12.07.16)
 0                                            nwindow_r    ! window size for filtering of psi array over R
