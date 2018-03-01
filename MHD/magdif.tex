@@ -1,0 +1,582 @@
+%% LyX 2.2.2 created this file.  For more info, see http://www.lyx.org/.
+%% Do not edit unless you really know what you are doing.
+\documentclass[12pt,british,english]{article}
+\usepackage[T1]{fontenc}
+\usepackage[latin9]{inputenc}
+\usepackage{geometry}
+\geometry{verbose,tmargin=2cm,bmargin=2cm,lmargin=2cm,rmargin=2cm}
+\setlength{\parskip}{\smallskipamount}
+\setlength{\parindent}{0pt}
+\usepackage{amsmath}
+\usepackage{esint}
+\usepackage{babel}
+\begin{document}
+\selectlanguage{british}%
+\global\long\def\tht{\vartheta}
+\global\long\def\ph{\varphi}
+\global\long\def\balpha{\boldsymbol{\alpha}}
+\global\long\def\btheta{\boldsymbol{\theta}}
+\global\long\def\bJ{\boldsymbol{J}}
+\global\long\def\bGamma{\boldsymbol{\Gamma}}
+\global\long\def\bOmega{\boldsymbol{\Omega}}
+\global\long\def\d{\text{d}}
+\global\long\def\t#1{\text{#1}}
+\global\long\def\m{\text{m}}
+\global\long\def\bm{\text{\textbf{m}}}
+\global\long\def\k{\text{k}}
+\global\long\def\i{\text{i}}
+
+\selectlanguage{english}%
+
+\title{Magnetic differential equations in stationary linear ideal MHD and
+their numerical solution}
+\maketitle
+
+\section*{Simple Example}
+
+We would like to solve an equation of the type
+\begin{align}
+\dot{p}_{n}(s)+inp_{n}(s) & =q_{n}(s)
+\end{align}
+for $p(s)$ with periodic boundary conditions at $s=0\dots2\pi$.
+With the ansatz $p_{n}=\sum_{m}p_{mn}e^{ims}$ and the same for $q_{n}$
+we obtain the analytical solution
+\begin{align}
+p_{mn} & =\frac{q_{mn}}{i(m+n)}.
+\end{align}
+The \textquotedbl{}natural\textquotedbl{} lowest order finite difference
+scheme using midpoint values where needed and with equidistant points
+in $s$ yields
+\begin{align}
+\frac{p_{n}^{(k+1)}-p_{n}^{(k)}}{\Delta s}+\frac{1}{2}in(p_{n}^{(k+1)}+p_{n}^{(k)}) & =\frac{1}{2}(q_{n}^{(k+1)}+q_{n}^{(k)}).\label{eq:fd3}
+\end{align}
+A corresponding matrix with periodic boundary conditions is
+\begin{align}
+\left(\begin{array}{cccc}
+in/2-1/\Delta s & in/2+1/\Delta s\\
+ & in/2-1/\Delta s & in/2+1/\Delta s\\
+ &  & \dots\\
+in/2+1/\Delta s &  &  & in/2-1/\Delta s
+\end{array}\right)\boldsymbol{p} & =\left(\begin{array}{cccc}
+1/2 & 1/2\\
+ & 1/2 & 1/2\\
+ &  & \dots\\
+1/2 &  &  & 1/2
+\end{array}\right)\boldsymbol{q}.
+\end{align}
+
+
+\section*{Magnetic differential equation for pressure}
+
+Magnetic differential equations arise from a number of problems in
+plasma physics. We consider for example the magnetohydrodynamic equilibrium
+\begin{align}
+c\nabla p & =\boldsymbol{J}\times\boldsymbol{B},
+\end{align}
+with pressure $p$, current $\boldsymbol{J}$ and magnetic field $\boldsymbol{B}$.
+Scalar multiplication with $\boldsymbol{B}$ yields the homogenous
+magnetic differential equation
+\begin{align}
+\boldsymbol{B}\cdot\nabla p & =0.
+\end{align}
+We consider an axisymmetric equilibrium field $\boldsymbol{B}_{0}$
+given by
+\begin{align}
+\boldsymbol{B}_{0} & =\nabla\psi\times\nabla\varphi+B_{0\ph}\nabla\ph.
+\end{align}
+Within linear perturbation theory where $\boldsymbol{B}=\boldsymbol{B}_{0}+\delta\boldsymbol{B}$
+and $p=p_{0}+\delta p$, a source term enters the right-hand side
+with
+\begin{align}
+\boldsymbol{B}_{0}\cdot\nabla\delta p & =-\delta\boldsymbol{B}\cdot\nabla p_{0}=-\delta B^{\psi}p_{0}^{\prime}(\psi).
+\end{align}
+For an axisymmetric plasma in a tokamak, we reduce the dimensionality
+by introducing cylindrical coordinates and an expansion in $\varphi$,
+such as
+\begin{align}
+\delta p(R,Z,\ph) & =\sum_{n}p_{n}(R,Z)e^{in\ph}.
+\end{align}
+The remaining equations in the poloidal $RZ$ plane for each harmonic
+are
+\begin{align}
+\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}+inB_{0}^{\varphi}p_{n} & =-B_{n}^{\psi}p_{0}^{\prime}(\psi),\label{eq:magdifp}
+\end{align}
+where the superscript \emph{pol} marks the projection into the $RZ$
+plane. This can also be written as
+\begin{align}
+(\nabla\psi\times\nabla\varphi)\cdot\nabla p_{n}+\frac{in}{R^{2}}B_{0\varphi}p_{n} & =-B_{n}^{r}p_{0}^{\prime}(r),\label{eq:magdifp-2}
+\end{align}
+where $r$ is any flux surface label. In cylindrical coordinates we
+have
+\begin{align}
+B_{0}^{R}=(\nabla\psi\times\nabla\varphi)^{R} & =\frac{1}{R}\frac{\partial\psi}{\partial Z},\\
+B_{0}^{Z}=(\nabla\psi\times\nabla\varphi)^{Z} & =-\frac{1}{R}\frac{\partial\psi}{\partial R}.
+\end{align}
+Finally, we write the form
+\begin{align}
+R\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}+inB_{0(\varphi)}p_{n} & =-RB_{n}^{r}p_{0}^{\prime}(r).\label{eq:magdifp-2-1}
+\end{align}
+Or normalized
+\begin{align}
+R\boldsymbol{h}_{0}^{\text{pol}}\cdot\nabla p_{n}+inh_{0(\varphi)}p_{n} & =-Rh_{n}^{r}p_{0}^{\prime}(r).\label{eq:magdifp-2-1-1}
+\end{align}
+
+
+\section*{Finite difference method to treat pressure perturbation}
+
+To solve equations of the type of Eq.~(\ref{eq:magdifp}) we use
+the lowest order scheme with forward differences in the gradient,
+midpoint values for the remaining terms, and periodic boundary conditions.
+\begin{align}
+\boldsymbol{h}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}}(p_{n}^{(k+1)}-p_{n}^{(k)})+\frac{inh_{0}^{\varphi}}{2}(p_{n}^{(k+1)}+p_{n}^{(k)}) & =\frac{p_{0}^{\prime}(\psi)}{2}(h_{n}^{\psi(k+1)}+h_{n}^{\psi(k)}).\label{eq:magdifp-1}
+\end{align}
+This equation has the general form
+\begin{align}
+\left(a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k+1)}+\left(-a_{k}+\frac{b_{k}}{2}\right)p_{n}^{(k)} & =\frac{c_{k}}{2}(h_{n}^{\psi(k+1)}+h_{n}^{\psi(k)}),
+\end{align}
+with
+\begin{align}
+a_{k} & =\boldsymbol{h}_{0}^{\text{pol}}\cdot\frac{\boldsymbol{r}^{(k+1)}-\boldsymbol{r}^{(k)}}{(\Delta r)^{2}},\\
+b_{k} & =inh_{0}^{\varphi},\\
+c_{k} & =p_{0}^{\prime}(\psi).
+\end{align}
+In our simple example of Eq.~(\ref{eq:fd3}) we can identify
+\begin{align}
+a_{k} & =\frac{1}{\Delta s},\\
+b_{k} & =in,\nonumber \\
+c_{k} & =1.
+\end{align}
+
+In general matrix form such a scheme is written as
+\begin{align}
+A_{jk}p_{n}^{(k)} & =M_{jk}h_{n}^{\psi(k)},
+\end{align}
+where the elements of the stiffness matrix $A$ are
+\begin{align}
+A_{jk} & =\left(a_{j}+\frac{b_{j}}{2}\right)\delta_{(j-1)k}+\left(-a_{j}+\frac{b_{j}}{2}\right)\delta_{jk},
+\end{align}
+and elements of the mass matrix $M$ are
+\begin{align}
+M_{jk} & =\frac{c_{j}}{2}(\delta_{(j-1)k}+\delta_{jk}).
+\end{align}
+At $k=N$, with $N$ the number of rows, one should replace $\delta_{(j-1)k}$
+by $\delta_{j1}$ for periodic boundary conditions. 
+
+\section*{Perturbation in current density}
+
+First variant: Use linear perturbation
+\begin{align}
+\boldsymbol{j}\times\boldsymbol{B} & \approx\boldsymbol{j}_{0}\times\boldsymbol{B}_{0}+\delta\boldsymbol{j}\times\boldsymbol{B}_{0}+\boldsymbol{j}_{0}\times\delta\boldsymbol{B}=c(\nabla p_{0}+\nabla\delta p),
+\end{align}
+resulting in
+\begin{align}
+\delta\boldsymbol{j}\times\boldsymbol{B}_{0} & =\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0}=c\nabla\delta p-\boldsymbol{j}_{0}\times\delta\boldsymbol{B}.\label{eq:jxB0}
+\end{align}
+Second variant: Use derived expresion for $\delta\boldsymbol{j}_{\perp}$
+with
+\begin{align}
+\delta\boldsymbol{j}_{\perp} & =j_{0\parallel}\frac{\delta\boldsymbol{B}_{\perp}}{B_{0}}-\frac{c\boldsymbol{h}_{0}\cdot\delta\boldsymbol{B}}{B_{0}^{2}}\boldsymbol{h}_{0}\times\nabla p_{0}+\frac{c}{B_{0}}\boldsymbol{h}_{0}\times\nabla\delta p.
+\end{align}
+Take cross product with $\boldsymbol{B}_{0}$. 
+\begin{itemize}
+\item First term
+\begin{align}
+j_{0\parallel}\frac{\delta\boldsymbol{B}_{\perp}}{B_{0}}\times\boldsymbol{B}_{0} & =\delta\boldsymbol{B}_{\perp}\times(j_{0\parallel}\boldsymbol{h}_{0})=\delta\boldsymbol{B}_{\perp}\times\boldsymbol{j}_{0\parallel}.
+\end{align}
+\item Second term
+\begin{align}
+-\frac{c\boldsymbol{h}_{0}\cdot\delta\boldsymbol{B}}{B_{0}^{2}}(\boldsymbol{h}_{0}\times\nabla p_{0})\times\boldsymbol{B}_{0} & =-\frac{\delta B_{\parallel}}{B_{0}}(\boldsymbol{h}_{0}\times(\boldsymbol{j}_{0}\times\boldsymbol{B}_{0}))\times\boldsymbol{h}_{0}\nonumber \\
+ & =-\delta B_{\parallel}(\boldsymbol{j}_{0\perp}\times\boldsymbol{h}_{0})=\delta\boldsymbol{B}_{\parallel}\times\boldsymbol{j}_{0\perp}.
+\end{align}
+\item Third term
+\begin{align*}
+\frac{c}{B_{0}}(\boldsymbol{h}_{0}\times\nabla\delta p)\times\boldsymbol{B}_{0} & =c(\nabla\delta p-(\boldsymbol{h}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0})
+\end{align*}
+\end{itemize}
+Summed up this yields
+\begin{align}
+\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0} & =\delta\boldsymbol{B}\times\boldsymbol{j}_{0}-\delta\boldsymbol{B}_{\perp}\times\boldsymbol{j}_{0\perp}+c\nabla\delta p-c(\boldsymbol{h}_{0}\cdot\nabla\delta p)\boldsymbol{h}_{0}.\label{eq:jperp}
+\end{align}
+If Eq.~(\ref{eq:jxB0}) is fulfilled, the two extra terms must cancel
+each other. Eq.~(\ref{eq:jperp}) restricts only perpendicular components
+with
+\begin{align}
+\delta\boldsymbol{j}_{\perp}\times\boldsymbol{B}_{0} & =(\delta\boldsymbol{B}\times\boldsymbol{j}_{0})_{\perp}+c\nabla_{\perp}\delta p.
+\end{align}
+In addition, the restriction
+\begin{align}
+(\delta\boldsymbol{B}\times\boldsymbol{j}_{0})_{\parallel} & =c\nabla_{\parallel}\delta p
+\end{align}
+follows from the linear perturbation in $p$ made before.
+
+\part*{Implementation}
+
+We start with
+\begin{align}
+\int_{1,2}\,\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+\int_{3}\,\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma+in\int j_{n}^{\varphi}d\Omega & =0
+\end{align}
+Taking $R\approx\text{const.}$ in one element.
+
+Approximation of constant fluxes across each edge yields
+
+\begin{align}
+I_{1}+I_{2}-\frac{inl_{3}}{|\nabla\psi|^{2}}\left(cp_{n}-\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right)\boldsymbol{n}_{3}\cdot\nabla\psi+\frac{inS_{\Omega}}{2}(j_{n1}^{\ph}+j_{n2}^{\ph}) & =0.
+\end{align}
+with 
+\begin{align*}
+I_{1} & =\int_{1,2}\,\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma.
+\end{align*}
+Taking
+\begin{align}
+j_{n}^{\ph} & =-\frac{B_{0(\ph)}}{\partial_{1}\psi}\boldsymbol{j}_{n}^{\text{pol}}\cdot\boldsymbol{n}+c\frac{\partial_{1}p_{n}}{\partial_{1}\psi}-\frac{B_{n(\ph)}}{B_{0(\ph)}}\left(c\frac{\partial_{1}p_{0}}{\partial_{1}\psi}-\frac{j_{0(\ph)}}{R}\right)+\frac{j_{0(\ph)}}{\partial_{1}\psi}\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n},
+\end{align}
+we get on edge 1 (and similar on edge 2)
+\begin{align}
+j_{n1}^{\ph} & =-\frac{B_{0(\ph)}}{\Delta\psi}I_{1}+c\frac{\Delta p_{n}}{\Delta\psi}-\frac{B_{n(\ph)}}{B_{0(\ph)}}\left(c\frac{\Delta p_{0}}{\Delta\psi}-\frac{j_{0(\ph)}}{R}\right)+\frac{j_{0(\ph)}}{\Delta\psi}l_{1}\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}.
+\end{align}
+Here $\Delta\psi=(\psi_{1e}-\psi_{1a})=\boldsymbol{l}_{1}\cdot\nabla\psi=l_{1}\partial_{1}\psi$
+marks a difference between the two vertices, which is constant for
+flux surface quantities such as $\psi$ or $p_{0}$.
+
+Finally the equation in $I_{1}$ and $I_{2}$ as unknowns is
+
+\begin{align}
+\left(1-\frac{inS_{\Omega}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)I_{1}+\left(1-\frac{inS_{\Omega}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)I_{2} & =q,\label{eq:I1I2}
+\end{align}
+with all the other terms moved to the right-hand side $q$.
+
+In general matrix form, we call the ingoing current into triangle
+Nr. $(k)$ counted in clockwise direction $I^{(k)}$. In triangle
+$(k)$, this is equal to $I_{1}=-I^{(k)}$ and $I_{2}=I^{(k+1)}$.
+The matrix form of Eq.~(\ref{eq:I1I2}) is then
+\[
+A_{jk}I^{(k)}=\boldsymbol{q}
+\]
+where the elements of the stiffness matrix $A$ are
+\begin{align}
+A_{jk} & =\left(1-\frac{inS_{\Omega k}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)\delta_{(j-1)k}+\left(-1-\frac{inS_{\Omega k}}{2}\frac{B_{0(\ph)}}{\Delta\psi}\right)\delta_{jk},
+\end{align}
+and the $k$th entry of vector $\boldsymbol{q}$ is 
+\begin{align*}
+q_{k} & =q_{k}^{1}+q_{k}^{2}+q_{k}^{3}
+\end{align*}
+where
+\begin{align}
+q_{k}^{1} & =\frac{in}{|\nabla\psi|^{2}}\left(cp_{n}-\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{A}_{n}\right)l_{3}\boldsymbol{n}_{3}\cdot\nabla\psi
+\end{align}
+is evaluated on edge Nr. 3 (mean value for $p_{n}$ there),
+\begin{equation}
+q_{k}^{2}=\frac{B_{n(\ph)}}{B_{0(\ph)}}\left(c\frac{\Delta p_{0}}{\Delta\psi}-\frac{j_{0(\ph)}}{R}\right)
+\end{equation}
+is evaluated with constant values inside triangle $k$, and 
+\begin{equation}
+q_{k}^{3}=-c\frac{\Delta p_{n}}{\Delta\psi}-\frac{j_{0(\ph)}}{\Delta\psi}l\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n},
+\end{equation}
+is an average over edge 1 and 2 of triangle $k$.
+
+In the usual notation:
+\begin{align}
+A_{jk} & =\left(a_{j}+\frac{b_{j}}{2}\right)\delta_{(j-1)k}+\left(-a_{j}+\frac{b_{j}}{2}\right)\delta_{jk},
+\end{align}
+
+\begin{align}
+a_{j} & =1\\
+b_{j} & =-inS_{\Omega k}\frac{B_{0(\ph)}}{\Delta\psi}
+\end{align}
+
+
+\part*{Old}
+
+or in components of coordinates $x^{k}$ with $k=1,2$ in the poloidal
+plans,
+\begin{align}
+B^{k}\frac{\partial}{\partial x^{k}}p_{n}+inB^{\varphi}p_{n} & =q_{n}\,.
+\end{align}
+
+Generating $\boldsymbol{B}$ from the stream function $\psi=A_{\ph}$
+we obtain
+\begin{align}
+B^{1} & =-\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{2}}\\
+B^{2} & =\frac{1}{R\sqrt{g_{p}}}\frac{\partial\psi}{\partial x^{1}}
+\end{align}
+Here, $g_{p}$ is the metric determinant of the 2D metric tensor in
+the poloidal plane. Using $\psi$ as one coordinate $x^{1}$, and
+the distance $s$ in the poloidal direction with $ds=\sqrt{dR^{2}+dZ^{2}}$,
+we have an orthogonal system with
+\begin{align}
+\hat{g}_{P} & =\left(\begin{array}{cc}
+g_{\psi\psi}\\
+ & 1
+\end{array}\right)
+\end{align}
+This means that $\sqrt{g_{p}}=\sqrt{g_{\psi\psi}}=1/|\nabla\psi|$.
+The transport law becomes
+\begin{align}
+\frac{1}{R\sqrt{g_{p}}}\frac{\partial p_{n}}{\partial s}+inB^{\varphi}p_{n} & =q_{n}\,.
+\end{align}
+This is a one-dimensional problem along the poloidal $\boldsymbol{B}$
+direction. 
+
+\section*{Finite Difference Method}
+
+Multiplying by $-iR\sqrt{g_{p}}$ we obtain
+\begin{align}
+nR\sqrt{g_{p}}B^{\varphi}p_{n}-i\dot{p}_{n} & =-iR\sqrt{g_{p}}q_{n}\,.
+\end{align}
+Discretizing with a forward Euler method and evaluating averages at
+the midpoints we obtain
+\begin{align}
+\frac{n}{2}\left(R^{k}\sqrt{g_{p}^{k}}B^{\varphi k}p_{n}^{k}+R^{k+1}\sqrt{g_{p}^{k+1}}B^{\varphi k+1}p_{n}^{k+1}\right) & -i\frac{p_{n}^{k+1}-p_{n}^{k}}{\Delta s^{k}}\\
+ & =-\frac{1}{2}i\left(R^{k}\sqrt{g_{p}^{k}}q_{n}^{k}+R^{k+1}\sqrt{g_{p}^{k+1}}q_{n}^{k+1}\right)\,.
+\end{align}
+Coefficients should be filled into a sparse matrix and the discrete
+equations solved e.g. by UMFPACK.
+
+\section*{Analytical solution}
+
+\begin{align*}
+i(mB^{\vartheta}+nB^{\varphi})p_{mn} & =q_{mn}\\
+p_{mn} & =\frac{q_{mn}}{i(mB^{\vartheta}+nB^{\varphi})}\,.
+\end{align*}
+We take circular flux surfaces in the large aspect ratio limit, such
+that the scaling with $R$ vanishes and as coordinates minor $r$
+and $\vartheta$.
+
+In this case
+
+\begin{align*}
+B^{\tht} & =\frac{1}{R_{0}\sqrt{g_{P}}}\frac{\partial\psi}{\partial r}\,.
+\end{align*}
+We set $\psi=r^{2}/4$ so $\frac{\partial\psi}{\partial r}=|\nabla\psi|=r/2$.
+Due to the circular flux surfaces, we have a orthogonal system and
+$\sqrt{g_{P}}=r$, so $B^{\tht}=1/(2R_{0})$.
+
+\subsection*{Volumetric source term}
+
+By taking the inner product with $\boldsymbol{e}_{\psi}$ we obtain
+\begin{align}
+\boldsymbol{e}_{\psi}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}) & =\boldsymbol{e}_{\psi}\cdot(\boldsymbol{j}_{n}\times(\nabla\psi\times\nabla\varphi+B_{0\ph}\nabla\ph))\nonumber \\
+ & =\boldsymbol{j}_{n}\cdot((\nabla\psi\times\nabla\varphi)\times\boldsymbol{e}_{\psi}+B_{0\ph}\nabla\ph\times\boldsymbol{e}_{\psi})\\
+ & =\boldsymbol{j}_{n}\cdot\left(\nabla\varphi+\frac{B_{0\ph}}{|\nabla\psi|^{2}}\nabla s\right)=j_{n}^{\ph}\pm\frac{B_{0\ph}}{|\nabla\psi|^{2}}j_{n\parallel}
+\end{align}
+on the left-hand side. The right-hand side yields:
+\begin{align}
+\boldsymbol{e}_{\psi}\cdot(\nabla p_{n}+in\,p_{n}\nabla\varphi) & =\boldsymbol{e}_{\psi}\cdot\nabla p_{n}=\frac{\partial p_{n}}{\partial\psi}\\
+\boldsymbol{e}_{\psi}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}) & =\frac{\nabla\psi}{|\nabla\psi|^{2}}\cdot(B_{n\ph}\boldsymbol{j}_{0}^{\text{pol}}\times\nabla\ph-j_{0\ph}\boldsymbol{B}_{n}^{\text{pol}}\times\nabla\ph)\nonumber \\
+ & =\frac{\boldsymbol{B}_{0}^{\text{pol}}}{|\nabla\psi|^{2}}\cdot(j_{0\ph}\boldsymbol{B}_{n}^{\text{pol}}-B_{n\ph}\boldsymbol{j}_{0}^{\text{pol}}).
+\end{align}
+can use
+\begin{align*}
+\frac{\nabla\psi}{|\nabla\psi|^{2}}\cdot(B_{n\ph}\boldsymbol{j}_{0}^{\text{pol}}\times\nabla\ph-j_{0\ph}\boldsymbol{B}_{n}^{\text{pol}}\times\nabla\ph) & =\frac{B_{n\ph}}{B_{0\ph}}\frac{\nabla\psi}{|\nabla\psi|^{2}}\cdot(c\nabla p_{0}-j_{0\ph}\nabla\psi)+j_{0\ph}\frac{\left(B_{n}^{\text{pol}}\right)^{2}}{|\nabla\psi|^{2}}\\
+ & =
+\end{align*}
+Take scalar product with $\nabla\psi$ to obtain
+\begin{align}
+\nabla\psi\cdot(\boldsymbol{j}_{0}^{\text{pol}}\times(B_{0\ph}\nabla\ph)) & =-B_{0\ph}\boldsymbol{j}_{0}^{\text{pol}}\cdot(\nabla\psi\times\nabla\ph)=-B_{0\ph}\boldsymbol{j}_{0}^{\text{pol}}\cdot\boldsymbol{B}_{0}^{\text{pol}}\\
+\nonumber \\
+\nabla\psi\cdot\nonumber 
+\end{align}
+
+Cross product with $\boldsymbol{e}_{\ph}$ yields
+\begin{align}
+B_{0\ph}\boldsymbol{e}_{\ph}\times(\boldsymbol{j}_{n}\times\nabla\ph) & =\boldsymbol{j}_{n}-j_{n\ph}\nabla\ph\\
+\boldsymbol{e}_{\ph}\times(\boldsymbol{j}_{n}\times(\nabla\psi\times\nabla\varphi)) & =\boldsymbol{e}_{\ph}\times(j_{n}^{\ph}\nabla\psi-j_{n}^{\psi}\nabla\varphi)=j_{n}^{\ph}\boldsymbol{e}_{\ph}\times\nabla\psi\nonumber \\
+ & =j_{n\ph}\nabla\ph\times\nabla\psi\nonumber 
+\end{align}
+
+\begin{itemize}
+\item Scalar product with $\boldsymbol{B}_{0}^{\text{pol}}=\nabla\psi\times\nabla\ph$
+yields
+\begin{align}
+\boldsymbol{B}_{0}^{\text{pol}}\cdot(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0}^{\text{pol}}) & =0\\
+B_{0\ph}(\nabla\psi\times\nabla\ph)\cdot(\boldsymbol{j}_{n}\times\nabla\ph) & =\frac{B_{0\ph}}{R^{2}}\boldsymbol{j}_{n}\cdot\nabla\psi
+\end{align}
+Right-hand side:
+\begin{align*}
+\boldsymbol{B}_{0}^{\text{pol}}\cdot(\nabla p_{n}+in\,p_{n}\nabla\varphi) & =\boldsymbol{B}_{0}^{\text{pol}}\cdot\nabla p_{n}\\
+\boldsymbol{B}_{0}^{\text{pol}}\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}) & =(\nabla\psi\times\nabla\ph)\cdot(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n})\\
+ & =(\boldsymbol{j}_{0}\cdot\nabla\psi)(\boldsymbol{B}_{n}\cdot\nabla\ph)-(\boldsymbol{B}_{n}\cdot\psi)(\boldsymbol{j}_{0}\cdot\nabla\ph)
+\end{align*}
+\end{itemize}
+We need to solve
+\begin{align}
+\nabla\cdot\delta\boldsymbol{j} & =0,\\
+\nabla\delta p & =\frac{1}{c}\left(\delta\boldsymbol{j}\times\boldsymbol{B}_{0}+\boldsymbol{j}_{0}\times\delta\boldsymbol{B}\right)
+\end{align}
+for $\delta\boldsymbol{j}$. Splitting into toroidal and poloidal
+parts for a single harmonic in $\varphi$ we obtain
+\begin{align}
+\nabla\cdot\boldsymbol{j}_{n}^{\text{pol}}+in\,j_{n}^{\ph} & =0.
+\end{align}
+The second equation reads
+\begin{align}
+\boldsymbol{j}_{n}\times\boldsymbol{B}_{0} & =c(\nabla p_{n}+in\,p_{n}\nabla\varphi)-\boldsymbol{j}_{0}\times\boldsymbol{B}_{n}.
+\end{align}
+The toroidal part of the cross product is
+\begin{align}
+(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0})_{\ph} & =R(j_{n}^{Z}B_{0}^{R}-j_{n}^{R}B_{0}^{Z})=R\sqrt{g_{P}}j_{n}^{\psi}B_{0}^{\text{pol}}\\
+ & =in\,p_{n}-(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n})_{\varphi}\\
+\Rightarrow j_{n}^{\psi} & \text{on flux surface edge}\nonumber 
+\end{align}
+On one triangle edge
+\begin{align*}
+(\boldsymbol{j}_{n}\times\boldsymbol{B}_{0})_{\parallel} & =R(j_{n\perp}B_{0}^{\ph}-j_{n}^{\ph}B_{0}^{\perp})\\
+ & \approx c\frac{p_{2}-p_{1}}{l}-(\boldsymbol{j}_{0}\times\boldsymbol{B}_{n})_{\parallel}
+\end{align*}
+
+
+\section*{Finite Volume Method}
+
+The divergence operator is defined via
+\begin{align*}
+\nabla\cdot\boldsymbol{u} & =\frac{1}{R\sqrt{g_{p}}}\frac{\partial}{\partial x^{k}}(R\sqrt{g_{p}}u^{k})\,.
+\end{align*}
+When working with $R,Z$ as coordinates in the poloidal plane, $\sqrt{g_{p}}=1$.
+We multiply by $R$ to obtain
+\begin{align*}
+\frac{\partial}{\partial x^{k}}(Rh^{k}j_{\parallel n})+inRh^{\varphi}j_{\parallel n} & =-\frac{\partial}{\partial x^{k}}(Rj_{\perp n}^{k})-inRj_{\perp n}^{\varphi}\,.
+\end{align*}
+Integration over a triangle yields
+\begin{align}
+\oint\,Rj_{\parallel n}\boldsymbol{h}\cdot\boldsymbol{n}d\Gamma+in\int Rh^{\varphi}j_{\parallel n}d\Omega & =-\oint\,R\boldsymbol{j}_{\perp n}^{\text{pol}}\cdot\boldsymbol{n}d\Gamma-in\int Rj_{\perp n}^{\ph}d\Omega\label{eq:fvmj}
+\end{align}
+where scalar products with $\boldsymbol{n}$ pointing towards the
+outer normal vector of the edge are taken component-wise in $R$ and
+$Z$. We assume a field-aligned mesh with $\boldsymbol{h}$ parallel
+to edge no.~3. The in- and outflux are over edges 1 and 2.
+
+\section*{General Finite Volume Method}
+
+Eq.~(\ref{eq:fvmj}) is of the form
+\begin{align*}
+\oint\,u\,\boldsymbol{h}\cdot\boldsymbol{n}d\Gamma+in\int u\,h^{\varphi}d\Omega & =-\oint\,\boldsymbol{v}\cdot\boldsymbol{n}d\Gamma-in\int w\,d\Omega
+\end{align*}
+with $u=Rj_{\parallel n}$, $\boldsymbol{v}=R\boldsymbol{j}_{\perp n}^{\text{pol}}$
+and $w=Rj_{\perp n}^{\ph}$. We approximate the flux by a flux value
+times edge length. Since the mesh is field-aligned, only two of the
+three triangle edges play a role for fluxes and we can write
+\begin{align}
+\oint\,u\,\boldsymbol{h}\cdot\boldsymbol{n}d\Gamma & \approx U_{1}+U_{2}=u_{1}l_{1}+u_{2}l_{2},
+\end{align}
+where
+\begin{align}
+U_{1} & =\int_{1}u\boldsymbol{h}\cdot\boldsymbol{n}\d\Gamma_{1}.
+\end{align}
+and so on. In the second term we can use
+\begin{align*}
+\int u\,h^{\varphi}d\Omega & \approx\frac{u_{1}+u_{2}}{2}h^{\varphi}S
+\end{align*}
+where $S$ is the surface of the triangle.
+
+For $\boldsymbol{v}$ the normal components to the edges (fluxes through
+edges) are required via
+\begin{align}
+\oint\,\boldsymbol{v}\cdot\boldsymbol{n}d\Gamma & \approx V_{1}+V_{2}+V_{3}\nonumber \\
+ & =\boldsymbol{v}_{1}\cdot\boldsymbol{n}_{1}l_{1}+\boldsymbol{v}_{2}\cdot\boldsymbol{n}_{2}l_{2}+\boldsymbol{v}_{3}\cdot\boldsymbol{n}_{3}l_{3}
+\end{align}
+
+Central difference scheme:
+\begin{align*}
+\dot{p}_{H} & =\frac{\Delta s^{k-1}}{\Delta s^{k}(\Delta s^{k}+\Delta s^{k-1})}p^{k+1}+\frac{\Delta s^{k}-\Delta s^{k-1}}{\Delta s^{k}\Delta s^{k-1}}p^{k}-\frac{\Delta s^{k}}{\Delta s^{k-1}(\Delta s^{k}+\Delta s^{k-1})}p^{k-1}
+\end{align*}
+
+In harmonics in $\varphi$ this becomes
+\begin{align}
+\boldsymbol{B}\cdot\nabla_{RZ}p_{n}+inB^{\varphi}p_{n} & =s_{n}\,.
+\end{align}
+If we take no toroidicity and harmonic RHS term with poloidal harmonic
+$m$ we obtain
+\begin{align*}
+i(mB^{\vartheta}+nB^{\varphi})p_{mn} & =s_{mn}\\
+p_{mn} & =\frac{s_{mn}}{i(mB^{\vartheta}+nB^{\varphi})}\,.
+\end{align*}
+Without toroidicity:
+\begin{align*}
+\sqrt{g} & =r\\
+B^{\vartheta} & =\frac{1}{r}\partial_{r}A_{\varphi}
+\end{align*}
+So for $A_{\varphi}=r^{2}/4$ we get $B^{\vartheta}=1/2$. Furthermore,
+we choose $B^{\varphi}=1$. We have
+\begin{align*}
+R & =R_{0}+r\cos\vartheta\\
+Z & =r\sin\vartheta\\
+\\
+\frac{\partial R}{\partial r} & =(R-R_{0})/r\\
+\frac{\partial Z}{\partial r} & =Z/r\\
+\\
+\frac{\partial R}{\partial\vartheta} & =-z\\
+\frac{\partial Z}{\partial\vartheta} & =R-R_{0}\\
+\\
+B^{R} & =\frac{\partial R}{\partial\vartheta}B^{\vartheta}=-z/2\\
+B^{Z} & =\frac{\partial Z}{\partial\vartheta}B^{\vartheta}=(R-R_{0})/2
+\end{align*}
+In real and imaginary parts this is
+\begin{align}
+\boldsymbol{B}\cdot\nabla_{RZ}(\Re p_{n}+i\Im p_{n})+inB^{\varphi}(\Re p_{n}+i\Im p_{n}) & =(\Re s_{n}+i\Im s_{n})\,\\
+\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n}-nB^{\varphi}\Im p_{n} & =\Re s_{n}\,\\
+\boldsymbol{B}\cdot\nabla_{RZ}\Im p_{n}+nB^{\varphi}\Re p_{n} & =\Im s_{n}\,
+\end{align}
+Combining
+\begin{align*}
+\boldsymbol{B}\cdot\nabla_{RZ}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n})-nB^{\varphi}(\Im s_{n}-nB^{\varphi}\Re p_{n}) & =\boldsymbol{B}\cdot\nabla_{RZ}\cdot\Re s_{n}\,\\
+\boldsymbol{B}\cdot\nabla_{RZ}(\boldsymbol{B}\cdot\nabla_{RZ}\Im p_{n})+nB^{\varphi}(\Re s_{n}+nB^{\varphi}\Im p_{n}) & =\boldsymbol{B}\cdot\nabla_{RZ}\cdot\Im s_{n}\,
+\end{align*}
+In Flat space:
+\begin{align*}
+B^{R}\partial_{R}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n})+B^{Z}\partial_{Z}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n}) & \,\\
+=(B^{R}\partial_{R}+B^{Z}\partial_{Z})(B^{R}\partial_{R}+B^{Z}\partial_{Z})\Re p_{n}\\
+=\left((B^{R})^{2}\partial_{R}^{2}+2B^{R}B^{Z}\partial_{R}\partial_{Z}+\left(B^{Z}\right)^{2}\partial_{Z}^{2}\right)\Re p_{n}
+\end{align*}
+This equation is parabolic and not, as such, suited for FEM.
+
+New:
+\begin{align*}
+\boldsymbol{B}\cdot\nabla_{RZ}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n}) & =\nabla_{RZ}\cdot(\boldsymbol{B}(\boldsymbol{B}\cdot\nabla_{RZ}\Re p_{n}))\\
+ & =\nabla_{RZ}\cdot(\boldsymbol{B}\nabla_{RZ}\cdot(\boldsymbol{B}\Re p_{n}))
+\end{align*}
+In real and imaginary parts this is
+\begin{align*}
+i(mB^{\vartheta}+nB^{\varphi})(\Re p_{mn}+i\Im p_{mn}) & =(\Re s_{mn}+i\Im s_{mn})\\
+\Im p_{mn} & =-\Re s_{mn}/(mB^{\vartheta}+nB^{\varphi})\\
+\Re p_{mn} & =\Im s_{mn}/(mB^{\vartheta}+nB^{\varphi})
+\end{align*}
+We have
+\begin{align*}
+s & =\sum_{n}s_{n}(\vartheta)e^{in\varphi}=\sum_{mn}s_{mn}e^{i(m\vartheta+n\varphi)}\\
+\\
+ & =\sum_{n}(\Re s_{n}+i\Im s_{n})(\cos n\varphi+i\sin n\varphi)\\
+ & =\sum_{n}(\Re s_{n}\cos n\varphi-\Im s_{n}\sin n\varphi)+i(\Re s_{n}\sin n\varphi+\Im s_{n}\cos n\varphi)\\
+\\
+ & =\sum_{mn}(\Re s_{mn}+i\Im s_{mn})(\cos(m\vartheta+n\varphi)+i\sin(m\vartheta+n\varphi))\\
+ & =\sum_{mn}(\Re s_{mn}\cos(m\vartheta+n\varphi)-\Im s_{mn}\sin(m\vartheta+n\varphi))\\
+ & +i(\Re s_{mn}\sin(m\vartheta+n\varphi)+\Im s_{mn}\cos(m\vartheta+n\varphi))\\
+\\
+s_{n} & =s_{mn}e^{im\vartheta}=(\Re s_{mn}+i\Im s_{mn})(\cos m\vartheta+i\sin m\vartheta)\\
+ & =\Re s_{mn}\cos m\vartheta-\Im s_{mn}\sin m\vartheta+i(\Re s_{mn}\sin m\vartheta+\Im s_{mn}\cos m\vartheta)
+\end{align*}
+Test:
+\begin{align*}
+s & =\Im s_{mn}(\cos(m\vartheta+n\varphi)-i\sin(m\vartheta+n\varphi))\\
+s_{n} & =s_{mn}e^{im\vartheta}=\Im s_{mn}(-\sin m\vartheta+i\cos m\vartheta)\\
+ & =\\
+\\
+\Re p_{mn} & =\Im s_{mn}/(mB^{\vartheta}+nB^{\varphi})\\
+\\
+p_{n} & =\Re p_{mn}(\cos m\vartheta+i\sin m\vartheta)
+\end{align*}
+
+
+\section*{Pseudotoroidal coordinates}
+
+\begin{align*}
+R & =R_{0}+r\cos\vartheta\\
+Z & =r\sin\tht\\
+\\
+\boldsymbol{e}_{r} & =\frac{\partial R}{\partial r}\boldsymbol{e}_{R}+\frac{\partial Z}{\partial r}\boldsymbol{e}_{Z}\\
+ & =\boldsymbol{e}_{R}\cos\vartheta+\boldsymbol{e}_{Z}\sin\tht\\
+\\
+\boldsymbol{e}_{\tht} & =\frac{\partial R}{\partial\tht}\boldsymbol{e}_{R}+\frac{\partial Z}{\partial\tht}\boldsymbol{e}_{Z}\\
+ & =-\boldsymbol{e}_{R}r\sin\vartheta+\boldsymbol{e}_{Z}r\cos\tht
+\end{align*}
+
+\end{document}
