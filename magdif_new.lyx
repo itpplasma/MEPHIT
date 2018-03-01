@@ -1230,6 +1230,94 @@ F(\psi)=\frac{i}{nq}\frac{\partial q}{\partial\psi}.
 
 \end_inset
 
+With known 
+\begin_inset Formula $B_{n}^{\psi}$
+\end_inset
+
+ and 
+\begin_inset Formula $B_{n}^{\ph}$
+\end_inset
+
+ we now proceed to find fluxes through triangle edges.
+ Divergence-freeness in cylindrical coordinates gives
+\begin_inset Formula 
+\begin{align}
+\int_{1,2}\d l\,R\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n} & =-\int_{3}\d l\,R\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}-in\int_{\Omega_{i}}\d R\d Z\,RB_{n}^{\ph}.\label{eq:integral law-1}
+\end{align}
+
+\end_inset
+
+As for currents we use the notation for weighted magnetic fluxes through
+ edges,
+\begin_inset Formula 
+\begin{equation}
+\Psi_{k}=\int_{k}R\,\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}dl\approx R_{k}\,\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}_{k}.
+\end{equation}
+
+\end_inset
+
+The term through edge 
+\begin_inset Formula $l_{3}$
+\end_inset
+
+ orthogonal to 
+\begin_inset Formula $n_{3}\parallel\nabla\psi$
+\end_inset
+
+ is
+\begin_inset Formula 
+\begin{align*}
+-\Psi_{3} & \approx\mp R_{3}l_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|}
+\end{align*}
+
+\end_inset
+
+with sign depending on edge orientation.
+ The second term yields
+\begin_inset Formula 
+\begin{align*}
+-\Psi_{\ph}=-in\int_{\Omega_{i}}\d R\d Z\,RB_{n}^{\ph} & \approx-inS_{\Omega k}\,R_{k}B_{nk}^{\ph}.
+\end{align*}
+
+\end_inset
+
+The equation to solve is
+\begin_inset Formula 
+\begin{equation}
+A_{jk}I^{(k)}=\boldsymbol{q},
+\end{equation}
+
+\end_inset
+
+with
+\begin_inset Formula 
+\begin{align}
+A_{jk} & =\delta_{(j-1)k}-\delta_{jk},
+\end{align}
+
+\end_inset
+
+and
+\begin_inset Formula 
+\begin{align}
+q^{k} & =\mp R_{3}l_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|}-inS_{\Omega k}\,R_{k}B_{nk}^{\ph}.
+\end{align}
+
+\end_inset
+
+Here, a compatibility condition needs to be fulfilled - the flux through
+ one flux surface shell, so the sum over all triangles 
+\begin_inset Formula $k$
+\end_inset
+
+ must vanish with
+\begin_inset Formula 
+\begin{align}
+\sum_{k}(\Psi_{\ph}^{(k)}+\Psi_{3}^{(k)}) & =0.
+\end{align}
+
+\end_inset
+
 
 \end_layout
 
