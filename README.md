@@ -5,6 +5,7 @@ Preparing input data
 --------------------
     cd PRELOAD/
     ./prepare_mesh.sh
+    ./prepare_vacfield.sh
 
 MHD single iteration
 --------------------
