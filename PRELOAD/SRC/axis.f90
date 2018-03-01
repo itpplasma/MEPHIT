@@ -45,8 +45,8 @@ program axis
   real*8, dimension(1:nt_core) :: delta_theta
   logical :: out_of_cw, wall_touch
   integer :: ibou_b2_pfr, ibou_b2_sol, number_of_points
-  integer, parameter :: n_rational = 0
-!  integer, parameter :: n_rational = 5 ! for refinement at rational surfaces
+!  integer, parameter :: n_rational = 0
+  integer, parameter :: n_rational = 5 ! for refinement at rational surfaces
   real*8 :: d_rational(n_rational) ! TODO: don't hardcode this
   real*8 :: tau_rad, tau_rad_old
   integer :: nr_core
