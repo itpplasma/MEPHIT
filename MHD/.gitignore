@@ -13,3 +13,6 @@ q.out
 test_bnflux.out
 test_bnp.out
 test_pressure_x.out
+*~
+*.mod
+*.o
