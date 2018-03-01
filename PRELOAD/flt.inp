@@ -1,0 +1,18 @@
+input parameters:
+ 0 	       | 0=2d only 1=3d fields **NOT USED
+parameters of the domain:
+  95.0d0       | rmn, min. radius (cm)
+ 252.5d0       | rmx, max. radius (cm)
+-140.0d0       | zmn, min. Z (cm)
+ 140.0d0       | zmx, max. Z (cm)
+ 160.0d0       | raxis, R-coord. of axis of vessel, cm **NOT USED
+   0.0d0       | zaxis, Z-coord. of axis of vessel, cm **NOT USED
+  1.d0 ! 5.0d-2| period in $\phi$, in $2\pi$ units 
+   0.0d0       | amplitude of perturbation, a.u.
+parameters of plot:
+-1             | direction of integration , +1 or -1
+10, 50         | nplot (number of start points to trace), nturns
+215.d0         | rmnplot, min. radius for start points (cm)
+215.5d0        | rmxplot, max. radius for start points (cm) 
+0.0d0    0.0d0 | phi0, zet0 - $\phi$ (2\pi) and Z(cm) for start points
+0              | 0=step in R;  1= step in Z
