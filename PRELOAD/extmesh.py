@@ -7,7 +7,7 @@ Created on Sat Jul 16 18:45:11 2016
 """
 
 import numpy as np
-from StringIO import StringIO
+from io import StringIO
 import sys
 
 from meshpy import triangle 

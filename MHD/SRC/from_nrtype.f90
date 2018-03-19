@@ -1,1 +1,0 @@
-../../PRELOAD/SRC/from_nrtype.f90
