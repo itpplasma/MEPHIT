@@ -1,4 +1,9 @@
-!
+! vacfield.f90
+! writes out quantities from vacuum perturbation field
+! into ascii files
+! 
+
+  
   use gettormode_mod
   use from_nrtype
   use mesh_mod
@@ -90,7 +95,7 @@
     elem = mesh_element(i)
     knots = mesh_point(elem%i_knot)
        
-    rr(1) = (knots(1)%rcoord + knots(2)%rcoord)/2d0
+    rr(1) = (knots(1)%rcoord + knots(2)%rcoord)/2d0 ! edge midpoints
     rr(2) = (knots(2)%rcoord + knots(3)%rcoord)/2d0
     rr(3) = (knots(3)%rcoord + knots(1)%rcoord)/2d0
     
@@ -98,8 +103,8 @@
     zz(2) = (knots(2)%zcoord + knots(3)%zcoord)/2d0
     zz(3) = (knots(3)%zcoord + knots(1)%zcoord)/2d0
     
-    lr(1) = knots(2)%rcoord - knots(1)%rcoord
-    lr(2) = knots(3)%rcoord - knots(2)%rcoord
+    lr(1) = knots(2)%rcoord - knots(1)%rcoord ! edge vector components
+    lr(2) = knots(3)%rcoord - knots(2)%rcoord ! (counterclockwise)
     lr(3) = knots(1)%rcoord - knots(3)%rcoord
     
     lz(1) = knots(2)%zcoord - knots(1)%zcoord
@@ -110,9 +115,9 @@
        call field(rr(k),0d0,zz(k),Br,Bp,Bz,dBrdR,&
             dBrdp,dBrdZ,dBpdR,dBpdp,dBpdZ,&
             dBzdR,dBzdp,dBzdZ)
-       Bnflux(k) = lz(k)*rr(k)*B_Rn - lr(k)*rr(k)*B_Zn
+       Bnflux(k) = lz(k)*rr(k)*B_Rn - lr(k)*rr(k)*B_Zn ! project vector onto edge normal
     end do
-    Bnphi = -1d0/((0d0,1d0)*n_tor_out)*sum(Bnflux)/(elem%det_3/2d0)
+    Bnphi = -1d0/((0d0,1d0)*n_tor_out)*sum(Bnflux)/(elem%det_3/2d0) ! make divergence free
     write(17,*) real(Bnflux(1)), aimag(Bnflux(1)),&
          real(Bnflux(2)), aimag(Bnflux(2)),&
          real(Bnflux(3)), aimag(Bnflux(3)),&
