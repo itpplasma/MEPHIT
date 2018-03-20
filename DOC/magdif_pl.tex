@@ -142,6 +142,8 @@ Here the perturbation field in vacuum, $\delta \vec{B}_{\text{v}}$, is pre-evalu
 
 The solution of \cref{eq:mhd} can further be split into two steps: First the pressure perturbation $\delta p$ is found, and then the plasma current density $\delta \vec{j}$ is computed using the condition $\nabla \cdot \delta \vec{j} = 0$. For an unperturbed equilibrium with nested flux surfaces, both steps can be performed in a radially local manner if a field-aligned computational grid is used, which will become clear below. Radial coupling happens by the combination of the two individual steps since their effective radial locations of computation are shifted by a half-step in radial grid distance.
 
+\subsection{Geometrical considerations}
+
 In axisymmetric coordinate systems, such as cylindrical $(R, \phi, Z)$, the equations to solve for harmonics in the toroidal angle $\phi$ are
 \begin{align}
   \nabla p_{n} + \im n p_{n} \nabla \phi &= \frac{1}{c} \left( \vec{j}_{0} \times \vec{B}_{n} + \vec{j}_{n} \times \vec{B}_{0} \right), \label{eq:mhd-2} \\
@@ -153,9 +155,7 @@ now with a 2D $\nabla$ operator acting in the poloidal ($RZ$) plane. The diverge
 \end{gather*}
 where $\sqrt{g_{\pol}}$ is the metric tensor of the coordinates in the poloidal plane, which is equal to $1$ for cylindrical coordinates.
 
-\subsection{Representation of equilibrium field}
-
-$\vec{B}_{0}$ is given by
+The representation of equilibrium field $\vec{B}_{0}$ is given by
 \begin{gather}
   \vec{B}_{0} = \vec{B}_{0}^{\pol} + \vec{B}_{0}^{\tor},
 \end{gather}
@@ -163,6 +163,34 @@ where
 \begin{align}
   \vec{B}_{0}^{\pol} &= \nabla \psi \times \nabla \phi, \\
   \vec{B}_{0}^{\tor} &= B_{0 \phi} \nabla \phi.
+\end{align}
+
+\begin{figure}
+  \centering
+  \begin{subfigure}[b]{0.33\textwidth}
+    \centering
+    \input{grid0.tpx}
+    \caption{The innermost loop of the grid with the magnetic axis at its center. Edge 3 lies on the flux surface in the infinitesimal limit.}
+    \label{fig:grid0}
+  \end{subfigure}
+  \quad
+  \begin{subfigure}[b]{0.5\textwidth}
+    \centering
+    \input{grid1.tpx}
+    \caption{One of the outer loops of the grid with two alternating kinds of triangles with edge 3 lying on the inner and outer flux surface respectively.}
+    \label{fig:grid1}
+  \end{subfigure}
+  \caption{The 2D mesh is given by a triangulation of poloidal cross-sections of the nested flux surfaces, resulting in \enquote{loops}. The cross-sections are assumed to be circular for illustration purposes.}
+  \label{fig:grid}
+\end{figure}
+
+\subsubsection{Coordinate system on each edge}
+
+For each edge (length $l$) we use a local orthogonal coordinate system on each triangle edge with $\vec{l}$ the vector of length $l$ along the edge in counter-clockwise orientation, $\vec{n}$ the outward normal of length $l$ and $\nabla \phi$ pointing inside the plane. We obtain relations
+\begin{align}
+  \vec{l} \times \vec{n} &= l^{2} R \nabla \phi, \\
+  \vec{n} \times R \nabla \phi &= \vec{l}, \\
+  R \nabla \phi \times \vec{l} &= \vec{n}.
 \end{align}
 
 \subsection{Pressure perturbation}
@@ -183,39 +211,7 @@ Here the first integral is performed over the 1-dimensional element boundary $\p
 \begin{gather}
   \oint_{\partial \Omega_{i}} \diff l \, R \vec{j}_{n} \cdot \hat{\vec{n}} = \int_{1, 2} \diff l \, R \vec{j}_{n} \cdot \hat{\vec{n}} + \int_{3} \diff l \, R \vec{j}_{n} \cdot \hat{\vec{n}}, \label{eq:integral law}
 \end{gather}
-where edge $3$ is tangential to an adjacent flux surface and edges $1$ and $2$ are not. For the grid it is important to distinguish two types of triangles, starting from the second loop outside the magnetic axis:
-
-\input{grid0.tpx}
-
-\input{grid1.tpx}
-
-A variation of this scheme considers quadrangles outside the innermost loop. Effectively, edge 2 of the triangles is ignored and the resulting quadrangle is renumbered (sketch to follow), so that edges 2 and 4 lie on neighbouring flux surfaces.
-
-\subsubsection{Coordinate system on each edge}
-
-For each edge (length $l$) we use a local orthogonal coordinate system on each triangle edge with $\vec{l}$ the vector of length $l$ along the edge in counter-clockwise orientation, $\vec{n}$ the outward normal of length $l$ and $\nabla \phi$ pointing inside the plane. We obtain relations
-\begin{align}
-  \vec{l} \times \vec{n} &= l^{2} R \nabla \phi, \\
-  \vec{n} \times R \nabla \phi &= \vec{l}, \\
-  R \nabla \phi \times \vec{l} &= \vec{n}.
-\end{align}
-
-\subsubsection{Cross-field currents through edge(s) on flux surfaces}
-
-It can be shown (see writeup on gyrokinetics) that
-\begin{align}
-  \vec{j}_{n \perp} &= \vec{j}_{n} - (\vec{j}_{n} \cdot \vec{h}_{0}) \vec{h}_{0} \nonumber \\
-  &= j_{0 \parallel} \frac{\vec{B}_{n \perp}}{B_{0}} - \frac{c B_{n \parallel}}{B_{0}^{2}} \vec{h}_{0} \times \nabla p_{0} + \frac{c}{B_{0}} \vec{h}_{0} \times (\nabla p_{n} + \im n p_{n} \nabla \phi).
-\end{align}
-Scalar multiplication with $\vec{n}_{3} \parallel \nabla p_{0} \parallel \nabla \psi \perp \vec{h}_{0}$ -- the first relation is true for infinitesimally small triangles -- yields
-\begin{align}
-  \vec{j}_{n \perp} \cdot \vec{n}_{3} = \vec{j}_{n \perp}^{\pol} \cdot \vec{n}_{3} &= j_{0 \parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{B_{0}} \vec{n}_{3} \cdot (\vec{h}_{0} \times (\nabla p_{n} + \im n p_{n} \nabla \phi)) \nonumber \\
-  &= j_{0 \parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{B_{0}} \vec{n}_{3} \cdot (h_{0 \phi} \nabla \phi \times \nabla p_{n} + \im n p_{n} \vec{h}_{0}^{\pol} \times \nabla \phi) \nonumber \\
-  &= j_{0 \parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{B_{0}} (h_{0 \phi} \nabla p_{n} \cdot (\vec{n}_{3} \times \nabla \phi) + \im n p_{n} \vec{h}_{0}^{\pol} \cdot (\nabla \phi \times \vec{n}_{3})) \nonumber \\
-  &= j_{0 \parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{R B_{0}} \vec{l}_{3} \cdot (h_{0 \phi} \nabla p_{n} - \im n p_{n} \vec{h}_{0}^{\pol}) \nonumber \\
-  &= j_{0 \parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{B_{0}^{2}} \vec{l}_{3} \cdot \left( B_{0 (\phi)} \nabla p_{n} - \frac{\im n}{R} p_{n} \vec{B}_{0}^{\pol} \right). \label{eq:I3}
-\end{align}
-For the quadrangles, edges 2 and 4 are considered instead of edge 3.
+where edge $3$ is tangential to an adjacent flux surface and edges $1$ and $2$ are not. For the grid it is important to distinguish two types of triangles, starting from the second loop outside the magnetic axis, see \cref{fig:grid}. A variation of this scheme considers quadrangles outside the innermost loop. Effectively, edge 2 of the triangles is ignored and the resulting quadrangle is renumbered (sketch to follow), so that edges 2 and 4 lie on neighbouring flux surfaces.
 
 \subsubsection{Toroidal unperturbed current}
 
@@ -352,6 +348,28 @@ This term is only meaningful to obtain $j_{n}^{\phi}$ on edges where $\vec{l} \c
 \end{gather}
 In the implementation, an average over edge 1 and 2 will be taken for this quantity.
 
+On the other edges, no connection between $j_{n}^{\phi}$ and $\vec{j}_{n}^{\pol} \cdot \vec{n}$ can be made, but the latter expression can be given in terms of already knwown quantities:
+\begin{gather}
+  R \vec{j}_{n}^{\pol} \cdot \vec{n} = \frac{c}{R B_{0 (\phi)}} \vec{l} \cdot \nabla p_{n} + \frac{j_{0 \phi}}{B_{0 (\phi)}} \vec{B}_{n}^{\pol} \cdot \vec{n}. \label{eq:I3}
+\end{gather}
+
+\subsubsection{Cross-field currents through edge(s) on flux surfaces}
+
+As an alternative to \cref{eq:I3} it can be shown (see writeup on gyrokinetics) that
+\begin{align}
+  \vec{j}_{n \perp} &= \vec{j}_{n} - (\vec{j}_{n} \cdot \vec{h}_{0}) \vec{h}_{0} \nonumber \\
+  &= j_{0 \parallel} \frac{\vec{B}_{n \perp}}{B_{0}} - \frac{c B_{n \parallel}}{B_{0}^{2}} \vec{h}_{0} \times \nabla p_{0} + \frac{c}{B_{0}} \vec{h}_{0} \times (\nabla p_{n} + \im n p_{n} \nabla \phi).
+\end{align}
+Scalar multiplication with $\vec{n}_{3} \parallel \nabla p_{0} \parallel \nabla \psi \perp \vec{h}_{0}$ -- the first relation is true for infinitesimally small triangles -- yields
+\begin{align}
+  \vec{j}_{n \perp} \cdot \vec{n}_{3} = \vec{j}_{n \perp}^{\pol} \cdot \vec{n}_{3} &= j_{0 \parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{B_{0}} \vec{n}_{3} \cdot (\vec{h}_{0} \times (\nabla p_{n} + \im n p_{n} \nabla \phi)) \nonumber \\
+  &= j_{0 \parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{B_{0}} \vec{n}_{3} \cdot (h_{0 \phi} \nabla \phi \times \nabla p_{n} + \im n p_{n} \vec{h}_{0}^{\pol} \times \nabla \phi) \nonumber \\
+  &= j_{0 \parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{B_{0}} (h_{0 \phi} \nabla p_{n} \cdot (\vec{n}_{3} \times \nabla \phi) + \im n p_{n} \vec{h}_{0}^{\pol} \cdot (\nabla \phi \times \vec{n}_{3})) \nonumber \\
+  &= j_{0 \parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{R B_{0}} \vec{l}_{3} \cdot (h_{0 \phi} \nabla p_{n} - \im n p_{n} \vec{h}_{0}^{\pol}) \nonumber \\
+  &= j_{0 \parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{B_{0}^{2}} \vec{l}_{3} \cdot \left( B_{0 (\phi)} \nabla p_{n} - \frac{\im n}{R} p_{n} \vec{B}_{0}^{\pol} \right). \label{eq:I3_alt}
+\end{align}
+For the quadrangles, edges 2 and 4 are considered instead of edge 3.
+
 \subsection{Implementation}
 
 We start with
@@ -362,10 +380,10 @@ where the notation for currents through edges, weighted by $R$, is
 \begin{gather}
   I_{k} = \int_{k} R \vec{j}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l \approx R_{k} \vec{j}_{n}^{\pol} \cdot \vec{n}_{k},
 \end{gather}
-where values are taken at the midpoint and assumed to be constant along the edge. $I_{3}$ is already known from \cref{eq:I3} with
-\begin{gather}
-  I_{3} = j_{0 \parallel} R_{3} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{B_{0}^{2}} \vec{l}_{3} \cdot \left( R_{3} B_{0 (\phi)} \nabla p_{n} - \im n p_{n} \vec{B}_{0}^{\pol} \right),
-\end{gather}
+where values are taken at the midpoint and assumed to be constant along the edge. $I_{3}$ is already known from \cref{eq:I3} or \cref{eq:I3_alt}
+% \begin{gather}
+%   I_{3} = j_{0 \parallel} R_{3} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{B_{0}^{2}} \vec{l}_{3} \cdot \left( R_{3} B_{0 (\phi)} \nabla p_{n} - \im n p_{n} \vec{B}_{0}^{\pol} \right),
+% \end{gather}
 and therefore acts as a source on the right-hand side. The remaining currents $I_{1}$ and $I_{2}$ are taken as unknowns and appear also in the last term of the left-hand side as
 \begin{align}
   \im n \int_{\Omega} R j_{n}^{\phi} \, \diff S & \approx \im n S_{\Omega} \frac{R_{1} j_{n 1}^{\phi} + R_{2} j_{n 2}^{\phi}}{2} \nonumber \\
