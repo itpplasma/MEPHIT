@@ -21,5 +21,8 @@ edit `VACFIELD/field_divB0.inp` to point to correct `field.dat`
 MHD single iteration
 --------------------
     cd MHD/
+
+Check or edit `magdif.in`
+    
     ./magdif_test.sh
 
