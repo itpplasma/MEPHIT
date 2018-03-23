@@ -215,6 +215,8 @@ where edge $3$ is tangential to an adjacent flux surface and edges $1$ and $2$ a
 
 \subsubsection{Toroidal unperturbed current}
 
+Since $\vec{B}_{0}$ and $p_{0}$ are directly available as input data, but $\vec{j}_{0}$ is not, the latter will be derived below from \cref{eq:mhd-1}, the condition of divergence-freeness and symmetry considerations.
+
 We take a cross-product of
 \begin{gather}
   \vec{j}_{0} \times \vec{B}_{0} = c \nabla p_{0}
@@ -252,19 +254,19 @@ With $\sqrt{g} B_{0}^{\theta} = \psi'(r)$ as a flux surface quantity, there are 
 \end{gather}
 yields
 \begin{gather}
-  j_{0 \parallel} = -\frac{c p_{0}'(\psi) B_{0 \phi}}{B_{0}} + C(\psi) \sqrt{g} B_{0}.
+  j_{0 \parallel} = -\frac{c p_{0}'(\psi) B_{0 \phi}}{B_{0}} + C(\psi) B_{0}.
 \end{gather}
 With the extra condition of the flux-surface average $\left\langle j_{0 \parallel} B_{0} \right\rangle = 0$ for testing without bootstrap current and the assumption $\left\langle B_{0 \phi} \right\rangle = B_{0 \phi}$, we obtain
 \begin{align}
-  0 &= -c p_{0}'(\psi) B_{0 \phi} + C(\psi) \sqrt{g} \left\langle B_{0}^{2} \right\rangle \nonumber \\
-  \Rightarrow C(\psi) &= \frac{c p_{0}'(\psi) B_{0 \phi}}{\sqrt{g} \left\langle B_{0}^{2} \right\rangle}.
+  0 &= -c p_{0}'(\psi) B_{0 \phi} + C(\psi) \left\langle B_{0}^{2} \right\rangle \nonumber \\
+  \Rightarrow C(\psi) &= \frac{c p_{0}'(\psi) B_{0 \phi}}{\left\langle B_{0}^{2} \right\rangle}.
 \end{align}
 In general, 
 \begin{align}
-  C(\psi) &= \frac{c p_{0}'(\psi) B_{0 \phi}}{\sqrt{g} \left\langle B_{0}^{2} \right\rangle} D(\psi), \\
+  C(\psi) &= \frac{c p_{0}'(\psi) B_{0 \phi}}{\left\langle B_{0}^{2} \right\rangle} D(\psi), \\
   j_{0 \parallel} &= -\frac{c p_{0}'(\psi) B_{0 \phi}}{B_{0}} \left( \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) - 1 \right).
 \end{align}
-with $D(\psi)$ set to 1 for now.
+with $D(\psi)$ set to 1 for now and modified for the more general case $\left\langle j_{0 \parallel} B_{0} \right\rangle \not\equiv 0$.
 
 For the unperturbed toroidal current density we have
 \begin{gather}
@@ -342,15 +344,15 @@ Finally
 \begin{gather}
   (\vec{l} \cdot \nabla \psi) j_{n}^{\phi} + B_{0 (\phi)} \vec{j}_{n}^{\pol} \cdot \vec{n} = c \vec{l} \cdot \nabla p_{n} - \frac{B_{n \phi}}{B_{0 \phi}} \left( c \vec{l} \cdot \nabla p_{0} - \frac{j_{0 \phi}}{R^{2}} \vec{l} \cdot \nabla \psi \right) + \frac{j_{0 \phi}}{R} \vec{B}_{n}^{\pol} \cdot \vec{n} \label{eq:jnxB0-1}
 \end{gather}
-This term is only meaningful to obtain $j_{n}^{\phi}$ on edges where $\vec{l} \cdot \nabla \psi \neq 0$ (1 and 2 for triangles, 1 and 3 for quadrangles) and we obtain
+This term is only meaningful to obtain $j_{n}^{\phi}$ on edges where $\vec{l} \cdot \nabla \psi \neq 0$ (1 and 2 in \cref{fig:grid}) and we obtain
 \begin{gather}
-  R j_{n}^{\phi} = j_{n (\phi)} = -\frac{B_{0 \phi}}{(\vec{l} \cdot \nabla \psi)} \vec{j}_{n}^{\pol} \cdot \vec{n} + \frac{c R}{(\vec{l} \cdot \nabla \psi)} \left( \vec{l} \cdot \nabla p_{n} - \frac{B_{n \phi}}{B_{0 \phi}} \vec{l} \cdot \nabla p_{0} \right) + j_{0 \phi} \left( \frac{B_{n \phi}}{R B_{0 \phi}} + \frac{\vec{n} \cdot \vec{B}_{n}^{\pol}}{\vec{l} \cdot \nabla \psi} \right). \label{eq:jnxB0-1-1}
+  R j_{n}^{\phi} = j_{n (\phi)} = -\frac{B_{0 \phi}}{\vec{l} \cdot \nabla \psi} \vec{j}_{n}^{\pol} \cdot \vec{n} + \frac{c R}{\vec{l} \cdot \nabla \psi} \left( \vec{l} \cdot \nabla p_{n} - \frac{B_{n \phi}}{B_{0 \phi}} \vec{l} \cdot \nabla p_{0} \right) + j_{0 \phi} \left( \frac{B_{n \phi}}{R B_{0 \phi}} + \frac{\vec{B}_{n}^{\pol} \cdot \vec{n}}{\vec{l} \cdot \nabla \psi} \right). \label{eq:jnxB0-1-1}
 \end{gather}
 In the implementation, an average over edge 1 and 2 will be taken for this quantity.
 
 On the other edges, no connection between $j_{n}^{\phi}$ and $\vec{j}_{n}^{\pol} \cdot \vec{n}$ can be made, but the latter expression can be given in terms of already knwown quantities:
 \begin{gather}
-  R \vec{j}_{n}^{\pol} \cdot \vec{n} = \frac{c}{R B_{0 (\phi)}} \vec{l} \cdot \nabla p_{n} + \frac{j_{0 \phi}}{B_{0 (\phi)}} \vec{B}_{n}^{\pol} \cdot \vec{n}. \label{eq:I3}
+  R \vec{j}_{n}^{\pol} \cdot \vec{n} = \frac{c R}{B_{0 (\phi)}} \vec{l} \cdot \nabla p_{n} + \frac{j_{0 \phi}}{B_{0 (\phi)}} \vec{B}_{n}^{\pol} \cdot \vec{n}. \label{eq:I3}
 \end{gather}
 
 \subsubsection{Cross-field currents through edge(s) on flux surfaces}
@@ -368,7 +370,6 @@ Scalar multiplication with $\vec{n}_{3} \parallel \nabla p_{0} \parallel \nabla 
   &= j_{0 \parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{R B_{0}} \vec{l}_{3} \cdot (h_{0 \phi} \nabla p_{n} - \im n p_{n} \vec{h}_{0}^{\pol}) \nonumber \\
   &= j_{0 \parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{B_{0}^{2}} \vec{l}_{3} \cdot \left( B_{0 (\phi)} \nabla p_{n} - \frac{\im n}{R} p_{n} \vec{B}_{0}^{\pol} \right). \label{eq:I3_alt}
 \end{align}
-For the quadrangles, edges 2 and 4 are considered instead of edge 3.
 
 \subsection{Implementation}
 
@@ -378,35 +379,45 @@ We start with
 \end{gather}
 where the notation for currents through edges, weighted by $R$, is
 \begin{gather}
-  I_{k} = \int_{k} R \vec{j}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l \approx R_{k} \vec{j}_{n}^{\pol} \cdot \vec{n}_{k},
+  I_{k} = \int_{\Gamma_{k}} R \vec{j}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l \approx R_{k} \vec{j}_{n}^{\pol} \cdot \vec{n}_{k},
 \end{gather}
-where values are taken at the midpoint and assumed to be constant along the edge. $I_{3}$ is already known from \cref{eq:I3} or \cref{eq:I3_alt}
+where values are taken at the midpoint of edge $\Gamma_{k}$ and assumed to be constant along that edge. $I_{3}$ is already known from \cref{eq:I3} or \cref{eq:I3_alt}
 % \begin{gather}
 %   I_{3} = j_{0 \parallel} R_{3} \frac{\vec{B}_{n} \cdot \vec{n}_{3}}{B_{0}} + \frac{c}{B_{0}^{2}} \vec{l}_{3} \cdot \left( R_{3} B_{0 (\phi)} \nabla p_{n} - \im n p_{n} \vec{B}_{0}^{\pol} \right),
 % \end{gather}
 and therefore acts as a source on the right-hand side. The remaining currents $I_{1}$ and $I_{2}$ are taken as unknowns and appear also in the last term of the left-hand side as
 \begin{align}
   \im n \int_{\Omega} R j_{n}^{\phi} \, \diff S & \approx \im n S_{\Omega} \frac{R_{1} j_{n 1}^{\phi} + R_{2} j_{n 2}^{\phi}}{2} \nonumber \\
-  &= -\frac{\im n S_{\Omega}}{2} \left( \frac{B_{0 (\phi), 1}}{(\vec{l}_{1} \cdot \nabla \psi)} I_{1} + \frac{B_{0 (\phi), 2}}{(\vec{l}_{2} \cdot \nabla \psi)} I_{2} + \dotsb \right),
+  &= -\frac{\im n S_{\Omega}}{2} \left( \frac{B_{0 (\phi), 1}}{\vec{l}_{1} \cdot \nabla \psi} I_{1} + \frac{B_{0 (\phi), 2}}{\vec{l}_{2} \cdot \nabla \psi} I_{2} + \dotsb \right),
 \end{align}
-where $S_{\Omega}$ is the triangle surface area.
- In the approximation above, a term $R_{3} j_{n 3}^{\phi}$ is neglected because within one "loop" of triangles, edge 3 alternates between the inner and outer flux surface and this "oscillation" of sample points would carry over to the approximation values.
+where $S_{\Omega}$ is the triangle surface area. In the approximation above, a term $R_{3} j_{n 3}^{\phi}$ is neglected because within one loop of triangles in \cref{fig:grid1}, edge 3 alternates between the inner and outer flux surface and this "oscillation" of sample points would carry over to the approximation values. Furthermore, $R_{3} j_{n 3}^{\phi}$ can't be reformulated in terms of $R_{3} j_{n 3}^{\phi}$, introducing another unknown. This would lead to an overdetermined set of equations, possibly violating divergence-freeness. Instead, $j_{n (\phi)}$ is approximated for each triangle by
+\begin{gather}
+  \im n \int_{\Omega} R j_{n}^{\phi} \approx \im n I_{(\phi)}.
+\end{gather}
 The remaining terms are moved to the right-hand-side as sources $q$, so the discretized equation in each triangle $\Omega$ is
 \begin{gather}
-  \left( 1 - \frac{\im n S_{\Omega}}{2} \frac{B_{0 (\phi), 1}}{(\vec{l}_{1} \cdot \nabla \psi)} \right) I_{1} + \left( 1 - \frac{\im n S_{\Omega}}{2} \frac{B_{0 (\phi), 2}}{(\vec{l}_{2} \cdot \nabla \psi)} \right) I_{2} = q. \label{eq:I1I2}
+  \left( 1 - \frac{\im n S_{\Omega}}{2} \frac{B_{0 (\phi), 1}}{\vec{l}_{1} \cdot \nabla \psi} \right) I_{1} + \left( 1 - \frac{\im n S_{\Omega}}{2} \frac{B_{0 (\phi), 2}}{\vec{l}_{2} \cdot \nabla \psi} \right) I_{2} = q. \label{eq:I1I2}
 \end{gather}
-In general matrix form, we call the ingoing current into triangle $(k)$ counted in clockwise direction $I^{(k)}$. In triangle $(k)$, this is equal to $I_{1} = -I^{(k)}$ and $I_{2} = I^{(k+1)}$. The matrix form of \cref{eq:I1I2} is then
+The source term is given by
 \begin{gather}
-  A_{jk} I^{(k)} = \vec{q},
+  q = -I_{3} - \frac{\im n S_{\Omega}}{2} \sum_{k = 1, 2} \frac{c R}{\vec{l}_{k} \cdot \nabla \psi} \left( \vec{l}_{k} \cdot \nabla p_{n} - \frac{B_{n \phi}}{B_{0 \phi}} \vec{l}_{k} \cdot \nabla p_{0} \right) + j_{0 \phi} \left( \frac{B_{n \phi}}{R B_{0 \phi}} + \frac{\vec{B}_{n}^{\pol} \cdot \vec{n}}{\vec{l}_{k} \cdot \nabla \psi} \right).
+\end{gather}
+The directional derivatives $\vec{l}_{k} \cdot \nabla \psi$ are approximated by a difference quotient with values taken at the nodes (for indexing see \cref{fig:grid}),
+\begin{align}
+  \vec{l}_{1} \cdot \nabla \psi = l_{1} \hat{\vec{l}}_{1} \cdot \nabla \psi = l_{1} \pd[\psi]{\vec{l}_{1}} & \approx l_{1} \frac{\psi \vert_{a} - \psi \vert_{b}}{l_{1}} = \pm \symup{\Delta} \psi, \\
+  \vec{l}_{2} \cdot \nabla \psi = l_{2} \hat{\vec{l}}_{2} \cdot \nabla \psi = l_{2} \pd[\psi]{\vec{l}_{2}} & \approx l_{2} \frac{\psi \vert_{c} - \psi \vert_{a}}{l_{2}} = \mp \symup{\Delta} \psi.
+\end{align}
+Note that $\psi \vert_{a} \neq \psi \vert_{b} = \psi \vert_{c}$ for each triangle because values are taken from the nodes at adjacent flux surfaces. Thus $\symup{\Delta} \psi$ is identical for the entire loop, but signs change depending on the direction of $\vec{l}_{k}$, alternating between triangles. It takes a positive value for $\vec{l}_{k}$ pointing in the outward direction. The same logic applies to $\vec{l} \cdot \nabla p_{0}$ terms.
+
+For the global indexing scheme, we call the ingoing current into triangle $(j)$ counted in clockwise direction $I^{(j)}$. In triangle $(j)$, this is equal to $I_{1} = -I^{(j)}$ and $I_{2} = I^{(j+1)}$, the latter being the outgoing currents into the next triangle in counter-clockwise direction. The matrix form of \cref{eq:I1I2} is then
+\begin{gather}
+  A_{jk} I^{(j)} = q_{k},
 \end{gather}
 where the elements of the stiffness matrix $A$ are
 \begin{gather}
-  A_{jk} = \left( 1 - \frac{\im n S_{\Omega k}}{2} \frac{B_{0 (\phi) k}}{\Delta \psi} \right) \delta_{(j - 1) k} + \left( -1 - \frac{\im n S_{\Omega k}}{2} \frac{B_{0 (\phi) k}}{\Delta \psi} \right) \delta_{j k}.
+  A_{jk} = \left( 1 - \frac{\im n S_{\Omega j}}{2} \frac{B_{0 (\phi) jk}}{\symup{\Delta} \psi_{jk}} \right) \delta_{j - 1, k} + \left( -1 - \frac{\im n S_{\Omega j}}{2} \frac{B_{0 (\phi) jk}}{\symup{\Delta} \psi_{jk}} \right) \delta_{j k}.
 \end{gather}
-Here, $\delta_{(j - 1) k}$ are the outgoing currents into the next triangle in counter-clockwise direction, and $\Delta \psi$ is the difference in $\psi$ counting in the outwards direction. $\vec{q}$ consists of entries $q^{k} = -I_{3}^{k} - \im n S_{\Omega k} w^{k}$ (no summation over $k$) where
-\begin{gather}
-  w^{k} = \frac{c R}{\Delta \psi} \left( \Delta p_{n} - \frac{B_{n \phi}}{B_{0 \phi}} \Delta p_{0} \right) + R j_{0 (\phi)} \left( \frac{B_{n \phi}}{B_{0 \phi}} + \frac{R \vec{n} \cdot \vec{B}_{n}^{\pol}}{\vec{l} \cdot \nabla \psi} \right).
-\end{gather}
+Here, indices $jk$ accompany values that are taken at edge $k$ on triangle $j$, whereas an index $j$ designates values that are constant on the entire triangle $j$. This is also used to resolve the sign ambiguity noted above, so that $\symup{\Delta} \psi_{jk} = \pm \symup{\Delta} \psi$ depending on the specific edge and triangle.
 
 \subsection{Test field}
 
