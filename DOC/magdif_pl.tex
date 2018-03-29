@@ -102,6 +102,10 @@
   pdflang            = {en}
 }
 
+% debugging
+\usepackage[inline]{showlabels}
+%\usepackage[notref]{showkeys}
+
 \title{Magnetic differential equations for stationary linear ideal MHD and their numerical solution}
 \author{Christopher Albert, Patrick Lainer}
 
@@ -110,6 +114,7 @@
 \newcommand*\e{\ensuremath{\symrm{e}}}  % Euler's constant
 \newcommand*\im{\ensuremath{\symrm{i}}}  % imaginary unit
 \newcommand*\pd[2][]{\ensuremath{\frac{\partial #1}{\partial #2}}}  % partial derivative
+\newcommand*\norm[1]{\ensuremath{\left \lVert #1 \right \rVert}}  % norm
 \newcommand*\pol{\ensuremath{\textrm{pol}}}  % poloidal
 \newcommand*\tor{\ensuremath{\textrm{tor}}}  % toroidal
 \newcommand*\fs{\ensuremath{\textrm{f}}}  % flux surface edge label
@@ -172,6 +177,11 @@ where
   \vec{B}_{0}^{\pol} &= \nabla \psi \times \nabla \phi, \\
   \vec{B}_{0}^{\tor} &= B_{0 \phi} \nabla \phi.
 \end{align}
+This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in cylindrical coordinates:
+\begin{align}
+  B_{0}^{R} &= (\nabla \psi \times \nabla \phi)^{R} = -\frac{1}{R} \pd[\psi]{Z}, \\
+  B_{0}^{Z} &= (\nabla \psi \times \nabla \phi)^{Z} = \frac{1}{R} \pd[\psi]{R}.
+\end{align}
 
 \begin{figure}
   \centering
@@ -203,8 +213,48 @@ For each edge (length $l$) we use a local orthogonal coordinate system on each t
 
 \subsection{Pressure perturbation}
 
-Already working, TODO: update description.
-
+Multiplying \cref{eq:mhd-2} by $\vec{B}_{0}$ yields
+\begin{align}
+  c \vec{B}_{0} \cdot \nabla p_{n} + \im n c p_{n} \vec{B}_{0} \cdot \nabla \phi &= -\vec{B}_{n} \cdot (\vec{j}_{0} \times \vec{B}_{0}) = -c \vec{B}_{n} \cdot \nabla p_{0} \nonumber \\
+  \vec{B}_{0}^{\pol} \cdot \nabla p_{n} + \im n p_{n} B_{0 \phi} &= -B_{n}^{\psi} p_{0}'(\psi).  \\
+\end{align}
+To solve this equation on one flux surface, we use a lowest-order finite difference method. Nodes are indexed by superscript $(k)$ and $\vec{r}^{(k)}$ is the position of node $(k)$. $\nabla p_{n}$ is approximated at the midpoint of edge $\Gamma_{k}$ as finite difference of $p_{n}$ at nodes $(k)$ and $(k+1)$. $p_{n}$ is accordingly approximated at the midpoint as the arithmetic mean of the values at these nodes. This results in
+\begin{gather*}
+  \vec{B}_{0}^{\pol} \cdot \frac{\vec{r}^{(k+1)} - \vec{r}^{(k)}}{\norm{\vec{r}^{(k+1)} - \vec{r}^{(k)}}} \frac{p_{n}^{(k+1)} - p_{n}^{(k)}}{\norm{\vec{r}^{(k+1)} - \vec{r}^{(k)}}} + \im n B_{0 \phi} \frac{p_{n}^{(k+1)} + p_{n}^{(k)}}{2} = -p_{0}'(\psi) B_{n}^{\psi} \vert_{\Gamma_{k}},
+\end{gather*}
+where a unit vector along the edge is used to get the correct sign for the gradient in the direction of the poloidal magnetic field; with a shorthand $\symup{\Delta} r$ for the distance between nodes we get
+\begin{gather}
+  \vec{B}_{0}^{\pol} \cdot \frac{\vec{r}^{(k+1)} - \vec{r}^{(k)}}{(\symup{\Delta} r)^2} \left ( p_{n}^{(k+1)} - p_{n}^{(k)} \right ) + \im n B_{0 \phi} \frac{p_{n}^{(k+1)} + p_{n}^{(k)}}{2} = -p_{0}'(\psi) B_{n}^{\psi} \vert_{\Gamma_{k}}.
+\end{gather}
+Reordering in terms of the unknowns yields
+\begin{gather}
+  (b_{k} + a_{k}) p_{n}^{(k+1)} + (b_{k} - a_{k}) p_{n}^{(k)} = c_{k}
+\end{gather}
+with
+\begin{align}
+  a_{k} &= \vec{B}_{0}^{\pol} \cdot \frac{\vec{r}^{(k+1)} - \vec{r}^{(k)}}{(\symup{\Delta} r)^2}, \\
+  b_{k} &= \frac{\im n B_{0 \phi}}{2}, \\
+  c_{k} &= -p_{0}'(\psi) B_{n}^{\psi} \vert_{\Gamma_{k}}.
+\end{align}
+In matrix form this scheme is written as
+\begin{gather}
+  A_{jk} p_{n}^{k} = c_{j},
+\end{gather}
+where the elements of the stiffness matrix are
+\begin{gather}
+  A_{jk} = (b_{j} + a_{j}) \delta_{j-1, k} + (b_{j} - a_{j}) \delta_{jk}.
+\end{gather}
+Note that for $N$ nodes with periodic boundary conditions $p_{n}^{(N+1)} = p_{n}^{(1)}$, indices are taken \emph{modulo} $N$, resulting in the following shape for the stiffness matrix:
+\begin{gather*}
+  A = \begin{pmatrix}
+    b_{1} - a_{1} &  b_{1} + a_{1} &        0       & \hdots &    0   \\
+           0       & b_{2} - a_{2} &  b_{2} + a_{2} & \hdots &    0   \\
+           0       &        0       & b_{3} - a_{3} & \hdots &    0   \\
+        \vdots     &     \vdots     &     \vdots     & \ddots & \vdots \\
+     b_{N} + a_{N} &        0       &        0       & \hdots & b_{N} - a_{N}
+  \end{pmatrix}.
+\end{gather*}
+    
 \subsection{Current perturbation}
 
 Multiplying \cref{eq:divfree-2} by $R$ yields
@@ -379,7 +429,7 @@ Scalar multiplication with $\vec{n}_{\fs} \parallel \nabla p_{0} \parallel \nabl
   &= j_{0 \parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{\fs}}{B_{0}} + \frac{c}{B_{0}^{2}} \vec{l}_{\fs} \cdot \left( B_{0 (\phi)} \nabla p_{n} - \frac{\im n}{R} p_{n} \vec{B}_{0}^{\pol} \right). \label{eq:I3_alt}
 \end{align}
 
-\subsection{Implementation}
+\subsubsection{Implementation}
 
 We start with
 \begin{gather}
