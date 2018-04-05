@@ -1,0 +1,2 @@
+python triplot.py inputformaxwell.msh curr_toplot.dat 0                 automatic color axis (0 - column to plot)
+python triplot.py inputformaxwell.msh curr_toplot.dat 0  -1e10 1e10     manual color axis
