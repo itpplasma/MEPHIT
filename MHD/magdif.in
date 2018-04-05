@@ -2,4 +2,9 @@
    log_level = 3                                ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
    point_file = 'points.dat'                    ! points.dat from PRELOAD
    tri_file = 'triangles.dat'                   ! triangles.dat from PRELOAD
+   n = 2                                        ! harmonic index of perturbation   
+   nkpol = 200					! number of knots per poloidal loop
+   nflux = 74   				! number of flux surfaces
+   ti0 = 3.d3                                   ! on-axis temparature
+   di0 = 5.d13	                                ! temparature slope, T = ti0 + di0*(psi-psi_axis)
 /
