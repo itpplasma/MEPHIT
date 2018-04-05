@@ -605,7 +605,7 @@ end if
   end subroutine test_current_new
   
   subroutine assemble_system(nrow, a, b, c, q, d, du, Mq)
-    integer, intent(in) :: nrow                ! number of system rows
+    integer, intent(in) :: nrow                 ! number of system rows
     complex(dp), intent(in) :: a(:), b(:), c(:) ! system coefficients
     complex(dp), intent(in) :: q(:)             ! right-hand side without mass matrix applied
     complex(dp), intent(out) :: d(nrow)         ! diagonal of stiffness matrix
