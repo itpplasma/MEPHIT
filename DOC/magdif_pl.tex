@@ -177,11 +177,14 @@ where
   \vec{B}_{0}^{\pol} &= \nabla \psi \times \nabla \phi, \\
   \vec{B}_{0}^{\tor} &= B_{0 \phi} \nabla \phi.
 \end{align}
+Here, $\psi$ is the disc poloidal flux $\Psi_{\pol}$ divided by $2 \pi$ and the sign chosen so that increases towards the magnetic axis -- $\psi_{\text{min}}$ is located at the outermost surface and $\psi_{\text{max}}$ is located at the magnetic axis. With $\phi$ increasing counter-clockwise when viewed from the top, this still constitutes a right-handed system.
+
 This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in cylindrical coordinates:
 \begin{align}
   B_{0}^{R} &= (\nabla \psi \times \nabla \phi)^{R} = -\frac{1}{R} \pd[\psi]{Z}, \\
   B_{0}^{Z} &= (\nabla \psi \times \nabla \phi)^{Z} = \frac{1}{R} \pd[\psi]{R}.
 \end{align}
+Note that the toroidal field coils produce a magnetic field that is roughly proportional to $\frac{1}{R}$, so $B_{0 \phi}$ is assumed to be constant over the entire plasma volume.
 
 \begin{figure}
   \centering
@@ -238,7 +241,7 @@ with
 \end{align}
 In matrix form this scheme is written as
 \begin{gather}
-  A_{jk} p_{n}^{k} = c_{j},
+  A_{jk} p_{n}^{(k)} = c_{j},
 \end{gather}
 where the elements of the stiffness matrix are
 \begin{gather}
@@ -478,10 +481,10 @@ The source term is given by
 \end{gather}
 The directional derivatives $\vec{l}_{k} \cdot \nabla \psi$ are approximated by a difference quotient with values taken at the nodes (for indexing see \cref{fig:grid}),
 \begin{align}
-  \vec{l}_{\inw} \cdot \nabla \psi = l_{\inw} \hat{\vec{l}}_{\inw} \cdot \nabla \psi = l_{\inw} \pd[\psi]{\vec{l}_{\inw}} & \approx l_{\inw} \frac{\symup{\Delta} \psi}{l_{\inw}} = \symup{\Delta} \psi, \\
-  \vec{l}_{\out} \cdot \nabla \psi = l_{\out} \hat{\vec{l}}_{\out} \cdot \nabla \psi = l_{\out} \pd[\psi]{\vec{l}_{\out}} & \approx l_{\out} \frac{-\symup{\Delta} \psi}{l_{\out}} = -\symup{\Delta} \psi.
+  \vec{l}_{\inw} \cdot \nabla \psi = l_{\inw} \hat{\vec{l}}_{\inw} \cdot \nabla \psi = l_{\inw} \pd[\psi]{\vec{l}_{\inw}} & \approx l_{\inw} \frac{-\symup{\Delta} \psi}{l_{\inw}} = -\symup{\Delta} \psi, \\
+  \vec{l}_{\out} \cdot \nabla \psi = l_{\out} \hat{\vec{l}}_{\out} \cdot \nabla \psi = l_{\out} \pd[\psi]{\vec{l}_{\out}} & \approx l_{\out} \frac{\symup{\Delta} \psi}{l_{\out}} = \symup{\Delta} \psi.
 \end{align}
-Note that $\psi \vert_{\vfs} \neq \psi \vert_{\vinw} = \psi \vert_{\vout}$ for each triangle because values are taken from the nodes at adjacent flux surfaces. Thus $\symup{\Delta} \psi$ is identical for the entire loop, but signs change depending on the direction of $\vec{l}_{k}$, alternating between triangles. It takes a positive value for $\vec{l}_{k}$ pointing in the radially outward direction. The same logic applies to $\vec{l} \cdot \nabla p_{0}$ terms, albeit with reversed sign because $p_{0}$ decreases radially outwards.
+Note that $\psi \vert_{\vfs} \neq \psi \vert_{\vinw} = \psi \vert_{\vout}$ for each triangle because values are taken from the nodes at adjacent flux surfaces. Thus $\symup{\Delta} \psi$ is identical for the entire loop, but signs change depending on the direction of $\vec{l}_{k}$, alternating between triangles. It takes a positive value for $\vec{l}_{k}$ pointing in the radially inward direction. The same logic applies to $\vec{l} \cdot \nabla p_{0}$ terms.
 
 For the global indexing scheme, we call the ingoing current into triangle $(i)$ counted in clockwise direction $I^{(i)}$. In triangle $(i)$, this is equal to $I_{\inw} = -I^{(i)}$ and $I_{\out} = I^{(i+1)}$. The matrix form of \cref{eq:Ii-Io} is then
 \begin{gather}
@@ -489,7 +492,7 @@ For the global indexing scheme, we call the ingoing current into triangle $(i)$ 
 \end{gather}
 where the elements of the stiffness matrix $A$ are
 \begin{gather}
-  A_{ij} = \left( -1 + \frac{\im n S_{\Omega^{(i)}}}{2} \frac{B_{0 (\phi)} \vert_{\Gamma_{\inw}^{(i)}}}{\symup{\Delta} \psi} \right) \delta_{i j} + \left( 1 + \frac{\im n S_{\Omega^{(i)}}}{2} \frac{B_{0 (\phi)} \vert_{\Gamma_{\out}^{(i)}}}{\symup{\Delta} \psi} \right) \delta_{i+1, j}.
+  A_{ij} = \left( -1 - \frac{\im n S_{\Omega^{(i)}}}{2} \frac{B_{0 (\phi)} \vert_{\Gamma_{\inw}^{(i)}}}{\symup{\Delta} \psi} \right) \delta_{i j} + \left( 1 - \frac{\im n S_{\Omega^{(i)}}}{2} \frac{B_{0 (\phi)} \vert_{\Gamma_{\out}^{(i)}}}{\symup{\Delta} \psi} \right) \delta_{i+1, j}.
 \end{gather}
 
 \subsection{Test field}
@@ -582,7 +585,4 @@ Flux
 %%% Local Variables: 
 %%% mode: latex
 %%% TeX-master: t
-%%% eval: (TeX-source-correlate-mode)
-%%% eval: (TeX-PDF-mode t)
-%%% eval: (TeX-engine (quote luatex))
 %%% End: 
