@@ -25,13 +25,16 @@ module magdif
   integer, parameter :: logfile = 6             ! log to stdout, TODO: make this configurable
 
   real(dp), allocatable :: pres0(:)             ! unperturbed pressure
-  real(dp), allocatable :: psi(:)               !
+  real(dp), allocatable :: dpres0_dpsi(:)       ! derivative of unperturbed pressure w.r.t. psi
+  real(dp), allocatable :: dens(:)              ! density on flux surface
+  real(dp), allocatable :: temp(:)              ! temperature on flux surface
+  real(dp), allocatable :: psi(:)               ! flux surface label
   complex(dp), allocatable :: presn(:)          ! pressure perturbation p_n in each mesh point
   complex(dp), allocatable :: currn(:,:)        ! edge currents R j_n \cdot n weighted by R
   complex(dp), allocatable :: Bnflux(:,:)       ! edge fluxes R B_n \cdot n weighted by R
   complex(dp), allocatable :: Bnphi(:)          ! physical toroidal component of Bn
 
-  real(dp) :: psimin, psimax, dens, temp
+  real(dp) :: psimin, psimax
   real(dp), parameter :: R0 = 172.74467899999999d0 ! distance of magnetic axis from center
   real(dp), parameter :: ideal_gas_factor = 1.6021766208d-12  ! unit conversion factor in ideal gas law (p = N/V * k_B*T) with p in dyn cm^-1, N/V in cm^-3 and k_B*T in eV
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp) ! imaginary unit in double precision
@@ -52,6 +55,9 @@ contains
   !> Final cleanup of magdif module
   subroutine magdif_cleanup
     deallocate(pres0)
+    deallocate(dpres0_dpsi)
+    deallocate(dens)
+    deallocate(temp)
     deallocate(psi)
     deallocate(presn)
     deallocate(currn)
@@ -156,25 +162,31 @@ contains
   !>Initialize poloidal psi and unperturbed pressure p0
   subroutine init_flux_variables
     integer :: k
+    real(dp) :: ddens_dpsi, dtemp_dpsi
 
     psimin = minval(mesh_point%psi_pol)
     psimax = maxval(mesh_point%psi_pol)
 
     if (log_info) write(logfile,*) 'psimin = ', psimin, '  psimax = ', psimax
 
+    ddens_dpsi = di0 / psimax
+    dtemp_dpsi = ti0 / psimax
+
     allocate(pres0(nflux+1))
+    allocate(dpres0_dpsi(nflux+1))
+    allocate(dens(nflux+1))
+    allocate(temp(nflux+1))
     allocate(psi(nflux+1))
 
-    do k = 0, nflux  ! magnetic axis at k == 0 is not counted as flux surface
-       if (k == 0) then
-          psi(1) = mesh_point(1)%psi_pol
-       else
-          psi(k+1) = mesh_point(1 + (k-1) * nkpol + 1)%psi_pol
-       endif
-       dens = (psi(k+1) - psimin) / psimax * di0 + d_min
-       temp = (psi(k+1) - psimin) / psimax * ti0 + t_min
-       pres0(k+1) = dens * temp * ideal_gas_factor
+    psi(1) = mesh_point(1)%psi_pol  ! magnetic axis at k == 0 is not counted as flux surface
+    do k = 1, nflux
+       ! average over the loop to smooth out numerical errors
+       psi(k+1) = sum(mesh_point((1 + (k-1) * nkpol + 1):(1 + k * nkpol))%psi_pol) / nkpol
     end do
+    dens = (psi - psimin) / psimax * di0 + d_min
+    temp = (psi - psimin) / psimax * ti0 + t_min
+    pres0 = dens * temp * ideal_gas_factor
+    dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ideal_gas_factor
   end subroutine init_flux_variables
 
   !>TODO
@@ -245,77 +257,44 @@ contains
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
     real(dp) :: rold, zold, Brold, Bpold, Bzold ! previous values in loop
-    complex(dp), dimension(nkpol) :: qn, a, b, c, d, du, x, Mq
-    integer :: kp, kl
+    complex(dp), dimension(nkpol) ::a, b, x, d, du
+    integer :: kp, kl, kpold
     integer :: nz
     integer, dimension(2*nkpol) :: irow, icol
     complex(dp), dimension(2*nkpol) :: aval
-    real(dp) :: psi_loc, dens_prof, ddens_dpsi, temp_prof, dtemp_dpsi
     type(knot) :: oldknot, curknot
     integer :: common_tri(2)
 
-    r = 0d0; p = 0d0; z = 0d0
-
-    call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-
     open(1, file = presn_file, recl = 1024)
     do kl = 1, nflux ! loop through flux surfaces
-      do kp = 1, nkpol ! loop through poloidal points along ring
-        rold = r; zold = z
-        Brold = Br; Bpold = Bp; Bzold = Bz
 
-        oldknot = curknot
-        curknot = mesh_point(1 + (kl-1)*nkpol + kp)
-        r = curknot%rcoord; p = 0d0; z = curknot%zcoord
-
-        call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-             dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-
-        psi_loc = curknot%psi_pol
-        dens_prof = (psi_loc - psimin) / psimax * di0 + d_min
-        ddens_dpsi = di0 / psimax
-        temp_prof = (psi_loc - psimin) / psimax * ti0 + t_min
-        dtemp_dpsi = ti0 / psimax
-
-        c(kp) = -ideal_gas_factor * (ddens_dpsi*temp_prof + dens_prof*dtemp_dpsi) ! -dp0/dpsi
-
-        if (kp == 1) cycle ! first point
-
-        call common_triangles(oldknot, curknot, common_tri)
-
-        call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-             dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-
-        x(kp-1) = c(kp-1) * (oldknot%b_mod + curknot%b_mod) * 0.5d0 * &
-             sum(mesh_element_rmp(common_tri(:))%bnorm_vac) * 0.5d0
-
-        a(kp-1) = ((Br + Brold) * 0.5d0 * (r-rold) + &
-             (Bz + Bzold) * 0.5d0 * (z - zold)) / ((r - rold) ** 2 + (z - zold) ** 2)
-
-        b(kp-1) = imun * n * (Bp / r + Bpold / rold) * 0.5d0
-      end do ! kp
-
-       ! once more between last and first point
-       kp = 1
-       rold = r; zold = z
-       Brold = Br; Bpold = Bp; Bzold = Bz
-
-       oldknot = curknot
-       curknot = mesh_point(1 + (kl-1)*nkpol + kp)
-
+       curknot = mesh_point(1 + kl*nkpol)
        r = curknot%rcoord; p = 0d0; z = curknot%zcoord
-
        call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
             dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
 
-       call common_triangles(oldknot, curknot, common_tri)
-       x(nkpol) = c(nkpol) * (oldknot%b_mod + curknot%b_mod) * 0.5d0 * &
-            sum(mesh_element_rmp(common_tri(:))%bnorm_vac) * 0.5d0
+       do kp = 1, nkpol ! loop through poloidal points along ring
+          rold = r; zold = z
+          Brold = Br; Bpold = Bp; Bzold = Bz
+          kpold = kp - 1
+          if (kpold == 0) kpold = nkpol
+          oldknot = curknot
+          curknot = mesh_point(1 + (kl-1)*nkpol + kp)
+          r = curknot%rcoord; p = 0d0; z = curknot%zcoord
 
-       a(nkpol) = ((Br + Brold) * 0.5d0 * (r - rold) + &
-            (Bz + Bzold) * 0.5d0 * (z - zold)) / ((r - rold) ** 2 + (z - zold) ** 2)
-       b(nkpol) = imun * n * (Bp / r + Bpold / rold) * 0.5d0
+          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+
+          call common_triangles(oldknot, curknot, common_tri)
+
+          x(kpold) = -dpres0_dpsi(kl+1) * (oldknot%b_mod + curknot%b_mod) * 0.5d0 * &
+               sum(mesh_element_rmp(common_tri(:))%bnorm_vac) * 0.5d0
+
+          a(kpold) = ((Br + Brold) * 0.5d0 * (r - rold) + &
+               (Bz + Bzold) * 0.5d0 * (z - zold)) / ((r - rold) ** 2 + (z - zold) ** 2)
+
+          b(kpold) = imun * n * (Bp / r + Bpold / rold) * 0.5d0
+       end do ! kp
 
        ! solve linear system
        call assemble_system_first_order(nkpol, a, b, d, du)
@@ -323,15 +302,15 @@ contains
        call sparse_solve(nkpol, nkpol, nz, irow, icol, aval, x)
 
        if (kl == 1) then ! first point on axis before actual output
-       write(1, *) mesh_point(1)%psi_pol, dens_prof, temp_prof, &
-            temp_prof * dens_prof * ideal_gas_factor, real(a(nkpol)), Bp, &
-            real(sum(x) / size(x)), aimag(sum(x) / size(x)) !, 0d0, 0d0
+          write(1, *) psi(1), dens(1), temp(1), &
+               pres0(1), real(a(1)), Bp, &
+               real(sum(x) / size(x)), aimag(sum(x) / size(x)) !, 0d0, 0d0
        end if
        do kp = 1, nkpol
           presn((kl - 1) * nkpol + 1 + kp) = x(kp)
-          write(1, *) mesh_point((kl - 1) * nkpol + 1 + kp)%psi_pol, dens_prof, &
-            temp_prof, temp_prof * dens_prof * ideal_gas_factor, real(a(nkpol)), &
-            Bp, real(x(kp)), aimag(x(kp)) !, real(a(kp)), aimag(a(kp))
+          write(1, *) psi(kl+1), dens(kl+1), &
+               temp(kl+1), pres0(kl+1), real(a(kp)), &
+               Bp, real(x(kp)), aimag(x(kp)) !, real(a(kp)), aimag(a(kp))
        end do
     end do ! kl
     do kp = 1, (npoint - nkpol * nflux - 1) ! write zeroes in remaining points until end
