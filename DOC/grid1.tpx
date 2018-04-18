@@ -111,16 +111,16 @@
 \path[line width=0.30mm, draw=L] (64.50,121.50) -- (45.00,130.00);
 \path[line width=0.30mm, draw=L] (62.00,130.00) -- (48.00,146.00);
 \path[line width=0.30mm, draw=L] (64.00,138.00) -- (60.00,160.00);
-\draw(104.00,139.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont 1};
-\draw(101.00,147.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont 2};
-\draw(91.00,139.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont 3};
-\draw(81.00,156.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont 1};
-\draw(90.00,151.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont 2};
-\draw(89.00,164.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont 3};
-\draw(79.00,145.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont a};
-\draw(79.00,166.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont b};
-\draw(101.00,161.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont c};
-\draw(113.00,146.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont a};
-\draw(93.00,136.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont b};
-\draw(88.00,142.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont c};
+\draw(104.00,139.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont i};
+\draw(101.00,147.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont o};
+\draw(91.00,139.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont f};
+\draw(81.00,156.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont o};
+\draw(90.00,151.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont i};
+\draw(89.00,164.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont f};
+\draw(79.00,145.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont F};
+\draw(79.00,166.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont I};
+\draw(101.00,161.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont O};
+\draw(113.00,146.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont F};
+\draw(93.00,136.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont O};
+\draw(88.00,142.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont I};
 \end{tikzpicture}%
