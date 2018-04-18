@@ -57,10 +57,10 @@
 \path[line width=0.30mm, draw=L] (70.00,115.00) -- (64.50,121.50);
 \path[line width=0.30mm, draw=L] (62.00,130.00) -- (64.50,121.50);
 \path[line width=0.30mm, draw=L] (64.00,138.00) -- (70.00,145.00);
-\draw(84.50,140.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont 1};
-\draw(90.50,132.50) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont 2};
-\draw(93.50,142.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont 3};
-\draw(89.50,147.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont a};
-\draw(80.50,134.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont b};
-\draw(97.50,138.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont c};
+\draw(84.50,140.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont o};
+\draw(90.50,132.50) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont i};
+\draw(93.50,142.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont f};
+\draw(89.50,147.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont I};
+\draw(80.50,134.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont F};
+\draw(97.50,138.00) node[anchor=base west]{\fontsize{8.54}{10.24}\selectfont O};
 \end{tikzpicture}%
