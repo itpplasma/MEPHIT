@@ -9,35 +9,41 @@ module magdif
 
   integer log_level
   logical :: log_err, log_warn, log_info, log_debug ! specify log levels
+  logical :: nonres = .false.  !< use non-resonant test case
 
-  character(len=1024) :: point_file, tri_file, Bnflux_file, hpsi_file ! data files from PRELOAD
-  character(len=1024) :: config_file ! config file for namelist
-  character(len=1024) :: presn_file ! output files
+  character(len=1024) :: point_file   !< input data file for mesh points
+  character(len=1024) :: tri_file     !< input data file for triangles and edges
+  character(len=1024) :: Bnflux_file  !< input data file for magnetic field perturbation
+  character(len=1024) :: hpsi_file    !< input data file for \f$ h_{n}^{\psi} \f$
+  character(len=1024) :: config_file  !< input config file for namelist settings
+  character(len=1024) :: presn_file   !< output data file for pressure perturbation
 
-  integer  :: n               ! harmonic index of perturbation
-  integer  :: nkpol           ! number of knots per poloidal loop
-  integer  :: nflux           ! number of flux surfaces
-  real(dp) :: ti0, di0        ! interpolation steps for temperature and density
+  integer  :: n               !< harmonic index of perturbation
+  integer  :: nkpol           !< number of knots per poloidal loop
+  integer  :: nflux           !< number of flux surfaces
+  real(dp) :: ti0             !< interpolation step for temperature
+  real(dp) :: di0             !< interpolation step for density
 
-  namelist / settings / log_level, point_file, tri_file, Bnflux_file, hpsi_file, presn_file, &
-       n, nkpol, nflux, ti0, di0
+  namelist / settings / log_level, nonres, point_file, tri_file, Bnflux_file, hpsi_file, presn_file, &
+       n, nkpol, nflux, ti0, di0  !< namelist for input parameters
 
-  integer, parameter :: logfile = 6             ! log to stdout, TODO: make this configurable
+  integer, parameter :: logfile = 6             !< log to stdout, TODO: make this configurable
 
-  real(dp), allocatable :: pres0(:)             ! unperturbed pressure
-  real(dp), allocatable :: dpres0_dpsi(:)       ! derivative of unperturbed pressure w.r.t. psi
-  real(dp), allocatable :: dens(:)              ! density on flux surface
-  real(dp), allocatable :: temp(:)              ! temperature on flux surface
-  real(dp), allocatable :: psi(:)               ! flux surface label
-  complex(dp), allocatable :: presn(:)          ! pressure perturbation p_n in each mesh point
-  complex(dp), allocatable :: currn(:,:)        ! edge currents R j_n \cdot n weighted by R
-  complex(dp), allocatable :: Bnflux(:,:)       ! edge fluxes R B_n \cdot n weighted by R
-  complex(dp), allocatable :: Bnphi(:)          ! physical toroidal component of Bn
+  real(dp), allocatable :: pres0(:)             !< unperturbed pressure \f$ p_{0} \f$ in dyn cm^-1
+  real(dp), allocatable :: dpres0_dpsi(:)       !< derivative of unperturbed pressure w.r.t. flux surface label, \f$ p_{0}'(\psi) \f$
+  real(dp), allocatable :: dens(:)              !< density \f$ \frac{N}{V} \f$ on flux surface in cm^-3
+  real(dp), allocatable :: temp(:)              !< temperature \f$ T \f$ on flux surface with \f$ k_{\mathrm{B}} T \f$ in eV
+  real(dp), allocatable :: psi(:)               !< flux surface label \f$ \psi \f$
+  complex(dp), allocatable :: presn(:)          !< pressure perturbation \f$ p_{n} \f$ in each mesh point
+  complex(dp), allocatable :: currn(:,:)        !< edge currents \f$ R \vec{j}_{n} \cdot \vec{n} \f$ weighted by \f$ R \f$
+  complex(dp), allocatable :: Bnflux(:,:)       !< edge fluxes \f$ R \vec{B}_{n} \cdot \vec{n} \f$ weighted by \f$ R \f$
+  complex(dp), allocatable :: Bnphi(:)          !< physical toroidal component of magnetic perturbation, \f$ B_{n \phi} \f$
 
-  real(dp) :: psimin, psimax
-  real(dp), parameter :: R0 = 172.74467899999999d0 ! distance of magnetic axis from center
-  real(dp), parameter :: ideal_gas_factor = 1.6021766208d-12  ! unit conversion factor in ideal gas law (p = N/V * k_B*T) with p in dyn cm^-1, N/V in cm^-3 and k_B*T in eV
-  complex(dp), parameter :: imun = (0.0_dp, 1.0_dp) ! imaginary unit in double precision
+  real(dp) :: psimin  !< minimum flux surface label, located at the separatrix
+  real(dp) :: psimax  !< maximum flux surface label, located at the magnetic axis
+  real(dp), parameter :: R0 = 172.74467899999999d0  !< distance of magnetic axis from center, \f$ R_{0} \f$
+  real(dp), parameter :: ideal_gas_factor = 1.6021766208d-12  !< unit conversion factor in ideal gas law \f$ p = \frac{N}{V} k_{\mathrm{B}} T \f$
+  complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< imaginary unit in double precision
 
 contains
 
@@ -146,15 +152,14 @@ contains
     open(1, file = hpsi_file)
     do k = 1, ntri
        read (1, *) dummy_re, dummy_im
-       !TODO: enable next line
-       !mesh_element_rmp(k)%bnorm_vac = cmplx(dummy_re, dummy_im, dp)
-       !mesh_element_rmp(k)%bnorm_vac = 1d0 ! check with constant source
-       !
+       if (.not. nonres) then
+          mesh_element_rmp(k)%bnorm_vac = cmplx(dummy_re, dummy_im, dp)
+       else
        !Test case: completely non-resonant perturbation
-       !TODO: disable this line
-       mesh_element_rmp(k)%bnorm_vac = 3.d0 * R0 * abs(bphicovar) &
-            / sum(mesh_point(mesh_element(k)%i_knot(:))%rcoord ** 2 &
-            * mesh_point(mesh_element(k)%i_knot(:))%b_mod)
+          mesh_element_rmp(k)%bnorm_vac = 3.d0 * R0 * abs(bphicovar) &
+               / sum(mesh_point(mesh_element(k)%i_knot(:))%rcoord ** 2 &
+               * mesh_point(mesh_element(k)%i_knot(:))%b_mod)
+       endif
     end do
     close(1)
   end subroutine read_hpsi
@@ -172,16 +177,16 @@ contains
     ddens_dpsi = di0 / psimax
     dtemp_dpsi = ti0 / psimax
 
-    allocate(pres0(nflux+1))
-    allocate(dpres0_dpsi(nflux+1))
-    allocate(dens(nflux+1))
-    allocate(temp(nflux+1))
-    allocate(psi(nflux+1))
+    allocate(pres0(0:nflux+1))
+    allocate(dpres0_dpsi(0:nflux+1))
+    allocate(dens(0:nflux+1))
+    allocate(temp(0:nflux+1))
+    allocate(psi(0:nflux+1))
 
-    psi(1) = mesh_point(1)%psi_pol  ! magnetic axis at k == 0 is not counted as flux surface
-    do k = 1, nflux
+    psi(0) = mesh_point(1)%psi_pol  ! magnetic axis at k == 0 is not counted as flux surface
+    do k = 1, nflux+1
        ! average over the loop to smooth out numerical errors
-       psi(k+1) = sum(mesh_point((1 + (k-1) * nkpol + 1):(1 + k * nkpol))%psi_pol) / nkpol
+       psi(k) = sum(mesh_point((1 + (k-1) * nkpol + 1):(1 + k * nkpol))%psi_pol) / nkpol
     end do
     dens = (psi - psimin) / psimax * di0 + d_min
     temp = (psi - psimin) / psimax * ti0 + t_min
@@ -191,10 +196,11 @@ contains
 
   !>TODO
   subroutine assemble_system_first_order(nrow, a, b, d, du)
-    integer, intent(in) :: nrow                 ! number of system rows
-    complex(dp), intent(in), dimension(nrow) :: a, b ! system coefficients
-    complex(dp), intent(out) :: d(nrow)         ! diagonal of stiffness matrix
-    complex(dp), intent(out) :: du(nrow)        ! superdiagonal of stiffness matrix + A(n,1)
+    integer, intent(in) :: nrow                    !< number of system rows
+    complex(dp), intent(in), dimension(nrow) :: a  !< system coefficient \f$ a_{k} \f$
+    complex(dp), intent(in), dimension(nrow) :: b  !< system coefficient \f$ b_{k} \f$
+    complex(dp), intent(out) :: d(nrow)            !< diagonal of stiffness matrix \f$ A \f$
+    complex(dp), intent(out) :: du(nrow)           !< superdiagonal of stiffness matrix \f$ A \f$ and \f$ A_{n, 1} \f$
 
     d = -a + b * 0.5d0
     du = a + b * 0.5d0
@@ -202,12 +208,12 @@ contains
 
   !>TODO
   subroutine assemble_sparse(nrow, d, du, nz, irow, icol, aval)
-    integer, intent(in)  :: nrow                          ! number of system rows
-    complex(dp), intent(in)  :: d(nrow)                   ! diagnonal
-    complex(dp), intent(in)  :: du(nrow)                  ! upper diagonal
-    integer, intent(out) :: nz                            ! number of system rows
-    integer, intent(out) :: irow(2*nrow), icol(2*nrow)    ! matrix index representation
-    complex(dp), intent(out) :: aval(2*nrow)              ! matrix values
+    integer, intent(in)  :: nrow                          !< number of system rows
+    complex(dp), intent(in)  :: d(nrow)                   !< diagnonal of stiffness matrix \f$ A \f$
+    complex(dp), intent(in)  :: du(nrow)                  !< superdiagonal of stiffness matrix \f$ A \f$ and \f$ A_{n, 1} \f$
+    integer, intent(out) :: nz                            !< number of non-zero entries
+    integer, intent(out) :: irow(2*nrow), icol(2*nrow)    !< matrix index representation
+    complex(dp), intent(out) :: aval(2*nrow)              !< matrix values
 
     integer :: k
 
@@ -252,18 +258,21 @@ contains
     end do
   end subroutine common_triangles
 
-  !>Compute pressure perturbation. TODO: cleanup and documentation
+  !>Compute pressure perturbation. TODO: documentation
   subroutine compute_presn
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
     real(dp) :: rold, zold, Brold, Bpold, Bzold ! previous values in loop
-    complex(dp), dimension(nkpol) ::a, b, x, d, du
+    real(dp) :: lr, lz  ! edge vector components
+    complex(dp) :: Bnpsi
+    complex(dp), dimension(nkpol) :: a, b, x, d, du
     integer :: kp, kl, kpold
     integer :: nz
     integer, dimension(2*nkpol) :: irow, icol
     complex(dp), dimension(2*nkpol) :: aval
     type(knot) :: oldknot, curknot
     integer :: common_tri(2)
+    real(dp) :: perps(2)
 
     open(1, file = presn_file, recl = 1024)
     do kl = 1, nflux ! loop through flux surfaces
@@ -287,11 +296,20 @@ contains
 
           call common_triangles(oldknot, curknot, common_tri)
 
-          x(kpold) = -dpres0_dpsi(kl+1) * (oldknot%b_mod + curknot%b_mod) * 0.5d0 * &
-               sum(mesh_element_rmp(common_tri(:))%bnorm_vac) * 0.5d0
+          lr = r - rold
+          lz = z - zold
+          perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz)
+          if (nonres) then
+             Bnflux(minval(common_tri), mod(mesh_element(minval(common_tri))%knot_h, 3) + 1) = &
+                  R0 / (r + rold) * 2 * abs(bphicovar) * hypot(lr, lz) * sum(perps) / (psi(kl+1) - psi(kl-1))
+          endif
+          Bnpsi = Bnflux(minval(common_tri), mod(mesh_element(minval(common_tri))%knot_h, 3) + 1) / &
+               (r + rold) * 2 / hypot(lr, lz) * (psi(kl+1) - psi(kl-1)) / sum(perps)
 
-          a(kpold) = ((Br + Brold) * 0.5d0 * (r - rold) + &
-               (Bz + Bzold) * 0.5d0 * (z - zold)) / ((r - rold) ** 2 + (z - zold) ** 2)
+          x(kpold) = -dpres0_dpsi(kl) * Bnpsi
+
+          a(kpold) = ((Br + Brold) * 0.5d0 * lr + (Bz + Bzold) * 0.5d0 * lz) / &
+               (lr ** 2 + lz ** 2)
 
           b(kpold) = imun * n * (Bp / r + Bpold / rold) * 0.5d0
        end do ! kp
@@ -302,19 +320,17 @@ contains
        call sparse_solve(nkpol, nkpol, nz, irow, icol, aval, x)
 
        if (kl == 1) then ! first point on axis before actual output
-          write(1, *) psi(1), dens(1), temp(1), &
-               pres0(1), real(a(1)), Bp, &
-               real(sum(x) / size(x)), aimag(sum(x) / size(x)) !, 0d0, 0d0
+          write(1, *) psi(0), dens(0), temp(0), pres0(0), &
+               real(sum(x) / size(x)), aimag(sum(x) / size(x))
        end if
        do kp = 1, nkpol
           presn((kl - 1) * nkpol + 1 + kp) = x(kp)
-          write(1, *) psi(kl+1), dens(kl+1), &
-               temp(kl+1), pres0(kl+1), real(a(kp)), &
-               Bp, real(x(kp)), aimag(x(kp)) !, real(a(kp)), aimag(a(kp))
+          write(1, *) psi(kl), dens(kl), temp(kl), pres0(kl), &
+               real(x(kp)), aimag(x(kp))
        end do
     end do ! kl
     do kp = 1, (npoint - nkpol * nflux - 1) ! write zeroes in remaining points until end
-       write(1, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+       write(1, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
     end do
     close(1)
   end subroutine compute_presn
