@@ -2,4 +2,6 @@
 *.mod
 *.o
 *.x
+BUILD/*
+DOC/doxygen
 
