@@ -1,10 +1,14 @@
 &settings
    log_level = 3                                ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
+   nonres = .false.                             ! use non-resonant test case
    point_file = 'points.dat'                    ! points.dat from PRELOAD
    tri_file = 'triangles.dat'                   ! triangles.dat from PRELOAD
+   Bnflux_file = 'VACFIELD/Bn_flux.dat'         ! Bn_flux.dat from PRELOAD
+   hpsi_file = 'VACFIELD/hpsi_vac.dat'          ! hpsi_vac.dat from PRELOAD
+   presn_file = 'test_pressure_x.out'           ! output file for presn
    n = 2                                        ! harmonic index of perturbation   
    nkpol = 200					! number of knots per poloidal loop
    nflux = 74   				! number of flux surfaces
-   ti0 = 3.d3                                   ! on-axis temparature
-   di0 = 5.d13	                                ! temparature slope, T = ti0 + di0*(psi-psi_axis)
+   ti0 = 3.d3                                   ! temparature interpolation step
+   di0 = 5.d13	                                ! density interpolation step
 /

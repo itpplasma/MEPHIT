@@ -9,13 +9,14 @@ Created on Sat Jul 16 18:45:11 2016
 import numpy as np
 from io import StringIO
 import sys
+import codecs
 
 from meshpy import triangle 
 
 infile = sys.argv[1]
 
 # read input
-with open(infile + '.msh', 'r') as f:
+with codecs.open(infile + '.msh', mode = 'r', encoding = 'utf-8') as f:
     data = f.readlines()
 
 # generate arrays for nodes, triangles, boundary edges    
