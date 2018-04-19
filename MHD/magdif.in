@@ -1,5 +1,6 @@
 &settings
    log_level = 3                                ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
+   nonres = .false.                             ! use non-resonant test case
    point_file = 'points.dat'                    ! points.dat from PRELOAD
    tri_file = 'triangles.dat'                   ! triangles.dat from PRELOAD
    Bnflux_file = 'VACFIELD/Bn_flux.dat'         ! Bn_flux.dat from PRELOAD
