@@ -6,6 +6,7 @@
    Bnflux_file = 'VACFIELD/Bn_flux.dat'         ! Bn_flux.dat from PRELOAD
    hpsi_file = 'VACFIELD/hpsi_vac.dat'          ! hpsi_vac.dat from PRELOAD
    presn_file = 'test_pressure_x.out'           ! output file for presn
+   currn_file = 'test_current_x.out'            ! output file for currn
    n = 2                                        ! harmonic index of perturbation   
    nkpol = 200					! number of knots per poloidal loop
    nflux = 74   				! number of flux surfaces
