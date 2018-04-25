@@ -1,5 +1,6 @@
 module magdif
   use from_nrtype, only: dp                                     ! PRELOAD/SRC/from_nrtype.f90
+  use constants, only: pi                                       ! PRELOAD/SRC/orbit_mod.f90
   use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, & ! PRELOAD/SRC/mesh_mod.f90
        mesh_element_rmp, bphicovar, knot, triangle
   use for_macrostep, only : t_min, d_min
@@ -50,6 +51,7 @@ module magdif
   real(dp), parameter :: clight = 2.99792458d10  !< speed of light in cm/s
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< imaginary unit in double precision
 
+  real(dp), allocatable :: q(:), dqdpsi(:) !< safety factor and derivative over psi
 contains
 
   !> Initialize magdif module
@@ -59,12 +61,14 @@ contains
     call read_bnflux
     call read_hpsi ! TODO: get rid of this due to redundancy with bnflux
     call init_flux_variables
-    !call init_safety_factor ! TODO
+    call init_safety_factor 
     if (log_info) write(logfile, *) 'magdif initialized'
   end subroutine magdif_init
 
   !> Final cleanup of magdif module
   subroutine magdif_cleanup
+    if (allocated(q)) deallocate(q)
+    if (allocated(dqdpsi)) deallocate(dqdpsi)
     if (allocated(pres0)) deallocate(pres0)
     if (allocated(dpres0_dpsi)) deallocate(dpres0_dpsi)
     if (allocated(dens)) deallocate(dens)
@@ -175,6 +179,59 @@ contains
     end do
     close(1)
   end subroutine read_hpsi
+
+    subroutine init_safety_factor
+    integer :: kl, kt, nt_loop
+    type(triangle) :: elem
+    type(knot), dimension(3) :: knots
+    real(dp) :: r, z, Br,Bp,Bz,dBrdR,dBrdp,dBrdZ         &
+         ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ,rinv
+
+    allocate(q(nflux))
+    allocate(dqdpsi(nflux))
+
+    if (log_debug) open(1, file = 'magfie.out')
+    
+    q = 0d0
+    do kl = 1, nflux
+       do kt=1, nt_loop
+          if (kl==1) then
+             elem = mesh_element(kt)
+          else
+             elem = mesh_element(nkpol+(kl-2)*2*nkpol+kt)
+          end if
+          knots = mesh_point(elem%i_knot)
+          r = sum(knots(:)%rcoord)/3d0
+          z = sum(knots(:)%zcoord)/3d0
+          rinv = sum(1d0/knots(:)%rcoord**2)/3d0
+          call field(r,0d0,z,Br,Bp,Bz,dBrdR,&
+               dBrdp,dBrdZ,dBpdR,dBpdp,dBpdZ,&
+               dBzdR,dBzdp,dBzdZ)
+          q(kl) = q(kl) + Bp/(2d0*pi)*elem%det_3/2d0 !bphicovar*rinv*elem%V_tri
+          if(log_debug) write(1,*) Br, Bp, Bz
+       end do
+       q(kl) = q(kl)/(psi(kl+1)-psi(kl))
+       if(kl==1) nt_loop = 2*nkpol
+    end do
+    q(1) = q(2)
+    if (log_debug) close(1)
+    
+    dqdpsi(1) = 0d0
+    do kl = 2, nflux-1
+       ! q on triangle loop, psi on edge loop
+       dqdpsi(kl) = .5d0*(q(kl+1)-q(kl-1))/(psi(kl+1)-psi(kl))
+    end do
+    dqdpsi(nflux) = dqdpsi(nflux-1)
+    
+    if (log_debug) then
+       open(1, file = 'qsafety.out')
+       do kl = 1, nflux
+          write(1,*) psi(kl), q(kl), dqdpsi(kl)
+       end do     
+       close(1)
+    end if
+    
+  end subroutine init_safety_factor
 
   subroutine ring_centered_avg_coord(elem, r, z)
     type(triangle), intent(in) :: elem
@@ -533,7 +590,7 @@ contains
           x(kp) = x(kp) - imun * n * elem%det_3 * 0.25d0 * ( &
                clight * r / -Deltapsi * (presn(li(2)) - presn(li(1)) - &
                Bnphi(k_low + kp) / r / Bp * (pres0(kl) - pres0(kl-1))) + &
-               j0phi(k_low + kp) * (Bnphi(k_low + kp) / Bp + Bnflux(k_low + kp, ei) / r / -Deltapsi))
+               j0phi(k_low + kp) * (Bnphi(k_low + kp) / Bp + Bnflux(k_low + kp, ei) / r / (-Deltapsi)))
           ! use midpoint of edge o
           base = mesh_point(lo(1))
           tip = mesh_point(lo(2))
