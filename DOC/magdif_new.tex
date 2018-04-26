@@ -29,6 +29,7 @@
 \global\long\def\bm{\text{\textbf{m}}}
 \global\long\def\k{\text{k}}
 \global\long\def\i{\text{i}}
+\global\long\def\v#1{\boldsymbol{#1}}
 \selectlanguage{english}%
 
 \title{Magnetic differential equations for stationary linear ideal MHD and
@@ -42,8 +43,8 @@ their numerical solution}
 With the usual toroidal flux angle $\zeta=\pi/2-\ph$ (dHaeseleer),
 the toroidal flux $\psi_{\text{tor}}$ is given by
 \begin{align}
-\psi_{\text{tor}} & =\int\d V\,\boldsymbol{B}\cdot\nabla\zeta=-\int\d V\,\boldsymbol{B}\cdot\nabla\ph\nonumber \\
- & =-2\pi\int\d R\d Z\,RB^{\ph}=-2\pi\int\d R\d ZB_{(\ph)}.
+\psi_{\text{tor}} & =\frac{1}{(2\pi)^{2}}\int\d V\,\boldsymbol{B}\cdot\nabla\zeta=-\frac{1}{(2\pi)^{2}}\int\d V\,\boldsymbol{B}\cdot\nabla\ph\nonumber \\
+ & =-\frac{1}{2\pi}\int\d R\d Z\,RB^{\ph}=-\frac{1}{2\pi}\int\d R\d ZB_{(\ph)}.
 \end{align}
 As a radial flux variable $\rho$ we use the (ribbon) poloidal flux
 $\psi_{\mathrm{pol}}$ which is the negative disk poloidal flux,
@@ -53,13 +54,13 @@ $\psi_{\mathrm{pol}}$ which is the negative disk poloidal flux,
 Thus the safety factor is given by
 \begin{align*}
 q & =\frac{\psi_{\mathrm{tor}}^{\prime}(\rho)}{\psi_{\mathrm{pol}}^{\prime}(\rho)}=\frac{\d\psi_{\mathrm{tor}}/\d\psi_{\mathrm{pol}}}{1}=-\frac{\d\psi_{\mathrm{tor}}}{\d\psi}\\
- & =+2\pi\frac{\d}{\d\psi}\int\d R\d ZB_{(\ph)}.
+ & =+\frac{1}{2\pi}\frac{\d}{\d\psi}\int\d R\d ZB_{(\ph)}.
 \end{align*}
 This quantity can be evaluated numerically by adding up $B_{(\ph)}$
 inside the volume between two flux surfaces and dividing by the the
 difference in $\psi$:
 \[
-q\approx\frac{2\pi}{\Delta\psi}\sum_{\triangle}B_{(\ph)}S_{\triangle},
+q\approx\frac{1}{2\pi\Delta\psi}\sum_{\triangle}B_{(\ph)}S_{\triangle},
 \]
 where the sum is taken over all triangles inside a triangle strip,
 and $S_{\Delta}$ is the respective triangle surface area.
@@ -144,5 +145,20 @@ with
 \begin{align}
 \sum_{k}(\Psi_{\ph}^{(k)}+\Psi_{3}^{(k)}) & =0.
 \end{align}
+
+\subsection*{Reduced MHD}
+
+We take
+\[
+B_{n\ph}=0
+\]
+so
+\begin{align*}
+\boldsymbol{B}_{n} & =\nabla\psi_{n}\times\nabla\ph.
+\end{align*}
+Amperes law becomes
+\begin{align*}
+\boldsymbol{B}_{n} & =\frac{1}{4\pi}\boldsymbol{J}_{n}.
+\end{align*}
 
 \end{document}

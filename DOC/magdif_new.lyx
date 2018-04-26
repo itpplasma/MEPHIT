@@ -146,6 +146,11 @@
 \end_inset
 
 
+\begin_inset FormulaMacro
+\newcommand{\v}[1]{\boldsymbol{#1}}
+\end_inset
+
+
 \end_layout
 
 \begin_layout Title
@@ -173,8 +178,8 @@ With the usual toroidal flux angle
  is given by
 \begin_inset Formula 
 \begin{align}
-\psi_{\text{tor}} & =\int\d V\,\boldsymbol{B}\cdot\nabla\zeta=-\int\d V\,\boldsymbol{B}\cdot\nabla\ph\nonumber \\
- & =-2\pi\int\d R\d Z\,RB^{\ph}=-2\pi\int\d R\d ZB_{(\ph)}.
+\psi_{\text{tor}} & =\frac{1}{(2\pi)^{2}}\int\d V\,\boldsymbol{B}\cdot\nabla\zeta=-\frac{1}{(2\pi)^{2}}\int\d V\,\boldsymbol{B}\cdot\nabla\ph\nonumber \\
+ & =-\frac{1}{2\pi}\int\d R\d Z\,RB^{\ph}=-\frac{1}{2\pi}\int\d R\d ZB_{(\ph)}.
 \end{align}
 
 \end_inset
@@ -199,7 +204,7 @@ Thus the safety factor is given by
 \begin_inset Formula 
 \begin{align*}
 q & =\frac{\psi_{\mathrm{tor}}^{\prime}(\rho)}{\psi_{\mathrm{pol}}^{\prime}(\rho)}=\frac{\d\psi_{\mathrm{tor}}/\d\psi_{\mathrm{pol}}}{1}=-\frac{\d\psi_{\mathrm{tor}}}{\d\psi}\\
- & =+2\pi\frac{\d}{\d\psi}\int\d R\d ZB_{(\ph)}.
+ & =+\frac{1}{2\pi}\frac{\d}{\d\psi}\int\d R\d ZB_{(\ph)}.
 \end{align*}
 
 \end_inset
@@ -216,7 +221,7 @@ This quantity can be evaluated numerically by adding up
 :
 \begin_inset Formula 
 \[
-q\approx\frac{2\pi}{\Delta\psi}\sum_{\triangle}B_{(\ph)}S_{\triangle},
+q\approx\frac{1}{2\pi\Delta\psi}\sum_{\triangle}B_{(\ph)}S_{\triangle},
 \]
 
 \end_inset
@@ -402,6 +407,38 @@ Here, a compatibility condition needs to be fulfilled - the flux through
 \begin{align}
 \sum_{k}(\Psi_{\ph}^{(k)}+\Psi_{3}^{(k)}) & =0.
 \end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection*
+Reduced MHD
+\end_layout
+
+\begin_layout Standard
+We take
+\begin_inset Formula 
+\[
+B_{n\ph}=0
+\]
+
+\end_inset
+
+so
+\begin_inset Formula 
+\begin{align*}
+\boldsymbol{B}_{n} & =\nabla\psi_{n}\times\nabla\ph.
+\end{align*}
+
+\end_inset
+
+Amperes law becomes
+\begin_inset Formula 
+\begin{align*}
+\boldsymbol{B}_{n} & =\frac{1}{4\pi}\boldsymbol{J}_{n}.
+\end{align*}
 
 \end_inset
 

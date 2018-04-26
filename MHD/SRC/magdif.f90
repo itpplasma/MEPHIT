@@ -187,18 +187,19 @@ contains
     real(dp) :: r, z, Br,Bp,Bz,dBrdR,dBrdp,dBrdZ         &
          ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ,rinv
 
-    allocate(q(nflux))
-    allocate(dqdpsi(nflux))
+    allocate(q(0:nflux))
+    allocate(dqdpsi(1:nflux))
 
     if (log_debug) open(1, file = 'magfie.out')
     
     q = 0d0
-    do kl = 1, nflux
+    nt_loop = nkpol
+    do kl = 0, nflux
        do kt=1, nt_loop
-          if (kl==1) then
+          if (kl==0) then
              elem = mesh_element(kt)
           else
-             elem = mesh_element(nkpol+(kl-2)*2*nkpol+kt)
+             elem = mesh_element(nkpol+(kl-1)*2*nkpol+kt)
           end if
           knots = mesh_point(elem%i_knot)
           r = sum(knots(:)%rcoord)/3d0
@@ -211,20 +212,20 @@ contains
           if(log_debug) write(1,*) Br, Bp, Bz
        end do
        q(kl) = q(kl)/(psi(kl+1)-psi(kl))
-       if(kl==1) nt_loop = 2*nkpol
+       if(kl==0) nt_loop = 2*nkpol
     end do
-    q(1) = q(2)
+
     if (log_debug) close(1)
     
-    dqdpsi(1) = 0d0
-    do kl = 2, nflux-1
-       ! q on triangle loop, psi on edge loop
-       dqdpsi(kl) = .5d0*(q(kl+1)-q(kl-1))/(psi(kl+1)-psi(kl))
+    do kl = 1, nflux-1
+       ! q on triangle strip, psi on edge ring
+       dqdpsi(kl) = 2d0*(q(kl)-q(kl-1))/(psi(kl+1)-psi(kl-1))
     end do
     dqdpsi(nflux) = dqdpsi(nflux-1)
     
     if (log_debug) then
        open(1, file = 'qsafety.out')
+       write(1,*) psi(0), q(0), .0d0
        do kl = 1, nflux
           write(1,*) psi(kl), q(kl), dqdpsi(kl)
        end do     
