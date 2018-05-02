@@ -17,6 +17,9 @@
 \DeclareSymbolFont{AMSb}{U}{msb}{m}{n}
 \protected\def\mathbb#1{{\mathchar\numexpr256*\symAMSb+`#1\relax}}
 \AtBeginDocument{%
+  \let\temp\varrho
+  \let\varrho\rho
+  \let\rho\temp
   \let\temp\vartheta
   \let\vartheta\theta
   \let\theta\temp
@@ -305,45 +308,48 @@ We take a cross-product of \cref{eq:mhd-gen} by $\vec{B}_{0}$:
   &= B_{0}^{2} \vec{j}_{0 \perp}.
 \end{align}
 Therefore
-\begin{align}
-  \vec{j}_{0 \perp} &= \frac{-c \nabla p_{0} \times \vec{B}_{0}}{B_{0}^{2}} \\
-  &= \frac{-c p_{0}' (\psi) \nabla \psi \times (\nabla \psi \times \nabla \phi + B_{0 \phi} \nabla \phi)}{B_{0}^{2}} \nonumber \\
-  &= \frac{-c p_{0}' (\psi)}{B_{0}^{2}} \left( B_{0 \phi} \vec{B}_{0}^{\pol} - \lvert \nabla \psi \rvert^{2} \nabla \phi \right).
-\end{align}
+\begin{gather}
+  \vec{j}_{0 \perp} = \frac{-c \nabla p_{0} \times \vec{B}_{0}}{B_{0}^{2}},
+\end{gather}
 which is the diamagnetic current density. For the parallel current density we use
 \begin{align}
  0 = \nabla \cdot \vec{j}_{0} &= \nabla \cdot \vec{j}_{0 \perp} + \nabla \cdot (j_{0 \parallel} \vec{h}_{0}) \nonumber \\
  &= -c \nabla \cdot \left( \frac{\nabla p_{0} \times \vec{B}_{0}}{B_{0}^{2}} \right) + \vec{B}_{0} \cdot \nabla \left( \frac{j_{0 \parallel}}{B_{0}} \right).
 \end{align}
-In straight-field line magnetic flux coordinates $(r, \theta, \phi)$ with Jacobian $\sqrt{g}$ and the divergence of the diamagnetic current is
+In straight-field line magnetic flux coordinates $(\rho, \theta, \zeta) = (-\psi, \theta, \frac{\pi}{2} - \phi)$ and Jacobian $\sqrt{g}$, the divergence of the diamagnetic current is
 \begin{align}
   \nabla \cdot \vec{j}_{0 \perp} &= -\frac{c}{\sqrt{g}} \pd{x^{k}} \left[ \frac{\sqrt{g}}{B_{0}^{2}} \left( \nabla p_{0} \times \vec{B}_{0} \right)^{k} \right] \nonumber \\
   &= -\frac{c}{\sqrt{g}} \pd{x^{k}} \left( \frac{\sqrt{g}}{B_{0}^{2}} \frac{\varepsilon^{ijk}}{\sqrt{g}} \pd[p_{0}]{x^{i}} B_{0 j} \right) \nonumber \\
-  &= \frac{c p_{0}' (r) B_{0 \phi}}{\sqrt{g}} \pd{\theta} \left( \frac{1}{B_{0}^{2}} \right),
+  &= \frac{c p_{0}' (\rho) B_{0 \zeta}}{\sqrt{g}} \pd{\theta} \left( \frac{1}{B_{0}^{2}} \right),
 \end{align}
-since $p_{0}$ and $B_{0 \phi}$ are constant on a flux surface, $\pd[p_{0}]{\theta} = 0$ and due to axisymmetry $\pd{\phi} = 0$. The divergence of the parallel current is
+since $p_{0}$ and $B_{0 \zeta}$ are constant on a flux surface, $\pd[p_{0}]{\theta} = 0$ and due to axisymmetry $\pd{\zeta} = 0$. The divergence of the parallel current is
 \begin{gather}
-  \nabla \cdot(j_{0 \parallel} \vec{h}_{0}) = B_{0}^{\theta} \pd{\theta} \left( \frac{j_{0 \parallel}}{B_{0}} \right).
+  \nabla \cdot(j_{0 \parallel} \vec{h}_{0}) = \vec{B}_{0} \cdot \nabla \frac{j_{0 \parallel}}{B_{0}} = B_{0}^{\theta} \pd{\theta} \frac{j_{0 \parallel}}{B_{0}}.
 \end{gather}
-With $\sqrt{g} B_{0}^{\theta} = \psi'(r)$ as a flux surface quantity, there are no dependencies of $\theta$ in front of the derivatives. Direct integration and a change of variables/notation as in
+With $\sqrt{g} B_{0}^{\theta} = -\psi'(\rho)$ as a flux surface quantity, there are no dependencies of $\theta$ in front of the derivatives:
 \begin{gather}
-  \frac{p_{0}'(r)}{\psi'(r)} = \frac{\pd[p_{0}]{r}}{\pd[\psi]{r}} = \pd[p_{0}]{\psi} = p_{0}'(\psi)
+  c p_{0}' (\rho) B_{0 \zeta} \pd{\theta} \frac{1}{B_{0}^{2}} - \psi'(\rho) \pd{\theta} \frac{j_{0 \parallel}}{B_{0}} = 0.
+\end{gather}
+Direct integration and a change of variables and notation as in
+\begin{gather}
+  \frac{p_{0}'(\rho)}{\psi'(\rho)} = \frac{\pd[p_{0}]{\rho}}{\pd[\psi]{\rho}} = \pd[p_{0}]{\psi} = p_{0}'(\psi)
 \end{gather}
 yields
 \begin{gather}
-  j_{0 \parallel} = -\frac{c p_{0}'(\psi) B_{0 \phi}}{B_{0}} + C(\psi) B_{0}.
+  \frac{-c p_{0}' (\psi) B_{0 \phi}}{B_{0}^{2}} - \frac{j_{0 \parallel}}{B_{0}} = C(\psi). \label{eq:j0parallel_general}
 \end{gather}
-With the extra condition of the flux-surface average $\left\langle j_{0 \parallel} B_{0} \right\rangle = 0$ for testing without bootstrap current and the assumption $\left\langle B_{0 \phi} \right\rangle = B_{0 \phi}$, we obtain
-\begin{align}
-  0 &= -c p_{0}'(\psi) B_{0 \phi} + C(\psi) \left\langle B_{0}^{2} \right\rangle \nonumber \\
-  \Rightarrow C(\psi) &= \frac{c p_{0}'(\psi) B_{0 \phi}}{\left\langle B_{0}^{2} \right\rangle}.
-\end{align}
+With the extra condition of the flux-surface average $\left\langle j_{0 \parallel} B_{0} \right\rangle = 0$ for testing without bootstrap current and the assumption $\left\langle B_{0 \phi} \right\rangle \approx B_{0 \phi}$, we obtain
+\begin{gather}
+  -c p_{0}'(\psi) B_{0 \phi} = C(\psi) \left\langle B_{0}^{2} \right\rangle.
+\end{gather}
 In general, 
-\begin{align}
-  C(\psi) &= \frac{c p_{0}'(\psi) B_{0 \phi}}{\left\langle B_{0}^{2} \right\rangle} D(\psi), \\
-  j_{0 \parallel} &= -\frac{c p_{0}'(\psi) B_{0 \phi}}{B_{0}} \left( \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) - 1 \right).
-\end{align}
-with $D(\psi)$ set to 1 for now and modified for the more general case $\left\langle j_{0 \parallel} B_{0} \right\rangle \not\equiv 0$.
+\begin{gather}
+  C(\psi) = -\frac{c p_{0}'(\psi) B_{0 \phi}}{\left\langle B_{0}^{2} \right\rangle} D(\psi),
+\end{gather}
+with $D(\psi)$ set to 1 for now and modified for the more general case $\left\langle j_{0 \parallel} B_{0} \right\rangle \not\equiv 0$. Inserting this back into \cref{eq:j0parallel_general} yields
+\begin{gather}
+  j_{0 \parallel} = \frac{c p_{0}'(\psi) B_{0 \phi}}{B_{0}} \left( \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) - 1 \right).
+\end{gather}
 
 For the unperturbed toroidal current density we have
 \begin{gather}
@@ -351,9 +357,9 @@ For the unperturbed toroidal current density we have
 \end{gather}
 where
 \begin{align}
-  j_{0 \parallel} h_{0}^{\phi} &= -\frac{1}{B_{0}} c p_{0}'(\psi) B_{0 \phi} \frac{B_{0}^{\phi}}{B_{0}} \left( \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) - 1 \right) \nonumber \\
-  &= -c p_{0}'(\psi) \frac{\left( B_{0}^{\tor} \right)^{2}}{B_0^2} \left( \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) - 1 \right) \nonumber \\
-  &= -c p_{0}'(\psi) \left( B_{0}^{\tor} \right)^{2} \left( \frac{D(\psi)}{\left\langle B_{0}^{2} \right\rangle} - \frac{1}{B_{0}^{2}} \right).
+  j_{0 \parallel} h_{0}^{\phi} &= \frac{1}{B_{0}} c p_{0}'(\psi) B_{0 \phi} \frac{B_{0}^{\phi}}{B_{0}} \left( \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) - 1 \right) \nonumber \\
+  &= c p_{0}'(\psi) \frac{\left( B_{0}^{\tor} \right)^{2}}{B_0^2} \left( \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) - 1 \right) \nonumber \\
+  &= c p_{0}'(\psi) \left( B_{0}^{\tor} \right)^{2} \left( \frac{D(\psi)}{\left\langle B_{0}^{2} \right\rangle} - \frac{1}{B_{0}^{2}} \right).
 \end{align}
 and
 \begin{align}
@@ -362,13 +368,9 @@ and
   &= \frac{c p_{0}'(\psi)}{B_{0}^{2}} \vec{B}_{0}^{\pol} \cdot \vec{B}_{0} \nonumber \\
   &= c p_{0}'(\psi) \frac{\left( B_{0}^{\pol} \right)^{2}}{B_{0}^{2}}.
 \end{align}
-It follows from
+It follows that
 \begin{gather}
-  \left( B_{0}^{\pol} \right)^{2} + \left( B_{0}^{\tor} \right)^{2} = B_{0}^{2}
-\end{gather}
-that
-\begin{gather}
-  j_{0}^{\phi} = c p_{0}'(\psi) \left( 1 - \frac{\left( B_{0}^{\tor} \right)^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) \right).
+  j_{0}^{\phi} = c p_{0}'(\psi) \left( \frac{\left( B_{0}^{\tor} \right)^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) + \frac{\left( B_{0}^{\pol} \right)^2 - \left( B_{0}^{\tor} \right)^2}{B_{0}^{2}} \right).
 \end{gather}
 
 \subsubsection{Toroidal current perturbation}

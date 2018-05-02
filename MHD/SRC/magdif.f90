@@ -300,6 +300,7 @@ contains
     integer :: kl, kp, kp_max, k_low
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+    real(dp) :: Bpol
 
     do kl = 1, nflux
        select case(kl)
@@ -314,23 +315,12 @@ contains
           call ring_centered_avg_coord(mesh_element(k_low + kp), r, z)
           call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+          Bpol = hypot(Br, Bz)
           j0phi(k_low + kp) = clight * (pres0(kl) - pres0(kl-1)) / (psi(kl) - psi(kl-1)) * &
-               (1 - Bp ** 2 / B2avg(kl))  ! D(psi) = 1
+               (Bp ** 2 / B2avg(kl) + (Bpol ** 2 - Bp ** 2) / (Bpol ** 2 + Bp ** 2))
        end do
     end do
   end subroutine compute_j0phi
-
-  !>TODO
-  subroutine assemble_system_first_order(nrow, a, b, d, du)
-    integer, intent(in) :: nrow                    !< number of system rows
-    complex(dp), intent(in), dimension(nrow) :: a  !< system coefficient \f$ a_{k} \f$
-    complex(dp), intent(in), dimension(nrow) :: b  !< system coefficient \f$ b_{k} \f$
-    complex(dp), intent(out) :: d(nrow)            !< diagonal of stiffness matrix \f$ A \f$
-    complex(dp), intent(out) :: du(nrow)           !< superdiagonal of stiffness matrix \f$ A \f$ and \f$ A_{n, 1} \f$
-
-    d = -a + b * 0.5d0
-    du = a + b * 0.5d0
-  end subroutine assemble_system_first_order
 
   !>TODO
   subroutine assemble_sparse(nrow, d, du, nz, irow, icol, aval)
@@ -441,7 +431,8 @@ contains
        end do ! kp
 
        ! solve linear system
-       call assemble_system_first_order(nkpol, a, b, d, du)
+       d = -a + b * 0.5d0
+       du = a + b * 0.5d0
        call assemble_sparse(nkpol, d, du, nz, irow, icol, aval)
        call sparse_solve(nkpol, nkpol, nz, irow, icol, aval, x)
 
@@ -571,7 +562,7 @@ contains
           base = mesh_point(lf(1))
           tip = mesh_point(lf(2))
           r = (base%rcoord + tip%rcoord) * 0.5d0
-          z = (base%zcoord + tip%rcoord) * 0.5d0
+          z = (base%zcoord + tip%zcoord) * 0.5d0
           call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
           ! first term on source side: flux through edge f
@@ -582,7 +573,7 @@ contains
           base = mesh_point(li(1))
           tip = mesh_point(li(2))
           r = (base%rcoord + tip%rcoord) * 0.5d0
-          z = (base%zcoord + tip%rcoord) * 0.5d0
+          z = (base%zcoord + tip%zcoord) * 0.5d0
           call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
           ! diagonal matrix element
@@ -596,7 +587,7 @@ contains
           base = mesh_point(lo(1))
           tip = mesh_point(lo(2))
           r = (base%rcoord + tip%rcoord) * 0.5d0
-          z = (base%zcoord + tip%rcoord) * 0.5d0
+          z = (base%zcoord + tip%zcoord) * 0.5d0
           call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
           ! superdiagonal matrix element
