@@ -29,7 +29,7 @@ find_library(Ccolamd_lib ccolamd ${SUITESPARSE_DIR}/CCOLAMD/Lib NO_DEFAULT_PATH)
 find_library(SuiteSparseConfig_lib suitesparseconfig ${SUITESPARSE_DIR}/SuiteSparse_config NO_DEFAULT_PATH)
 
 ### Set compiler flags
-set(CMAKE_Fortran_FLAGS "-O2 -g -fbounds-check")
+set(CMAKE_Fortran_FLAGS "-O2 -g -fbounds-check -Wall")
 
 ### Define libraries
 add_library(magdif SHARED

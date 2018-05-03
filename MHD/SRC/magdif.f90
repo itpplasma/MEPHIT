@@ -455,10 +455,12 @@ contains
     integer, intent(out) :: ei, eo, ef
     integer, dimension(3) :: i_knot_diff
     integer :: knot_i, knot_o, knot_f
-    integer i1, i2
-    logical closing_loop
+    integer :: i1, i2
+    logical :: closing_loop
     character(len = *), parameter :: errmsg = 'cannot find correct label for triangle edges'
 
+    i1 = 0
+    i2 = 0
     select case (elem%knot_h)
     case (1)
        i1 = 2
@@ -508,11 +510,11 @@ contains
   subroutine compute_currn
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-    complex(dp), allocatable, dimension(:) :: x, d, du
+    complex(dp), dimension(2 * nkpol) :: x, d, du
     integer :: kl, kp, kp_max, k_low
     integer :: nz
-    integer, allocatable, dimension(:) :: irow, icol
-    complex(dp), allocatable, dimension(:) :: aval
+    integer, dimension(4 * nkpol) :: irow, icol
+    complex(dp), dimension(4 * nkpol) :: aval
     type(triangle) :: elem
     type(knot) :: base, tip
     integer, dimension(2) :: li, lo, lf
@@ -526,27 +528,9 @@ contains
        case (1)
           kp_max = nkpol
           k_low = 0
-          allocate(x(kp_max))
-          allocate(d(kp_max))
-          allocate(du(kp_max))
-          allocate(irow(2*kp_max))
-          allocate(icol(2*kp_max))
-          allocate(aval(2*kp_max))
        case (2)
           kp_max = 2 * nkpol
           k_low = (kl-1) * kp_max - nkpol
-          deallocate(x)
-          deallocate(d)
-          deallocate(du)
-          deallocate(irow)
-          deallocate(icol)
-          deallocate(aval)
-          allocate(x(kp_max))
-          allocate(d(kp_max))
-          allocate(du(kp_max))
-          allocate(irow(2*kp_max))
-          allocate(icol(2*kp_max))
-          allocate(aval(2*kp_max))
        case default
           kp_max = 2 * nkpol
           k_low = (kl-1) * kp_max - nkpol
@@ -595,8 +579,8 @@ contains
                Bnphi(k_low + kp) / r / Bp * (pres0(kl-1) - pres0(kl))) + &
                j0phi(k_low + kp) * (Bnphi(k_low + kp) / Bp + Bnflux(k_low + kp, eo) / r / Deltapsi))
        end do
-       call assemble_sparse(kp_max, d, du, nz, irow, icol, aval)
-       call sparse_solve(kp_max, kp_max, nz, irow, icol, aval, x)
+       call assemble_sparse(kp_max, d(:kp_max), du(:kp_max), nz, irow(:2*kp_max), icol(:2*kp_max), aval(:2*kp_max))
+       call sparse_solve(kp_max, kp_max, nz, irow(:nz), icol(:nz), aval(:nz), x(:kp_max))
        do kp = 1, kp_max
           elem = mesh_element(k_low + kp)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef)
@@ -609,12 +593,6 @@ contains
                real(jnphi(k_low + kp)), aimag(jnphi(k_low + kp))
        end do
     end do
-    deallocate(x)
-    deallocate(d)
-    deallocate(du)
-    deallocate(irow)
-    deallocate(icol)
-    deallocate(aval)
     close(1)
   end subroutine compute_currn
 
