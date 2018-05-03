@@ -181,57 +181,54 @@ contains
   end subroutine read_hpsi
 
     subroutine init_safety_factor
-    integer :: kl, kt, nt_loop
+    integer :: kl, kp, kp_max, k_low
     type(triangle) :: elem
-    type(knot), dimension(3) :: knots
-    real(dp) :: r, z, Br,Bp,Bz,dBrdR,dBrdp,dBrdZ         &
-         ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ,rinv
+    real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
 
-    allocate(q(0:nflux))
-    allocate(dqdpsi(1:nflux))
+    allocate(q(nflux+1))
+    allocate(dqdpsi(0:nflux))
+    q = 0d0
+    dqdpsi = 0d0
 
     if (log_debug) open(1, file = 'magfie.out')
     
-    q = 0d0
-    nt_loop = nkpol
-    do kl = 0, nflux
-       do kt=1, nt_loop
-          if (kl==0) then
-             elem = mesh_element(kt)
-          else
-             elem = mesh_element(nkpol+(kl-1)*2*nkpol+kt)
-          end if
-          knots = mesh_point(elem%i_knot)
-          r = sum(knots(:)%rcoord)/3d0
-          z = sum(knots(:)%zcoord)/3d0
-          rinv = sum(1d0/knots(:)%rcoord**2)/3d0
-          call field(r,0d0,z,Br,Bp,Bz,dBrdR,&
-               dBrdp,dBrdZ,dBpdR,dBpdp,dBpdZ,&
-               dBzdR,dBzdp,dBzdZ)
-          q(kl) = q(kl) + Bp/(2d0*pi)*elem%det_3/2d0 !bphicovar*rinv*elem%V_tri
+    do kl = 1, nflux+1
+       select case(kl)
+       case (1)
+          kp_max = nkpol
+          k_low = 0
+       case default
+          kp_max = 2 * nkpol
+          k_low = (kl-1) * kp_max - nkpol
+       end select
+       do kp = 1, kp_max
+          elem = mesh_element(k_low + kp)
+          call ring_centered_avg_coord(elem, r, z)
+          call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+          q(kl) = q(kl) + Bp * elem%det_3 * 0.5d0
+
           if(log_debug) write(1,*) Br, Bp, Bz
        end do
-       q(kl) = q(kl)/(psi(kl+1)-psi(kl))
-       if(kl==0) nt_loop = 2*nkpol
+       q(kl) = -q(kl) * 0.5d0 / pi / (psi(kl) - psi(kl-1))  ! check sign
     end do
 
     if (log_debug) close(1)
     
-    do kl = 1, nflux-1
+    do kl = 1, nflux
        ! q on triangle strip, psi on edge ring
-       dqdpsi(kl) = 2d0*(q(kl)-q(kl-1))/(psi(kl+1)-psi(kl-1))
+       dqdpsi(kl) = (q(kl+1) - q(kl)) / (psi(kl+1) - psi(kl-1)) * 0.5d0
     end do
-    dqdpsi(nflux) = dqdpsi(nflux-1)
     
     if (log_debug) then
        open(1, file = 'qsafety.out')
-       write(1,*) psi(0), q(0), .0d0
+       write(1,*) psi(0), 0.0d0, dqdpsi(0)
        do kl = 1, nflux
           write(1,*) psi(kl), q(kl), dqdpsi(kl)
        end do     
        close(1)
     end if
-    
   end subroutine init_safety_factor
 
   subroutine ring_centered_avg_coord(elem, r, z)
