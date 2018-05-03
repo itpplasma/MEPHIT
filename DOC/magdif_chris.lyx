@@ -184,27 +184,42 @@ With the usual toroidal flux angle
 
 \end_inset
 
-As a radial flux variable 
-\begin_inset Formula $\rho$
+As a radial flux variable we use the (ribbon) poloidal flux 
+\begin_inset Formula $\psi_{\mathrm{pol}}=\psi$
 \end_inset
 
- we use the (ribbon) poloidal flux 
-\begin_inset Formula $\psi_{\mathrm{pol}}$
+ which is the negative disk poloidal flux.
+ Since 
+\begin_inset Formula $\v B_{\mathrm{pol}}$
 \end_inset
 
- which is the negative disk poloidal flux,
-\begin_inset Formula 
-\[
-\rho=\psi_{\mathrm{pol}}=-\psi.
-\]
-
+ can be pointed in either orientation, we add a factor 
+\begin_inset Formula $\sigma_{\mathrm{pol}}=+1$
 \end_inset
 
-Thus the safety factor is given by
+ for counterclockwise and 
+\begin_inset Formula $\sigma_{\mathrm{pol}}=-1$
+\end_inset
+
+ for clockwise direction of 
+\begin_inset Formula $\v B_{\mathrm{pol}}$
+\end_inset
+
+ in the poloidal plane.
+ Thus 
+\begin_inset Formula $\psi_{\mathrm{pol}}(\rho)=\sigma_{\mathrm{pol}}\rho$
+\end_inset
+
+ and 
+\begin_inset Formula $\psi_{\mathrm{pol}}^{\prime}(\rho)=\sigma_{\mathrm{pol}}$
+\end_inset
+
+.
+ The safety factor is then given by
 \begin_inset Formula 
 \begin{align*}
-q & =\frac{\psi_{\mathrm{tor}}^{\prime}(\rho)}{\psi_{\mathrm{pol}}^{\prime}(\rho)}=\frac{\d\psi_{\mathrm{tor}}/\d\psi_{\mathrm{pol}}}{1}=-\frac{\d\psi_{\mathrm{tor}}}{\d\psi}\\
- & =+\frac{1}{2\pi}\frac{\d}{\d\psi}\int\d R\d ZB_{(\ph)}.
+q & =\frac{\psi_{\mathrm{tor}}^{\prime}(\rho)}{\psi_{\mathrm{pol}}^{\prime}(\rho)}=\frac{\d\psi_{\mathrm{tor}}}{\d\psi_{\mathrm{pol}}}=\frac{\d\psi_{\mathrm{tor}}}{\d\psi}\\
+ & =-\frac{1}{2\pi}\frac{\d}{\d\psi}\int\d R\d ZB_{(\ph)}.
 \end{align*}
 
 \end_inset
@@ -220,9 +235,9 @@ This quantity can be evaluated numerically by adding up
 
 :
 \begin_inset Formula 
-\[
-q\approx\frac{1}{2\pi\Delta\psi}\sum_{\triangle}B_{(\ph)}S_{\triangle},
-\]
+\begin{align*}
+q & \approx-\frac{1}{2\pi\Delta\psi}\sum_{\triangle}B_{(\ph)}S_{\triangle}
+\end{align*}
 
 \end_inset
 
@@ -240,7 +255,7 @@ s)
 
 \begin_layout Standard
 For derivation we use symmetry flux coordinates 
-\begin_inset Formula $(\rho,\vartheta,\zeta)=(-\psi,\vartheta,\frac{\pi}{2}-\varphi)$
+\begin_inset Formula $(\rho,\vartheta,\zeta)=(\sigma_{\mathrm{pol}}\psi,\vartheta,\frac{\pi}{2}-\varphi)$
 \end_inset
 
  with Jacobian
