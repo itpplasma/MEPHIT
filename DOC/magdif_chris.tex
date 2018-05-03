@@ -39,21 +39,41 @@ their numerical solution}
 \title{\textemdash{} remaining input from Chris}
 \maketitle
 
+\subsection*{Coordinate conventions}
+
+We use two different right-handed coordinate systems: Firstly cylindrical
+coordinates $(R,\ph,Z)$ with $\ph$ running counterclockwise as seen
+from above, so
+\begin{align*}
+x & =R\cos\ph,\quad y=R\sin\ph,\quad z=Z.
+\end{align*}
+Those coordinates are used in computations and for meshes. For derivations,
+also symmetry flux coordinates $(\rho,\theta,\zeta)$ are used at
+some point. Here, we use the convention of d'Haeseleer with radial
+coordinate growing towards the outside of the torus. We use $\rho=\sigma_{\mathrm{pol}}\psi$
+with $\sigma_{\mathrm{pol}}=+1$ for counterclockwise poloidal field
+$\v B_{0}^{\mathrm{pol}}$ and $\sigma_{\mathrm{pol}}=-1$ for clockwise
+field. The toroidal symmetry angle is defined in the direction opposite
+to $\ph$ with
+\begin{align*}
+\zeta & =\frac{\pi}{2}-\ph.
+\end{align*}
+The flux angle $\theta$ has the same orientation as $\vartheta=\arctan\frac{Z}{R}$,
+so the sign $\sigma_{\mathrm{pol}}=\mathrm{sgn}(B^{\tht})=\mathrm{sgn}(B^{\theta})$,
+so positive for counter-clockwise and negative for clockwise in the
+poloidal plane.
+
 \subsection*{Safety factor (TODO: check all signs with flux coordinates)}
 
-With the usual toroidal flux angle $\zeta=\pi/2-\ph$ (dHaeseleer),
+With the usual toroidal flux angle $\zeta=\pi/2-\ph$ (d'Haeseleer),
 the toroidal flux $\psi_{\text{tor}}$ is given by
 \begin{align}
 \psi_{\text{tor}} & =\frac{1}{(2\pi)^{2}}\int\d V\,\boldsymbol{B}\cdot\nabla\zeta=-\frac{1}{(2\pi)^{2}}\int\d V\,\boldsymbol{B}\cdot\nabla\ph\nonumber \\
  & =-\frac{1}{2\pi}\int\d R\d Z\,RB^{\ph}=-\frac{1}{2\pi}\int\d R\d ZB_{(\ph)}.
 \end{align}
 As a radial flux variable we use the (ribbon) poloidal flux $\psi_{\mathrm{pol}}=\psi$
-which is the negative disk poloidal flux. Since $\v B_{\mathrm{pol}}$
-can be pointed in either orientation, we add a factor $\sigma_{\mathrm{pol}}=+1$
-for counterclockwise and $\sigma_{\mathrm{pol}}=-1$ for clockwise
-direction of $\v B_{\mathrm{pol}}$ in the poloidal plane. Thus $\psi_{\mathrm{pol}}(\rho)=\sigma_{\mathrm{pol}}\rho$
-and $\psi_{\mathrm{pol}}^{\prime}(\rho)=\sigma_{\mathrm{pol}}$. The
-safety factor is then given by
+which is the negative disk poloidal flux. The safety factor is then
+given by
 \begin{align*}
 q & =\frac{\psi_{\mathrm{tor}}^{\prime}(\rho)}{\psi_{\mathrm{pol}}^{\prime}(\rho)}=\frac{\d\psi_{\mathrm{tor}}}{\d\psi_{\mathrm{pol}}}=\frac{\d\psi_{\mathrm{tor}}}{\d\psi}\\
  & =-\frac{1}{2\pi}\frac{\d}{\d\psi}\int\d R\d ZB_{(\ph)}.

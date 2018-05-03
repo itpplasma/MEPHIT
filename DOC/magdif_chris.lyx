@@ -163,6 +163,81 @@ Magnetic differential equations for stationary linear ideal MHD and their
 \end_layout
 
 \begin_layout Subsection*
+Coordinate conventions
+\end_layout
+
+\begin_layout Standard
+We use two different right-handed coordinate systems: Firstly cylindrical
+ coordinates 
+\begin_inset Formula $(R,\ph,Z)$
+\end_inset
+
+ with 
+\begin_inset Formula $\ph$
+\end_inset
+
+ running counterclockwise as seen from above, so
+\begin_inset Formula 
+\begin{align*}
+x & =R\cos\ph,\quad y=R\sin\ph,\quad z=Z.
+\end{align*}
+
+\end_inset
+
+Those coordinates are used in computations and for meshes.
+ For derivations, also symmetry flux coordinates 
+\begin_inset Formula $(\rho,\theta,\zeta)$
+\end_inset
+
+ are used at some point.
+ Here, we use the convention of d'Haeseleer with radial coordinate growing
+ towards the outside of the torus.
+ We use 
+\begin_inset Formula $\rho=\sigma_{\mathrm{pol}}\psi$
+\end_inset
+
+ with 
+\begin_inset Formula $\sigma_{\mathrm{pol}}=+1$
+\end_inset
+
+ for counterclockwise poloidal field 
+\begin_inset Formula $\v B_{0}^{\mathrm{pol}}$
+\end_inset
+
+ and 
+\begin_inset Formula $\sigma_{\mathrm{pol}}=-1$
+\end_inset
+
+ for clockwise field.
+ The toroidal symmetry angle is defined in the direction opposite to 
+\begin_inset Formula $\ph$
+\end_inset
+
+ with
+\begin_inset Formula 
+\begin{align*}
+\zeta & =\frac{\pi}{2}-\ph.
+\end{align*}
+
+\end_inset
+
+The flux angle 
+\begin_inset Formula $\theta$
+\end_inset
+
+ has the same orientation as 
+\begin_inset Formula $\vartheta=\arctan\frac{Z}{R}$
+\end_inset
+
+, so the sign 
+\begin_inset Formula $\sigma_{\mathrm{pol}}=\mathrm{sgn}(B^{\tht})=\mathrm{sgn}(B^{\theta})$
+\end_inset
+
+, so positive for counter-clockwise and negative for clockwise in the poloidal
+ plane.
+\end_layout
+
+\begin_layout Subsection*
 Safety factor (TODO: check all signs with flux coordinates)
 \end_layout
 
@@ -171,7 +246,7 @@ With the usual toroidal flux angle
 \begin_inset Formula $\zeta=\pi/2-\ph$
 \end_inset
 
- (dHaeseleer), the toroidal flux 
+ (d'Haeseleer), the toroidal flux 
 \begin_inset Formula $\psi_{\text{tor}}$
 \end_inset
 
@@ -189,32 +264,6 @@ As a radial flux variable we use the (ribbon) poloidal flux
 \end_inset
 
  which is the negative disk poloidal flux.
- Since 
-\begin_inset Formula $\v B_{\mathrm{pol}}$
-\end_inset
-
- can be pointed in either orientation, we add a factor 
-\begin_inset Formula $\sigma_{\mathrm{pol}}=+1$
-\end_inset
-
- for counterclockwise and 
-\begin_inset Formula $\sigma_{\mathrm{pol}}=-1$
-\end_inset
-
- for clockwise direction of 
-\begin_inset Formula $\v B_{\mathrm{pol}}$
-\end_inset
-
- in the poloidal plane.
- Thus 
-\begin_inset Formula $\psi_{\mathrm{pol}}(\rho)=\sigma_{\mathrm{pol}}\rho$
-\end_inset
-
- and 
-\begin_inset Formula $\psi_{\mathrm{pol}}^{\prime}(\rho)=\sigma_{\mathrm{pol}}$
-\end_inset
-
-.
  The safety factor is then given by
 \begin_inset Formula 
 \begin{align*}
