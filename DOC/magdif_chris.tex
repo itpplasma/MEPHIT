@@ -1,4 +1,4 @@
-%% LyX 2.2.2 created this file.  For more info, see http://www.lyx.org/.
+%% LyX 2.2.3 created this file.  For more info, see http://www.lyx.org/.
 %% Do not edit unless you really know what you are doing.
 \documentclass[12pt,british,english]{article}
 \usepackage[T1]{fontenc}
@@ -30,7 +30,6 @@
 \global\long\def\k{\text{k}}
 \global\long\def\i{\text{i}}
 \global\long\def\v#1{\boldsymbol{#1}}
-
 \selectlanguage{english}%
 
 \title{Magnetic differential equations for stationary linear ideal MHD and
@@ -143,7 +142,9 @@ edges,
 The term through edge $l_{3}$ orthogonal to $n_{3}\parallel\nabla\psi$
 is
 \begin{align*}
--\Psi_{3} & \approx\mp R_{3}l_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|}
+\Psi_{3} & \approx R_{3}\,\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}_{3}\\
+ & =R_{3}\,(\boldsymbol{B}_{n}^{\text{pol}}\cdot\nabla\psi)/|\nabla\psi|^{2}\\
+ & =R_{3}l_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|^{2}}(\hat{\boldsymbol{n}}_{3}\cdot\nabla\psi)
 \end{align*}
 with sign depending on edge orientation. The second term yields
 \begin{align*}
@@ -168,8 +169,7 @@ with
 \sum_{k}(\Psi_{\ph}^{(k)}+\Psi_{3}^{(k)}) & =0.
 \end{align}
 
-
-\subsection*{Reduced MHD}
+\subsection*{Reduced MHD (unfinished)}
 
 We take
 \[
@@ -183,5 +183,12 @@ Amperes law becomes
 \begin{align*}
 \boldsymbol{B}_{n} & =\frac{1}{4\pi}\boldsymbol{J}_{n}.
 \end{align*}
+
+\subsection*{Reading input files from experiment}
+\begin{itemize}
+\item ASDEX Upgrade has two formats that are common: CLISTE and EFIT/EQDSK
+(g-files)
+\item Much data in /proj/plasma/RMP/DATA/ASDEX/ and /proj/plasma/RMP/DATA2017/ASDEX/
+\end{itemize}
 
 \end{document}

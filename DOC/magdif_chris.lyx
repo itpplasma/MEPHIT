@@ -423,7 +423,9 @@ The term through edge
  is
 \begin_inset Formula 
 \begin{align*}
--\Psi_{3} & \approx\mp R_{3}l_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|}
+\Psi_{3} & \approx R_{3}\,\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}_{3}\\
+ & =R_{3}\,(\boldsymbol{B}_{n}^{\text{pol}}\cdot\nabla\psi)/|\nabla\psi|^{2}\\
+ & =R_{3}l_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|^{2}}(\hat{\boldsymbol{n}}_{3}\cdot\nabla\psi)
 \end{align*}
 
 \end_inset
@@ -478,7 +480,7 @@ Here, a compatibility condition needs to be fulfilled - the flux through
 \end_layout
 
 \begin_layout Subsection*
-Reduced MHD
+Reduced MHD (unfinished)
 \end_layout
 
 \begin_layout Standard
@@ -507,6 +509,18 @@ Amperes law becomes
 \end_inset
 
 
+\end_layout
+
+\begin_layout Subsection*
+Reading input files from experiment
+\end_layout
+
+\begin_layout Itemize
+ASDEX Upgrade has two formats that are common: CLISTE and EFIT/EQDSK (g-files)
+\end_layout
+
+\begin_layout Itemize
+Much data in /proj/plasma/RMP/DATA/ASDEX/ and /proj/plasma/RMP/DATA2017/ASDEX/
 \end_layout
 
 \end_body
