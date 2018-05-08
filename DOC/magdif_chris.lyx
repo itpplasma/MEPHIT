@@ -424,7 +424,7 @@ The term through edge
 \begin_inset Formula 
 \begin{align*}
 \Psi_{3} & \approx R_{3}\,\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}_{3}\\
- & =R_{3}\,(\boldsymbol{B}_{n}^{\text{pol}}\cdot\nabla\psi)/|\nabla\psi|^{2}\\
+ & =R_{3}\,(\boldsymbol{B}_{n}^{\text{pol}}\cdot\nabla\psi)(\boldsymbol{n}_{3}\cdot\nabla\psi)/|\nabla\psi|^{2}\\
  & =R_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|^{2}}(\boldsymbol{n}_{3}\cdot\nabla\psi)\\
  & =R_{3}l_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|^{2}}(\hat{\boldsymbol{n}}_{3}\cdot\nabla\psi)
 \end{align*}
