@@ -52,6 +52,30 @@ module magdif
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< imaginary unit in double precision
 
   real(dp), allocatable :: q(:), dqdpsi(:) !< safety factor and derivative over psi
+
+  interface
+     subroutine sub_assemble_flux_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, l, &
+          edge_index, edge_name)
+       import :: dp, triangle
+       complex(dp), dimension(:), intent(inout) :: x, d, du
+       integer, intent(in) :: kl, kp, k_low
+       real(dp), intent(in) :: Deltapsi
+       type(triangle), intent(in) :: elem
+       integer, dimension(2), intent(in) :: l
+       integer, intent(in) :: edge_index
+       character, intent(in) :: edge_name
+     end subroutine sub_assemble_flux_coeff
+  end interface
+
+  interface
+     subroutine sub_assign_flux(x, kl, kp, kp_max, k_low, ei, eo, ef)
+       import :: dp
+       complex(dp), dimension(:), intent(in) :: x
+       integer, intent(in) :: kl, kp, kp_max, k_low
+       integer, intent(in) :: ei, eo, ef
+     end subroutine sub_assign_flux
+  end interface
+
 contains
 
   !> Initialize magdif module
@@ -61,7 +85,8 @@ contains
     call read_bnflux
     call read_hpsi ! TODO: get rid of this due to redundancy with bnflux
     call init_flux_variables
-    call init_safety_factor 
+    call init_safety_factor
+    if (nonres) call compute_Bn_nonres
     if (log_info) write(logfile, *) 'magdif initialized'
   end subroutine magdif_init
 
@@ -371,6 +396,39 @@ contains
     end do
   end subroutine common_triangles
 
+  subroutine unshared_knots(common_tri, outer_knot, inner_knot)
+    integer, intent(in) :: common_tri(2)
+    type(knot), intent(out) :: outer_knot, inner_knot
+    integer, dimension(2, 3) :: set
+    integer, dimension(2) :: i_unshared
+    integer :: tri, k, n_unshared
+    character(len = *), parameter :: errmsg = &
+         'not exactly one unshared knot between triangles'
+
+    set(1, :) = mesh_element(common_tri(1))%i_knot(:)
+    set(2, :) = mesh_element(common_tri(2))%i_knot(:)
+    do tri = 1, 2
+       n_unshared = 0
+       do k = 1, 3
+          if (.not. any(set(tri, k) == set(3-tri, :))) then
+             n_unshared = n_unshared + 1
+             i_unshared(tri) = set(tri, k)
+          end if
+       end do
+       if (n_unshared /= 1) then
+          if (log_debug) write(logfile, *) errmsg
+          stop errmsg
+       end if
+    end do
+    if (i_unshared(1) > i_unshared(2)) then
+       outer_knot = mesh_point(i_unshared(1))
+       inner_knot = mesh_point(i_unshared(2))
+    else
+       outer_knot = mesh_point(i_unshared(2))
+       inner_knot = mesh_point(i_unshared(1))
+    end if
+  end subroutine unshared_knots
+
   !>Compute pressure perturbation. TODO: documentation
   subroutine compute_presn
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
@@ -412,10 +470,6 @@ contains
           lr = r - rold
           lz = z - zold
           perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz)
-          if (nonres) then
-             Bnflux(minval(common_tri), mod(mesh_element(minval(common_tri))%knot_h, 3) + 1) = &
-                  R0 / (r + rold) * 2 * abs(bphicovar) * hypot(lr, lz) * sum(perps) / (psi(kl+1) - psi(kl-1))
-          endif
           Bnpsi = Bnflux(minval(common_tri), mod(mesh_element(minval(common_tri))%knot_h, 3) + 1) / &
                (r + rold) * 2 / hypot(lr, lz) * (psi(kl+1) - psi(kl-1)) / sum(perps)
 
@@ -506,23 +560,25 @@ contains
     end if
   end subroutine get_labeled_edges
 
-  !> Compute current perturbation. TODO: documentation
-  subroutine compute_currn
-    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+  subroutine compute_triangle_flux(assemble_flux_coeff, assign_flux, pol_flux, tor_flux, &
+       outfile)
+    procedure(sub_assemble_flux_coeff) :: assemble_flux_coeff
+    procedure(sub_assign_flux) :: assign_flux
+    complex(dp), intent(inout) :: pol_flux(:,:)
+    complex(dp), intent(inout) :: tor_flux(:)
+    character(len = 1024), intent(in), optional :: outfile
+
     complex(dp), dimension(2 * nkpol) :: x, d, du
     integer :: kl, kp, kp_max, k_low
     integer :: nz
     integer, dimension(4 * nkpol) :: irow, icol
     complex(dp), dimension(4 * nkpol) :: aval
     type(triangle) :: elem
-    type(knot) :: base, tip
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     real(dp) :: Deltapsi
 
-    p = 0d0
-    open(1, file = currn_file, recl = 1024)
+    if (present(outfile)) open(1, file = outfile, recl = 1024)
     do kl = 1, nflux ! loop through flux surfaces
        select case(kl)
        case (1)
@@ -539,61 +595,156 @@ contains
        do kp = 1, kp_max
           elem = mesh_element(k_low + kp)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef)
-          ! use midpoint of edge f
-          base = mesh_point(lf(1))
-          tip = mesh_point(lf(2))
-          r = (base%rcoord + tip%rcoord) * 0.5d0
-          z = (base%zcoord + tip%zcoord) * 0.5d0
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          ! first term on source side: flux through edge f
-          x(kp) = -clight * r / Bp * (presn(lf(2)) - presn(lf(1))) - &
-               j0phi(k_low + kp) / Bp / r * Bnflux(k_low + kp, ef)
-          jnflux(k_low + kp, ef) = x(kp)
-          ! use midpoint of edge i
-          base = mesh_point(li(1))
-          tip = mesh_point(li(2))
-          r = (base%rcoord + tip%rcoord) * 0.5d0
-          z = (base%zcoord + tip%zcoord) * 0.5d0
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          ! diagonal matrix element
-          d(kp) = -1d0 - imun * n * elem%det_3 * 0.25d0 * Bp / Deltapsi
-          ! additional term from edge i on source side
-          x(kp) = x(kp) - imun * n * elem%det_3 * 0.25d0 * ( &
-               clight * r / -Deltapsi * (presn(li(2)) - presn(li(1)) - &
-               Bnphi(k_low + kp) / r / Bp * (pres0(kl) - pres0(kl-1))) + &
-               j0phi(k_low + kp) * (Bnphi(k_low + kp) / Bp + Bnflux(k_low + kp, ei) / r / (-Deltapsi)))
-          ! use midpoint of edge o
-          base = mesh_point(lo(1))
-          tip = mesh_point(lo(2))
-          r = (base%rcoord + tip%rcoord) * 0.5d0
-          z = (base%zcoord + tip%zcoord) * 0.5d0
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          ! superdiagonal matrix element
-          du(kp) = 1d0 - imun * n * elem%det_3 * 0.25d0 * Bp / Deltapsi
-          ! additional term from edge o on source side
-          x(kp) = x(kp) - imun * n * elem%det_3 * 0.25d0 * ( &
-               clight * r / Deltapsi * (presn(lo(2)) - presn(lo(1)) - &
-               Bnphi(k_low + kp) / r / Bp * (pres0(kl-1) - pres0(kl))) + &
-               j0phi(k_low + kp) * (Bnphi(k_low + kp) / Bp + Bnflux(k_low + kp, eo) / r / Deltapsi))
+          call assemble_flux_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, lf, ef, 'f')
+          call assemble_flux_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, li, ei, 'i')
+          call assemble_flux_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, lo, eo, 'o')
        end do
        call assemble_sparse(kp_max, d(:kp_max), du(:kp_max), nz, irow(:2*kp_max), icol(:2*kp_max), aval(:2*kp_max))
        call sparse_solve(kp_max, kp_max, nz, irow(:nz), icol(:nz), aval(:nz), x(:kp_max))
        do kp = 1, kp_max
           elem = mesh_element(k_low + kp)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef)
-          jnflux(k_low + kp, ei) = -x(kp)
-          jnflux(k_low + kp, eo) = x(mod(kp, kp_max) + 1)
-          jnphi(k_low + kp) = sum(jnflux(k_low + kp, :)) * imun / n
-          write(1, *) real(jnflux(k_low + kp, 1)), aimag(jnflux(k_low + kp, 1)), &
-               real(jnflux(k_low + kp, 2)), aimag(jnflux(k_low + kp, 2)), &
-               real(jnflux(k_low + kp, 3)), aimag(jnflux(k_low + kp, 3)), &
-               real(jnphi(k_low + kp)), aimag(jnphi(k_low + kp))
+          call assign_flux(x, kl, kp, kp_max, k_low, ei, eo, ef)
+          if (present(outfile)) write(1, *) &
+               real(pol_flux(k_low + kp, 1)), aimag(pol_flux(k_low + kp, 1)), &
+               real(pol_flux(k_low + kp, 2)), aimag(pol_flux(k_low + kp, 2)), &
+               real(pol_flux(k_low + kp, 3)), aimag(pol_flux(k_low + kp, 3)), &
+               real(tor_flux(k_low + kp)), aimag(tor_flux(k_low + kp))
        end do
     end do
-    close(1)
+    if (present(outfile)) close(1)
+  end subroutine compute_triangle_flux
+
+  subroutine assemble_currn_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, l, &
+       edge_index, edge_name)
+
+    complex(dp), dimension(:), intent(inout) :: x, d, du
+    integer, intent(in) :: kl, kp, k_low
+    real(dp), intent(in) :: Deltapsi
+    type(triangle), intent(in) :: elem
+    integer, dimension(2), intent(in) :: l
+    integer, intent(in) :: edge_index
+    character, intent(in) :: edge_name
+
+    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+    type(knot) :: base, tip
+
+    p = 0d0
+    ! use midpoint of edge
+    base = mesh_point(l(1))
+    tip = mesh_point(l(2))
+    r = (base%rcoord + tip%rcoord) * 0.5d0
+    z = (base%zcoord + tip%zcoord) * 0.5d0
+    call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+    select case (edge_name)
+    case ('f')
+       ! first term on source side: flux through edge f
+       x(kp) = -clight * r / Bp * (presn(l(2)) - presn(l(1))) - &
+            j0phi(k_low + kp) / Bp / r * Bnflux(k_low + kp, edge_index)
+       jnflux(k_low + kp, edge_index) = x(kp)
+    case ('i')
+       ! diagonal matrix element
+       d(kp) = -1d0 - imun * n * elem%det_3 * 0.25d0 * Bp / Deltapsi
+       ! additional term from edge i on source side
+       x(kp) = x(kp) - imun * n * elem%det_3 * 0.25d0 * (clight * r / -Deltapsi * &
+            (presn(l(2)) - presn(l(1)) - Bnphi(k_low + kp) / r / Bp * &
+            (pres0(kl) - pres0(kl-1))) + j0phi(k_low + kp) * (Bnphi(k_low + kp) / Bp + &
+            Bnflux(k_low + kp, edge_index) / r / (-Deltapsi)))
+    case ('o')
+       ! superdiagonal matrix element
+       du(kp) = 1d0 - imun * n * elem%det_3 * 0.25d0 * Bp / Deltapsi
+       ! additional term from edge o on source side
+       x(kp) = x(kp) - imun * n * elem%det_3 * 0.25d0 * (clight * r / Deltapsi * &
+            (presn(l(2)) - presn(l(1)) - Bnphi(k_low + kp) / r / Bp * &
+            (pres0(kl-1) - pres0(kl))) + j0phi(k_low + kp) * (Bnphi(k_low + kp) / Bp + &
+            Bnflux(k_low + kp, edge_index) / r / Deltapsi))
+    end select
+  end subroutine assemble_currn_coeff
+
+  subroutine assign_currn(x, kl, kp, kp_max, k_low, ei, eo, ef)
+    complex(dp), dimension(:), intent(in) :: x
+    integer, intent(in) :: kl, kp, kp_max, k_low
+    integer, intent(in) :: ei, eo, ef
+    jnflux(k_low + kp, ei) = -x(kp)
+    jnflux(k_low + kp, eo) = x(mod(kp, kp_max) + 1)
+    jnphi(k_low + kp) = sum(jnflux(k_low + kp, :)) * imun / n
+  end subroutine assign_currn
+
+  subroutine compute_currn
+    call compute_triangle_flux(assemble_currn_coeff, assign_currn, jnflux, jnphi, currn_file)
   end subroutine compute_currn
+
+  subroutine assemble_Bn_nonres_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, l, &
+       edge_index, edge_name)
+
+    complex(dp), dimension(:), intent(inout) :: x, d, du
+    integer, intent(in) :: kl, kp, k_low
+    real(dp), intent(in) :: Deltapsi
+    type(triangle), intent(in) :: elem
+    integer, dimension(2), intent(in) :: l
+    integer, intent(in) :: edge_index
+    character, intent(in) :: edge_name
+
+    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+    type(knot) :: base, tip, outer, inner
+    integer :: common_tri(2)
+    real(dp) :: dpsi_dr, dpsi_dz, nr, nz
+
+    select case (edge_name)
+    case ('f')
+       p = 0d0
+       ! use midpoint of edge
+       base = mesh_point(l(1))
+       tip = mesh_point(l(2))
+       call common_triangles(base, tip, common_tri)
+       call unshared_knots(common_tri, outer, inner)
+       r = (base%rcoord + tip%rcoord) * 0.5d0
+       z = (base%zcoord + tip%zcoord) * 0.5d0
+       call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+            dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+       dpsi_dr = (psi(kl+1) - psi(kl-1)) / (outer%rcoord - inner%rcoord)
+       dpsi_dz = (psi(kl+1) - psi(kl-1)) / (outer%zcoord - inner%zcoord)
+       nr = (tip%zcoord - base%zcoord)
+       nz = -(tip%rcoord - base%rcoord)  ! normal pointing out of the triangle
+       Bnflux(k_low + kp, edge_index) = Bp * R0 / r * (nr * dpsi_dr + nz * dpsi_dz) / &
+            (dpsi_dr ** 2 + dpsi_dz ** 2)
+       ! use weighted triangle midpoint
+       call ring_centered_avg_coord(elem, r, z)
+       call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+            dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+       Bnphi(k_low + kp) = Bp * R0 / r ** 2 * imun / n / q(kl) * &
+            (dqdpsi(kl) + dqdpsi(kl-1)) * 0.5d0
+       x(kp) = -Bnflux(k_low + kp, edge_index) - imun * n * elem%det_3 * 0.5d0 * r * &
+            Bnphi(k_low + kp)
+    case ('i')
+       d(kp) = -1d0
+    case ('o')
+       du(kp) = 1d0
+    end select
+  end subroutine assemble_Bn_nonres_coeff
+
+  subroutine assign_Bn_nonres(x, kl, kp, kp_max, k_low, ei, eo, ef)
+    complex(dp), dimension(:), intent(in) :: x
+    integer, intent(in) :: kl, kp, kp_max, k_low
+    integer, intent(in) :: ei, eo, ef
+    Bnflux(k_low + kp, ei) = -x(kp)
+    Bnflux(k_low + kp, eo) = x(mod(kp, kp_max) + 1)
+  end subroutine assign_Bn_nonres
+
+  subroutine compute_Bn_nonres
+    integer :: k
+    call compute_triangle_flux(assemble_Bn_nonres_coeff, assign_Bn_nonres, Bnflux, Bnphi)
+    do k = 1, ntri
+       if (abs((sum(Bnflux(k,:)) + imun * n * Bnphi(k) * mesh_element(k)%det_3 * 0.5d0) &
+            / sum(Bnflux(k,:))) > 1d-10) then
+          if (log_err) write(logfile, *) 'nonresonant B_n not divergence free'
+          stop 'nonresonant B_n not divergence free'
+       end if
+    end do
+
+  end subroutine compute_Bn_nonres
 
 end module magdif
