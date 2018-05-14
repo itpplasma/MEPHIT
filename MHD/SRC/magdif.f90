@@ -5,29 +5,11 @@ module magdif
        mesh_element_rmp, bphicovar, knot, triangle
   use for_macrostep, only : t_min, d_min
   use sparse_mod, only: remap_rc, sparse_solve, sparse_matmul
+  use magdif_config, only: log_level, log_err, log_warn, log_info, log_debug,&
+       nonres, point_file, tri_file, Bnflux_file, hpsi_file, presn_file, currn_file, &
+       n, nkpol, nflux, ti0, di0
 
   implicit none
-
-  integer log_level
-  logical :: log_err, log_warn, log_info, log_debug ! specify log levels
-  logical :: nonres = .false.  !< use non-resonant test case
-
-  character(len=1024) :: point_file   !< input data file for mesh points
-  character(len=1024) :: tri_file     !< input data file for triangles and edges
-  character(len=1024) :: Bnflux_file  !< input data file for magnetic field perturbation
-  character(len=1024) :: hpsi_file    !< input data file for \f$ h_{n}^{\psi} \f$
-  character(len=1024) :: config_file  !< input config file for namelist settings
-  character(len=1024) :: presn_file   !< output data file for pressure perturbation
-  character(len=1024) :: currn_file   !< output data file for current perturbation
-
-  integer  :: n               !< harmonic index of perturbation
-  integer  :: nkpol           !< number of knots per poloidal loop
-  integer  :: nflux           !< number of flux surfaces
-  real(dp) :: ti0             !< interpolation step for temperature
-  real(dp) :: di0             !< interpolation step for density
-
-  namelist / settings / log_level, nonres, point_file, tri_file, Bnflux_file, hpsi_file, presn_file, currn_file, &
-       n, nkpol, nflux, ti0, di0  !< namelist for input parameters
 
   integer, parameter :: logfile = 6             !< log to stdout, TODO: make this configurable
 
@@ -80,7 +62,6 @@ contains
 
   !> Initialize magdif module
   subroutine magdif_init
-    call read_config(config_file)
     call read_mesh
     call read_bnflux
     call read_hpsi ! TODO: get rid of this due to redundancy with bnflux
@@ -111,25 +92,6 @@ contains
     if (allocated(mesh_element_rmp)) deallocate(mesh_element_rmp)
     if (log_info) write(logfile, *) 'magdif cleanup finished'
   end subroutine magdif_cleanup
-
-  !> Read configuration file for magdif
-  !! @param config_filename file name of config file
-  subroutine read_config(config_filename)
-    character(len = *) :: config_filename
-
-    open(1, file = config_filename)
-    read(1, nml = settings)
-    close(1)
-
-    log_err = .false.
-    log_warn = .false.
-    log_info = .false.
-    log_debug = .false.
-    if (log_level > 0) log_err = .true.
-    if (log_level > 1) log_warn = .true.
-    if (log_level > 2) log_info = .true.
-    if (log_level > 3) log_debug = .true.
-  end subroutine read_config
 
   !> Read mesh points and triangles
   subroutine read_mesh
@@ -177,9 +139,11 @@ contains
        Bnphi(k) = cmplx(dummy8(7), dummy8(8), dp)
 
        if (abs((sum(Bnflux(k,:)) + imun * n * Bnphi(k) * mesh_element(k)%det_3 * 0.5d0) &
-            / sum(Bnflux(k,:))) > 1d-10) then
-          if (log_err) write(logfile, *) 'vacuum B_n not divergence free'
-          stop 'vacuum B_n not divergence free'
+            / sum(Bnflux(k,:))) > 1d-6) then
+          if (log_err) write(logfile, *) 'B_n not divergence free: ',&
+               abs((sum(Bnflux(k,:)) + imun * n * Bnphi(k) * mesh_element(k)%det_3 * 0.5d0) &
+            / sum(Bnflux(k,:)))
+          stop 'B_n not divergence free'
        end if
     end do
     close(1)
@@ -577,6 +541,9 @@ contains
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     real(dp) :: Deltapsi
+    integer :: ktri
+
+    ktri = 0
 
     if (present(outfile)) open(1, file = outfile, recl = 1024)
     do kl = 1, nflux ! loop through flux surfaces
@@ -599,7 +566,8 @@ contains
           call assemble_flux_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, li, ei, 'i')
           call assemble_flux_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, lo, eo, 'o')
        end do
-       call assemble_sparse(kp_max, d(:kp_max), du(:kp_max), nz, irow(:2*kp_max), icol(:2*kp_max), aval(:2*kp_max))
+       call assemble_sparse(kp_max, d(:kp_max), du(:kp_max), nz, irow(:2*kp_max),&
+            icol(:2*kp_max), aval(:2*kp_max))
        call sparse_solve(kp_max, kp_max, nz, irow(:nz), icol(:nz), aval(:nz), x(:kp_max))
        do kp = 1, kp_max
           elem = mesh_element(k_low + kp)
@@ -610,9 +578,17 @@ contains
                real(pol_flux(k_low + kp, 2)), aimag(pol_flux(k_low + kp, 2)), &
                real(pol_flux(k_low + kp, 3)), aimag(pol_flux(k_low + kp, 3)), &
                real(tor_flux(k_low + kp)), aimag(tor_flux(k_low + kp))
+          ktri = ktri+1
        end do
     end do
-    if (present(outfile)) close(1)
+    
+    if (present(outfile)) then
+       do while (ktri<ntri)
+          write(1, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+          ktri = ktri+1
+       end do
+       close(1)
+    end if
   end subroutine compute_triangle_flux
 
   subroutine assemble_currn_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, l, &
@@ -648,7 +624,7 @@ contains
        ! diagonal matrix element
        d(kp) = -1d0 - imun * n * elem%det_3 * 0.25d0 * Bp / Deltapsi
        ! additional term from edge i on source side
-       x(kp) = x(kp) - imun * n * elem%det_3 * 0.25d0 * (clight * r / -Deltapsi * &
+       x(kp) = x(kp) - imun * n * elem%det_3 * 0.25d0 * (clight * r / (-Deltapsi) * &
             (presn(l(2)) - presn(l(1)) - Bnphi(k_low + kp) / r / Bp * &
             (pres0(kl) - pres0(kl-1))) + j0phi(k_low + kp) * (Bnphi(k_low + kp) / Bp + &
             Bnflux(k_low + kp, edge_index) / r / (-Deltapsi)))
