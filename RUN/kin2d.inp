@@ -1,9 +1,9 @@
 5d6                      bmod_ref                   ! reference field, G, for Boozer $B_{00}$
-2000000  5.d13  5.d2       nptrace, source0, T_source ! number of particles to trace, source intensity & T(eV)  
+10000000  5.d13  5.d2       nptrace, source0, T_source ! number of particles to trace, source intensity & T(eV)  
 0.d0                     relax_tau                  ! underrelaxation factor for lifetime
 1.d4  3.d0               wcv(1), wct(1)             ! weights of cells for electrons
 1.d4  5.d1               wcv(2), wct(2)             ! weights of cells for ions
 1.d4                     D_perp                     ! anomalous diffusion, cm^2/s
 1     1                  n_evol, n_prfs             ! number of steps between outputs (average vals. and profiles)
-2000000                   npgroup                    ! portion for 1 macrostep
+10000000                     npgroup                    ! portion for 1 macrostep
 .false.                  restart                    ! restart from the last output (single PE) 

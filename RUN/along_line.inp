@@ -1,3 +1,3 @@
-172.d0 10.d0  !R_start, Z_start ! start point
+170.d0 -80.d0  !R_start, Z_start ! start point
 0.25d0 0.1d0    !alpha, ddt       ! angle/(2pi), subdivision factor
-1              !isort            ! particle species
+1               !isort            ! particle species

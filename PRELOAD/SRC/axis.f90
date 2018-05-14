@@ -45,8 +45,8 @@ program axis
   real*8, dimension(1:nt_core) :: delta_theta
   logical :: out_of_cw, wall_touch
   integer :: ibou_b2_pfr, ibou_b2_sol, number_of_points
-!  integer, parameter :: n_rational = 0
-  integer, parameter :: n_rational = 5 ! for refinement at rational surfaces
+  integer, parameter :: n_rational = 0
+!  integer, parameter :: n_rational = 5 ! for refinement at rational surfaces
   real*8 :: d_rational(n_rational) ! TODO: don't hardcode this
   real*8 :: tau_rad, tau_rad_old
   integer :: nr_core
@@ -54,23 +54,23 @@ program axis
   external fff, rkqs, f_min, f_root
 
   ! for case "finer"
-!  d_rational(1) = .5675d0  ! q=1.5
-!  d_rational(2) = .694d0  ! q=2 
-!  d_rational(3) = .7585d0  ! q=2.5
-!  d_rational(4) = .808d0  ! q=3
-!  d_rational(5) = .850d0  ! q=3.5
-!  d_rational(6) = .8905d0 ! q=4
-!  d_rational(7) = .9413d0  ! q=4.5
-!  d_rational(8) = .971d0  ! q=5
-!  d_rational(9) = .985d0  ! q=5.5
-  !  d_rational(10) = .997d0 ! q=6
+!!  d_rational(1) = .5675d0  ! q=1.5
+!!  d_rational(2) = .694d0  ! q=2 
+!!  d_rational(3) = .7585d0  ! q=2.5
+!!  d_rational(4) = .808d0  ! q=3
+!!  d_rational(5) = .850d0  ! q=3.5
+!!  d_rational(6) = .8905d0 ! q=4
+!!  d_rational(7) = .9413d0  ! q=4.5
+!!  d_rational(8) = .971d0  ! q=5
+!!  d_rational(9) = .985d0  ! q=5.5
+!  !  d_rational(10) = .997d0 ! q=6
   
-  d_rational(1) = .335d0  ! q=1.5
-  d_rational(2) = .445d0  ! q=2 
-  d_rational(3) = .506d0  ! q=2.5
-  d_rational(4) = .561d0  ! q=3
-  d_rational(5) = .611d0  ! q=3.5
-  ! d_rational(6) = .667d0 ! q=4.0
+!  d_rational(1) = .335d0  ! q=1.5
+!  d_rational(2) = .445d0  ! q=2 
+!  d_rational(3) = .506d0  ! q=2.5
+!  d_rational(4) = .561d0  ! q=3
+!  d_rational(5) = .611d0  ! q=3.5
+!  ! d_rational(6) = .667d0 ! q=4.0
   
   open(11, file='flt.inp')
   read(11,*)
