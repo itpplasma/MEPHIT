@@ -33,7 +33,7 @@ use esche_hujnja
   integer :: look_4_tri, itri_sav, n_bou, leg_entry
   external check_in_tri, look_4_tri
 !
-  double complex :: cdummy,expon,countden,countpres,countparcurr
+  double complex :: cdummy,expon,countden,countpres_perp,countpres_par,countparcurr
 !
   double precision :: bphicovar_interp, psival(3), psi, psi_h
   
@@ -64,7 +64,8 @@ use esche_hujnja
         +(vperp**2+vpar**2)*mesh_element_rmp(ind_tri)%bnorm_times_thermforces(2,isort))
   if(do_averages) then
     countden=wpart_rmp*conjg(expon)/R
-    countpres=wpart_rmp*conjg(expon)*vperp**2/R
+    countpres_perp=wpart_rmp*conjg(expon)*vperp**2/R
+    countpres_par=wpart_rmp*conjg(expon)*vpar**2/R
     countparcurr=wpart_rmp*conjg(expon)*vpar/R
   endif
 !
@@ -86,17 +87,21 @@ use esche_hujnja
   wpart_rmp=(wpart_rmp+0.5d0*dt*cdummy)/(1.d0+damp_prob)
   if(do_averages) then
     countden=countden+wpart_rmp*conjg(expon)/R
-    countpres=countpres+wpart_rmp*conjg(expon)*vperp**2/R
+    countpres_perp=countpres_perp+wpart_rmp*conjg(expon)*vperp**2/R
+    countpres_par=countpres_par+wpart_rmp*conjg(expon)*vpar**2/R
     countparcurr=countparcurr+wpart_rmp*conjg(expon)*vpar/R
 !
     countden=countden*0.5d0*dt*wpartsrr*echarge*charge(isort)
-    countpres=countpres*amass(isort)*0.25d0*dt*wpartsrr
+    countpres_perp=countpres_perp*amass(isort)*0.25d0*dt*wpartsrr
+    countpres_par=countpres_par*amass(isort)*0.5d0*dt*wpartsrr
     countparcurr=countparcurr*0.5d0*dt*wpartsrr*echarge*charge(isort)
-    mesh_element_rmp(ind_tri)%denspert(isort)                         &
+    mesh_element_rmp(ind_tri)%denspert(isort)                             &
         = mesh_element_rmp(ind_tri)%denspert(isort) + countden
-    mesh_element_rmp(ind_tri)%pprespert(isort)                        &
-        = mesh_element_rmp(ind_tri)%pprespert(isort) + countpres
-    mesh_element_rmp(ind_tri)%parcurrpert(isort)                      &
+    mesh_element_rmp(ind_tri)%prespert_perp(isort)                        &
+        = mesh_element_rmp(ind_tri)%prespert_perp(isort) + countpres_perp
+    mesh_element_rmp(ind_tri)%prespert_par(isort)                         &
+        = mesh_element_rmp(ind_tri)%prespert_par(isort) + countpres_par
+    mesh_element_rmp(ind_tri)%parcurrpert(isort)                          &
         = mesh_element_rmp(ind_tri)%parcurrpert(isort) + countparcurr
   endif
 !
@@ -349,6 +354,7 @@ integer :: jjj, j
     vpar=(vpar*binv0+apsir_pt*(R-Rnew)+apsiz_pt*(Z-Znew))/binv
     R=Rnew
     Z=Znew
+    phi=phinew
     return
   endif
 !

@@ -50,7 +50,7 @@ program k2d
   double precision, dimension(:), allocatable :: D_ephi
   double precision, dimension(:,:), allocatable :: D_j, D_q, D_tm
   double precision, dimension(nsorts) :: D_time_l, part_sink, temp_out
-  double precision :: dummy_re,dummy_im
+  double precision :: dummy_re,dummy_im,triangle_area
   double complex   :: bnorm_vac,cur1,cur2
   double precision :: eps_urelax,delta,dens_reduce_factor
   double precision, dimension(3) :: R_vert,Z_vert
@@ -64,6 +64,7 @@ program k2d
   double complex, dimension(:), allocatable :: coefren
   integer,        dimension(:), allocatable :: ipiv
   double complex, dimension(:,:), allocatable :: amat, bvec
+  double complex, dimension(:,:), allocatable :: cdummy_foraveraging
   
   logical :: do_arnoldi, precond
   
@@ -344,8 +345,10 @@ do_arnoldi = .False.
      endif
   endif
 
+#ifdef PARALLEL
   call MPI_BCAST(ngrow, 1, MPI_INTEGER4, mpi_p_root, MPI_COMM_WORLD, ierr)
   call MPI_BCAST(do_arnoldi, 1, MPI_INTEGER4, mpi_p_root, MPI_COMM_WORLD, ierr)
+#endif
   
   
      
@@ -386,7 +389,9 @@ do_arnoldi = .False.
 !else
 !print *, mype, 'not root', ngrow
         endif
+#ifdef PARALLEL
         call MPI_BCAST(bnorm_plas, ntri, MPI_DOUBLE_COMPLEX, mpi_p_root, MPI_COMM_WORLD, ierr)
+#endif
      endif
      bnorm_plas_prev = bnorm_plas
   end do
@@ -417,14 +422,20 @@ contains
 !print *, mype, cg_rng
     end if
      
+!open(1,file='PLOTTING/bnormtimesthemforces.dat')
     do i=1,ntri
        mesh_element_rmp(i)%currents(:,:)=(0.d0,0.d0)
        mesh_element_rmp(i)%denspert(:)=(0.d0,0.d0)
-       mesh_element_rmp(i)%pprespert(:)=(0.d0,0.d0)
+       mesh_element_rmp(i)%prespert_perp(:)=(0.d0,0.d0)
+       mesh_element_rmp(i)%prespert_par(:)=(0.d0,0.d0)
        mesh_element_rmp(i)%parcurrpert(:)=(0.d0,0.d0)
        mesh_element_rmp(i)%bnorm_times_thermforces=mesh_element(i)%thermforces &
             *(mesh_element_rmp(i)%bnorm_vac+hold(i))
+!write(1,*) real(mesh_element_rmp(i)%bnorm_times_thermforces), &
+!           dimag(mesh_element_rmp(i)%bnorm_times_thermforces)
     end do
+!close(1)
+!stop
     
     if(.false.) then !=====>turn off update<=====
        do i=2,npoint ! excluding O-point
@@ -697,6 +708,76 @@ contains
        write(1) cg_rng
        close(1)
 !
+!-----------------------------
+! Averaging over quadrangles:
+!
+       allocate(cdummy_foraveraging(nsorts,ntri))
+!
+! density:
+       do i=1,ntri
+         r_bc = sum(mesh_point(mesh_element(i)%i_knot(:))%rcoord)*one3rd
+         triangle_area=mesh_element(i)%V_tri/(2.d0*pi*r_bc)
+         cdummy_foraveraging(:,i)=mesh_element_rmp(i)%denspert(:)/triangle_area
+       enddo
+!
+       call quadrangle_averaging(nsorts,ntri,cdummy_foraveraging)
+!
+       open(1,file='PLOTTING/dens_toplot.dat')
+       do i=1,ntri
+         write (1,*) real(cdummy_foraveraging(:,i)), dimag(cdummy_foraveraging(:,i))
+       enddo
+       close(1)
+!
+! perpendicular pressure:
+       do i=1,ntri
+         r_bc = sum(mesh_point(mesh_element(i)%i_knot(:))%rcoord)*one3rd
+         triangle_area=mesh_element(i)%V_tri/(2.d0*pi*r_bc)
+         cdummy_foraveraging(:,i)=mesh_element_rmp(i)%prespert_perp(:)/triangle_area
+       enddo
+!
+       call quadrangle_averaging(nsorts,ntri,cdummy_foraveraging)
+!
+       open(1,file='PLOTTING/perppres_toplot.dat')
+       do i=1,ntri
+         write (1,*) real(cdummy_foraveraging(:,i)), dimag(cdummy_foraveraging(:,i))
+       enddo
+       close(1)
+!
+! parallel current density
+       do i=1,ntri
+         r_bc = sum(mesh_point(mesh_element(i)%i_knot(:))%rcoord)*one3rd
+         triangle_area=mesh_element(i)%V_tri/(2.d0*pi*r_bc)
+         cdummy_foraveraging(:,i)=mesh_element_rmp(i)%prespert_par(:)/triangle_area
+       enddo
+!
+       call quadrangle_averaging(nsorts,ntri,cdummy_foraveraging)
+!
+       open(1,file='PLOTTING/parpres_toplot.dat')
+       do i=1,ntri
+         write (1,*) real(cdummy_foraveraging(:,i)), dimag(cdummy_foraveraging(:,i))
+       enddo
+       close(1)
+!
+! parallel stress tensor component (approximately - parallel pressure):
+       do i=1,ntri
+         r_bc = sum(mesh_point(mesh_element(i)%i_knot(:))%rcoord)*one3rd
+         triangle_area=mesh_element(i)%V_tri/(2.d0*pi*r_bc)
+         cdummy_foraveraging(:,i)=mesh_element_rmp(i)%parcurrpert(:)/triangle_area
+       enddo
+!
+       call quadrangle_averaging(nsorts,ntri,cdummy_foraveraging)
+!
+       open(1,file='PLOTTING/parcurr_toplot.dat')
+       do i=1,ntri
+         write (1,*) real(cdummy_foraveraging(:,i)), dimag(cdummy_foraveraging(:,i))
+       enddo
+       close(1)
+!
+       deallocate(cdummy_foraveraging)
+!
+! End averaging over quadrangles
+!-----------------------------------
+!
        open(1,file='PLOTTING/curr_toplot.dat')
        open(2,file='PLOTTING/dens_toplot.dat')
        open(3,file='PLOTTING/ppres_toplot.dat')
@@ -748,6 +829,7 @@ contains
                dimag(mesh_element_rmp(i)%currents(:,2))
        enddo
        close(1)
+ stop      
 !
        call update_field(ierr)
        print *,'Maxwell solver exit status = ',ierr
@@ -769,8 +851,10 @@ contains
 !
 !
     end if
+#ifdef PARALLEL
     call MPI_BARRIER(MPI_COMM_WORLD,ierr)
     call MPI_BCAST(hnew, ntri, MPI_DOUBLE_COMPLEX, mpi_p_root, MPI_COMM_WORLD, ierr)
+#endif
     !print *,'T min = ', minval(T_therm), mype, '4'
     
 204 format(1000(ES12.5E2,1X))
@@ -1491,3 +1575,26 @@ endif ! TEST: NO PROFILE UPDATES
 
 
 end program k2d
+!
+!cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+!
+  subroutine quadrangle_averaging(m,n,a)
+!
+! Averages m quantities specified in n triangles over quadrangles containing pairs of triangles.
+! Takes itno account the shift in triangle numbering due to triangles shearing the magnetic axis
+! (these triangles are non-standard and they stand first in the list - shift depends on the parity
+! of number of these triangles).
+!
+  implicit none
+!
+  integer :: m,n,i,j
+  double complex, dimension(m,n) :: a
+!
+  j=modulo(n,2)+2
+!
+  do i=j,n,2
+    a(:,i)=0.5d0*(a(:,i)+a(:,i-1))
+    a(:,i-1)=a(:,i)
+  enddo
+!
+  end subroutine quadrangle_averaging
