@@ -27,7 +27,16 @@ program axis
   real*8 :: R_dpl_1, Z_dpl_1, R_dpl_2, Z_dpl_2, theta_dpl, R_cw_dpl, Z_cw_dpl
 ! mesh resolution:
 !  integer, parameter :: iterat=200, nt_core=100, nr_core=20, nr_pfr=30, nt_pfr=20, nr_sol=20 
-  integer, parameter :: iterat=200, nt_core=100, nr_core=20, nr_pfr=30, nt_pfr=20, nr_sol=20 
+!
+! case: "finer":
+  integer, parameter :: iterat=200, nt_core=200, nr_core_max=150, nr_pfr=30, nt_pfr=20, nr_sol=60 
+! case: "coarse":
+!  integer, parameter :: iterat=200, nt_core=100, nr_core_max=100, nr_pfr=30, nt_pfr=20, nr_sol=60
+! case: "fine":
+!  integer, parameter :: iterat=200, nt_core=200, nr_core_max=200, nr_pfr=30, nt_pfr=20, nr_sol=60
+! case: "extracoarse":
+!integer, parameter :: iterat=200, nt_core=50, nr_core_max=30, nr_pfr=30, nt_pfr=20, nr_sol=20  
+  
   integer, parameter :: nt_sol=nt_core+2*nt_pfr+1
   real*8, dimension(1:nt_sol) :: R_sep, Z_sep
   real*8, dimension(:), allocatable :: R_0_sol, Z_0_sol, psif_0_sol
@@ -36,8 +45,33 @@ program axis
   real*8, dimension(1:nt_core) :: delta_theta
   logical :: out_of_cw, wall_touch
   integer :: ibou_b2_pfr, ibou_b2_sol, number_of_points
+!  integer, parameter :: n_rational = 0
+  integer, parameter :: n_rational = 5 ! for refinement at rational surfaces
+  real*8 :: d_rational(n_rational) ! TODO: don't hardcode this
+  real*8 :: tau_rad, tau_rad_old
+  integer :: nr_core
+  
   external fff, rkqs, f_min, f_root
 
+  ! for case "finer"
+!  d_rational(1) = .5675d0  ! q=1.5
+!  d_rational(2) = .694d0  ! q=2 
+!  d_rational(3) = .7585d0  ! q=2.5
+!  d_rational(4) = .808d0  ! q=3
+!  d_rational(5) = .850d0  ! q=3.5
+!  d_rational(6) = .8905d0 ! q=4
+!  d_rational(7) = .9413d0  ! q=4.5
+!  d_rational(8) = .971d0  ! q=5
+!  d_rational(9) = .985d0  ! q=5.5
+  !  d_rational(10) = .997d0 ! q=6
+  
+  d_rational(1) = .335d0  ! q=1.5
+  d_rational(2) = .445d0  ! q=2 
+  d_rational(3) = .506d0  ! q=2.5
+  d_rational(4) = .561d0  ! q=3
+  d_rational(5) = .611d0  ! q=3.5
+  ! d_rational(6) = .667d0 ! q=4.0
+  
   open(11, file='flt.inp')
   read(11,*)
   read(11,*)
@@ -147,6 +181,7 @@ program axis
   enddo
   R_o = raxis
   Z_o = zaxis
+  print *, "Axis: "
   write(*,*) raxis, zaxis, psif
 
 ! X-point, coordinate-wise minimization (min and minus max):
@@ -179,6 +214,7 @@ program axis
      write(111,101) x1_min, x2_min, z_min
 
   enddo
+  print *, "X-point: "
   print *, x1_min, x2_min, z_min
   R_x = x1_min 
   Z_x = x2_min
@@ -186,14 +222,33 @@ program axis
 ! core region, lines of psi=const:
   R0 = R_o ! for f_root (will be changed for PFR)
   Z0 = Z_o
-  delta_xo = 1.d0/dfloat(nr_core-1)
-  allocate(R_o_x(nr_core+1), Z_o_x(nr_core+1), psif_o_x(nr_core+1), &
-       R_coord(nt_core,nr_core+1), Z_coord(nt_core,nr_core+1), ipoi_core(nt_core+1,nr_core+1))
+  delta_xo = 2.d0/dfloat(nr_core_max-1)
+  allocate(R_o_x(nr_core_max+1), Z_o_x(nr_core_max+1), psif_o_x(nr_core_max+1), &
+       R_coord(nt_core,nr_core_max+1), Z_coord(nt_core,nr_core_max+1), ipoi_core(nt_core+1,nr_core_max+1))
 ! nt_core+1 to close the array ipoint after period
 
-  do i=1,nr_core
-     R_o_x(i) = R_x + sqrt(1.d0-delta_xo*dfloat(i-1))*(R_o - R_x)  
-     Z_o_x(i) = Z_x + sqrt(1.d0-delta_xo*dfloat(i-1))*(Z_o - Z_x)
+!
+  open(112,file='RZpsirho.dat')
+!
+  do i=1,nr_core_max
+     if (i==1) then
+        tau_rad = 0.0
+        tau_rad_old = 0.0
+     else
+        tau_rad = tau_rad_old + delta_xo/&
+             (1.d0+5.d0*sum(exp(-(tau_rad_old-d_rational)**2/8d-3**2)))
+        tau_rad_old = tau_rad
+     end if
+     if(tau_rad > 1.d0) then
+        R_o_x(i) = R_x  
+        Z_o_x(i) = Z_x 
+    else
+        R_o_x(i) = R_x + (1.d0-tau_rad)*(R_o - R_x)
+        Z_o_x(i) = Z_x + (1.d0-tau_rad)*(Z_o - Z_x)
+        
+    !   R_o_x(i) = R_x + sqrt(1.d0-tau_rad)*(R_o - R_x)  
+    !   Z_o_x(i) = Z_x + sqrt(1.d0-tau_rad)*(Z_o - Z_x)
+     end if
      R_coord(1,i) = R_o_x(i)
      Z_coord(1,i) = Z_o_x(i)
      ppp = 0.d0
@@ -203,6 +258,10 @@ program axis
           ,dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
      psif_o_x(i) = psif
      write(112,101)R_o_x(i), Z_o_x(i), psif_o_x(i), sqrt((R_coord(1,i)-R_o)**2 + (Z_coord(1,i)-Z_o)**2)
+     if(tau_rad > 1.d0) then
+        nr_core = i
+        exit
+     end if
   enddo
 
   theta_o_x = atan2(Z_x-Z_o,R_x-R_o)

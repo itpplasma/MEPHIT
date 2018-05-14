@@ -183,6 +183,9 @@ program axis
   Z_o = zaxis
   print *, "Axis: "
   write(*,*) raxis, zaxis, psif
+  open(1,file='Opoint.dat')
+  write (1,*) raxis, zaxis, psif
+  close(1)
 
 ! X-point, coordinate-wise minimization (min and minus max):
   x_min = -341.d0  !60.d0

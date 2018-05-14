@@ -10,7 +10,7 @@ program readcarre_m
   implicit none
 
   real(dp) :: rbtor, xv(npqq), yv(npqq), psimin, psimax, r_bc, z_bc, sumD, field_ratio
-  real(dp), parameter ::  eps_dist=1.d-8, ti0=3.d3, di0 = 5.d13, ePhi0=2d3
+  real(dp), parameter ::  eps_dist=1.d-8, ti0=3.d3, di0 = 5.d13, ePhi0=2d4 !2d3
   real(dp) :: btf, rtf, psi_loc, bmod_loc
   character(len=7) :: dummy7
   character(len=6) :: dummy6
@@ -292,8 +292,9 @@ program readcarre_m
      mesh_element(i)%T_part(1:nsorts) = temp_prof
      mesh_element(i)%ePhi_tri = ePhi_prof
 !
-     mesh_element(i)%thermforces(1,:)=ddens_dpsi/dens_prof-1.5d0*dtemp_dpsi/temp_prof !&
-!TODO uncomment again                                     +charge*dePhi_dpsi/temp_prof
+!     mesh_element(i)%thermforces(1,:)=ddens_dpsi/dens_prof-1.5d0*dtemp_dpsi/temp_prof &
+!                                     +charge*dePhi_dpsi/temp_prof
+     mesh_element(i)%thermforces(1,:)=ddens_dpsi/dens_prof-1.5d0*dtemp_dpsi/temp_prof !<= IDEAL RESPONSE
      mesh_element(i)%thermforces(2,:)=dtemp_dpsi/temp_prof*vt2inv
 ! Caution: thermodynamic force A_2 has been divided by v_T^2 here
                                       

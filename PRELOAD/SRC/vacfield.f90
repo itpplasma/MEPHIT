@@ -20,6 +20,7 @@
   type(knot), dimension(3) :: knots
   real(dp), dimension(3) :: rr, zz, lr, lz
   complex(dp), dimension(3) :: Bnflux
+  complex(dp) :: Bnphiflux
   complex(dp) :: Bnphi
 !
   n_tor_out=2
