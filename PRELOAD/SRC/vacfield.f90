@@ -21,7 +21,6 @@
   real(dp), dimension(3) :: rr, zz, lr, lz
   complex(dp), dimension(3) :: Bnflux
   complex(dp) :: Bnphiflux
-  complex(dp) :: Bnphi
 !
   n_tor_out=2
 !
@@ -118,11 +117,11 @@
             dBzdR,dBzdp,dBzdZ)
        Bnflux(k) = lz(k)*rr(k)*B_Rn - lr(k)*rr(k)*B_Zn ! project vector onto edge normal
     end do
-    Bnphi = -1d0/((0d0,1d0)*n_tor_out)*sum(Bnflux)/(elem%det_3/2d0) ! make divergence free
+    Bnphiflux = -1d0/((0d0,1d0)*n_tor_out)*sum(Bnflux) ! make divergence free
     write(17,*) real(Bnflux(1)), aimag(Bnflux(1)),&
          real(Bnflux(2)), aimag(Bnflux(2)),&
          real(Bnflux(3)), aimag(Bnflux(3)),&
-         real(Bnphi), aimag(Bnphi)
+         real(Bnphiflux), aimag(Bnphiflux)
   enddo
 !
   close(10)

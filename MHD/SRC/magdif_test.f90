@@ -53,11 +53,12 @@ module magdif_config
 end module magdif_config
 
 program magdif_test
-
+  use from_nrtype, only: dp                                     ! PRELOAD/SRC/from_nrtype.f90
   use magdif_config, only: config_file, read_config, runmode, runmode_single,&
        runmode_direct, runmode_precon
-  use magdif, only: magdif_init, magdif_cleanup, &
+  use magdif, only: magdif_init, magdif_cleanup, Bnflux, Bnphi,&
        compute_presn, compute_j0phi, compute_currn, read_bnflux, Bnflux_file, currn_file
+  use mesh_mod, only: mesh_element, ntri
 
   implicit none
 
@@ -82,20 +83,44 @@ contains
   end subroutine magdif_single
    
   subroutine magdif_direct
-    integer, parameter :: niter = 1 ! TODO: make this configurable
-    integer :: kiter
+    integer, parameter :: niter = 20 ! TODO: make this configurable
+    integer :: kiter, kt
     integer :: stat
 
+    complex(dp), allocatable :: Bnfluxsum(:,:)    
+    complex(dp), allocatable :: Bnphisum(:)      
+
+    allocate(Bnfluxsum(ntri, 3))
+    allocate(Bnphisum(ntri))
+
+    Bnfluxsum = .0d0 
+    Bnphisum = .0d0
+    
     ! TODO: make this configurable over tmpdir parameter
     currn_file = '/tmp/currents.dat'
     Bnflux_file = '/tmp/bnflux.dat'
     do kiter=1,niter
+       print *, kiter
        call compute_presn       ! compute pressure based on previous perturbation field
        call compute_j0phi       ! compute currents based on previous perturbation field
        call compute_currn 
        call compute_field(stat) ! use field code to generate new field from currents
        call read_bnflux         ! read new bnflux from field code
-    end do   
+       Bnfluxsum = Bnfluxsum + Bnflux
+       Bnphisum = Bnphisum + Bnphi
+    end do
+
+    do kt = 1, ntri
+       write(1, *) &
+            real(Bnfluxsum(kt, 1)), aimag(Bnfluxsum(kt, 1)), &
+            real(Bnfluxsum(kt, 2)), aimag(Bnfluxsum(kt, 2)), &
+            real(Bnfluxsum(kt, 3)), aimag(Bnfluxsum(kt, 3)), &
+            real(Bnphisum(kt)*mesh_element(kt)%det_3*0.5d0), &
+            aimag(Bnphisum(kt)*mesh_element(kt)%det_3*0.5d0)
+    end do
+    
+    deallocate(Bnfluxsum)
+    deallocate(Bnphisum)
   end subroutine magdif_direct
 
   subroutine compute_field(stat)

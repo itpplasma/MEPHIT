@@ -136,10 +136,10 @@ contains
        Bnflux(k,1) = cmplx(dummy8(1), dummy8(2), dp)
        Bnflux(k,2) = cmplx(dummy8(3), dummy8(4), dp)
        Bnflux(k,3) = cmplx(dummy8(5), dummy8(6), dp)
-       Bnphi(k) = cmplx(dummy8(7), dummy8(8), dp)
+       Bnphi(k) = cmplx(dummy8(7), dummy8(8), dp) / (mesh_element(k)%det_3 * 0.5d0)
 
        if (abs((sum(Bnflux(k,:)) + imun * n * Bnphi(k) * mesh_element(k)%det_3 * 0.5d0) &
-            / sum(Bnflux(k,:))) > 1d-6) then
+            / sum(Bnflux(k,:))) > 1d-3) then
           if (log_err) write(logfile, *) 'B_n not divergence free: ',&
                abs((sum(Bnflux(k,:)) + imun * n * Bnphi(k) * mesh_element(k)%det_3 * 0.5d0) &
             / sum(Bnflux(k,:)))

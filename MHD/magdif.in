@@ -1,6 +1,6 @@
 &settings
    log_level = 4                                ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
-   runmode = 0                                  ! 0: single iteration, 1: direct iterations,
+   runmode = 1                                  ! 0: single iteration, 1: direct iterations,
                                                 ! 2: preconditioned iterations
    nonres = .false.                             ! use non-resonant test case
    point_file = 'points.dat'                    ! points.dat from PRELOAD

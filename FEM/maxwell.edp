@@ -176,5 +176,5 @@ for (int k=0; k<nti; k++) {
     sig = (Th[k][0].y-Th[k][2].y)/vx[][Hrot(k,1)];
   ofile3.scientific << sig*real(rBr[][Hdiv(k,1)]) <<  "\t" << sig*imag(rBr[][Hdiv(k,1)]) << "\t";
   
-  ofile3.scientific << real(Bphi[][k]) << "\t" << imag(Bphi[][k]) << endl;
+  ofile3.scientific << real(Bphi[][k])*Th[k].area << "\t" << imag(Bphi[][k])*Th[k].area << endl;
 }

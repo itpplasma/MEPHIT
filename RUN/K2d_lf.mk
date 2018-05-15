@@ -1,7 +1,7 @@
 #MODE = PARALLEL
 MODE = SEQUENCIAL
-DEBUG = NO
-#DEBUG = YES
+#DEBUG = NO
+DEBUG = YES
 
 ifeq ($(MODE), PARALLEL)
 FC = mpif90
@@ -12,7 +12,7 @@ ifeq ($(MODE), SEQUENCIAL)
 #FC = lf95
 #FC = f95-lah
 FC = gfortran
-FD = -cpp
+FD = -cpp 
 endif
 #OPTS = -O3 -M OBJS  #-fp-model strict
 OPTS = -O3 -J OBJS  #-fp-model strict

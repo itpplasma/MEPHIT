@@ -780,7 +780,6 @@ contains
 !
        open(1,file='PLOTTING/curr_toplot.dat')
        open(2,file='PLOTTING/dens_toplot.dat')
-       open(3,file='PLOTTING/ppres_toplot.dat')
        open(11,file='PLOTTING/parcurr_toplot.dat')
        do i=1,ntri
           R_vert(:) = mesh_point( mesh_element(i)%i_knot(:) )%rcoord
@@ -796,8 +795,6 @@ contains
           write (1,*) real(cur_R),real(cur_Z),dimag(cur_R),dimag(cur_Z)
           write (2,*) real(mesh_element_rmp(i)%denspert(:)), &
                       dimag(mesh_element_rmp(i)%denspert(:))
-          write (3,*) real(mesh_element_rmp(i)%pprespert(:)), &
-                      dimag(mesh_element_rmp(i)%pprespert(:))
           write (11,*) real(mesh_element_rmp(i)%parcurrpert(:)), &
                        dimag(mesh_element_rmp(i)%parcurrpert(:))
        enddo
