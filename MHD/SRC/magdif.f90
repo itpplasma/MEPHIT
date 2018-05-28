@@ -1,17 +1,72 @@
+module magdif_config
+  use from_nrtype, only: dp                                     ! PRELOAD/SRC/from_nrtype.f90
+
+  implicit none
+
+  integer, parameter :: runmode_single = 0 !< single iteration mode
+  integer, parameter :: runmode_direct = 1 !< direct iteration mode
+  integer, parameter :: runmode_precon = 2 !< preconditioned iteration mode
+
+  integer, parameter :: logfile = 6             !< log to stdout, TODO: make this configurable
+
+  integer :: log_level
+  integer :: runmode
+  logical :: log_err, log_warn, log_info, log_debug ! specify log levels
+  logical :: nonres = .false.  !< use non-resonant test case
+
+  character(len=1024) :: point_file   !< input data file for mesh points
+  character(len=1024) :: tri_file     !< input data file for triangles and edges
+  character(len=1024) :: Bnflux_file  !< input data file for magnetic field perturbation
+  character(len=1024) :: hpsi_file    !< input data file for \f$ h_{n}^{\psi} \f$
+  character(len=1024) :: config_file  !< input config file for namelist settings
+  character(len=1024) :: presn_file   !< output data file for pressure perturbation
+  character(len=1024) :: currn_file   !< output data file for current perturbation
+
+  integer  :: niter = 20
+  integer  :: n               !< harmonic index of perturbation
+  integer  :: nkpol           !< number of knots per poloidal loop
+  integer  :: nflux           !< number of flux surfaces
+  real(dp) :: ti0             !< interpolation step for temperature
+  real(dp) :: di0             !< interpolation step for density
+
+  namelist / settings / log_level, runmode, nonres, point_file, tri_file, Bnflux_file, &
+       hpsi_file, presn_file, currn_file, niter, n, nkpol, nflux, ti0, di0
+       !< namelist for input parameters
+
+  contains
+
+  !> Read configuration file for magdif
+  !! @param config_filename file name of config file
+  subroutine read_config(config_filename)
+    character(len = *) :: config_filename
+
+    open(1, file = config_filename)
+    read(1, nml = settings)
+    close(1)
+
+    log_err = .false.
+    log_warn = .false.
+    log_info = .false.
+    log_debug = .false.
+    if (log_level > 0) log_err = .true.
+    if (log_level > 1) log_warn = .true.
+    if (log_level > 2) log_info = .true.
+    if (log_level > 3) log_debug = .true.
+  end subroutine read_config
+end module magdif_config
+
 module magdif
   use from_nrtype, only: dp                                     ! PRELOAD/SRC/from_nrtype.f90
-  use constants, only: pi                                       ! PRELOAD/SRC/orbit_mod.f90
+  use constants, only: pi, ev2erg                               ! PRELOAD/SRC/orbit_mod.f90
   use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, & ! PRELOAD/SRC/mesh_mod.f90
        mesh_element_rmp, bphicovar, knot, triangle
   use for_macrostep, only : t_min, d_min
   use sparse_mod, only: remap_rc, sparse_solve, sparse_matmul
-  use magdif_config, only: log_level, log_err, log_warn, log_info, log_debug,&
+  use magdif_config, only: logfile, log_level, log_err, log_warn, log_info, log_debug, &
        nonres, point_file, tri_file, Bnflux_file, hpsi_file, presn_file, currn_file, &
-       n, nkpol, nflux, ti0, di0
+       niter, n, nkpol, nflux, ti0, di0
 
   implicit none
-
-  integer, parameter :: logfile = 6             !< log to stdout, TODO: make this configurable
 
   real(dp), allocatable :: pres0(:)             !< unperturbed pressure \f$ p_{0} \f$ in dyn cm^-1
   real(dp), allocatable :: dpres0_dpsi(:)       !< derivative of unperturbed pressure w.r.t. flux surface label, \f$ p_{0}'(\psi) \f$
@@ -29,7 +84,6 @@ module magdif
   real(dp) :: psimin  !< minimum flux surface label, located at the separatrix
   real(dp) :: psimax  !< maximum flux surface label, located at the magnetic axis
   real(dp), parameter :: R0 = 172.74467899999999d0  !< distance of magnetic axis from center, \f$ R_{0} \f$
-  real(dp), parameter :: ideal_gas_factor = 1.6021766208d-12  !< unit conversion factor in ideal gas law \f$ p = \frac{N}{V} k_{\mathrm{B}} T \f$
   real(dp), parameter :: clight = 2.99792458d10  !< speed of light in cm/s
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< imaginary unit in double precision
 
@@ -63,11 +117,10 @@ contains
   !> Initialize magdif module
   subroutine magdif_init
     call read_mesh
-    call read_bnflux
     call read_hpsi ! TODO: get rid of this due to redundancy with bnflux
     call init_flux_variables
     call init_safety_factor
-    if (nonres) call compute_Bn_nonres
+    call compute_j0phi
     if (log_info) write(logfile, *) 'magdif initialized'
   end subroutine magdif_init
 
@@ -92,6 +145,49 @@ contains
     if (allocated(mesh_element_rmp)) deallocate(mesh_element_rmp)
     if (log_info) write(logfile, *) 'magdif cleanup finished'
   end subroutine magdif_cleanup
+
+  subroutine magdif_single
+    integer :: stat
+
+    if (nonres) then
+       call compute_Bn_nonres
+    else
+       call compute_Bn(stat)
+       call read_bnflux
+    end if
+    call compute_presn
+    call compute_currn
+  end subroutine magdif_single
+
+  subroutine magdif_direct
+    integer :: kiter, kt
+    integer :: stat
+    complex(dp) :: Bnfluxsum(ntri, 3)
+    complex(dp) :: Bnphisum(ntri)
+
+    Bnfluxsum = 0.0d0
+    Bnphisum = 0.0d0
+    do kiter = 1, niter
+       if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter
+       call compute_Bn(stat) ! use field code to generate new field from currents
+       call read_bnflux         ! read new bnflux from field code
+       call compute_presn       ! compute pressure based on previous perturbation field
+       call compute_currn
+       Bnfluxsum = Bnfluxsum + Bnflux
+       Bnphisum = Bnphisum + Bnphi
+    end do
+
+    open(1, file = 'Bnsum.out')
+    do kt = 1, ntri
+       write(1, *) &
+            real(Bnfluxsum(kt, 1)), aimag(Bnfluxsum(kt, 1)), &
+            real(Bnfluxsum(kt, 2)), aimag(Bnfluxsum(kt, 2)), &
+            real(Bnfluxsum(kt, 3)), aimag(Bnfluxsum(kt, 3)), &
+            real(Bnphisum(kt) * mesh_element(kt)%det_3 * 0.5d0), &
+            aimag(Bnphisum(kt) * mesh_element(kt)%det_3 * 0.5d0)
+    end do
+    close(1)
+  end subroutine magdif_direct
 
   !> Read mesh points and triangles
   subroutine read_mesh
@@ -124,6 +220,17 @@ contains
     j0phi = 0d0
     jnflux = 0d0
   end subroutine read_mesh
+
+  subroutine compute_Bn(stat)
+    integer, intent(out) :: stat
+
+    call execute_command_line (&
+         "PATH=/temp/ert/local/bin:$PATH /temp/ert/local/bin/FreeFem++ " // &
+         "../FEM/maxwell.edp ../PRELOAD/inputformaxwell_ext.msh " // currn_file // &
+         "2 > /tmp/freefem.out 2>&1 && cd ..", &
+         exitstat = stat)
+
+  end subroutine compute_Bn
 
   !> Read fluxes of perturbation field
   subroutine read_bnflux
@@ -181,7 +288,7 @@ contains
     dqdpsi = 0d0
 
     if (log_debug) open(1, file = 'magfie.out')
-    
+
     do kl = 1, nflux+1
        select case(kl)
        case (1)
@@ -204,18 +311,18 @@ contains
     end do
 
     if (log_debug) close(1)
-    
+
     do kl = 1, nflux
        ! q on triangle strip, psi on edge ring
        dqdpsi(kl) = (q(kl+1) - q(kl)) / (psi(kl+1) - psi(kl-1)) * 0.5d0
     end do
-    
+
     if (log_debug) then
        open(1, file = 'qsafety.out')
        write(1,*) psi(0), 0.0d0, dqdpsi(0)
        do kl = 1, nflux
           write(1,*) psi(kl), q(kl), dqdpsi(kl)
-       end do     
+       end do
        close(1)
     end if
   end subroutine init_safety_factor
@@ -278,8 +385,8 @@ contains
     end do
     dens = (psi - psimin) / psimax * di0 + d_min
     temp = (psi - psimin) / psimax * ti0 + t_min
-    pres0 = dens * temp * ideal_gas_factor
-    dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ideal_gas_factor
+    pres0 = dens * temp * ev2erg
+    dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
   end subroutine init_flux_variables
 
   subroutine compute_j0phi
@@ -437,12 +544,12 @@ contains
           Bnpsi = Bnflux(minval(common_tri), mod(mesh_element(minval(common_tri))%knot_h, 3) + 1) / &
                (r + rold) * 2 / hypot(lr, lz) * (psi(kl+1) - psi(kl-1)) / sum(perps)
 
-          x(kpold) = -dpres0_dpsi(kl) * Bnpsi
+          x(kp) = -dpres0_dpsi(kl) * Bnpsi
 
-          a(kpold) = ((Br + Brold) * 0.5d0 * lr + (Bz + Bzold) * 0.5d0 * lz) / &
+          a(kp) = ((Br + Brold) * 0.5d0 * lr + (Bz + Bzold) * 0.5d0 * lz) / &
                (lr ** 2 + lz ** 2)
 
-          b(kpold) = imun * n * (Bp / r + Bpold / rold) * 0.5d0
+          b(kp) = imun * n * (Bp / r + Bpold / rold) * 0.5d0
        end do ! kp
 
        ! solve linear system
@@ -581,9 +688,9 @@ contains
           ktri = ktri+1
        end do
     end do
-    
+
     if (present(outfile)) then
-       do while (ktri<ntri)
+       do while (ktri < ntri)
           write(1, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
           ktri = ktri+1
        end do

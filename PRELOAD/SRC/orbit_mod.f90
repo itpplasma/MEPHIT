@@ -1,7 +1,7 @@
 module constants
   use from_nrtype
   double precision, parameter :: amp=1.6726d-24, ame=9.1094d-28, clight=2.9979d10,  &
-       ev2erg=1.6022d-12,  erg2ev=1.d0/ev2erg, echarge=4.8032d-10,              &
+       ev2erg=1.6021766208d-12,  erg2ev=1.d0/ev2erg, echarge=4.8032d-10,              &
        pi=3.141592653589793238462643383d0, Cs0=9.79d5*9.12870929d-1
   integer(i4b), parameter :: nsorts=2
   double precision, parameter, dimension(nsorts) :: amass=(/ ame, amp*2.d0 /), charge =(/-1.d0, 1.d0/)
