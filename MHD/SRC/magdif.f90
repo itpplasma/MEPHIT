@@ -14,13 +14,15 @@ module magdif_config
   logical :: log_err, log_warn, log_info, log_debug ! specify log levels
   logical :: nonres = .false.  !< use non-resonant test case
 
-  character(len=1024) :: point_file   !< input data file for mesh points
-  character(len=1024) :: tri_file     !< input data file for triangles and edges
-  character(len=1024) :: Bnflux_file  !< input data file for magnetic field perturbation
-  character(len=1024) :: hpsi_file    !< input data file for \f$ h_{n}^{\psi} \f$
-  character(len=1024) :: config_file  !< input config file for namelist settings
-  character(len=1024) :: presn_file   !< output data file for pressure perturbation
-  character(len=1024) :: currn_file   !< output data file for current perturbation
+  character(len=1024) :: point_file       !< input data file for mesh points
+  character(len=1024) :: tri_file         !< input data file for triangles and edges
+  character(len=1024) :: Bnflux_file      !< input data file for magnetic field perturbation
+  character(len=1024) :: Bnflux_vac_file  !< input data file for magnetic field perturbation
+  character(len=1024) :: Bn_sum_file      !< output data file for accumulated magnetic field perturbation
+  character(len=1024) :: hpsi_file        !< input data file for \f$ h_{n}^{\psi} \f$
+  character(len=1024) :: config_file      !< input config file for namelist settings
+  character(len=1024) :: presn_file       !< output data file for pressure perturbation
+  character(len=1024) :: currn_file       !< output data file for current perturbation
 
   integer  :: niter = 20
   integer  :: n               !< harmonic index of perturbation
@@ -30,7 +32,8 @@ module magdif_config
   real(dp) :: di0             !< interpolation step for density
 
   namelist / settings / log_level, runmode, nonres, point_file, tri_file, Bnflux_file, &
-       hpsi_file, presn_file, currn_file, niter, n, nkpol, nflux, ti0, di0
+       Bnflux_vac_file, Bn_sum_file, hpsi_file, presn_file, currn_file, niter, n, nkpol, &
+       nflux, ti0, di0
        !< namelist for input parameters
 
   contains
@@ -62,9 +65,7 @@ module magdif
        mesh_element_rmp, bphicovar, knot, triangle
   use for_macrostep, only : t_min, d_min
   use sparse_mod, only: remap_rc, sparse_solve, sparse_matmul
-  use magdif_config, only: logfile, log_level, log_err, log_warn, log_info, log_debug, &
-       nonres, point_file, tri_file, Bnflux_file, hpsi_file, presn_file, currn_file, &
-       niter, n, nkpol, nflux, ti0, di0
+  use magdif_config
 
   implicit none
 
@@ -77,6 +78,8 @@ module magdif
   complex(dp), allocatable :: presn(:)          !< pressure perturbation \f$ p_{n} \f$ in each mesh point
   complex(dp), allocatable :: Bnflux(:,:)       !< edge fluxes \f$ R \vec{B}_{n} \cdot \vec{n} \f$
   complex(dp), allocatable :: Bnphi(:)          !< physical toroidal component of magnetic perturbation, \f$ B_{n (\phi)} \f$
+  complex(dp), allocatable :: Bnflux_vac(:,:)   !< vacuum edge fluxes \f$ R \vec{B}_{n} \cdot \vec{n} \f$
+  complex(dp), allocatable :: Bnphi_vac(:)      !< vacuum physical toroidal component of magnetic perturbation, \f$ B_{n (\phi)} \f$
   complex(dp), allocatable :: jnflux(:,:)       !< edge currents \f$ R \vec{j}_{n} \cdot \vec{n} \f$
   complex(dp), allocatable :: jnphi(:)          !< physical toroidal component of current perturbation, \f$ j_{n (\phi)} \f$
   real(dp), allocatable :: j0phi(:)             !< physical toroidal component of equilibrium current, \f$ j_{0 (\phi)} \f$
@@ -121,6 +124,13 @@ contains
     call init_flux_variables
     call init_safety_factor
     call compute_j0phi
+    if (nonres) then
+       call compute_Bn_nonres
+    else
+       call read_bnflux(Bnflux_vac_file)
+    end if
+    Bnflux_vac = Bnflux
+    Bnphi_vac = Bnphi
     if (log_info) write(logfile, *) 'magdif initialized'
   end subroutine magdif_init
 
@@ -138,6 +148,8 @@ contains
     if (allocated(jnflux)) deallocate(jnflux)
     if (allocated(Bnflux)) deallocate(Bnflux)
     if (allocated(Bnphi)) deallocate(Bnphi)
+    if (allocated(Bnflux_vac)) deallocate(Bnflux_vac)
+    if (allocated(Bnphi_vac)) deallocate(Bnphi_vac)
     if (allocated(jnphi)) deallocate(jnphi)
     if (allocated(j0phi)) deallocate(j0phi)
     if (allocated(mesh_point)) deallocate(mesh_point)
@@ -149,42 +161,38 @@ contains
   subroutine magdif_single
     integer :: stat
 
-    if (nonres) then
-       call compute_Bn_nonres
-    else
-       call compute_Bn(stat)
-       call read_bnflux
-    end if
     call compute_presn
     call compute_currn
+    call compute_Bn(stat)
+    call read_bnflux(Bnflux_file)
   end subroutine magdif_single
 
   subroutine magdif_direct
     integer :: kiter, kt
     integer :: stat
-    complex(dp) :: Bnfluxsum(ntri, 3)
-    complex(dp) :: Bnphisum(ntri)
+    complex(dp) :: Bnflux_sum(ntri, 3)
+    complex(dp) :: Bnphi_sum(ntri)
 
-    Bnfluxsum = 0.0d0
-    Bnphisum = 0.0d0
+    Bnflux_sum = 0.0d0
+    Bnphi_sum = 0.0d0
     do kiter = 1, niter
        if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter
-       call compute_Bn(stat) ! use field code to generate new field from currents
-       call read_bnflux         ! read new bnflux from field code
-       call compute_presn       ! compute pressure based on previous perturbation field
+       call compute_presn             ! compute pressure based on previous perturbation field
        call compute_currn
-       Bnfluxsum = Bnfluxsum + Bnflux
-       Bnphisum = Bnphisum + Bnphi
+       call compute_Bn(stat)          ! use field code to generate new field from currents
+       call read_bnflux(Bnflux_file)  ! read new bnflux from field code
+       Bnflux_sum = Bnflux_sum + Bnflux
+       Bnphi_sum = Bnphi_sum + Bnphi
     end do
 
-    open(1, file = 'Bnsum.out')
+    open(1, file = Bn_sum_file)
     do kt = 1, ntri
        write(1, *) &
-            real(Bnfluxsum(kt, 1)), aimag(Bnfluxsum(kt, 1)), &
-            real(Bnfluxsum(kt, 2)), aimag(Bnfluxsum(kt, 2)), &
-            real(Bnfluxsum(kt, 3)), aimag(Bnfluxsum(kt, 3)), &
-            real(Bnphisum(kt) * mesh_element(kt)%det_3 * 0.5d0), &
-            aimag(Bnphisum(kt) * mesh_element(kt)%det_3 * 0.5d0)
+            real(Bnflux_sum(kt, 1)), aimag(Bnflux_sum(kt, 1)), &
+            real(Bnflux_sum(kt, 2)), aimag(Bnflux_sum(kt, 2)), &
+            real(Bnflux_sum(kt, 3)), aimag(Bnflux_sum(kt, 3)), &
+            real(Bnphi_sum(kt) * mesh_element(kt)%det_3 * 0.5d0), &
+            aimag(Bnphi_sum(kt) * mesh_element(kt)%det_3 * 0.5d0)
     end do
     close(1)
   end subroutine magdif_direct
@@ -210,12 +218,16 @@ contains
     allocate(mesh_element_rmp(ntri))
     allocate(Bnflux(ntri, 3))
     allocate(Bnphi(ntri))
+    allocate(Bnflux_vac(ntri, 3))
+    allocate(Bnphi_vac(ntri))
     allocate(jnphi(ntri))
     allocate(j0phi(ntri))
     allocate(jnflux(ntri, 3))
 
     Bnflux = 0d0
     Bnphi = 0d0
+    Bnflux_vac = 0d0
+    Bnphi_vac = 0d0
     jnphi = 0d0
     j0phi = 0d0
     jnflux = 0d0
@@ -233,11 +245,12 @@ contains
   end subroutine compute_Bn
 
   !> Read fluxes of perturbation field
-  subroutine read_bnflux
+  subroutine read_bnflux(filename)
+    character(len = 1024) :: filename
     integer :: k
     real(dp) :: dummy8(8)
 
-    open(1, file = Bnflux_file)
+    open(1, file = filename)
     do k = 1, ntri
        read(1, *) dummy8
        Bnflux(k,1) = cmplx(dummy8(1), dummy8(2), dp)
@@ -287,8 +300,6 @@ contains
     q = 0d0
     dqdpsi = 0d0
 
-    if (log_debug) open(1, file = 'magfie.out')
-
     do kl = 1, nflux+1
        select case(kl)
        case (1)
@@ -304,13 +315,9 @@ contains
           call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
           q(kl) = q(kl) + Bp * elem%det_3 * 0.5d0
-
-          if(log_debug) write(1,*) Br, Bp, Bz
        end do
        q(kl) = -q(kl) * 0.5d0 / pi / (psi(kl) - psi(kl-1))  ! check sign
     end do
-
-    if (log_debug) close(1)
 
     do kl = 1, nflux
        ! q on triangle strip, psi on edge ring
