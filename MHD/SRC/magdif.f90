@@ -10,7 +10,7 @@ module magdif_config
   integer, parameter :: logfile = 6             !< log to stdout, TODO: make this configurable
 
   integer :: log_level
-  integer :: runmode
+  integer :: runmode 
   logical :: log_err, log_warn, log_info, log_debug ! specify log levels
   logical :: nonres = .false.  !< use non-resonant test case
 

@@ -192,4 +192,52 @@ Amperes law becomes
 \item Much data in /proj/plasma/RMP/DATA/ASDEX/ and /proj/plasma/RMP/DATA2017/ASDEX/
 \end{itemize}
 
+\subsection*{The reason why we choose Bnpsi the way we do}
+
+We have
+\begin{align*}
+\v B_{0}^{\mathrm{pol}}\cdot\nabla p_{n}+\i np_{n}\frac{B_{0\varphi}}{R^{2}} & =-B_{n}^{\psi}p_{0}^{\prime}(\psi)\\
+ & =-\frac{B_{0\varphi}R_{0}}{R^{2}}p_{0}^{\prime}(\psi)\\
+\left(\begin{array}{c}
+B_{0R}\cdot\partial_{R}\\
+B_{0Z}\cdot\partial_{Z}\\
+0\cdot\partial_{\ph}
+\end{array}\right)p_{n}(R,Z)e^{in\ph}
+\end{align*}
+\begin{align*}
+\v B_{0}^{\mathrm{pol}}\cdot\nabla p_{n}+\i np_{n}\frac{B_{0\varphi}}{R^{2}} & =-B_{n}^{\psi}p_{0}^{\prime}(\psi)\\
+R^{2}\v B_{0}^{\mathrm{pol}}\cdot\nabla p_{n}+\i np_{n}B_{0\ph} & =-B_{0\varphi}R_{0}p_{0}^{\prime}(\psi)
+\end{align*}
+Solve magnetic differential equation
+\begin{align*}
+\v B_{0}\cdot\nabla\delta p & =-\delta B^{\psi}p_{0}^{\prime}(\psi)
+\end{align*}
+
+Can also write as conservation law, $\nabla\cdot\v B_{0}=0$ (otherwise,
+another source term would appear)
+\begin{align*}
+\nabla\cdot(\delta p\v B_{0})-(\nabla\cdot\v B_{0})\delta p & =-\delta B^{\psi}p_{0}^{\prime}(\psi)
+\end{align*}
+Divergence operator in any coordinates
+\[
+\nabla\cdot\v v=\frac{1}{\sqrt{g}}\partial_{k}(\sqrt{g}v^{k})
+\]
+In symmstry flux coordinates $(\rho,\vartheta,\zeta)=(\sigma_{\mathrm{pol}}\psi,\vartheta,\frac{\pi}{2}-\varphi)$
+\begin{align}
+\sqrt{g} & =\frac{1}{B_{0}^{\vartheta}}=\frac{q}{B_{0}^{\zeta}}\\
+ & =\frac{q}{-B_{0}^{\varphi}}=\frac{qR^{2}}{-B_{0\varphi}}.
+\end{align}
+In Fourier representation: $\delta p=p_{mn}(\rho)e^{i(m\tht+n\ph)}=p_{mn}(\rho)e^{i(m\tht-n(\zeta-\pi/2))}$
+we get
+\begin{align*}
+\nabla\cdot(p_{mn}\v B_{0}) & =\frac{1}{\sqrt{g}}\partial_{k}(\sqrt{g}p_{mn}B_{0}^{k})\\
+ & =imp_{mn}B_{0}^{\tht}-inp_{mn}B_{0}^{\zeta}.
+\end{align*}
+Original expression
+\begin{align*}
+\nabla\cdot(\delta p\v B_{0}) & =-\nabla\cdot(p\delta\v B)\\
+imp_{mn}B_{0}^{\tht}-inp_{mn}B_{0}^{\zeta} & =-\frac{1}{\sqrt{g}}\partial_{k}(\sqrt{g}p_{0}B_{mn}^{k})\\
+ & =-\frac{1}{\sqrt{g}}\partial_{k}(\sqrt{g}p_{0}B_{mn}^{k})
+\end{align*}
+
 \end{document}

@@ -524,5 +524,104 @@ ASDEX Upgrade has two formats that are common: CLISTE and EFIT/EQDSK (g-files)
 Much data in /proj/plasma/RMP/DATA/ASDEX/ and /proj/plasma/RMP/DATA2017/ASDEX/
 \end_layout
 
+\begin_layout Subsection*
+The reason why we choose Bnpsi the way we do
+\end_layout
+
+\begin_layout Standard
+We have
+\begin_inset Formula 
+\begin{align*}
+\v B_{0}^{\mathrm{pol}}\cdot\nabla p_{n}+\i np_{n}\frac{B_{0\varphi}}{R^{2}} & =-B_{n}^{\psi}p_{0}^{\prime}(\psi)\\
+ & =-\frac{B_{0\varphi}R_{0}}{R^{2}}p_{0}^{\prime}(\psi)\\
+\left(\begin{array}{c}
+B_{0R}\cdot\partial_{R}\\
+B_{0Z}\cdot\partial_{Z}\\
+0\cdot\partial_{\ph}
+\end{array}\right)p_{n}(R,Z)e^{in\ph}
+\end{align*}
+
+\end_inset
+
+
+\begin_inset Formula 
+\begin{align*}
+\v B_{0}^{\mathrm{pol}}\cdot\nabla p_{n}+\i np_{n}\frac{B_{0\varphi}}{R^{2}} & =-B_{n}^{\psi}p_{0}^{\prime}(\psi)\\
+R^{2}\v B_{0}^{\mathrm{pol}}\cdot\nabla p_{n}+\i np_{n}B_{0\ph} & =-B_{0\varphi}R_{0}p_{0}^{\prime}(\psi)
+\end{align*}
+
+\end_inset
+
+Solve magnetic differential equation
+\begin_inset Formula 
+\begin{align*}
+\v B_{0}\cdot\nabla\delta p & =-\delta B^{\psi}p_{0}^{\prime}(\psi)
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Can also write as conservation law, 
+\begin_inset Formula $\nabla\cdot\v B_{0}=0$
+\end_inset
+
+ (otherwise, another source term would appear)
+\begin_inset Formula 
+\begin{align*}
+\nabla\cdot(\delta p\v B_{0})-(\nabla\cdot\v B_{0})\delta p & =-\delta B^{\psi}p_{0}^{\prime}(\psi)
+\end{align*}
+
+\end_inset
+
+Divergence operator in any coordinates
+\begin_inset Formula 
+\[
+\nabla\cdot\v v=\frac{1}{\sqrt{g}}\partial_{k}(\sqrt{g}v^{k})
+\]
+
+\end_inset
+
+In symmstry flux coordinates 
+\begin_inset Formula $(\rho,\vartheta,\zeta)=(\sigma_{\mathrm{pol}}\psi,\vartheta,\frac{\pi}{2}-\varphi)$
+\end_inset
+
+
+\begin_inset Formula 
+\begin{align}
+\sqrt{g} & =\frac{1}{B_{0}^{\vartheta}}=\frac{q}{B_{0}^{\zeta}}\\
+ & =\frac{q}{-B_{0}^{\varphi}}=\frac{qR^{2}}{-B_{0\varphi}}.
+\end{align}
+
+\end_inset
+
+In Fourier representation: 
+\begin_inset Formula $\delta p=p_{mn}(\rho)e^{i(m\tht+n\ph)}=p_{mn}(\rho)e^{i(m\tht-n(\zeta-\pi/2))}$
+\end_inset
+
+ we get
+\begin_inset Formula 
+\begin{align*}
+\nabla\cdot(p_{mn}\v B_{0}) & =\frac{1}{\sqrt{g}}\partial_{k}(\sqrt{g}p_{mn}B_{0}^{k})\\
+ & =imp_{mn}B_{0}^{\tht}-inp_{mn}B_{0}^{\zeta}.
+\end{align*}
+
+\end_inset
+
+Original expression
+\begin_inset Formula 
+\begin{align*}
+\nabla\cdot(\delta p\v B_{0}) & =-\nabla\cdot(p\delta\v B)\\
+imp_{mn}B_{0}^{\tht}-inp_{mn}B_{0}^{\zeta} & =-\frac{1}{\sqrt{g}}\partial_{k}(\sqrt{g}p_{0}B_{mn}^{k})\\
+ & =-\frac{1}{\sqrt{g}}\partial_{k}(\sqrt{g}p_{0}B_{mn}^{k})
+\end{align*}
+
+\end_inset
+
+
+\end_layout
+
 \end_body
 \end_document
