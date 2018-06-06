@@ -49,20 +49,26 @@ x & =R\cos\ph,\quad y=R\sin\ph,\quad z=Z.
 Those coordinates are used in computations and for meshes. For derivations,
 also symmetry flux coordinates $(\rho,\theta,\zeta)$ are used at
 some point. Here, we use the convention of d'Haeseleer with radial
-coordinate growing towards the outside of the torus. We use $\rho=\sigma_{\mathrm{pol}}\psi$
-with $\sigma_{\mathrm{pol}}=+1$ for counterclockwise poloidal field
-$\v B_{0}^{\mathrm{pol}}$ and $\sigma_{\mathrm{pol}}=-1$ for clockwise
-field. The toroidal symmetry angle is defined in the direction opposite
-to $\ph$ with
+coordinate growing towards the outside of the torus. As a radial variable
+we use $\rho=\sigma_{\mathrm{pol}}\psi$ with $\sigma_{\mathrm{pol}}=+1$
+for counterclockwise poloidal field $\v B_{0}^{\mathrm{pol}}$ and
+$\sigma_{\mathrm{pol}}=-1$ for clockwise field. The toroidal symmetry
+angle is defined in the direction opposite to $\ph$ with
 \begin{align*}
 \zeta & =\frac{\pi}{2}-\ph.
 \end{align*}
 The flux angle $\theta$ has the same orientation as $\vartheta=\arctan\frac{Z}{R}$,
-so the sign $\sigma_{\mathrm{pol}}=\mathrm{sgn}(B^{\tht})=\mathrm{sgn}(B^{\theta})$,
-so positive for counter-clockwise and negative for clockwise in the
-poloidal plane.
+so the sign $\sigma_{\mathrm{pol}}=\mathrm{sgn}(B^{\tht})=\mathrm{sgn}(B^{\theta})$
+is positive for counter-clockwise and negative for clockwise orientation
+in the poloidal plane. The Jacobian of symmetry flux coordinates $(\rho,\theta,\zeta)=(\sigma_{\mathrm{pol}}\psi,\theta,\frac{\pi}{2}-\varphi)$
+is
+\begin{align}
+\sqrt{g} & =\frac{1}{B_{0}^{\vartheta}}=\frac{q}{B_{0}^{\zeta}}\\
+ & =\frac{q}{-B_{0}^{\varphi}}=\frac{qR^{2}}{-B_{0\varphi}}.
+\end{align}
+Note that in our configuration (ASDEX Upgrade) $\sigma_{\mathrm{pol}}=-1$.
 
-\subsection*{Safety factor (TODO: check all signs with flux coordinates)}
+\subsection*{Safety factor}
 
 With the usual toroidal flux angle $\zeta=\pi/2-\ph$ (d'Haeseleer),
 the toroidal flux $\psi_{\text{tor}}$ is given by
@@ -70,105 +76,65 @@ the toroidal flux $\psi_{\text{tor}}$ is given by
 \psi_{\text{tor}} & =\frac{1}{(2\pi)^{2}}\int\d V\,\boldsymbol{B}\cdot\nabla\zeta=-\frac{1}{(2\pi)^{2}}\int\d V\,\boldsymbol{B}\cdot\nabla\ph\nonumber \\
  & =-\frac{1}{2\pi}\int\d R\d Z\,RB^{\ph}=-\frac{1}{2\pi}\int\d R\d ZB_{(\ph)}.
 \end{align}
-As a radial flux variable we use the (ribbon) poloidal flux $\psi_{\mathrm{pol}}=\psi$
-which is the negative disk poloidal flux. The safety factor is then
-given by
+The safety factor is then given by
 \begin{align*}
-q & =\frac{\psi_{\mathrm{tor}}^{\prime}(\rho)}{\psi_{\mathrm{pol}}^{\prime}(\rho)}=\frac{\d\psi_{\mathrm{tor}}}{\d\psi_{\mathrm{pol}}}=\frac{\d\psi_{\mathrm{tor}}}{\d\psi}\\
- & =-\frac{1}{2\pi}\frac{\d}{\d\psi}\int\d R\d ZB_{(\ph)}.
+q & =\frac{\psi_{\mathrm{tor}}^{\prime}(\rho)}{\psi_{\mathrm{pol}}^{\prime}(\rho)}=\sigma_{\mathrm{pol}}\frac{\d\psi_{\mathrm{tor}}}{\d\psi}\\
+ & =\sigma_{\mathrm{pol}}\frac{1}{2\pi}\frac{\d}{\d\psi}\int\d R\d ZB_{(\ph)}.
 \end{align*}
 This quantity can be evaluated numerically by adding up $B_{(\ph)}$
 inside the volume between two flux surfaces and dividing by the the
 difference in $\psi$:
 \begin{align*}
-q & \approx-\frac{1}{2\pi\Delta\psi}\sum_{\triangle}B_{(\ph)}S_{\triangle}
+q & \approx\frac{\sigma_{\mathrm{pol}}}{2\pi\Delta\psi}\sum_{\triangle}B_{(\ph)}S_{\triangle}
 \end{align*}
 where the sum is taken over all triangles inside a triangle strip,
 and $S_{\Delta}$ is the respective triangle surface area.
 
-\subsection*{Generating a non-resonant test field (TODO: check all signs with
-flux coordinates)}
+\subsection*{Generating a non-resonant test field}
 
-For derivation we use symmetry flux coordinates $(\rho,\vartheta,\zeta)=(\sigma_{\mathrm{pol}}\psi,\vartheta,\frac{\pi}{2}-\varphi)$
-with Jacobian
-\begin{align}
-\sqrt{g} & =\frac{1}{B_{0}^{\vartheta}}=\frac{q}{B_{0}^{\zeta}}\\
- & =\frac{q}{-B_{0}^{\varphi}}=\frac{qR^{2}}{-B_{0\varphi}}.
-\end{align}
-We would like to have a completely non-resonant field with $B_{n}^{\tht}=0$.
-As an ansatz we take
-
-\begin{equation}
-B_{n}^{\zeta}=B_{n}^{\rho}F(\rho).
-\end{equation}
-and the normal component of the test field
-\begin{equation}
-B_{n}^{\psi}=\frac{B_{0\varphi}R_{0}}{R^{2}}.
-\end{equation}
-Thus
+We would like to have a completely non-resonant and only radial field
 \begin{align*}
-B_{n}^{\rho} & =-\frac{B_{0\varphi}R_{0}}{R^{2}}.
+\delta\v B & =\v B_{n}e^{in\ph}
 \end{align*}
-Divergence-freeness of $\boldsymbol{B}_{n}$ yields
-\begin{align*}
-0 & =\frac{1}{\sqrt{g}}\frac{\partial}{\partial x^{k}}(\sqrt{g}B_{n}^{k})\\
-0 & =\frac{\partial}{\partial\rho}(\sqrt{g}B_{n}^{\rho})+\frac{\partial}{\partial\rho}(\sqrt{g}B_{n}^{\tht})+\frac{\partial}{\partial\zeta}(\sqrt{g}B_{n}^{\zeta})\\
- & =\frac{\partial}{\partial\rho}(\sqrt{g}B_{n}^{\rho})+0-\frac{\partial}{\partial\ph}(\sqrt{g}B_{n}^{\zeta})\\
- & =\frac{\partial}{\partial\rho}(\sqrt{g}B_{n}^{\rho})-in\sqrt{g}B_{n}^{\rho}F(\rho)\\
- & =\frac{\partial}{\partial\rho}\left(+\frac{qR^{2}}{B_{0\varphi}}\frac{B_{0\varphi}R_{0}}{R^{2}}\right)+inF(\rho)\frac{qR^{2}}{B_{0\varphi}}\frac{B_{0\varphi}R_{0}}{R^{2}}\\
- & =R_{0}\left(\frac{\partial q}{\partial\rho}+inF(\rho)q\right).
-\end{align*}
-To fulfill this, we take
+ with $B_{n}^{\ph}=B_{n}^{\tht}=0$. As an ansatz we take as a radial
+component of the field
 \begin{equation}
-F(\rho)=-\frac{1}{inq}\frac{\partial q}{\partial\rho}=\frac{1}{inq}\frac{\partial q}{\partial\psi}.
+B_{n}^{\psi}=\frac{B_{0\varphi}R_{0}}{qR^{2}}=-\frac{R_{0}}{\sqrt{g}}.
 \end{equation}
-We obtain
-\begin{align*}
-B_{n}^{\psi}=-B_{n}^{\rho} & =\frac{B_{0\varphi}R_{0}}{R^{2}}\\
-B_{n}^{\ph}=-B_{n}^{\zeta} & =-B_{n}^{\rho}F(\rho)=\frac{B_{0\varphi}R_{0}}{R^{2}}\frac{1}{inq}\frac{\partial q}{\partial\psi}
-\end{align*}
-
-TODO CONTINUE FROM HERE: With known $B_{n}^{\psi}$ and $B_{n}^{\ph}$
-we now proceed to find fluxes through triangle edges. Divergence-freeness
-in cylindrical coordinates gives
-\begin{align}
-\int_{1,2}\d l\,R\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n} & =-\int_{3}\d l\,R\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}-in\int_{\Omega_{i}}\d R\d Z\,RB_{n}^{\ph}.\label{eq:integral law-1}
-\end{align}
-As for currents we use the notation for weighted magnetic fluxes through
-edges,
-\begin{equation}
-\Psi_{k}=\int_{k}R\,\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}dl\approx R_{k}\,\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}_{k}.
-\end{equation}
-The term through edge $l_{3}$ orthogonal to $n_{3}\parallel\nabla\psi$
-is
-\begin{align*}
-\Psi_{3} & \approx R_{3}\,\boldsymbol{B}_{n}^{\text{pol}}\cdot\boldsymbol{n}_{3}\\
- & =R_{3}\,(\boldsymbol{B}_{n}^{\text{pol}}\cdot\nabla\psi)(\boldsymbol{n}_{3}\cdot\nabla\psi)/|\nabla\psi|^{2}\\
- & =R_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|^{2}}(\boldsymbol{n}_{3}\cdot\nabla\psi)\\
- & =R_{3}l_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|^{2}}(\hat{\boldsymbol{n}}_{3}\cdot\nabla\psi)
-\end{align*}
-with sign depending on edge orientation. The second term yields
-\begin{align*}
--\Psi_{\ph}=-in\int_{\Omega_{i}}\d R\d Z\,RB_{n}^{\ph} & \approx-inS_{\Omega k}\,R_{k}B_{nk}^{\ph}.
-\end{align*}
-The equation to solve is
-\begin{equation}
-A_{jk}I^{(k)}=\boldsymbol{q},
-\end{equation}
+Divergence-freeness of $\delta\boldsymbol{B}$ is now possible for
+a field containing only the radial component $\delta B^{\rho}=\sigma_{\mathrm{pol}}\delta B^{\psi}$
 with
-\begin{align}
-A_{jk} & =\delta_{(j-1)k}-\delta_{jk},
-\end{align}
-and
-\begin{align}
-q^{k} & =\mp R_{3}l_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|}-inS_{\Omega k}\,R_{k}B_{nk}^{\ph}.
-\end{align}
-Here, a compatibility condition needs to be fulfilled - the flux through
-one flux surface shell, so the sum over all triangles $k$ must vanish
-with
-\begin{align}
-\sum_{k}(\Psi_{\ph}^{(k)}+\Psi_{3}^{(k)}) & =0.
-\end{align}
+\begin{align*}
+\nabla\cdot\delta\v B & =\frac{1}{\sqrt{g}}\frac{\partial}{\partial x^{k}}\left(\sqrt{g}\delta B^{k}\right)\\
+ & =\frac{1}{\sqrt{g}}\frac{\partial}{\partial x^{k}}\left(\sqrt{g}\delta B^{\rho}\right)\\
+ & =\frac{1}{\sqrt{g}}\frac{\partial}{\partial x^{k}}\left(-\sigma_{\mathrm{pol}}R_{0}\right)=0.
+\end{align*}
+This means that
+\begin{align*}
+\v B_{n} & =(\v B_{n}\cdot\nabla\psi)\v e_{\psi}=B_{n}^{\psi}\v e_{\psi}.
+\end{align*}
+Fluxes through edges are
+\begin{align*}
+\Psi & \approx R\v B_{n}\cdot\v n\\
+ & =RB_{n}^{\psi}(\v e_{\psi}\cdot\v n)\\
+ & =RB_{n}^{\psi}n_{\psi}
+\end{align*}
+Fluxes through edges parallel to flux surfaces with $\v n_{3}=\sigma l_{3}\nabla\psi/|\nabla\psi|$
+are
+\begin{align*}
+\Psi_{3} & \approx R_{3}B_{n}^{\psi}\v e_{\psi}\cdot\v n_{3}\\
+ & =\sigma l_{3}R_{3}B_{n}^{\psi}/|\nabla\psi|\\
+ & =R_{3}l_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|^{2}}(\hat{\v n}_{3}\cdot\nabla\psi)\\
+ & =R_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|^{2}}(\v n_{3}\cdot\nabla\psi).
+\end{align*}
+TODO: other edges either by conservation law or by vector projection.
+
+\subsection*{Reading input files from experiment}
+\begin{itemize}
+\item ASDEX Upgrade has two formats that are common: CLISTE and EFIT/EQDSK
+(g-files)
+\item Much data in /proj/plasma/RMP/DATA/ASDEX/ and /proj/plasma/RMP/DATA2017/ASDEX/
+\end{itemize}
 
 \subsection*{Reduced MHD (unfinished)}
 
@@ -183,61 +149,6 @@ so
 Amperes law becomes
 \begin{align*}
 \boldsymbol{B}_{n} & =\frac{1}{4\pi}\boldsymbol{J}_{n}.
-\end{align*}
-
-\subsection*{Reading input files from experiment}
-\begin{itemize}
-\item ASDEX Upgrade has two formats that are common: CLISTE and EFIT/EQDSK
-(g-files)
-\item Much data in /proj/plasma/RMP/DATA/ASDEX/ and /proj/plasma/RMP/DATA2017/ASDEX/
-\end{itemize}
-
-\subsection*{The reason why we choose Bnpsi the way we do}
-
-We have
-\begin{align*}
-\v B_{0}^{\mathrm{pol}}\cdot\nabla p_{n}+\i np_{n}\frac{B_{0\varphi}}{R^{2}} & =-B_{n}^{\psi}p_{0}^{\prime}(\psi)\\
- & =-\frac{B_{0\varphi}R_{0}}{R^{2}}p_{0}^{\prime}(\psi)\\
-\left(\begin{array}{c}
-B_{0R}\cdot\partial_{R}\\
-B_{0Z}\cdot\partial_{Z}\\
-0\cdot\partial_{\ph}
-\end{array}\right)p_{n}(R,Z)e^{in\ph}
-\end{align*}
-\begin{align*}
-\v B_{0}^{\mathrm{pol}}\cdot\nabla p_{n}+\i np_{n}\frac{B_{0\varphi}}{R^{2}} & =-B_{n}^{\psi}p_{0}^{\prime}(\psi)\\
-R^{2}\v B_{0}^{\mathrm{pol}}\cdot\nabla p_{n}+\i np_{n}B_{0\ph} & =-B_{0\varphi}R_{0}p_{0}^{\prime}(\psi)
-\end{align*}
-Solve magnetic differential equation
-\begin{align*}
-\v B_{0}\cdot\nabla\delta p & =-\delta B^{\psi}p_{0}^{\prime}(\psi)
-\end{align*}
-
-Can also write as conservation law, $\nabla\cdot\v B_{0}=0$ (otherwise,
-another source term would appear)
-\begin{align*}
-\nabla\cdot(\delta p\v B_{0})-(\nabla\cdot\v B_{0})\delta p & =-\delta B^{\psi}p_{0}^{\prime}(\psi)
-\end{align*}
-Divergence operator in any coordinates
-\[
-\nabla\cdot\v v=\frac{1}{\sqrt{g}}\partial_{k}(\sqrt{g}v^{k})
-\]
-In symmstry flux coordinates $(\rho,\vartheta,\zeta)=(\sigma_{\mathrm{pol}}\psi,\vartheta,\frac{\pi}{2}-\varphi)$
-\begin{align}
-\sqrt{g} & =\frac{1}{B_{0}^{\vartheta}}=\frac{q}{B_{0}^{\zeta}}\\
- & =\frac{q}{-B_{0}^{\varphi}}=\frac{qR^{2}}{-B_{0\varphi}}.
-\end{align}
-In Fourier representation: $\delta p=p_{mn}(\rho)e^{i(m\tht+n\ph)}=p_{mn}(\rho)e^{i(m\tht-n(\zeta-\pi/2))}$
-we get
-\begin{align*}
-\nabla\cdot(p_{mn}\v B_{0}) & =\frac{1}{\sqrt{g}}\partial_{k}(\sqrt{g}p_{mn}B_{0}^{k})\\
- & =imp_{mn}B_{0}^{\tht}-inp_{mn}B_{0}^{\zeta}.
-\end{align*}
-Original expression
-\begin{align*}
-\nabla\cdot(\delta p\v B_{0}) & =-\nabla\cdot(p\delta\v B)\\
-imp_{mn}B_{0}^{\tht}-inp_{mn}B_{0}^{\zeta} & =-\frac{1}{\sqrt{g}}\partial_{k}(\sqrt{g}p_{0}B_{mn}^{k})\\
- & =-\frac{1}{\sqrt{g}}\partial_{k}(\sqrt{g}p_{0}B_{mn}^{k})
 \end{align*}
 
 \end{document}
