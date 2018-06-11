@@ -63,10 +63,16 @@ is positive for counter-clockwise and negative for clockwise orientation
 in the poloidal plane. The Jacobian of symmetry flux coordinates $(\rho,\theta,\zeta)=(\sigma_{\mathrm{pol}}\psi,\theta,\frac{\pi}{2}-\varphi)$
 is
 \begin{align}
-\sqrt{g} & =\frac{1}{B_{0}^{\vartheta}}=\frac{q}{B_{0}^{\zeta}}\\
- & =\frac{q}{-B_{0}^{\varphi}}=\frac{qR^{2}}{-B_{0\varphi}}.
+\sqrt{g} & =\frac{\sigma_{\mathrm{pol}}}{B_{0}^{\vartheta}}=\sigma_{\mathrm{pol}}\frac{q}{B_{0}^{\zeta}}\\
+ & =-\sigma_{\mathrm{pol}}\frac{q}{B_{0}^{\varphi}}=-\sigma_{\mathrm{pol}}\frac{qR^{2}}{B_{0\varphi}}.
 \end{align}
-Note that in our configuration (ASDEX Upgrade) $\sigma_{\mathrm{pol}}=-1$.
+If $B_{0}^{\tht}$ changes sign, both, $\sigma_{\mathrm{pol}}$ and
+$q$ change sign, and a sign change in $B_{0}^{\ph}$ leads to a sign
+change also in $q$. Thus, $\sqrt{g}$ is always positive. The sign
+of $q$ describes the sign of the helicity in $(\tht,\zeta)$ and
+can be computed as described below. Note that in our configuration
+(ASDEX Upgrade) $\sigma_{\mathrm{pol}}=-1$ and $B_{0\varphi}$ is
+positive, so $q$ is negative. 
 
 \subsection*{Safety factor}
 
@@ -78,19 +84,78 @@ the toroidal flux $\psi_{\text{tor}}$ is given by
 \end{align}
 The safety factor is then given by
 \begin{align*}
-q & =\frac{\psi_{\mathrm{tor}}^{\prime}(\rho)}{\psi_{\mathrm{pol}}^{\prime}(\rho)}=\sigma_{\mathrm{pol}}\frac{\d\psi_{\mathrm{tor}}}{\d\psi}\\
- & =\sigma_{\mathrm{pol}}\frac{1}{2\pi}\frac{\d}{\d\psi}\int\d R\d ZB_{(\ph)}.
+q & =\frac{\psi_{\mathrm{tor}}^{\prime}(\rho)}{\psi_{\mathrm{pol}}^{\prime}(\rho)}=\frac{\psi_{\mathrm{tor}}^{\prime}(\sigma_{\mathrm{pol}}\psi)}{\psi_{\mathrm{pol}}^{\prime}(\sigma_{\mathrm{pol}}\psi)}=\frac{\d\psi_{\mathrm{tor}}}{\d\psi}\\
+ & =-\frac{1}{2\pi}\frac{\d}{\d\psi}\int\d R\d ZB_{(\ph)}.
 \end{align*}
 This quantity can be evaluated numerically by adding up $B_{(\ph)}$
 inside the volume between two flux surfaces and dividing by the the
 difference in $\psi$:
 \begin{align*}
-q & \approx\frac{\sigma_{\mathrm{pol}}}{2\pi\Delta\psi}\sum_{\triangle}B_{(\ph)}S_{\triangle}
+q & \approx-\frac{1}{2\pi\Delta\psi}\sum_{\triangle}B_{(\ph)}S_{\triangle}
 \end{align*}
 where the sum is taken over all triangles inside a triangle strip,
 and $S_{\Delta}$ is the respective triangle surface area.
 
 \subsection*{Generating a non-resonant test field}
+
+The axisymmetric equilibrium field $\v B_{0}$ lies on nested flux
+surfaces $\psi=\mathrm{const.}$ meaning
+\[
+\v B_{0}\cdot\nabla\psi=0.
+\]
+If the perturbed field shall still lie on distorted, but not broken,
+flux surfaces (without magnetic islands), a new flux surface label
+$\psi+\delta\psi$ must exist fulfilling
+
+\[
+(\v B_{0}+\delta\v B)\cdot\nabla(\psi+\delta\psi)=0
+\]
+for the perturbed magnetic field $\v B_{0}+\delta\v B$, where $\delta\psi$
+remains small and continuous within the plasma. In that case we can
+use a linear order expansion
+\[
+\underbrace{\v B_{0}\cdot\nabla\psi}_{=0}+\v B_{0}\cdot\nabla\delta\psi+\delta\v B\cdot\nabla\psi+\mathcal{O}(\varepsilon^{2})=0,
+\]
+or in coordinate form with symmetry flux coordinates $(\rho,\tht,\zeta)$,
+\[
+B_{0}^{\tht}\frac{\partial\delta\psi}{\partial\tht}+B_{0}^{\zeta}\frac{\partial\delta\psi}{\delta\zeta}+\delta B^{\rho}=0.
+\]
+With safety factor $q$ defined for clockwise toroidal direction $\d\zeta=-\d\ph$
+(see above) we obtain
+\begin{align*}
+\left(\frac{\partial}{\partial\tht}-q\frac{\partial}{\partial\ph}\right)\delta\psi & =-\sigma_{\mathrm{pol}}\frac{\delta B^{\psi}}{B_{0}^{\tht}}\\
+ & =-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\psi}}{\psi_{\mathrm{tor}}^{\prime}(\rho)}=-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\psi}}{\sigma_{\mathrm{pol}}\psi_{\mathrm{tor}}^{\prime}(\psi)}\\
+ & =-\frac{\sqrt{g}\delta B^{\psi}}{q}.
+\end{align*}
+Written in terms of toroidal Fourier harmonics $m,n$ in $\tht,\ph$
+the equation becomes
+\begin{align*}
+\psi_{mn} & =-\frac{\left(\sqrt{g}\delta B^{\psi}\right)_{mn}}{q\left(m-nq\right)}=-\frac{\left(\sqrt{g}B_{n}^{\psi}\right)_{m}}{q\left(m-nq\right)}.
+\end{align*}
+The safety factor $q$ is a flux function, but $\sqrt{g}$ depends
+also on $\tht$, so poloidal harmonics $m$ have to be taken outside
+the bracket here. In order to fulfill the original requirement not
+to break flux surfaces, $\psi_{mn}$ must never diverge, so $(m-nq)$
+must not become zero. We can avoid such resonant surfaces if $\left(\sqrt{g}B_{n}^{\psi}\right)_{m}=0$
+for all possible $m$ that could lead to a resonance. The simplest
+way to do so is to make $\sqrt{g}B_{n}^{\psi}$ a flux function, possessing
+only the poloidally symmetric harmonic $m=0$. More generally, also
+$m<nq_{\mathrm{min}}$ and $m>nq_{\mathrm{max}}$ are possible, but
+for nonzeri $m$ a transformation to the flux angle $\tht$ has to
+be computed explicitly.
+
+Using the Jacobian of symmetry flux coordinates we obtain
+\begin{align*}
+\psi_{mn} & =\frac{\sigma_{\mathrm{pol}}}{m-nq}\left(\frac{R^{2}}{B_{0\varphi}}B_{n}^{\psi}\right)_{m},
+\end{align*}
+so if $B_{0\ph}=\mathrm{const.}$ we are allowed to use any value
+$B_{n}^{\psi}=C(\psi)/R^{2}$, where $C(\psi)$ is a flux function,
+to generate a non-resonant field. The other components of $\delta\v B$
+are not relevant for the resonance condition and just need to fulfill
+divergence-freeness.
+
+\subsection*{Generating a non-resonant test field (old, doesn't work with purely
+radial)}
 
 We would like to have a completely non-resonant and only radial field
 \begin{align*}

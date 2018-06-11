@@ -242,17 +242,61 @@ The flux angle
  is
 \begin_inset Formula 
 \begin{align}
-\sqrt{g} & =\frac{1}{B_{0}^{\vartheta}}=\frac{q}{B_{0}^{\zeta}}\\
- & =\frac{q}{-B_{0}^{\varphi}}=\frac{qR^{2}}{-B_{0\varphi}}.
+\sqrt{g} & =\frac{\sigma_{\mathrm{pol}}}{B_{0}^{\vartheta}}=\sigma_{\mathrm{pol}}\frac{q}{B_{0}^{\zeta}}\\
+ & =-\sigma_{\mathrm{pol}}\frac{q}{B_{0}^{\varphi}}=-\sigma_{\mathrm{pol}}\frac{qR^{2}}{B_{0\varphi}}.
 \end{align}
 
 \end_inset
 
-Note that in our configuration (ASDEX Upgrade) 
-\begin_inset Formula $\sigma_{\mathrm{pol}}=-1$
+If 
+\begin_inset Formula $B_{0}^{\tht}$
+\end_inset
+
+ changes sign, both, 
+\begin_inset Formula $\sigma_{\mathrm{pol}}$
+\end_inset
+
+ and 
+\begin_inset Formula $q$
+\end_inset
+
+ change sign, and a sign change in 
+\begin_inset Formula $B_{0}^{\ph}$
+\end_inset
+
+ leads to a sign change also in 
+\begin_inset Formula $q$
 \end_inset
 
 .
+ Thus, 
+\begin_inset Formula $\sqrt{g}$
+\end_inset
+
+ is always positive.
+ The sign of 
+\begin_inset Formula $q$
+\end_inset
+
+ describes the sign of the helicity in 
+\begin_inset Formula $(\tht,\zeta)$
+\end_inset
+
+ and can be computed as described below.
+ Note that in our configuration (ASDEX Upgrade) 
+\begin_inset Formula $\sigma_{\mathrm{pol}}=-1$
+\end_inset
+
+ and 
+\begin_inset Formula $B_{0\varphi}$
+\end_inset
+
+ is positive, so 
+\begin_inset Formula $q$
+\end_inset
+
+ is negative.
+ 
 \end_layout
 
 \begin_layout Subsection*
@@ -280,8 +324,8 @@ With the usual toroidal flux angle
 The safety factor is then given by
 \begin_inset Formula 
 \begin{align*}
-q & =\frac{\psi_{\mathrm{tor}}^{\prime}(\rho)}{\psi_{\mathrm{pol}}^{\prime}(\rho)}=\sigma_{\mathrm{pol}}\frac{\d\psi_{\mathrm{tor}}}{\d\psi}\\
- & =\sigma_{\mathrm{pol}}\frac{1}{2\pi}\frac{\d}{\d\psi}\int\d R\d ZB_{(\ph)}.
+q & =\frac{\psi_{\mathrm{tor}}^{\prime}(\rho)}{\psi_{\mathrm{pol}}^{\prime}(\rho)}=\frac{\psi_{\mathrm{tor}}^{\prime}(\sigma_{\mathrm{pol}}\psi)}{\psi_{\mathrm{pol}}^{\prime}(\sigma_{\mathrm{pol}}\psi)}=\frac{\d\psi_{\mathrm{tor}}}{\d\psi}\\
+ & =-\frac{1}{2\pi}\frac{\d}{\d\psi}\int\d R\d ZB_{(\ph)}.
 \end{align*}
 
 \end_inset
@@ -298,7 +342,7 @@ This quantity can be evaluated numerically by adding up
 :
 \begin_inset Formula 
 \begin{align*}
-q & \approx\frac{\sigma_{\mathrm{pol}}}{2\pi\Delta\psi}\sum_{\triangle}B_{(\ph)}S_{\triangle}
+q & \approx-\frac{1}{2\pi\Delta\psi}\sum_{\triangle}B_{(\ph)}S_{\triangle}
 \end{align*}
 
 \end_inset
@@ -312,6 +356,200 @@ where the sum is taken over all triangles inside a triangle strip, and
 
 \begin_layout Subsection*
 Generating a non-resonant test field
+\end_layout
+
+\begin_layout Standard
+The axisymmetric equilibrium field 
+\begin_inset Formula $\v B_{0}$
+\end_inset
+
+ lies on nested flux surfaces 
+\begin_inset Formula $\psi=\mathrm{const.}$
+\end_inset
+
+ meaning
+\begin_inset Formula 
+\[
+\v B_{0}\cdot\nabla\psi=0.
+\]
+
+\end_inset
+
+If the perturbed field shall still lie on distorted, but not broken, flux
+ surfaces (without magnetic islands), a new flux surface label 
+\begin_inset Formula $\psi+\delta\psi$
+\end_inset
+
+ must exist fulfilling
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\[
+(\v B_{0}+\delta\v B)\cdot\nabla(\psi+\delta\psi)=0
+\]
+
+\end_inset
+
+for the perturbed magnetic field 
+\begin_inset Formula $\v B_{0}+\delta\v B$
+\end_inset
+
+, where 
+\begin_inset Formula $\delta\psi$
+\end_inset
+
+ remains small and continuous within the plasma.
+ In that case we can use a linear order expansion
+\begin_inset Formula 
+\[
+\underbrace{\v B_{0}\cdot\nabla\psi}_{=0}+\v B_{0}\cdot\nabla\delta\psi+\delta\v B\cdot\nabla\psi+\mathcal{O}(\varepsilon^{2})=0,
+\]
+
+\end_inset
+
+or in coordinate form with symmetry flux coordinates 
+\begin_inset Formula $(\rho,\tht,\zeta)$
+\end_inset
+
+,
+\begin_inset Formula 
+\[
+B_{0}^{\tht}\frac{\partial\delta\psi}{\partial\tht}+B_{0}^{\zeta}\frac{\partial\delta\psi}{\delta\zeta}+\delta B^{\rho}=0.
+\]
+
+\end_inset
+
+With safety factor 
+\begin_inset Formula $q$
+\end_inset
+
+ defined for clockwise toroidal direction 
+\begin_inset Formula $\d\zeta=-\d\ph$
+\end_inset
+
+ (see above) we obtain
+\begin_inset Formula 
+\begin{align*}
+\left(\frac{\partial}{\partial\tht}-q\frac{\partial}{\partial\ph}\right)\delta\psi & =-\sigma_{\mathrm{pol}}\frac{\delta B^{\psi}}{B_{0}^{\tht}}\\
+ & =-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\psi}}{\psi_{\mathrm{tor}}^{\prime}(\rho)}=-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\psi}}{\sigma_{\mathrm{pol}}\psi_{\mathrm{tor}}^{\prime}(\psi)}\\
+ & =-\frac{\sqrt{g}\delta B^{\psi}}{q}.
+\end{align*}
+
+\end_inset
+
+Written in terms of toroidal Fourier harmonics 
+\begin_inset Formula $m,n$
+\end_inset
+
+ in 
+\begin_inset Formula $\tht,\ph$
+\end_inset
+
+ the equation becomes
+\begin_inset Formula 
+\begin{align*}
+\psi_{mn} & =-\frac{\left(\sqrt{g}\delta B^{\psi}\right)_{mn}}{q\left(m-nq\right)}=-\frac{\left(\sqrt{g}B_{n}^{\psi}\right)_{m}}{q\left(m-nq\right)}.
+\end{align*}
+
+\end_inset
+
+The safety factor 
+\begin_inset Formula $q$
+\end_inset
+
+ is a flux function, but 
+\begin_inset Formula $\sqrt{g}$
+\end_inset
+
+ depends also on 
+\begin_inset Formula $\tht$
+\end_inset
+
+, so poloidal harmonics 
+\begin_inset Formula $m$
+\end_inset
+
+ have to be taken outside the bracket here.
+ In order to fulfill the original requirement not to break flux surfaces,
+ 
+\begin_inset Formula $\psi_{mn}$
+\end_inset
+
+ must never diverge, so 
+\begin_inset Formula $(m-nq)$
+\end_inset
+
+ must not become zero.
+ We can avoid such resonant surfaces if 
+\begin_inset Formula $\left(\sqrt{g}B_{n}^{\psi}\right)_{m}=0$
+\end_inset
+
+ for all possible 
+\begin_inset Formula $m$
+\end_inset
+
+ that could lead to a resonance.
+ The simplest way to do so is to make 
+\begin_inset Formula $\sqrt{g}B_{n}^{\psi}$
+\end_inset
+
+ a flux function, possessing only the poloidally symmetric harmonic 
+\begin_inset Formula $m=0$
+\end_inset
+
+.
+ More generally, also 
+\begin_inset Formula $m<nq_{\mathrm{min}}$
+\end_inset
+
+ and 
+\begin_inset Formula $m>nq_{\mathrm{max}}$
+\end_inset
+
+ are possible, but for nonzeri 
+\begin_inset Formula $m$
+\end_inset
+
+ a transformation to the flux angle 
+\begin_inset Formula $\tht$
+\end_inset
+
+ has to be computed explicitly.
+\end_layout
+
+\begin_layout Standard
+Using the Jacobian of symmetry flux coordinates we obtain
+\begin_inset Formula 
+\begin{align*}
+\psi_{mn} & =\frac{\sigma_{\mathrm{pol}}}{m-nq}\left(\frac{R^{2}}{B_{0\varphi}}B_{n}^{\psi}\right)_{m},
+\end{align*}
+
+\end_inset
+
+so if 
+\begin_inset Formula $B_{0\ph}=\mathrm{const.}$
+\end_inset
+
+ we are allowed to use any value 
+\begin_inset Formula $B_{n}^{\psi}=C(\psi)/R^{2}$
+\end_inset
+
+, where 
+\begin_inset Formula $C(\psi)$
+\end_inset
+
+ is a flux function, to generate a non-resonant field.
+ The other components of 
+\begin_inset Formula $\delta\v B$
+\end_inset
+
+ are not relevant for the resonance condition and just need to fulfill divergenc
+e-freeness.
+\end_layout
+
+\begin_layout Subsection*
+Generating a non-resonant test field (old, doesn't work with purely radial)
 \end_layout
 
 \begin_layout Standard
