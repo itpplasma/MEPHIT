@@ -527,19 +527,15 @@ Using the Jacobian of symmetry flux coordinates we obtain
 
 \end_inset
 
-so if 
-\begin_inset Formula $B_{0\ph}=\mathrm{const.}$
-\end_inset
-
- we are allowed to use any value 
-\begin_inset Formula $B_{n}^{\psi}=C(\psi)/R^{2}$
+so, to generate a non-resonant field, we are allowed to use any value 
+\begin_inset Formula $B_{n}^{\psi}=C(\psi)B_{0\ph}/R^{2}$
 \end_inset
 
 , where 
 \begin_inset Formula $C(\psi)$
 \end_inset
 
- is a flux function, to generate a non-resonant field.
+ is a flux function.
  The other components of 
 \begin_inset Formula $\delta\v B$
 \end_inset
@@ -664,7 +660,7 @@ so
 Amperes law becomes
 \begin_inset Formula 
 \begin{align*}
-\boldsymbol{B}_{n} & =\frac{1}{4\pi}\boldsymbol{J}_{n}.
+\nabla\times\boldsymbol{B}_{n} & =\frac{1}{4\pi}\boldsymbol{J}_{n}.
 \end{align*}
 
 \end_inset
