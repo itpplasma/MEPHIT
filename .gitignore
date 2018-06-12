@@ -2,6 +2,20 @@
 *.mod
 *.o
 *.x
-BUILD/*
+*.aux
+*.log
+*.bbl
+*.fls
+*.out
+*.fdb_latexmk
+*.pdf
+*.blg
+*.bcf
+*.run.xml
+*.toc
+\#*\#
+BUILD*
 DOC/doxygen
+__pycache__
+
 
