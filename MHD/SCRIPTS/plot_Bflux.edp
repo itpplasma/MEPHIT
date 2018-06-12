@@ -1,0 +1,73 @@
+//include "getARGV.idp" 
+
+real c = 29979245800.0; // speed of light
+
+real n = 2.0;  // mode number
+
+bool doplot = true;
+mesh Th = readmesh("maxwell.msh");
+
+fespace Vh0(Th,P0);
+fespace Vh1(Th,P1);
+fespace Vh2(Th,P2);
+fespace Hrot(Th,RT0Ortho);
+fespace Hdiv(Th,RT0); 
+
+Hrot <complex> [ax,ay],[wx,wy];
+Hdiv <complex> [Br,Bz];
+Hdiv [ReBr,ReBz], [ImBr,ImBz];
+Vh0 <complex> Bp;
+Vh0 ReBp, ImBp;
+
+Hrot [ux,uy],[vx,vy];   // for edge orientation
+[ux,uy] = [1,0];
+[vx,vy] = [0,1];
+
+Br[] = 0.0 + 0.0i; Bz[] = 0.0 + 0.0i;
+
+// count triangles in internal region 0
+int nti = 0;
+for (int k=0; k<Th.nt; k++) {
+  if(Th[k].label==0)
+    nti++;
+}
+
+ifstream ifile("Bn_flux_test.dat");
+for (int k=0; k<nti; k++) {
+  real Jnr1, Jnr2, Jnr3, Jni1, Jni2, Jni3, Bpr, Bpi, sig;
+  ifile >> Jnr1 >> Jni1 >> Jnr2 >> Jni2 >> Jnr3 >> Jni3 >> Bpr >> Bpi;
+  
+  // check orientation of edges and assign
+  // normal flux coordinate accordingly
+  if(abs(ux[][Hrot(k,2)]) > abs(vx[][Hrot(k,2)]))
+    sig = (Th[k][1].x-Th[k][0].x)/ux[][Hrot(k,2)];
+  else
+    sig = (Th[k][1].y-Th[k][0].y)/vx[][Hrot(k,2)];
+  Br[][Hdiv(k,2)] = sig*(Jnr1 + 1.0i*Jni1);
+  
+  if(abs(ux[][Hrot(k,0)]) > abs(vx[][Hrot(k,0)]))
+    sig = (Th[k][2].x-Th[k][1].x)/ux[][Hrot(k,0)];
+  else
+    sig = (Th[k][2].y-Th[k][1].y)/vx[][Hrot(k,0)];
+  Br[][Hdiv(k,0)] = sig*(Jnr2 + 1.0i*Jni2);
+  
+  if(abs(ux[][Hrot(k,1)]) > abs(vx[][Hrot(k,1)]))
+    sig = (Th[k][0].x-Th[k][2].x)/ux[][Hrot(k,1)];
+  else
+    sig = (Th[k][0].y-Th[k][2].y)/vx[][Hrot(k,1)];
+  Br[][Hdiv(k,1)] = sig*(Jnr3 + 1.0i*Jni3);
+
+  Bp[][k] = Bpr + 1.0i*Bpi;
+}
+
+
+[ReBr,ReBz] = [real(Br),real(Bz)];
+[ImBr,ImBz] = [imag(Br),imag(Bz)];
+ReBp = real(Bp);
+ImBp = imag(Bp);
+
+plot([ReBr,ReBz],wait=true);
+plot([ImBr,ImBz],wait=true);
+plot(ReBp,fill=true,wait=true);
+plot(ImBp,fill=true,wait=true);
+

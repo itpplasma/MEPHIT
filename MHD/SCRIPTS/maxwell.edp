@@ -1,0 +1,182 @@
+//
+// Magnetostatics with Fourier modes in toroidal angle
+//
+// C. Albert, July 2016
+//
+//
+
+include "getARGV.idp" 
+
+real c = 29979245800.0; // speed of light
+
+real n = 2.0;  // mode number
+
+bool doplot = true;
+mesh Th = readmesh(getARGV(1,"maxwell.msh"));
+
+fespace Vh0(Th,P0);
+fespace Vh1(Th,P1);
+fespace Vh2(Th,P2);
+fespace Hrot(Th,RT0Ortho);
+fespace Hdiv(Th,RT0); 
+
+Hrot <complex> [ax,ay],[wx,wy];
+Hdiv <complex> [Jr,Jz], [br,bz], [rBr, rBz];
+Vh0 <complex> bphi, rBp;
+Vh0 brr, bri, bzr, bzi; // output on triangle faces
+
+Hrot [ux,uy],[vx,vy];   // for edge orientation
+[ux,uy] = [1,0];
+[vx,vy] = [0,1];
+
+Jr[] = 0.0 + 0.0i; Jz[] = 0.0 + 0.0i;
+
+// count triangles in internal region 0
+int nti = 0;
+for (int k=0; k<Th.nt; k++) {
+  if(Th[k].label==0)
+    nti++;
+}
+
+// flag for run parameters
+int flag = getARGV(3,0);
+if(flag > 0)
+  doplot = false; // no plot for production runs
+if(flag == 1)
+  nti = Th.nt;    // validation run with currents given on extended
+
+ifstream ifile(getARGV(2,"currents.dat"));
+for (int k=0; k<nti; k++) {
+  real Jnr1, Jnr2, Jnr3, Jni1, Jni2, Jni3, sig;
+  ifile >> Jnr1 >> Jnr2 >> Jnr3 >> Jni1 >> Jni2 >> Jni3;
+  
+  // check orientation of edges and assign
+  // normal flux coordinate accordingly
+  if(abs(ux[][Hrot(k,2)]) > abs(vx[][Hrot(k,2)]))
+    sig = (Th[k][1].x-Th[k][0].x)/ux[][Hrot(k,2)];
+  else
+    sig = (Th[k][1].y-Th[k][0].y)/vx[][Hrot(k,2)];
+  Jr[][Hdiv(k,2)] = sig*(Jnr1 + 1.0i*Jni1);
+  
+  if(abs(ux[][Hrot(k,0)]) > abs(vx[][Hrot(k,0)]))
+    sig = (Th[k][2].x-Th[k][1].x)/ux[][Hrot(k,0)];
+  else
+    sig = (Th[k][2].y-Th[k][1].y)/vx[][Hrot(k,0)];
+  Jr[][Hdiv(k,0)] = sig*(Jnr2 + 1.0i*Jni2);
+  
+  if(abs(ux[][Hrot(k,1)]) > abs(vx[][Hrot(k,1)]))
+    sig = (Th[k][0].x-Th[k][2].x)/ux[][Hrot(k,1)];
+  else
+    sig = (Th[k][0].y-Th[k][2].y)/vx[][Hrot(k,1)];
+  Jr[][Hdiv(k,1)] = sig*(Jnr3 + 1.0i*Jni3);
+}
+
+solve Ampere([ax,ay],[wx,wy],solver=LU) = // defines the PDE
+int2d(Th)(x*(dx(wy)-dy(wx))*(dx(ay)-dy(ax)))
+  + int2d(Th)(n^2/x*[wx,wy]'*[ax,ay])
+  - int2d(Th)(4.0*pi/c*[wx,wy]'*[Jr,Jz])
+  + on(1,ax=0,ay=0);
+
+[br,bz] = [1.0i*n*ay/x,-1.0i*n*ax/x];
+[rBr,rBz] = [1.0i*n*ay,-1.0i*n*ax];
+rBp = -(dx(ay)-dy(ax));
+
+bphi = -(dx(ay)-dy(ax));
+
+brr = real(br);
+bzr = real(bz);
+bri = imag(br);
+bzi = imag(bz);
+
+if(flag == 1) // validation run
+  {
+    ofstream ofile("maxwell.out");
+    ofile.precision(16);
+    for (int k=0; k<Vh0.ndof; k++) {
+      ofile.scientific 
+	<< brr[][k] << "\t" << bzr[][k] << "\t"
+	<< bri[][k] << "\t" << bzi[][k] << endl;
+    }
+  }
+
+if (doplot) {
+  Hdiv [Jrp,Jzp],[brp,bzp];
+  Vh0 bphip;
+  [Jrp,Jzp] = [real(Jr),real(Jz)];
+  [brp,bzp] = [imag(br),imag(bz)];
+  
+  plot(Th,wait=true);
+  plot([Jrp,Jzp],wait=true,value=true);
+  plot([brp,bzp],wait=true,value=true);
+  plot(bphi,wait=true,fill=true,value=true);
+ }
+
+//----------------------------------------------------------
+// output hpsi.dat, containing B/BMOD*GRAD(PSI_POL)
+//
+
+Vh1 bmod, psipol;
+Hrot [dpsir,dpsiz];
+Vh0 <complex> hr;
+Vh0 hrr, hri;
+Vh0 reg;
+
+bmod[] = 1e-30;
+
+ifstream bmodfile("bmod_psipol.dat");
+for (int kt=0; kt<nti; kt++) {
+  real b1, b2, b3, psi1, psi2, psi3;
+  bmodfile >> b1 >> b2 >> b3 >> psi1 >> psi2 >> psi3;
+  bmod[][Th[kt][0]] = b1+1e-30;
+  bmod[][Th[kt][1]] = b2+1e-30;
+  bmod[][Th[kt][2]] = b3+1e-30;
+  psipol[][Th[kt][0]] = psi1;
+  psipol[][Th[kt][1]] = psi2;
+  psipol[][Th[kt][2]] = psi3;
+}
+
+[dpsir,dpsiz] = [dx(psipol),dy(psipol)];
+reg = (region==0)*(bmod>0)/bmod;
+hr = reg*(dx(psipol)*br+dy(psipol)*bz);
+hrr = real(hr);
+hri = imag(hr);
+
+if (doplot) {
+  plot(bmod,wait=true);
+  plot(psipol,wait=true);
+  plot([dpsir,dpsiz],wait=true);
+  plot(hrr,fill=true,value=true,wait=true);
+  plot(hri,fill=true,value=true,wait=true);
+ }
+
+ofstream ofile2("hpsi.dat");
+ofile2.precision(16);
+for (int k=0; k<nti; k++) {
+  ofile2.scientific 
+	<< hrr[][k] << "\t" << hri[][k] << endl;
+}
+
+ofstream ofile3("Bn_flux_fem.dat");
+ofile3.precision(16);
+for (int k=0; k<nti; k++) {
+  real sig;
+  if(abs(ux[][Hrot(k,2)]) > abs(vx[][Hrot(k,2)]))
+    sig = (Th[k][1].x-Th[k][0].x)/ux[][Hrot(k,2)];
+  else
+    sig = (Th[k][1].y-Th[k][0].y)/vx[][Hrot(k,2)];
+  ofile3.scientific << sig*real(rBr[][Hdiv(k,2)]) <<  "\t" << sig*imag(rBr[][Hdiv(k,2)]) << "\t";
+  
+  if(abs(ux[][Hrot(k,0)]) > abs(vx[][Hrot(k,0)]))
+    sig = (Th[k][2].x-Th[k][1].x)/ux[][Hrot(k,0)];
+  else
+    sig = (Th[k][2].y-Th[k][1].y)/vx[][Hrot(k,0)];
+  ofile3.scientific << sig*real(rBr[][Hdiv(k,0)]) <<  "\t" << sig*imag(rBr[][Hdiv(k,0)]) << "\t";
+  
+  if(abs(ux[][Hrot(k,1)]) > abs(vx[][Hrot(k,1)]))
+    sig = (Th[k][0].x-Th[k][2].x)/ux[][Hrot(k,1)];
+  else
+    sig = (Th[k][0].y-Th[k][2].y)/vx[][Hrot(k,1)];
+  ofile3.scientific << sig*real(rBr[][Hdiv(k,1)]) <<  "\t" << sig*imag(rBr[][Hdiv(k,1)]) << "\t";
+  
+  ofile3.scientific << real(rBp[][k]) << "\t" << imag(rBp[][k]) << endl;
+}
