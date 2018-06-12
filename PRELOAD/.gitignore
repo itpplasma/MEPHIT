@@ -36,3 +36,14 @@ triangles.fmt
 wall_loads.dat
 writeout.x
 wsrr_rec_fix.dat
+BR_im.dat
+BR_re.dat
+BZ_im.dat
+BZ_re.dat
+Opoint.dat
+VACFIELD/Bn_flux.dat.avg
+VACFIELD/hpsi_vac.dat.avg
+VACFIELD/hpsi_vac_fem.dat
+VACFIELD/hpsi_vac_flux.dat
+bmod_psipol_vac.dat
+hpsi_vac.dat

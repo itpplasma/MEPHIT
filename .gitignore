@@ -1,3 +1,5 @@
+OBJS
+BUILD*
 *~
 *.mod
 *.o
@@ -14,8 +16,6 @@
 *.run.xml
 *.toc
 \#*\#
-BUILD*
 DOC/doxygen
 __pycache__
-
-
+.vscode
