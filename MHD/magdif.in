@@ -3,10 +3,10 @@
    runmode = 1                                  ! 0: single iteration, 1: direct iterations,
                                                 ! 2: preconditioned iterations
    nonres = .false.                             ! use non-resonant test case
-   point_file = 'points.dat'                    ! points.dat from PRELOAD
-   tri_file = 'triangles.dat'                   ! triangles.dat from PRELOAD
-   Bnflux_vac_file = 'VACFIELD/Bn_flux.dat'     ! Bn_flux.dat from PRELOAD
-   hpsi_file = 'VACFIELD/hpsi_vac.dat'          ! hpsi_vac.dat from PRELOAD
+   point_file = '../PRELOAD/points.dat'         ! points.dat from PRELOAD
+   tri_file = '../PRELOAD/triangles.dat'        ! triangles.dat from PRELOAD
+   Bnflux_vac_file = '../PRELOAD/VACFIELD/Bn_flux.dat'     ! Bn_flux.dat from PRELOAD
+   hpsi_file = '../PRELOAD/VACFIELD/hpsi_vac.dat'          ! hpsi_vac.dat from PRELOAD
    presn_file = 'test_pressure_x.out'           ! output file for presn
    currn_file = '/tmp/currents.dat'             ! output file for currn
    Bnflux_file = '/tmp/bnflux.dat'              ! perturbation field from FreeFEM++

@@ -7,6 +7,8 @@ Created on Mon Jul 18 09:15:14 2016
 """
 
 import numpy as np
+import matplotlib
+matplotlib.use('TkAgg')  
 import matplotlib.pyplot as plt
 import sys
 try:
