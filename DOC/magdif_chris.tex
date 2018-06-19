@@ -52,8 +52,10 @@ some point. Here, we use the convention of d'Haeseleer with radial
 coordinate growing towards the outside of the torus. As a radial variable
 we use $\rho=\sigma_{\mathrm{pol}}\psi$ with $\sigma_{\mathrm{pol}}=+1$
 for counterclockwise poloidal field $\v B_{0}^{\mathrm{pol}}$ and
-$\sigma_{\mathrm{pol}}=-1$ for clockwise field. The toroidal symmetry
-angle is defined in the direction opposite to $\ph$ with
+$\sigma_{\mathrm{pol}}=-1$ for clockwise field. Here $\psi$ is the
+normalized ribbon poloidal flux also usually used in MHD for the Grad-Shafranov-equation.
+The toroidal symmetry angle is defined in the direction opposite to
+$\ph$ with
 \begin{align*}
 \zeta & =\frac{\pi}{2}-\ph.
 \end{align*}
@@ -101,11 +103,11 @@ and $S_{\Delta}$ is the respective triangle surface area.
 The axisymmetric equilibrium field $\v B_{0}$ lies on nested flux
 surfaces $\psi=\mathrm{const.}$ meaning
 \[
-\v B_{0}\cdot\nabla\psi=0.
+\v B_{0}\cdot\nabla\psi=B_{0}^{\psi}=0.
 \]
 If the perturbed field shall still lie on distorted, but not broken,
-flux surfaces (without magnetic islands), a new flux surface label
-$\psi+\delta\psi$ must exist fulfilling
+flux surfaces (non-resonant, without magnetic islands), a new flux
+surface label $\psi+\delta\psi$ must exist fulfilling
 
 \[
 (\v B_{0}+\delta\v B)\cdot\nabla(\psi+\delta\psi)=0
@@ -118,19 +120,21 @@ use a linear order expansion
 \]
 or in coordinate form with symmetry flux coordinates $(\rho,\tht,\zeta)$,
 \[
-B_{0}^{\tht}\frac{\partial\delta\psi}{\partial\tht}+B_{0}^{\zeta}\frac{\partial\delta\psi}{\delta\zeta}+\delta B^{\rho}=0.
+B_{0}^{\tht}\frac{\partial\delta\psi}{\partial\tht}+B_{0}^{\zeta}\frac{\partial\delta\psi}{\partial\zeta}+\delta B^{\rho}\psi^{\prime}(\rho)=0.
 \]
-With safety factor $q$ defined for clockwise toroidal direction $\d\zeta=-\d\ph$
-(see above) we obtain
+Here we have used $\nabla\psi=\psi^{\prime}(\rho)\nabla\rho$. Further,
+$\psi^{\prime}(\rho)=\sigma_{\mathrm{pol}}$. With safety factor $q=B_{0}^{\zeta}/B_{0}^{\tht}$
+defined for clockwise toroidal direction $\d\zeta=-\d\ph$ (see above)
+by dividing through $B_{0}^{\tht}$, we obtain
 \begin{align*}
-\left(\frac{\partial}{\partial\tht}-q\frac{\partial}{\partial\ph}\right)\delta\psi & =-\sigma_{\mathrm{pol}}\frac{\delta B^{\psi}}{B_{0}^{\tht}}\\
- & =-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\psi}}{\psi_{\mathrm{tor}}^{\prime}(\rho)}=-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\psi}}{\sigma_{\mathrm{pol}}\psi_{\mathrm{tor}}^{\prime}(\psi)}\\
- & =-\frac{\sqrt{g}\delta B^{\psi}}{q}.
+\left(\frac{\partial}{\partial\tht}+q\frac{\partial}{\partial\zeta}\right)\delta\psi & =\left(\frac{\partial}{\partial\tht}-q\frac{\partial}{\partial\ph}\right)\delta\psi=-\sigma_{\mathrm{pol}}\frac{\delta B^{\rho}}{B_{0}^{\tht}}\\
+ & =-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\rho}}{\psi_{\mathrm{tor}}^{\prime}(\rho)}=-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\rho}}{\sigma_{\mathrm{pol}}\psi_{\mathrm{tor}}^{\prime}(\psi)}\\
+ & =-\frac{\sqrt{g}\delta B^{\rho}}{q}=-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\psi}}{q}.
 \end{align*}
 Written in terms of toroidal Fourier harmonics $m,n$ in $\tht,\ph$
 the equation becomes
 \begin{align*}
-\psi_{mn} & =-\frac{\left(\sqrt{g}\delta B^{\psi}\right)_{mn}}{q\left(m-nq\right)}=-\frac{\left(\sqrt{g}B_{n}^{\psi}\right)_{m}}{q\left(m-nq\right)}.
+\psi_{mn} & =-\sigma_{\mathrm{pol}}\frac{\left(\sqrt{g}\delta B^{\psi}\right)_{mn}}{q\left(m-nq\right)}=-\sigma_{\mathrm{pol}}\frac{\left(\sqrt{g}B_{n}^{\psi}\right)_{m}}{q\left(m-nq\right)}.
 \end{align*}
 The safety factor $q$ is a flux function, but $\sqrt{g}$ depends
 also on $\tht$, so poloidal harmonics $m$ have to be taken outside
@@ -141,12 +145,12 @@ for all possible $m$ that could lead to a resonance. The simplest
 way to do so is to make $\sqrt{g}B_{n}^{\psi}$ a flux function, possessing
 only the poloidally symmetric harmonic $m=0$. More generally, also
 $m<nq_{\mathrm{min}}$ and $m>nq_{\mathrm{max}}$ are possible, but
-for nonzeri $m$ a transformation to the flux angle $\tht$ has to
+for nonzero $m$ a transformation to the flux angle $\tht$ has to
 be computed explicitly.
 
 Using the Jacobian of symmetry flux coordinates we obtain
 \begin{align*}
-\psi_{mn} & =\frac{\sigma_{\mathrm{pol}}}{m-nq}\left(\frac{R^{2}}{B_{0\varphi}}B_{n}^{\psi}\right)_{m},
+\psi_{mn} & =\frac{1}{m-nq}\left(\frac{R^{2}}{B_{0\varphi}}B_{n}^{\psi}\right)_{m},
 \end{align*}
 so, to generate a non-resonant field, we are allowed to use any value
 $B_{n}^{\psi}=C(\psi)B_{0\ph}/R^{2}$, where $C(\psi)$ is a flux
@@ -156,42 +160,50 @@ the resonance condition and just need to fulfill divergence-freeness.
 \subsection*{Generating a non-resonant test field (old, doesn't work with purely
 radial)}
 
-We would like to have a completely non-resonant and only radial field
+We would like to have a completely non-resonant field
 \begin{align*}
 \delta\v B & =\v B_{n}e^{in\ph}
 \end{align*}
- with $B_{n}^{\ph}=B_{n}^{\tht}=0$. As an ansatz we take as a radial
-component of the field
+ with $B_{n}^{\tht}=0$. As an ansatz we take as a radial component
+of the field
 \begin{equation}
-B_{n}^{\psi}=\frac{B_{0\varphi}R_{0}}{qR^{2}}=-\frac{R_{0}}{\sqrt{g}}.
+B_{n}^{\psi}=\frac{B_{0\varphi}R_{0}}{R^{2}}=-\sigma_{\mathrm{pol}}\frac{qR_{0}}{\sqrt{g}}
 \end{equation}
-Divergence-freeness of $\delta\boldsymbol{B}$ is now possible for
-a field containing only the radial component $\delta B^{\rho}=\sigma_{\mathrm{pol}}\delta B^{\psi}$
+so
+\[
+B_{n}^{\rho}=-\frac{qR_{0}}{\sqrt{g}}
+\]
+and
+\[
+B_{n}^{\zeta}=-B_{n}^{\psi}F(\psi)=-\sigma_{\mathrm{pol}}B_{n}^{\rho}F(\rho).
+\]
+Divergence-freeness of $\delta\boldsymbol{B}$ is now possible with
+\begin{align*}
+0=\nabla\cdot\delta\v B & =\frac{1}{\sqrt{g}}\frac{\partial}{\partial x^{k}}\left(\sqrt{g}\delta B^{k}\right)\\
+ & =\frac{1}{\sqrt{g}}\left[\frac{\partial}{\partial\rho}\left(\sqrt{g}\delta B^{\rho}\right)+\frac{\partial}{\partial\zeta}\left(-\sigma_{\mathrm{pol}}\sqrt{g}\delta B^{\zeta}\right)\right]\\
+ & =\frac{1}{\sqrt{g}}\left[\frac{\partial}{\partial\rho}\left(-qR_{0}\right)-in\left(\sigma_{\mathrm{pol}}qR_{0}F(\rho)\right)\right].
+\end{align*}
+We should thus have 
+\begin{align*}
+q^{\prime}(\rho)R_{0} & =-in\sigma_{\mathrm{pol}}qR_{0}F(\rho)
+\end{align*}
+or
+\begin{align*}
+F & =-\sigma_{\mathrm{pol}}\frac{q^{\prime}(\rho)}{inq}=-\frac{q^{\prime}(\psi)}{inq}.
+\end{align*}
+We obtain
+\[
+\v B_{n}=B_{n}^{\psi}\v e_{\psi}+B_{n}^{\ph}\v e_{\ph}
+\]
 with
 \begin{align*}
-\nabla\cdot\delta\v B & =\frac{1}{\sqrt{g}}\frac{\partial}{\partial x^{k}}\left(\sqrt{g}\delta B^{k}\right)\\
- & =\frac{1}{\sqrt{g}}\frac{\partial}{\partial x^{k}}\left(\sqrt{g}\delta B^{\rho}\right)\\
- & =\frac{1}{\sqrt{g}}\frac{\partial}{\partial x^{k}}\left(-\sigma_{\mathrm{pol}}R_{0}\right)=0.
+B_{n}^{\psi} & =\v B_{n}\cdot\nabla\psi=\frac{B_{0\varphi}R_{0}}{R^{2}},\\
+B_{n}^{\ph} & =\v B_{n}\cdot\nabla\ph=-\frac{B_{0\varphi}R_{0}}{R^{2}}\frac{q^{\prime}(\psi)}{inq}.
 \end{align*}
-This means that
-\begin{align*}
-\v B_{n} & =(\v B_{n}\cdot\nabla\psi)\v e_{\psi}=B_{n}^{\psi}\v e_{\psi}.
-\end{align*}
-Fluxes through edges are
-\begin{align*}
-\Psi & \approx R\v B_{n}\cdot\v n\\
- & =RB_{n}^{\psi}(\v e_{\psi}\cdot\v n)\\
- & =RB_{n}^{\psi}n_{\psi}
-\end{align*}
-Fluxes through edges parallel to flux surfaces with $\v n_{3}=\sigma l_{3}\nabla\psi/|\nabla\psi|$
-are
-\begin{align*}
-\Psi_{3} & \approx R_{3}B_{n}^{\psi}\v e_{\psi}\cdot\v n_{3}\\
- & =\sigma l_{3}R_{3}B_{n}^{\psi}/|\nabla\psi|\\
- & =R_{3}l_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|^{2}}(\hat{\v n}_{3}\cdot\nabla\psi)\\
- & =R_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|^{2}}(\v n_{3}\cdot\nabla\psi).
-\end{align*}
-TODO: other edges either by conservation law or by vector projection.
+Divergence freeness in cylindrical coordinates gives
+\[
+\int_{i,o}\d l\,R\v B_{n}^{\mathrm{pol}}\cdot\v n=-\int_{f}\d l\,R\v B_{n}^{\mathrm{pol}}\cdot\v n-in\int_{\Omega_{\Delta}}\d R\,\d Z\,RB_{n}^{\ph}.
+\]
 
 \subsection*{Reading input files from experiment}
 \begin{itemize}

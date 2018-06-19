@@ -209,6 +209,12 @@ Those coordinates are used in computations and for meshes.
 \end_inset
 
  for clockwise field.
+ Here 
+\begin_inset Formula $\psi$
+\end_inset
+
+ is the normalized ribbon poloidal flux also usually used in MHD for the
+ Grad-Shafranov-equation.
  The toroidal symmetry angle is defined in the direction opposite to 
 \begin_inset Formula $\ph$
 \end_inset
@@ -370,13 +376,14 @@ The axisymmetric equilibrium field
  meaning
 \begin_inset Formula 
 \[
-\v B_{0}\cdot\nabla\psi=0.
+\v B_{0}\cdot\nabla\psi=B_{0}^{\psi}=0.
 \]
 
 \end_inset
 
 If the perturbed field shall still lie on distorted, but not broken, flux
- surfaces (without magnetic islands), a new flux surface label 
+ surfaces (non-resonant, without magnetic islands), a new flux surface label
+ 
 \begin_inset Formula $\psi+\delta\psi$
 \end_inset
 
@@ -415,25 +422,39 @@ or in coordinate form with symmetry flux coordinates
 ,
 \begin_inset Formula 
 \[
-B_{0}^{\tht}\frac{\partial\delta\psi}{\partial\tht}+B_{0}^{\zeta}\frac{\partial\delta\psi}{\delta\zeta}+\delta B^{\rho}=0.
+B_{0}^{\tht}\frac{\partial\delta\psi}{\partial\tht}+B_{0}^{\zeta}\frac{\partial\delta\psi}{\partial\zeta}+\delta B^{\rho}\psi^{\prime}(\rho)=0.
 \]
 
 \end_inset
 
-With safety factor 
-\begin_inset Formula $q$
+Here we have used 
+\begin_inset Formula $\nabla\psi=\psi^{\prime}(\rho)\nabla\rho$
+\end_inset
+
+.
+ Further, 
+\begin_inset Formula $\psi^{\prime}(\rho)=\sigma_{\mathrm{pol}}$
+\end_inset
+
+.
+ With safety factor 
+\begin_inset Formula $q=B_{0}^{\zeta}/B_{0}^{\tht}$
 \end_inset
 
  defined for clockwise toroidal direction 
 \begin_inset Formula $\d\zeta=-\d\ph$
 \end_inset
 
- (see above) we obtain
+ (see above) by dividing through 
+\begin_inset Formula $B_{0}^{\tht}$
+\end_inset
+
+, we obtain
 \begin_inset Formula 
 \begin{align*}
-\left(\frac{\partial}{\partial\tht}-q\frac{\partial}{\partial\ph}\right)\delta\psi & =-\sigma_{\mathrm{pol}}\frac{\delta B^{\psi}}{B_{0}^{\tht}}\\
- & =-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\psi}}{\psi_{\mathrm{tor}}^{\prime}(\rho)}=-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\psi}}{\sigma_{\mathrm{pol}}\psi_{\mathrm{tor}}^{\prime}(\psi)}\\
- & =-\frac{\sqrt{g}\delta B^{\psi}}{q}.
+\left(\frac{\partial}{\partial\tht}+q\frac{\partial}{\partial\zeta}\right)\delta\psi & =\left(\frac{\partial}{\partial\tht}-q\frac{\partial}{\partial\ph}\right)\delta\psi=-\sigma_{\mathrm{pol}}\frac{\delta B^{\rho}}{B_{0}^{\tht}}\\
+ & =-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\rho}}{\psi_{\mathrm{tor}}^{\prime}(\rho)}=-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\rho}}{\sigma_{\mathrm{pol}}\psi_{\mathrm{tor}}^{\prime}(\psi)}\\
+ & =-\frac{\sqrt{g}\delta B^{\rho}}{q}=-\sigma_{\mathrm{pol}}\frac{\sqrt{g}\delta B^{\psi}}{q}.
 \end{align*}
 
 \end_inset
@@ -449,7 +470,7 @@ Written in terms of toroidal Fourier harmonics
  the equation becomes
 \begin_inset Formula 
 \begin{align*}
-\psi_{mn} & =-\frac{\left(\sqrt{g}\delta B^{\psi}\right)_{mn}}{q\left(m-nq\right)}=-\frac{\left(\sqrt{g}B_{n}^{\psi}\right)_{m}}{q\left(m-nq\right)}.
+\psi_{mn} & =-\sigma_{\mathrm{pol}}\frac{\left(\sqrt{g}\delta B^{\psi}\right)_{mn}}{q\left(m-nq\right)}=-\sigma_{\mathrm{pol}}\frac{\left(\sqrt{g}B_{n}^{\psi}\right)_{m}}{q\left(m-nq\right)}.
 \end{align*}
 
 \end_inset
@@ -507,7 +528,7 @@ The safety factor
 \begin_inset Formula $m>nq_{\mathrm{max}}$
 \end_inset
 
- are possible, but for nonzeri 
+ are possible, but for nonzero 
 \begin_inset Formula $m$
 \end_inset
 
@@ -522,7 +543,7 @@ The safety factor
 Using the Jacobian of symmetry flux coordinates we obtain
 \begin_inset Formula 
 \begin{align*}
-\psi_{mn} & =\frac{\sigma_{\mathrm{pol}}}{m-nq}\left(\frac{R^{2}}{B_{0\varphi}}B_{n}^{\psi}\right)_{m},
+\psi_{mn} & =\frac{1}{m-nq}\left(\frac{R^{2}}{B_{0\varphi}}B_{n}^{\psi}\right)_{m},
 \end{align*}
 
 \end_inset
@@ -549,7 +570,7 @@ Generating a non-resonant test field (old, doesn't work with purely radial)
 \end_layout
 
 \begin_layout Standard
-We would like to have a completely non-resonant and only radial field
+We would like to have a completely non-resonant field
 \begin_inset Formula 
 \begin{align*}
 \delta\v B & =\v B_{n}e^{in\ph}
@@ -558,15 +579,31 @@ We would like to have a completely non-resonant and only radial field
 \end_inset
 
  with 
-\begin_inset Formula $B_{n}^{\ph}=B_{n}^{\tht}=0$
+\begin_inset Formula $B_{n}^{\tht}=0$
 \end_inset
 
 .
  As an ansatz we take as a radial component of the field
 \begin_inset Formula 
 \begin{equation}
-B_{n}^{\psi}=\frac{B_{0\varphi}R_{0}}{qR^{2}}=-\frac{R_{0}}{\sqrt{g}}.
+B_{n}^{\psi}=\frac{B_{0\varphi}R_{0}}{R^{2}}=-\sigma_{\mathrm{pol}}\frac{qR_{0}}{\sqrt{g}}
 \end{equation}
+
+\end_inset
+
+so
+\begin_inset Formula 
+\[
+B_{n}^{\rho}=-\frac{qR_{0}}{\sqrt{g}}
+\]
+
+\end_inset
+
+and
+\begin_inset Formula 
+\[
+B_{n}^{\zeta}=-B_{n}^{\psi}F(\psi)=-\sigma_{\mathrm{pol}}B_{n}^{\rho}F(\rho).
+\]
 
 \end_inset
 
@@ -574,54 +611,58 @@ Divergence-freeness of
 \begin_inset Formula $\delta\boldsymbol{B}$
 \end_inset
 
- is now possible for a field containing only the radial component 
-\begin_inset Formula $\delta B^{\rho}=\sigma_{\mathrm{pol}}\delta B^{\psi}$
-\end_inset
-
- with
+ is now possible with
 \begin_inset Formula 
 \begin{align*}
-\nabla\cdot\delta\v B & =\frac{1}{\sqrt{g}}\frac{\partial}{\partial x^{k}}\left(\sqrt{g}\delta B^{k}\right)\\
- & =\frac{1}{\sqrt{g}}\frac{\partial}{\partial x^{k}}\left(\sqrt{g}\delta B^{\rho}\right)\\
- & =\frac{1}{\sqrt{g}}\frac{\partial}{\partial x^{k}}\left(-\sigma_{\mathrm{pol}}R_{0}\right)=0.
+0=\nabla\cdot\delta\v B & =\frac{1}{\sqrt{g}}\frac{\partial}{\partial x^{k}}\left(\sqrt{g}\delta B^{k}\right)\\
+ & =\frac{1}{\sqrt{g}}\left[\frac{\partial}{\partial\rho}\left(\sqrt{g}\delta B^{\rho}\right)+\frac{\partial}{\partial\zeta}\left(-\sigma_{\mathrm{pol}}\sqrt{g}\delta B^{\zeta}\right)\right]\\
+ & =\frac{1}{\sqrt{g}}\left[\frac{\partial}{\partial\rho}\left(-qR_{0}\right)-in\left(\sigma_{\mathrm{pol}}qR_{0}F(\rho)\right)\right].
 \end{align*}
 
 \end_inset
 
-This means that
+We should thus have 
 \begin_inset Formula 
 \begin{align*}
-\v B_{n} & =(\v B_{n}\cdot\nabla\psi)\v e_{\psi}=B_{n}^{\psi}\v e_{\psi}.
+q^{\prime}(\rho)R_{0} & =-in\sigma_{\mathrm{pol}}qR_{0}F(\rho)
 \end{align*}
 
 \end_inset
 
-Fluxes through edges are
+or
 \begin_inset Formula 
 \begin{align*}
-\Psi & \approx R\v B_{n}\cdot\v n\\
- & =RB_{n}^{\psi}(\v e_{\psi}\cdot\v n)\\
- & =RB_{n}^{\psi}n_{\psi}
+F & =-\sigma_{\mathrm{pol}}\frac{q^{\prime}(\rho)}{inq}=-\frac{q^{\prime}(\psi)}{inq}.
 \end{align*}
 
 \end_inset
 
-Fluxes through edges parallel to flux surfaces with 
-\begin_inset Formula $\v n_{3}=\sigma l_{3}\nabla\psi/|\nabla\psi|$
+We obtain
+\begin_inset Formula 
+\[
+\v B_{n}=B_{n}^{\psi}\v e_{\psi}+B_{n}^{\ph}\v e_{\ph}
+\]
+
 \end_inset
 
- are
+with
 \begin_inset Formula 
 \begin{align*}
-\Psi_{3} & \approx R_{3}B_{n}^{\psi}\v e_{\psi}\cdot\v n_{3}\\
- & =\sigma l_{3}R_{3}B_{n}^{\psi}/|\nabla\psi|\\
- & =R_{3}l_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|^{2}}(\hat{\v n}_{3}\cdot\nabla\psi)\\
- & =R_{3}\frac{B_{n}^{\psi}}{|\nabla\psi|^{2}}(\v n_{3}\cdot\nabla\psi).
+B_{n}^{\psi} & =\v B_{n}\cdot\nabla\psi=\frac{B_{0\varphi}R_{0}}{R^{2}},\\
+B_{n}^{\ph} & =\v B_{n}\cdot\nabla\ph=-\frac{B_{0\varphi}R_{0}}{R^{2}}\frac{q^{\prime}(\psi)}{inq}.
 \end{align*}
 
 \end_inset
 
-TODO: other edges either by conservation law or by vector projection.
+Divergence freeness in cylindrical coordinates gives
+\begin_inset Formula 
+\[
+\int_{i,o}\d l\,R\v B_{n}^{\mathrm{pol}}\cdot\v n=-\int_{f}\d l\,R\v B_{n}^{\mathrm{pol}}\cdot\v n-in\int_{\Omega_{\Delta}}\d R\,\d Z\,RB_{n}^{\ph}.
+\]
+
+\end_inset
+
+
 \end_layout
 
 \begin_layout Subsection*
