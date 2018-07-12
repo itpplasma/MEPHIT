@@ -121,7 +121,7 @@ Vh0 reg;
 
 bmod[] = 1e-30;
 
-ifstream bmodfile("bmod_psipol.dat");
+ifstream bmodfile("../PRELOAD/VACFIELD/bmod_psipol_vac.dat");
 for (int kt = 0; kt < nti; kt++) {
   real b1, b2, b3, psi1, psi2, psi3;
   bmodfile >> b1 >> b2 >> b3 >> psi1 >> psi2 >> psi3;

@@ -2,13 +2,13 @@
 set (CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
 
 ### Path to the external libraries
-set(PROJLIBS /home/calbert/libs/gnu/)
+set(PROJLIBS /temp/ert/code/Libs/GNU/)
 
 set(SUPERLU_DIR ${PROJLIBS}SuperLU_5.2.1/)
 set(SUPERLU_HDR ${SUPERLU_DIR}SRC/)
 set(SUPERLU_F90 ${SUPERLU_DIR}FORTRAN/) 
 
-set(SUITESPARSE_DIR ${PROJLIBS}SuiteSparse_5.2.0/)
+set(SUITESPARSE_DIR ${PROJLIBS}SuiteSparse-4.5.5/)
 set(SUITESPARSE_LIB ${SUITESPARSE_DIR}lib/)
 set(SUITESPARSE_HDR ${SUITESPARSE_DIR}include/)
 set(SUITESPARSE_F90 ${SUITESPARSE_DIR}UMFPACK/Demo/)

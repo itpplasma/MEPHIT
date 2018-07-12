@@ -357,7 +357,7 @@ contains
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
           Bpol = hypot(Br, Bz)
           j0phi(k_low + kp) = clight * (pres0(kl) - pres0(kl-1)) / (psi(kl) - psi(kl-1)) * &
-               (Bp ** 2 / B2avg(kl) + (Bpol ** 2 - Bp ** 2) / (Bpol ** 2 + Bp ** 2))
+               (Bp ** 2 / B2avg(kl) + (Bpol ** 2 - Bp ** 2) / (Bpol ** 2 + Bp ** 2)) * r
        end do
     end do
   end subroutine compute_j0phi
@@ -487,9 +487,10 @@ contains
 
           lr = r - rold
           lz = z - zold
-          perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz)
-          Bnpsi = Bnflux(minval(common_tri), mod(mesh_element(minval(common_tri))%knot_h, 3) + 1) / &
-               (r + rold) * 2 / hypot(lr, lz) * (psi(kl+1) - psi(kl-1)) / sum(perps)
+          perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz) * 0.5d0
+          Bnpsi = Bnflux(minval(common_tri), mod(mesh_element(minval(common_tri))% &
+               knot_h, 3) + 1) / (r + rold) * 2 / hypot(lr, lz) * &
+               (psi(kl+1) - psi(kl-1)) / sum(perps)
 
           x(kp) = -dpres0_dpsi(kl) * Bnpsi
 
@@ -671,15 +672,15 @@ contains
     select case (edge_name)
     case ('f')
        ! first term on source side: flux through edge f
-       x(kp) = -clight * r / Bp * (presn(l(2)) - presn(l(1))) - &
-            j0phi(k_low + kp) / Bp / r * Bnflux(k_low + kp, edge_index)
-       jnflux(k_low + kp, edge_index) = x(kp)
+       jnflux(k_low + kp, edge_index) = clight * r / Bp * (presn(l(2)) - presn(l(1))) + &
+            j0phi(k_low + kp) / Bp * Bnflux(k_low + kp, edge_index)
+       x(kp) = -jnflux(k_low + kp, edge_index)
     case ('i')
        ! diagonal matrix element
        d(kp) = -1d0 - imun * n * elem%det_3 * 0.25d0 * Bp / Deltapsi
        ! additional term from edge i on source side
        x(kp) = x(kp) - imun * n * elem%det_3 * 0.25d0 * (clight * r / (-Deltapsi) * &
-            (presn(l(2)) - presn(l(1)) - Bnphi(k_low + kp) / r / Bp * &
+            (presn(l(2)) - presn(l(1)) - Bnphi(k_low + kp) / Bp * &
             (pres0(kl) - pres0(kl-1))) + j0phi(k_low + kp) * (Bnphi(k_low + kp) / Bp + &
             Bnflux(k_low + kp, edge_index) / r / (-Deltapsi)))
     case ('o')
@@ -687,7 +688,7 @@ contains
        du(kp) = 1d0 - imun * n * elem%det_3 * 0.25d0 * Bp / Deltapsi
        ! additional term from edge o on source side
        x(kp) = x(kp) - imun * n * elem%det_3 * 0.25d0 * (clight * r / Deltapsi * &
-            (presn(l(2)) - presn(l(1)) - Bnphi(k_low + kp) / r / Bp * &
+            (presn(l(2)) - presn(l(1)) - Bnphi(k_low + kp) / Bp * &
             (pres0(kl-1) - pres0(kl))) + j0phi(k_low + kp) * (Bnphi(k_low + kp) / Bp + &
             Bnflux(k_low + kp, edge_index) / r / Deltapsi))
     end select
@@ -721,7 +722,8 @@ contains
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
     type(knot) :: base, tip, outer, inner
     integer :: common_tri(2)
-    real(dp) :: dpsi_dr, dpsi_dz, nr, nz
+    real(dp) :: lr, lz, perps(2)
+    complex(dp) :: Bnpsi
 
     select case (edge_name)
     case ('f')
@@ -733,20 +735,19 @@ contains
        call unshared_knots(common_tri, outer, inner)
        r = (base%rcoord + tip%rcoord) * 0.5d0
        z = (base%zcoord + tip%zcoord) * 0.5d0
+       lr = tip%rcoord - base%rcoord
+       lz = tip%zcoord - base%zcoord
+       perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz) * 0.5d0
        call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
             dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-       dpsi_dr = (psi(kl+1) - psi(kl-1)) / (outer%rcoord - inner%rcoord)
-       dpsi_dz = (psi(kl+1) - psi(kl-1)) / (outer%zcoord - inner%zcoord)
-       nr = (tip%zcoord - base%zcoord)
-       nz = -(tip%rcoord - base%rcoord)  ! normal pointing out of the triangle
-       Bnflux(k_low + kp, edge_index) = Bp * R0 / r * (nr * dpsi_dr + nz * dpsi_dz) / &
-            (dpsi_dr ** 2 + dpsi_dz ** 2)
+       Bnpsi = Bp / r
+       Bnflux(k_low + kp, edge_index) = Bnpsi * r * hypot(lr, lz) * sum(perps) / &
+            (psi(kl+1) - psi(kl-1))
        ! use weighted triangle midpoint
        call ring_centered_avg_coord(elem, r, z)
        call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
             dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-       Bnphi(k_low + kp) = Bp * R0 / r ** 2 * imun / n / q(kl) * &
-            (dqdpsi(kl) + dqdpsi(kl-1)) * 0.5d0
+       Bnphi(k_low + kp) = Bp * imun / n * 2d0
        x(kp) = -Bnflux(k_low + kp, edge_index) - imun * n * elem%det_3 * 0.5d0 * r * &
             Bnphi(k_low + kp)
     case ('i')

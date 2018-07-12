@@ -582,6 +582,18 @@ Flux
   \nabla \phi \perp \left( \nabla \psi, \dotsc, \vec{l}_3, \vec{B}_{\bullet}^{\pol}, \vec{h}_{0}^{\pol}, \vec{j}_{\bullet}^{\pol}, \nabla p_n \right)
 \end{gather*}
 
+\section{Fourier transform of vector quantitites}
+
+$\delta \vec{B}$ in symmetry flux coordinates $(\rho, \theta, \phi)$ is given as the \textsc{Fourier} series
+\begin{gather}
+  \delta B^{k} (\rho, \theta, \phi) = B_{m n}^{k}(\rho) \e^{-\im n \phi} \e^{-\im m \theta}.
+\end{gather}
+$\delta \vec{B}$ is also divergence-free and assuming $g = g(\rho, \theta)$, we get
+\begin{align}
+  0 &= \nabla \cdot \delta \vec{B} = \frac{1}{\sqrt{g}} \partial_{k} \left( \sqrt{g} \delta B^{k} \right) = \frac{1}{\sqrt{g}} \partial_{k} \left( \sqrt{g} B_{m n}^{k} \e^{-\im n \phi} \e^{-\im m \theta} \right) = \\
+    &= \frac{1}{\sqrt{g}} \partial_{\rho} \left( \sqrt{g} B_{m n}^{\rho} \right) \e^{-\im n \phi} \e^{-\im m \theta} + B_{m n}^{\phi} \partial_{\phi} \left( \e^{-\im n \phi} \right) \e^{-\im m \theta} + \frac{1}{\sqrt{g}} \partial_{\theta} \left( \sqrt{g} \e^{-\im m \theta} \right) B_{m n}^{\theta} \e^{-\im n \phi} = \\
+    &= \underbrace{\e^{-\im n \phi} \e^{-\im m \theta}}_{\neq 0} \left( \frac{\partial_{\rho} \sqrt{g}}{\sqrt{g}} B_{m n}^{\rho} + \partial_{\rho} B_{m n}^{\rho} - \im n B_{m n}^{\phi}  + \frac{\partial_{\theta} \sqrt{g}}{\sqrt{g}} B_{m n}^{\theta} - \im m B_{m n}^{\theta} \right).
+\end{align}
 \end{document}
 
 %%% Local Variables: 
