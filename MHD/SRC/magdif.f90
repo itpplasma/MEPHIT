@@ -9,28 +9,124 @@ module magdif
 
   implicit none
 
-  real(dp), allocatable :: pres0(:)             !< unperturbed pressure \f$ p_{0} \f$ in dyn cm^-1
-  real(dp), allocatable :: dpres0_dpsi(:)       !< derivative of unperturbed pressure w.r.t. flux surface label, \f$ p_{0}'(\psi) \f$
-  real(dp), allocatable :: dens(:)              !< density \f$ \frac{N}{V} \f$ on flux surface in cm^-3
-  real(dp), allocatable :: temp(:)              !< temperature \f$ T \f$ on flux surface with \f$ k_{\mathrm{B}} T \f$ in eV
-  real(dp), allocatable :: psi(:)               !< flux surface label \f$ \psi \f$
-  real(dp), allocatable :: B2avg(:)             !< flux surface average \f$ \langle B_{0}^{2} \rangle \f$
-  complex(dp), allocatable :: presn(:)          !< pressure perturbation \f$ p_{n} \f$ in each mesh point
-  complex(dp), allocatable :: Bnflux(:,:)       !< edge fluxes \f$ R \vec{B}_{n} \cdot \vec{n} \f$
-  complex(dp), allocatable :: Bnphi(:)          !< physical toroidal component of magnetic perturbation, \f$ B_{n (\phi)} \f$
-  complex(dp), allocatable :: Bnflux_vac(:,:)   !< vacuum edge fluxes \f$ R \vec{B}_{n} \cdot \vec{n} \f$
-  complex(dp), allocatable :: Bnphi_vac(:)      !< vacuum physical toroidal component of magnetic perturbation, \f$ B_{n (\phi)} \f$
-  complex(dp), allocatable :: jnflux(:,:)       !< edge currents \f$ R \vec{j}_{n} \cdot \vec{n} \f$
-  complex(dp), allocatable :: jnphi(:)          !< physical toroidal component of current perturbation, \f$ j_{n (\phi)} \f$
-  real(dp), allocatable :: j0phi(:)             !< physical toroidal component of equilibrium current, \f$ j_{0 (\phi)} \f$
+  !> Unperturbed pressure \f$ p_{0} \f$ in dyn cm^-1.
+  !> 
+  !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
+  !> +1, i.e. from the magnetic axis to just outside the last closed flux surface.
+  real(dp), allocatable :: pres0(:)
 
-  real(dp) :: psimin  !< minimum flux surface label, located at the separatrix
-  real(dp) :: psimax  !< maximum flux surface label, located at the magnetic axis
-  real(dp), parameter :: R0 = 172.74467899999999d0  !< distance of magnetic axis from center, \f$ R_{0} \f$
-  real(dp), parameter :: clight = 2.99792458d10  !< speed of light in cm/s
-  complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< imaginary unit in double precision
+  !> Derivative of unperturbed pressure w.r.t. flux surface label, \f$ p_{0}'(\psi) \f$.
+  !> 
+  !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
+  !> +1, i.e. from the magnetic axis to just outside the last closed flux surface.
+  real(dp), allocatable :: dpres0_dpsi(:)
 
-  real(dp), allocatable :: q(:), dqdpsi(:) !< safety factor and derivative over psi
+  !> Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
+  !> 
+  !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
+  !> +1, i.e. from the magnetic axis to just outside the last closed flux surface.
+  real(dp), allocatable :: dens(:)
+
+  !> Temperature \f$ T \f$ on flux surface with \f$ k_{\mathrm{B}} T \f$ in eV.
+  !> 
+  !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
+  !> +1, i.e. from the magnetic axis to just outside the last closed flux surface.
+  real(dp), allocatable :: temp(:)
+
+  !> Magnetic flux surface label \f$ \psi \f$ in G cm^2.
+  !>
+  !> \f$ \psi \f$ is the ribbon poloidal flux divided by \f$ 2 \pi \f$. Its sign is
+  !> positive and its magnitude is growing in the radially inward direction. The indices
+  !> are running from 0 for the magnetic axis to #magdif_config::nflux +1 for the first
+  !> non-closed flux surface.
+  real(dp), allocatable :: psi(:)
+
+  real(dp) :: psimin  !< Minimum flux surface label, located at the LCFS
+  real(dp) :: psimax  !< Maximum flux surface label, located at the magnetic axis
+
+  !> Safety factor \f$ q \f$ (dimensionless).
+  !>
+  !> Values are taken between two flux surfaces with indices running from 1 to
+  !> #magdif_config::nflux +1, i.e. from the triangle strip surrounding the magnetic axis
+  !> to the triangle strip just outside the last closed flux surface. The latter is
+  !> only useful for approximation of #dqdpsi on the last closed flux surface.
+  real(dp), allocatable :: q(:)
+
+  !> Derivative of #q w.r.t. #psi.
+  !>
+  !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux,
+  !> +1, i.e. from the magnetic axis to the last closed flux surface. The value at the
+  !> magnetic axis is identically zero.
+  real(dp), allocatable :: dqdpsi(:)
+
+  !> Flux surface average \f$ \langle B_{0}^{2} \rangle \f$.
+  !>
+  !> Values are taken between two flux surfaces with indices running from 1 to
+  !> #magdif_config::nflux, i.e. from the triangle strip surrounding the magnetic axis to
+  !> the triangle strip contained by the last closed flux surface.
+  real(dp), allocatable :: B2avg(:)
+
+  !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
+  !>
+  !> Values are taken at each mesh point and the indexing scheme is the same as for
+  !> #mesh_mod::mesh_point.
+  complex(dp), allocatable :: presn(:)
+
+  !> Edge fluxes \f$ R \vec{B}_{n} \cdot \vec{n} \f$ in G cm^2.
+  !>
+  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
+  !> refers to the triangle and the indexing scheme is the same as for
+  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
+  !> by get_labeled_edges().
+  complex(dp), allocatable :: Bnflux(:,:)
+
+  !> Physical toroidal component of magnetic perturbation \f$ B_{n (\phi)} \f$ in G.
+  !>
+  !> Values are taken at each triangle and the indexing scheme is the same as for
+  !> #mesh_mod::mesh_element.
+  complex(dp), allocatable :: Bnphi(:)
+
+  !> Vacuum perturbation edge fluxes \f$ R \vec{B}_{n} \cdot \vec{n} \f$ in G cm^2.
+  !>
+  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
+  !> refers to the triangle and the indexing scheme is the same as for
+  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
+  !> by get_labeled_edges().
+  complex(dp), allocatable :: Bnflux_vac(:,:)
+
+  !> Physical toroidal component of vacuum magnetic perturbation \f$ B_{n(\phi)} \f$ in G.
+  !>
+  !> Values are taken at each triangle and the indexing scheme is the same as for
+  !> #mesh_mod::mesh_element.
+  complex(dp), allocatable :: Bnphi_vac(:)
+
+  !> Edge currents \f$ R \vec{j}_{n} \cdot \vec{n} \f$ in statampere.
+  !>
+  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
+  !> refers to the triangle and the indexing scheme is the same as for
+  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
+  !> by get_labeled_edges().
+  complex(dp), allocatable :: jnflux(:,:)
+
+  !> Physical toroidal component of current perturbation \f$ j_{n (\phi)} \f$ in
+  !> statampere cm^-2.
+  !>
+  !> Values are taken at each triangle and the indexing scheme is the same as for
+  !> #mesh_mod::mesh_element.
+  complex(dp), allocatable :: jnphi(:)
+
+  !> Physical toroidal component of equilibrium current \f$ j_{0 (\phi)} \f$ in
+  !> statampere cm^-2.
+  !>
+  !> Values are taken at each triangle and the indexing scheme is the same as for
+  !> #mesh_mod::mesh_element.
+  real(dp), allocatable :: j0phi(:)
+
+  !> Distance of magnetic axis from center \f$ R_{0} \f$ in cm.
+  real(dp), parameter :: R0 = 172.74467899999999d0
+
+  real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
+  complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
 
   interface
      subroutine sub_assemble_flux_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, l, &
