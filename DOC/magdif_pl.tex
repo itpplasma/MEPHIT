@@ -117,6 +117,7 @@
 \newcommand*\e{\ensuremath{\symrm{e}}}  % Euler's constant
 \newcommand*\im{\ensuremath{\symrm{i}}}  % imaginary unit
 \newcommand*\pd[2][]{\ensuremath{\frac{\partial #1}{\partial #2}}}  % partial derivative
+\newcommand*\td[2][]{\ensuremath{\frac{\diff #1}{\diff #2}}}  % total derivative
 \newcommand*\norm[1]{\ensuremath{\left \lVert #1 \right \rVert}}  % norm
 \newcommand*\pol{\ensuremath{\textrm{pol}}}  % poloidal
 \newcommand*\tor{\ensuremath{\textrm{tor}}}  % toroidal
@@ -128,6 +129,7 @@
 \newcommand*\vout{\ensuremath{\textrm{O}}}  % label for vertex opposite outward current edge
 \DeclareMathOperator\Real{Re}
 \DeclareMathOperator\Imag{Im}
+\DeclareMathOperator\sgn{sgn}
 
 \begin{document}
 
@@ -189,6 +191,25 @@ This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in
 \end{align}
 Note that the toroidal field coils produce a magnetic field that is roughly proportional to $\frac{1}{R}$, so $B_{0 \phi}$ is assumed to be constant over the entire plasma volume.
 
+\subsubsection{Coordinate conventions}
+\label{sec:cocos}
+
+We use two different right-handed coordinate systems: Firstly cylindrical coordinates $(R, \phi, Z)$ with $\phi$ running counterclockwise as seen from above, so
+\begin{gather*}
+  x = R \cos \phi, \quad y = R \sin \phi, \quad z = Z.
+\end{gather*}
+Those coordinates are used in computations and for meshes. For derivations, also symmetry flux coordinates $(\rho, \theta, \zeta)$ are used at some point. Here, we use the convention of d'Haeseleer with radial coordinate growing towards the outside of the torus. As a radial variable we use $\rho = \sigma_{\pol} \psi$ with $\sigma_{\pol} = +1$ for counterclockwise poloidal field $\vec{B}_{0}^{\pol}$ and $\sigma_{\pol} = -1$ for clockwise field. Here $\psi$ is the normalized ribbon poloidal flux also usually used in MHD for the \textsc{Grad}-\textsc{Shafranov} equation. The toroidal symmetry angle is defined in the direction opposite to $\phi$ with
+\begin{gather*}
+  \zeta = \frac{\pi}{2} - \phi.
+\end{gather*}
+The flux angle $\theta$ has the same orientation as $\vartheta = \arctan \frac{Z}{R}$, so the sign $\sigma_{\pol} = \sgn B^{\theta} = \sgn B^{\vartheta}$ is positive for counter-clockwise and negative for clockwise orientation in the poloidal plane. The Jacobian of symmetry flux coordinates $(\rho, \theta, \zeta) = (\sigma_{\pol} \psi, \theta, \frac{\pi}{2} - \phi)$ is
+\begin{gather}
+  \sqrt{g} = \frac{\sigma_{\pol}}{B_{0}^{\theta}} = \sigma_{\pol} \frac{q}{B_{0}^{\zeta}} = -\sigma_{\pol} \frac{q}{B_{0}^{\phi}} = -\sigma_{\pol} \frac{q R^{2}}{B_{0 \phi}}.
+\end{gather}
+If $B_{0}^{\theta}$ changes sign, both $\sigma_{\pol}$ and $q$ change sign, and a sign change in $B_{0}^{\phi}$ leads to a sign change also in $q$. Thus, $\sqrt{g}$ is always positive. The sign of $q$ describes the sign of the helicity in $(\theta, \zeta)$ and can be computed as described in \cref{sec:safety_factor}. Note that in our configuration (ASDEX Upgrade) $\sigma_{\pol} = -1$ and $B_{0 \phi}$ is positive, so $q$ is negative.
+
+\subsubsection{Coordinate system on each edge}
+
 \begin{figure}
   \centering
   \begin{subfigure}[b]{0.33\textwidth}
@@ -207,8 +228,6 @@ Note that the toroidal field coils produce a magnetic field that is roughly prop
   \caption{The 2D mesh is given by a triangulation of poloidal cross-sections of the nested flux surfaces, resulting in \enquote{loops}. The cross-sections are assumed to be circular for illustration purposes.}
   \label{fig:grid}
 \end{figure}
-
-\subsubsection{Coordinate system on each edge}
 
 For each edge (length $l$) we use a local orthogonal coordinate system on each triangle edge with $\vec{l}$ the vector of length $l$ along the edge in counter-clockwise orientation, $\vec{n}$ the outward normal of length $l$ and $\nabla \phi$ pointing inside the plane. We obtain relations
 \begin{align}
@@ -451,6 +470,7 @@ Scalar multiplication with $\vec{n}_{\fs} \parallel \nabla p_{0} \parallel \nabl
 \end{align}
 
 \subsubsection{Implementation}
+\label{sec:compute_currn}
 
 We start with
 \begin{gather}
@@ -497,34 +517,149 @@ where the elements of the stiffness matrix $A$ are
   A_{ij} = \left( -1 - \frac{\im n S_{\Omega^{(i)}}}{2} \frac{B_{0 (\phi)} \vert_{\Gamma_{\inw}^{(i)}}}{\symup{\Delta} \psi} \right) \delta_{i j} + \left( 1 - \frac{\im n S_{\Omega^{(i)}}}{2} \frac{B_{0 (\phi)} \vert_{\Gamma_{\out}^{(i)}}}{\symup{\Delta} \psi} \right) \delta_{i+1, j}.
 \end{gather}
 
-\subsection{Test field}
+\subsection{Generating a non-resonant test field}
 
-We can take
-\[
-  B_{n}^{\phi} = B_{n}^{\psi} F(\psi)
-\]
-where 
-\[
-  F(\psi) = \frac{\im R_{0}}{n q} \pd[q]{\psi}
-\]
-and (reminder) the normal component has been chosen as 
-\[
-  B_{n}^{\psi} = \frac{B_{0 \phi} R_{0}}{R^{2}}.
-\]
-For derivation one uses the Jacobian of symmetry flux coordinates $(\psi, \theta, \phi)$ 
-\[
-  \sqrt{g} = \frac{1}{B_{0}^{\theta}} = \frac{q}{B_{0}^{\phi}} = \frac{q}{R^{2} B_{0 \phi}}.
-\]
+The axisymmetric equilibrium field $\vec{B}_{0}$ lies on nested flux surfaces $\psi = \text{const.}$, meaning
+\begin{gather*}
+  \vec{B}_{0} \cdot \nabla \psi = B_{0}^{\psi} = 0.
+\end{gather*}
+If the perturbed field shall still lie on distorted, but not broken, flux surfaces (non-resonant, without magnetic islands), a new flux surface label $\psi + \delta \psi$ must exist fulfilling
+\begin{gather*}
+  (\vec{B}_{0} + \delta \vec{B}) \cdot \nabla (\psi + \delta \psi) = 0
+\end{gather*}
+for the perturbed magnetic field $\vec{B}_{0} + \delta \vec{B}$, where $\delta \psi$ remains small and continuous within the plasma. In that case we can use a linear order expansion
+\begin{gather*}
+  \underbrace{\vec{B}_{0} \cdot \nabla \psi}_{= 0} + \vec{B}_{0} \cdot \nabla \delta \psi + \delta \vec{B} \cdot \nabla \psi + \mathcal{O}(\varepsilon^{2}) = 0,
+\end{gather*}
+or in coordinate form with symmetry flux coordinates $(\rho, \theta, \zeta)$,
+\begin{gather*}
+  B_{0}^{\theta} \pd[\delta \psi]{\theta} + B_{0}^{\zeta} \pd[\delta \psi]{\zeta} + \delta B^{\rho} \psi' (\rho) = 0.
+\end{gather*}
+Here we have used $\nabla \psi = \psi' (\rho) \nabla \rho$. Further, $\psi' (\rho) = \sigma_{\pol}$. With safety factor
+\begin{gather*}
+  q = \frac{B_{0}^{\zeta}}{B_{0}^{\theta}}
+\end{gather*}
+defined for clockwise toroidal direction $\diff \zeta = -\diff \phi$ (see \cref{sec:cocos}) by dividing through $B_{0}^{\theta}$, we obtain
+\begin{align*}
+  \left( \pd{\theta} + q \pd{\zeta} \right) \delta \psi = \left( \pd{\theta} - q \pd{\phi} \right) \delta \psi &= -\sigma_{\pol} \frac{\delta B^{\rho}}{B_{0}^{\theta}} = -\sigma_{\pol} \frac{\sqrt{g} \delta B^{\rho}}{\psi_{\tor}' (\rho)} = -\sigma_{\pol} \frac{\sqrt{g} \delta B^{\rho}}{\sigma_{\pol} \psi_{\tor}' (\psi)} = \\
+  &= -\frac{\sqrt{g} \delta B^{\rho}}{q} = -\sigma_{\pol} \frac{\sqrt{g} \delta B^{\psi}}{q}.
+\end{align*}
+Written in terms of toroidal Fourier harmonics $m, n$ in $\theta, \phi$ the equation becomes
+\begin{gather*}
+  \psi_{m n} = -\sigma_{\pol} \frac{\left( \sqrt{g} \delta B^{\psi} \right)_{m n}}{q (m - n q)} = -\sigma_{\pol} \frac{\left( \sqrt{g} B_{n}^{\psi} \right)_{m}}{q (m - n q)}.
+\end{gather*}
+The safety factor $q$ is a flux function, but $\sqrt{g}$ depends also on $\theta$, so poloidal harmonics $m$ have to be taken outside the bracket here. In order to fulfill the original requirement not to break flux surfaces, $\psi_{m n}$ must never diverge, so $(m - n q)$ must not become zero. We can avoid such resonant surfaces if
+\begin{gather*}
+  \left( \sqrt{g} B_{n}^{\psi} \right)_{m} = 0
+\end{gather*}
+for all possible $m$ that could lead to a resonance. The simplest way to do so is to make $\sqrt{g} B_{n}^{\psi}$ a flux function, possessing only the poloidally symmetric harmonic $m = 0$. More generally, also $m < n q_{\text{min}}$ and $m > n q_{\text{max}}$ are possible, but for nonzero $m$ a transformation to the flux angle $\theta$ has to be computed explicitly.
+
+Using the Jacobian of symmetry flux coordinates we obtain
+\begin{gather*}
+  \psi_{m n} = \frac{1}{m - n q} \left( \frac{R^{2}}{B_{0 \phi}} B_{n}^{\psi} \right)_{m},
+\end{gather*}
+so, to generate a non-resonant field, we are allowed to use any value
+\begin{gather*}
+  B_{n}^{\psi} = C(\psi) \frac{B_{0 \phi}}{R^{2}},
+\end{gather*}
+where $C(\psi)$ is a flux function. The other components of $\delta \vec{B}$ are not relevant for the resonance condition and just need to fulfill divergence-freeness. For any given $B_{n}^{\phi}$ we proceed as in \cref{sec:compute_currn} and find fluxes through triangle edges:
+\begin{gather}
+  \int_{\Gamma_{\inw}, \Gamma_{\out}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} = -\int_{\Gamma_{\fs}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} - \im n \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi}.
+\end{gather}
+As for currents we use the notation for weighted magnetic fluxes through edges,
+\begin{gather}
+  \Psi_{k} = \int_{k} R \vec{B}_{n}^{\pol} \cdot \vec{n} \, \diff l \approx R_{k} \vec{B}_{n}^{\pol} \cdot \vec{n}_{k}.
+\end{gather}
+The term through edge \fs\ orthogonal to $n_{\fs} \parallel \nabla \psi$ is
+\begin{gather*}
+  -\Psi_{\fs} \approx \mp R_{\fs} l_{\fs} \frac{B_{n}^{\psi}}{\lvert \nabla \psi \rvert}
+\end{gather*}
+with sign depending on edge orientation. The second term yields
+\begin{gather*}
+  -\Psi_{\phi} = -\im n \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi} \approx - \im n S_{\Omega} \, R_{k} B_{n k}^{\phi}.
+\end{gather*}
+The equation to solve is
+\begin{equation}
+  A_{jk} \Psi^{(k)} = \vec{q},
+\end{equation}
+with
+\begin{gather}
+  A_{jk} = \delta_{j-1, k} - \delta_{jk},
+\end{gather}
+and
+\begin{gather}
+  q^{k} = \mp R_{\fs} l_{\fs} \frac{B_{n}^{\psi}}{\lvert \nabla \psi \rvert} - \im n S_{\Omega} R_{k} B_{n k}^{\phi}.
+\end{gather}
+Here, a compatibility condition needs to be fulfilled -- the flux through one flux surface shell, so the sum over all triangles $i$ must vanish with
+\begin{gather}
+  \sum_{i} (\Psi_{\phi}^{(i)} + \Psi_{\fs}^{(i)}) = 0.
+\end{gather}
+
+\subsubsection{Alternative version including safety factor}
+
+We would like to have a completely non-resonant field
+\begin{gather*}
+  \delta \vec{B} = \vec{B}_{n} \e^{\im n \phi}
+\end{gather*}
+with $B_{n}^{\theta} = 0$. As an ansatz we take as a radial component of the field
+\begin{gather}
+  B_{n}^{\psi} = \frac{B_{0 \phi} R_{0}}{R^{2}} = -\sigma_{\pol} \frac{q R_{0}}{\sqrt{g}}
+\end{gather}
+so
+\begin{gather*}
+  B_{n}^{\rho} = -\frac{q R_{0}}{\sqrt{g}}
+\end{gather*}
+and
+\begin{gather*}
+  B_{n}^{\zeta} = -B_{n}^{\psi} F(\psi) = -\sigma_{\pol} B_{n}^{\rho} F(\rho).
+\end{gather*}
+Divergence-freeness of $\delta \vec{B}$ is now possible with
+\begin{align*}
+  0 = \nabla \cdot \delta \vec{B} &= \frac{1}{\sqrt{g}} \pd{x^{k}} \left( \sqrt{g} \delta B^{k} \right) \\
+  &= \frac{1}{\sqrt{g}} \left( \pd{\rho} \left( \sqrt{g} \delta B^{\rho} \right) + \pd{\zeta} \left( -\sigma_{\pol} \sqrt{g} \delta B^{\zeta} \right) \right) \\
+  &= \frac{1}{\sqrt{g}} \left(\pd{\rho} \left( -q R_{0} \right) - \im n \left( \sigma_{\pol} q R_{0} F(\rho) \right) \right).
+\end{align*}
+We should thus have 
+\begin{gather*}
+  q' (\rho) R_{0} = -\im n \sigma_{\pol} q R_{0} F(\rho)
+\end{gather*}
+or
+\begin{gather*}
+  F = -\sigma_{\pol} \frac{q' (\rho)}{\im n q} = -\frac{q' (\psi)}{\im n q}.
+\end{gather*}
+We obtain
+\begin{gather*}
+  \vec{B}_{n} = B_{n}^{\psi} \vec{e}_{\psi} + B_{n}^{\phi} \vec{e}_{\phi}
+\end{gather*}
+with
+\begin{align*}
+  B_{n}^{\psi} &= \vec{B}_{n} \cdot \nabla \psi = \frac{B_{0 \phi} R_{0}}{R^{2}}, \\
+  B_{n}^{\phi} &= \vec{B}_{n} \cdot \nabla \phi = -\frac{B_{0 \phi} R_{0}}{R^{2}} \frac{q' (\psi)}{\im n q}.
+\end{align*}
+Divergence-freeness in cylindrical coordinates gives
+\begin{gather*}
+  \int_{\Gamma_{\inw}, \Gamma_{\out}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} = -\int_{\Gamma_{\fs}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} - \im n \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi}.
+\end{gather*}
 
 \subsection{Safety factor}
+\label{sec:safety_factor}
 
-Toroidal flux is
-\begin{align}
-  \psi_{\tor} &= \int \diff V \, \vec{B} \cdot \nabla \phi \nonumber \\
-  &= 2 \pi \int \diff R \, \diff Z \, R B^{\phi} = \int \diff R \, \diff Z \, B_{(\phi)}.
-\end{align}
+With the usual toroidal flux angle $\zeta = \frac{\pi}{2} - \phi$ (d'Haeseleer), the toroidal flux $\psi_{\tor}$ is given by
+\begin{gather}
+  \psi_{\tor} = \frac{1}{(2 \pi)^{2}} \int \diff V \, \vec{B} \cdot \nabla \zeta = -\frac{1}{(2 \pi)^{2}} \int \diff V \, \vec{B} \cdot \nabla \phi = -\frac{1}{2 \pi} \int \diff R \, \diff Z \, R B^{\phi} = -\frac{1}{2 \pi} \int \diff R \, \diff Z \, B_{(\phi)}.
+\end{gather}
+The safety factor is then given by
+\begin{gather*}
+  q = \frac{\psi_{\tor}' (\rho)}{\psi_{\pol}' (\rho)} = \frac{\psi_{\tor}' (\sigma_{\pol} \psi)}{\psi_{\pol}' (\sigma_{\pol} \psi)} = \td[\psi_{\tor}]{\psi} = -\frac{1}{2 \pi} \td{\psi} \int \diff R \, \diff Z \, B_{(\phi)}.
+\end{gather*}
+This quantity can be evaluated numerically by adding up $B_{(\phi)}$ inside the volume between two flux surfaces and dividing by the the difference in $\psi$:
+\begin{gather}
+  q \approx -\frac{1}{2 \pi \Delta \psi} \sum_{\Omega} B_{(\phi)} S_{\Omega},
+\end{gather}
+where the sum is taken over all triangles $\Omega$ inside a triangle strip, and $S_{\Omega}$ is the respective triangle surface area.
 
-\subsection{Current perturbation -- alternative}
+\appendix
+\section{Current perturbation -- alternative}
 
 We split the current into parallel and perpendicular current:
 \begin{gather}
@@ -575,7 +710,6 @@ Flux
   &= c_{1} (\vec{n}^{1} \cdot \vec{B}_{n}^{\pol}) \vec{n}^{1} \cdot \vec{h}^{\pol} + c_{2} (\vec{n}^{2} \cdot \vec{B}_{n}^{\pol}) \vec{n}^{2} \cdot \vec{h}^{\pol} + B_{n (\phi)} h_{(\phi)}.
 \end{align}
 
-\appendix
 \section{Overview of used vector quantities}
 \begin{gather*}
   \nabla \psi \parallel \nabla p_0 \parallel \vec{n}_3 \\
@@ -594,6 +728,22 @@ $\delta \vec{B}$ is also divergence-free and assuming $g = g(\rho, \theta)$, we 
     &= \frac{1}{\sqrt{g}} \partial_{\rho} \left( \sqrt{g} B_{m n}^{\rho} \right) \e^{-\im n \phi} \e^{-\im m \theta} + B_{m n}^{\phi} \partial_{\phi} \left( \e^{-\im n \phi} \right) \e^{-\im m \theta} + \frac{1}{\sqrt{g}} \partial_{\theta} \left( \sqrt{g} \e^{-\im m \theta} \right) B_{m n}^{\theta} \e^{-\im n \phi} = \\
     &= \underbrace{\e^{-\im n \phi} \e^{-\im m \theta}}_{\neq 0} \left( \frac{\partial_{\rho} \sqrt{g}}{\sqrt{g}} B_{m n}^{\rho} + \partial_{\rho} B_{m n}^{\rho} - \im n B_{m n}^{\phi}  + \frac{\partial_{\theta} \sqrt{g}}{\sqrt{g}} B_{m n}^{\theta} - \im m B_{m n}^{\theta} \right).
 \end{align}
+
+\section*{Reduced MHD (unfinished)}
+
+We take
+\begin{gather*}
+  B_{n \phi} = 0
+\end{gather*}
+so
+\begin{gather*}
+  \vec{B}_{n} = \nabla \psi_{n} \times \nabla \phi.
+\end{gather*}
+Ampere's law becomes
+\begin{gather*}
+  \nabla \times \vec{B}_{n} = \frac{1}{4 \pi} \vec{J}_{n}.
+\end{gather*}
+
 \end{document}
 
 %%% Local Variables: 

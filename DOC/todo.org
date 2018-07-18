@@ -1,0 +1,10 @@
+* use $B_{0 \phi}$ everywhere because \texttt{bphicovar} is assumed constant
+* use modulo for indices in matrix assembly (instead of copy&paste for one special case) [done]
+* rewrite to use assemble_system without mass matrix [done]
+* documenting variables in Doxygen with LaTeX syntax
+* modify grid illustration [done]
+* initialize oldknot to last knot → no special treatment for periodic boundary conditions [done]
+* determinant: any isnan, overflow check, SuiteSparse function; condition number [redo]
+* reading input files from experiment
+- ASDEX Upgrade has two formats that are common: CLISTE and EFIT/EQDSK (g-files)
+- much data in /proj/plasma/RMP/DATA/ASDEX/ and /proj/plasma/RMP/DATA2017/ASDEX/
