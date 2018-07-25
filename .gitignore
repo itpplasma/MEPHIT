@@ -18,4 +18,5 @@ BUILD*
 \#*\#
 DOC/doxygen
 __pycache__
-.vscodeProjectConfig.cmake.in
+.vscode
+ProjectConfig.cmake.in
