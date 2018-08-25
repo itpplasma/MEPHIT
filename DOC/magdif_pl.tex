@@ -571,9 +571,9 @@ As for currents we use the notation for weighted magnetic fluxes through edges,
   \Psi_{k} = \int_{k} R \vec{B}_{n}^{\pol} \cdot \vec{n} \, \diff l \approx R_{k} \vec{B}_{n}^{\pol} \cdot \vec{n}_{k}.
 \end{gather}
 The term through edge \fs\ orthogonal to $n_{\fs} \parallel \nabla \psi$ is
-\begin{gather*}
-  -\Psi_{\fs} \approx \mp R_{\fs} l_{\fs} \frac{B_{n}^{\psi}}{\lvert \nabla \psi \rvert}
-\end{gather*}
+\begin{gather}
+  -\Psi_{\fs} \approx \mp R_{\fs} l_{\fs} \frac{B_{n}^{\psi}}{\lvert \nabla \psi \rvert} \label{eq:Psi_f}
+\end{gather}
 with sign depending on edge orientation. The second term yields
 \begin{gather*}
   -\Psi_{\phi} = -\im n \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi} \approx - \im n S_{\Omega} \, R_{k} B_{n k}^{\phi}.
@@ -590,10 +590,11 @@ and
 \begin{gather}
   q^{k} = \mp R_{\fs} l_{\fs} \frac{B_{n}^{\psi}}{\lvert \nabla \psi \rvert} - \im n S_{\Omega} R_{k} B_{n k}^{\phi}.
 \end{gather}
-Here, a compatibility condition needs to be fulfilled -- the flux through one flux surface shell, so the sum over all triangles $i$ must vanish with
+Since any one row/column in $A$ is a linear combination of all other rows/columns, $A$ is of rank $N - 1$ and thus singular. To get a non-trivial (i.e.\ non-zero) solution for $\Psi^{(k)}$, $\vec{q}$ should vanish as well, making the linear system homogeneous. The solution then assumes the simple form of $\Psi^{(1)} = \Psi^{(2)} = \dotsb = \Psi^{(N)} = c_{1}$ with an arbitrary constant $c_{1}$. This means that flux conservation, i.e.\ divergence-freeness, is fulfilled by balancing $\Psi_{\inw}$ with $\Psi_{\out}$ and $\Psi_{\fs}$ with $\Psi_{\phi}$ on each individual triangle. With $\Psi_{\fs}$ fixed by \cref{eq:Psi_f}, the remaining degrees of freedom on the same triangle are then determined:
 \begin{gather}
-  \sum_{i} (\Psi_{\phi}^{(i)} + \Psi_{\fs}^{(i)}) = 0.
+  \Psi_{\inw} = -c_{1}, \quad \Psi_{\out} = c_{1}, \quad \Psi_{\phi} = \frac{\im}{n} \frac{\Psi_{\fs}}{S_{\Omega}}.
 \end{gather}
+Note that a solution can also be constructed for non-zero $\vec{q}$, as long as $\vec{q}$ is a linear combination of columns of $A$. This can be interpreted as follows: Starting from the aforementioned solution to the homogeneous system of equations, another arbitrary constant $c_{2}$ can be added to any $\Psi^{(k)}$, resulting in $\Psi_{\inw} = -c_{1} - c_{2}$ in one adjacent triangle and $\Psi_{\out} = c_{1} + c_{2}$ in the other triangle sharing that edge. This offset is balanced by adding/subtracting the same $c_{2}$ from $\Psi_{\phi}$ in order to uphold divergence-freeness, seeing that $\Psi_{\fs}$ is fixed and changing the other remaining degree of freedom would necessitate changes in the next triangle adjacent to \emph{that} edge.
 
 \subsubsection{Alternative version including safety factor}
 
@@ -729,7 +730,7 @@ $\delta \vec{B}$ is also divergence-free and assuming $g = g(\rho, \theta)$, we 
     &= \underbrace{\e^{-\im n \phi} \e^{-\im m \theta}}_{\neq 0} \left( \frac{\partial_{\rho} \sqrt{g}}{\sqrt{g}} B_{m n}^{\rho} + \partial_{\rho} B_{m n}^{\rho} - \im n B_{m n}^{\phi}  + \frac{\partial_{\theta} \sqrt{g}}{\sqrt{g}} B_{m n}^{\theta} - \im m B_{m n}^{\theta} \right).
 \end{align}
 
-\section*{Reduced MHD (unfinished)}
+\section{Reduced MHD (unfinished)}
 
 We take
 \begin{gather*}

@@ -10,25 +10,25 @@ module magdif
   implicit none
 
   !> Unperturbed pressure \f$ p_{0} \f$ in dyn cm^-1.
-  !> 
+  !>
   !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
   !> +1, i.e. from the magnetic axis to just outside the last closed flux surface.
   real(dp), allocatable :: pres0(:)
 
   !> Derivative of unperturbed pressure w.r.t. flux surface label, \f$ p_{0}'(\psi) \f$.
-  !> 
+  !>
   !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
   !> +1, i.e. from the magnetic axis to just outside the last closed flux surface.
   real(dp), allocatable :: dpres0_dpsi(:)
 
   !> Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
-  !> 
+  !>
   !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
   !> +1, i.e. from the magnetic axis to just outside the last closed flux surface.
   real(dp), allocatable :: dens(:)
 
   !> Temperature \f$ T \f$ on flux surface with \f$ k_{\mathrm{B}} T \f$ in eV.
-  !> 
+  !>
   !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
   !> +1, i.e. from the magnetic axis to just outside the last closed flux surface.
   real(dp), allocatable :: temp(:)
@@ -702,9 +702,6 @@ contains
        case (1)
           kp_max = nkpol
           k_low = 0
-       case (2)
-          kp_max = 2 * nkpol
-          k_low = (kl-1) * kp_max - nkpol
        case default
           kp_max = 2 * nkpol
           k_low = (kl-1) * kp_max - nkpol
@@ -803,67 +800,53 @@ contains
     call compute_triangle_flux(assemble_currn_coeff, assign_currn, jnflux, jnphi, currn_file)
   end subroutine compute_currn
 
-  subroutine assemble_Bn_nonres_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, l, &
-       edge_index, edge_name)
-
-    complex(dp), dimension(:), intent(inout) :: x, d, du
-    integer, intent(in) :: kl, kp, k_low
-    real(dp), intent(in) :: Deltapsi
-    type(triangle), intent(in) :: elem
-    integer, dimension(2), intent(in) :: l
-    integer, intent(in) :: edge_index
-    character, intent(in) :: edge_name
-
-    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-    type(knot) :: base, tip, outer, inner
+  subroutine compute_Bn_nonres
+    integer :: kl, kp, kp_max, k_low
+    type(triangle) :: elem
+    type(knot) :: base, tip
+    integer, dimension(2) :: li, lo, lf
+    integer :: ei, eo, ef
     integer :: common_tri(2)
     real(dp) :: lr, lz, perps(2)
+    real(dp) :: Deltapsi
     complex(dp) :: Bnpsi
-
-    select case (edge_name)
-    case ('f')
-       p = 0d0
-       ! use midpoint of edge
-       base = mesh_point(l(1))
-       tip = mesh_point(l(2))
-       call common_triangles(base, tip, common_tri)
-       call unshared_knots(common_tri, outer, inner)
-       r = (base%rcoord + tip%rcoord) * 0.5d0
-       z = (base%zcoord + tip%zcoord) * 0.5d0
-       lr = tip%rcoord - base%rcoord
-       lz = tip%zcoord - base%zcoord
-       perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz) * 0.5d0
-       call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-            dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-       Bnpsi = Bp / r
-       Bnflux(k_low + kp, edge_index) = Bnpsi * r * hypot(lr, lz) * sum(perps) / &
-            (psi(kl+1) - psi(kl-1))
-       ! use weighted triangle midpoint
-       call ring_centered_avg_coord(elem, r, z)
-       call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-            dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-       Bnphi(k_low + kp) = Bp * imun / n * 2d0
-       x(kp) = -Bnflux(k_low + kp, edge_index) - imun * n * elem%det_3 * 0.5d0 * r * &
-            Bnphi(k_low + kp)
-    case ('i')
-       d(kp) = -1d0
-    case ('o')
-       du(kp) = 1d0
-    end select
-  end subroutine assemble_Bn_nonres_coeff
-
-  subroutine assign_Bn_nonres(x, kl, kp, kp_max, k_low, ei, eo, ef)
-    complex(dp), dimension(:), intent(in) :: x
-    integer, intent(in) :: kl, kp, kp_max, k_low
-    integer, intent(in) :: ei, eo, ef
-    Bnflux(k_low + kp, ei) = -x(kp)
-    Bnflux(k_low + kp, eo) = x(mod(kp, kp_max) + 1)
-  end subroutine assign_Bn_nonres
-
-  subroutine compute_Bn_nonres
+    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
     integer :: k
-    call compute_triangle_flux(assemble_Bn_nonres_coeff, assign_Bn_nonres, Bnflux, Bnphi)
+
+    p = 0d0
+    do kl = 1, nflux ! loop through flux surfaces
+       select case(kl)
+       case (1)
+          kp_max = nkpol
+          k_low = 0
+       case default
+          kp_max = 2 * nkpol
+          k_low = (kl-1) * kp_max - nkpol
+       end select
+       do kp = 1, kp_max
+          elem = mesh_element(k_low + kp)
+          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef)
+          ! use midpoint of edge f
+          base = mesh_point(lf(1))
+          tip = mesh_point(lf(2))
+          r = (base%rcoord + tip%rcoord) * 0.5d0
+          z = (base%zcoord + tip%zcoord) * 0.5d0
+          lr = tip%rcoord - base%rcoord
+          lz = tip%zcoord - base%zcoord
+          call common_triangles(base, tip, common_tri)
+          perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz) * 0.5d0
+          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+          Bnpsi = Bp / r
+          Bnflux(k_low + kp, ef) = Bnpsi * r * hypot(lr, lz) * sum(perps) / &
+               (psi(kl+1) - psi(kl-1))
+          Bnphi(k_low + kp) = imun / n * Bnflux(k_low + kp, ef) / elem%det_3 * 2d0
+          Bnflux(k_low + kp, ei) = -0.1d0  ! replace by sensible average
+          Bnflux(k_low + kp, eo) =  0.1d0  ! replace by sensible average
+       end do
+    end do
+
     do k = 1, ntri
        if (abs((sum(Bnflux(k,:)) + imun * n * Bnphi(k) * mesh_element(k)%det_3 * 0.5d0) &
             / sum(Bnflux(k,:))) > 1d-10) then
