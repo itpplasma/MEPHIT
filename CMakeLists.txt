@@ -12,7 +12,7 @@ include(${CMAKE_SOURCE_DIR}/ProjectConfig.cmake.in)
 
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
-set(LIBRARY_OUTPUT_PATH ${CMAKE_BINARY_DIR}/lib)
+set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 
 ### SuiteSparse and SuperLU
 find_package(SuiteSparse REQUIRED)
