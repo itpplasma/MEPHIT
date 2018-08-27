@@ -162,6 +162,7 @@ contains
     call compute_j0phi
     if (nonres) then
        call compute_Bn_nonres
+       if (log_debug) call dump_triangle_flux(Bnflux, Bnphi, dump_flux_file)
     else
        call read_bnflux(Bnflux_vac_file)
     end if
@@ -808,7 +809,6 @@ contains
     integer :: ei, eo, ef
     integer :: common_tri(2)
     real(dp) :: lr, lz, perps(2)
-    real(dp) :: Deltapsi
     complex(dp) :: Bnpsi
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
@@ -856,5 +856,39 @@ contains
     end do
 
   end subroutine compute_Bn_nonres
+
+  subroutine dump_triangle_flux(pol_flux, tor_flux, outfile)
+    complex(dp), intent(in) :: pol_flux(:,:)
+    complex(dp), intent(in) :: tor_flux(:)
+    character(len = 1024), intent(in) :: outfile
+
+    integer :: ktri
+    type(triangle) :: elem
+    type(knot) :: tri(3)
+    real(dp) :: length(3)
+    complex(dp) :: pol_flux_r, pol_flux_z
+    real(dp) :: r, z
+
+    open(1, file = outfile, recl = 1024)
+    do ktri = 1, (2 * nflux - 1) * nkpol - 1
+       elem = mesh_element(ktri)
+       tri = mesh_point(elem%i_knot(:))
+       length(1) = hypot(tri(2)%rcoord - tri(1)%rcoord, tri(2)%zcoord - tri(1)%zcoord)
+       length(2) = hypot(tri(3)%rcoord - tri(2)%rcoord, tri(3)%zcoord - tri(2)%zcoord)
+       length(3) = hypot(tri(1)%rcoord - tri(3)%rcoord, tri(1)%zcoord - tri(3)%zcoord)
+       call ring_centered_avg_coord(elem, r, z)
+       pol_flux_r = 2d0 / elem%det_3 * ( &
+            pol_flux(ktri, 1) * (r - tri(3)%rcoord) * length(1) + &
+            pol_flux(ktri, 2) * (r - tri(1)%rcoord) * length(2) + &
+            pol_flux(ktri, 3) * (r - tri(2)%rcoord) * length(3))
+       pol_flux_z = 2d0 / elem%det_3 * ( &
+            pol_flux(ktri, 1) * (z - tri(3)%zcoord) * length(1) + &
+            pol_flux(ktri, 2) * (z - tri(1)%zcoord) * length(2) + &
+            pol_flux(ktri, 3) * (z - tri(2)%zcoord) * length(3))
+       write (1, *) r, z, real(tor_flux(ktri)), aimag(tor_flux(ktri)), &
+            real(pol_flux_r), aimag(pol_flux_r), real(pol_flux_z), aimag(pol_flux_z)
+    end do
+    close(1)
+  end subroutine dump_triangle_flux
 
 end module magdif

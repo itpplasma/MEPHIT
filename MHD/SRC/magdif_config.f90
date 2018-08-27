@@ -18,6 +18,7 @@ module magdif_config
   character(len=1024) :: tri_file         !< input data file for triangles and edges
   character(len=1024) :: Bnflux_file      !< input data file for magnetic field perturbation
   character(len=1024) :: Bnflux_vac_file  !< input data file for magnetic field perturbation
+  character(len=1024) :: dump_flux_file   !< output file for plots
   character(len=1024) :: Bn_sum_file      !< output data file for accumulated magnetic field perturbation
   character(len=1024) :: hpsi_file        !< input data file for \f$ h_{n}^{\psi} \f$
   character(len=1024) :: config_file      !< input config file for namelist settings
@@ -32,7 +33,7 @@ module magdif_config
   real(dp) :: di0             !< interpolation step for density
 
   namelist / settings / log_level, runmode, nonres, point_file, tri_file, Bnflux_file, &
-       Bnflux_vac_file, Bn_sum_file, hpsi_file, presn_file, currn_file, niter, n, nkpol, &
+       Bnflux_vac_file, dump_flux_file, Bn_sum_file, hpsi_file, presn_file, currn_file, niter, n, nkpol, &
        nflux, ti0, di0
   !< namelist for input parameters
 
