@@ -54,7 +54,7 @@ module magdif
 
   !> Derivative of #q w.r.t. #psi.
   !>
-  !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux,
+  !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
   !> +1, i.e. from the magnetic axis to the last closed flux surface. The value at the
   !> magnetic axis is identically zero.
   real(dp), allocatable :: dqdpsi(:)
@@ -280,6 +280,42 @@ contains
 
   end subroutine compute_Bn
 
+
+  !> Check if divergence-freeness of the given vector field is fulfilled on each
+  !> triangle, otherwise halt the program.
+  !>
+  !> @param pol_flux poloidal flux components, e.g. #jnflux - first index refers to the
+  !> triangle, second index refers to the edge on that triangle, as per
+  !> #mesh_mod::mesh_element
+  !> @param tor_flux toroidal flux components, e.g. #jnphi - index refers to the triangle
+  !> @param abs_err absolute error threshold, i.e. maximum acceptable value for divergence
+  !> @param field_name name given to the vector field in the error message
+  !>
+  !> This subroutine calculates the divergence via the divergence theorem, i.e. by adding
+  !> up the fluxes of the vector field through triangle edges. If this sum is higher than
+  !> \p abs_err on any triangle, it halts the program.
+
+  subroutine check_div_free(pol_flux, tor_flux, abs_err, field_name)
+    complex(dp), intent(in) :: pol_flux(:,:)
+    complex(dp), intent(in) :: tor_flux(:)
+    real(dp), intent(in) :: abs_err
+    character(len = *), intent(in) :: field_name
+
+    integer :: k
+    real(dp) :: div
+    character(len = len_trim(field_name) + 20) :: err_msg
+    err_msg = trim(field_name) // ' not divergence-free'
+
+    do k = 1, ntri
+       div = abs((sum(pol_flux(k,:)) + imun * n * tor_flux(k) * mesh_element(k)%det_3 * &
+            0.5d0) / sum(pol_flux(k,:)))
+       if (div > abs_err) then
+          if (log_err) write(logfile, *) err_msg, ': ', div
+          stop err_msg
+       end if
+    end do
+  end subroutine check_div_free
+
   !> Read fluxes of perturbation field
   subroutine read_bnflux(filename)
     character(len = 1024) :: filename
@@ -293,16 +329,10 @@ contains
        Bnflux(k,2) = cmplx(dummy8(3), dummy8(4), dp)
        Bnflux(k,3) = cmplx(dummy8(5), dummy8(6), dp)
        Bnphi(k) = cmplx(dummy8(7), dummy8(8), dp) / (mesh_element(k)%det_3 * 0.5d0)
-
-       if (abs((sum(Bnflux(k,:)) + imun * n * Bnphi(k) * mesh_element(k)%det_3 * 0.5d0) &
-            / sum(Bnflux(k,:))) > 1d-3) then
-          if (log_err) write(logfile, *) 'B_n not divergence free: ',&
-               abs((sum(Bnflux(k,:)) + imun * n * Bnphi(k) * mesh_element(k)%det_3 * 0.5d0) &
-            / sum(Bnflux(k,:)))
-          stop 'B_n not divergence free'
-       end if
     end do
     close(1)
+
+    call check_div_free(Bnflux, Bnphi, 1d-3, 'B_n')
   end subroutine read_bnflux
 
   subroutine init_safety_factor
@@ -490,39 +520,6 @@ contains
     end do
   end subroutine common_triangles
 
-  subroutine unshared_knots(common_tri, outer_knot, inner_knot)
-    integer, intent(in) :: common_tri(2)
-    type(knot), intent(out) :: outer_knot, inner_knot
-    integer, dimension(2, 3) :: set
-    integer, dimension(2) :: i_unshared
-    integer :: tri, k, n_unshared
-    character(len = *), parameter :: errmsg = &
-         'not exactly one unshared knot between triangles'
-
-    set(1, :) = mesh_element(common_tri(1))%i_knot(:)
-    set(2, :) = mesh_element(common_tri(2))%i_knot(:)
-    do tri = 1, 2
-       n_unshared = 0
-       do k = 1, 3
-          if (.not. any(set(tri, k) == set(3-tri, :))) then
-             n_unshared = n_unshared + 1
-             i_unshared(tri) = set(tri, k)
-          end if
-       end do
-       if (n_unshared /= 1) then
-          if (log_debug) write(logfile, *) errmsg
-          stop errmsg
-       end if
-    end do
-    if (i_unshared(1) > i_unshared(2)) then
-       outer_knot = mesh_point(i_unshared(1))
-       inner_knot = mesh_point(i_unshared(2))
-    else
-       outer_knot = mesh_point(i_unshared(2))
-       inner_knot = mesh_point(i_unshared(1))
-    end if
-  end subroutine unshared_knots
-
   !>Compute pressure perturbation. TODO: documentation
   subroutine compute_presn
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
@@ -598,6 +595,22 @@ contains
     close(1)
   end subroutine compute_presn
 
+
+  !> Map edge symbols to integer indices.
+  !>
+  !> @param elem the triangle for which indices are to be obtained
+  !> @param li knot indices for base (1) and tip (2) of edge i
+  !> @param lo knot indices for base (1) and tip (2) of edge o
+  !> @param lf knot indices for base (1) and tip (2) of edge f
+  !> @param ei index of edge i, e.g. for #bnflux
+  !> @param eo index of edge o, e.g. for #bnflux
+  !> @param ef index of edge f, e.g. for #bnflux
+  !>
+  !> It is assumed that the knots are numbered in ascending order starting from the
+  !> magnetic axis and going counter-clockwise around each flux surface. Furthermore it
+  !> is assumed that edge 1 goes from knot 1 to knot 2, edge 2 from knot 2 to knot 3 and
+  !> edge 3 from knot 3 to knot 1.
+
   subroutine get_labeled_edges(elem, li, lo, lf, ei, eo, ef)
     type(triangle), intent(in) :: elem
     integer, dimension(2), intent(out) :: li, lo, lf
@@ -655,6 +668,27 @@ contains
     end if
   end subroutine get_labeled_edges
 
+
+  !> Compute the fluxes of a complex vector field through each triangle, separately for
+  !> each flux surface.
+  !>
+  !> @param assemble_flux_coeff subroutine that assembles the system of linear equations
+  !> edge by edge, e.g. assemble_currn_coeff()
+  !> @param assign_flux subroutine that assigns values to the fluxes through each triangle
+  !> after the system of linear equations is solved, e.g. assign_currn()
+  !> @param pol_flux poloidal flux components, e.g. #jnflux - first index refers to the
+  !> triangle, second index refers to the edge on that triangle, as per
+  !> #mesh_mod::mesh_element
+  !> @param tor_flux toroidal flux components, e.g. #jnphi - index refers to the triangle
+  !> @param outfile if present, write \p pol_flux and \p tor_flux to the given filename
+  !>
+  !> For each flux surface, this subroutine loops through every triangle and calls \p
+  !> assemble_flux_coeff for edges f, i, o (in that order). Then, it assembles and solves
+  !> the resulting sparse system of linear equations. With the known solution, it loops
+  !> over the triangle strip again and assigns values to \p pol_flux and \p tor_flux via
+  !> \p assign_flux. Note that \p assemble_flux_coeff can also assign flux components that
+  !> are already known, usually the one through edge f.
+
   subroutine compute_triangle_flux(assemble_flux_coeff, assign_flux, pol_flux, tor_flux, &
        outfile)
     procedure(sub_assemble_flux_coeff) :: assemble_flux_coeff
@@ -694,7 +728,7 @@ contains
           call assemble_flux_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, li, ei, 'i')
           call assemble_flux_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, lo, eo, 'o')
        end do
-       call assemble_sparse(kp_max, d(:kp_max), du(:kp_max), nz, irow(:2*kp_max),&
+       call assemble_sparse(kp_max, d(:kp_max), du(:kp_max), nz, irow(:2*kp_max), &
             icol(:2*kp_max), aval(:2*kp_max))
        call sparse_solve(kp_max, kp_max, nz, irow(:nz), icol(:nz), aval(:nz), x(:kp_max))
        do kp = 1, kp_max
@@ -791,7 +825,6 @@ contains
     complex(dp) :: Bnpsi, Bnflux_avg
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-    integer :: k
 
     p = 0d0
     do kl = 1, nflux ! loop through flux surfaces
@@ -833,14 +866,7 @@ contains
        end do
     end do
 
-    do k = 1, ntri
-       if (abs((sum(Bnflux(k,:)) + imun * n * Bnphi(k) * mesh_element(k)%det_3 * 0.5d0) &
-            / sum(Bnflux(k,:))) > 1d-10) then
-          if (log_err) write(logfile, *) 'nonresonant B_n not divergence free'
-          stop 'nonresonant B_n not divergence free'
-       end if
-    end do
-
+    call check_div_free(Bnflux, Bnphi, 1d-10, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
   subroutine dump_triangle_flux(pol_flux, tor_flux, outfile)
