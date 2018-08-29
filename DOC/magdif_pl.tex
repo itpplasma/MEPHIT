@@ -489,7 +489,7 @@ and therefore acts as a source on the right-hand side. The remaining currents $I
   \im n \int_{\Omega} R j_{n}^{\phi} \, \diff S & \approx \im n S_{\Omega} \frac{R_{\inw} j_{n \inw}^{\phi} + R_{\out} j_{n \out}^{\phi}}{2} \nonumber \\
   &= -\frac{\im n S_{\Omega}}{2} \left( \frac{B_{0 (\phi), \inw}}{\vec{l}_{\inw} \cdot \nabla \psi} I_{\inw} + \frac{B_{0 (\phi), \out}}{\vec{l}_{\out} \cdot \nabla \psi} I_{\out} + \dotsb \right),
 \end{align}
-where $S_{\Omega}$ is the triangle surface area. In the approximation above, a term $R_{\fs} j_{n \fs}^{\phi}$ is neglected because within one loop of triangles in \cref{fig:grid1}, edge \fs\ alternates between the inner and outer flux surface and this "oscillation" of sample points would carry over to the approximation values. Furthermore, $R_{\fs} j_{n \fs}^{\phi}$ can't be reformulated in terms of $R_{\fs} j_{n \fs}^{\phi}$, introducing another unknown. This would lead to an overdetermined set of equations, possibly violating divergence-freeness. Instead, $j_{n (\phi)}$ is approximated for each triangle by
+where $S_{\Omega}$ is the triangle surface area. In the approximation above, a term $R_{\fs} j_{n \fs}^{\phi}$ is neglected because within one loop of triangles in \cref{fig:grid1}, edge \fs\ alternates between the inner and outer flux surface and this "oscillation" of sample points would carry over to the approximation values. Furthermore, $R_{\fs} j_{n \fs}^{\phi}$ can't be reformulated in terms of $R_{\fs} \vec{j}_{n \fs}^{\pol}$, introducing another unknown. This would lead to an overdetermined set of equations, possibly violating divergence-freeness. Instead, $j_{n (\phi)}$ is approximated for each triangle by
 \begin{gather}
   \im n \int_{\Omega} R j_{n}^{\phi} \approx \im n I_{(\phi)}.
 \end{gather}
@@ -562,25 +562,31 @@ so, to generate a non-resonant field, we are allowed to use any value
 \begin{gather*}
   B_{n}^{\psi} = C(\psi) \frac{B_{0 \phi}}{R^{2}},
 \end{gather*}
-where $C(\psi)$ is a flux function. The other components of $\delta \vec{B}$ are not relevant for the resonance condition and just need to fulfill divergence-freeness. For any given $B_{n}^{\phi}$ we proceed as in \cref{sec:compute_currn} and find fluxes through triangle edges:
+where $C(\psi)$ is a flux function. The other components of $\delta \vec{B}$ are not relevant for the resonance condition and just need to fulfill divergence-freeness. Thus we proceed as in \cref{sec:compute_currn} and find fluxes through triangle edges:
 \begin{gather}
-  \int_{\Gamma_{\inw}, \Gamma_{\out}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} = -\int_{\Gamma_{\fs}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} - \im n \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi}.
+  \int_{\Gamma_{\inw}, \Gamma_{\out}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} = -\int_{\Gamma_{\fs}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} - \im n \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi}. \label{eq:Bn_divfree}
 \end{gather}
 As for currents we use the notation for weighted magnetic fluxes through edges,
 \begin{gather}
-  \Psi_{k} = \int_{k} R \vec{B}_{n}^{\pol} \cdot \vec{n} \, \diff l \approx R_{k} \vec{B}_{n}^{\pol} \cdot \vec{n}_{k}.
+  \Psi_{k} = \int_{k} R \vec{B}_{n}^{\pol} \cdot \vec{n} \, \diff l \approx R_{k} \vec{B}_{n}^{\pol} \cdot \vec{n}_{k},
 \end{gather}
-The term through edge \fs\ orthogonal to $n_{\fs} \parallel \nabla \psi$ is
+and the same for the weighted toroidal magnetic flux,
 \begin{gather}
-  -\Psi_{\fs} \approx \mp R_{\fs} l_{\fs} \frac{B_{n}^{\psi}}{\lvert \nabla \psi \rvert} \label{eq:Psi_f}
+  \Psi_{\phi} = \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi} \approx S_{\Omega} \, R_{\Omega} B_{n \Omega}^{\phi},
 \end{gather}
-with sign depending on edge orientation. The second term yields
-\begin{gather*}
-  -\Psi_{\phi} = -\im n \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi} \approx - \im n S_{\Omega} \, R_{k} B_{n k}^{\phi}.
-\end{gather*}
-The equation to solve is
+resulting in a shortened notation for \cref{eq:Bn_divfree} where the system of equations to be assembled is more apparent:
+\begin{gather}
+  \Psi_{\inw} + \Psi_{\out} = -\Psi_{\fs} - \im n \Psi_{\phi}.
+\end{gather}
+The term through edge \fs\ orthogonal to $\vec{n}_{\fs} \parallel \nabla \psi$ is
+\begin{gather}
+  \Psi_{\fs} \approx B_{n}^{\psi} \frac{R_{\fs} l_{\fs}}{\vec{n}_{\fs} \cdot \nabla \psi} \label{eq:Psi_f}
+\end{gather}
+with the sign of the directional derivative depending on edge orientation.
+
+The system of linear equations to solve is
 \begin{equation}
-  A_{jk} \Psi^{(k)} = \vec{q},
+  A_{jk} \Psi^{(k)} = q_{j},
 \end{equation}
 with
 \begin{gather}
@@ -588,7 +594,7 @@ with
 \end{gather}
 and
 \begin{gather}
-  q^{k} = \mp R_{\fs} l_{\fs} \frac{B_{n}^{\psi}}{\lvert \nabla \psi \rvert} - \im n S_{\Omega} R_{k} B_{n k}^{\phi}.
+  q_{j} = -\Psi_{\fs}^{(j)} - \im n \Psi_{\phi}^{(j)}
 \end{gather}
 Since any one row/column in $A$ is a linear combination of all other rows/columns, $A$ is of rank $N - 1$ and thus singular. To get a non-trivial (i.e.\ non-zero) solution for $\Psi^{(k)}$, $\vec{q}$ should vanish as well, making the linear system homogeneous. The solution then assumes the simple form of $\Psi^{(1)} = \Psi^{(2)} = \dotsb = \Psi^{(N)} = c_{1}$ with an arbitrary constant $c_{1}$. This means that flux conservation, i.e.\ divergence-freeness, is fulfilled by balancing $\Psi_{\inw}$ with $\Psi_{\out}$ and $\Psi_{\fs}$ with $\Psi_{\phi}$ on each individual triangle. With $\Psi_{\fs}$ fixed by \cref{eq:Psi_f}, the remaining degrees of freedom on the same triangle are then determined:
 \begin{gather}

@@ -605,16 +605,18 @@ contains
   !> @param ei index of edge i, e.g. for #bnflux
   !> @param eo index of edge o, e.g. for #bnflux
   !> @param ef index of edge f, e.g. for #bnflux
+  !> @param orient true if edge f lies on the outer flux surface, false otherwise
   !>
   !> It is assumed that the knots are numbered in ascending order starting from the
   !> magnetic axis and going counter-clockwise around each flux surface. Furthermore it
   !> is assumed that edge 1 goes from knot 1 to knot 2, edge 2 from knot 2 to knot 3 and
   !> edge 3 from knot 3 to knot 1.
 
-  subroutine get_labeled_edges(elem, li, lo, lf, ei, eo, ef)
+  subroutine get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
     type(triangle), intent(in) :: elem
     integer, dimension(2), intent(out) :: li, lo, lf
     integer, intent(out) :: ei, eo, ef
+    logical, intent(out) :: orient
     integer, dimension(3) :: i_knot_diff
     integer :: knot_i, knot_o, knot_f
     integer :: i1, i2
@@ -638,24 +640,31 @@ contains
        if (log_debug) write(logfile, *) errmsg
        stop errmsg
     end if
-    closing_loop = abs(elem%i_knot(i1) - elem%i_knot(i2)) /= 1  ! indices not next to each other
-    if ((elem%i_knot(i1) > elem%i_knot(i2)) .neqv. closing_loop) then  ! i1 is next counter-clockwise
+    ! last triangle in strip if indices not next to each other
+    closing_loop = abs(elem%i_knot(i1) - elem%i_knot(i2)) /= 1
+    if ((elem%i_knot(i1) > elem%i_knot(i2)) .neqv. closing_loop) then
+       ! i1 is next counter-clockwise
        knot_i = i1
        knot_o = i2
-    else  ! i2 is next counter-clockwise
+    else
+       ! i2 is next counter-clockwise
        knot_i = i2
        knot_o = i1
     end if
     knot_f = elem%knot_h
     i_knot_diff = elem%i_knot - elem%i_knot(knot_f)
-    if (all(i_knot_diff >= 0)) then  ! knot_f lies on inner surface
+    if (all(i_knot_diff >= 0)) then
+       ! knot_f lies on inner surface
+       orient = .true.
        ei = knot_f
        eo = knot_i
        ef = knot_o
        li = (/ elem%i_knot(knot_f), elem%i_knot(knot_o) /)
        lo = (/ elem%i_knot(knot_i), elem%i_knot(knot_f) /)
        lf = (/ elem%i_knot(knot_o), elem%i_knot(knot_i) /)
-    else if (all(i_knot_diff <= 0)) then ! elem%i_knot(knot_f) lies on outer surface
+    else if (all(i_knot_diff <= 0)) then
+       ! knot_f lies on outer surface
+       orient = .false.
        ei = knot_o
        eo = knot_f
        ef = knot_i
@@ -705,6 +714,7 @@ contains
     type(triangle) :: elem
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
+    logical :: orient
     real(dp) :: Deltapsi
     integer :: ktri
 
@@ -723,7 +733,7 @@ contains
        Deltapsi = psi(kl) - psi(kl-1)
        do kp = 1, kp_max
           elem = mesh_element(k_low + kp)
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef)
+          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           call assemble_flux_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, lf, ef, 'f')
           call assemble_flux_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, li, ei, 'i')
           call assemble_flux_coeff(x, d, du, kl, kp, k_low, Deltapsi, elem, lo, eo, 'o')
@@ -733,7 +743,7 @@ contains
        call sparse_solve(kp_max, kp_max, nz, irow(:nz), icol(:nz), aval(:nz), x(:kp_max))
        do kp = 1, kp_max
           elem = mesh_element(k_low + kp)
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef)
+          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           call assign_flux(x, kl, kp, kp_max, k_low, ei, eo, ef)
           if (present(outfile)) write(1, *) &
                real(pol_flux(k_low + kp, 1)), aimag(pol_flux(k_low + kp, 1)), &
@@ -820,13 +830,15 @@ contains
     type(knot) :: base, tip
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
+    logical :: orient
     integer :: common_tri(2)
-    real(dp) :: lr, lz, perps(2)
+    real(dp) :: lr, lz, Deltapsi, perps(2)
     complex(dp) :: Bnpsi, Bnflux_avg
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
 
     p = 0d0
+    open(1, file = 'Bn_nonres.dat', recl = 1024)
     do kl = 1, nflux ! loop through flux surfaces
        select case(kl)
        case (1)
@@ -839,7 +851,12 @@ contains
        Bnflux_avg = (0d0, 0d0)
        do kp = 1, kp_max
           elem = mesh_element(k_low + kp)
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef)
+          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+          if (orient) then
+             Deltapsi = psi(kl+1) - psi(kl-1)
+          else
+             Deltapsi = psi(kl-2) - psi(kl)
+          end if
           ! use midpoint of edge f
           base = mesh_point(lf(1))
           tip = mesh_point(lf(2))
@@ -852,19 +869,21 @@ contains
           call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
           Bnpsi = Bp / r
-          Bnflux(k_low + kp, ef) = Bnpsi * r * hypot(lr, lz) * sum(perps) / &
-               (psi(kl+1) - psi(kl-1))
+          Bnflux(k_low + kp, ef) = Bnpsi * r * hypot(lr, lz) * sum(perps) / Deltapsi
           Bnflux_avg = Bnflux_avg + Bnflux(k_low + kp, ef)
           Bnphi(k_low + kp) = imun / n * Bnflux(k_low + kp, ef) / elem%det_3 * 2d0
        end do
        Bnflux_avg = Bnflux_avg / kp_max
        do kp = 1, kp_max
           elem = mesh_element(k_low + kp)
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef)
+          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           Bnflux(k_low + kp, ei) = -2d0 * abs(Bnflux_avg)
           Bnflux(k_low + kp, eo) =  2d0 * abs(Bnflux_avg)
+          write (1, *) real(Bnflux(k_low + kp, 1)), real(Bnflux(k_low + kp, 2)), &
+               real(Bnflux(k_low + kp, 3)), aimag(Bnphi(k_low + kp))
        end do
     end do
+    close(1)
 
     call check_div_free(Bnflux, Bnphi, 1d-10, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
