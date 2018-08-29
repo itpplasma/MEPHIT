@@ -156,7 +156,6 @@ contains
   !> Initialize magdif module
   subroutine magdif_init
     call read_mesh
-    call read_hpsi ! TODO: get rid of this due to redundancy with bnflux
     call init_flux_variables
     call init_safety_factor
     call compute_j0phi
@@ -306,27 +305,7 @@ contains
     close(1)
   end subroutine read_bnflux
 
-  !> TODO: get rid of this due to redundancy with bnflux
-  subroutine read_hpsi
-    integer :: k
-    real(dp) :: dummy_re, dummy_im
-
-    open(1, file = hpsi_file)
-    do k = 1, ntri
-       read (1, *) dummy_re, dummy_im
-       if (.not. nonres) then
-          mesh_element_rmp(k)%bnorm_vac = cmplx(dummy_re, dummy_im, dp)
-       else
-       !Test case: completely non-resonant perturbation
-          mesh_element_rmp(k)%bnorm_vac = 3.d0 * R0 * abs(bphicovar) &
-               / sum(mesh_point(mesh_element(k)%i_knot(:))%rcoord ** 2 &
-               * mesh_point(mesh_element(k)%i_knot(:))%b_mod)
-       endif
-    end do
-    close(1)
-  end subroutine read_hpsi
-
-    subroutine init_safety_factor
+  subroutine init_safety_factor
     integer :: kl, kp, kp_max, k_low
     type(triangle) :: elem
     real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
