@@ -809,7 +809,7 @@ contains
     integer :: ei, eo, ef
     integer :: common_tri(2)
     real(dp) :: lr, lz, perps(2)
-    complex(dp) :: Bnpsi
+    complex(dp) :: Bnpsi, Bnflux_avg
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
     integer :: k
@@ -824,6 +824,7 @@ contains
           kp_max = 2 * nkpol
           k_low = (kl-1) * kp_max - nkpol
        end select
+       Bnflux_avg = (0d0, 0d0)
        do kp = 1, kp_max
           elem = mesh_element(k_low + kp)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef)
@@ -841,9 +842,15 @@ contains
           Bnpsi = Bp / r
           Bnflux(k_low + kp, ef) = Bnpsi * r * hypot(lr, lz) * sum(perps) / &
                (psi(kl+1) - psi(kl-1))
+          Bnflux_avg = Bnflux_avg + Bnflux(k_low + kp, ef)
           Bnphi(k_low + kp) = imun / n * Bnflux(k_low + kp, ef) / elem%det_3 * 2d0
-          Bnflux(k_low + kp, ei) = -0.1d0  ! replace by sensible average
-          Bnflux(k_low + kp, eo) =  0.1d0  ! replace by sensible average
+       end do
+       Bnflux_avg = Bnflux_avg / kp_max
+       do kp = 1, kp_max
+          elem = mesh_element(k_low + kp)
+          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef)
+          Bnflux(k_low + kp, ei) = -2d0 * abs(Bnflux_avg)
+          Bnflux(k_low + kp, eo) =  2d0 * abs(Bnflux_avg)
        end do
     end do
 
