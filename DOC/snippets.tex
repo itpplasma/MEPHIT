@@ -1,13 +1,4 @@
-\begin{align}
-  \vec{j}_{0 \perp} &= \frac{-c \nabla p_{0} \times \vec{B}_{0}}{B_{0}^{2}} \\
-  &= \frac{-c p_{0}' (\psi) \nabla \psi \times (\nabla \psi \times \nabla \phi + B_{0 \phi} \nabla \phi)}{B_{0}^{2}} \nonumber \\
-  &= \frac{-c p_{0}' (\psi)}{B_{0}^{2}} \left( B_{0 \phi} \vec{B}_{0}^{\pol} - \lvert \nabla \psi \rvert^{2} \nabla \phi \right).
-\end{align}
-
-\begin{gather}
-  \left( B_{0}^{\pol} \right)^{2} + \left( B_{0}^{\tor} \right)^{2} = B_{0}^{2}
-\end{gather}
-
+\iffalse
 % glossary
 \usepackage[
   xindy,
@@ -22,3 +13,144 @@
 \AfterPreamble{%
   \input{notation.tex}
 }
+\fi
+
+
+\begin{align}
+  \vec{j}_{0 \perp} &= \frac{-c \nabla p_{0} \times \vec{B}_{0}}{B_{0}^{2}} \\
+  &= \frac{-c p_{0}' (\psi) \nabla \psi \times (\nabla \psi \times \nabla \phi + B_{0 \phi} \nabla \phi)}{B_{0}^{2}} \nonumber \\
+  &= \frac{-c p_{0}' (\psi)}{B_{0}^{2}} \left( B_{0 \phi} \vec{B}_{0}^{\pol} - \lvert \nabla \psi \rvert^{2} \nabla \phi \right).
+\end{align}
+
+\begin{gather}
+  \left( B_{0}^{\pol} \right)^{2} + \left( B_{0}^{\tor} \right)^{2} = B_{0}^{2}
+\end{gather}
+
+
+\subsubsection{Alternative formulation for the current through flux surface edges}
+
+As an alternative to \cref{eq:If} it can be shown (see writeup on gyrokinetics) that
+\begin{align}
+  \vec{j}_{n}^{\perp} &= \vec{j}_{n} - (\vec{j}_{n} \cdot \vec{h}_{0}) \vec{h}_{0} \nonumber \\
+  &= j_{0}^{\parallel} \frac{\vec{B}_{n}^{\perp}}{B_{0}} - \frac{c B_{n}^{\parallel}}{B_{0}^{2}} \vec{h}_{0} \times \nabla p_{0} + \frac{c}{B_{0}} \vec{h}_{0} \times (\nabla p_{n} + \im n p_{n} \nabla \phi).
+\end{align}
+Scalar multiplication with $\vec{n}_{\fs} \parallel \nabla p_{0} \parallel \nabla \psi \perp \vec{h}_{0}$ -- the first relation is true for infinitesimally small triangles -- yields
+\begin{align}
+  \vec{j}_{n}^{\perp} \cdot \vec{n}_{\fs} = \vec{j}_{n}^{\perp \pol} \cdot \vec{n}_{\fs} &= j_{0}^{\parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{\fs}}{B_{0}} + \frac{c}{B_{0}} \vec{n}_{\fs} \cdot (\vec{h}_{0} \times (\nabla p_{n} + \im n p_{n} \nabla \phi)) \nonumber \\
+  &= j_{0}^{\parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{\fs}}{B_{0}} + \frac{c}{B_{0}} \vec{n}_{\fs} \cdot (h_{0 \phi} \nabla \phi \times \nabla p_{n} + \im n p_{n} \vec{h}_{0}^{\pol} \times \nabla \phi) \nonumber \\
+  &= j_{0}^{\parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{\fs}}{B_{0}} + \frac{c}{B_{0}} (h_{0 \phi} \nabla p_{n} \cdot (\vec{n}_{\fs} \times \nabla \phi) + \im n p_{n} \vec{h}_{0}^{\pol} \cdot (\nabla \phi \times \vec{n}_{\fs})) \nonumber \\
+  &= j_{0}^{\parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{\fs}}{B_{0}} + \frac{c}{R B_{0}} \vec{l}_{\fs} \cdot (h_{0 \phi} \nabla p_{n} - \im n p_{n} \vec{h}_{0}^{\pol}) \nonumber \\
+  &= j_{0}^{\parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{\fs}}{B_{0}} + \frac{c}{B_{0}^{2}} \vec{l}_{\fs} \cdot \left( B_{0 (\phi)} \nabla p_{n} - \frac{\im n}{R} p_{n} \vec{B}_{0}^{\pol} \right). \label{eq:I3_alt}
+\end{align}
+
+\section{Current perturbation -- alternative}
+
+We split the current into parallel and perpendicular current:
+\begin{gather}
+  \vec{j}_{n} = j_{n \parallel} \vec{h}_{0} + \vec{j}_{n \perp}.
+\end{gather}
+We write the divergence-freeness condition as
+\begin{gather}
+  \nabla \cdot (\vec{h}_{0}^{\pol} j_{n \parallel}) + \im n h_{0}^{\phi} j_{n \parallel} = -\nabla \cdot \vec{j}_{n \perp}^{\pol} - \im n j_{n \perp}^{\phi}.
+\end{gather}
+In integral form, multiplied by $R$:
+\begin{gather}
+  \oint R j_{n \parallel} \vec{h}_{0}^{\pol} \cdot \vec{n} \, \diff l + \im n \int R h_{0}^{\phi} j_{n \parallel} \, \diff S = -\oint R \vec{j}_{n \perp}^{\pol} \cdot \vec{n} \, \diff l - \im n \int R j_{n \perp}^{\phi} \, \diff S.
+\end{gather}
+Approximate
+\begin{gather}
+  R^{1} j_{n \parallel}^{1} \vec{h}_{0}^{\pol} \cdot \vec{n}^{1} + R^{2} j_{n \parallel}^{2} \vec{h}_{0}^{\pol} \cdot \vec{n}^{2} + \im n S_{\Omega} \frac{(h_{0 (\phi)}^{1} j_{n \parallel}^{1} + h_{0 (\phi)}^{2} j_{n \parallel}^{2})}{2} = \nonumber \\
+  -R^{1} \vec{j}_{n \perp}^{\pol, 1} \cdot \vec{n}^{1} - R^{2} \vec{j}_{n \perp}^{\pol, 2} \cdot \vec{n}^{2} - R^{3} \vec{j}_{n \perp}^{\pol, 3} \cdot \vec{n}^{3} - \im n S_{\Omega} R j_{n \perp}^{\phi}.
+\end{gather}
+We use
+\begin{align}
+  j_{n \perp}^{\phi} &= \text{TODO} - \frac{c B_{n \parallel}}{B_{0}^{2}} \nabla \phi \cdot (\vec{h}_{0} \times \nabla p_{0}) + \frac{c}{B_{0}} \nabla \phi \cdot (\vec{h}_{0} \times \nabla p_{n}) \\
+  &= -\frac{c B_{n \parallel}}{B_{0}^{3}} \nabla p_{0} \cdot ((\nabla \psi \times \nabla \phi) \times \nabla \phi) + \frac{c}{B_{0}^{2}} \nabla p_{n} \cdot ((\nabla \psi \times \nabla \phi) \times \nabla \phi)\\
+  &= \frac{c B_{n \parallel}}{R^{2} B_{0}^{3}} \nabla p_{0} \cdot \nabla \psi - \frac{c}{R^{2} B_{0}^{2}} \nabla p_{n}\cdot \nabla \psi \\
+  &= \frac{c B_{n \parallel}}{R^{2} B_{0}^{3}} p_{0}'(\psi) \lvert \nabla \psi \rvert^{2} - \frac{c}{R^{2} B_{0}^{2}} \nabla p_{n} \cdot \nabla \psi.
+\end{align}
+We would like to represent
+\begin{gather}
+  \nabla \psi = (\nabla \psi)_{1} \vec{l}^{1} + (\nabla \psi)_{2} \vec{l}^{2}.
+\end{gather}
+We construct the system
+\begin{align*}
+  \vec{l}^{1} \cdot \nabla \psi &= \lvert l^{1} \rvert^{2} (\nabla \psi)_{1} + \vec{l}^{1} \cdot \vec{l}^{2} (\nabla \psi)_{2} \\
+  \vec{l}^{2} \cdot \nabla \psi = -(\vec{l}^{1} \cdot \nabla \psi) &= \vec{l}^{1} \cdot \vec{l}^{2} (\nabla \psi)_{1} + \lvert l^{2} \rvert^{2} (\nabla \psi)_{2}
+\end{align*}
+or generally
+\begin{align*}
+  v_{1} &= \frac{\lvert l^{2} \rvert^{2} + (\vec{l}^{1} \cdot \vec{l}^{2})}{\lvert l^{1} \rvert^{2} \lvert l^{2} \rvert^{2} - (\vec{l}^{1} \cdot \vec{l}^{2})^{2}} (\vec{l}^{1} \cdot \vec{v}) \\
+  v_{2} &= \frac{\lvert l^{1} \rvert^{2} + (\vec{l}^{1} \cdot \vec{l}^{2})}{\lvert l^{1} \rvert^{2} \lvert l^{2} \rvert^{2} - (\vec{l}^{1} \cdot \vec{l}^{2})^{2}} (\vec{l}^{2} \cdot \vec{v}).
+\end{align*}
+Finally
+\begin{align}
+  \vec{v} &= \frac{\lvert l^{2} \rvert^{2} + (\vec{l}^{1} \cdot \vec{l}^{2})}{\lvert l^{1} \rvert^{2} \lvert l^{2} \rvert^{2} - (\vec{l}^{1} \cdot \vec{l}^{2})^{2}}(\vec{l}^{1} \cdot \vec{v}) \vec{l}^{1} + \frac{\lvert l^{1} \rvert^{2} + (\vec{l}^{1} \cdot \vec{l}^{2})}{\lvert l^{1} \rvert^{2} \lvert l^{2} \rvert^{2} - (\vec{l}^{1} \cdot \vec{l}^{2})^{2}}(\vec{l}^{2} \cdot \vec{v}) \vec{l}^{2} \\
+  &= c_{1} (\vec{l}^{1} \cdot \vec{v}) \vec{l}^{1} + c_{2} (\vec{l}^{2} \cdot \vec{v}) \vec{l}^{2}.
+\end{align}
+Flux
+\begin{align}
+  B_{n \parallel} &= \vec{B}_{n} \cdot \vec{h} = \vec{B}_{n}^{\pol} \cdot \vec{h}^{\pol} + B_{n \phi} h^{\phi} \nonumber \\
+  &= c_{1} (\vec{n}^{1} \cdot \vec{B}_{n}^{\pol}) \vec{n}^{1} \cdot \vec{h}^{\pol} + c_{2} (\vec{n}^{2} \cdot \vec{B}_{n}^{\pol}) \vec{n}^{2} \cdot \vec{h}^{\pol} + B_{n (\phi)} h_{(\phi)}.
+\end{align}
+
+\section{Reduced MHD (unfinished)}
+
+We take
+\begin{gather*}
+  B_{n \phi} = 0
+\end{gather*}
+so
+\begin{gather*}
+  \vec{B}_{n} = \nabla \psi_{n} \times \nabla \phi.
+\end{gather*}
+Ampere's law becomes
+\begin{gather*}
+  \nabla \times \vec{B}_{n} = \frac{1}{4 \pi} \vec{J}_{n}.
+\end{gather*}
+
+\subsubsection{Non-resonant test field: alternative version including safety factor}
+
+We would like to have a completely non-resonant field
+\begin{gather*}
+  \delta \vec{B} = \vec{B}_{n} \e^{\im n \phi}
+\end{gather*}
+with $B_{n}^{\theta} = 0$. As an ansatz we take as a radial component of the field
+\begin{gather}
+  B_{n}^{\psi} = \frac{B_{0 \phi} R_{0}}{R^{2}} = -\sigma_{\pol} \frac{q R_{0}}{\sqrt{g}}
+\end{gather}
+so
+\begin{gather*}
+  B_{n}^{\rho} = -\frac{q R_{0}}{\sqrt{g}}
+\end{gather*}
+and
+\begin{gather*}
+  B_{n}^{\zeta} = -B_{n}^{\psi} F(\psi) = -\sigma_{\pol} B_{n}^{\rho} F(\rho).
+\end{gather*}
+Divergence-freeness of $\delta \vec{B}$ is now possible with
+\begin{align*}
+  0 = \nabla \cdot \delta \vec{B} &= \frac{1}{\sqrt{g}} \pd{x^{k}} \left( \sqrt{g} \delta B^{k} \right) \\
+  &= \frac{1}{\sqrt{g}} \left( \pd{\rho} \left( \sqrt{g} \delta B^{\rho} \right) + \pd{\zeta} \left( -\sigma_{\pol} \sqrt{g} \delta B^{\zeta} \right) \right) \\
+  &= \frac{1}{\sqrt{g}} \left(\pd{\rho} \left( -q R_{0} \right) - \im n \left( \sigma_{\pol} q R_{0} F(\rho) \right) \right).
+\end{align*}
+We should thus have 
+\begin{gather*}
+  q' (\rho) R_{0} = -\im n \sigma_{\pol} q R_{0} F(\rho)
+\end{gather*}
+or
+\begin{gather*}
+  F = -\sigma_{\pol} \frac{q' (\rho)}{\im n q} = -\frac{q' (\psi)}{\im n q}.
+\end{gather*}
+We obtain
+\begin{gather*}
+  \vec{B}_{n} = B_{n}^{\psi} \vec{e}_{\psi} + B_{n}^{\phi} \vec{e}_{\phi}
+\end{gather*}
+with
+\begin{align*}
+  B_{n}^{\psi} &= \vec{B}_{n} \cdot \nabla \psi = \frac{B_{0 \phi} R_{0}}{R^{2}}, \\
+  B_{n}^{\phi} &= \vec{B}_{n} \cdot \nabla \phi = -\frac{B_{0 \phi} R_{0}}{R^{2}} \frac{q' (\psi)}{\im n q}.
+\end{align*}
+Divergence-freeness in cylindrical coordinates gives
+\begin{gather*}
+  \int_{\Gamma_{\inw}, \Gamma_{\out}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} = -\int_{\Gamma_{\fs}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} - \im n \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi}.
+\end{gather*}
