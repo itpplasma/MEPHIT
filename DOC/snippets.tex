@@ -8,3 +8,17 @@
   \left( B_{0}^{\pol} \right)^{2} + \left( B_{0}^{\tor} \right)^{2} = B_{0}^{2}
 \end{gather}
 
+% glossary
+\usepackage[
+  xindy,
+  numberedsection,
+  toc,
+  nonumberlist,
+  nopostdot
+]{glossaries}
+\usepackage{glossary-longbooktabs}
+\setglossarystyle{longragged-booktabs}
+\makeglossaries
+\AfterPreamble{%
+  \input{notation.tex}
+}
