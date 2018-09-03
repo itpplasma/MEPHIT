@@ -157,12 +157,41 @@ Starting with a given MHD equilibrium fulfilling \cref{eq:mhd-gen,eq:divfree-gen
   \nabla \times (\nabla \times \delta \vec{A}) &= \frac{4 \pi}{c} \delta \vec{j}, \label{eq:ampere} \\
   \Rightarrow \nabla \cdot \delta \vec{B} &= \nabla \cdot \delta \vec{j} = 0. \label{eq:divfree}
 \end{align}
-Here the perturbation field in vacuum, $\delta \vec{B}_{\text{v}}$, is pre-evaluated by a Biot-Savart integral over external coil currents $I_{\text{c}} (\vec{r}')$ and the perturbation field in plasma $\delta \vec{B}_{\text{p}}$ is computed from Ampère's law (\ref{eq:ampere}) from the plasma current density $\delta \vec{j}$ using a vector potential formulation. To find a consistent solution for the system, \cref{eq:mhd} and \cref{eq:ampere} are treated individually in an iterative way. The linearized force balance \cref{eq:mhd} is used to compute $\delta \vec{j}$ for given $\delta \vec{B}$ whereas \cref{eq:ampere} yields $\delta \vec{B}_{\text{p}}$ for given $\delta \vec{j}$. In the first iteration, $\delta \vec{B}$ is set equal to $\delta \vec{B}_{\text{v}}$ in \cref{eq:mhd}. Then, \cref{eq:ampere} and \cref{eq:mhd} are solved in an alternating way until convergence is reached. In addition a preconditioner is used to enhance convergence. Here we limit the analysis to an axisymmetric unperturbed equilibrium and a single toroidal perturbation harmonic $\delta \vec{B} = \Real (\vec{B}_{n} \e^{\im n \phi})$ with a similar notation for other perturbed quantities. As all equations are linear, a superposition of multiple harmonics is easily possible. Note that $n \neq 0$; such a perturbation is necessarily small and considered part of the axisymmetric equilibrium.
-% clarify why/whether $n = 0$ is in fact negligible
+Here the perturbation field in vacuum, $\delta \vec{B}_{\text{v}}$, is pre-evaluated by a \textsc{Biot-Savart} integral over external\footnote{i.e.\ entirely outside the plasma region} coil currents $I_{\text{c}} (\vec{r}')$. This induces a plasma response, resulting in the current density perturbation $\delta \vec{j}$. The perturbation field from currents within the plasma, $\delta \vec{B}_{\text{p}}$, is in turn computed from $\delta \vec{j}$, again giving rise to a plasma response current. Now, the linearized force balance \cref{eq:mhd} is used to compute $\delta \vec{j}$ for given $\delta \vec{B}$ whereas \cref{eq:ampere} yields $\delta \vec{B}_{\text{p}}$ for given $\delta \vec{j}$. With abstract operators $\hat{P}$ for the computation in \cref{eq:mhd} and $\hat{M}$ for the computation in \cref{eq:ampere}, this can be written in compact form:
+\begin{align}
+  \delta \vec{j} &= \hat{P} \delta \vec{B} = \hat{P} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}} \right ), \\
+  \delta \vec{B}_{\text{p}} &= \hat{M} \delta \vec{j}.
+\end{align}
+Substituting for $\delta \vec{j}$ and using a shorthand $\hat{K} = \hat{M} \hat{P}$ gives
+\begin{align}
+  \hat{M} \hat{P} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}} \right ) &= \delta \vec{B}_{\text{p}}, \\
+  \hat{K} \delta \vec{B}_{\text{v}} &= \left ( \hat{1} - \hat{K} \right ) \delta \vec{B}_{\text{p}}, \\
+  \left ( \hat{1} - \hat{K} \right )^{-1} \hat{K} \delta \vec{B}_{\text{v}} &= \delta \vec{B}_{\text{p}}.
+\end{align}
+The first term can be rewritten in the form of a \textsc{Neumann} series, a generalisation of geometric series to operators, assuming the series converges:
+\begin{gather}
+  \left ( \hat{1} - \hat{K} \right )^{-1} = \sum_{k = 0}^{\infty} \hat{K}^{k}.
+\end{gather}
+This way a consistent solution for $\delta \vec{B}_{\text{p}}$ can be computed from $\delta \vec{B}_{\text{v}}$ by repeated application of $\hat{K}$:
+\begin{gather}
+  \delta \vec{B}_{\text{p}} = \left ( \hat{1} + \hat{K} + \hat{K}^{2} + \dotsb \right ) \hat{K} \delta \vec{B}_{\text{v}}.
+\end{gather}
+This means \cref{eq:mhd} and \cref{eq:ampere} are treated individually in an iterative way / solved in an alternating way until convergence is reached. The result is a fixed-point iteration for $\delta \vec{B}_{\text{p}}^{(k)}$ where $\delta \vec{B}_{\text{v}}$ is used as the initial value:
+\begin{gather}
+  \delta \vec{B}_{\text{p}}^{(k+1)} = \hat{K} \delta \vec{B}_{\text{p}}^{(k)}, \quad \delta \vec{B}_{\text{p}}^{(0)} = \delta \vec{B}_{\text{v}}.
+\end{gather}
+The values are accumulated for the final result:
+\begin{gather}
+  \delta \vec{B} = \sum_{k = 0} \delta \vec{B}_{\text{p}}^{(k)}.
+\end{gather}
+In addition a preconditioner is used to enhance convergence.
 
 The solution of \cref{eq:mhd} can further be split into two steps: First the pressure perturbation $\delta p$ is found, and then the plasma current density $\delta \vec{j}$ is computed using the condition $\nabla \cdot \delta \vec{j} = 0$. For an unperturbed equilibrium with nested flux surfaces, both steps can be performed in a radially local manner if a field-aligned computational grid is used, which will become clear below. Radial coupling happens by the combination of the two individual steps since their effective radial locations of computation are shifted by a half-step in radial grid distance.
 
 \section{Geometrical considerations}
+
+Here we limit the analysis to an axisymmetric unperturbed equilibrium and a single toroidal perturbation harmonic $\delta \vec{B} = \Real (\vec{B}_{n} \e^{\im n \phi})$ with a similar notation for other perturbed quantities. As all equations are linear, a superposition of multiple harmonics is easily possible. Note that $n \neq 0$; such a perturbation is necessarily small and considered part of the axisymmetric equilibrium.
+% clarify why/whether $n = 0$ is in fact negligible
 
 In axisymmetric coordinate systems, such as cylindrical $(R, \phi, Z)$, the equations to solve for harmonics in the toroidal angle $\phi$ are
 \begin{align}
