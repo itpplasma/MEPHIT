@@ -9,3 +9,4 @@
 - ASDEX Upgrade has two formats that are common: CLISTE and EFIT/EQDSK (g-files)
 - much data in /proj/plasma/RMP/DATA/ASDEX/ and /proj/plasma/RMP/DATA2017/ASDEX/
 * check weighting factors (R, S, l, ...) of vector DOFs
+* replace nkpol when handling sparse matrices
