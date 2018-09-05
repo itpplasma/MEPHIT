@@ -47,17 +47,9 @@ module magdif
   !> Safety factor \f$ q \f$ (dimensionless).
   !>
   !> Values are taken between two flux surfaces with indices running from 1 to
-  !> #magdif_config::nflux +1, i.e. from the triangle strip surrounding the magnetic axis
-  !> to the triangle strip just outside the last closed flux surface. The latter is
-  !> only useful for approximation of #dqdpsi on the last closed flux surface.
+  !> #magdif_config::nflux, i.e. from the triangle strip surrounding the magnetic axis
+  !> to the triangle strip just inside the last closed flux surface.
   real(dp), allocatable :: q(:)
-
-  !> Derivative of #q w.r.t. #psi.
-  !>
-  !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
-  !> +1, i.e. from the magnetic axis to the last closed flux surface. The value at the
-  !> magnetic axis is identically zero.
-  real(dp), allocatable :: dqdpsi(:)
 
   !> Flux surface average \f$ \langle B_{0}^{2} \rangle \f$.
   !>
@@ -173,7 +165,6 @@ contains
   !> Final cleanup of magdif module
   subroutine magdif_cleanup
     if (allocated(q)) deallocate(q)
-    if (allocated(dqdpsi)) deallocate(dqdpsi)
     if (allocated(pres0)) deallocate(pres0)
     if (allocated(dpres0_dpsi)) deallocate(dpres0_dpsi)
     if (allocated(dens)) deallocate(dens)
@@ -337,17 +328,15 @@ contains
   end subroutine read_bnflux
 
   subroutine init_safety_factor
-    integer :: kl, kp, kt_max, k_low
+    integer :: kl, kp, kp_max, k_low
     type(triangle) :: elem
     real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
 
-    allocate(q(nflux+1))
-    allocate(dqdpsi(0:nflux))
+    allocate(q(nflux))
     q = 0d0
-    dqdpsi = 0d0
 
-    do kl = 1, nflux+1
+    do kl = 1, nflux
        select case(kl)
        case (1)
           kp_max = nkpol
@@ -366,16 +355,11 @@ contains
        q(kl) = -q(kl) * 0.5d0 / pi / (psi(kl) - psi(kl-1))  ! check sign
     end do
 
-    do kl = 1, nflux
-       ! q on triangle strip, psi on edge ring
-       dqdpsi(kl) = (q(kl+1) - q(kl)) / (psi(kl+1) - psi(kl-1)) * 0.5d0
-    end do
-
     if (log_debug) then
        open(1, file = 'qsafety.out')
-       write(1,*) psi(0), 0.0d0, dqdpsi(0)
+       write(1,*) psi(0), 0.0d0
        do kl = 1, nflux
-          write(1,*) psi(kl), q(kl), dqdpsi(kl)
+          write(1,*) psi(kl), q(kl)
        end do
        close(1)
     end if
