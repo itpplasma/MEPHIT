@@ -1,0 +1,722 @@
+\documentclass[a4paper, 10pt, english]{article}
+\setlength\overfullrule{5pt}
+
+% (La)TeX stuff
+\usepackage{etoolbox}
+
+% fonts and maths
+\usepackage{fontspec}
+%\setmainfont{TeX Gyre Pagella}
+%\setsansfont{TeX Gyre Heros}
+%\setmonofont[Scale=MatchLowercase]{Source Code Pro}
+\usepackage{microtype}
+\usepackage{ulem}
+\usepackage{amsmath}  % [fleqn]
+\allowdisplaybreaks[1]
+%\numberwithin{equation}{section}
+\usepackage[math-style=ISO, bold-style=ISO]{unicode-math}
+\DeclareSymbolFont{AMSb}{U}{msb}{m}{n}
+\protected\def\mathbb#1{{\mathchar\numexpr256*\symAMSb+`#1\relax}}
+\AfterPreamble{%
+  \let\temp\varrho
+  \let\varrho\rho
+  \let\rho\temp
+  \let\temp\vartheta
+  \let\vartheta\theta
+  \let\theta\temp
+  \let\temp\varphi
+  \let\varphi\phi
+  \let\phi\temp
+  \let\vecarr\vec
+  \let\vec\symbf
+}
+
+% language
+\usepackage{polyglossia}
+\setmainlanguage{english}
+\usepackage{csquotes}
+\MakeOuterQuote{"}
+
+% tables
+\usepackage{array}
+\usepackage{ragged2e}
+%\usepackage{tabularx}
+\usepackage{longtable}
+\usepackage{booktabs}
+\usepackage{caption}
+\usepackage{subcaption}
+
+% graphics
+\usepackage{xcolor}
+\newcommand\comment[1]{\begingroup\color{red}[#1]\endgroup}
+\usepackage{graphicx}
+\usepackage{grffile}
+\usepackage{tikz}
+
+% import and display data
+\usepackage{siunitx}
+\sisetup{
+  %locale=DE,
+  group-digits=false,
+  add-decimal-zero=false,
+  separate-uncertainty,
+  round-mode=figures,
+  round-precision=2,
+  table-number-alignment=left,
+  detect-mode=true}
+
+% page layout
+\raggedbottom
+\tolerance=2000
+\usepackage{enumitem}
+\setlist{align=left}
+\usepackage{parskip}
+\usepackage{lastpage}
+\usepackage[margin=2cm, head=15pt, includehead, includefoot]{geometry}
+\usepackage[bottom, stable, perpage]{footmisc}
+\usepackage{fancyhdr}
+\cfoot{\thepage/\pageref{LastPage}}
+\pagestyle{fancy}
+\renewcommand{\sectionmark}[1]{\markboth{\thesection~#1}{}}
+\renewcommand{\subsectionmark}[1]{\markright{\thesubsection~#1}}
+
+% front and back matter
+\usepackage{eso-pic}
+\usepackage[backend=biber, bibstyle=numeric, citestyle=authoryear, sorting=none, maxcitenames=1, maxbibnames=5]{biblatex}
+\renewcommand*\finalnamedelim{,\ }
+\DefineBibliographyStrings{english}{%
+  andothers        = {et\,al\adddot},
+  andmore          = {et\,al\adddot}
+}
+\usepackage[
+% pdfa         = true,
+  unicode      = true,
+  bookmarks    = true,
+  colorlinks   = true,
+  linkcolor    = black,
+  urlcolor     = black,
+  citecolor    = black,
+  pdfstartview = FitH
+  ]{hyperref}
+\hypersetup{
+  pdftitle           = {Magnetic differential equations for stationary linear ideal MHD and their numerical solution},
+  pdfauthor          = {Christoper Albert, Patrick Lainer},
+  pdfsubject         = {write-up},
+  pdfkeywords        = {magnetohydrodynamics},
+  pdflang            = {en}
+}
+
+% references
+\usepackage{cleveref}
+
+% debugging
+%\usepackage[inline]{showlabels}
+%\usepackage[notref]{showkeys}
+
+\title{Magnetic differential equations for stationary linear ideal MHD and their numerical solution}
+\author{Christopher Albert, Patrick Lainer}
+
+% math shortcuts etc.
+\newcommand*\diff{\ensuremath{\symrm{d}}}  % differential
+\newcommand*\e{\ensuremath{\symrm{e}}}  % Euler's constant
+\newcommand*\im{\ensuremath{\symrm{i}}}  % imaginary unit
+\newcommand*\pd[2][]{\ensuremath{\frac{\partial #1}{\partial #2}}}  % partial derivative
+\newcommand*\td[2][]{\ensuremath{\frac{\diff #1}{\diff #2}}}  % total derivative
+\newcommand*\norm[1]{\ensuremath{\left \lVert #1 \right \rVert}}  % norm
+\newcommand*\pol{\ensuremath{\textrm{pol}}}  % poloidal
+\newcommand*\tor{\ensuremath{\textrm{tor}}}  % toroidal
+\newcommand*\fs{\ensuremath{\textrm{f}}}  % flux surface edge label
+\newcommand*\inw{\ensuremath{\textrm{i}}}  % inward current edge label
+\newcommand*\out{\ensuremath{\textrm{o}}}  % outward current edge label
+\newcommand*\vfs{\ensuremath{\textrm{F}}}  % label for vertex opposite flux surface edge
+\newcommand*\vinw{\ensuremath{\textrm{I}}}  % label for vertex opposite inward current edge
+\newcommand*\vout{\ensuremath{\textrm{O}}}  % label for vertex opposite outward current edge
+\DeclareMathOperator\Real{Re}
+\DeclareMathOperator\Imag{Im}
+\DeclareMathOperator\sgn{sgn}
+
+\begin{document}
+
+\maketitle
+\tableofcontents
+
+\section{Stationary linear perturbation of ideal MHD equilibrium}
+
+For the intended application on stationary (compared to MHD mode eigenfrequencies) non-axisymmetric magnetic perturbations by external coils, we consider a perturbed ideal MHD equilibrium for pressure $p$, currents $\vec{j}$ and magnetic field $\vec{B}$ fulfilling
+\begin{align}
+  \nabla p &= \frac{1}{c} \vec{j} \times \vec{B}, \label{eq:mhd-gen} \\
+  \nabla \times \vec{B} &= \frac{4 \pi}{c} \vec{j}, \label{eq:ampere-gen} \\
+  \nabla \cdot \vec{B} &= 0. \label{eq:divfree-gen}
+\end{align}
+Starting with a given MHD equilibrium fulfilling \cref{eq:mhd-gen,eq:divfree-gen} denoted by subscripts "$0$", linear order equations for an external magnetic perturbation (denoted by $\delta$) split into a vacuum and a plasma part (subscript $\text{v}$ and $\text{p}$, respectively) are
+\begin{align}
+  \nabla \delta p &= \frac{1}{c} \left( \vec{j}_{0} \times \delta \vec{B} + \delta \vec{j} \times \vec{B}_{0} \right), \label{eq:mhd} \\
+  \delta \vec{B} &= \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}}, \\
+  \delta \vec{B}_{\text{v}} &= \frac{1}{c} \oint \frac{I_{\text{c}}(\vec{r}') \, \diff \vec{l}' \times \vec{r}}{\lvert \vec{r} - \vec{r}' \rvert^{3}}, \\
+  \delta \vec{B}_{\text{p}} &= \nabla \times \delta \vec{A}, \\
+  \nabla \times (\nabla \times \delta \vec{A}) &= \frac{4 \pi}{c} \delta \vec{j}, \label{eq:ampere} \\
+  \Rightarrow \nabla \cdot \delta \vec{B} &= \nabla \cdot \delta \vec{j} = 0. \label{eq:divfree}
+\end{align}
+Here the perturbation field in vacuum, $\delta \vec{B}_{\text{v}}$, is pre-evaluated by a \textsc{Biot-Savart} integral over external\footnote{i.e.\ entirely outside the plasma region} coil currents $I_{\text{c}} (\vec{r}')$. This induces a plasma response, resulting in the current density perturbation $\delta \vec{j}$. The perturbation field from currents within the plasma, $\delta \vec{B}_{\text{p}}$, is in turn computed from $\delta \vec{j}$, again giving rise to a plasma response current. Now, the linearized force balance \cref{eq:mhd} is used to compute $\delta \vec{j}$ for given $\delta \vec{B}$ whereas \cref{eq:ampere} yields $\delta \vec{B}_{\text{p}}$ for given $\delta \vec{j}$. With abstract operators $\hat{P}$ for the computation in \cref{eq:mhd} and $\hat{M}$ for the computation in \cref{eq:ampere}, this can be written in compact form:
+\begin{align}
+  \delta \vec{j} &= \hat{P} \delta \vec{B} = \hat{P} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}} \right ), \\
+  \delta \vec{B}_{\text{p}} &= \hat{M} \delta \vec{j}.
+\end{align}
+Substituting for $\delta \vec{j}$ and using a shorthand $\hat{K} = \hat{M} \hat{P}$ gives
+\begin{align}
+  \hat{M} \hat{P} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}} \right ) &= \delta \vec{B}_{\text{p}}, \\
+  \hat{K} \delta \vec{B}_{\text{v}} &= \left ( \hat{1} - \hat{K} \right ) \delta \vec{B}_{\text{p}}, \\
+  \left ( \hat{1} - \hat{K} \right )^{-1} \hat{K} \delta \vec{B}_{\text{v}} &= \delta \vec{B}_{\text{p}}.
+\end{align}
+The first term can be rewritten in the form of a \textsc{Neumann} series, a generalisation of geometric series to operators, assuming the series converges:
+\begin{gather}
+  \left ( \hat{1} - \hat{K} \right )^{-1} = \sum_{k = 0}^{\infty} \hat{K}^{k}.
+\end{gather}
+This way a consistent solution for $\delta \vec{B}_{\text{p}}$ can be computed from $\delta \vec{B}_{\text{v}}$ by repeated application of $\hat{K}$:
+\begin{gather}
+  \delta \vec{B}_{\text{p}} = \left ( \hat{1} + \hat{K} + \hat{K}^{2} + \dotsb \right ) \hat{K} \delta \vec{B}_{\text{v}}.
+\end{gather}
+This means \cref{eq:mhd} and \cref{eq:ampere} are treated individually in an iterative way / solved in an alternating way until convergence is reached. The result is a fixed-point iteration for $\delta \vec{B}_{\text{p}}^{(k)}$ where $\delta \vec{B}_{\text{v}}$ is used as the initial value:
+\begin{gather}
+  \delta \vec{B}_{\text{p}}^{(k+1)} = \hat{K} \delta \vec{B}_{\text{p}}^{(k)}, \quad \delta \vec{B}_{\text{p}}^{(0)} = \delta \vec{B}_{\text{v}}.
+\end{gather}
+The values are accumulated for the final result:
+\begin{gather}
+  \delta \vec{B} = \sum_{k = 0} \delta \vec{B}_{\text{p}}^{(k)}.
+\end{gather}
+In addition a preconditioner is used to enhance convergence.
+
+The solution of \cref{eq:mhd} can further be split into two steps: First the pressure perturbation $\delta p$ is found, and then the plasma current density $\delta \vec{j}$ is computed using the condition $\nabla \cdot \delta \vec{j} = 0$. For an unperturbed equilibrium with nested flux surfaces, both steps can be performed in a radially local manner if a field-aligned computational grid is used, which will become clear below. Radial coupling happens by the combination of the two individual steps since their effective radial locations of computation are shifted by a half-step in radial grid distance.
+
+\section{Geometrical considerations}
+
+Here we limit the analysis to an axisymmetric unperturbed equilibrium and a single toroidal perturbation harmonic $\delta \vec{B} = \Real (\vec{B}_{n} \e^{\im n \phi})$ with a similar notation for other perturbed quantities. As all equations are linear, a superposition of multiple harmonics is easily possible. Note that $n \neq 0$; such a perturbation is necessarily small and considered part of the axisymmetric equilibrium.
+% clarify why/whether $n = 0$ is in fact negligible
+
+In axisymmetric coordinate systems, such as cylindrical $(R, \phi, Z)$, the equations to solve for harmonics in the toroidal angle $\phi$ are
+\begin{align}
+  \nabla p_{n} + \im n p_{n} \nabla \phi &= \frac{1}{c} \left( \vec{j}_{0} \times \vec{B}_{n} + \vec{j}_{n} \times \vec{B}_{0} \right), \label{eq:mhd-phi} \\
+  \nabla \cdot \vec{j}_{n}^{\pol}+ \im n j_{n}^{\phi} &= 0. \label{eq:divfree-phi}
+\end{align}
+now with a 2D $\nabla$ operator acting in the poloidal ($RZ$) plane. The divergence operator is defined via
+\begin{gather*}
+  \nabla \cdot \vec{u} = \frac{1}{R \sqrt{g_{\pol}}} \pd{x^{k}} (R \sqrt{g_{\pol}} u^{k}),
+\end{gather*}
+where $\sqrt{g_{\pol}}$ is the metric tensor of the coordinates in the poloidal plane, which is equal to $1$ for cylindrical coordinates.
+
+The representation of equilibrium field $\vec{B}_{0}$ is given by
+\begin{gather}
+  \vec{B}_{0} = \vec{B}_{0}^{\pol} + \vec{B}_{0}^{\tor},
+\end{gather}
+where 
+\begin{align}
+  \vec{B}_{0}^{\pol} &= \nabla \psi \times \nabla \phi, \\
+  \vec{B}_{0}^{\tor} &= B_{0 \phi} \nabla \phi.
+\end{align}
+Here, $\psi$ is the disc poloidal flux $\Psi_{\pol}$ divided by $2 \pi$ and the sign chosen so that increases towards the magnetic axis -- $\psi_{\text{min}}$ is located at the outermost surface and $\psi_{\text{max}}$ is located at the magnetic axis. With $\phi$ increasing counter-clockwise when viewed from the top, this still constitutes a right-handed system.
+
+This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in cylindrical coordinates:
+\begin{align}
+  B_{0}^{R} &= (\nabla \psi \times \nabla \phi)^{R} = -\frac{1}{R} \pd[\psi]{Z}, \\
+  B_{0}^{Z} &= (\nabla \psi \times \nabla \phi)^{Z} = \frac{1}{R} \pd[\psi]{R}.
+\end{align}
+Note that the toroidal field coils produce a magnetic field that is roughly proportional to $\frac{1}{R}$, so $B_{0 \phi}$ is assumed to be constant over the entire plasma volume.
+
+\subsection{Coordinate conventions}
+\label{sec:cocos}
+
+We use two different right-handed coordinate systems: Firstly cylindrical coordinates $(R, \phi, Z)$ with $\phi$ running counterclockwise as seen from above, so
+\begin{gather*}
+  x = R \cos \phi, \quad y = R \sin \phi, \quad z = Z.
+\end{gather*}
+Those coordinates are used in computations and for meshes. For derivations, also symmetry flux coordinates $(\rho, \theta, \zeta)$ are used at some point. Here, we use the convention of d'Haeseleer with radial coordinate growing towards the outside of the torus. As a radial variable we use $\rho = \sigma_{\pol} \psi$ with $\sigma_{\pol} = +1$ for counterclockwise poloidal field $\vec{B}_{0}^{\pol}$ and $\sigma_{\pol} = -1$ for clockwise field. Here $\psi$ is the normalized ribbon poloidal flux also usually used in MHD for the \textsc{Grad}-\textsc{Shafranov} equation. The toroidal symmetry angle is defined in the direction opposite to $\phi$ with
+\begin{gather*}
+  \zeta = \frac{\pi}{2} - \phi.
+\end{gather*}
+The flux angle $\theta$ has the same orientation as $\vartheta = \arctan \frac{Z}{R}$, so the sign $\sigma_{\pol} = \sgn B^{\theta} = \sgn B^{\vartheta}$ is positive for counter-clockwise and negative for clockwise orientation in the poloidal plane. The Jacobian of symmetry flux coordinates $(\rho, \theta, \zeta) = (\sigma_{\pol} \psi, \theta, \frac{\pi}{2} - \phi)$ is
+\begin{gather}
+  \sqrt{g} = \frac{\sigma_{\pol}}{B_{0}^{\theta}} = \sigma_{\pol} \frac{q}{B_{0}^{\zeta}} = -\sigma_{\pol} \frac{q}{B_{0}^{\phi}} = -\sigma_{\pol} \frac{q R^{2}}{B_{0 \phi}}.
+\end{gather}
+If $B_{0}^{\theta}$ changes sign, both $\sigma_{\pol}$ and $q$ change sign, and a sign change in $B_{0}^{\phi}$ leads to a sign change also in $q$. Thus, $\sqrt{g}$ is always positive. The sign of $q$ describes the sign of the helicity in $(\theta, \zeta)$ and can be computed as described in \cref{sec:safety_factor}. Note that in our configuration (ASDEX Upgrade) $\sigma_{\pol} = -1$ and $B_{0 \phi}$ is positive, so $q$ is negative.
+
+\subsection{Coordinate system on each edge}
+
+\begin{figure}
+  \centering
+  \begin{subfigure}[b]{0.33\textwidth}
+    \centering
+    \input{grid0.tpx}
+    \caption{The innermost loop of the grid with the magnetic axis at its center. Edge \fs\ lies on the flux surface in the infinitesimal limit.}
+    \label{fig:grid0}
+  \end{subfigure}
+  \quad
+  \begin{subfigure}[b]{0.5\textwidth}
+    \centering
+    \input{grid1.tpx}
+    \caption{One of the outer loops of the grid with two alternating kinds of triangles with edge \fs\ lying on the inner and outer flux surface respectively.}
+    \label{fig:grid1}
+  \end{subfigure}
+  \caption{The 2D mesh is given by a triangulation of poloidal cross-sections of the nested flux surfaces, resulting in \enquote{loops}. The cross-sections are assumed to be circular for illustration purposes.}
+  \label{fig:grid}
+\end{figure}
+
+For each edge (length $l$) we use a local orthogonal coordinate system on each triangle edge with $\vec{l}$ the vector of length $l$ along the edge in counter-clockwise orientation, $\vec{n}$ the outward normal of length $l$ and $\nabla \phi$ pointing inside the plane. We obtain relations
+\begin{align}
+  \vec{l} \times \vec{n} &= l^{2} R \nabla \phi, \\
+  \vec{n} \times R \nabla \phi &= \vec{l}, \\
+  R \nabla \phi \times \vec{l} &= \vec{n}.
+\end{align}
+
+\section{Pre-processing of input data}
+
+\subsection{Toroidal unperturbed current}
+
+Since $\vec{B}_{0}$ and $p_{0}$ are directly available as input data, but $\vec{j}_{0}$ is not, the latter will be derived below from \cref{eq:mhd-gen}, the condition of divergence-freeness and symmetry considerations.
+
+We take a cross-product of \cref{eq:mhd-gen} by $\vec{B}_{0}$:
+\begin{align}
+  \vec{B}_{0} \times \left( \vec{j}_{0} \times \vec{B}_{0} \right) &= B_{0}^{2} \vec{j}_{0} - (\vec{B}_{0} \cdot \vec{j}_{0}) \vec{B}_{0} \nonumber \\
+  &= B_{0}^{2} (\vec{j}_{0} - j_{0}^{\parallel} \vec{h}_{0}) \nonumber \\
+  &= B_{0}^{2} \vec{j}_{0}^{\perp}.
+\end{align}
+Therefore
+\begin{gather}
+  \vec{j}_{0}^{\perp} = \frac{-c \nabla p_{0} \times \vec{B}_{0}}{B_{0}^{2}},
+\end{gather}
+which is the diamagnetic current density. For the parallel current density we use
+\begin{align}
+ 0 = \nabla \cdot \vec{j}_{0} &= \nabla \cdot \vec{j}_{0}^{\perp} + \nabla \cdot (j_{0}^{\parallel} \vec{h}_{0}) \nonumber \\
+ &= -c \nabla \cdot \left( \frac{\nabla p_{0} \times \vec{B}_{0}}{B_{0}^{2}} \right) + \vec{B}_{0} \cdot \nabla \left( \frac{j_{0}^{\parallel}}{B_{0}} \right).
+\end{align}
+In straight-field line magnetic flux coordinates $(\rho, \theta, \zeta) = (-\psi, \theta, \frac{\pi}{2} - \phi)$ and Jacobian $\sqrt{g}$, the divergence of the diamagnetic current is
+\begin{align}
+  \nabla \cdot \vec{j}_{0}^{\perp} &= -\frac{c}{\sqrt{g}} \pd{x^{k}} \left[ \frac{\sqrt{g}}{B_{0}^{2}} \left( \nabla p_{0} \times \vec{B}_{0} \right)^{k} \right] \nonumber \\
+  &= -\frac{c}{\sqrt{g}} \pd{x^{k}} \left( \frac{\sqrt{g}}{B_{0}^{2}} \frac{\varepsilon^{ijk}}{\sqrt{g}} \pd[p_{0}]{x^{i}} B_{0 j} \right) \nonumber \\
+  &= \frac{c p_{0}' (\rho) B_{0 \zeta}}{\sqrt{g}} \pd{\theta} \left( \frac{1}{B_{0}^{2}} \right),
+\end{align}
+since $p_{0}$ and $B_{0 \zeta}$ are constant on a flux surface, $\pd[p_{0}]{\theta} = 0$ and due to axisymmetry $\pd{\zeta} = 0$. The divergence of the parallel current is
+\begin{gather}
+  \nabla \cdot(j_{0}^{\parallel} \vec{h}_{0}) = \vec{B}_{0} \cdot \nabla \frac{j_{0}^{\parallel}}{B_{0}} = B_{0}^{\theta} \pd{\theta} \frac{j_{0}^{\parallel}}{B_{0}}.
+\end{gather}
+With $\sqrt{g} B_{0}^{\theta} = -\psi'(\rho)$ as a flux surface quantity, there are no dependencies of $\theta$ in front of the derivatives:
+\begin{gather}
+  c p_{0}' (\rho) B_{0 \zeta} \pd{\theta} \frac{1}{B_{0}^{2}} - \psi'(\rho) \pd{\theta} \frac{j_{0}^{\parallel}}{B_{0}} = 0.
+\end{gather}
+Direct integration and a change of variables and notation as in
+\begin{gather}
+  \frac{p_{0}'(\rho)}{\psi'(\rho)} = \frac{\pd[p_{0}]{\rho}}{\pd[\psi]{\rho}} = \pd[p_{0}]{\psi} = p_{0}'(\psi)
+\end{gather}
+yields
+\begin{gather}
+  \frac{-c p_{0}' (\psi) B_{0 \phi}}{B_{0}^{2}} - \frac{j_{0}^{\parallel}}{B_{0}} = C(\psi). \label{eq:j0parallel_general}
+\end{gather}
+With the extra condition of the flux-surface average $\left\langle j_{0}^{\parallel} B_{0} \right\rangle = 0$ for testing without bootstrap current and the assumption $\left\langle B_{0 \phi} \right\rangle \approx B_{0 \phi}$, we obtain
+\begin{gather}
+  -c p_{0}'(\psi) B_{0 \phi} = C(\psi) \left\langle B_{0}^{2} \right\rangle.
+\end{gather}
+In general, 
+\begin{gather}
+  C(\psi) = -\frac{c p_{0}'(\psi) B_{0 \phi}}{\left\langle B_{0}^{2} \right\rangle} D(\psi),
+\end{gather}
+with $D(\psi)$ set to 1 for now and modified for the more general case $\left\langle j_{0}^{\parallel} B_{0} \right\rangle \not\equiv 0$. Inserting this back into \cref{eq:j0parallel_general} yields
+\begin{gather}
+  j_{0}^{\parallel} = \frac{c p_{0}'(\psi) B_{0 \phi}}{B_{0}} \left( \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) - 1 \right).
+\end{gather}
+
+For the unperturbed toroidal current density we have
+\begin{gather}
+  j_{0}^{\phi} = j_{0}^{\parallel} h_{0}^{\phi} + \vec{j}_{0}^{\perp} \cdot \nabla \phi,
+\end{gather}
+where
+\begin{align}
+  j_{0}^{\parallel} h_{0}^{\phi} &= \frac{1}{B_{0}} c p_{0}'(\psi) B_{0 \phi} \frac{B_{0}^{\phi}}{B_{0}} \left( \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) - 1 \right) \nonumber \\
+  &= c p_{0}'(\psi) \frac{\left( B_{0}^{\tor} \right)^{2}}{B_0^2} \left( \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) - 1 \right) \nonumber \\
+  &= c p_{0}'(\psi) \left( B_{0}^{\tor} \right)^{2} \left( \frac{D(\psi)}{\left\langle B_{0}^{2} \right\rangle} - \frac{1}{B_{0}^{2}} \right).
+\end{align}
+and
+\begin{align}
+  \vec{j}_{0}^{\perp} \cdot \nabla \phi &= \frac{-c p_{0}'(\psi) \nabla \phi \cdot (\nabla \psi \times \vec{B}_{0})}{B_{0}^{2}} \nonumber \\
+  &= \frac{-c p_{0}'(\psi) \vec{B}_{0} \cdot (\nabla \phi \times \nabla \psi)}{B_{0}^{2}} \\
+  &= \frac{c p_{0}'(\psi)}{B_{0}^{2}} \vec{B}_{0}^{\pol} \cdot \vec{B}_{0} \nonumber \\
+  &= c p_{0}'(\psi) \frac{\left( B_{0}^{\pol} \right)^{2}}{B_{0}^{2}}.
+\end{align}
+It follows that
+\begin{gather}
+  j_{0}^{\phi} = c p_{0}'(\psi) \left( \frac{\left( B_{0}^{\tor} \right)^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) + \frac{\left( B_{0}^{\pol} \right)^2 - \left( B_{0}^{\tor} \right)^2}{B_{0}^{2}} \right).
+\end{gather}
+
+\subsection{Safety factor}
+\label{sec:safety_factor}
+
+With the usual toroidal flux angle $\zeta = \frac{\pi}{2} - \phi$ (d'Haeseleer), the toroidal flux $\psi_{\tor}$ is given by
+\begin{gather}
+  \psi_{\tor} = \frac{1}{(2 \pi)^{2}} \int \diff V \, \vec{B} \cdot \nabla \zeta = -\frac{1}{(2 \pi)^{2}} \int \diff V \, \vec{B} \cdot \nabla \phi = -\frac{1}{2 \pi} \int \diff R \, \diff Z \, R B^{\phi} = -\frac{1}{2 \pi} \int \diff R \, \diff Z \, B_{(\phi)}.
+\end{gather}
+The safety factor is then given by
+\begin{gather*}
+  q = \frac{\psi_{\tor}' (\rho)}{\psi_{\pol}' (\rho)} = \frac{\psi_{\tor}' (\sigma_{\pol} \psi)}{\psi_{\pol}' (\sigma_{\pol} \psi)} = \td[\psi_{\tor}]{\psi} = -\frac{1}{2 \pi} \td{\psi} \int \diff R \, \diff Z \, B_{(\phi)}.
+\end{gather*}
+This quantity can be evaluated numerically by adding up $B_{(\phi)}$ inside the volume between two flux surfaces and dividing by the the difference in $\psi$:
+\begin{gather}
+  q \approx -\frac{1}{2 \pi \symup{\Delta} \psi} \sum_{k} B_{(\phi)} (\Omega^{(k)}) S_{\Omega^{(k)}},
+\end{gather}
+where the sum is taken over all triangles $\Omega$ inside a triangle strip, and $S_{\Omega}$ is the respective triangle surface area.
+
+\subsection{Generating a non-resonant test field}
+
+The axisymmetric equilibrium field $\vec{B}_{0}$ lies on nested flux surfaces $\psi = \text{const.}$, meaning
+\begin{gather*}
+  \vec{B}_{0} \cdot \nabla \psi = B_{0}^{\psi} = 0.
+\end{gather*}
+If the perturbed field shall still lie on distorted, but not broken, flux surfaces (non-resonant, without magnetic islands), a new flux surface label $\psi + \delta \psi$ must exist fulfilling
+\begin{gather*}
+  (\vec{B}_{0} + \delta \vec{B}) \cdot \nabla (\psi + \delta \psi) = 0
+\end{gather*}
+for the perturbed magnetic field $\vec{B}_{0} + \delta \vec{B}$, where $\delta \psi$ remains small and continuous within the plasma. In that case we can use a linear order expansion
+\begin{gather*}
+  \underbrace{\vec{B}_{0} \cdot \nabla \psi}_{= 0} + \vec{B}_{0} \cdot \nabla \delta \psi + \delta \vec{B} \cdot \nabla \psi + \mathcal{O}(\varepsilon^{2}) = 0,
+\end{gather*}
+or in coordinate form with symmetry flux coordinates $(\rho, \theta, \zeta)$,
+\begin{gather*}
+  B_{0}^{\theta} \pd[\delta \psi]{\theta} + B_{0}^{\zeta} \pd[\delta \psi]{\zeta} + \delta B^{\rho} \psi' (\rho) = 0.
+\end{gather*}
+Here we have used $\nabla \psi = \psi' (\rho) \nabla \rho$. Further, $\psi' (\rho) = \sigma_{\pol}$. With safety factor
+\begin{gather*}
+  q = \frac{B_{0}^{\zeta}}{B_{0}^{\theta}}
+\end{gather*}
+defined for clockwise toroidal direction $\diff \zeta = -\diff \phi$ (see \cref{sec:cocos}) by dividing through $B_{0}^{\theta}$, we obtain
+\begin{align*}
+  \left( \pd{\theta} + q \pd{\zeta} \right) \delta \psi = \left( \pd{\theta} - q \pd{\phi} \right) \delta \psi &= -\sigma_{\pol} \frac{\delta B^{\rho}}{B_{0}^{\theta}} = -\sigma_{\pol} \frac{\sqrt{g} \delta B^{\rho}}{\psi_{\tor}' (\rho)} = -\sigma_{\pol} \frac{\sqrt{g} \delta B^{\rho}}{\sigma_{\pol} \psi_{\tor}' (\psi)} = \\
+  &= -\frac{\sqrt{g} \delta B^{\rho}}{q} = -\sigma_{\pol} \frac{\sqrt{g} \delta B^{\psi}}{q}.
+\end{align*}
+Written in terms of toroidal Fourier harmonics $m, n$ in $\theta, \phi$ the equation becomes
+\begin{gather*}
+  \psi_{m n} = -\sigma_{\pol} \frac{\left( \sqrt{g} \delta B^{\psi} \right)_{m n}}{q (m - n q)} = -\sigma_{\pol} \frac{\left( \sqrt{g} B_{n}^{\psi} \right)_{m}}{q (m - n q)}.
+\end{gather*}
+The safety factor $q$ is a flux function, but $\sqrt{g}$ depends also on $\theta$, so poloidal harmonics $m$ have to be taken outside the bracket here. In order to fulfill the original requirement not to break flux surfaces, $\psi_{m n}$ must never diverge, so $(m - n q)$ must not become zero. We can avoid such resonant surfaces if
+\begin{gather*}
+  \left( \sqrt{g} B_{n}^{\psi} \right)_{m} = 0
+\end{gather*}
+for all possible $m$ that could lead to a resonance. The simplest way to do so is to make $\sqrt{g} B_{n}^{\psi}$ a flux function, possessing only the poloidally symmetric harmonic $m = 0$. More generally, also $m < n q_{\text{min}}$ and $m > n q_{\text{max}}$ are possible, but for nonzero $m$ a transformation to the flux angle $\theta$ has to be computed explicitly.
+
+Using the Jacobian of symmetry flux coordinates we obtain
+\begin{gather*}
+  \psi_{m n} = \frac{1}{m - n q} \left( \frac{R^{2}}{B_{0 \phi}} B_{n}^{\psi} \right)_{m},
+\end{gather*}
+so, to generate a non-resonant field, we are allowed to use any value
+\begin{gather*}
+  B_{n}^{\psi} = C(\psi) \frac{B_{0 \phi}}{R^{2}},
+\end{gather*}
+where $C(\psi)$ is a flux function. The other components of $\delta \vec{B}$ are not relevant for the resonance condition and just need to fulfill divergence-freeness. Thus we proceed as in \cref{sec:compute_currn} and find fluxes through triangle edges:
+\begin{gather}
+  \int_{\Gamma_{\inw}, \Gamma_{\out}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} = -\int_{\Gamma_{\fs}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} - \im n \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi}. \label{eq:Bn_divfree}
+\end{gather}
+As for currents we use the notation for weighted magnetic fluxes through edges,
+\begin{gather}
+  \Psi_{k} = \int_{\Gamma_{k}} R \vec{B}_{n}^{\pol} \cdot \vec{n} \, \diff l \approx R (\Gamma_{k}) \vec{B}_{n}^{\pol} (\Gamma_{k}) \cdot \vec{n}_{k},
+\end{gather}
+and the same for the weighted toroidal magnetic flux,
+\begin{gather}
+  \Psi_{\phi} = \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi} \approx S_{\Omega} \, R (\Omega) B_{n}^{\phi} (\Omega),
+\end{gather}
+resulting in a shortened notation for \cref{eq:Bn_divfree} where the system of equations to be assembled is more apparent:
+\begin{gather}
+  \Psi_{\inw} + \Psi_{\out} = -\Psi_{\fs} - \im n \Psi_{\phi}.
+\end{gather}
+The term through edge \fs\ orthogonal to $\vec{n}_{\fs} \parallel \nabla \psi$ is
+\begin{gather}
+  \Psi_{\fs} \approx B_{n}^{\psi} (\Gamma_{\fs}) \frac{R (\Gamma_{\fs}) l_{\fs}}{\vec{n}_{\fs} \cdot \nabla \psi (\Gamma_{\fs})} \label{eq:Psi_f}
+\end{gather}
+with the sign of the directional derivative depending on edge orientation.
+
+The system of linear equations to solve is
+\begin{equation}
+  K_{jk} \Psi^{(k)} = s_{j},
+\end{equation}
+with
+\begin{gather}
+  K_{jk} = \delta_{j-1, k} - \delta_{jk},
+\end{gather}
+and
+\begin{gather}
+  s_{j} = -\Psi_{\fs}^{(j)} - \im n \Psi_{\phi}^{(j)}
+\end{gather}
+Since any one row/column in $K$ is a linear combination of all other rows/columns, $K$ is of rank $N - 1$ and thus singular. To get a non-trivial (i.e.\ non-zero) solution for $\Psi^{(k)}$, $\vec{s}$ should vanish as well, making the linear system homogeneous. The solution then assumes the simple form of $\Psi^{(1)} = \Psi^{(2)} = \dotsb = \Psi^{(N)} = C_{1}$ with an arbitrary constant $C_{1}$. This means that flux conservation, i.e.\ divergence-freeness, is fulfilled by balancing $\Psi_{\inw}$ with $\Psi_{\out}$ and $\Psi_{\fs}$ with $\Psi_{\phi}$ on each individual triangle. With $\Psi_{\fs}$ fixed by \cref{eq:Psi_f}, the remaining degrees of freedom on the same triangle are then determined:
+\begin{gather}
+  \Psi_{\inw} = -C_{1}, \quad \Psi_{\out} = C_{1}, \quad \Psi_{\phi} = \frac{\im}{n} \frac{\Psi_{\fs}}{S_{\Omega}}.
+\end{gather}
+Note that a solution can also be constructed for non-zero $\vec{s}$, as long as $\vec{s}$ is a linear combination of columns of $K$. This can be interpreted as follows: Starting from the aforementioned solution to the homogeneous system of equations, another arbitrary constant $C_{2}$ can be added to any one $\Psi^{(k)}$, resulting in $\Psi_{\out}^{(k)} = C_{1} + C_{2}$ in the adjacent triangle $(k)$ and $\Psi_{\inw}^{(k+1)} = -C_{1} - C_{2}$  in the other triangle $(k+1)$ sharing that edge. This offset is balanced by adding/subtracting the same $C_{2}$ from $\Psi_{\phi}$ in order to uphold divergence-freeness, seeing that $\Psi_{\fs}$ is fixed and changing the other remaining degree of freedom would necessitate changes in the next triangle adjacent to \emph{that} edge.
+
+\section{Linearized MHD force balance}
+
+\subsection{Pressure perturbation}
+
+Multiplying \cref{eq:mhd-phi} by $\vec{B}_{0}$ yields
+\begin{align}
+  c \vec{B}_{0} \cdot \nabla p_{n} + \im n c p_{n} \vec{B}_{0} \cdot \nabla \phi &= -\vec{B}_{n} \cdot (\vec{j}_{0} \times \vec{B}_{0}) = -c \vec{B}_{n} \cdot \nabla p_{0} \nonumber \\
+  \vec{B}_{0}^{\pol} \cdot \nabla p_{n} + \im n p_{n} B_{0}^{\phi} &= -B_{n}^{\psi} p_{0}'(\psi). \label{eq:pn}
+\end{align}
+To solve this equation on one flux surface, we use a lowest-order finite difference method. Nodes are indexed by superscript $(k)$ and $\vec{r}^{(k)}$ is the position of node $(k)$, whereas $\vec{l}_{\fs}^{(k)} = \vec{r}^{(k+1)} - \vec{r}^{(k)}$ is the counter-clockwise vector between nodes on edge $\Gamma_{\fs}^{(k)}$. $\nabla p_{n}$ is approximated at the midpoint of edge $\Gamma_{\fs}^{(k)}$ as finite difference of $p_{n}$ at nodes $(k)$ and $(k+1)$. $p_{n}$ is accordingly approximated at the midpoint as the arithmetic mean of the values at these nodes. With a shorthand $p_{n}^{(k)} = p_{n} (\vec{r}^{(k)})$ for the degrees of freedom we get
+\begin{gather}
+  \vec{B}_{0}^{\pol} (\Gamma_{\fs}^{(k)}) \cdot \frac{\vec{l}_{\fs}^{(k)}}{l_{\fs}^{(k)}} \frac{p_{n}^{(k+1)} - p_{n}^{(k)}}{l_{\fs}^{(k)}} + \im n B_{0}^{\phi} (\Gamma_{\fs}^{(k)}) \frac{p_{n}^{(k+1)} + p_{n}^{(k)}}{2} = -\pd[p_{0}]{\psi} (\Gamma_{\fs}^{(k)}) B_{n}^{\psi} (\Gamma_{\fs}^{(k)}),
+\end{gather}
+where a unit vector along the edge is used to get the correct sign for the gradient in the direction of the poloidal magnetic field. Reordering in terms of the unknowns yields
+\begin{gather}
+  (b_{k} + a_{k}) p_{n}^{(k+1)} + (b_{k} - a_{k}) p_{n}^{(k)} = s_{k}
+\end{gather}
+with
+\begin{align}
+  a_{k} &= \vec{B}_{0}^{\pol} (\Gamma_{\fs}^{(k)}) \cdot \frac{\hat{\vec{l}}_{\fs}^{(k)}}{l_{\fs}^{(k)}}, \\
+  b_{k} &= \frac{\im n B_{0}^{\phi} (\Gamma_{\fs}^{(k)})}{2}, \\
+  s_{k} &= -\pd[p_{0}]{\psi} (\Gamma_{\fs}^{(k)}) B_{n}^{\psi} (\Gamma_{\fs}^{(k)}).
+\end{align}
+In matrix form this scheme is written as
+\begin{gather}
+  K_{jk} p_{n}^{(k)} = s_{j},
+\end{gather}
+where the elements of the stiffness matrix $K$ are
+\begin{gather}
+  K_{jk} = (b_{j} + a_{j}) \delta_{j-1, k} + (b_{j} - a_{j}) \delta_{jk}.
+\end{gather}
+Note that for $N$ nodes with periodic boundary conditions $p_{n}^{(0)} = p_{n}^{(N)}$, indices "wrap around", resulting in the following shape for the stiffness matrix:
+\begin{gather*}
+  K = \begin{pmatrix}
+    b_{1} - a_{1} &  b_{1} + a_{1} &        0       & \hdots &    0   \\
+           0       & b_{2} - a_{2} &  b_{2} + a_{2} & \hdots &    0   \\
+           0       &        0       & b_{3} - a_{3} & \hdots &    0   \\
+        \vdots     &     \vdots     &     \vdots     & \ddots & \vdots \\
+     b_{N} + a_{N} &        0       &        0       & \hdots & b_{N} - a_{N}
+  \end{pmatrix}.
+\end{gather*}
+
+\subsection{Current perturbation}
+
+Multiplying \cref{eq:divfree-phi} by $R$ yields
+\begin{gather}
+  \pd{x^{k}} (R j_{n}^{k}) + \im n R j_{n}^{\phi} = 0.
+\end{gather}
+Using the divergence theorem this can also be written in integral form in a specific triangular mesh element $\Omega^{(k)}$ as
+\begin{gather}
+  \oint_{\partial \Omega^{(k)}} \diff l \, R \vec{j}_{n} \cdot \hat{\vec{n}} + \im n \int_{\Omega^{(k)}} \diff R \, \diff Z \, R j_{n}^{\phi} = 0.
+\end{gather}
+Here the first integral is performed over the 1-dimensional element boundary $\partial \Omega^{(k)} = \Gamma^{(k)}$. The first term is split into three contributions,
+\begin{gather}
+  \oint_{\partial \Omega^{(k)}} \diff l \, R \vec{j}_{n} \cdot \hat{\vec{n}} = \int_{\Gamma_{\inw}^{(k)}, \Gamma_{\out}^{(k)}} \diff l \, R \vec{j}_{n} \cdot \hat{\vec{n}} + \int_{\Gamma_{\fs}^{(k)}} \diff l \, R \vec{j}_{n} \cdot \hat{\vec{n}},
+\end{gather}
+where edge \fs\ is tangential to an adjacent flux surface and edges \inw\ and \out\ are not. For the grid it is important to distinguish two types of triangles, starting from the second loop outside the magnetic axis, see \cref{fig:grid}.
+
+For the computation of toroidal $j_{n}^{\phi}$ in the element volume we start from \cref{eq:mhd-phi} with
+\begin{gather}
+  \vec{j}_{n} \times \vec{B}_{0} = c (\nabla p_{n} + \im n p_{n} \nabla \phi) - \vec{j}_{0} \times \vec{B}_{n} \label{eq:jnxB0}
+\end{gather}
+and
+\begin{gather}
+  \vec{B}_{0} = \nabla \psi \times \nabla \phi + B_{0 \phi} \nabla \phi.
+\end{gather}
+Taking a scalar product of $\vec{l}$ with \cref{eq:jnxB0} on some edge yields
+\begin{align}
+  \vec{l} \cdot (\vec{j}_{n} \times \vec{B}_{0}) &= \vec{l} \cdot (\vec{j}_{n} \times (\nabla \psi \times \nabla \phi + B_{0 \phi} \nabla \phi)) \nonumber \\
+  &= \vec{j}_{n} \cdot ((\nabla \psi \times \nabla \phi) \times \vec{l} + B_{0 \phi} \nabla \phi \times \vec{l}) \nonumber \\
+  &= \vec{j}_{n} \cdot ((\nabla \psi \times \nabla \phi) \times \vec{l} + B_{0 \phi} \vec{n} / R) \nonumber \\
+  &= \vec{j}_{n} \cdot \left( (\vec{l} \cdot \nabla \psi) \nabla \phi + B_{0 (\phi)} \vec{n} \right) \nonumber \\
+  &= (\vec{l} \cdot \nabla \psi) j_{n}^{\phi} + B_{0 (\phi)} \vec{j}_{n}^{\pol} \cdot \vec{n}.
+\end{align}
+Further,
+\begin{gather}
+  \vec{l} \cdot \nabla \psi = R \nabla \psi \cdot \left( \vec{n} \times \nabla \phi \right) = -R \vec{n} \cdot \vec{B}_{0}^{\pol}.
+\end{gather}
+Finally,
+\begin{gather}
+  \vec{l} \cdot (\vec{j}_{n} \times \vec{B}_{0}) = B_{0 (\phi)} \vec{j}_{n}^{\pol} \cdot \vec{n} - R j_{n}^{\phi} \vec{n} \cdot \vec{B}_{0}^{\pol}.
+\end{gather}
+The right-hand side of \cref{eq:jnxB0} yields:
+\begin{align}
+  \vec{l} \cdot (\nabla p_{n} + \im n p_{n} \nabla \phi) &= \vec{l} \cdot \nabla p_{n} \\
+  \vec{l} \cdot (\vec{j}_{0} \times \vec{B}_{n}) &= \vec{l} \cdot (B_{n \phi} \vec{j}_{0}^{\pol} \times \nabla \phi + j_{0 \phi} \nabla \phi \times \vec{B}_{n}^{\pol}).
+\end{align}
+We use the fact that $\nabla p_{0}$ is parallel to $\nabla \psi$, so the cross product in the equilibrium is purely radial,
+\begin{align}
+  \vec{j}_{0} \times \vec{B}_{0} &= c \nabla p_{0} \nonumber \\
+  &= \vec{j}_{0}^{\pol} \times (B_{0 \phi} \nabla \phi) + j_{0 \phi} \nabla \phi \times (\nabla \psi \times \nabla \phi) \nonumber \\
+  &= \vec{j}_{0}^{\pol} \times (B_{0 \phi} \nabla \phi) + \frac{j_{0 \phi}}{R^{2}} \nabla \psi.
+\end{align}
+Thus
+\begin{gather}
+  \vec{j}_{0}^{\pol} \times \nabla \phi = \frac{1}{B_{0 \phi}} \left( c \nabla p_{0} - \frac{j_{0 \phi}}{R^{2}} \nabla \psi \right).
+\end{gather}
+Also
+\begin{align}
+  \vec{l} \cdot (\nabla \phi \times \vec{B}_{n}^{\pol}) &= \vec{B}_{n}^{\pol} \cdot (\vec{l} \times \nabla \phi) \nonumber \\
+  &= -\frac{1}{R} \vec{B}_{n}^{\pol} \cdot \vec{n}.
+\end{align}
+Finally
+\begin{gather}
+  (\vec{l} \cdot \nabla \psi) j_{n}^{\phi} + B_{0 (\phi)} \vec{j}_{n}^{\pol} \cdot \vec{n} = c \vec{l} \cdot \nabla p_{n} - \frac{B_{n \phi}}{B_{0 \phi}} \left( c \vec{l} \cdot \nabla p_{0} - \frac{j_{0 \phi}}{R^{2}} \vec{l} \cdot \nabla \psi \right) + \frac{j_{0 \phi}}{R} \vec{B}_{n}^{\pol} \cdot \vec{n} \label{eq:jnphi-jnpol}
+\end{gather}
+This term is only meaningful to obtain $j_{n}^{\phi}$ on edges where $\vec{l} \cdot \nabla \psi \neq 0$ (\inw\ and \out\ in \cref{fig:grid}) and we obtain
+\begin{gather}
+  R j_{n}^{\phi} = j_{n (\phi)} = -\frac{B_{0 \phi}}{\vec{l} \cdot \nabla \psi} \vec{j}_{n}^{\pol} \cdot \vec{n} + \frac{c R}{\vec{l} \cdot \nabla \psi} \left( \vec{l} \cdot \nabla p_{n} - \frac{B_{n \phi}}{B_{0 \phi}} \vec{l} \cdot \nabla p_{0} \right) + j_{0 \phi} \left( \frac{B_{n \phi}}{R B_{0 \phi}} + \frac{\vec{B}_{n}^{\pol} \cdot \vec{n}}{\vec{l} \cdot \nabla \psi} \right). \label{eq:jnphi}
+\end{gather}
+In the implementation, an average over edge \inw\ and \out\ will be taken for this quantity.
+
+On edge \fs, no connection between $j_{n}^{\phi}$ and $\vec{j}_{n}^{\pol} \cdot \vec{n}$ can be made, but the latter expression can be given in terms of already knwown quantities:
+\begin{gather}
+  R \vec{j}_{n}^{\pol} \cdot \vec{n} = \frac{c R}{B_{0 (\phi)}} \vec{l} \cdot \nabla p_{n} + \frac{j_{0 \phi}}{B_{0 (\phi)}} \vec{B}_{n}^{\pol} \cdot \vec{n}. \label{eq:If}
+\end{gather}
+
+\subsubsection{Implementation}
+\label{sec:compute_currn}
+
+We start with
+\begin{gather}
+  I_{\inw} + I_{\out} + \im n \int_{\Omega} R j_{n}^{\phi} \diff S = -I_{\fs},
+\end{gather}
+where the notation for currents through edges, weighted by $R$, is
+\begin{gather}
+  I_{k} = \int_{\Gamma_{k}} R \vec{j}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l \approx R (\Gamma_{k}) \vec{j}_{n}^{\pol} (\Gamma_{k}) \cdot \vec{n}_{k},
+\end{gather}
+where values are taken at the midpoint of edge $\Gamma_{k}$ and assumed to be constant along that edge. $I_{\fs}$ is already known from \cref{eq:If} and therefore acts as a source on the right-hand side. The remaining currents $I_{\inw}$ and $I_{\out}$ are taken as unknowns and appear also in the last term of the left-hand side as
+\begin{align}
+  \im n \int_{\Omega} R j_{n}^{\phi} \, \diff S & \approx \im n S_{\Omega} \frac{R (\Gamma_{\inw}) j_{n}^{\phi} (\Gamma_{\inw}) + R (\Gamma_{\out}) j_{n}^{\phi} (\Gamma_{\out})}{2} \nonumber \\
+  &= -\frac{\im n S_{\Omega}}{2} \left( \frac{B_{0 (\phi)} (\Gamma_{\inw})}{\vec{l}_{\inw} \cdot \nabla \psi (\Gamma_{\inw})} I_{\inw} + \frac{B_{0 (\phi)} (\Gamma_{\out})}{\vec{l}_{\out} \cdot \nabla \psi (\Gamma_{\out})} I_{\out} + \dotsb \right),
+\end{align}
+where $S_{\Omega}$ is the triangle surface area. In the approximation above, a term $R (\Gamma_{\fs}) j_{n}^{\phi} (\Gamma_{\fs})$ is neglected because within one loop of triangles in \cref{fig:grid1}, edge \fs\ alternates between the inner and outer flux surface and this "oscillation" of sample points would carry over to the approximation values. Furthermore, $R (\Gamma_{\fs}) j_{n}^{\phi} (\Gamma_{\fs})$ can't be reformulated in terms of $R (\Gamma_{\fs}) \vec{j}_{n}^{\pol} (\Gamma_{\fs})$, introducing another unknown. This would lead to an overdetermined set of equations, possibly violating divergence-freeness. Instead, $I_{(\phi)}$ is approximated for each triangle by
+\begin{gather}
+  I_{(\phi)} = \int_{\Omega} R j_{n}^{\phi} \, \diff S \approx S_{\Omega} R (\Omega) j_{n}^{\phi} (\Omega).
+\end{gather}
+The remaining terms are moved to the right-hand-side as sources $s$, so the discretized equation in each triangle $\Omega$ is
+\begin{gather}
+  \left( 1 - \frac{\im n S_{\Omega}}{2} \frac{B_{0 (\phi)} (\Gamma_{\inw})}{\vec{l}_{\inw} \cdot \nabla \psi (\Gamma_{\inw})} \right) I_{\inw} + \left( 1 - \frac{\im n S_{\Omega}}{2} \frac{B_{0 (\phi)} (\Gamma_{\out})}{\vec{l}_{\out} \cdot \nabla \psi (\Gamma_{\out})} \right) I_{\out} = s. \label{eq:Ii-Io}
+\end{gather}
+The source term is given by
+\begin{gather}
+  s = -I_{\fs} - \frac{\im n S_{\Omega}}{2} \sum_{k = \inw, \out} \frac{c R}{\vec{l}_{k} \cdot \nabla \psi} \left( \vec{l}_{k} \cdot \nabla p_{n} - \frac{B_{n \phi}}{B_{0 \phi}} \vec{l}_{k} \cdot \nabla p_{0} \right) + j_{0 \phi} \left( \frac{B_{n \phi}}{R B_{0 \phi}} + \frac{\vec{B}_{n}^{\pol} \cdot \vec{n}}{\vec{l}_{k} \cdot \nabla \psi} \right).
+\end{gather}
+The directional derivatives $\vec{l}_{k} \cdot \nabla \psi$ are approximated by a difference quotient with values taken at the nodes (for indexing see \cref{fig:grid}),
+\begin{align}
+  \vec{l}_{\inw} \cdot \nabla \psi = l_{\inw} \hat{\vec{l}}_{\inw} \cdot \nabla \psi = l_{\inw} \pd[\psi]{\vec{l}_{\inw}} & \approx l_{\inw} \frac{-\symup{\Delta} \psi}{l_{\inw}} = -\symup{\Delta} \psi, \\
+  \vec{l}_{\out} \cdot \nabla \psi = l_{\out} \hat{\vec{l}}_{\out} \cdot \nabla \psi = l_{\out} \pd[\psi]{\vec{l}_{\out}} & \approx l_{\out} \frac{\symup{\Delta} \psi}{l_{\out}} = \symup{\Delta} \psi.
+\end{align}
+Note that $\psi \vert_{\vfs} \neq \psi \vert_{\vinw} = \psi \vert_{\vout}$ for each triangle because values are taken from the nodes at adjacent flux surfaces. Thus $\symup{\Delta} \psi$ is identical for the entire loop, but signs change depending on the direction of $\vec{l}_{k}$, alternating between triangles. It takes a positive value for $\vec{l}_{k}$ pointing in the radially inward direction. The same logic applies to $\vec{l} \cdot \nabla p_{0}$ terms.
+
+For the global indexing scheme, we call the ingoing current into triangle $(k)$ counted in clockwise direction $I^{(k)}$. In triangle $(k)$, this is equal to $I_{\inw} = -I^{(k)}$ and $I_{\out} = I^{(k+1)}$. The matrix form of \cref{eq:Ii-Io} is then
+\begin{gather}
+  K_{jk} I^{(k)} = s_{j},
+\end{gather}
+where the elements of the stiffness matrix $K$ are
+\begin{gather}
+  K_{jk} = \left( -1 - \frac{\im n S_{\Omega^{(j)}}}{2} \frac{B_{0 (\phi)} (\Gamma_{\inw}^{(j)})}{\symup{\Delta} \psi} \right) \delta_{jk} + \left( 1 - \frac{\im n S_{\Omega^{(j)}}}{2} \frac{B_{0 (\phi)} (\Gamma_{\out}^{(j)})}{\symup{\Delta} \psi} \right) \delta_{j+1, k}.
+\end{gather}
+
+\section{Analytical solution for very large aspect ratios}
+
+Using flux coordinates $(r, \theta, \phi)$, a term in \cref{eq:pn} can be simplified:
+\begin{gather}
+  \vec{B}_{0}^{\pol} \cdot \nabla p_{n} = B_{0}^{\theta} \vec{e}_{\theta} \cdot \nabla p_{n} = B_{0}^{\theta} \pd[p_{n}]{\theta}.
+\end{gather}
+Now when we expand the perturbed quantities as series in $\theta$ as well as $\phi$ so that
+\begin{gather}
+  \delta p = \sum_{n} p_n(r, \theta) \e^{\im n \phi} = \sum_{m, n} p_{mn}(r) \e^{\im m \theta + \im n \phi},
+\end{gather}
+\cref{eq:pn} reduces to
+\begin{gather}
+  \im m p_{mn} B_{0}^{\theta} + \im n p_{mn} B_{0}^{\phi} = -B_{mn}^{r} p_{0}'(r) =: -s_{mn}
+\end{gather}
+with a source term $s_{mn}$. This allows a simple algebraic solution where all quantities depend only on $r$:
+\begin{gather}
+  p_{mn} =  \frac{\im s_{mn}}{m B_{0}^{\theta} + n B_{0}^{\phi}}.
+\end{gather}
+Now an approximation can be made by switching from contravariant components to covariant components which are (for some reason) assumed to be constant. The factor $R$ appearing in the metric components can also be considered constant over the domain in question -- the toroidal geometry is effectively transformed to cylindrical geometry with a very thin and elongated cylinder and periodic boundary conditions.
+
+\appendix
+\section{List of symbols}
+
+\begin{longtable}{l >{\RaggedRight}p{0.8\textwidth}}
+  \caption{Base symbols} \\
+  \toprule
+  \textbf{Notation} & \textbf{Description} \\
+  \midrule
+  \endhead
+  $\vec{B}$ & magnetic field strength, measured in Gauss \\
+  $\delta \vec{B}_{\text{p}}$ & perturbation field from \emph{p}lasma current \\
+  $\delta \vec{B}_{\text{v}}$ & perturbation field in \emph{v}acuum (from external coils) \\
+  $C$ & arbitrary constant (of integration) \\
+  $c$ & speed of light in centimetres per second \\
+  $\e$ & \textsc{Euler}'s constant, base of natural logarithm \\
+  $g$ & metric determinant \\
+  $\vec{h}_{0}$ & unit vector of $\vec{B}_{0}$ \\
+  $I$ & electric current \\
+  $I_{\text{c}}$ & electric current produced by RMP \emph{c}oils \\
+  $\im$ & imaginary unit, $\im^{2} = -1$ \\
+  $\vec{j}$ & electric current density, measured in statampere \\
+  $K$ & stiffness matrix \\
+  $\vec{l}$ & edge vector in counter-clockwise direction \\
+  $l$ & length of edge \\
+  $m$ & poloidal mode number \\
+  $n$ & toroidal mode number \\
+  $\vec{n}$ & outward pointing normal vector \\
+  $p$ & pressure, measured in dyne per square centimetre \\
+  $q$ & safety factor \\
+  $R$ & radial coordinate in cylindrical coordinates \\
+  $R_{0}$ & major radius of the tokamak \\
+  $S$ & area in poloidal cross-section \\
+  $Z$ & axial coordinate in cylindrical coordinates \\
+  $\delta_{ij}$ & \textsc{Kronecker} delta \\
+  $\theta$ & poloidal angle \\
+  $\phi$ & toroidal angle \\
+  $\Psi$ & magnetic flux \\
+  $\psi$ & flux surface label \\
+  \bottomrule
+\end{longtable}
+
+\begin{longtable}{l >{\RaggedRight}p{0.8\textwidth}}
+  \caption{Symbol decorations} \\
+  \toprule
+  \textbf{Notation} & \textbf{Description} \\
+  \midrule
+  \endhead
+  $p_{0}$ & equilibrium quantity \\
+  $\delta p$ & perturbed quantity \\
+  $p_{n}$ & \textsc{Fourier} coefficient of perturbed quantity with toroidal mode number $n$ \\
+  $p_{m n}$ & \textsc{Fourier} coefficient of perturbed quantity with poloidal mode number $m$ and toroidal mode number $n$ \\
+  \midrule
+  $\vec{j}^{\pol}$ & poloidal component \\
+  $\vec{j}^{\tor}$ & toroidal component \\
+  $\vec{j}^{\parallel}$ & component parallel to $\vec{B}_{0}$ \\
+  $\vec{j}^{\perp}$ & component perpendicular to $\vec{B}_{0}$ \\
+  $j^{u}$ & contravariant component w.r.t.\ coordinate $u$ \\
+  $j_{u}$ & covariant component w.r.t.\ coordinate $u$ \\
+  $j_{(u)}$ & physical component w.r.t.\ coordinate $u$ \\
+  $\hat{\vec{n}}$ & unit vector \\
+  \midrule
+  $\vec{B} (\vec{r}^{(k)})$ & $\vec{B}$ evaluated at node with index $k$ \\
+  $\vec{B} (\Gamma_{e}^{(k)})$ & $\vec{B}$ evaluated at midpoint of edge $e$ of triangle $k$ \\
+  $\vec{B} (\Omega^{(k)})$ & $\vec{B}$ evaluated at weighted centroid of triangle $k$ \\
+  \bottomrule
+\end{longtable}
+
+\begin{gather*}
+  \nabla \psi \parallel \nabla p_{0} \parallel \vec{n}_{\fs} \\
+  \nabla \phi \perp \left( \nabla \psi, \nabla p_{0}, \vec{n}, \vec{l}, \vec{B}_{\bullet}^{\pol}, \vec{h}_{0}^{\pol}, \vec{j}_{\bullet}^{\pol}, \nabla p_{n} \right)
+\end{gather*}
+
+
+\section{Fourier transform of vector quantitites}
+
+$\delta \vec{B}$ in symmetry flux coordinates $(\rho, \theta, \phi)$ is given as the \textsc{Fourier} series
+\begin{gather}
+  \delta B^{k} (\rho, \theta, \phi) = B_{m n}^{k}(\rho) \e^{-\im n \phi} \e^{-\im m \theta}.
+\end{gather}
+$\delta \vec{B}$ is also divergence-free and assuming $g = g(\rho, \theta)$, we get
+\begin{align}
+  0 &= \nabla \cdot \delta \vec{B} = \frac{1}{\sqrt{g}} \partial_{k} \left( \sqrt{g} \delta B^{k} \right) = \frac{1}{\sqrt{g}} \partial_{k} \left( \sqrt{g} B_{m n}^{k} \e^{-\im n \phi} \e^{-\im m \theta} \right) = \\
+    &= \frac{1}{\sqrt{g}} \partial_{\rho} \left( \sqrt{g} B_{m n}^{\rho} \right) \e^{-\im n \phi} \e^{-\im m \theta} + B_{m n}^{\phi} \partial_{\phi} \left( \e^{-\im n \phi} \right) \e^{-\im m \theta} + \frac{1}{\sqrt{g}} \partial_{\theta} \left( \sqrt{g} \e^{-\im m \theta} \right) B_{m n}^{\theta} \e^{-\im n \phi} = \\
+    &= \underbrace{\e^{-\im n \phi} \e^{-\im m \theta}}_{\neq 0} \left( \frac{\partial_{\rho} \sqrt{g}}{\sqrt{g}} B_{m n}^{\rho} + \partial_{\rho} B_{m n}^{\rho} - \im n B_{m n}^{\phi}  + \frac{\partial_{\theta} \sqrt{g}}{\sqrt{g}} B_{m n}^{\theta} - \im m B_{m n}^{\theta} \right).
+\end{align}
+
+\end{document}
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: t
+%%% End: 
