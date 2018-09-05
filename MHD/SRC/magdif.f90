@@ -161,7 +161,7 @@ contains
     call compute_j0phi
     if (nonres) then
        call compute_Bn_nonres
-       if (log_debug) call dump_triangle_flux(Bnflux, Bnphi, dump_flux_file)
+       if (log_debug) call dump_triangle_flux(Bnflux, Bnphi, 'plot_Bn_nonres.dat')
     else
        call read_bnflux(Bnflux_vac_file)
     end if
@@ -199,6 +199,7 @@ contains
 
     call compute_presn
     call compute_currn
+    if (log_debug) call dump_triangle_flux(jnflux, jnphi, 'plot_jn_nonres.dat')
     call compute_Bn(stat)
     call read_bnflux(Bnflux_file)
   end subroutine magdif_single
@@ -328,7 +329,7 @@ contains
        Bnflux(k,1) = cmplx(dummy8(1), dummy8(2), dp)
        Bnflux(k,2) = cmplx(dummy8(3), dummy8(4), dp)
        Bnflux(k,3) = cmplx(dummy8(5), dummy8(6), dp)
-       Bnphi(k) = cmplx(dummy8(7), dummy8(8), dp) / (mesh_element(k)%det_3 * 0.5d0)
+       Bnphi(k) = cmplx(dummy8(7), dummy8(8), dp) / mesh_element(k)%det_3 * 2d0
     end do
     close(1)
 
@@ -336,7 +337,7 @@ contains
   end subroutine read_bnflux
 
   subroutine init_safety_factor
-    integer :: kl, kp, kp_max, k_low
+    integer :: kl, kp, kt_max, k_low
     type(triangle) :: elem
     real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
@@ -891,7 +892,7 @@ contains
   subroutine dump_triangle_flux(pol_flux, tor_flux, outfile)
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_flux(:)
-    character(len = 1024), intent(in) :: outfile
+    character(len = *), intent(in) :: outfile
 
     integer :: ktri
     type(triangle) :: elem
@@ -918,6 +919,9 @@ contains
             pol_flux(ktri, 3) * (z - tri(2)%zcoord) * length(3))
        write (1, *) r, z, real(tor_flux(ktri)), aimag(tor_flux(ktri)), &
             real(pol_flux_r), aimag(pol_flux_r), real(pol_flux_z), aimag(pol_flux_z)
+    end do
+    do ktri = (2 * nflux - 1) * nkpol, ntri
+       write (1, *) R0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
     end do
     close(1)
   end subroutine dump_triangle_flux
