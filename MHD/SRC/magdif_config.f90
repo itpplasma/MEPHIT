@@ -13,6 +13,7 @@ module magdif_config
   integer :: runmode
   logical :: log_err, log_warn, log_info, log_debug ! specify log levels
   logical :: nonres = .false.  !< use non-resonant test case
+  logical :: quad_avg = .true. !< average over quadrilaterals for non-resonant test case
 
   character(len=1024) :: point_file       !< input data file for mesh points
   character(len=1024) :: tri_file         !< input data file for triangles and edges
@@ -32,7 +33,7 @@ module magdif_config
   real(dp) :: ti0             !< interpolation step for temperature
   real(dp) :: di0             !< interpolation step for density
 
-  namelist / settings / log_level, runmode, nonres, point_file, tri_file, Bnflux_file, &
+  namelist / settings / log_level, runmode, nonres, quad_avg, point_file, tri_file, Bnflux_file, &
        Bnflux_vac_file, dump_flux_file, Bn_sum_file, hpsi_file, presn_file, currn_file, niter, n, nkpol, &
        nflux, ti0, di0
   !< namelist for input parameters

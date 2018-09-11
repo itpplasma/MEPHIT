@@ -815,10 +815,11 @@ contains
     logical :: orient
     integer :: common_tri(2)
     real(dp) :: lr, lz, Deltapsi, perps(2)
-    complex(dp) :: Bnpsi, Bnflux_avg
+    complex(dp) :: Bnpsi, Bnflux_avg, tor_flux_avg, tor_flux_diff
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
 
+    tor_flux_avg = (0d0, 0d0); tor_flux_diff = (0d0, 0d0)  ! to suppress -Wuninitialized
     p = 0d0
     open(1, file = 'Bn_nonres.dat', recl = 1024)
     do kf = 1, nflux ! loop through flux surfaces
@@ -854,6 +855,22 @@ contains
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           Bnflux(kt_low(kf) + kt, ei) = -2d0 * abs(Bnflux_avg)
           Bnflux(kt_low(kf) + kt, eo) =  2d0 * abs(Bnflux_avg)
+          if (quad_avg .and. (kf > 1)) then
+             select case (mod(kt, 2))
+             case (1)
+                tor_flux_avg = 0.25d0 * (Bnphi(kt_low(kf) + kt) * elem%det_3 + &
+                     Bnphi(kt_low(kf) + kt + 1) * mesh_element(kt_low(kf) + kt + 1)%det_3)
+                tor_flux_diff = 0.25d0 * (-Bnphi(kt_low(kf) + kt) * elem%det_3 + &
+                     Bnphi(kt_low(kf) + kt + 1) * mesh_element(kt_low(kf) + kt + 1)%det_3)
+                Bnphi(kt_low(kf) + kt) = tor_flux_avg / elem%det_3 * 2d0
+                Bnflux(kt_low(kf) + kt, eo) = Bnflux(kt_low(kf) + kt, eo) - imun * n * &
+                     tor_flux_diff
+             case (0)
+                Bnphi(kt_low(kf) + kt) = tor_flux_avg / elem%det_3 * 2d0
+                Bnflux(kt_low(kf) + kt, ei) = Bnflux(kt_low(kf) + kt, ei) + imun * n * &
+                     tor_flux_diff
+             end select
+          end if
           write (1, *) &
                real(Bnflux(kt_low(kf) + kt, 1)), real(Bnflux(kt_low(kf) + kt, 2)), &
                real(Bnflux(kt_low(kf) + kt, 3)), aimag(Bnphi(kt_low(kf) + kt))
@@ -861,7 +878,7 @@ contains
     end do
     close(1)
 
-    call check_div_free(Bnflux, Bnphi, 1d-10, 'non-resonant B_n')
+    call check_div_free(Bnflux, Bnphi, 1d-09, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
   subroutine dump_triangle_flux(pol_flux, tor_comp, outfile)
@@ -873,31 +890,32 @@ contains
     type(triangle) :: elem
     type(knot) :: tri(3)
     real(dp) :: length(3)
-    complex(dp) :: pol_flux_r, pol_flux_z, tor_flux
+    complex(dp) :: pol_comp_r, pol_comp_z
     real(dp) :: r, z
 
     open(1, file = outfile, recl = 1024)
     do ktri = 1, kt_low(nflux+1)
        elem = mesh_element(ktri)
-       tor_flux = elem%det_3 * 0.5d0 * tor_comp(ktri)
        tri = mesh_point(elem%i_knot(:))
        length(1) = hypot(tri(2)%rcoord - tri(1)%rcoord, tri(2)%zcoord - tri(1)%zcoord)
        length(2) = hypot(tri(3)%rcoord - tri(2)%rcoord, tri(3)%zcoord - tri(2)%zcoord)
        length(3) = hypot(tri(1)%rcoord - tri(3)%rcoord, tri(1)%zcoord - tri(3)%zcoord)
        call ring_centered_avg_coord(elem, r, z)
-       pol_flux_r = 2d0 / elem%det_3 * ( &
+       pol_comp_r = 2d0 / elem%det_3 * ( &
             pol_flux(ktri, 1) * (r - tri(3)%rcoord) * length(1) + &
             pol_flux(ktri, 2) * (r - tri(1)%rcoord) * length(2) + &
             pol_flux(ktri, 3) * (r - tri(2)%rcoord) * length(3))
-       pol_flux_z = 2d0 / elem%det_3 * ( &
+       pol_comp_z = 2d0 / elem%det_3 * ( &
             pol_flux(ktri, 1) * (z - tri(3)%zcoord) * length(1) + &
             pol_flux(ktri, 2) * (z - tri(1)%zcoord) * length(2) + &
             pol_flux(ktri, 3) * (z - tri(2)%zcoord) * length(3))
-       write (1, *) r, z, real(tor_flux), aimag(tor_flux), &
-            real(pol_flux_r), aimag(pol_flux_r), real(pol_flux_z), aimag(pol_flux_z)
+       write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), real(tor_comp(ktri)), &
+            aimag(tor_comp(ktri)), real(pol_comp_z), aimag(pol_comp_z)
     end do
+    r = mesh_point(1)%rcoord
+    z = mesh_point(1)%zcoord
     do ktri = kt_low(nflux+1) + 1, ntri
-       write (1, *) R0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+       write (1, *) r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
     end do
     close(1)
   end subroutine dump_triangle_flux

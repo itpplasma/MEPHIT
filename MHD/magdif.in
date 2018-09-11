@@ -3,6 +3,7 @@
    runmode = 0                                  ! 0: single iteration, 1: direct iterations,
                                                 ! 2: preconditioned iterations
    nonres = .true.                              ! use non-resonant test case
+   quad_avg = .true.                            ! average over quadrilaterals for non-resonant test case
    point_file = '../PRELOAD/points.dat'         ! points.dat from PRELOAD
    tri_file = '../PRELOAD/triangles.dat'        ! triangles.dat from PRELOAD
    Bnflux_vac_file = '../PRELOAD/VACFIELD/Bn_flux.dat'     ! Bn_flux.dat from PRELOAD
