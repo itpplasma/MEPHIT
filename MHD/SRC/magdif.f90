@@ -194,18 +194,15 @@ contains
   end subroutine magdif_cleanup
 
   subroutine magdif_single
-    integer :: stat
-
     call compute_presn
     call compute_currn
     if (log_debug) call dump_triangle_flux(jnflux, jnphi, 'plot_jn_nonres.dat')
-    call compute_Bn(stat)
+    call compute_Bn
     call read_bnflux(Bnflux_file)
   end subroutine magdif_single
 
   subroutine magdif_direct
     integer :: kiter, kt
-    integer :: stat
     complex(dp) :: Bnflux_sum(ntri, 3)
     complex(dp) :: Bnphi_sum(ntri)
 
@@ -215,7 +212,7 @@ contains
        if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter
        call compute_presn             ! compute pressure based on previous perturbation field
        call compute_currn
-       call compute_Bn(stat)          ! use field code to generate new field from currents
+       call compute_Bn                ! use field code to generate new field from currents
        call read_bnflux(Bnflux_file)  ! read new bnflux from field code
        Bnflux_sum = Bnflux_sum + Bnflux
        Bnphi_sum = Bnphi_sum + Bnphi
@@ -291,15 +288,14 @@ contains
     jnflux = 0d0
   end subroutine read_mesh
 
-  subroutine compute_Bn(stat)
-    integer, intent(out) :: stat
-
-    call execute_command_line (&
-         "PATH=/temp/ert/local/bin:$PATH /temp/ert/local/bin/FreeFem++ " // &
-         "../FEM/maxwell.edp ../PRELOAD/inputformaxwell_ext.msh " // currn_file // &
-         "2 > /tmp/freefem.out 2>&1 && cd ..", &
-         exitstat = stat)
-
+  subroutine compute_Bn
+    integer :: stat, dummy
+    call execute_command_line("./maxwell.sh " // currn_file, exitstat = stat, &
+         cmdstat = dummy)
+    if (stat /= 0) then
+       if (log_err) write(logfile, *) 'FreeFem++ failed with exit code ', stat
+       stop 'FreeFem++ failed'
+    end if
   end subroutine compute_Bn
 
 
@@ -736,6 +732,7 @@ contains
                real(pol_flux(kt_low(kf) + kt, 2)), aimag(pol_flux(kt_low(kf) + kt, 2)), &
                real(pol_flux(kt_low(kf) + kt, 3)), aimag(pol_flux(kt_low(kf) + kt, 3)), &
                real(tor_flux), aimag(tor_flux)
+          end if
        end do
     end do
 
