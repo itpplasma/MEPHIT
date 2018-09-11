@@ -309,7 +309,7 @@ contains
   !> @param pol_flux poloidal flux components, e.g. #jnflux - first index refers to the
   !> triangle, second index refers to the edge on that triangle, as per
   !> #mesh_mod::mesh_element
-  !> @param tor_flux toroidal flux components, e.g. #jnphi - index refers to the triangle
+  !> @param tor_comp toroidal field components, e.g. #jnphi - index refers to the triangle
   !> @param abs_err absolute error threshold, i.e. maximum acceptable value for divergence
   !> @param field_name name given to the vector field in the error message
   !>
@@ -317,9 +317,9 @@ contains
   !> up the fluxes of the vector field through triangle edges. If this sum is higher than
   !> \p abs_err on any triangle, it halts the program.
 
-  subroutine check_div_free(pol_flux, tor_flux, abs_err, field_name)
+  subroutine check_div_free(pol_flux, tor_comp, abs_err, field_name)
     complex(dp), intent(in) :: pol_flux(:,:)
-    complex(dp), intent(in) :: tor_flux(:)
+    complex(dp), intent(in) :: tor_comp(:)
     real(dp), intent(in) :: abs_err
     character(len = *), intent(in) :: field_name
 
@@ -329,7 +329,7 @@ contains
     err_msg = trim(field_name) // ' not divergence-free'
 
     do kt = 1, ntri
-       div = abs((sum(pol_flux(kt,:)) + imun * n * tor_flux(kt) * &
+       div = abs((sum(pol_flux(kt,:)) + imun * n * tor_comp(kt) * &
             mesh_element(kt)%det_3 * 0.5d0) / sum(pol_flux(kt,:)))
        if (div > abs_err) then
           if (log_err) write(logfile, *) err_msg, ': ', div
@@ -682,22 +682,23 @@ contains
   !> @param pol_flux poloidal flux components, e.g. #jnflux - first index refers to the
   !> triangle, second index refers to the edge on that triangle, as per
   !> #mesh_mod::mesh_element
-  !> @param tor_flux toroidal flux components, e.g. #jnphi - index refers to the triangle
-  !> @param outfile if present, write \p pol_flux and \p tor_flux to the given filename
+  !> @param tor_comp toroidal field components, e.g. #jnphi - index refers to the triangle
+  !> @param outfile if present, write \p pol_flux and area-weighted \p tor_comp to the
+  !> given filename
   !>
   !> For each flux surface, this subroutine loops through every triangle and calls \p
   !> assemble_flux_coeff for edges f, i, o (in that order). Then, it assembles and solves
   !> the resulting sparse system of linear equations. With the known solution, it loops
-  !> over the triangle strip again and assigns values to \p pol_flux and \p tor_flux via
+  !> over the triangle strip again and assigns values to \p pol_flux and \p tor_comp via
   !> \p assign_flux. Note that \p assemble_flux_coeff can also assign flux components that
   !> are already known, usually the one through edge f.
 
-  subroutine compute_triangle_flux(assemble_flux_coeff, assign_flux, pol_flux, tor_flux, &
+  subroutine compute_triangle_flux(assemble_flux_coeff, assign_flux, pol_flux, tor_comp, &
        outfile)
     procedure(sub_assemble_flux_coeff) :: assemble_flux_coeff
     procedure(sub_assign_flux) :: assign_flux
     complex(dp), intent(inout) :: pol_flux(:,:)
-    complex(dp), intent(inout) :: tor_flux(:)
+    complex(dp), intent(inout) :: tor_comp(:)
     character(len = 1024), intent(in), optional :: outfile
 
     complex(dp), dimension(2 * nkpol) :: x, d, du
@@ -709,9 +710,7 @@ contains
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     logical :: orient
-    integer :: ktri
-
-    ktri = 0
+    complex(dp) :: tor_flux
 
     if (present(outfile)) open(1, file = outfile, recl = 1024)
     do kf = 1, nflux ! loop through flux surfaces
@@ -730,19 +729,19 @@ contains
           elem = mesh_element(kt_low(kf) + kt)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           call assign_flux(x, kf, kt, ei, eo, ef)
-          if (present(outfile)) write(1, *) &
+          if (present(outfile)) then
+             tor_flux = tor_comp(kt_low(kf) + kt) * elem%det_3 * 0.5d0
+             write(1, *) &
                real(pol_flux(kt_low(kf) + kt, 1)), aimag(pol_flux(kt_low(kf) + kt, 1)), &
                real(pol_flux(kt_low(kf) + kt, 2)), aimag(pol_flux(kt_low(kf) + kt, 2)), &
                real(pol_flux(kt_low(kf) + kt, 3)), aimag(pol_flux(kt_low(kf) + kt, 3)), &
-               real(tor_flux(kt_low(kf) + kt)), aimag(tor_flux(kt_low(kf) + kt))
-          ktri = ktri+1
+               real(tor_flux), aimag(tor_flux)
        end do
     end do
 
     if (present(outfile)) then
-       do while (ktri < ntri)
+       do kt = kt_low(nflux+1) + 1, ntri
           write(1, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
-          ktri = ktri+1
        end do
        close(1)
     end if
@@ -802,7 +801,8 @@ contains
     integer, intent(in) :: ei, eo, ef
     jnflux(kt_low(kf) + kt, ei) = -x(kt)
     jnflux(kt_low(kf) + kt, eo) = x(mod(kt, kt_max(kf) + 1))
-    jnphi(kt_low(kf) + kt) = sum(jnflux(kt_low(kf) + kt, :)) * imun / n
+    jnphi(kt_low(kf) + kt) = sum(jnflux(kt_low(kf) + kt, :)) * imun / n / &
+         mesh_element(kt_low(kf) + kt)%det_3 * 2d0
   end subroutine assign_currn
 
   subroutine compute_currn
@@ -867,21 +867,22 @@ contains
     call check_div_free(Bnflux, Bnphi, 1d-10, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
-  subroutine dump_triangle_flux(pol_flux, tor_flux, outfile)
+  subroutine dump_triangle_flux(pol_flux, tor_comp, outfile)
     complex(dp), intent(in) :: pol_flux(:,:)
-    complex(dp), intent(in) :: tor_flux(:)
+    complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
 
     integer :: ktri
     type(triangle) :: elem
     type(knot) :: tri(3)
     real(dp) :: length(3)
-    complex(dp) :: pol_flux_r, pol_flux_z
+    complex(dp) :: pol_flux_r, pol_flux_z, tor_flux
     real(dp) :: r, z
 
     open(1, file = outfile, recl = 1024)
     do ktri = 1, kt_low(nflux+1)
        elem = mesh_element(ktri)
+       tor_flux = elem%det_3 * 0.5d0 * tor_comp(ktri)
        tri = mesh_point(elem%i_knot(:))
        length(1) = hypot(tri(2)%rcoord - tri(1)%rcoord, tri(2)%zcoord - tri(1)%zcoord)
        length(2) = hypot(tri(3)%rcoord - tri(2)%rcoord, tri(3)%zcoord - tri(2)%zcoord)
@@ -895,7 +896,7 @@ contains
             pol_flux(ktri, 1) * (z - tri(3)%zcoord) * length(1) + &
             pol_flux(ktri, 2) * (z - tri(1)%zcoord) * length(2) + &
             pol_flux(ktri, 3) * (z - tri(2)%zcoord) * length(3))
-       write (1, *) r, z, real(tor_flux(ktri)), aimag(tor_flux(ktri)), &
+       write (1, *) r, z, real(tor_flux), aimag(tor_flux), &
             real(pol_flux_r), aimag(pol_flux_r), real(pol_flux_z), aimag(pol_flux_z)
     end do
     do ktri = kt_low(nflux+1) + 1, ntri
