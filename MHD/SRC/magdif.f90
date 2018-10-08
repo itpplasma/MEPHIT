@@ -290,8 +290,7 @@ contains
 
   subroutine compute_Bn
     integer :: stat, dummy
-    call execute_command_line("./maxwell.sh " // currn_file, exitstat = stat, &
-         cmdstat = dummy)
+    call execute_command_line("./maxwell.sh", exitstat = stat, cmdstat = dummy)
     if (stat /= 0) then
        if (log_err) write(logfile, *) 'FreeFem++ failed with exit code ', stat
        stop 'FreeFem++ failed'

@@ -5,14 +5,15 @@
 //
 //
 
-include "getARGV.idp"
-
 real c = 29979245800.0; // speed of light
 
 real n = 2.0; // mode number
 
 bool doplot = true;
-mesh Th = readmesh(getARGV(1, "maxwell.msh"));
+
+include "magdif.idp"  // config (incl. filenames)
+
+mesh Th = readmesh(meshfile);
 
 fespace Vh0(Th, P0);
 fespace Vh1(Th, P1);
@@ -39,11 +40,10 @@ for (int k = 0; k < Th.nt; k++) {
 }
 
 // flag for run parameters
-int flag = getARGV(3, 0);
 if (flag > 0) doplot = false; // no plot for production runs
 if (flag == 1) nti = Th.nt;   // validation run with currents given on extended
 
-ifstream ifile(getARGV(2, "currents.dat"));
+ifstream ifile(currnfile);
 for (int k = 0; k < nti; k++) {
   real Jnr1, Jnr2, Jnr3, Jni1, Jni2, Jni3, sig;
   ifile >> Jnr1 >> Jnr2 >> Jnr3 >> Jni1 >> Jni2 >> Jni3;
@@ -88,13 +88,49 @@ bri = imag(br);
 bzi = imag(bz);
 
 if (flag == 1) { // validation run
-  ofstream ofile("maxwell.out");
+  ofstream ofile(validationfile);
   ofile.precision(16);
   for (int k = 0; k < Vh0.ndof; k++) {
     ofile.scientific
       << brr[][k] << "\t" << bzr[][k] << "\t"
       << bri[][k] << "\t" << bzi[][k] << endl;
   }
+}
+
+ofstream ofile(Bnfluxfile);
+ofile.precision(16);
+for (int k = 0; k < nti; k++) {
+  real sig;
+  if (abs(ux[][Hrot(k,2)]) > abs(vx[][Hrot(k,2)])) {
+    sig = (Th[k][1].x - Th[k][0].x) / ux[][Hrot(k,2)];
+  } else {
+    sig = (Th[k][1].y - Th[k][0].y) / vx[][Hrot(k,2)];
+  }
+  ofile.scientific
+    << sig * real(rBr[][Hdiv(k,2)]) << "\t"
+    << sig * imag(rBr[][Hdiv(k,2)]) << "\t";
+
+  if (abs(ux[][Hrot(k,0)]) > abs(vx[][Hrot(k,0)])) {
+    sig = (Th[k][2].x - Th[k][1].x) / ux[][Hrot(k,0)];
+  } else {
+    sig = (Th[k][2].y - Th[k][1].y) / vx[][Hrot(k,0)];
+  }
+  ofile.scientific
+    << sig * real(rBr[][Hdiv(k,0)]) << "\t"
+    << sig * imag(rBr[][Hdiv(k,0)]) << "\t";
+
+  if (abs(ux[][Hrot(k,1)]) > abs(vx[][Hrot(k,1)])) {
+    sig = (Th[k][0].x - Th[k][2].x) / ux[][Hrot(k,1)];
+  } else {
+    sig = (Th[k][0].y - Th[k][2].y) / vx[][Hrot(k,1)];
+  }
+  ofile.scientific
+    << sig * real(rBr[][Hdiv(k,1)]) << "\t"
+    << sig * imag(rBr[][Hdiv(k,1)]) << "\t";
+
+  ofile.scientific
+    << real(Bphi[][k]) * Th[k].area << "\t"
+    << imag(Bphi[][k]) * Th[k].area << endl;
 }
 
 if (doplot) {
@@ -121,10 +157,10 @@ Vh0 reg;
 
 bmod[] = 1e-30;
 
-ifstream bmodfile("../PRELOAD/VACFIELD/bmod_psipol_vac.dat");
+ifstream bmodin(bmodfile);
 for (int kt = 0; kt < nti; kt++) {
   real b1, b2, b3, psi1, psi2, psi3;
-  bmodfile >> b1 >> b2 >> b3 >> psi1 >> psi2 >> psi3;
+  bmodin >> b1 >> b2 >> b3 >> psi1 >> psi2 >> psi3;
   bmod[][Th[kt][0]] = b1 + 1e-30;
   bmod[][Th[kt][1]] = b2 + 1e-30;
   bmod[][Th[kt][2]] = b3 + 1e-30;
@@ -147,45 +183,9 @@ if (doplot) {
   plot(hri, fill = true, value = true, wait = true);
 }
 
-ofstream ofile2("/tmp/hpsi.dat");
-ofile2.precision(16);
+ofstream hpsiout(hpsifile);
+hpsiout.precision(16);
 for (int k = 0; k < nti; k++) {
-  ofile2.scientific
+  hpsiout.scientific
     << hrr[][k] << "\t" << hri[][k] << endl;
-}
-
-ofstream ofile3("/tmp/bnflux.dat");
-ofile3.precision(16);
-for (int k = 0; k < nti; k++) {
-  real sig;
-  if (abs(ux[][Hrot(k,2)]) > abs(vx[][Hrot(k,2)])) {
-    sig = (Th[k][1].x - Th[k][0].x) / ux[][Hrot(k,2)];
-  } else {
-    sig = (Th[k][1].y - Th[k][0].y) / vx[][Hrot(k,2)];
-  }
-  ofile3.scientific
-    << sig * real(rBr[][Hdiv(k,2)]) << "\t"
-    << sig * imag(rBr[][Hdiv(k,2)]) << "\t";
-
-  if (abs(ux[][Hrot(k,0)]) > abs(vx[][Hrot(k,0)])) {
-    sig = (Th[k][2].x - Th[k][1].x) / ux[][Hrot(k,0)];
-  } else {
-    sig = (Th[k][2].y - Th[k][1].y) / vx[][Hrot(k,0)];
-  }
-  ofile3.scientific
-    << sig * real(rBr[][Hdiv(k,0)]) << "\t"
-    << sig * imag(rBr[][Hdiv(k,0)]) << "\t";
-
-  if (abs(ux[][Hrot(k,1)]) > abs(vx[][Hrot(k,1)])) {
-    sig = (Th[k][0].x - Th[k][2].x) / ux[][Hrot(k,1)];
-  } else {
-    sig = (Th[k][0].y - Th[k][2].y) / vx[][Hrot(k,1)];
-  }
-  ofile3.scientific
-    << sig * real(rBr[][Hdiv(k,1)]) << "\t"
-    << sig * imag(rBr[][Hdiv(k,1)]) << "\t";
-
-  ofile3.scientific
-    << real(Bphi[][k]) * Th[k].area << "\t"
-    << imag(Bphi[][k]) * Th[k].area << endl;
 }
