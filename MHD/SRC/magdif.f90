@@ -3,7 +3,7 @@ module magdif
   use constants, only: pi, ev2erg                               ! PRELOAD/SRC/orbit_mod.f90
   use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, & ! PRELOAD/SRC/mesh_mod.f90
        mesh_element_rmp, bphicovar, knot, triangle
-  use for_macrostep, only : t_min, d_min
+  use for_macrostep, only: t_min, d_min
   use sparse_mod, only: remap_rc, sparse_solve, sparse_matmul
   use magdif_config
 
@@ -114,9 +114,37 @@ module magdif
   !> #mesh_mod::mesh_element.
   real(dp), allocatable :: j0phi(:)
 
+  !> Number of knots on the flux surface given by the array index.
+  !>
+  !> The array index ranges from 1 for the innermost flux surface to
+  !> #magdif_config::nflux+2 for consistency with #kp_low.
   integer, allocatable :: kp_max(:)
+
+  !> Number of triangles inside the flux surface given by the array index.
+  !>
+  !> The array index ranges from 1 for the innermost flux surface to
+  !> #magdif_config::nflux+1 for consistency with #kt_low.
   integer, allocatable :: kt_max(:)
+
+  !> Global index of the last knot of the previous flux surface given by the array index.
+  !>
+  !> The global index of knots in #mesh_mod::mesh_point on the flux surface kf runs from
+  !> #kp_low (kf)+1 to #kp_low (kf)+#kp_max (kf), so #kp_low is determined by cumulatively
+  !> adding consecutive values of #kp_max. The array index ranges from 1, giving the
+  !> global index of the knot on the magnetic axis (which has to be 1), to
+  !> #magdif_config::nflux+2, giving the last knot on the flux surface just outside the
+  !> last closed flux surface. The latter is needed for some interpolations.
   integer, allocatable :: kp_low(:)
+
+  !> Global index of the last triangle of the previous flux surface given by the array
+  !> index.
+  !>
+  !> The global index of triangles in #mesh_mod::mesh_element inside the flux surface kf
+  !> runs from #kt_low (kf)+1 to #kt_low (kf)+#kt_max (kf), so #kt_low is determined by
+  !> cumulatively adding consecutive values of #kt_max. The array index ranges from 1,
+  !> giving the global index of the non-existent triangle on the magnetic axis (which is
+  !> therefore 0), to #magdif_config::nflux+1, giving the last triangle just outside the
+  !> last closed flux surface. The latter is needed for some interpolations.
   integer, allocatable :: kt_low(:)
 
   !> Distance of magnetic axis from center \f$ R_{0} \f$ in cm.
@@ -126,11 +154,32 @@ module magdif
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
 
   interface
-     subroutine sub_assemble_flux_coeff(x, d, du, kf, kt, elem, lk, ek, edge_name)
-       import :: dp, triangle
+     !> Assembles entries of the stiffness matrix for use with assemble_sparse() in
+     !> compute_triangle_flux().
+     !>
+     !> @param x inhomogeneity or load vector
+     !> @param d diagonal entries of the stiffness matrix
+     !> @param du superdiagonal entries of the stiffness matrix (and entry in lower left
+     !> corner)
+     !> @param kf index of the outer flux surface of the current triangle strip
+     !> @param kt triangle index <em>in the current triangle strip</em>, i.e. the value
+     !> added to kt_low(kf), used as index to \p x, \p d and \p du
+     !> @param area area of the current triangle
+     !> @param lk global knot indices for the current edge, i.e. \p lf, \p li or \p lo
+     !> from get_labeled_edges()
+     !> @param ek local index for the current edge, i.e. \p ef, \p ei or \p eo from
+     !> get_labeled_edges()
+     !> @param edge_name symbolic edge label, telling the subroutine the type of the
+     !> current edge, i.e. 'f', 'i' or 'o'
+     !>
+     !> A subroutine with this interface is passed as an argument to
+     !> compute_triangle_flux(), where it is called for each edge of the current triangle
+     !> in a loop over a triangle strip.
+     subroutine sub_assemble_flux_coeff(x, d, du, kf, kt, area, lk, ek, edge_name)
+       import :: dp
        complex(dp), dimension(:), intent(inout) :: x, d, du
        integer, intent(in) :: kf, kt
-       type(triangle), intent(in) :: elem
+       real(dp), intent(in) :: area
        integer, dimension(2), intent(in) :: lk
        integer, intent(in) :: ek
        character, intent(in) :: edge_name
@@ -138,10 +187,26 @@ module magdif
   end interface
 
   interface
-     subroutine sub_assign_flux(x, kf, kt, ei, eo, ef)
+     !> Assigns the values to \p pol_flux and \p tor_comp in compute_triangle_flux()
+     !> based on the solution from sparse_mod::sparse_solve().
+     !>
+     !> @param x solution vector from sparse_mod::sparse_solve()
+     !> @param kf index of the outer flux surface of the current triangle strip
+     !> @param kt triangle index <em>in the current triangle strip</em>, i.e. the value
+     !> added to kt_low(kf), used as index to \p x
+     !> @param area area of the current triangle
+     !> @param ei local index of edge i from get_labeled_edges()
+     !> @param eo local index of edge o from get_labeled_edges()
+     !> @param ef local index of edge f from get_labeled_edges()
+     !>
+     !> A subroutine with this interface is passed as an argument to
+     !> compute_triangle_flux(), where it is called for each edge of the current triangle
+     !> in a loop over a triangle strip.
+     subroutine sub_assign_flux(x, kf, kt, area, ei, eo, ef)
        import :: dp
        complex(dp), dimension(:), intent(in) :: x
        integer, intent(in) :: kf, kt
+       real(dp), intent(in) :: area
        integer, intent(in) :: ei, eo, ef
      end subroutine sub_assign_flux
   end interface
@@ -153,7 +218,7 @@ contains
     call init_indices
     call read_mesh
     call init_flux_variables
-    call init_safety_factor
+    call compute_safety_factor
     call compute_j0phi
     if (nonres) then
        call compute_Bn_nonres
@@ -166,7 +231,7 @@ contains
     if (log_info) write(logfile, *) 'magdif initialized'
   end subroutine magdif_init
 
-  !> Final cleanup of magdif module
+  !> Deallocates all previously allocated variables.
   subroutine magdif_cleanup
     if (allocated(q)) deallocate(q)
     if (allocated(pres0)) deallocate(pres0)
@@ -230,6 +295,9 @@ contains
     close(1)
   end subroutine magdif_direct
 
+  !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
+  !> of #magdif_config::nflux and #magdif_config::nkpol. Deallocation is done in
+  !> magdif_cleanup().
   subroutine init_indices
     integer :: kf
 
@@ -252,13 +320,18 @@ contains
     end do
   end subroutine init_indices
 
-  !> Read mesh points and triangles
+  !> Reads mesh points and triangles.
+  !>
+  !> #mesh_mod::npoint and #mesh_mod::mesh_point are read directly from an unformatted
+  !> #magdif_config::point_file, while #mesh_mod::ntri and #mesh_mod::mesh_element are
+  !> read directly from an unformatted #magdif_config::tri_file. #presn, #bnflux, #bnphi,
+  !> #bnflux_vac, #bnphi_vac, #j0phi, #jnphi and #jnflux are allocated and initialized to
+  !> zero. Deallocation is done in magdif_cleanup().
   subroutine read_mesh
     open(1, file = point_file, form = 'unformatted')
     read(1) npoint
     if (log_info) write(logfile, *) 'npoint = ', npoint
     allocate(mesh_point(npoint))
-    allocate(presn(npoint))
     read(1) mesh_point
     close(1)
 
@@ -271,6 +344,7 @@ contains
     close(1)
 
     allocate(mesh_element_rmp(ntri))
+    allocate(presn(npoint))
     allocate(Bnflux(ntri, 3))
     allocate(Bnphi(ntri))
     allocate(Bnflux_vac(ntri, 3))
@@ -279,6 +353,7 @@ contains
     allocate(j0phi(ntri))
     allocate(jnflux(ntri, 3))
 
+    presn = 0d0
     Bnflux = 0d0
     Bnphi = 0d0
     Bnflux_vac = 0d0
@@ -288,6 +363,12 @@ contains
     jnflux = 0d0
   end subroutine read_mesh
 
+  !> Computes #bnflux and #bnphi from #jnflux and #jnphi via an external program. No data
+  !> is read yet; this is done by read_bnflux().
+  !>
+  !> Currently, this subroutine Calls FreeFem++ via shell script maxwell.sh in the current
+  !> directory and handles the exit code. For further information see maxwell.sh and the
+  !> script called therein.
   subroutine compute_Bn
     integer :: stat, dummy
     call execute_command_line("./maxwell.sh", exitstat = stat, cmdstat = dummy)
@@ -297,9 +378,8 @@ contains
     end if
   end subroutine compute_Bn
 
-
-  !> Check if divergence-freeness of the given vector field is fulfilled on each
-  !> triangle, otherwise halt the program.
+  !> Checks if divergence-freeness of the given vector field is fulfilled on each
+  !> triangle, otherwise halts the program.
   !>
   !> @param pol_flux poloidal flux components, e.g. #jnflux - first index refers to the
   !> triangle, second index refers to the edge on that triangle, as per
@@ -311,7 +391,6 @@ contains
   !> This subroutine calculates the divergence via the divergence theorem, i.e. by adding
   !> up the fluxes of the vector field through triangle edges. If this sum is higher than
   !> \p abs_err on any triangle, it halts the program.
-
   subroutine check_div_free(pol_flux, tor_comp, abs_err, field_name)
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
@@ -333,7 +412,14 @@ contains
     end do
   end subroutine check_div_free
 
-  !> Read fluxes of perturbation field
+  !> Reads fluxes of perturbation field and checks divergence-freeness.
+  !>
+  !> @param filename name of the formatted file containing the data
+  !>
+  !> Line numbers in the given file correspond to the global triangle index of
+  !> #mesh_mod::mesh_element. The content of each line is read into #bnflux and #bnphi
+  !> with numbering of edges in #bnflux as in #mesh_mod::mesh_element and the imaginary
+  !> part of each value immediately following the real part.
   subroutine read_bnflux(filename)
     character(len = 1024) :: filename
     integer :: kt
@@ -352,7 +438,9 @@ contains
     call check_div_free(Bnflux, Bnphi, 1d-3, 'B_n')
   end subroutine read_bnflux
 
-  subroutine init_safety_factor
+  !> Allocates and computes the safety factor #q. Deallocation is done in
+  !> magdif_cleanup().
+  subroutine compute_safety_factor
     integer :: kf, kt
     type(triangle) :: elem
     real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
@@ -380,8 +468,21 @@ contains
        end do
        close(1)
     end if
-  end subroutine init_safety_factor
+  end subroutine compute_safety_factor
 
+  !> Computes the "weighted" centroid for a triangle so that it is approximately
+  !> equidistant between the enclosing flux surfaces, independent of triangle orientation.
+  !>
+  !> @param elem the triangle for which the centroid is to be computed
+  !> @param r radial cylindrical coordinate of the centroid
+  !> @param z axial cylindrical coordinate of the centroid
+  !>
+  !> Depending on the orientation of the triangle (see also \p orient of
+  !> get_labeled_edges()), two knots lie on the inner flux surface and one on the outer
+  !> one, or vice versa. A simple arithmetic mean of the three knots' coordinates would
+  !> place the centroid closer to the inner flux surface for one orientation and closer
+  !> to the outer one for the other. To counteract this, the "lonely" knot is counted
+  !> twice in the averaging procedure, i.e. with double weighting.
   subroutine ring_centered_avg_coord(elem, r, z)
     type(triangle), intent(in) :: elem
     real(dp), intent(out) :: r, z
@@ -392,12 +493,16 @@ contains
     z = (sum(knots%zcoord) + knots(elem%knot_h)%zcoord) * 0.25d0
   end subroutine ring_centered_avg_coord
 
-  !>Initialize poloidal psi and unperturbed pressure p0
+  !> Initializes quantities that are constant on each flux surface. The safety factor #q
+  !> is initialized separately in compute_safety_factor().
+  !>
+  !> #psimin, #psimax and #psi are initialized from #mesh_mod::mesh_point::psi_pol.
+  !> #pres0, #dpres0_dpsi, #dens and #temp are given an assumed profile based on #psimin,
+  !> #psimax, #psi, #magdif_conf::di0, #magdif_conf::d_min, #magdif_conf::ti0 and
+  !> #magdif_conf::t_min.
   subroutine init_flux_variables
-    integer :: kf, kt
+    integer :: kf
     real(dp) :: ddens_dpsi, dtemp_dpsi
-    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
 
     psimin = minval(mesh_point%psi_pol)
     psimax = maxval(mesh_point%psi_pol)
@@ -412,7 +517,6 @@ contains
     allocate(dens(0:nflux+1))
     allocate(temp(0:nflux+1))
     allocate(psi(0:nflux+1))
-    allocate(B2avg(nflux))
 
     ! magnetic axis at k == 0 is not counted as flux surface
     psi(0) = mesh_point(1)%psi_pol
@@ -420,8 +524,28 @@ contains
     do kf = 1, nflux+1
        ! average over the loop to smooth out numerical errors
        psi(kf) = sum(mesh_point((kp_low(kf) + 1):kp_low(kf+1))%psi_pol) / kp_max(kf)
+    end do
+    dens = (psi - psimin) / psimax * di0 + d_min
+    temp = (psi - psimin) / psimax * ti0 + t_min
+    pres0 = dens * temp * ev2erg
+    dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
+  end subroutine init_flux_variables
 
-       if (kf > nflux) cycle
+  !> Computes equilibrium current density #j0phi from given equilibrium magnetic field and
+  !> assumed equilibrium pressure #pres0. #b2avg is also allocated and set; deallocation
+  !> is done in magdif_cleanup().
+  !>
+  !> This step is necessary because equilibrium pressure is not given experimentally as is
+  !> \f$ \vec{B}_{0} \f$; arbitrary values are assumed. Consistency of MHD equilibrium is
+  !> necessary in the derivation, while Ampere's equation is not used.
+  subroutine compute_j0phi
+    integer :: kf, kt
+    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+    real(dp) :: Bpol
+
+    allocate(B2avg(nflux))
+    do kf = 1, nflux
        B2avg(kf) = 0d0
        do kt = 1, kt_max(kf)
           call ring_centered_avg_coord(mesh_element(kt_low(kf) + kt), r, z)
@@ -430,20 +554,7 @@ contains
           B2avg(kf) = B2avg(kf) + Br**2 + Bp**2 + Bz**2
        end do
        B2avg(kf) = B2avg(kf) / kt_max(kf)
-    end do
-    dens = (psi - psimin) / psimax * di0 + d_min
-    temp = (psi - psimin) / psimax * ti0 + t_min
-    pres0 = dens * temp * ev2erg
-    dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
-  end subroutine init_flux_variables
 
-  subroutine compute_j0phi
-    integer :: kf, kt
-    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-    real(dp) :: Bpol
-
-    do kf = 1, nflux
        do kt = 1, kt_max(kf)
           call ring_centered_avg_coord(mesh_element(kt_low(kf) + kt), r, z)
           call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
@@ -456,14 +567,28 @@ contains
     end do
   end subroutine compute_j0phi
 
-  !>TODO
+  !> Assembles a sparse matrix in coordinate list (COO) representation for use with
+  !> sparse_mod::sparse_solve().
+  !>
+  !> @param nrow number \f$ n \f$ of rows in the matrix
+  !> @param d \f$ n \f$ diagnonal elements of stiffness matrix \f$ A \f$
+  !> @param du \f$ n-1 \f$ superdiagonal elements of stiffness matrix \f$ A \f$ and
+  !> \f$ A_{n, 1} \f$ (lower left corner)
+  !> @param nz number of non-zero entries (2*nrow)
+  !> @param irow nz row indices of non-zero entries
+  !> @param icol nz column indices of non-zero entries
+  !> @param aval nz values of non-zero entries
+  !>
+  !> The input is a stiffness matrix \f$ K \f$ with non-zero entries on the main diagonal,
+  !> the upper diagonal and, due to periodicity, in the lower left corner. This shape
+  !> results from the problems in compute_presn() and compute_currn().
   subroutine assemble_sparse(nrow, d, du, nz, irow, icol, aval)
-    integer, intent(in)  :: nrow                          !< number of system rows
-    complex(dp), intent(in)  :: d(nrow)                   !< diagnonal of stiffness matrix \f$ A \f$
-    complex(dp), intent(in)  :: du(nrow)                  !< superdiagonal of stiffness matrix \f$ A \f$ and \f$ A_{n, 1} \f$
-    integer, intent(out) :: nz                            !< number of non-zero entries
-    integer, intent(out) :: irow(2*nrow), icol(2*nrow)    !< matrix index representation
-    complex(dp), intent(out) :: aval(2*nrow)              !< matrix values
+    integer, intent(in)  :: nrow
+    complex(dp), intent(in)  :: d(nrow)
+    complex(dp), intent(in)  :: du(nrow)
+    integer, intent(out) :: nz
+    integer, intent(out) :: irow(2*nrow), icol(2*nrow)
+    complex(dp), intent(out) :: aval(2*nrow)
 
     integer :: k
 
@@ -490,7 +615,14 @@ contains
     nz = 2*nrow
   end subroutine assemble_sparse
 
-  !>TODO
+  !> Returns the indices of the two triangles sharing an edge.
+  !>
+  !> @param knot1 first knot of the edge
+  !> @param knot2 second knot of the edge
+  !> @param common_tri indices of the triangles sharing the given edge
+  !>
+  !> The program is halted if the input data is invalid, i.e. if more than two triangles
+  !> appear to share the edge.
   subroutine common_triangles(knot1, knot2, common_tri)
     type(knot), intent(in) :: knot1, knot2
     integer, intent(out) :: common_tri(2)
@@ -508,7 +640,11 @@ contains
     end do
   end subroutine common_triangles
 
-  !>Compute pressure perturbation. TODO: documentation
+  !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
+  !>
+  !> #psi, #dens, #temp, #pres0 and real and imaginary part of #presn are written, in that
+  !> order, to #magdif_conf::presn_file, where line number corresponds to the knot index
+  !> in #mesh_mod::mesh_point.
   subroutine compute_presn
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
@@ -702,6 +838,7 @@ contains
     integer, dimension(4 * nkpol) :: irow, icol
     complex(dp), dimension(4 * nkpol) :: aval
     type(triangle) :: elem
+    real(dp) :: area
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     logical :: orient
@@ -711,10 +848,11 @@ contains
     do kf = 1, nflux ! loop through flux surfaces
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
+          area = elem%det_3 * 0.5d0
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          call assemble_flux_coeff(x, d, du, kf, kt, elem, lf, ef, 'f')
-          call assemble_flux_coeff(x, d, du, kf, kt, elem, li, ei, 'i')
-          call assemble_flux_coeff(x, d, du, kf, kt, elem, lo, eo, 'o')
+          call assemble_flux_coeff(x, d, du, kf, kt, area, lf, ef, 'f')
+          call assemble_flux_coeff(x, d, du, kf, kt, area, li, ei, 'i')
+          call assemble_flux_coeff(x, d, du, kf, kt, area, lo, eo, 'o')
        end do
        call assemble_sparse(kt_max(kf), d(:kt_max(kf)), du(:kt_max(kf)), nz, &
             irow(:(2*kt_max(kf))), icol(:(2*kt_max(kf))), aval(:(2*kt_max(kf))))
@@ -722,10 +860,11 @@ contains
             x(:kt_max(kf)))
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
+          area = elem%det_3 * 0.5d0
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          call assign_flux(x, kf, kt, ei, eo, ef)
+          call assign_flux(x, kf, kt, area, ei, eo, ef)
           if (present(outfile)) then
-             tor_flux = tor_comp(kt_low(kf) + kt) * elem%det_3 * 0.5d0
+             tor_flux = tor_comp(kt_low(kf) + kt) * area
              write(1, *) &
                real(pol_flux(kt_low(kf) + kt, 1)), aimag(pol_flux(kt_low(kf) + kt, 1)), &
                real(pol_flux(kt_low(kf) + kt, 2)), aimag(pol_flux(kt_low(kf) + kt, 2)), &
@@ -743,11 +882,12 @@ contains
     end if
   end subroutine compute_triangle_flux
 
-  subroutine assemble_currn_coeff(x, d, du, kf, kt, elem, lk, ek, edge_name)
+  !> Implements sub_assemble_flux_coeff() for compute_currn().
+  subroutine assemble_currn_coeff(x, d, du, kf, kt, area, lk, ek, edge_name)
 
     complex(dp), dimension(:), intent(inout) :: x, d, du
     integer, intent(in) :: kf, kt
-    type(triangle), intent(in) :: elem
+    real(dp), intent(in) :: area
     integer, dimension(2), intent(in) :: lk
     integer, intent(in) :: ek
     character, intent(in) :: edge_name
@@ -774,33 +914,39 @@ contains
        x(kt) = -jnflux(kt_low(kf) + kt, ek)
     case ('i')
        ! diagonal matrix element
-       d(kt) = -1d0 - imun * n * elem%det_3 * 0.25d0 * Bp / Deltapsi
+       d(kt) = -1d0 - imun * n * area * 0.5d0 * Bp / Deltapsi
        ! additional term from edge i on source side
-       x(kt) = x(kt) - imun * n * elem%det_3 * 0.25d0 * (clight * r / (-Deltapsi) * &
+       x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / (-Deltapsi) * &
             (presn(lk(2)) - presn(lk(1)) - Bnphi(kt_low(kf) + kt) / Bp * &
             (pres0(kf) - pres0(kf-1))) + j0phi(kt_low(kf) + kt) * &
             (Bnphi(kt_low(kf) + kt) / Bp + Bnflux(kt_low(kf) + kt, ek) / r / (-Deltapsi)))
     case ('o')
        ! superdiagonal matrix element
-       du(kt) = 1d0 - imun * n * elem%det_3 * 0.25d0 * Bp / Deltapsi
+       du(kt) = 1d0 - imun * n * area * 0.5d0 * Bp / Deltapsi
        ! additional term from edge o on source side
-       x(kt) = x(kt) - imun * n * elem%det_3 * 0.25d0 * (clight * r / Deltapsi * &
+       x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / Deltapsi * &
             (presn(lk(2)) - presn(lk(1)) - Bnphi(kt_low(kf) + kt) / Bp * &
             (pres0(kf-1) - pres0(kf))) + j0phi(kt_low(kf) + kt) * &
             (Bnphi(kt_low(kf) + kt) / Bp + Bnflux(kt_low(kf) + kt, ek) / r / Deltapsi))
     end select
   end subroutine assemble_currn_coeff
 
-  subroutine assign_currn(x, kf, kt, ei, eo, ef)
+  !> Implements sub_assign_flux() for compute_currn().
+  subroutine assign_currn(x, kf, kt, area, ei, eo, ef)
     complex(dp), dimension(:), intent(in) :: x
     integer, intent(in) :: kf, kt
+    real(dp), intent(in) :: area
     integer, intent(in) :: ei, eo, ef
     jnflux(kt_low(kf) + kt, ei) = -x(kt)
     jnflux(kt_low(kf) + kt, eo) = x(mod(kt, kt_max(kf) + 1))
-    jnphi(kt_low(kf) + kt) = sum(jnflux(kt_low(kf) + kt, :)) * imun / n / &
-         mesh_element(kt_low(kf) + kt)%det_3 * 2d0
+    jnphi(kt_low(kf) + kt) = sum(jnflux(kt_low(kf) + kt, :)) * imun / n / area
   end subroutine assign_currn
 
+  !> Computes current perturbation #jnflux and #jnphi from equilibrium quantities,
+  !> #presn, #bnflux and #bnphi.
+  !>
+  !> This subroutine uses compute_triangle_flux() with assemble_currn_coeff() and
+  !> assign_currn(). The result is written to #magdif_conf::currn_file.
   subroutine compute_currn
     call compute_triangle_flux(assemble_currn_coeff, assign_currn, jnflux, jnphi, currn_file)
   end subroutine compute_currn

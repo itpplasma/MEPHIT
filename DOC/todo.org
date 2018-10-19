@@ -1,4 +1,4 @@
-* use $B_{0 \phi}$ everywhere because \texttt{bphicovar} is assumed constant
+* use $B_{0 \phi}$ where possible in documentation because \texttt{bphicovar} is assumed constant
 * use modulo for indices in matrix assembly (instead of copy&paste for one special case) [done]
 * rewrite to use assemble_system without mass matrix [done]
 * documenting variables in Doxygen with LaTeX syntax
@@ -8,5 +8,6 @@
 * reading input files from experiment
 - ASDEX Upgrade has two formats that are common: CLISTE and EFIT/EQDSK (g-files)
 - much data in /proj/plasma/RMP/DATA/ASDEX/ and /proj/plasma/RMP/DATA2017/ASDEX/
-* check weighting factors (R, S, l, ...) of vector DOFs
-* replace nkpol when handling sparse matrices
+* check weighting factors (R, S, l, ...) of vector DOFs [done]
+* replace nkpol when handling sparse matrices (along with alternative meshing)
+- in compute_presn handle x and size(x) as in compute_currn
