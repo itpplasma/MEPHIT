@@ -9,14 +9,13 @@ Building
 
 Preparing input data
 --------------------
-    cd PRELOAD/
-    ./prepare_mesh.sh
 
 Prepare vacuum perturbation field:
-edit `VACFIELD/field_divB0.inp` to point to correct `field.dat`
+edit `PRELOAD/VACFIELD/field_divB0.inp` to point to correct `field.dat`
 (e.g. copied from `/proj/plasma/RMP/DATA/ASDEX/MESH3D_30835/`)
     
-    ./prepare_vacfield.sh
+    cd PRELOAD/
+    make
 
 MHD single iteration
 --------------------

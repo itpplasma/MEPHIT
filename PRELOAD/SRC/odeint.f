@@ -60,10 +60,10 @@
           endif
           return
         endif
-        if(abs(hnext).lt.hmin) pause
+        if(abs(hnext).lt.hmin) write(*,*)
      *'stepsize smaller than minimum in odeint'
         h=hnext
 16    continue
-      pause 'too many steps in odeint'
+      write(*,*) 'too many steps in odeint'
       return
       END

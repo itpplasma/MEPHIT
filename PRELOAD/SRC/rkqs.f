@@ -24,7 +24,7 @@ CU    USES derivs,rkck
         htemp=SAFETY*h*(errmax**PSHRNK)
         h=sign(max(abs(htemp),0.1*abs(h)),h)
         xnew=x+h
-        if(xnew.eq.x)pause 'stepsize underflow in rkqs'
+        if(xnew.eq.x) write(*,*) 'stepsize underflow in rkqs'
         goto 1
       else
         if(errmax.gt.ERRCON)then
