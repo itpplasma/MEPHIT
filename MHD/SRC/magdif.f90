@@ -222,9 +222,8 @@ contains
     call compute_j0phi
     if (nonres) then
        call compute_Bn_nonres
-       if (log_debug) call dump_triangle_flux(Bnflux, Bnphi, 'plot_Bn_nonres.dat')
     else
-       call read_bnflux(Bnflux_vac_file)
+       call read_Bn(Bn_vac_file)
     end if
     Bnflux_vac = Bnflux
     Bnphi_vac = Bnphi
@@ -261,13 +260,12 @@ contains
   subroutine magdif_single
     call compute_presn
     call compute_currn
-    if (log_debug) call dump_triangle_flux(jnflux, jnphi, 'plot_jn_nonres.dat')
     call compute_Bn
-    call read_bnflux(Bnflux_file)
+    call read_Bn(Bn_file)
   end subroutine magdif_single
 
   subroutine magdif_direct
-    integer :: kiter, kt
+    integer :: kiter
     complex(dp) :: Bnflux_sum(ntri, 3)
     complex(dp) :: Bnphi_sum(ntri)
 
@@ -275,24 +273,15 @@ contains
     Bnphi_sum = 0.0d0
     do kiter = 1, niter
        if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter
-       call compute_presn             ! compute pressure based on previous perturbation field
-       call compute_currn
-       call compute_Bn                ! use field code to generate new field from currents
-       call read_bnflux(Bnflux_file)  ! read new bnflux from field code
+       call compute_presn     ! compute pressure based on previous perturbation field
+       call compute_currn     ! compute currents based on previous perturbation field
+       call compute_Bn        ! use field code to generate new field from currents
+       call read_Bn(Bn_file)  ! read new bnflux from field code
        Bnflux_sum = Bnflux_sum + Bnflux
        Bnphi_sum = Bnphi_sum + Bnphi
     end do
 
-    open(1, file = Bn_sum_file)
-    do kt = 1, ntri
-       write(1, *) &
-            real(Bnflux_sum(kt, 1)), aimag(Bnflux_sum(kt, 1)), &
-            real(Bnflux_sum(kt, 2)), aimag(Bnflux_sum(kt, 2)), &
-            real(Bnflux_sum(kt, 3)), aimag(Bnflux_sum(kt, 3)), &
-            real(Bnphi_sum(kt) * mesh_element(kt)%det_3 * 0.5d0), &
-            aimag(Bnphi_sum(kt) * mesh_element(kt)%det_3 * 0.5d0)
-    end do
-    close(1)
+    call write_triangle_flux(Bnflux_sum, Bnphi_sum, Bn_sum_file, .false.)
   end subroutine magdif_direct
 
   !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
@@ -364,7 +353,7 @@ contains
   end subroutine read_mesh
 
   !> Computes #bnflux and #bnphi from #jnflux and #jnphi via an external program. No data
-  !> is read yet; this is done by read_bnflux().
+  !> is read yet; this is done by read_bn().
   !>
   !> Currently, this subroutine Calls FreeFem++ via shell script maxwell.sh in the current
   !> directory and handles the exit code. For further information see maxwell.sh and the
@@ -420,12 +409,12 @@ contains
   !> #mesh_mod::mesh_element. The content of each line is read into #bnflux and #bnphi
   !> with numbering of edges in #bnflux as in #mesh_mod::mesh_element and the imaginary
   !> part of each value immediately following the real part.
-  subroutine read_bnflux(filename)
+  subroutine read_Bn(filename)
     character(len = 1024) :: filename
     integer :: kt
     real(dp) :: dummy8(8)
 
-    open(1, file = filename)
+    open(1, file = filename, recl = longlines)
     do kt = 1, ntri
        read(1, *) dummy8
        Bnflux(kt,1) = cmplx(dummy8(1), dummy8(2), dp)
@@ -436,7 +425,7 @@ contains
     close(1)
 
     call check_div_free(Bnflux, Bnphi, 1d-3, 'B_n')
-  end subroutine read_bnflux
+  end subroutine read_Bn
 
   !> Allocates and computes the safety factor #q. Deallocation is done in
   !> magdif_cleanup().
@@ -461,7 +450,7 @@ contains
     end do
 
     if (log_debug) then
-       open(1, file = 'qsafety.out')
+       open(1, file = qsafety_file, recl = longlines)
        write(1,*) psi(0), 0.0d0
        do kf = 1, nflux
           write(1,*) psi(kf), q(kf)
@@ -706,7 +695,7 @@ contains
        if (kf == 1) then ! first point on axis before actual output
           presn(1) = sum(x) / size(x)
           write(1, *) psi(0), dens(0), temp(0), pres0(0), &
-               real(sum(x) / size(x)), aimag(sum(x) / size(x))
+               real(presn(1)), aimag(presn(1))
        end if
        do kp = 1, kp_max(kf)
           presn(kp_low(kf) + kp) = x(kp)
@@ -842,9 +831,7 @@ contains
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     logical :: orient
-    complex(dp) :: tor_flux
 
-    if (present(outfile)) open(1, file = outfile, recl = 1024)
     do kf = 1, nflux ! loop through flux surfaces
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
@@ -863,23 +850,11 @@ contains
           area = elem%det_3 * 0.5d0
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           call assign_flux(x, kf, kt, area, ei, eo, ef)
-          if (present(outfile)) then
-             tor_flux = tor_comp(kt_low(kf) + kt) * area
-             write(1, *) &
-               real(pol_flux(kt_low(kf) + kt, 1)), aimag(pol_flux(kt_low(kf) + kt, 1)), &
-               real(pol_flux(kt_low(kf) + kt, 2)), aimag(pol_flux(kt_low(kf) + kt, 2)), &
-               real(pol_flux(kt_low(kf) + kt, 3)), aimag(pol_flux(kt_low(kf) + kt, 3)), &
-               real(tor_flux), aimag(tor_flux)
-          end if
        end do
     end do
 
-    if (present(outfile)) then
-       do kt = kt_low(nflux+1) + 1, ntri
-          write(1, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
-       end do
-       close(1)
-    end if
+    if (present(outfile)) call write_triangle_flux(pol_flux, tor_comp, outfile, .false.)
+    if (present(outfile)) call write_triangle_flux(pol_flux, tor_comp, outfile, .true.)
   end subroutine compute_triangle_flux
 
   !> Implements sub_assemble_flux_coeff() for compute_currn().
@@ -966,7 +941,6 @@ contains
 
     tor_flux_avg = (0d0, 0d0); tor_flux_diff = (0d0, 0d0)  ! to suppress -Wuninitialized
     p = 0d0
-    open(1, file = 'Bn_nonres.dat', recl = 1024)
     do kf = 1, nflux ! loop through flux surfaces
        Bnflux_avg = (0d0, 0d0)
        do kt = 1, kt_max(kf)
@@ -1016,20 +990,19 @@ contains
                      tor_flux_diff
              end select
           end if
-          write (1, *) &
-               real(Bnflux(kt_low(kf) + kt, 1)), real(Bnflux(kt_low(kf) + kt, 2)), &
-               real(Bnflux(kt_low(kf) + kt, 3)), aimag(Bnphi(kt_low(kf) + kt))
        end do
     end do
-    close(1)
 
+    if (log_debug) call write_triangle_flux(Bnflux, Bnphi, Bn_nonres_file, .false.)
     call check_div_free(Bnflux, Bnphi, 1d-09, 'non-resonant B_n')
+    if (log_debug) call write_triangle_flux(Bnflux, Bnphi, Bn_nonres_file, .true.)
   end subroutine compute_Bn_nonres
 
-  subroutine dump_triangle_flux(pol_flux, tor_comp, outfile)
+  subroutine write_triangle_flux(pol_flux, tor_comp, outfile, interpolate)
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
+    logical, intent(in) :: interpolate
 
     integer :: ktri
     type(triangle) :: elem
@@ -1038,31 +1011,47 @@ contains
     complex(dp) :: pol_comp_r, pol_comp_z
     real(dp) :: r, z
 
-    open(1, file = outfile, recl = 1024)
-    do ktri = 1, kt_low(nflux+1)
-       elem = mesh_element(ktri)
-       tri = mesh_point(elem%i_knot(:))
-       length(1) = hypot(tri(2)%rcoord - tri(1)%rcoord, tri(2)%zcoord - tri(1)%zcoord)
-       length(2) = hypot(tri(3)%rcoord - tri(2)%rcoord, tri(3)%zcoord - tri(2)%zcoord)
-       length(3) = hypot(tri(1)%rcoord - tri(3)%rcoord, tri(1)%zcoord - tri(3)%zcoord)
-       call ring_centered_avg_coord(elem, r, z)
-       pol_comp_r = 2d0 / elem%det_3 * ( &
-            pol_flux(ktri, 1) * (r - tri(3)%rcoord) * length(1) + &
-            pol_flux(ktri, 2) * (r - tri(1)%rcoord) * length(2) + &
-            pol_flux(ktri, 3) * (r - tri(2)%rcoord) * length(3))
-       pol_comp_z = 2d0 / elem%det_3 * ( &
-            pol_flux(ktri, 1) * (z - tri(3)%zcoord) * length(1) + &
-            pol_flux(ktri, 2) * (z - tri(1)%zcoord) * length(2) + &
-            pol_flux(ktri, 3) * (z - tri(2)%zcoord) * length(3))
-       write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), real(tor_comp(ktri)), &
-            aimag(tor_comp(ktri)), real(pol_comp_z), aimag(pol_comp_z)
-    end do
-    r = mesh_point(1)%rcoord
-    z = mesh_point(1)%zcoord
-    do ktri = kt_low(nflux+1) + 1, ntri
-       write (1, *) r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
-    end do
-    close(1)
-  end subroutine dump_triangle_flux
+    if (interpolate) then
+       open(1, file = 'plot_' // outfile, recl = longlines)
+       do ktri = 1, kt_low(nflux+1)
+          elem = mesh_element(ktri)
+          tri = mesh_point(elem%i_knot(:))
+          length(1) = hypot(tri(2)%rcoord - tri(1)%rcoord, tri(2)%zcoord - tri(1)%zcoord)
+          length(2) = hypot(tri(3)%rcoord - tri(2)%rcoord, tri(3)%zcoord - tri(2)%zcoord)
+          length(3) = hypot(tri(1)%rcoord - tri(3)%rcoord, tri(1)%zcoord - tri(3)%zcoord)
+          call ring_centered_avg_coord(elem, r, z)
+          pol_comp_r = 2d0 / elem%det_3 * ( &
+               pol_flux(ktri, 1) * (r - tri(3)%rcoord) * length(1) + &
+               pol_flux(ktri, 2) * (r - tri(1)%rcoord) * length(2) + &
+               pol_flux(ktri, 3) * (r - tri(2)%rcoord) * length(3))
+          pol_comp_z = 2d0 / elem%det_3 * ( &
+               pol_flux(ktri, 1) * (z - tri(3)%zcoord) * length(1) + &
+               pol_flux(ktri, 2) * (z - tri(1)%zcoord) * length(2) + &
+               pol_flux(ktri, 3) * (z - tri(2)%zcoord) * length(3))
+          write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), real(tor_comp(ktri)), &
+               aimag(tor_comp(ktri)), real(pol_comp_z), aimag(pol_comp_z)
+       end do
+       r = mesh_point(1)%rcoord
+       z = mesh_point(1)%zcoord
+       do ktri = kt_low(nflux+1) + 1, ntri
+          write (1, *) r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+       end do
+       close(1)
+    else
+       open(1, file = outfile, recl = longlines)
+       do ktri = 1, kt_low(nflux+1)
+          write(1, *) &
+               real(pol_flux(ktri, 1)), aimag(pol_flux(ktri, 1)), &
+               real(pol_flux(ktri, 2)), aimag(pol_flux(ktri, 2)), &
+               real(pol_flux(ktri, 3)), aimag(pol_flux(ktri, 3)), &
+               real(tor_comp(ktri) * mesh_element(ktri)%det_3 * 0.5d0), &
+               aimag(tor_comp(ktri) * mesh_element(ktri)%det_3 * 0.5d0)
+       end do
+       do ktri = kt_low(nflux+1) + 1, ntri
+          write (1, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+       end do
+       close(1)
+    end if
+  end subroutine write_triangle_flux
 
 end module magdif

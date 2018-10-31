@@ -11,3 +11,9 @@
 * check weighting factors (R, S, l, ...) of vector DOFs [done]
 * replace nkpol when handling sparse matrices (along with alternative meshing)
 - in compute_presn handle x and size(x) as in compute_currn
+* consistent I/O of intermediate results [done]
+* documentation
+- [ ] barycentric coordinates for ring_avg_coord
+- [ ] example matrices for aver_quad
+- [ ] linear interpolation error
+- [ ] analytical solution

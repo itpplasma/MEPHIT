@@ -1,22 +1,24 @@
 &settings
-   log_level = 4                                ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
-   runmode = 0                                  ! 0: single iteration, 1: direct iterations,
-                                                ! 2: preconditioned iterations
-   nonres = .true.                              ! use non-resonant test case
-   quad_avg = .true.                            ! average over quadrilaterals for non-resonant test case
-   point_file = '../PRELOAD/points.dat'         ! points.dat from PRELOAD
-   tri_file = '../PRELOAD/triangles.dat'        ! triangles.dat from PRELOAD
-   Bnflux_vac_file = '../PRELOAD/VACFIELD/Bn_flux.dat'     ! Bn_flux.dat from PRELOAD
-   dump_flux_file = 'dump_flux.dat'             ! dump flux file
-   hpsi_file = '../PRELOAD/VACFIELD/hpsi_vac.dat'          ! hpsi_vac.dat from PRELOAD
-   presn_file = 'test_pressure_x.out'           ! output file for presn
-   currn_file = '/tmp/currents.dat'             ! output file for currn
-   Bnflux_file = '/tmp/bnflux.dat'              ! perturbation field from FreeFEM++
-   Bn_sum_file = 'Bn_sum.out'                   ! accumulated magnetic field from iterations
-   n = 2                                        ! harmonic index of perturbation
-   niter = 100
-   nkpol = 200					! number of knots per poloidal loop
-   nflux = 74   				! number of flux surfaces
-   ti0 = 3.d3                                   ! temparature interpolation step
-   di0 = 5.d13	                                ! density interpolation step
+   log_level = 4                                   ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
+   runmode = 0                                     ! 0: single iteration, 1: direct iterations,
+                                                   ! 2: preconditioned iterations
+   nonres = .true.                                 ! use non-resonant test case
+   quad_avg = .true.                               ! average over quadrilaterals for non-resonant test case
+
+   n = 2                                           ! harmonic index of perturbation
+   niter = 100                                     ! number of iteration steps
+   nkpol = 200                                     ! number of knots per poloidal loop
+   nflux = 74                                      ! number of flux surfaces up to and counting LCFS
+   ti0 = 3.d3                                      ! temparature interpolation step
+   di0 = 5.d13                                     ! density interpolation step
+   point_file = '../PRELOAD/points.dat'            ! mesh points from PRELOAD
+   tri_file = '../PRELOAD/triangles.dat'           ! triangles and edges from PRELOAD
+   Bn_vac_file = '../PRELOAD/VACFIELD/Bn_flux.dat' ! vacuum perturbation field from PRELOAD
+
+   Bn_nonres_file = 'Bn_nonres.dat'                ! vacuum perturbation field from non-resonant test case
+   Bn_file = 'Bn.dat'                              ! plasma perturbation field from FEM
+   Bn_sum_file = 'Bn_sum.dat'                      ! accumulated perturbation field from iterations
+   qsafety_file = 'qsafety.dat'                    ! output file for safety factor
+   presn_file = 'presn.dat'                        ! output file for pressure perturbation
+   currn_file = 'currn.dat'                        ! output file for current perturbation
 /
