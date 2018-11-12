@@ -4,7 +4,7 @@ module magdif
   use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, & ! PRELOAD/SRC/mesh_mod.f90
        mesh_element_rmp, bphicovar, knot, triangle
   use for_macrostep, only: t_min, d_min
-  use sparse_mod, only: remap_rc, sparse_solve, sparse_matmul
+  use sparse_mod, only: sparse_solve, sparse_matmul
   use magdif_config
 
   implicit none
@@ -227,6 +227,11 @@ contains
     end if
     Bnflux_vac = Bnflux
     Bnphi_vac = Bnphi
+    if (log_debug) then
+       call write_triangle_flux(Bnflux_vac, Bnphi_vac, Bn_nonres_file, .false.)
+       call write_triangle_flux(Bnflux_vac, Bnphi_vac, decorate_filename(Bn_nonres_file, &
+            'plot_'), .true.)
+    end if
     if (log_info) write(logfile, *) 'magdif initialized'
   end subroutine magdif_init
 
@@ -268,6 +273,10 @@ contains
     integer :: kiter
     complex(dp) :: Bnflux_sum(ntri, 3)
     complex(dp) :: Bnphi_sum(ntri)
+    complex(dp) :: Bnflux_prev(ntri, 3)
+    complex(dp) :: Bnphi_prev(ntri)
+    complex(dp) :: Bnflux_diff(ntri, 3)
+    complex(dp) :: Bnphi_diff(ntri)
 
     Bnflux_sum = 0.0d0
     Bnphi_sum = 0.0d0
@@ -275,13 +284,29 @@ contains
        if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter
        call compute_presn     ! compute pressure based on previous perturbation field
        call compute_currn     ! compute currents based on previous perturbation field
+       Bnflux_prev = Bnflux
+       Bnphi_prev = Bnphi
        call compute_Bn        ! use field code to generate new field from currents
        call read_Bn(Bn_file)  ! read new bnflux from field code
+       Bnflux_diff = Bnflux - Bnflux_prev
+       Bnphi_diff = Bnphi - Bnphi_prev
+       call write_triangle_flux(Bnflux_diff, Bnphi_diff, &
+            decorate_filename(Bn_abs_err_file, '', kiter), .false.)
+       call write_triangle_flux(Bnflux_diff, Bnphi_diff, &
+            decorate_filename(Bn_abs_err_file, 'plot_', kiter), .true.)
+       call write_triangle_flux(Bnflux_diff / Bnflux_prev, Bnphi_diff / Bnphi_prev, &
+            decorate_filename(Bn_rel_err_file, '', kiter), .false.)
+       call write_triangle_flux(Bnflux, Bnphi, &
+            decorate_filename(Bn_file, 'plot_', kiter), .true.)
+       call write_triangle_flux(jnflux, jnphi, &
+            decorate_filename(currn_file, 'plot_', kiter), .true.)
        Bnflux_sum = Bnflux_sum + Bnflux
        Bnphi_sum = Bnphi_sum + Bnphi
     end do
 
     call write_triangle_flux(Bnflux_sum, Bnphi_sum, Bn_sum_file, .false.)
+    call write_triangle_flux(Bnflux_sum, Bnphi_sum, decorate_filename(Bn_sum_file, &
+         'plot_'), .true.)
   end subroutine magdif_direct
 
   !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
@@ -359,7 +384,7 @@ contains
   !> directory and handles the exit code. For further information see maxwell.sh and the
   !> script called therein.
   subroutine compute_Bn
-    integer :: stat, dummy
+    integer :: stat = 0, dummy = 0
     call execute_command_line("./maxwell.sh", exitstat = stat, cmdstat = dummy)
     if (stat /= 0) then
        if (log_err) write(logfile, *) 'FreeFem++ failed with exit code ', stat
@@ -640,7 +665,10 @@ contains
     real(dp) :: r_prev, z_prev, Br_prev, Bp_prev, Bz_prev ! previous values in loop
     real(dp) :: lr, lz  ! edge vector components
     complex(dp) :: Bnpsi
-    complex(dp), dimension(nkpol) :: a, b, x, d, du
+    complex(dp), dimension(nkpol) :: a, b, x, d, du, inhom
+    complex(dp), dimension(:), allocatable :: resid
+    real(dp), dimension(nkpol) :: rel_err
+    real(dp) :: max_rel_err, avg_rel_err
     integer :: kf, kp, kp_prev
     integer :: nz
     integer, dimension(2*nkpol) :: irow, icol
@@ -649,6 +677,8 @@ contains
     integer :: common_tri(2)
     real(dp) :: perps(2)
 
+    max_rel_err = 0d0
+    avg_rel_err = 0d0
     open(1, file = presn_file, recl = 1024)
     do kf = 1, nflux ! loop through flux surfaces
 
@@ -683,14 +713,20 @@ contains
           a(kp) = ((Br + Br_prev) * 0.5d0 * lr + (Bz + Bz_prev) * 0.5d0 * lz) / &
                (lr ** 2 + lz ** 2)
 
-          b(kp) = imun * n * (Bp / r + Bp_prev / r_prev) * 0.5d0
+          b(kp) = imun * (n + imun * damp) * (Bp / r + Bp_prev / r_prev) * 0.5d0
        end do ! kp
 
        ! solve linear system
        d = -a + b * 0.5d0
        du = a + b * 0.5d0
        call assemble_sparse(nkpol, d, du, nz, irow, icol, aval)
+       inhom = x  ! remember inhomogeneity before x is overwritten with the solution
        call sparse_solve(nkpol, nkpol, nz, irow, icol, aval, x)
+       call sparse_matmul(nkpol, nkpol, irow, icol, aval, x, resid)
+       resid = resid - inhom
+       rel_err = abs(resid) / abs(inhom)
+       max_rel_err = max(max_rel_err, maxval(rel_err))
+       avg_rel_err = avg_rel_err + sum(rel_err)
 
        if (kf == 1) then ! first point on axis before actual output
           presn(1) = sum(x) / size(x)
@@ -707,6 +743,11 @@ contains
        write(1, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
     end do
     close(1)
+
+    avg_rel_err = avg_rel_err / sum(kp_max(1:nflux))
+    if (log_debug) write (logfile, *) 'compute_presn: diagonalization' // &
+         ' max_rel_err = ', max_rel_err, ' avg_rel_err = ', avg_rel_err
+    if (allocated(resid)) deallocate(resid)
   end subroutine compute_presn
 
 
@@ -821,7 +862,10 @@ contains
     complex(dp), intent(inout) :: tor_comp(:)
     character(len = 1024), intent(in), optional :: outfile
 
-    complex(dp), dimension(2 * nkpol) :: x, d, du
+    complex(dp), dimension(2 * nkpol) :: x, d, du, inhom
+    complex(dp), dimension(:), allocatable :: resid
+    real(dp), dimension(2 * nkpol) :: rel_err
+    real(dp) :: max_rel_err, avg_rel_err
     integer :: kf, kt
     integer :: nz
     integer, dimension(4 * nkpol) :: irow, icol
@@ -832,6 +876,8 @@ contains
     integer :: ei, eo, ef
     logical :: orient
 
+    max_rel_err = 0d0
+    avg_rel_err = 0d0
     do kf = 1, nflux ! loop through flux surfaces
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
@@ -843,8 +889,15 @@ contains
        end do
        call assemble_sparse(kt_max(kf), d(:kt_max(kf)), du(:kt_max(kf)), nz, &
             irow(:(2*kt_max(kf))), icol(:(2*kt_max(kf))), aval(:(2*kt_max(kf))))
+       inhom = x  ! remember inhomogeneity before x is overwritten with the solution
        call sparse_solve(kt_max(kf), kt_max(kf), nz, irow(:nz), icol(:nz), aval(:nz), &
             x(:kt_max(kf)))
+       call sparse_matmul(kt_max(kf), kt_max(kf), irow(:nz), icol(:nz), aval(:nz), &
+            x(:kt_max(kf)), resid)
+       resid = resid - inhom(:kt_max(kf))
+       rel_err(:kt_max(kf)) = abs(resid(:kt_max(kf))) / abs(inhom(:kt_max(kf)))
+       max_rel_err = max(max_rel_err, maxval(rel_err(:kt_max(kf))))
+       avg_rel_err = avg_rel_err + sum(rel_err(:kt_max(kf)))
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
           area = elem%det_3 * 0.5d0
@@ -852,9 +905,16 @@ contains
           call assign_flux(x, kf, kt, area, ei, eo, ef)
        end do
     end do
+    avg_rel_err = avg_rel_err / sum(kt_max(1:nflux))
+    if (log_debug) write (logfile, *) 'compute_triangle_flux: diagonalization' // &
+         ' max_rel_err = ', max_rel_err, ' avg_rel_err = ', avg_rel_err
+    if (allocated(resid)) deallocate(resid)
 
-    if (present(outfile)) call write_triangle_flux(pol_flux, tor_comp, outfile, .false.)
-    if (present(outfile)) call write_triangle_flux(pol_flux, tor_comp, outfile, .true.)
+    if (present(outfile)) then
+       call write_triangle_flux(pol_flux, tor_comp, outfile, .false.)
+       call write_triangle_flux(pol_flux, tor_comp, decorate_filename(outfile, 'plot_'), &
+            .true.)
+    end if
   end subroutine compute_triangle_flux
 
   !> Implements sub_assemble_flux_coeff() for compute_currn().
@@ -889,7 +949,7 @@ contains
        x(kt) = -jnflux(kt_low(kf) + kt, ek)
     case ('i')
        ! diagonal matrix element
-       d(kt) = -1d0 - imun * n * area * 0.5d0 * Bp / Deltapsi
+       d(kt) = -1d0 - imun * (n + imun * damp) * area * 0.5d0 * Bp / Deltapsi
        ! additional term from edge i on source side
        x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / (-Deltapsi) * &
             (presn(lk(2)) - presn(lk(1)) - Bnphi(kt_low(kf) + kt) / Bp * &
@@ -897,7 +957,7 @@ contains
             (Bnphi(kt_low(kf) + kt) / Bp + Bnflux(kt_low(kf) + kt, ek) / r / (-Deltapsi)))
     case ('o')
        ! superdiagonal matrix element
-       du(kt) = 1d0 - imun * n * area * 0.5d0 * Bp / Deltapsi
+       du(kt) = 1d0 - imun * (n + imun * damp) * area * 0.5d0 * Bp / Deltapsi
        ! additional term from edge o on source side
        x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / Deltapsi * &
             (presn(lk(2)) - presn(lk(1)) - Bnphi(kt_low(kf) + kt) / Bp * &
@@ -993,9 +1053,7 @@ contains
        end do
     end do
 
-    if (log_debug) call write_triangle_flux(Bnflux, Bnphi, Bn_nonres_file, .false.)
     call check_div_free(Bnflux, Bnphi, 1d-09, 'non-resonant B_n')
-    if (log_debug) call write_triangle_flux(Bnflux, Bnphi, Bn_nonres_file, .true.)
   end subroutine compute_Bn_nonres
 
   subroutine write_triangle_flux(pol_flux, tor_comp, outfile, interpolate)
@@ -1011,8 +1069,8 @@ contains
     complex(dp) :: pol_comp_r, pol_comp_z
     real(dp) :: r, z
 
+    open(1, file = outfile, recl = longlines)
     if (interpolate) then
-       open(1, file = 'plot_' // outfile, recl = longlines)
        do ktri = 1, kt_low(nflux+1)
           elem = mesh_element(ktri)
           tri = mesh_point(elem%i_knot(:))
@@ -1036,9 +1094,7 @@ contains
        do ktri = kt_low(nflux+1) + 1, ntri
           write (1, *) r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
        end do
-       close(1)
     else
-       open(1, file = outfile, recl = longlines)
        do ktri = 1, kt_low(nflux+1)
           write(1, *) &
                real(pol_flux(ktri, 1)), aimag(pol_flux(ktri, 1)), &
@@ -1050,8 +1106,8 @@ contains
        do ktri = kt_low(nflux+1) + 1, ntri
           write (1, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
        end do
-       close(1)
     end if
+    close(1)
   end subroutine write_triangle_flux
 
 end module magdif

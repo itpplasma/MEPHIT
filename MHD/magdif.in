@@ -1,16 +1,17 @@
 &settings
    log_level = 4                                   ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
-   runmode = 0                                     ! 0: single iteration, 1: direct iterations,
+   runmode = 1                                     ! 0: single iteration, 1: direct iterations,
                                                    ! 2: preconditioned iterations
-   nonres = .true.                                 ! use non-resonant test case
+   nonres = .false.                                ! use non-resonant test case
    quad_avg = .true.                               ! average over quadrilaterals for non-resonant test case
 
    n = 2                                           ! harmonic index of perturbation
-   niter = 100                                     ! number of iteration steps
+   niter = 5                                       ! number of iteration steps
    nkpol = 200                                     ! number of knots per poloidal loop
    nflux = 74                                      ! number of flux surfaces up to and counting LCFS
    ti0 = 3.d3                                      ! temparature interpolation step
    di0 = 5.d13                                     ! density interpolation step
+   damp = 5.d-2                                    ! damping factor for resonances
    point_file = '../PRELOAD/points.dat'            ! mesh points from PRELOAD
    tri_file = '../PRELOAD/triangles.dat'           ! triangles and edges from PRELOAD
    Bn_vac_file = '../PRELOAD/VACFIELD/Bn_flux.dat' ! vacuum perturbation field from PRELOAD
@@ -18,6 +19,8 @@
    Bn_nonres_file = 'Bn_nonres.dat'                ! vacuum perturbation field from non-resonant test case
    Bn_file = 'Bn.dat'                              ! plasma perturbation field from FEM
    Bn_sum_file = 'Bn_sum.dat'                      ! accumulated perturbation field from iterations
+   Bn_abs_err_file = 'Bn_abs_err.dat'              ! absolute error in perturbation field
+   Bn_rel_err_file = 'Bn_rel_err.dat'              ! relative error in perturbation field
    qsafety_file = 'qsafety.dat'                    ! output file for safety factor
    presn_file = 'presn.dat'                        ! output file for pressure perturbation
    currn_file = 'currn.dat'                        ! output file for current perturbation
