@@ -215,11 +215,26 @@ contains
 
   !> Initialize magdif module
   subroutine magdif_init
+    integer :: kf, kp
+
     call init_indices
     call read_mesh
     call init_flux_variables
     call compute_safety_factor
     call compute_j0phi
+
+    open(1, file = fluxvar_file, recl = longlines)
+    write (1, *) psi(0), 0d0, dens(0), temp(0), pres0(0)
+    do kf = 1, nflux
+       do kp = 1, kp_max(kf)
+          write (1, *) psi(kf), q(kf), dens(kf), temp(kf), pres0(kf)
+       end do
+    end do
+    do kp = kp_low(nflux+1) + 1, npoint
+       write (1, *) 0d0, 0d0, 0d0, 0d0, 0d0
+    end do
+    close(1)
+
     if (nonres) then
        call compute_Bn_nonres
     else
@@ -304,6 +319,11 @@ contains
        Bnphi_sum = Bnphi_sum + Bnphi
     end do
 
+    Bnflux = Bnflux_sum
+    Bnphi = Bnphi_sum
+    call compute_presn
+    call compute_currn
+    call write_triangle_flux(jnflux, jnphi, decorate_filename(currn_file, 'plot_'), .true.)
     call write_triangle_flux(Bnflux_sum, Bnphi_sum, Bn_sum_file, .false.)
     call write_triangle_flux(Bnflux_sum, Bnphi_sum, decorate_filename(Bn_sum_file, &
          'plot_'), .true.)
@@ -473,15 +493,6 @@ contains
        end do
        q(kf) = -q(kf) * 0.5d0 / pi / (psi(kf) - psi(kf-1))  ! check sign
     end do
-
-    if (log_debug) then
-       open(1, file = qsafety_file, recl = longlines)
-       write(1,*) psi(0), 0.0d0
-       do kf = 1, nflux
-          write(1,*) psi(kf), q(kf)
-       end do
-       close(1)
-    end if
   end subroutine compute_safety_factor
 
   !> Computes the "weighted" centroid for a triangle so that it is approximately
@@ -730,17 +741,15 @@ contains
 
        if (kf == 1) then ! first point on axis before actual output
           presn(1) = sum(x) / size(x)
-          write(1, *) psi(0), dens(0), temp(0), pres0(0), &
-               real(presn(1)), aimag(presn(1))
+          write(1, *) real(presn(1)), aimag(presn(1))
        end if
        do kp = 1, kp_max(kf)
           presn(kp_low(kf) + kp) = x(kp)
-          write(1, *) psi(kf), dens(kf), temp(kf), pres0(kf), &
-               real(x(kp)), aimag(x(kp))
+          write(1, *) real(x(kp)), aimag(x(kp))
        end do
     end do ! kf
     do kp = kp_low(nflux+1) + 1, npoint ! write zeroes in remaining points until end
-       write(1, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+       write(1, *) 0d0, 0d0
     end do
     close(1)
 
@@ -1086,8 +1095,8 @@ contains
                pol_flux(ktri, 1) * (z - tri(3)%zcoord) * length(1) + &
                pol_flux(ktri, 2) * (z - tri(1)%zcoord) * length(2) + &
                pol_flux(ktri, 3) * (z - tri(2)%zcoord) * length(3))
-          write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), real(tor_comp(ktri)), &
-               aimag(tor_comp(ktri)), real(pol_comp_z), aimag(pol_comp_z)
+          write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), real(pol_comp_z), &
+               aimag(pol_comp_z), real(tor_comp(ktri)), aimag(tor_comp(ktri))
        end do
        r = mesh_point(1)%rcoord
        z = mesh_point(1)%zcoord

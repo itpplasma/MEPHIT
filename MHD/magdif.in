@@ -21,7 +21,7 @@
    Bn_sum_file = 'Bn_sum.dat'                      ! accumulated perturbation field from iterations
    Bn_abs_err_file = 'Bn_abs_err.dat'              ! absolute error in perturbation field
    Bn_rel_err_file = 'Bn_rel_err.dat'              ! relative error in perturbation field
-   qsafety_file = 'qsafety.dat'                    ! output file for safety factor
+   fluxvar_file = 'fluxvar.dat'                    ! output file for flux variables
    presn_file = 'presn.dat'                        ! output file for pressure perturbation
    currn_file = 'currn.dat'                        ! output file for current perturbation
 /
