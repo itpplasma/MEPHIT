@@ -2,7 +2,7 @@
    log_level = 4                                   ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
    runmode = 1                                     ! 0: single iteration, 1: direct iterations,
                                                    ! 2: preconditioned iterations
-   nonres = .false.                                ! use non-resonant test case
+   nonres = .true.                                 ! use non-resonant test case
    quad_avg = .true.                               ! average over quadrilaterals for non-resonant test case
 
    n = 2                                           ! harmonic index of perturbation

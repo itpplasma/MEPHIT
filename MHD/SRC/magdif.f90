@@ -759,7 +759,6 @@ contains
     if (allocated(resid)) deallocate(resid)
   end subroutine compute_presn
 
-
   !> Map edge symbols to integer indices.
   !>
   !> @param elem the triangle for which indices are to be obtained
@@ -995,6 +994,37 @@ contains
     call compute_triangle_flux(assemble_currn_coeff, assign_currn, jnflux, jnphi, currn_file)
   end subroutine compute_currn
 
+  subroutine avg_flux_on_quad(pol_flux, tor_comp)
+    complex(dp), intent(inout) :: pol_flux(:,:)
+    complex(dp), intent(inout) :: tor_comp(:)
+
+    integer :: kf, kt
+    complex(dp) :: tor_flux_avg, tor_flux_diff
+    type(triangle) :: elem1, elem2
+    integer, dimension(2) :: li, lo, lf
+    integer :: ei1, eo1, ef1, ei2, eo2, ef2
+    logical :: orient
+
+    do kf = 2, nflux
+       do kt = 1, kt_max(kf), 2
+          elem1 = mesh_element(kt_low(kf) + kt)
+          elem2 = mesh_element(kt_low(kf) + kt + 1)
+          call get_labeled_edges(elem1, li, lo, lf, ei1, eo1, ef1, orient)
+          call get_labeled_edges(elem2, li, lo, lf, ei2, eo2, ef2, orient)
+          tor_flux_avg = 0.25d0 * (tor_comp(kt_low(kf) + kt) * elem1%det_3 + &
+               tor_comp(kt_low(kf) + kt + 1) * elem2%det_3)
+          tor_flux_diff = 0.25d0 * (-tor_comp(kt_low(kf) + kt) * elem1%det_3 + &
+               tor_comp(kt_low(kf) + kt + 1) * elem2%det_3)
+          tor_comp(kt_low(kf) + kt) = tor_flux_avg / elem1%det_3 * 2d0
+          pol_flux(kt_low(kf) + kt, eo1) = pol_flux(kt_low(kf) + kt, eo1) - imun * n * &
+                  tor_flux_diff
+          tor_comp(kt_low(kf) + kt + 1) = tor_flux_avg / elem2%det_3 * 2d0
+          pol_flux(kt_low(kf) + kt + 1, ei2) = pol_flux(kt_low(kf) + kt + 1, ei2) + &
+               imun * n * tor_flux_diff
+       end do
+    end do
+  end subroutine avg_flux_on_quad
+
   subroutine compute_Bn_nonres
     integer :: kf, kt
     type(triangle) :: elem
@@ -1004,11 +1034,10 @@ contains
     logical :: orient
     integer :: common_tri(2)
     real(dp) :: lr, lz, Deltapsi, perps(2)
-    complex(dp) :: Bnpsi, Bnflux_avg, tor_flux_avg, tor_flux_diff
+    complex(dp) :: Bnpsi, Bnflux_avg
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
 
-    tor_flux_avg = (0d0, 0d0); tor_flux_diff = (0d0, 0d0)  ! to suppress -Wuninitialized
     p = 0d0
     do kf = 1, nflux ! loop through flux surfaces
        Bnflux_avg = (0d0, 0d0)
@@ -1043,25 +1072,9 @@ contains
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           Bnflux(kt_low(kf) + kt, ei) = -2d0 * abs(Bnflux_avg)
           Bnflux(kt_low(kf) + kt, eo) =  2d0 * abs(Bnflux_avg)
-          if (quad_avg .and. (kf > 1)) then
-             select case (mod(kt, 2))
-             case (1)
-                tor_flux_avg = 0.25d0 * (Bnphi(kt_low(kf) + kt) * elem%det_3 + &
-                     Bnphi(kt_low(kf) + kt + 1) * mesh_element(kt_low(kf) + kt + 1)%det_3)
-                tor_flux_diff = 0.25d0 * (-Bnphi(kt_low(kf) + kt) * elem%det_3 + &
-                     Bnphi(kt_low(kf) + kt + 1) * mesh_element(kt_low(kf) + kt + 1)%det_3)
-                Bnphi(kt_low(kf) + kt) = tor_flux_avg / elem%det_3 * 2d0
-                Bnflux(kt_low(kf) + kt, eo) = Bnflux(kt_low(kf) + kt, eo) - imun * n * &
-                     tor_flux_diff
-             case (0)
-                Bnphi(kt_low(kf) + kt) = tor_flux_avg / elem%det_3 * 2d0
-                Bnflux(kt_low(kf) + kt, ei) = Bnflux(kt_low(kf) + kt, ei) + imun * n * &
-                     tor_flux_diff
-             end select
-          end if
        end do
     end do
-
+    if (quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
     call check_div_free(Bnflux, Bnphi, 1d-09, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
