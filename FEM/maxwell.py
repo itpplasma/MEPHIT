@@ -8,14 +8,14 @@ Created on Tue Dec 11 09:01:58 2018
 
 import numpy as np
 import matplotlib.pyplot as plt
-import codecs
-from io import StringIO
 import dolfin as df
-from dolfin import derivative, div, curl, inner, dx
+from dolfin import div, curl, inner, dx
+
+from readmsh import readmsh
 
 df.parameters["reorder_dofs_serial"] = False
 
-doplot = True
+doplot = False
 
 c = 29979245800.0
 
@@ -31,27 +31,8 @@ plotcurrnfile = '../MHD/plot_currn.dat'
 
 #currnfile = '../PRELOAD/VACFIELD/Bn_flux.dat'
 
-# read msh file
-def readmsh(infile):
-    with codecs.open(infile, mode = 'r', encoding = 'utf-8') as f:
-        data = f.readlines()
-    
-    # generate arrays for nodes, triangles, boundary edges    
-    [NN,NT,NE] = np.genfromtxt(StringIO(data[0]),dtype=int)
-    
-    node = np.genfromtxt(StringIO(''.join(data[1:NN+1])),dtype=float)
-    nlab = np.array(node[:,2],dtype=int)
-    node = node[:,0:2]
-    
-    tri = np.genfromtxt(StringIO(''.join(data[NN+1:NN+NT+1])),dtype=int)
-    tlab = tri[:,3]
-    tri = tri[:,0:3]
-    
-    edge = np.genfromtxt(StringIO(''.join(data[NN+NT+1:])),dtype=int)
-    elab = edge[:,2]
-    edge = edge[:,0:2]
-    
-    return [node, tri, edge, nlab, tlab, elab]    
+outfile = '../MHD/Bn_fenics.dat'
+
 
 [node, tri, edge, nlab, tlab, elab] = readmsh(infile)
 currn = np.loadtxt(currnfile)
@@ -82,20 +63,24 @@ Hcurlmap = Hdiv.dofmap()
 
 # Read data
 cells = mesh.cells()
+ncells = len(cells)
 nodes = mesh.coordinates()
 ndofs = len(Hdivmap.dofs())
 
 Jvec = [np.zeros(ndofs), np.zeros(ndofs)]
 J = [df.Function(Hdiv), df.Function(Hdiv)]
 Jphi = [df.Function(P0), df.Function(P0)]
+acell = np.zeros(ncells)
 
 for kcell in range(len(currn)):
     nodeind = cells[kcell]
     nodecoords = nodes[nodeind]
     cellarea = .5*np.linalg.det(np.concatenate(([[1,1,1]],nodecoords.T)))
     cellorient = np.sign(cellarea)
-    inddiff = np.roll(nodeind,1)+(-1)*np.roll(nodeind,-1) # (-1) to convert uint to int
-    orient = np.sign(inddiff)
+    acell[kcell] = cellarea*cellorient
+    orient = np.sign([nodeind[2]+(-1)*nodeind[1], 
+                      nodeind[0]+(-1)*nodeind[2], 
+                      nodeind[1]+(-1)*nodeind[0]]) # (-1) for signed int
     dofs = Hdivmap.cell_dofs(kcell) # DOFs in cell k
     for k in range(2): # real and imaginary part
         Jvec[k][dofs] = cellorient*orient*currn[kcell,2*map2lex[kcell]+k]
@@ -132,7 +117,24 @@ A = [df.Function(Hcurl), df.Function(Hcurl)] # poloidal vector potential
 df.solve(a == b[0], A[0], bc) # real part
 df.solve(a == b[1], A[1], bc) # imaginary part
 
-# TODO: conversion to B field and output of fluxes
+#%% TODO: output bflux
+Bflux = np.zeros((len(currn),8))
+Avec = [A[0].vector()[:], A[1].vector()[:]]
+for kcell in range(len(currn)):
+    nodeind = cells[kcell]
+    nodecoords = nodes[nodeind]
+    cellarea = .5*np.linalg.det(np.concatenate(([[1,1,1]],nodecoords.T)))
+    cellorient = np.sign(cellarea)
+    orient = np.sign([nodeind[2]+(-1)*nodeind[1], 
+                      nodeind[0]+(-1)*nodeind[2], 
+                      nodeind[1]+(-1)*nodeind[0]]) # (-1) for signed int
+    dofs = Hdivmap.cell_dofs(kcell) # DOFs in cell k
+    Bflux[kcell,2*map2lex[kcell]] = -n * Avec[1][dofs]*cellorient*orient
+    Bflux[kcell,2*map2lex[kcell]+1] = n * Avec[0][dofs]*cellorient*orient
+    Bflux[kcell,6] = -sum(Avec[0][dofs]*cellorient*orient) # Re R B^phi
+    Bflux[kcell,7] = -sum(Avec[1][dofs]*cellorient*orient) # Im R B^phi
+
+np.savetxt(outfile, Bflux)
 
 #%%   ------------------------ 
 ###   Plotting and comparisons
@@ -141,6 +143,7 @@ if (doplot):
     plotcurrn = np.loadtxt(plotcurrnfile)
     
     #%% plot mesh
+    plt.figure()
     plt.subplot(1,2,1)
     plt.triplot(node[:, 0], node[:, 1], tri-1, linewidth=.1)
     plt.title('mesh (triplot)')
@@ -161,11 +164,11 @@ if (doplot):
     #%%
     plt.figure()
     plt.subplot(1,2,1)
-    p = df.plot(div(J[0])-n*Jphi[1])
+    p = df.plot(div(J[0]))
     plt.colorbar(p)
     plt.title('Re div J')
     plt.subplot(1,2,2)
-    p = df.plot(div(J[1])+n*Jphi[0])
+    p = df.plot(div(J[1]))
     plt.colorbar(p)
     plt.title('Im div J')
     
@@ -217,5 +220,29 @@ if (doplot):
     plt.colorbar(p)
     plt.title('Im Bphi')
     plt.tight_layout()
+    
+    #%% Plot resulting magnetic field
+    B = [df.Function(Hdiv), df.Function(Hdiv)]
+    Bphi = [df.Function(P0), df.Function(P0)]
+    B[0].vector()[:] = -n * Avec[1]
+    B[1].vector()[:] = n * Avec[0]
+    Bphivec = [np.zeros(ncells), np.zeros(ncells)]
+    Bphivec[0][0:len(Bflux)] = Bflux[:,6]/acell[0:len(Bflux)]
+    Bphivec[1][0:len(Bflux)] = Bflux[:,7]/acell[0:len(Bflux)]
+    Bphi[0].vector()[:] = Bphivec[0]
+    Bphi[1].vector()[:] = Bphivec[1]
+    
+    plt.figure()
+    df.plot(B[0])
+    plt.title('Re B')
+    plt.figure()
+    df.plot(B[1])
+    plt.title('Im B')
+    plt.figure()
+    df.plot(Bphi[0])
+    plt.title('Re Bphi')
+    plt.figure()
+    df.plot(Bphi[1])
+    plt.title('Im Bphi')
     
     plt.show()
