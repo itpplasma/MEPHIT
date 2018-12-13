@@ -153,64 +153,6 @@ module magdif
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
 
-  interface
-     !> Assembles entries of the stiffness matrix for use with assemble_sparse() in
-     !> compute_triangle_flux().
-     !>
-     !> @param x inhomogeneity or load vector
-     !> @param d diagonal entries of the stiffness matrix
-     !> @param du superdiagonal entries of the stiffness matrix (and entry in lower left
-     !> corner)
-     !> @param kf index of the outer flux surface of the current triangle strip
-     !> @param kt triangle index <em>in the current triangle strip</em>, i.e. the value
-     !> added to kt_low(kf), used as index to \p x, \p d and \p du
-     !> @param area area of the current triangle
-     !> @param lk global knot indices for the current edge, i.e. \p lf, \p li or \p lo
-     !> from get_labeled_edges()
-     !> @param ek local index for the current edge, i.e. \p ef, \p ei or \p eo from
-     !> get_labeled_edges()
-     !> @param edge_name symbolic edge label, telling the subroutine the type of the
-     !> current edge, i.e. 'f', 'i' or 'o'
-     !>
-     !> A subroutine with this interface is passed as an argument to
-     !> compute_triangle_flux(), where it is called for each edge of the current triangle
-     !> in a loop over a triangle strip.
-     subroutine sub_assemble_flux_coeff(x, d, du, kf, kt, area, lk, ek, edge_name)
-       import :: dp
-       complex(dp), dimension(:), intent(inout) :: x, d, du
-       integer, intent(in) :: kf, kt
-       real(dp), intent(in) :: area
-       integer, dimension(2), intent(in) :: lk
-       integer, intent(in) :: ek
-       character, intent(in) :: edge_name
-     end subroutine sub_assemble_flux_coeff
-  end interface
-
-  interface
-     !> Assigns the values to \p pol_flux and \p tor_comp in compute_triangle_flux()
-     !> based on the solution from sparse_mod::sparse_solve().
-     !>
-     !> @param x solution vector from sparse_mod::sparse_solve()
-     !> @param kf index of the outer flux surface of the current triangle strip
-     !> @param kt triangle index <em>in the current triangle strip</em>, i.e. the value
-     !> added to kt_low(kf), used as index to \p x
-     !> @param area area of the current triangle
-     !> @param ei local index of edge i from get_labeled_edges()
-     !> @param eo local index of edge o from get_labeled_edges()
-     !> @param ef local index of edge f from get_labeled_edges()
-     !>
-     !> A subroutine with this interface is passed as an argument to
-     !> compute_triangle_flux(), where it is called for each edge of the current triangle
-     !> in a loop over a triangle strip.
-     subroutine sub_assign_flux(x, kf, kt, area, ei, eo, ef)
-       import :: dp
-       complex(dp), dimension(:), intent(in) :: x
-       integer, intent(in) :: kf, kt
-       real(dp), intent(in) :: area
-       integer, intent(in) :: ei, eo, ef
-     end subroutine sub_assign_flux
-  end interface
-
 contains
 
   !> Initialize magdif module
@@ -841,35 +783,12 @@ contains
   end subroutine get_labeled_edges
 
 
-  !> Compute the fluxes of a complex vector field through each triangle, separately for
-  !> each flux surface.
+  !> Computes current perturbation #jnflux and #jnphi from equilibrium quantities,
+  !> #presn, #bnflux and #bnphi.
   !>
-  !> @param assemble_flux_coeff subroutine that assembles the system of linear equations
-  !> edge by edge, e.g. assemble_currn_coeff()
-  !> @param assign_flux subroutine that assigns values to the fluxes through each triangle
-  !> after the system of linear equations is solved, e.g. assign_currn()
-  !> @param pol_flux poloidal flux components, e.g. #jnflux - first index refers to the
-  !> triangle, second index refers to the edge on that triangle, as per
-  !> #mesh_mod::mesh_element
-  !> @param tor_comp toroidal field components, e.g. #jnphi - index refers to the triangle
-  !> @param outfile if present, write \p pol_flux and area-weighted \p tor_comp to the
-  !> given filename
-  !>
-  !> For each flux surface, this subroutine loops through every triangle and calls \p
-  !> assemble_flux_coeff for edges f, i, o (in that order). Then, it assembles and solves
-  !> the resulting sparse system of linear equations. With the known solution, it loops
-  !> over the triangle strip again and assigns values to \p pol_flux and \p tor_comp via
-  !> \p assign_flux. Note that \p assemble_flux_coeff can also assign flux components that
-  !> are already known, usually the one through edge f.
-
-  subroutine compute_triangle_flux(assemble_flux_coeff, assign_flux, pol_flux, tor_comp, &
-       outfile)
-    procedure(sub_assemble_flux_coeff) :: assemble_flux_coeff
-    procedure(sub_assign_flux) :: assign_flux
-    complex(dp), intent(inout) :: pol_flux(:,:)
-    complex(dp), intent(inout) :: tor_comp(:)
-    character(len = 1024), intent(in), optional :: outfile
-
+  !> This subroutine computes the fluxes through each triangle, separately for each flux
+  !> surface. The result is written to #magdif_conf::currn_file.
+  subroutine compute_currn
     complex(dp), dimension(2 * nkpol) :: x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(2 * nkpol) :: rel_err
@@ -883,7 +802,12 @@ contains
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     logical :: orient
+    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+    real(dp) :: Deltapsi
+    type(knot) :: base, tip
 
+    p = 0d0
     max_rel_err = 0d0
     avg_rel_err = 0d0
     do kf = 1, nflux ! loop through flux surfaces
@@ -891,9 +815,46 @@ contains
           elem = mesh_element(kt_low(kf) + kt)
           area = elem%det_3 * 0.5d0
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          call assemble_flux_coeff(x, d, du, kf, kt, area, lf, ef, 'f')
-          call assemble_flux_coeff(x, d, du, kf, kt, area, li, ei, 'i')
-          call assemble_flux_coeff(x, d, du, kf, kt, area, lo, eo, 'o')
+          Deltapsi = psi(kf) - psi(kf-1)
+          ! use midpoint of edge f
+          base = mesh_point(lf(1))
+          tip = mesh_point(lf(2))
+          r = (base%rcoord + tip%rcoord) * 0.5d0
+          z = (base%zcoord + tip%zcoord) * 0.5d0
+          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+          ! first term on source side: flux through edge f
+          jnflux(kt_low(kf) + kt, ef) = clight * r / Bp * (presn(lf(2)) - presn(lf(1))) + &
+               j0phi(kt_low(kf) + kt) / Bp * Bnflux(kt_low(kf) + kt, ef)
+          x(kt) = -jnflux(kt_low(kf) + kt, ef)
+          ! use midpoint of edge i
+          base = mesh_point(li(1))
+          tip = mesh_point(li(2))
+          r = (base%rcoord + tip%rcoord) * 0.5d0
+          z = (base%zcoord + tip%zcoord) * 0.5d0
+          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+          ! diagonal matrix element
+          d(kt) = -1d0 - imun * (n + imun * damp) * area * 0.5d0 * Bp / Deltapsi
+          ! additional term from edge i on source side
+          x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / (-Deltapsi) * &
+               (presn(li(2)) - presn(li(1)) - Bnphi(kt_low(kf) + kt) / Bp * &
+               (pres0(kf) - pres0(kf-1))) + j0phi(kt_low(kf) + kt) * &
+               (Bnphi(kt_low(kf) + kt) / Bp + Bnflux(kt_low(kf) + kt, ei) / r / (-Deltapsi)))
+          ! use midpoint of edge o
+          base = mesh_point(lo(1))
+          tip = mesh_point(lo(2))
+          r = (base%rcoord + tip%rcoord) * 0.5d0
+          z = (base%zcoord + tip%zcoord) * 0.5d0
+          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+          ! superdiagonal matrix element
+          du(kt) = 1d0 - imun * (n + imun * damp) * area * 0.5d0 * Bp / Deltapsi
+          ! additional term from edge o on source side
+          x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / Deltapsi * &
+               (presn(lo(2)) - presn(lo(1)) - Bnphi(kt_low(kf) + kt) / Bp * &
+               (pres0(kf-1) - pres0(kf))) + j0phi(kt_low(kf) + kt) * &
+               (Bnphi(kt_low(kf) + kt) / Bp + Bnflux(kt_low(kf) + kt, eo) / r / Deltapsi))
        end do
        call assemble_sparse(kt_max(kf), d(:kt_max(kf)), du(:kt_max(kf)), nz, &
             irow(:(2*kt_max(kf))), icol(:(2*kt_max(kf))), aval(:(2*kt_max(kf))))
@@ -910,7 +871,9 @@ contains
           elem = mesh_element(kt_low(kf) + kt)
           area = elem%det_3 * 0.5d0
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          call assign_flux(x, kf, kt, area, ei, eo, ef)
+          jnflux(kt_low(kf) + kt, ei) = -x(kt)
+          jnflux(kt_low(kf) + kt, eo) = x(mod(kt, kt_max(kf)) + 1)
+          jnphi(kt_low(kf) + kt) = sum(jnflux(kt_low(kf) + kt, :)) * imun / n / area
        end do
     end do
     avg_rel_err = avg_rel_err / sum(kt_max(1:nflux))
@@ -918,80 +881,9 @@ contains
          ' max_rel_err = ', max_rel_err, ' avg_rel_err = ', avg_rel_err
     if (allocated(resid)) deallocate(resid)
 
-    if (present(outfile)) then
-       call write_triangle_flux(pol_flux, tor_comp, outfile, .false.)
-       call write_triangle_flux(pol_flux, tor_comp, decorate_filename(outfile, 'plot_'), &
-            .true.)
-    end if
-  end subroutine compute_triangle_flux
-
-  !> Implements sub_assemble_flux_coeff() for compute_currn().
-  subroutine assemble_currn_coeff(x, d, du, kf, kt, area, lk, ek, edge_name)
-
-    complex(dp), dimension(:), intent(inout) :: x, d, du
-    integer, intent(in) :: kf, kt
-    real(dp), intent(in) :: area
-    integer, dimension(2), intent(in) :: lk
-    integer, intent(in) :: ek
-    character, intent(in) :: edge_name
-
-    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-    real(dp) :: Deltapsi
-    type(knot) :: base, tip
-
-    p = 0d0
-    ! use midpoint of edge
-    base = mesh_point(lk(1))
-    tip = mesh_point(lk(2))
-    r = (base%rcoord + tip%rcoord) * 0.5d0
-    z = (base%zcoord + tip%zcoord) * 0.5d0
-    call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-    Deltapsi = psi(kf) - psi(kf-1)
-    select case (edge_name)
-    case ('f')
-       ! first term on source side: flux through edge f
-       jnflux(kt_low(kf) + kt, ek) = clight * r / Bp * (presn(lk(2)) - presn(lk(1))) + &
-            j0phi(kt_low(kf) + kt) / Bp * Bnflux(kt_low(kf) + kt, ek)
-       x(kt) = -jnflux(kt_low(kf) + kt, ek)
-    case ('i')
-       ! diagonal matrix element
-       d(kt) = -1d0 - imun * (n + imun * damp) * area * 0.5d0 * Bp / Deltapsi
-       ! additional term from edge i on source side
-       x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / (-Deltapsi) * &
-            (presn(lk(2)) - presn(lk(1)) - Bnphi(kt_low(kf) + kt) / Bp * &
-            (pres0(kf) - pres0(kf-1))) + j0phi(kt_low(kf) + kt) * &
-            (Bnphi(kt_low(kf) + kt) / Bp + Bnflux(kt_low(kf) + kt, ek) / r / (-Deltapsi)))
-    case ('o')
-       ! superdiagonal matrix element
-       du(kt) = 1d0 - imun * (n + imun * damp) * area * 0.5d0 * Bp / Deltapsi
-       ! additional term from edge o on source side
-       x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / Deltapsi * &
-            (presn(lk(2)) - presn(lk(1)) - Bnphi(kt_low(kf) + kt) / Bp * &
-            (pres0(kf-1) - pres0(kf))) + j0phi(kt_low(kf) + kt) * &
-            (Bnphi(kt_low(kf) + kt) / Bp + Bnflux(kt_low(kf) + kt, ek) / r / Deltapsi))
-    end select
-  end subroutine assemble_currn_coeff
-
-  !> Implements sub_assign_flux() for compute_currn().
-  subroutine assign_currn(x, kf, kt, area, ei, eo, ef)
-    complex(dp), dimension(:), intent(in) :: x
-    integer, intent(in) :: kf, kt
-    real(dp), intent(in) :: area
-    integer, intent(in) :: ei, eo, ef
-    jnflux(kt_low(kf) + kt, ei) = -x(kt)
-    jnflux(kt_low(kf) + kt, eo) = x(mod(kt, kt_max(kf)) + 1)
-    jnphi(kt_low(kf) + kt) = sum(jnflux(kt_low(kf) + kt, :)) * imun / n / area
-  end subroutine assign_currn
-
-  !> Computes current perturbation #jnflux and #jnphi from equilibrium quantities,
-  !> #presn, #bnflux and #bnphi.
-  !>
-  !> This subroutine uses compute_triangle_flux() with assemble_currn_coeff() and
-  !> assign_currn(). The result is written to #magdif_conf::currn_file.
-  subroutine compute_currn
-    call compute_triangle_flux(assemble_currn_coeff, assign_currn, jnflux, jnphi, currn_file)
+    call write_triangle_flux(jnflux, jnphi, currn_file, .false.)
+    call write_triangle_flux(jnflux, jnphi, decorate_filename(currn_file, 'plot_'), &
+         .true.)
   end subroutine compute_currn
 
   subroutine avg_flux_on_quad(pol_flux, tor_comp)
