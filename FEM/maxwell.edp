@@ -23,12 +23,8 @@ fespace Hdiv(Th, RT0);
 
 Hrot <complex> [ax, ay], [wx, wy];
 Hdiv <complex> [Jr, Jz], [br, bz], [rBr, rBz];
-Vh0 <complex> Bphi;
+Vh0 <complex> Bphi, Jphi;
 Vh0 brr, bri, bzr, bzi; // output on triangle faces
-
-Hrot [ux, uy], [vx, vy]; // for edge orientation
-[ux, uy] = [1, 0];
-[vx, vy] = [0, 1];
 
 Jr[] = 0.0 + 0.0i; Jz[] = 0.0 + 0.0i;
 
@@ -43,34 +39,24 @@ for (int k = 0; k < Th.nt; k++) {
 if (flag > 0) doplot = false; // no plot for production runs
 if (flag == 1) nti = Th.nt;   // validation run with currents given on extended
 
+
 ifstream ifile(currnfile);
+real[int] Jreal(4), Jimag(4);
 for (int k = 0; k < nti; k++) {
-  real Jnr1, Jnr2, Jnr3, Jni1, Jni2, Jni3, sig;
-  ifile >> Jnr1 >> Jnr2 >> Jnr3 >> Jni1 >> Jni2 >> Jni3;
-
-  // check orientation of edges and assign
-  // normal flux coordinate accordingly
-  if (abs(ux[][Hrot(k,2)]) > abs(vx[][Hrot(k,2)])) {
-    sig = (Th[k][1].x - Th[k][0].x) / ux[][Hrot(k,2)];
-  } else {
-    sig = (Th[k][1].y - Th[k][0].y) / vx[][Hrot(k,2)];
+  for (int j = 0; j < 3; j++) {
+    ifile >> Jreal[j] >> Jimag[j];
+    // check orientation of edges and assign
+    // normal flux coordinate accordingly
+    if ((Th[k][(j+2) % 3] - Th[k][(j+1) % 3]) > 0) {
+      Jr[][Hdiv(k, j)] = Jreal[j] + 1.0i * Jimag[j];
+    } else {
+      Jr[][Hdiv(k, j)] = -Jreal[j] - 1.0i * Jimag[j];
+    }
   }
-  Jr[][Hdiv(k,2)] = sig * (Jnr1 + 1.0i*Jni1);
-
-  if (abs(ux[][Hrot(k,0)]) > abs(vx[][Hrot(k,0)])) {
-    sig = (Th[k][2].x - Th[k][1].x) / ux[][Hrot(k,0)];
-  } else {
-    sig = (Th[k][2].y - Th[k][1].y) / vx[][Hrot(k,0)];
-  }
-  Jr[][Hdiv(k,0)] = sig * (Jnr2 + 1.0i*Jni2);
-
-  if (abs(ux[][Hrot(k,1)]) > abs(vx[][Hrot(k,1)])) {
-    sig = (Th[k][0].x - Th[k][2].x) / ux[][Hrot(k,1)];
-  } else {
-    sig = (Th[k][0].y - Th[k][2].y) / vx[][Hrot(k,1)];
-  }
-  Jr[][Hdiv(k,1)] = sig * (Jnr3 + 1.0i*Jni3);
+  ifile >> Jreal[3] >> Jimag[3];
+  Jphi[][k] = Jreal[3] + 1.0i * Jimag[3];
 }
+// Jphi = (dx(Jr) + dy(Jz)) * 1.0i / n;
 
 solve Ampere([ax, ay], [wx, wy], solver = UMFPACK) = // defines the PDE
   int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(ay) - dy(ax)))
@@ -98,44 +84,26 @@ if (flag == 1) { // validation run
 }
 
 ofstream ofile(Bnfluxfile);
-ofile.precision(16);
+ofile.scientific.precision(16);
 for (int k = 0; k < nti; k++) {
-  real sig;
-  if (abs(ux[][Hrot(k,2)]) > abs(vx[][Hrot(k,2)])) {
-    sig = (Th[k][1].x - Th[k][0].x) / ux[][Hrot(k,2)];
-  } else {
-    sig = (Th[k][1].y - Th[k][0].y) / vx[][Hrot(k,2)];
+  for (int j = 0; j < 3; j++) {
+    if ((Th[k][(j+2) % 3] - Th[k][(j+1) % 3]) > 0) {
+      ofile
+        << real(rBr[][Hdiv(k, j)]) << "\t"
+        << imag(rBr[][Hdiv(k, j)]) << "\t";
+    } else {
+      ofile
+        << -real(rBr[][Hdiv(k, j)]) << "\t"
+        << -imag(rBr[][Hdiv(k, j)]) << "\t";
+    }
   }
-  ofile.scientific
-    << sig * real(rBr[][Hdiv(k,2)]) << "\t"
-    << sig * imag(rBr[][Hdiv(k,2)]) << "\t";
-
-  if (abs(ux[][Hrot(k,0)]) > abs(vx[][Hrot(k,0)])) {
-    sig = (Th[k][2].x - Th[k][1].x) / ux[][Hrot(k,0)];
-  } else {
-    sig = (Th[k][2].y - Th[k][1].y) / vx[][Hrot(k,0)];
-  }
-  ofile.scientific
-    << sig * real(rBr[][Hdiv(k,0)]) << "\t"
-    << sig * imag(rBr[][Hdiv(k,0)]) << "\t";
-
-  if (abs(ux[][Hrot(k,1)]) > abs(vx[][Hrot(k,1)])) {
-    sig = (Th[k][0].x - Th[k][2].x) / ux[][Hrot(k,1)];
-  } else {
-    sig = (Th[k][0].y - Th[k][2].y) / vx[][Hrot(k,1)];
-  }
-  ofile.scientific
-    << sig * real(rBr[][Hdiv(k,1)]) << "\t"
-    << sig * imag(rBr[][Hdiv(k,1)]) << "\t";
-
-  ofile.scientific
+  ofile
     << real(Bphi[][k]) * Th[k].area << "\t"
     << imag(Bphi[][k]) * Th[k].area << endl;
 }
 
 if (doplot) {
   Hdiv [Jrp, Jzp], [brp, bzp];
-  Vh0 bphip;
   [Jrp, Jzp] = [real(Jr), real(Jz)];
   [brp, bzp] = [imag(br), imag(bz)];
 
