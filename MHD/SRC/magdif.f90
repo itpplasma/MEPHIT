@@ -981,7 +981,7 @@ contains
     real(dp), intent(in) :: area
     integer, intent(in) :: ei, eo, ef
     jnflux(kt_low(kf) + kt, ei) = -x(kt)
-    jnflux(kt_low(kf) + kt, eo) = x(mod(kt, kt_max(kf) + 1))
+    jnflux(kt_low(kf) + kt, eo) = x(mod(kt, kt_max(kf)) + 1)
     jnphi(kt_low(kf) + kt) = sum(jnflux(kt_low(kf) + kt, :)) * imun / n / area
   end subroutine assign_currn
 
