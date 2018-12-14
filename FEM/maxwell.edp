@@ -9,8 +9,6 @@ real c = 29979245800.0; // speed of light
 
 real n = 2.0; // mode number
 
-bool doplot = true;
-
 include "magdif.idp"  // config (incl. filenames)
 
 mesh Th = readmesh(meshfile);
