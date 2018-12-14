@@ -21,11 +21,14 @@ fespace Hdiv(Th, RT0);
 
 Hrot [axRe, ayRe], [axIm, ayIm], [wx, wy];
 Hdiv [JrRe, JzRe], [JrIm, JzIm], [BrRe, BzRe], [BrIm, BzIm];
+
 Vh0 BphiRe, BphiIm, JphiRe, JphiIm;
 Vh0 brRe, brIm, bzRe, bzIm; // output on triangle faces
 
-JrRe[] = 0.0;
-JrIm[] = 0.0;
+real[int] JfluxRe(Hdiv.ndof);
+real[int] JfluxIm(Hdiv.ndof);
+JfluxRe = 0.0;
+JfluxIm = 0.0;
 
 // count triangles in internal region 0
 int nti = 0;
@@ -34,22 +37,33 @@ for (int k = 0; k < Th.nt; k++) {
     nti++;
 }
 
+cout << nti << endl;
+
 ifstream ifile(currnfile);
 for (int k = 0; k < nti; k++) {
   for (int j = 0; j < 3; j++) {
-    ifile >> JrRe[][Hdiv(k, j)] >> JrIm[][Hdiv(k, j)];
+    real jotherRe = JfluxRe[Hdiv(k, j)];
+    real jotherIm = JfluxIm[Hdiv(k, j)];    
+    ifile >> JfluxRe[Hdiv(k, j)] >> JfluxIm[Hdiv(k, j)];
     // check orientation of edges and assign
     // normal flux coordinate accordingly
     if ((Th[k][(j+2) % 3] - Th[k][(j+1) % 3]) < 0) {
-      JrRe[][Hdiv(k, j)] = -JrRe[][Hdiv(k, j)];
-      JrIm[][Hdiv(k, j)] = -JrIm[][Hdiv(k, j)];
+      JfluxRe[Hdiv(k, j)] = -JfluxRe[Hdiv(k, j)];
+      JfluxIm[Hdiv(k, j)] = -JfluxRe[Hdiv(k, j)];
     }
+    if (abs(jotherRe)>1e-10 && abs(jotherRe-JfluxRe[Hdiv(k, j)]) > 1e-10*abs(jotherRe))
+      cout << "Error: Real flux inconsistent at cell" << k << " " << j << endl;
+    if (abs(jotherIm)>1e-10 && abs(jotherIm-JfluxIm[Hdiv(k, j)]) > 1e-10*abs(jotherIm))
+      cout << "Error: Imag flux inconsistent at cell" << k << " " << j << endl;
   }
   ifile >> JphiRe[][k] >> JphiIm[][k];
 }
 // Check:
 // JphiRe = -(dx(JrIm) + dy(JzIm)) / n;
 // JphiIm = (dx(JrRe) + dy(JzRe)) / n;
+
+JrRe[] = JfluxRe;
+JrIm[] = JfluxIm;
 
 solve AmpereRe([axRe, ayRe], [wx, wy], solver = UMFPACK) = // defines the PDE
   int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(axRe) - dy(axRe)))
@@ -90,6 +104,7 @@ for (int k = 0; k < nti; k++) {
 if (doplot) {
   plot(Th, wait = true);
   plot([JrRe, JzRe], wait = true, value = true);
+  plot(JphiRe, wait = true, fill = true, value = true);
   plot([BrRe, BzRe], wait = true, value = true);
   plot(BphiRe, wait = true, fill = true, value = true);
 }
