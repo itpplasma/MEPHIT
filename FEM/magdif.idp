@@ -5,3 +5,4 @@ string validationfile = "maxwell.out";
 string Bnfluxfile = "../MHD/Bn.dat";
 string bmodfile = "../PRELOAD/VACFIELD/bmod_psipol_vac.dat";
 string hpsifile = "/tmp/hpsi.dat";
+bool doplot = true;
