@@ -81,3 +81,61 @@ subroutine read_hpsi
   end do
   close(1)
 end subroutine read_hpsi
+
+
+    allocate(connections(ntri, 3))
+    connections = 0
+    low = 1
+    do kt = 1, kt_low(nflux+1)
+       do ke = 1, 3
+          if (connections(kt, ke) == 0) then
+             kt_adj = mesh_element(kt)%neighbour(ke)
+             ke_adj = mesh_element(kt)%neighbour_edge(ke)
+             if (connections(kt_adj, ke_adj) == 0) then
+                connections(kt, ke) = low
+                connections(kt_adj, ke_adj) = low
+                low = low + 1
+             else
+                connections(kt, ke) = connections(kt_adj, ke_adj)
+             end if
+          end if
+       end do
+    end do
+    open(1, file = 'connectivity.dat')
+    do kt = 1, ntri
+       write (1, *) connections(kt, :)
+    end do
+    close(1)
+    deallocate(connections)
+
+program connectivity
+  implicit none
+  integer :: fid, kt, ke, low
+  integer, parameter :: ntri = 35680
+  integer, dimension(ntri, 3) :: connections
+  integer, dimension(:), allocatable :: mapping
+
+  open(newunit = fid, file = '../FEM/connectivity.dat')
+  do kt = 1, ntri
+     read (fid, *) connections(kt, :)
+  end do
+  close(fid)
+  allocate(mapping(minval(connections):maxval(connections)))
+  mapping = 0
+  low = 1
+  do kt = 1, ntri
+     do ke = 1, 3
+        if (mapping(connections(kt, ke)) == 0) then
+           mapping(connections(kt, ke)) = low
+           low = low + 1
+        end if
+        connections(kt, ke) = mapping(connections(kt, ke))
+     end do
+  end do
+  open(newunit = fid, file = '../FEM/connections.dat')
+  do kt = 1, ntri
+     write (fid, *) connections(kt, :)
+  end do
+  close(fid)
+  deallocate(mapping)
+end program connectivity

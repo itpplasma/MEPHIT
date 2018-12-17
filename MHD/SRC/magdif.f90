@@ -51,13 +51,6 @@ module magdif
   !> to the triangle strip just inside the last closed flux surface.
   real(dp), allocatable :: q(:)
 
-  !> Flux surface average \f$ \langle B_{0}^{2} \rangle \f$.
-  !>
-  !> Values are taken between two flux surfaces with indices running from 1 to
-  !> #magdif_config::nflux, i.e. from the triangle strip surrounding the magnetic axis to
-  !> the triangle strip contained by the last closed flux surface.
-  real(dp), allocatable :: B2avg(:)
-
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   !>
   !> Values are taken at each mesh point and the indexing scheme is the same as for
@@ -110,9 +103,11 @@ module magdif
   !> Physical toroidal component of equilibrium current \f$ j_{0 (\phi)} \f$ in
   !> statampere cm^-2.
   !>
-  !> Values are taken at each triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element.
-  real(dp), allocatable :: j0phi(:)
+  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
+  !> refers to the triangle and the indexing scheme is the same as for
+  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
+  !> by get_labeled_edges().
+  real(dp), allocatable :: j0phi(:,:)
 
   !> Number of knots on the flux surface given by the array index.
   !>
@@ -200,7 +195,6 @@ contains
     if (allocated(dens)) deallocate(dens)
     if (allocated(temp)) deallocate(temp)
     if (allocated(psi)) deallocate(psi)
-    if (allocated(B2avg)) deallocate(B2avg)
     if (allocated(presn)) deallocate(presn)
     if (allocated(jnflux)) deallocate(jnflux)
     if (allocated(Bnflux)) deallocate(Bnflux)
@@ -326,7 +320,7 @@ contains
     allocate(Bnflux_vac(ntri, 3))
     allocate(Bnphi_vac(ntri))
     allocate(jnphi(ntri))
-    allocate(j0phi(ntri))
+    allocate(j0phi(ntri, 3))
     allocate(jnflux(ntri, 3))
 
     presn = 0d0
@@ -388,6 +382,41 @@ contains
     end do
   end subroutine check_div_free
 
+  subroutine check_redundant_edges(pol_quant, comp_factor, name)
+    complex(dp), intent(in) :: pol_quant(:,:)
+    real(dp), intent(in) :: comp_factor
+    character(len = *), intent(in) :: name
+    integer :: ktri, ktri_adj, ke, ke_adj
+    logical :: checked(ntri, 3)
+    type(triangle) :: elem
+    integer, dimension(2) :: li, lo, lf
+    integer :: ei, eo, ef
+    logical :: orient
+    character(len = len_trim(name) + 30) :: err_msg
+    err_msg = trim(name) // ': inconsistent redundant edges'
+
+    checked = .false.
+    do ktri = 1, kt_low(nflux+1)
+       elem = mesh_element(ktri)
+       call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+       do ke = 1, 3
+          if (ktri > kt_low(nflux) .and. ke == ef) cycle
+          if (.not. checked(ktri, ke)) then
+             checked(ktri, ke) = .true.
+             ktri_adj = mesh_element(ktri)%neighbour(ke)
+             ke_adj = mesh_element(ktri)%neighbour_edge(ke)
+             checked(ktri_adj, ke_adj) = .true.
+             if (pol_quant(ktri, ke) /= comp_factor * pol_quant(ktri_adj, ke_adj)) then
+                if (log_err) write (logfile, *) err_msg, ' - ', &
+                     name, '(', ktri, ',', ke, ') = ', pol_quant(ktri, ke), &
+                     name, '(', ktri_adj, ',', ke_adj, ') = ', pol_quant(ktri_adj, ke_adj)
+                stop err_msg
+             end if
+          end if
+       end do
+    end do
+  end subroutine check_redundant_edges
+
   !> Reads fluxes of perturbation field and checks divergence-freeness.
   !>
   !> @param filename name of the formatted file containing the data
@@ -412,6 +441,7 @@ contains
     close(1)
 
     call check_div_free(Bnflux, Bnphi, 1d-3, 'B_n')
+    call check_redundant_edges(Bnflux, -1d0, 'B_n')
   end subroutine read_Bn
 
   !> Allocates and computes the safety factor #q. Deallocation is done in
@@ -499,8 +529,7 @@ contains
   end subroutine init_flux_variables
 
   !> Computes equilibrium current density #j0phi from given equilibrium magnetic field and
-  !> assumed equilibrium pressure #pres0. #b2avg is also allocated and set; deallocation
-  !> is done in magdif_cleanup().
+  !> assumed equilibrium pressure #pres0.
   !>
   !> This step is necessary because equilibrium pressure is not given experimentally as is
   !> \f$ \vec{B}_{0} \f$; arbitrary values are assumed. Consistency of MHD equilibrium is
@@ -510,28 +539,69 @@ contains
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
     real(dp) :: Bpol
+    real(dp) :: B2avg(nflux)
+    real(dp) :: B2avg_half(nflux)
+    type(triangle) :: elem
+    integer, dimension(2) :: li, lo, lf
+    integer :: ei, eo, ef
+    logical :: orient
 
-    allocate(B2avg(nflux))
+    p = 0d0
+    B2avg = 0d0
+    B2avg_half = 0d0
     do kf = 1, nflux
-       B2avg(kf) = 0d0
        do kt = 1, kt_max(kf)
-          call ring_centered_avg_coord(mesh_element(kt_low(kf) + kt), r, z)
+          elem = mesh_element(kt_low(kf) + kt)
+          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+          r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
+          z = sum(mesh_point(lf(:))%zcoord) * 0.5d0
           call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
           B2avg(kf) = B2avg(kf) + Br**2 + Bp**2 + Bz**2
+          r = sum(mesh_point(li(:))%rcoord) * 0.5d0
+          z = sum(mesh_point(li(:))%zcoord) * 0.5d0
+          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+          B2avg_half(kf) = B2avg_half(kf) + Br**2 + Bp**2 + Bz**2
        end do
        B2avg(kf) = B2avg(kf) / kt_max(kf)
+       B2avg_half(kf) = B2avg_half(kf) / kt_max(kf)
 
        do kt = 1, kt_max(kf)
-          call ring_centered_avg_coord(mesh_element(kt_low(kf) + kt), r, z)
+          elem = mesh_element(kt_low(kf) + kt)
+          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+          r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
+          z = sum(mesh_point(lf(:))%zcoord) * 0.5d0
           call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
           Bpol = hypot(Br, Bz)
-          j0phi(kt_low(kf) + kt) = &
-               clight * (pres0(kf) - pres0(kf-1)) / (psi(kf) - psi(kf-1)) * &
-               (Bp ** 2 / B2avg(kf) + (Bpol ** 2 - Bp ** 2) / (Bpol ** 2 + Bp ** 2)) * r
+          if (kf > 1 .and. .not. orient) then
+             j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf-1) * (Bp ** 2 / &
+                  B2avg(kf-1) + (Bpol ** 2 - Bp ** 2) / (Bpol ** 2 + Bp ** 2)) * r
+          else
+             j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf) * (Bp ** 2 / &
+                  B2avg(kf) + (Bpol ** 2 - Bp ** 2) / (Bpol ** 2 + Bp ** 2)) * r
+          end if
+          r = sum(mesh_point(li(:))%rcoord) * 0.5d0
+          z = sum(mesh_point(li(:))%zcoord) * 0.5d0
+          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+          Bpol = hypot(Br, Bz)
+          j0phi(kt_low(kf) + kt, ei) = clight * (pres0(kf) - pres0(kf-1)) / &
+               (psi(kf) - psi(kf-1)) * (Bp ** 2 / B2avg_half(kf) + &
+               (Bpol ** 2 - Bp ** 2) / (Bpol ** 2 + Bp ** 2)) * r
+          r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
+          z = sum(mesh_point(lo(:))%zcoord) * 0.5d0
+          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+          Bpol = hypot(Br, Bz)
+          j0phi(kt_low(kf) + kt, eo) = clight * (pres0(kf) - pres0(kf-1)) / &
+               (psi(kf) - psi(kf-1)) * (Bp ** 2 / B2avg_half(kf) + &
+               (Bpol ** 2 - Bp ** 2) / (Bpol ** 2 + Bp ** 2)) * r
        end do
     end do
+
+    call check_redundant_edges(cmplx(j0phi, 0d0, dp), 1d0, 'j0phi')
   end subroutine compute_j0phi
 
   !> Assembles a sparse matrix in coordinate list (COO) representation for use with
@@ -825,7 +895,7 @@ contains
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
           ! first term on source side: flux through edge f
           jnflux(kt_low(kf) + kt, ef) = clight * r / Bp * (presn(lf(2)) - presn(lf(1))) + &
-               j0phi(kt_low(kf) + kt) / Bp * Bnflux(kt_low(kf) + kt, ef)
+               j0phi(kt_low(kf) + kt, ef) / Bp * Bnflux(kt_low(kf) + kt, ef)
           x(kt) = -jnflux(kt_low(kf) + kt, ef)
           ! use midpoint of edge i
           base = mesh_point(li(1))
@@ -839,7 +909,7 @@ contains
           ! additional term from edge i on source side
           x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / (-Deltapsi) * &
                (presn(li(2)) - presn(li(1)) - Bnphi(kt_low(kf) + kt) / Bp * &
-               (pres0(kf) - pres0(kf-1))) + j0phi(kt_low(kf) + kt) * &
+               (pres0(kf) - pres0(kf-1))) + j0phi(kt_low(kf) + kt, ei) * &
                (Bnphi(kt_low(kf) + kt) / Bp + Bnflux(kt_low(kf) + kt, ei) / r / (-Deltapsi)))
           ! use midpoint of edge o
           base = mesh_point(lo(1))
@@ -853,7 +923,7 @@ contains
           ! additional term from edge o on source side
           x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / Deltapsi * &
                (presn(lo(2)) - presn(lo(1)) - Bnphi(kt_low(kf) + kt) / Bp * &
-               (pres0(kf-1) - pres0(kf))) + j0phi(kt_low(kf) + kt) * &
+               (pres0(kf-1) - pres0(kf))) + j0phi(kt_low(kf) + kt, eo) * &
                (Bnphi(kt_low(kf) + kt) / Bp + Bnflux(kt_low(kf) + kt, eo) / r / Deltapsi))
        end do
        call assemble_sparse(kt_max(kf), d(:kt_max(kf)), du(:kt_max(kf)), nz, &
@@ -880,6 +950,8 @@ contains
     if (log_debug) write (logfile, *) 'compute_triangle_flux: diagonalization' // &
          ' max_rel_err = ', max_rel_err, ' avg_rel_err = ', avg_rel_err
     if (allocated(resid)) deallocate(resid)
+
+    call check_redundant_edges(jnflux, -1d0, 'jnflux')
 
     call write_triangle_flux(jnflux, jnphi, currn_file, .false.)
     call write_triangle_flux(jnflux, jnphi, decorate_filename(currn_file, 'plot_'), &
@@ -968,6 +1040,7 @@ contains
     end do
     if (quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
     call check_div_free(Bnflux, Bnphi, 1d-09, 'non-resonant B_n')
+    call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
   subroutine write_triangle_flux(pol_flux, tor_comp, outfile, interpolate)

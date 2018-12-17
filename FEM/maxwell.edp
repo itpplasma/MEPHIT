@@ -41,20 +41,20 @@ if (flag == 1) nti = Th.nt;   // validation run with currents given on extended
 
 
 ifstream ifile(currnfile);
-real[int] Jreal(4), Jimag(4);
+real Jreal, Jimag;
 for (int k = 0; k < nti; k++) {
   for (int j = 0; j < 3; j++) {
-    ifile >> Jreal[j] >> Jimag[j];
+    ifile >> Jreal >> Jimag;
     // check orientation of edges and assign
     // normal flux coordinate accordingly
-    if ((Th[k][(j+2) % 3] - Th[k][(j+1) % 3]) > 0) {
-      Jr[][Hdiv(k, j)] = Jreal[j] + 1.0i * Jimag[j];
+    if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
+      Jr[][Hdiv(k, (j+2) % 3)] = Jreal + 1.0i * Jimag;
     } else {
-      Jr[][Hdiv(k, j)] = -Jreal[j] - 1.0i * Jimag[j];
+      Jr[][Hdiv(k, (j+2) % 3)] = -Jreal - 1.0i * Jimag;
     }
   }
-  ifile >> Jreal[3] >> Jimag[3];
-  Jphi[][k] = Jreal[3] + 1.0i * Jimag[3];
+  ifile >> Jreal >> Jimag;
+  Jphi[][k] = Jreal + 1.0i * Jimag;
 }
 // Jphi = (dx(Jr) + dy(Jz)) * 1.0i / n;
 
@@ -87,14 +87,14 @@ ofstream ofile(Bnfluxfile);
 ofile.scientific.precision(16);
 for (int k = 0; k < nti; k++) {
   for (int j = 0; j < 3; j++) {
-    if ((Th[k][(j+2) % 3] - Th[k][(j+1) % 3]) > 0) {
+    if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
       ofile
-        << real(rBr[][Hdiv(k, j)]) << "\t"
-        << imag(rBr[][Hdiv(k, j)]) << "\t";
+        << real(rBr[][Hdiv(k, (j+2) % 3)]) << "\t"
+        << imag(rBr[][Hdiv(k, (j+2) % 3)]) << "\t";
     } else {
       ofile
-        << -real(rBr[][Hdiv(k, j)]) << "\t"
-        << -imag(rBr[][Hdiv(k, j)]) << "\t";
+        << -real(rBr[][Hdiv(k, (j+2) % 3)]) << "\t"
+        << -imag(rBr[][Hdiv(k, (j+2) % 3)]) << "\t";
     }
   }
   ofile
