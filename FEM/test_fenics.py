@@ -113,4 +113,29 @@ plt.figure()
 df.plot(A)
 
 plt.show()
+# %%
+mesh = df.UnitSquareMesh(10, 10)
+
+Hdiv = df.FunctionSpace(mesh, 'RT', 1)
+Hcurl = df.FunctionSpace(mesh, 'N1curl', 1)
+
+u = df.TrialFunction(Hcurl)
+v = df.TestFunction(Hcurl)
+
+J = df.Expression(('x[1]', '-x[0]'), degree=1)
+
+
+a = (inner(curl(u), curl(v)) + inner(u,v)) * dx
+b = inner(J, v) * dx
+
+A = df.Function(Hcurl)
+
+df.solve(a == b, A)
+
+plt.figure()
+df.plot(A)
+
+plt.show()
+
+#%%
 

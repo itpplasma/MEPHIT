@@ -15,7 +15,7 @@ from readmsh import readmsh
 
 df.parameters["reorder_dofs_serial"] = False
 
-doplot = False
+doplot = True
 
 c = 29979245800.0
 
@@ -49,7 +49,7 @@ for kt in range(len(tri)):
 meshgen.close()
 
 # Map for re-ordering of indexes and orientations
-map2facing = np.array([2,0,1]) # index of edge facing vertex
+map2facing = np.array([1,2,0]) # index of edge facing vertex
 map2lex = np.argsort(tri[:,map2facing],1) # map to lexical order in each triangle cell
 assert np.max(mesh.cells()[:]+1 - np.sort(tri)) == 0, "triangle sort order"
 
@@ -104,23 +104,27 @@ A_D = df.Constant((0, 0))
 bc = df.DirichletBC(Hcurl, A_D, boundary)
 
 rweight = df.Expression('x[0]', degree=1)
+Jtest = df.Expression(('x[1]','-x[0]'), degree=1)
 
 # variational bilinear form for 2D curl-curl harmonics (->stiffness matrix)
 a = (rweight*inner(curl(u), curl(v)) + n**2/rweight*inner(u,v)) * dx
 
 # linear form (->right-hand side vector)
 b = []
-b.append(4.0*np.pi/c*inner(J[0], v) * dx) # real part
-b.append(4.0*np.pi/c*inner(J[1], v) * dx) # imaginary part
+#b.append(4.0*np.pi/c*inner(J[0], v) * dx) # real part
+#b.append(4.0*np.pi/c*inner(J[1], v) * dx) # imaginary part
+b.append(inner(Jtest, v) * dx) # real part
+b.append(inner(Jtest, v) * dx) # imaginary part
+
 
 A = [df.Function(Hcurl), df.Function(Hcurl)] # poloidal vector potential
-df.solve(a == b[0], A[0], bc) # real part
-df.solve(a == b[1], A[1], bc) # imaginary part
+df.solve(a == b[0], A[0])#, bc) # real part
+df.solve(a == b[1], A[1])#, bc) # imaginary part
 
 #%% TODO: output bflux
-Bflux = np.zeros((len(currn),8))
+Bflux = np.zeros((ncells,8))
 Avec = [A[0].vector()[:], A[1].vector()[:]]
-for kcell in range(len(currn)):
+for kcell in range(ncells):
     nodeind = cells[kcell]
     nodecoords = nodes[nodeind]
     cellarea = .5*np.linalg.det(np.concatenate(([[1,1,1]],nodecoords.T)))

@@ -14,7 +14,10 @@ from dolfin import div
 from readmsh import readmsh
 
 infile = '../PRELOAD/inputformaxwell_ext.msh'
-currnfile = '../MHD/Bn.dat'
+#currnfile = '../FEM/currtest.dat'
+#currnfile = '../MHD/Bn.dat'
+currnfile = '../MHD/Bn_fenics.dat'
+#currnfile = '../MHD/currn.dat'
 
 [node, tri, edge, nlab, tlab, elab] = readmsh(infile)
 currn = np.loadtxt(currnfile)
@@ -31,7 +34,7 @@ for kt in range(len(tri)):
 meshgen.close()
 
 # Map for re-ordering of indexes and orientations
-map2facing = np.array([2,0,1]) # index of edge facing vertex
+map2facing = np.array([1,2,0]) # index of edge facing vertex
 map2lex = np.argsort(tri[:,map2facing],1) # map to lexical order in each triangle cell
 assert np.max(mesh.cells()[:]+1 - np.sort(tri)) == 0, "triangle sort order"
 
@@ -87,8 +90,13 @@ plt.title('mesh (fenics)')
 #%%
 plt.figure()
 p = df.plot(J[0])
+#p.scale = 5e12
+#p.scaleunits = 'xy'
+#p.minshaft = .01
 plt.colorbar(p)
 plt.title('Re poloidal')
+
+#%%
 plt.figure()
 p = df.plot(J[1])
 plt.colorbar(p)
