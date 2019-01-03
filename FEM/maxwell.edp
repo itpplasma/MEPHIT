@@ -58,8 +58,8 @@ for (int k = 0; k < nti; k++) {
 
 solve Ampere([ax, ay], [wx, wy], solver = UMFPACK) = // defines the PDE
   int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(ay) - dy(ax)))
-  + int2d(Th)(n^2 / x * [wx, wy] '* [ax, ay])
-  - int2d(Th)(4.0 * pi / c * [wx, wy] '* [Jr,Jz])
+  + int2d(Th)(n^2 / x * (wx * ax + wy * ay))
+  - int2d(Th)(4.0 * pi / c * (wx * Jr + wy * Jz))
   + on(1, ax = 0, ay = 0);
 
 [br, bz] = [1.0i * n * ay / x, -1.0i * n * ax / x];
