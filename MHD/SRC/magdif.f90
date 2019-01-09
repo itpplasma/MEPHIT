@@ -288,6 +288,11 @@ contains
     do kf = 2, nflux+1
        kt_low(kf) = kt_low(kf-1) + kt_max(kf-1)
     end do
+
+    if (log_info) then
+       write (logfile, *) "Number of points up to LCFS: ", kp_low(nflux+1), &
+            "Number of triangles up to LCFS: ", kt_low(nflux+1)
+    end if
   end subroutine init_indices
 
   !> Reads mesh points and triangles.
@@ -1052,7 +1057,6 @@ contains
     integer :: ktri
     type(triangle) :: elem
     type(knot) :: tri(3)
-    real(dp) :: length(3)
     complex(dp) :: pol_comp_r, pol_comp_z
     real(dp) :: r, z
 
@@ -1061,18 +1065,15 @@ contains
        do ktri = 1, kt_low(nflux+1)
           elem = mesh_element(ktri)
           tri = mesh_point(elem%i_knot(:))
-          length(1) = hypot(tri(2)%rcoord - tri(1)%rcoord, tri(2)%zcoord - tri(1)%zcoord)
-          length(2) = hypot(tri(3)%rcoord - tri(2)%rcoord, tri(3)%zcoord - tri(2)%zcoord)
-          length(3) = hypot(tri(1)%rcoord - tri(3)%rcoord, tri(1)%zcoord - tri(3)%zcoord)
           call ring_centered_avg_coord(elem, r, z)
-          pol_comp_r = 2d0 / elem%det_3 * ( &
-               pol_flux(ktri, 1) * (r - tri(3)%rcoord) * length(1) + &
-               pol_flux(ktri, 2) * (r - tri(1)%rcoord) * length(2) + &
-               pol_flux(ktri, 3) * (r - tri(2)%rcoord) * length(3))
-          pol_comp_z = 2d0 / elem%det_3 * ( &
-               pol_flux(ktri, 1) * (z - tri(3)%zcoord) * length(1) + &
-               pol_flux(ktri, 2) * (z - tri(1)%zcoord) * length(2) + &
-               pol_flux(ktri, 3) * (z - tri(2)%zcoord) * length(3))
+          pol_comp_r = 1d0 / elem%det_3 * ( &
+               pol_flux(ktri, 1) * (r - tri(3)%rcoord) + &
+               pol_flux(ktri, 2) * (r - tri(1)%rcoord) + &
+               pol_flux(ktri, 3) * (r - tri(2)%rcoord))
+          pol_comp_z = 1d0 / elem%det_3 * ( &
+               pol_flux(ktri, 1) * (z - tri(3)%zcoord) + &
+               pol_flux(ktri, 2) * (z - tri(1)%zcoord) + &
+               pol_flux(ktri, 3) * (z - tri(2)%zcoord))
           write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), real(pol_comp_z), &
                aimag(pol_comp_z), real(tor_comp(ktri)), aimag(tor_comp(ktri))
        end do

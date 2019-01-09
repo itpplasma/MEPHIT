@@ -7,7 +7,7 @@
 
 real c = 29979245800.0; // speed of light
 
-real n = 2.0; // mode number
+real nmode = 2.0; // mode number
 
 include "magdif.idp"  // config (incl. filenames)
 
@@ -20,79 +20,68 @@ fespace Hrot(Th, RT0Ortho);
 fespace Hdiv(Th, RT0);
 
 Hrot <complex> [ax, ay], [wx, wy];
-Hdiv <complex> [Jr, Jz], [br, bz], [rBr, rBz];
-Vh0 <complex> Bphi, Jphi;
-Vh0 brr, bri, bzr, bzi; // output on triangle faces
+Hdiv <complex> [Jr, Jz], [Br, Bz];
+[Jr, Jz] = [0.0, 0.0];
 
-Jr[] = 0.0 + 0.0i; Jz[] = 0.0 + 0.0i;
+Vh0 <complex> Bphi, Jphi;
+Jphi = 0.0;
+
+real JfluxRe, JfluxIm;
+complex redundancy;
 
 // count triangles in internal region 0
-int nti = 0;
+int ntri = 0;
 for (int k = 0; k < Th.nt; k++) {
   if (Th[k].label == 0)
-    nti++;
+    ntri++;
 }
 
-// flag for run parameters
-if (flag > 0) doplot = false; // no plot for production runs
-if (flag == 1) nti = Th.nt;   // validation run with currents given on extended
-
+cout << "Number of triangles in internal region: " << ntri << endl;
 
 ifstream ifile(currnfile);
-real Jreal, Jimag;
-for (int k = 0; k < nti; k++) {
+for (int k = 0; k < ktlownfluxp1; k++) {
   for (int j = 0; j < 3; j++) {
-    ifile >> Jreal >> Jimag;
+    redundancy = Jr[][Hdiv(k, (j+2) % 3)];
+    ifile >> JfluxRe >> JfluxIm;
     // check orientation of edges and assign
     // normal flux coordinate accordingly
     if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
-      Jr[][Hdiv(k, (j+2) % 3)] = Jreal + 1.0i * Jimag;
+      Jr[][Hdiv(k, (j+2) % 3)] = JfluxRe + 1.0i * JfluxIm;
     } else {
-      Jr[][Hdiv(k, (j+2) % 3)] = -Jreal - 1.0i * Jimag;
+      Jr[][Hdiv(k, (j+2) % 3)] = -JfluxRe - 1.0i * JfluxIm;
+    }
+    if (redundancy != 0.0 && redundancy != Jr[][Hdiv(k, (j+2) % 3)]) {
+      cerr << "Flux inconsistent in file " << currnfile
+        << " at triangle " << k << " edge " << (j+2) % 3 << ": "
+        << redundancy << " != " << Jr[][Hdiv(k, (j+2) % 3)] << endl;
     }
   }
-  ifile >> Jreal >> Jimag;
-  Jphi[][k] = Jreal + 1.0i * Jimag;
+  ifile >> JfluxRe >> JfluxIm;
+  Jphi[][k] = (JfluxRe + 1.0i * JfluxIm) / Th[k].area;
 }
-// Jphi = (dx(Jr) + dy(Jz)) * 1.0i / n;
+// Jphi = (dx(Jr) + dy(Jz)) * 1.0i / nmode;
 
 solve Ampere([ax, ay], [wx, wy], solver = UMFPACK) = // defines the PDE
   int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(ay) - dy(ax)))
-  + int2d(Th)(n^2 / x * (wx * ax + wy * ay))
+  + int2d(Th)(nmode^2 / x * (wx * ax + wy * ay))
   - int2d(Th)(4.0 * pi / c * (wx * Jr + wy * Jz))
   + on(1, ax = 0, ay = 0);
 
-[br, bz] = [1.0i * n * ay / x, -1.0i * n * ax / x];
-[rBr, rBz] = [1.0i * n * ay, -1.0i * n * ax];
+[Br, Bz] = [1.0i * nmode * ay, -1.0i * nmode * ax];
 Bphi = -(dx(ay) - dy(ax));
-
-brr = real(br);
-bzr = real(bz);
-bri = imag(br);
-bzi = imag(bz);
-
-if (flag == 1) { // validation run
-  ofstream ofile(validationfile);
-  ofile.precision(16);
-  for (int k = 0; k < Vh0.ndof; k++) {
-    ofile.scientific
-      << brr[][k] << "\t" << bzr[][k] << "\t"
-      << bri[][k] << "\t" << bzi[][k] << endl;
-  }
-}
 
 ofstream ofile(Bnfluxfile);
 ofile.scientific.precision(16);
-for (int k = 0; k < nti; k++) {
+for (int k = 0; k < ktlownfluxp1; k++) {
   for (int j = 0; j < 3; j++) {
     if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
       ofile
-        << real(rBr[][Hdiv(k, (j+2) % 3)]) << "\t"
-        << imag(rBr[][Hdiv(k, (j+2) % 3)]) << "\t";
+        << real(Br[][Hdiv(k, (j+2) % 3)]) << "\t"
+        << imag(Br[][Hdiv(k, (j+2) % 3)]) << "\t";
     } else {
       ofile
-        << -real(rBr[][Hdiv(k, (j+2) % 3)]) << "\t"
-        << -imag(rBr[][Hdiv(k, (j+2) % 3)]) << "\t";
+        << -real(Br[][Hdiv(k, (j+2) % 3)]) << "\t"
+        << -imag(Br[][Hdiv(k, (j+2) % 3)]) << "\t";
     }
   }
   ofile
@@ -101,57 +90,13 @@ for (int k = 0; k < nti; k++) {
 }
 
 if (doplot) {
-  Hdiv [Jrp, Jzp], [brp, bzp];
-  [Jrp, Jzp] = [real(Jr), real(Jz)];
-  [brp, bzp] = [imag(br), imag(bz)];
-
+  Hdiv [JrRe, JzRe], [JrIm, JzIm], [BrRe, BzRe], [BrIm, BzIm];
+  [JrRe, JzRe] = [real(Jr), real(Jz)];
+  [JrIm, JzIm] = [imag(Jr), imag(Jz)];
+  [BrRe, BzRe] = [real(Br), real(Bz)];
+  [BrIm, BzIm] = [imag(Br), imag(Bz)];
   plot(Th, wait = true);
-  plot([Jrp, Jzp], wait = true, value = true);
-  plot([brp, bzp], wait = true, value = true);
+  plot(JrRe, wait = true, value = true);
+  plot(BrRe, wait = true, value = true);
   plot(Bphi, wait = true, fill = true, value = true);
-}
-
-//----------------------------------------------------------
-// output hpsi.dat, containing B/BMOD*GRAD(PSI_POL)
-//
-
-Vh1 bmod, psipol;
-Hrot [dpsir, dpsiz];
-Vh0 <complex> hr;
-Vh0 hrr, hri;
-Vh0 reg;
-
-bmod[] = 1e-30;
-
-ifstream bmodin(bmodfile);
-for (int kt = 0; kt < nti; kt++) {
-  real b1, b2, b3, psi1, psi2, psi3;
-  bmodin >> b1 >> b2 >> b3 >> psi1 >> psi2 >> psi3;
-  bmod[][Th[kt][0]] = b1 + 1e-30;
-  bmod[][Th[kt][1]] = b2 + 1e-30;
-  bmod[][Th[kt][2]] = b3 + 1e-30;
-  psipol[][Th[kt][0]] = psi1;
-  psipol[][Th[kt][1]] = psi2;
-  psipol[][Th[kt][2]] = psi3;
-}
-
-[dpsir, dpsiz] = [dx(psipol), dy(psipol)];
-reg = (region == 0) * (bmod > 0) / bmod;
-hr = reg * (dx(psipol) * br + dy(psipol) * bz);
-hrr = real(hr);
-hri = imag(hr);
-
-if (doplot) {
-  plot(bmod, wait = true);
-  plot(psipol, wait = true);
-  plot([dpsir, dpsiz], wait = true);
-  plot(hrr, fill = true, value = true, wait = true);
-  plot(hri, fill = true, value = true, wait = true);
-}
-
-ofstream hpsiout(hpsifile);
-hpsiout.precision(16);
-for (int k = 0; k < nti; k++) {
-  hpsiout.scientific
-    << hrr[][k] << "\t" << hri[][k] << endl;
 }
