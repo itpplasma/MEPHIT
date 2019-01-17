@@ -51,6 +51,30 @@ module magdif
   !> to the triangle strip just inside the last closed flux surface.
   real(dp), allocatable :: q(:)
 
+  !> \f$ R \$ component of equilibrium magnetic field \f$ B_{0} \f$.
+  !>
+  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
+  !> refers to the triangle and the indexing scheme is the same as for
+  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
+  !> by get_labeled_edges().
+  real(dp), allocatable :: B0r(:,:)
+
+  !> \f$ \phi \$ component of equilibrium magnetic field \f$ B_{0} \f$.
+  !>
+  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
+  !> refers to the triangle and the indexing scheme is the same as for
+  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
+  !> by get_labeled_edges().
+  real(dp), allocatable :: B0phi(:,:)
+
+  !> \f$ Z \$ component of equilibrium magnetic field \f$ B_{0} \f$.
+  !>
+  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
+  !> refers to the triangle and the indexing scheme is the same as for
+  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
+  !> by get_labeled_edges().
+  real(dp), allocatable :: B0z(:,:)
+
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   !>
   !> Values are taken at each mesh point and the indexing scheme is the same as for
@@ -157,6 +181,7 @@ contains
     call init_indices
     call read_mesh
     call init_flux_variables
+    call cache_equilibrium_field
     call compute_safety_factor
     call compute_j0phi
 
@@ -195,6 +220,9 @@ contains
     if (allocated(dens)) deallocate(dens)
     if (allocated(temp)) deallocate(temp)
     if (allocated(psi)) deallocate(psi)
+    if (allocated(B0r)) deallocate(B0r)
+    if (allocated(B0phi)) deallocate(B0phi)
+    if (allocated(B0z)) deallocate(B0z)
     if (allocated(presn)) deallocate(presn)
     if (allocated(jnflux)) deallocate(jnflux)
     if (allocated(Bnflux)) deallocate(Bnflux)
@@ -319,6 +347,9 @@ contains
     close(1)
 
     allocate(mesh_element_rmp(ntri))
+    allocate(B0r(ntri, 3))
+    allocate(B0phi(ntri, 3))
+    allocate(B0z(ntri, 3))
     allocate(presn(npoint))
     allocate(Bnflux(ntri, 3))
     allocate(Bnphi(ntri))
@@ -328,6 +359,9 @@ contains
     allocate(j0phi(ntri, 3))
     allocate(jnflux(ntri, 3))
 
+    B0r = 0d0
+    B0phi = 0d0
+    B0z = 0d0
     presn = 0d0
     Bnflux = 0d0
     Bnphi = 0d0
@@ -533,6 +567,32 @@ contains
     dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
   end subroutine init_flux_variables
 
+  subroutine cache_equilibrium_field
+    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+    integer :: kf, kt, ke
+    type(triangle) :: elem
+    type(knot) :: base, tip
+
+    p = 0d0
+    do kf = 1, nflux
+       do kt = 1, kt_max(kf)
+          elem = mesh_element(kt_low(kf) + kt)
+          do ke = 1, 3
+             base = mesh_point(elem%i_knot(ke))
+             tip = mesh_point(elem%i_knot(mod(ke, 3) + 1))
+             r = (base%rcoord + tip%rcoord) * 0.5d0
+             z = (base%zcoord + tip%zcoord) * 0.5d0
+             call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+                  dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+             B0r(kt_low(kf) + kt, ke) = Br
+             B0phi(kt_low(kf) + kt, ke) = Bp
+             B0z(kt_low(kf) + kt, ke) = Bz
+          end do
+       end do
+    end do
+  end subroutine cache_equilibrium_field
+
   !> Computes equilibrium current density #j0phi from given equilibrium magnetic field and
   !> assumed equilibrium pressure #pres0.
   !>
@@ -541,17 +601,15 @@ contains
   !> necessary in the derivation, while Ampere's equation is not used.
   subroutine compute_j0phi
     integer :: kf, kt
-    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-    real(dp) :: Bpol
+    real(dp) :: Bpol2, Btor2
     real(dp) :: B2avg(nflux)
     real(dp) :: B2avg_half(nflux)
+    real(dp) :: r
     type(triangle) :: elem
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     logical :: orient
 
-    p = 0d0
     B2avg = 0d0
     B2avg_half = 0d0
     do kf = 1, nflux
@@ -559,15 +617,11 @@ contains
           elem = mesh_element(kt_low(kf) + kt)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
-          z = sum(mesh_point(lf(:))%zcoord) * 0.5d0
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          B2avg(kf) = B2avg(kf) + Br**2 + Bp**2 + Bz**2
+          B2avg(kf) = B2avg(kf) + B0r(kt_low(kf) + kt, ef) ** 2 + &
+               B0phi(kt_low(kf) + kt, ef) ** 2 + B0z(kt_low(kf) + kt, ef) ** 2
           r = sum(mesh_point(li(:))%rcoord) * 0.5d0
-          z = sum(mesh_point(li(:))%zcoord) * 0.5d0
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          B2avg_half(kf) = B2avg_half(kf) + Br**2 + Bp**2 + Bz**2
+          B2avg_half(kf) = B2avg_half(kf) + B0r(kt_low(kf) + kt, ei) ** 2 + &
+               B0phi(kt_low(kf) + kt, ei) ** 2 + B0z(kt_low(kf) + kt, ei) ** 2
        end do
        B2avg(kf) = B2avg(kf) / kt_max(kf)
        B2avg_half(kf) = B2avg_half(kf) / kt_max(kf)
@@ -576,33 +630,27 @@ contains
           elem = mesh_element(kt_low(kf) + kt)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
-          z = sum(mesh_point(lf(:))%zcoord) * 0.5d0
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          Bpol = hypot(Br, Bz)
+          Bpol2 = B0r(kt_low(kf) + kt, ef) ** 2 + B0z(kt_low(kf) + kt, ef) ** 2
+          Btor2 = B0phi(kt_low(kf) + kt, ef) ** 2
           if (kf > 1 .and. .not. orient) then
-             j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf-1) * (Bp ** 2 / &
-                  B2avg(kf-1) + (Bpol ** 2 - Bp ** 2) / (Bpol ** 2 + Bp ** 2)) * r
+             j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf-1) * (Bpol2 / &
+                  B2avg(kf-1) + (Bpol2 - Btor2) / (Bpol2 + Btor2)) * r
           else
-             j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf) * (Bp ** 2 / &
-                  B2avg(kf) + (Bpol ** 2 - Bp ** 2) / (Bpol ** 2 + Bp ** 2)) * r
+             j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf) * (Bpol2 / &
+                  B2avg(kf) + (Bpol2 - Btor2) / (Bpol2 + Btor2)) * r
           end if
           r = sum(mesh_point(li(:))%rcoord) * 0.5d0
-          z = sum(mesh_point(li(:))%zcoord) * 0.5d0
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          Bpol = hypot(Br, Bz)
+          Bpol2 = B0r(kt_low(kf) + kt, ei) ** 2 + B0z(kt_low(kf) + kt, ei) ** 2
+          Btor2 = B0phi(kt_low(kf) + kt, ei) ** 2
           j0phi(kt_low(kf) + kt, ei) = clight * (pres0(kf) - pres0(kf-1)) / &
-               (psi(kf) - psi(kf-1)) * (Bp ** 2 / B2avg_half(kf) + &
-               (Bpol ** 2 - Bp ** 2) / (Bpol ** 2 + Bp ** 2)) * r
+               (psi(kf) - psi(kf-1)) * (Btor2 / B2avg_half(kf) + &
+               (Bpol2 - Btor2) / (Bpol2 + Btor2)) * r
           r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
-          z = sum(mesh_point(lo(:))%zcoord) * 0.5d0
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          Bpol = hypot(Br, Bz)
+          Bpol2 = B0r(kt_low(kf) + kt, eo) ** 2 + B0z(kt_low(kf) + kt, eo) ** 2
+          Btor2 = B0phi(kt_low(kf) + kt, eo) ** 2
           j0phi(kt_low(kf) + kt, eo) = clight * (pres0(kf) - pres0(kf-1)) / &
-               (psi(kf) - psi(kf-1)) * (Bp ** 2 / B2avg_half(kf) + &
-               (Bpol ** 2 - Bp ** 2) / (Bpol ** 2 + Bp ** 2)) * r
+               (psi(kf) - psi(kf-1)) * (Btor2 / B2avg_half(kf) + &
+               (Bpol2 - Btor2) / (Bpol2 + Btor2)) * r
        end do
     end do
 
@@ -877,12 +925,9 @@ contains
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     logical :: orient
-    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
     real(dp) :: Deltapsi
-    type(knot) :: base, tip
+    real(dp) :: r
 
-    p = 0d0
     max_rel_err = 0d0
     avg_rel_err = 0d0
     do kf = 1, nflux ! loop through flux surfaces
@@ -891,45 +936,32 @@ contains
           area = elem%det_3 * 0.5d0
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           Deltapsi = psi(kf) - psi(kf-1)
-          ! use midpoint of edge f
-          base = mesh_point(lf(1))
-          tip = mesh_point(lf(2))
-          r = (base%rcoord + tip%rcoord) * 0.5d0
-          z = (base%zcoord + tip%zcoord) * 0.5d0
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
           ! first term on source side: flux through edge f
-          jnflux(kt_low(kf) + kt, ef) = clight * r / Bp * (presn(lf(2)) - presn(lf(1))) + &
-               j0phi(kt_low(kf) + kt, ef) / Bp * Bnflux(kt_low(kf) + kt, ef)
+          r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
+          jnflux(kt_low(kf) + kt, ef) = clight * r / B0phi(kt_low(kf) + kt, ef) * &
+          (presn(lf(2)) - presn(lf(1))) + j0phi(kt_low(kf) + kt, ef) / &
+          B0phi(kt_low(kf) + kt, ef) * Bnflux(kt_low(kf) + kt, ef)
           x(kt) = -jnflux(kt_low(kf) + kt, ef)
-          ! use midpoint of edge i
-          base = mesh_point(li(1))
-          tip = mesh_point(li(2))
-          r = (base%rcoord + tip%rcoord) * 0.5d0
-          z = (base%zcoord + tip%zcoord) * 0.5d0
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          ! diagonal matrix element
-          d(kt) = -1d0 - imun * (n + imun * damp) * area * 0.5d0 * Bp / Deltapsi
+          ! diagonal matrix element - edge i
+          d(kt) = -1d0 - imun * (n + imun * damp) * area * 0.5d0 * &
+               B0phi(kt_low(kf) + kt, ei) / Deltapsi
           ! additional term from edge i on source side
+          r = sum(mesh_point(li(:))%rcoord) * 0.5d0
           x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / (-Deltapsi) * &
-               (presn(li(2)) - presn(li(1)) - Bnphi(kt_low(kf) + kt) / Bp * &
-               (pres0(kf) - pres0(kf-1))) + j0phi(kt_low(kf) + kt, ei) * &
-               (Bnphi(kt_low(kf) + kt) / Bp + Bnflux(kt_low(kf) + kt, ei) / r / (-Deltapsi)))
-          ! use midpoint of edge o
-          base = mesh_point(lo(1))
-          tip = mesh_point(lo(2))
-          r = (base%rcoord + tip%rcoord) * 0.5d0
-          z = (base%zcoord + tip%zcoord) * 0.5d0
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          ! superdiagonal matrix element
-          du(kt) = 1d0 - imun * (n + imun * damp) * area * 0.5d0 * Bp / Deltapsi
+               (presn(li(2)) - presn(li(1)) - Bnphi(kt_low(kf) + kt) / &
+               B0phi(kt_low(kf) + kt, ei) * (pres0(kf) - pres0(kf-1))) + &
+               j0phi(kt_low(kf) + kt, ei) * (Bnphi(kt_low(kf) + kt) / &
+               B0phi(kt_low(kf) + kt, ei) + Bnflux(kt_low(kf) + kt, ei) / r / (-Deltapsi)))
+          ! superdiagonal matrix element - edge o
+          du(kt) = 1d0 - imun * (n + imun * damp) * area * 0.5d0 * &
+               B0phi(kt_low(kf) + kt, eo) / Deltapsi
           ! additional term from edge o on source side
+          r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
           x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / Deltapsi * &
-               (presn(lo(2)) - presn(lo(1)) - Bnphi(kt_low(kf) + kt) / Bp * &
-               (pres0(kf-1) - pres0(kf))) + j0phi(kt_low(kf) + kt, eo) * &
-               (Bnphi(kt_low(kf) + kt) / Bp + Bnflux(kt_low(kf) + kt, eo) / r / Deltapsi))
+               (presn(lo(2)) - presn(lo(1)) - Bnphi(kt_low(kf) + kt) / &
+               B0phi(kt_low(kf) + kt, ei) * (pres0(kf-1) - pres0(kf))) + &
+               j0phi(kt_low(kf) + kt, eo) * (Bnphi(kt_low(kf) + kt) / &
+               B0phi(kt_low(kf) + kt, ei) + Bnflux(kt_low(kf) + kt, eo) / r / Deltapsi))
        end do
        call assemble_sparse(kt_max(kf), d(:kt_max(kf)), du(:kt_max(kf)), nz, &
             irow(:(2*kt_max(kf))), icol(:(2*kt_max(kf))), aval(:(2*kt_max(kf))))
@@ -1004,10 +1036,8 @@ contains
     integer :: common_tri(2)
     real(dp) :: lr, lz, Deltapsi, perps(2)
     complex(dp) :: Bnpsi, Bnflux_avg
-    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+    real(dp) :: r
 
-    p = 0d0
     do kf = 1, nflux ! loop through flux surfaces
        Bnflux_avg = (0d0, 0d0)
        do kt = 1, kt_max(kf)
@@ -1022,14 +1052,11 @@ contains
           base = mesh_point(lf(1))
           tip = mesh_point(lf(2))
           r = (base%rcoord + tip%rcoord) * 0.5d0
-          z = (base%zcoord + tip%zcoord) * 0.5d0
           lr = tip%rcoord - base%rcoord
           lz = tip%zcoord - base%zcoord
           call common_triangles(base, tip, common_tri)
           perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz) * 0.5d0
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          Bnpsi = Bp / r
+          Bnpsi = B0phi(kt_low(kf) + kt, ef) / r
           Bnflux(kt_low(kf) + kt, ef) = Bnpsi * r * hypot(lr, lz) * sum(perps) / Deltapsi
           Bnflux_avg = Bnflux_avg + Bnflux(kt_low(kf) + kt, ef)
           Bnphi(kt_low(kf) + kt) = imun / n * Bnflux(kt_low(kf) + kt, ef) &
