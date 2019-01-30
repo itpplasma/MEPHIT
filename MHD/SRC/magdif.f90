@@ -705,92 +705,64 @@ contains
     nz = 2*nrow
   end subroutine assemble_sparse
 
-  !> Returns the indices of the two triangles sharing an edge.
-  !>
-  !> @param knot1 first knot of the edge
-  !> @param knot2 second knot of the edge
-  !> @param common_tri indices of the triangles sharing the given edge
-  !>
-  !> The program is halted if the input data is invalid, i.e. if more than two triangles
-  !> appear to share the edge.
-  subroutine common_triangles(knot1, knot2, common_tri)
-    type(knot), intent(in) :: knot1, knot2
-    integer, intent(out) :: common_tri(2)
-
-    integer :: k, l, kcom
-    kcom = 0
-    do k = 1, knot1%n_owners
-       do l = 1, knot2%n_owners
-          if (knot1%i_owner_tri(k) == knot2%i_owner_tri(l)) then
-             kcom = kcom+1
-             if (kcom > 2) stop "Error: more than two common triangles for knots"
-             common_tri(kcom) = knot1%i_owner_tri(k)
-          end if
-       end do
-    end do
-  end subroutine common_triangles
-
   !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
   !>
   !> #psi, #dens, #temp, #pres0 and real and imaginary part of #presn are written, in that
   !> order, to #magdif_conf::presn_file, where line number corresponds to the knot index
   !> in #mesh_mod::mesh_point.
   subroutine compute_presn
-    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-    real(dp) :: r_prev, z_prev, Br_prev, Bp_prev, Bz_prev ! previous values in loop
+    real(dp) :: r
     real(dp) :: lr, lz  ! edge vector components
     complex(dp) :: Bnpsi
     complex(dp), dimension(nkpol) :: a, b, x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(nkpol) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kp, kp_prev
+    integer :: kf, kt, kp
     integer :: nz
     integer, dimension(2*nkpol) :: irow, icol
     complex(dp), dimension(2*nkpol) :: aval
-    type(knot) :: cur_knot, prev_knot
+    type(triangle) :: elem
+    integer, dimension(2) :: li, lo, lf
+    integer :: ei, eo, ef
+    logical :: orient
+    type(knot) :: base, tip
     integer :: common_tri(2)
     real(dp) :: perps(2)
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
     open(1, file = presn_file, recl = 1024)
-    do kf = 1, nflux ! loop through flux surfaces
+    do kf = 1, nflux
+inner: do kt = 1, kt_max(kf)
+          elem = mesh_element(kt_low(kf) + kt)
+          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+          if (.not. orient) cycle inner
+          common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
+          ! use midpoint of edge f
+          base = mesh_point(lf(1))
+          tip = mesh_point(lf(2))
+          r = (base%rcoord + tip%rcoord) * 0.5d0
+          lr = tip%rcoord - base%rcoord
+          lz = tip%zcoord - base%zcoord
 
-       cur_knot = mesh_point(kp_low(kf+1))
-       r = cur_knot%rcoord; p = 0d0; z = cur_knot%zcoord
-       call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-            dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-
-       do kp = 1, kp_max(kf) ! loop through poloidal points along loop
-          r_prev = r; z_prev = z
-          Br_prev = Br; Bp_prev = Bp; Bz_prev = Bz
-          kp_prev = kp - 1
-          if (kp_prev == 0) kp_prev = kp_max(kf)  ! index "wraps around"
-          prev_knot = cur_knot
-          cur_knot = mesh_point(kp_low(kf) + kp)
-          r = cur_knot%rcoord; p = 0d0; z = cur_knot%zcoord
-
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-
-          call common_triangles(prev_knot, cur_knot, common_tri)
-
-          lr = r - r_prev
-          lz = z - z_prev
           perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz) * 0.5d0
-          Bnpsi = Bnflux(minval(common_tri), mod(mesh_element(minval(common_tri))% &
-               knot_h, 3) + 1) / (r + r_prev) * 2 / hypot(lr, lz) * &
+          Bnpsi = Bnflux(kt_low(kf) + kt, ef) / r / hypot(lr, lz) * &
                (psi(kf+1) - psi(kf-1)) / sum(perps)
+
+          if (kf == 1) then
+             kp = kt
+          else
+             kp = kt / 2 + mod(kt, 2)
+          end if
 
           x(kp) = -dpres0_dpsi(kf) * Bnpsi
 
-          a(kp) = ((Br + Br_prev) * 0.5d0 * lr + (Bz + Bz_prev) * 0.5d0 * lz) / &
+          a(kp) = (B0r(kt_low(kf) + kt, ef) * lr + B0z(kt_low(kf) + kt, ef) * lz) / &
                (lr ** 2 + lz ** 2)
 
-          b(kp) = imun * (n + imun * damp) * (Bp / r + Bp_prev / r_prev) * 0.5d0
-       end do ! kp
+          b(kp) = imun * (n + imun * damp) * B0phi(kt_low(kf) + kt, ef) / r
+       end do inner
 
        ! solve linear system
        d = -a + b * 0.5d0
@@ -812,7 +784,7 @@ contains
           presn(kp_low(kf) + kp) = x(kp)
           write(1, *) real(x(kp)), aimag(x(kp))
        end do
-    end do ! kf
+    end do
     do kp = kp_low(nflux+1) + 1, npoint ! write zeroes in remaining points until end
        write(1, *) 0d0, 0d0
     end do
@@ -931,11 +903,11 @@ contains
     max_rel_err = 0d0
     avg_rel_err = 0d0
     do kf = 1, nflux ! loop through flux surfaces
+       Deltapsi = psi(kf) - psi(kf-1)
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
           area = elem%det_3 * 0.5d0
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          Deltapsi = psi(kf) - psi(kf-1)
           ! first term on source side: flux through edge f
           r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
           jnflux(kt_low(kf) + kt, ef) = clight * r / B0phi(kt_low(kf) + kt, ef) * &
@@ -1054,7 +1026,7 @@ contains
           r = (base%rcoord + tip%rcoord) * 0.5d0
           lr = tip%rcoord - base%rcoord
           lz = tip%zcoord - base%zcoord
-          call common_triangles(base, tip, common_tri)
+          common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
           perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz) * 0.5d0
           Bnpsi = B0phi(kt_low(kf) + kt, ef) / r
           Bnflux(kt_low(kf) + kt, ef) = Bnpsi * r * hypot(lr, lz) * sum(perps) / Deltapsi

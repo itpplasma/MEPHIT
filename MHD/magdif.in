@@ -11,7 +11,7 @@
    nflux = 74                                      ! number of flux surfaces up to and counting LCFS
    ti0 = 3.d3                                      ! temparature interpolation step
    di0 = 5.d13                                     ! density interpolation step
-   damp = 5.d-2                                    ! damping factor for resonances
+   damp = 0d0                                      ! damping factor for resonances
    point_file = '../PRELOAD/points.dat'            ! mesh points from PRELOAD
    tri_file = '../PRELOAD/triangles.dat'           ! triangles and edges from PRELOAD
    Bn_vac_file = '../PRELOAD/VACFIELD/Bn_flux.dat' ! vacuum perturbation field from PRELOAD

@@ -17,3 +17,5 @@
 - [ ] example matrices for aver_quad
 - [ ] linear interpolation error
 - [ ] analytical solution
+* check divergence at LCFS
+- d, du and individual factors are smooth, x and q are not

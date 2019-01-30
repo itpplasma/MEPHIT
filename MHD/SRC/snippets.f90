@@ -1,3 +1,28 @@
+  !> Returns the indices of the two triangles sharing an edge.
+  !>
+  !> @param knot1 first knot of the edge
+  !> @param knot2 second knot of the edge
+  !> @param common_tri indices of the triangles sharing the given edge
+  !>
+  !> The program is halted if the input data is invalid, i.e. if more than two triangles
+  !> appear to share the edge.
+  subroutine common_triangles(knot1, knot2, common_tri)
+    type(knot), intent(in) :: knot1, knot2
+    integer, intent(out) :: common_tri(2)
+
+    integer :: k, l, kcom
+    kcom = 0
+    do k = 1, knot1%n_owners
+       do l = 1, knot2%n_owners
+          if (knot1%i_owner_tri(k) == knot2%i_owner_tri(l)) then
+             kcom = kcom+1
+             if (kcom > 2) stop "Error: more than two common triangles for knots"
+             common_tri(kcom) = knot1%i_owner_tri(k)
+          end if
+       end do
+    end do
+  end subroutine common_triangles
+
 complex(dp) function neumaier_sum(length, array)
   integer, intent(in) :: length
   complex(dp), intent(in), dimension(length) :: array
