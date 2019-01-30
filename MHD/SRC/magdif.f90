@@ -279,6 +279,7 @@ contains
             decorate_filename(Bn_file, 'plot_', kiter), .true.)
        call write_triangle_flux(jnflux, jnphi, &
             decorate_filename(currn_file, 'plot_', kiter), .true.)
+       call write_nodal_dof(presn, decorate_filename(presn_file, '', kiter))
        Bnflux_sum = Bnflux_sum + Bnflux
        Bnphi_sum = Bnphi_sum + Bnphi
     end do
@@ -732,7 +733,6 @@ contains
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
-    open(1, file = presn_file, recl = 1024)
     do kf = 1, nflux
 inner: do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
@@ -778,22 +778,18 @@ inner: do kt = 1, kt_max(kf)
 
        if (kf == 1) then ! first point on axis before actual output
           presn(1) = sum(x) / size(x)
-          write(1, *) real(presn(1)), aimag(presn(1))
        end if
        do kp = 1, kp_max(kf)
           presn(kp_low(kf) + kp) = x(kp)
-          write(1, *) real(x(kp)), aimag(x(kp))
        end do
     end do
-    do kp = kp_low(nflux+1) + 1, npoint ! write zeroes in remaining points until end
-       write(1, *) 0d0, 0d0
-    end do
-    close(1)
 
     avg_rel_err = avg_rel_err / sum(kp_max(1:nflux))
     if (log_debug) write (logfile, *) 'compute_presn: diagonalization' // &
          ' max_rel_err = ', max_rel_err, ' avg_rel_err = ', avg_rel_err
     if (allocated(resid)) deallocate(resid)
+
+    call write_nodal_dof(presn, presn_file)
   end subroutine compute_presn
 
   !> Map edge symbols to integer indices.
@@ -1097,4 +1093,19 @@ inner: do kt = 1, kt_max(kf)
     close(1)
   end subroutine write_triangle_flux
 
+  subroutine write_nodal_dof(nodal_dof, outfile)
+    complex(dp), intent(in) :: nodal_dof(:)
+    character(len = *), intent(in) :: outfile
+
+    integer :: kpoint
+
+    open(1, file = outfile, recl = longlines)
+    do kpoint = 1, kp_low(nflux+1)
+       write (1, *) real(nodal_dof(kpoint)), aimag(nodal_dof(kpoint))
+    end do
+    do kpoint = kp_low(nflux+1) + 1, npoint ! write zeroes in remaining points until end
+       write (1, *) 0d0, 0d0
+    end do
+    close(1)
+  end subroutine write_nodal_dof
 end module magdif
