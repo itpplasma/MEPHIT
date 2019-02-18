@@ -1,0 +1,316 @@
+%% LyX 2.3.2 created this file.  For more info, see http://www.lyx.org/.
+%% Do not edit unless you really know what you are doing.
+\documentclass[english,notitlepage]{revtex4-1}
+\usepackage{tgpagella}
+\usepackage[T1]{fontenc}
+\usepackage[latin9]{inputenc}
+\setcounter{secnumdepth}{3}
+\usepackage{babel}
+\usepackage{amsmath}
+\usepackage[unicode=true]
+ {hyperref}
+\begin{document}
+\global\long\def\tht{\vartheta}%
+\global\long\def\ph{\varphi}%
+\global\long\def\balpha{\boldsymbol{\alpha}}%
+\global\long\def\btheta{\boldsymbol{\theta}}%
+\global\long\def\bJ{\boldsymbol{J}}%
+\global\long\def\bGamma{\boldsymbol{\Gamma}}%
+\global\long\def\bOmega{\boldsymbol{\Omega}}%
+\global\long\def\d{\text{d}}%
+\global\long\def\t#1{\text{#1}}%
+\global\long\def\m{\text{m}}%
+\global\long\def\v#1{\boldsymbol{#1}}%
+\global\long\def\u#1{\underline{#1}}%
+
+\global\long\def\t#1{\mathbf{#1}}%
+\global\long\def\bA{\boldsymbol{A}}%
+\global\long\def\bB{\boldsymbol{B}}%
+\global\long\def\c{\mathrm{c}}%
+\global\long\def\difp#1#2{\frac{\partial#1}{\partial#2}}%
+\global\long\def\xset{{\bf x}}%
+\global\long\def\zset{{\bf z}}%
+\global\long\def\qset{{\bf q}}%
+\global\long\def\pset{{\bf p}}%
+
+\title{Preconditioned iterations via the Arnoldi method aka incomplete GMRES}
+\author{Christopher Albert, Sergei Kasilov}
+\date{\today}
+\maketitle
+
+\section{Preconditioned iterative schemes}
+
+\subsection{Basics}
+
+Consider a linear system
+\begin{equation}
+\hat{A}\v x=\v b,\label{eq:Axb}
+\end{equation}
+where $\v x$ and $\v b$ are vectors of length $N$ and $\hat{A}$
+is an invertible linear operator, i.e.
+\begin{equation}
+\hat{A}(\lambda\v x+\mu\v y)=\lambda\hat{A}\v x+\mu\hat{A}\v y.
+\end{equation}
+We assume that the matrix representation of as an $N\times N$ is
+not given (usually due to the construction of the algorithm and/or
+memory requirements for large $N$), but for a given vector $\v x$
+there should be an explicit way to obtain $\hat{A}\v x$, e.g. by
+a function call. We are thus limited to matrix-free iterative methods
+to solve Eq.~(\ref{eq:Axb}). Such methods include direct (Richardson)
+iterations, possibly with some preconditioner, the conjugate gradient
+method, and the GMRES method.
+
+In particular we are going to consider problems of treating problems
+with some ``first guess'' $\v x_{0}$ and a correction $\hat{K}\v x$
+depending self-consistently on the final solution, so
+\begin{equation}
+\v x=\v x_{0}+\hat{K}\v x.\label{eq:xit}
+\end{equation}
+This means our operator $\hat{A}$ is of the form
+\begin{equation}
+\hat{A}=(\hat{I}-\hat{K}),
+\end{equation}
+where $\hat{I}$ is the identity operator, and our equation~(\ref{eq:xit})
+in the form of (\ref{eq:Axb}) with $\v b=\v x_{0}$ becomes
+\begin{equation}
+(\hat{I}-\hat{K})\v x=\v x_{0},\label{eq:ImK}
+\end{equation}
+so the solution is formally
+\begin{equation}
+\v x=(\hat{I}-\hat{K})^{-1}\v x_{0}.\label{eq:sol}
+\end{equation}
+
+
+\subsection{Exact solution in the eigenbasis}
+
+Assume we have have solved the eigenvalue problem for $\hat{K}$ and
+can write
+\begin{equation}
+\hat{K}=\hat{V}\hat{\Lambda}\hat{V}^{-1},
+\end{equation}
+where
+\begin{equation}
+\hat{\Lambda}=\left(\begin{array}{cccc}
+\lambda_{1}\\
+ & \lambda_{2}\\
+ &  & \ddots\\
+ &  &  & \lambda_{N}
+\end{array}\right)=\v{\Lambda}\hat{I}
+\end{equation}
+is a diagonal matrix containing eigenvalues, 
+\[
+\hat{V}=(\v v_{1},\v v_{2},\dots\v v_{N})
+\]
+is a matrix with respective eigenvectors as columns, and $\hat{V}^{-1}$
+is its inverse (for\emph{ normal }matrices this is equal to the transposed
+complex conjugate $\hat{V}^{\ast}$ of $\hat{V}$). Multiplying Eq.~(\ref{eq:ImK})
+from the left with $\hat{V}^{-1}$ and from the right with $\hat{V}$
+yields an equation 
+\begin{equation}
+(\underbrace{\hat{V}^{-1}\hat{I}\hat{V}}_{\hat{I}}-\hat{\Lambda})\v x^{\prime}=\v x_{0}^{\prime},\label{eq:ImK-1}
+\end{equation}
+where components of $\v x^{\prime}$ and $\v x_{0}^{\prime}$ in the
+eigenbasis $(\v v_{1},\v v_{2},\dots\v v_{N})$ are related to $\v x$
+and $\v x_{0}$ in the original canonical basis by the basis transformation
+\begin{equation}
+\v x^{\prime}=\hat{V}^{-1}\v x\hat{V}.
+\end{equation}
+Thus we can directly write the solution in the eigenbasis,
+\begin{equation}
+\v x^{\prime}=(\hat{I}-\hat{\Lambda})^{-1}\v x_{0}^{\prime}=\left(\begin{array}{cccc}
+\frac{1}{1-\lambda_{1}}\\
+ & \frac{1}{1-\lambda_{2}}\\
+ &  & \ddots\\
+ &  &  & \frac{1}{1-\lambda_{N}}
+\end{array}\right)\left(\begin{array}{c}
+x_{01}^{\prime}\\
+x_{02}^{\prime}\\
+\dots\\
+x_{0N}^{\prime}
+\end{array}\right).
+\end{equation}
+Finally we transform back to 
+\begin{equation}
+\v x=\hat{V}\v x^{\prime}\hat{V}^{-1}.
+\end{equation}
+Performing this procedure in an incomplete iterative way until convergence,
+starting at the largest eigenvalue using a Krylov/Arnoldi scheme is
+known as the GMRES method. Since in the end our matrices will be noisy
+and our problems possibly nonlinear, we cannot apply standard method
+up to convergence, let alone find all eigenvalues. Instead we will
+work partly in the eigenbasis to precondition the problem and solve
+the remaining (hopefully highly convergent) part of the problem by
+direct iterations discussed below.
+
+\subsection{Direct iterations}
+
+A simple and robust (but often slow) way to solve Eq.~(\ref{eq:ImK})
+iteratively is the following. If we apply the operator $\hat{K}$
+to $\v x$ and it doesn't change anymore, this means that we have
+found a converged solution. Indeed we can expand Eq.~(\ref{eq:ImK})
+to an operator series analogous to the well-known geometric series
+\begin{equation}
+\frac{1}{1-z}=1+z+z^{2}+\dots\label{eq:series1}
+\end{equation}
+as a so-called \emph{Neumann} or \emph{operator series}
+\begin{equation}
+(\hat{I}-\hat{K})^{-1}=\hat{I}+\hat{K}+\hat{K}^{2}+\dots,
+\end{equation}
+where $\hat{K}^{n}\equiv\hat{K}\hat{K}\dots$ means applying the operator
+$n$ times. The solution~(\ref{eq:sol}) to Eq.~(\ref{eq:ImK})
+is thus given as an infinite series
+\begin{equation}
+\v x=(\hat{I}-\hat{K})^{-1}=\v x_{0}+\hat{K}\v x_{0}+\hat{K}^{2}\v x_{0}+\dots\label{eq:series2}
+\end{equation}
+Of course we can do this kind of expansion for any linear system Eq.~(\ref{eq:Axb})
+with operator $\hat{A}$ in by defining $\hat{K}\equiv\hat{A}+\hat{I}$,
+but in contrast to the natural expansion for problems of the form
+(\ref{eq:ImK}), adding and substracting $\hat{I}$ in Eq.~(\ref{eq:Axb})
+seems like a rather arbitrary step.
+
+\subsubsection{Convergence and analogy to the complex geometric series}
+
+Now the natural question is, if the series (\ref{eq:series2}) converges,
+and if yes, how fast. Let us take again the geometric series~(\ref{eq:series1})
+as an example. The function $1/(1-z)$ is the inverse of $1-z$ in
+the sense that
+\begin{align*}
+(1-z)\,\v x & =\v x_{0}\Leftrightarrow\v x=\frac{1}{1-z}\v x_{0}
+\end{align*}
+and has a well-defined value for any complex number $z\neq1$ (the
+corresponding operator would be $\hat{K}=z\hat{I}$). We can easily
+check convergence of the series by taking the formula for finite polynomials
+\begin{equation}
+1+z+z^{2}+\dots+z^{n}=\frac{1-z^{n+1}}{1-z}.\label{eq:series1-2}
+\end{equation}
+Taking a limit $n\rightarrow\infty$ shows lets $z^{n}$ vanish if
+$|z|<1$. If we put in a number with $|z|>1$ the series diverges
+and cannot reproduce the correct result $1/(1-z)$. The series representation~(\ref{eq:series1})
+is thus said to have a convergence radius $r=1$. In the limiting
+case $|z|=1$ we don't get any useful information, but note the following:
+\begin{enumerate}
+\item At a real $z=1$ the series diverges, but so does $\frac{1}{1-z}$.
+\item At purely imaginary $z=i$ the series oscillates around zero
+\begin{equation}
+1+i-1-i+\dots\label{eq:series1-1}
+\end{equation}
+but doesn't converge.
+\end{enumerate}
+Now we can ask the question how fast the series converges, i.e. how
+many terms we need to compute in order to get a reasonable approximation.
+Take for example $z=0.2$. Then we have the exact result
+\begin{equation}
+f(z)=\frac{1}{1-z}=\frac{1}{1-0.2}=\frac{1}{0.8}=1.25\,.
+\end{equation}
+The first few truncated series terms are
+\begin{align}
+f_{[0]} & =1,\\
+f_{[1]} & =1+0.2=1.2,\\
+f_{[2]} & =1+0.2+0.04=1.24,\\
+f_{[3]} & =1+0.2+0.04+0.008=1.248,\\
+ & \vdots\nonumber 
+\end{align}
+We observe that we reach a very good approximation of $1.25$ quite
+fast. Take on the other hand $z=0.8$ with
+\begin{equation}
+f(z)=\frac{1}{1-z}=\frac{1}{1-0.8}=\frac{1}{0.2}=5\,.
+\end{equation}
+Then we have
+\begin{align}
+f_{[0]} & =1,\label{eq:08}\\
+f_{[1]} & =1+0.8=1.8,\\
+f_{[2]} & =1+0.8+0.64=2.44,\\
+f_{[3]} & =1+0.8+0.64+0.008=2.952,\label{eq:08end}\\
+ & \vdots\nonumber 
+\end{align}
+Here convergence is much worse and we would need a lot more iterations
+to reach values close to $5$. The reason is that $z=0.8$ is much
+closer to $1$ than $z=0.2$, and thus produces a large value when
+taking $1/(1-z)$. Our available series terms are always $<1$ and
+must shrink even further to converge. The exact value of $1/(1-z)$
+can become arbitrarily large for $z\rightarrow1$ and arbitrarily
+close to $1$ for $z\rightarrow0$. In fact in the former case we
+have infinitely slow convergence due to the mentioned reason, whereas
+in the latter case we have the exact solution already in the $0$th
+iteration.
+
+\subsection{Enforcing convergence of a series by a transformation}
+
+Now the question is how we can extend our radius of convergence beyond
+$1$ and at the same time accelerate convergence for $z<1$ close
+to $1$. Let's see what happens if we rescale
+\begin{equation}
+z\equiv aw,
+\end{equation}
+with a fixed $a$. Then we have partial sums
+\begin{equation}
+1+aw+a^{2}w^{2}+\dots+a^{n}w^{n}=\frac{1-a^{n+1}w^{n+1}}{1-aw}.
+\end{equation}
+Unfortunately this doesn't help us at all, since the convergence radius
+of the series in $w$ is now only $1/a$, which gives us the exact
+same behavior as of the original series. This will turn out to be
+the reason why a relaxation factor for direct iterations doesn't help
+us in this class or problems.
+
+What works better for accelerating convergence is replacing $z=aw+d$
+by a linear transformation with generally complex $a$ and $d$, i.e.
+\begin{equation}
+\frac{1}{1-z}=\frac{1}{1-aw-d}=\frac{1}{1-d}\frac{1}{1-\frac{aw}{1-d}}.
+\end{equation}
+More generally, to accelerate convergence of complex number series
+one would use conformal mappings (see e.g. \href{http://www.math.wisc.edu/~waleffe/M321/complex.pdf}{http://www.math.wisc.edu/$\sim$waleffe/M321/complex.pdf}),
+but for our purpose of treating operators, we limit ourselves to linear
+transformations. In that case we obtain a geometric series representation
+in $\frac{aw}{1-d}$ as
+\begin{equation}
+\frac{1}{1-z}=\frac{1}{1-d}\left(1+\frac{aw}{1-d}+\left(\frac{aw}{1-d}\right)^{2}+\dots\right)
+\end{equation}
+that converges for $\left|\frac{aw}{1-d}\right|<1$, i.e.
+\begin{equation}
+|z-d|<|1-d|.\label{eq:conve}
+\end{equation}
+Remember that $d$ is complex, so we can really shift the complex
+origin around (try drawing it), rather than just subtracting real
+numbers from $z$. Let's take $d=0.6$ and $a=1$. Then for our case
+$z=0.8$ we obtain 
+\begin{equation}
+w=\frac{z-d}{a}=0.2
+\end{equation}
+ and approximations
+\begin{align}
+f_{[0]} & =\frac{1}{1-d}=\frac{1}{0.4}=2.5,\\
+f_{[1]} & =\frac{1}{0.4}\left(1+\frac{0.8}{0.4}\right)=3.75,\\
+f_{[2]} & =\frac{1}{0.4}\left(1+\frac{0.2}{0.4}+\left(\frac{0.2}{0.4}\right)^{2}\right)=4.375,\\
+f_{[3]} & =\frac{1}{0.4}\left(1+\frac{0.2}{0.4}+\left(\frac{0.2}{0.4}\right)^{2}+\left(\frac{0.2}{0.4}\right)^{3}\right)=4.6875,\\
+ & \vdots\nonumber 
+\end{align}
+This is not quite as good as the case of $z=0.2$, but already much
+better than the direct iterations in~(\ref{eq:08}-\ref{eq:08end}).
+Of course if we had taken $d=z$ then $f_{[0]}=f$ would have been
+the exact solution with guaranteed convergence everywhere (except
+trivial $z=0$) due to $0<|1-z|$ in (\ref{eq:conve}).
+
+\subsection{Preconditioning to enforce/accelerate iteration convergence}
+
+In general we call a method to make an \emph{operator series }converge
+by a linear transformation \emph{preconditioned iterations.} More
+generally what we have done in the previous section for the seemingly
+trivial optimum case $d=z$ is related to \emph{eigenvalues} of the
+operator where $\hat{K}\v v=\lambda\v v$ for \emph{eigenvectors $\v v$}.
+Since for $\hat{K}=z\hat{I}$ all vectors are eigenvectors with $\lambda=z$
+the solution becomes trivial in this sense. Now we will extend the
+discussed concepts and preconditioning to general linear operators
+and their eigenbasis. TODO write operator series via eigenvalues...
+finally preconditioner: $\hat{\Pi}$
+
+\section{TODOs for the one who continues kinetic equilibria:}
+
+\subsection{Perturbed problem for noisy matrices}
+
+Check how sensitive the method is to random noise in the operator
+$\hat{A}$ and possibly find some general rules of applicability.
+
+\subsection{Extension to nonlinear operators}
+
+Extend the method to nonlinear operators.
+\end{document}

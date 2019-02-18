@@ -165,3 +165,5 @@ with open(infile+'_ext.msh', 'w') as f:
     for ke in range(NEE):
         f.write('{} {} {}\n'.format(edge[ke,0],edge[ke,1],1))
         
+# write extended mesh for GMSH
+        

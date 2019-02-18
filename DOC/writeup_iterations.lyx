@@ -1,0 +1,1192 @@
+#LyX 2.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 544
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass revtex4-1
+\options notitlepage
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "tgpagella" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\use_microtype false
+\use_dash_ligatures true
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize default
+\spacing single
+\use_hyperref false
+\papersize default
+\use_geometry false
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine natbib
+\cite_engine_type authoryear
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\use_minted 0
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation indent
+\paragraph_indentation default
+\is_math_indent 0
+\math_numbering_side default
+\quotes_style english
+\dynamic_quotes 0
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Standard
+\begin_inset FormulaMacro
+\newcommand{\tht}{\vartheta}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\ph}{\varphi}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\balpha}{\boldsymbol{\alpha}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\btheta}{\boldsymbol{\theta}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bJ}{\boldsymbol{J}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bGamma}{\boldsymbol{\Gamma}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bOmega}{\boldsymbol{\Omega}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\d}{\text{d}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\t}[1]{\text{#1}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\m}{\text{m}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\v}[1]{\boldsymbol{#1}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\u}[1]{\underline{#1}}
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset FormulaMacro
+\renewcommand{\t}[1]{\mathbf{#1}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bA}{\boldsymbol{A}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bB}{\boldsymbol{B}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\c}{\mathrm{c}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\difp}[2]{\frac{\partial#1}{\partial#2}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\xset}{{\bf x}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\zset}{{\bf z}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\qset}{{\bf q}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\pset}{{\bf p}}
+\end_inset
+
+
+\end_layout
+
+\begin_layout Title
+Preconditioned iterations via the Arnoldi method aka incomplete GMRES
+\end_layout
+
+\begin_layout Author
+Christopher Albert, Sergei Kasilov
+\end_layout
+
+\begin_layout Date
+\begin_inset ERT
+status open
+
+\begin_layout Plain Layout
+
+
+\backslash
+today
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+Preconditioned iterative schemes
+\end_layout
+
+\begin_layout Subsection
+Basics
+\end_layout
+
+\begin_layout Standard
+Consider a linear system
+\begin_inset Formula 
+\begin{equation}
+\hat{A}\v x=\v b,\label{eq:Axb}
+\end{equation}
+
+\end_inset
+
+where 
+\begin_inset Formula $\v x$
+\end_inset
+
+ and 
+\begin_inset Formula $\v b$
+\end_inset
+
+ are vectors of length 
+\begin_inset Formula $N$
+\end_inset
+
+ and 
+\begin_inset Formula $\hat{A}$
+\end_inset
+
+ is an invertible linear operator, i.e.
+\begin_inset Formula 
+\begin{equation}
+\hat{A}(\lambda\v x+\mu\v y)=\lambda\hat{A}\v x+\mu\hat{A}\v y.
+\end{equation}
+
+\end_inset
+
+We assume that the matrix representation of as an 
+\begin_inset Formula $N\times N$
+\end_inset
+
+ is not given (usually due to the construction of the algorithm and/or memory
+ requirements for large 
+\begin_inset Formula $N$
+\end_inset
+
+), but for a given vector 
+\begin_inset Formula $\v x$
+\end_inset
+
+ there should be an explicit way to obtain 
+\begin_inset Formula $\hat{A}\v x$
+\end_inset
+
+, e.g.
+ by a function call.
+ We are thus limited to matrix-free iterative methods to solve Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:Axb"
+
+\end_inset
+
+.
+ Such methods include direct (Richardson) iterations, possibly with some
+ preconditioner, the conjugate gradient method, and the GMRES method.
+\end_layout
+
+\begin_layout Standard
+In particular we are going to consider problems of treating problems with
+ some 
+\begin_inset Quotes eld
+\end_inset
+
+first guess
+\begin_inset Quotes erd
+\end_inset
+
+ 
+\begin_inset Formula $\v x_{0}$
+\end_inset
+
+ and a correction 
+\begin_inset Formula $\hat{K}\v x$
+\end_inset
+
+ depending self-consistently on the final solution, so
+\begin_inset Formula 
+\begin{equation}
+\v x=\v x_{0}+\hat{K}\v x.\label{eq:xit}
+\end{equation}
+
+\end_inset
+
+This means our operator 
+\begin_inset Formula $\hat{A}$
+\end_inset
+
+ is of the form
+\begin_inset Formula 
+\begin{equation}
+\hat{A}=(\hat{I}-\hat{K}),
+\end{equation}
+
+\end_inset
+
+where 
+\begin_inset Formula $\hat{I}$
+\end_inset
+
+ is the identity operator, and our equation
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:xit"
+
+\end_inset
+
+ in the form of 
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:Axb"
+
+\end_inset
+
+ with 
+\begin_inset Formula $\v b=\v x_{0}$
+\end_inset
+
+ becomes
+\begin_inset Formula 
+\begin{equation}
+(\hat{I}-\hat{K})\v x=\v x_{0},\label{eq:ImK}
+\end{equation}
+
+\end_inset
+
+so the solution is formally
+\begin_inset Formula 
+\begin{equation}
+\v x=(\hat{I}-\hat{K})^{-1}\v x_{0}.\label{eq:sol}
+\end{equation}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Subsection
+Exact solution in the eigenbasis
+\end_layout
+
+\begin_layout Standard
+Assume we have have solved the eigenvalue problem for 
+\begin_inset Formula $\hat{K}$
+\end_inset
+
+ and can write
+\begin_inset Formula 
+\begin{equation}
+\hat{K}=\hat{V}\hat{\Lambda}\hat{V}^{-1},
+\end{equation}
+
+\end_inset
+
+where
+\begin_inset Formula 
+\begin{equation}
+\hat{\Lambda}=\left(\begin{array}{cccc}
+\lambda_{1}\\
+ & \lambda_{2}\\
+ &  & \ddots\\
+ &  &  & \lambda_{N}
+\end{array}\right)=\v{\Lambda}\hat{I}
+\end{equation}
+
+\end_inset
+
+is a diagonal matrix containing eigenvalues, 
+\begin_inset Formula 
+\[
+\hat{V}=(\v v_{1},\v v_{2},\dots\v v_{N})
+\]
+
+\end_inset
+
+is a matrix with respective eigenvectors as columns, and 
+\begin_inset Formula $\hat{V}^{-1}$
+\end_inset
+
+ is its inverse (for
+\emph on
+ normal 
+\emph default
+matrices this is equal to the transposed complex conjugate 
+\begin_inset Formula $\hat{V}^{\ast}$
+\end_inset
+
+ of 
+\begin_inset Formula $\hat{V}$
+\end_inset
+
+).
+ Multiplying Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:ImK"
+
+\end_inset
+
+ from the left with 
+\begin_inset Formula $\hat{V}^{-1}$
+\end_inset
+
+ and from the right with 
+\begin_inset Formula $\hat{V}$
+\end_inset
+
+ yields an equation 
+\begin_inset Formula 
+\begin{equation}
+(\underbrace{\hat{V}^{-1}\hat{I}\hat{V}}_{\hat{I}}-\hat{\Lambda})\v x^{\prime}=\v x_{0}^{\prime},\label{eq:ImK-1}
+\end{equation}
+
+\end_inset
+
+where components of 
+\begin_inset Formula $\v x^{\prime}$
+\end_inset
+
+ and 
+\begin_inset Formula $\v x_{0}^{\prime}$
+\end_inset
+
+ in the eigenbasis 
+\begin_inset Formula $(\v v_{1},\v v_{2},\dots\v v_{N})$
+\end_inset
+
+ are related to 
+\begin_inset Formula $\v x$
+\end_inset
+
+ and 
+\begin_inset Formula $\v x_{0}$
+\end_inset
+
+ in the original canonical basis by the basis transformation
+\begin_inset Formula 
+\begin{equation}
+\v x^{\prime}=\hat{V}^{-1}\v x\hat{V}.
+\end{equation}
+
+\end_inset
+
+Thus we can directly write the solution in the eigenbasis,
+\begin_inset Formula 
+\begin{equation}
+\v x^{\prime}=(\hat{I}-\hat{\Lambda})^{-1}\v x_{0}^{\prime}=\left(\begin{array}{cccc}
+\frac{1}{1-\lambda_{1}}\\
+ & \frac{1}{1-\lambda_{2}}\\
+ &  & \ddots\\
+ &  &  & \frac{1}{1-\lambda_{N}}
+\end{array}\right)\left(\begin{array}{c}
+x_{01}^{\prime}\\
+x_{02}^{\prime}\\
+\dots\\
+x_{0N}^{\prime}
+\end{array}\right).
+\end{equation}
+
+\end_inset
+
+Finally we transform back to 
+\begin_inset Formula 
+\begin{equation}
+\v x=\hat{V}\v x^{\prime}\hat{V}^{-1}.
+\end{equation}
+
+\end_inset
+
+Performing this procedure in an incomplete iterative way until convergence,
+ starting at the largest eigenvalue using a Krylov/Arnoldi scheme is known
+ as the GMRES method.
+ Since in the end our matrices will be noisy and our problems possibly nonlinear
+, we cannot apply standard method up to convergence, let alone find all
+ eigenvalues.
+ Instead we will work partly in the eigenbasis to precondition the problem
+ and solve the remaining (hopefully highly convergent) part of the problem
+ by direct iterations discussed below.
+\end_layout
+
+\begin_layout Subsection
+Direct iterations
+\end_layout
+
+\begin_layout Standard
+A simple and robust (but often slow) way to solve Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:ImK"
+
+\end_inset
+
+ iteratively is the following.
+ If we apply the operator 
+\begin_inset Formula $\hat{K}$
+\end_inset
+
+ to 
+\begin_inset Formula $\v x$
+\end_inset
+
+ and it doesn't change anymore, this means that we have found a converged
+ solution.
+ Indeed we can expand Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:ImK"
+
+\end_inset
+
+ to an operator series analogous to the well-known geometric series
+\begin_inset Formula 
+\begin{equation}
+\frac{1}{1-z}=1+z+z^{2}+\dots\label{eq:series1}
+\end{equation}
+
+\end_inset
+
+as a so-called 
+\emph on
+Neumann
+\emph default
+ or 
+\emph on
+operator series
+\emph default
+
+\begin_inset Formula 
+\begin{equation}
+(\hat{I}-\hat{K})^{-1}=\hat{I}+\hat{K}+\hat{K}^{2}+\dots,
+\end{equation}
+
+\end_inset
+
+where 
+\begin_inset Formula $\hat{K}^{n}\equiv\hat{K}\hat{K}\dots$
+\end_inset
+
+ means applying the operator 
+\begin_inset Formula $n$
+\end_inset
+
+ times.
+ The solution
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:sol"
+
+\end_inset
+
+ to Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:ImK"
+
+\end_inset
+
+ is thus given as an infinite series
+\begin_inset Formula 
+\begin{equation}
+\v x=(\hat{I}-\hat{K})^{-1}=\v x_{0}+\hat{K}\v x_{0}+\hat{K}^{2}\v x_{0}+\dots\label{eq:series2}
+\end{equation}
+
+\end_inset
+
+Of course we can do this kind of expansion for any linear system Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:Axb"
+
+\end_inset
+
+ with operator 
+\begin_inset Formula $\hat{A}$
+\end_inset
+
+ in by defining 
+\begin_inset Formula $\hat{K}\equiv\hat{A}+\hat{I}$
+\end_inset
+
+, but in contrast to the natural expansion for problems of the form 
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:ImK"
+
+\end_inset
+
+, adding and substracting 
+\begin_inset Formula $\hat{I}$
+\end_inset
+
+ in Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:Axb"
+
+\end_inset
+
+ seems like a rather arbitrary step.
+\end_layout
+
+\begin_layout Subsubsection
+Convergence and analogy to the complex geometric series
+\end_layout
+
+\begin_layout Standard
+Now the natural question is, if the series 
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:series2"
+
+\end_inset
+
+ converges, and if yes, how fast.
+ Let us take again the geometric series
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:series1"
+
+\end_inset
+
+ as an example.
+ The function 
+\begin_inset Formula $1/(1-z)$
+\end_inset
+
+ is the inverse of 
+\begin_inset Formula $1-z$
+\end_inset
+
+ in the sense that
+\begin_inset Formula 
+\begin{align*}
+(1-z)\,\v x & =\v x_{0}\Leftrightarrow\v x=\frac{1}{1-z}\v x_{0}
+\end{align*}
+
+\end_inset
+
+and has a well-defined value for any complex number 
+\begin_inset Formula $z\neq1$
+\end_inset
+
+ (the corresponding operator would be 
+\begin_inset Formula $\hat{K}=z\hat{I}$
+\end_inset
+
+).
+ We can easily check convergence of the series by taking the formula for
+ finite polynomials
+\begin_inset Formula 
+\begin{equation}
+1+z+z^{2}+\dots+z^{n}=\frac{1-z^{n+1}}{1-z}.\label{eq:series1-2}
+\end{equation}
+
+\end_inset
+
+Taking a limit 
+\begin_inset Formula $n\rightarrow\infty$
+\end_inset
+
+ shows lets 
+\begin_inset Formula $z^{n}$
+\end_inset
+
+ vanish if 
+\begin_inset Formula $|z|<1$
+\end_inset
+
+.
+ If we put in a number with 
+\begin_inset Formula $|z|>1$
+\end_inset
+
+ the series diverges and cannot reproduce the correct result 
+\begin_inset Formula $1/(1-z)$
+\end_inset
+
+.
+ The series representation
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:series1"
+
+\end_inset
+
+ is thus said to have a convergence radius 
+\begin_inset Formula $r=1$
+\end_inset
+
+.
+ In the limiting case 
+\begin_inset Formula $|z|=1$
+\end_inset
+
+ we don't get any useful information, but note the following:
+\end_layout
+
+\begin_layout Enumerate
+At a real 
+\begin_inset Formula $z=1$
+\end_inset
+
+ the series diverges, but so does 
+\begin_inset Formula $\frac{1}{1-z}$
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Enumerate
+At purely imaginary 
+\begin_inset Formula $z=i$
+\end_inset
+
+ the series oscillates around zero
+\begin_inset Formula 
+\begin{equation}
+1+i-1-i+\dots\label{eq:series1-1}
+\end{equation}
+
+\end_inset
+
+but doesn't converge.
+\end_layout
+
+\begin_layout Standard
+Now we can ask the question how fast the series converges, i.e.
+ how many terms we need to compute in order to get a reasonable approximation.
+ Take for example 
+\begin_inset Formula $z=0.2$
+\end_inset
+
+.
+ Then we have the exact result
+\begin_inset Formula 
+\begin{equation}
+f(z)=\frac{1}{1-z}=\frac{1}{1-0.2}=\frac{1}{0.8}=1.25\,.
+\end{equation}
+
+\end_inset
+
+The first few truncated series terms are
+\begin_inset Formula 
+\begin{align}
+f_{[0]} & =1,\\
+f_{[1]} & =1+0.2=1.2,\\
+f_{[2]} & =1+0.2+0.04=1.24,\\
+f_{[3]} & =1+0.2+0.04+0.008=1.248,\\
+ & \vdots\nonumber 
+\end{align}
+
+\end_inset
+
+We observe that we reach a very good approximation of 
+\begin_inset Formula $1.25$
+\end_inset
+
+ quite fast.
+ Take on the other hand 
+\begin_inset Formula $z=0.8$
+\end_inset
+
+ with
+\begin_inset Formula 
+\begin{equation}
+f(z)=\frac{1}{1-z}=\frac{1}{1-0.8}=\frac{1}{0.2}=5\,.
+\end{equation}
+
+\end_inset
+
+Then we have
+\begin_inset Formula 
+\begin{align}
+f_{[0]} & =1,\label{eq:08}\\
+f_{[1]} & =1+0.8=1.8,\\
+f_{[2]} & =1+0.8+0.64=2.44,\\
+f_{[3]} & =1+0.8+0.64+0.008=2.952,\label{eq:08end}\\
+ & \vdots\nonumber 
+\end{align}
+
+\end_inset
+
+Here convergence is much worse and we would need a lot more iterations to
+ reach values close to 
+\begin_inset Formula $5$
+\end_inset
+
+.
+ The reason is that 
+\begin_inset Formula $z=0.8$
+\end_inset
+
+ is much closer to 
+\begin_inset Formula $1$
+\end_inset
+
+ than 
+\begin_inset Formula $z=0.2$
+\end_inset
+
+, and thus produces a large value when taking 
+\begin_inset Formula $1/(1-z)$
+\end_inset
+
+.
+ Our available series terms are always 
+\begin_inset Formula $<1$
+\end_inset
+
+ and must shrink even further to converge.
+ The exact value of 
+\begin_inset Formula $1/(1-z)$
+\end_inset
+
+ can become arbitrarily large for 
+\begin_inset Formula $z\rightarrow1$
+\end_inset
+
+ and arbitrarily close to 
+\begin_inset Formula $1$
+\end_inset
+
+ for 
+\begin_inset Formula $z\rightarrow0$
+\end_inset
+
+.
+ In fact in the former case we have infinitely slow convergence due to the
+ mentioned reason, whereas in the latter case we have the exact solution
+ already in the 
+\begin_inset Formula $0$
+\end_inset
+
+th iteration.
+\end_layout
+
+\begin_layout Subsection
+Enforcing convergence of a series by a transformation
+\end_layout
+
+\begin_layout Standard
+Now the question is how we can extend our radius of convergence beyond 
+\begin_inset Formula $1$
+\end_inset
+
+ and at the same time accelerate convergence for 
+\begin_inset Formula $z<1$
+\end_inset
+
+ close to 
+\begin_inset Formula $1$
+\end_inset
+
+.
+ Let's see what happens if we rescale
+\begin_inset Formula 
+\begin{equation}
+z\equiv aw,
+\end{equation}
+
+\end_inset
+
+with a fixed 
+\begin_inset Formula $a$
+\end_inset
+
+.
+ Then we have partial sums
+\begin_inset Formula 
+\begin{equation}
+1+aw+a^{2}w^{2}+\dots+a^{n}w^{n}=\frac{1-a^{n+1}w^{n+1}}{1-aw}.
+\end{equation}
+
+\end_inset
+
+Unfortunately this doesn't help us at all, since the convergence radius
+ of the series in 
+\begin_inset Formula $w$
+\end_inset
+
+ is now only 
+\begin_inset Formula $1/a$
+\end_inset
+
+, which gives us the exact same behavior as of the original series.
+ This will turn out to be the reason why a relaxation factor for direct
+ iterations doesn't help us in this class or problems.
+\end_layout
+
+\begin_layout Standard
+What works better for accelerating convergence is replacing 
+\begin_inset Formula $z=aw+d$
+\end_inset
+
+ by a linear transformation with generally complex 
+\begin_inset Formula $a$
+\end_inset
+
+ and 
+\begin_inset Formula $d$
+\end_inset
+
+, i.e.
+\begin_inset Formula 
+\begin{equation}
+\frac{1}{1-z}=\frac{1}{1-aw-d}=\frac{1}{1-d}\frac{1}{1-\frac{aw}{1-d}}.
+\end{equation}
+
+\end_inset
+
+More generally, to accelerate convergence of complex number series one would
+ use conformal mappings (see e.g.
+ 
+\begin_inset CommandInset href
+LatexCommand href
+target "http://www.math.wisc.edu/~waleffe/M321/complex.pdf"
+
+\end_inset
+
+), but for our purpose of treating operators, we limit ourselves to linear
+ transformations.
+ In that case we obtain a geometric series representation in 
+\begin_inset Formula $\frac{aw}{1-d}$
+\end_inset
+
+ as
+\begin_inset Formula 
+\begin{equation}
+\frac{1}{1-z}=\frac{1}{1-d}\left(1+\frac{aw}{1-d}+\left(\frac{aw}{1-d}\right)^{2}+\dots\right)
+\end{equation}
+
+\end_inset
+
+that converges for 
+\begin_inset Formula $\left|\frac{aw}{1-d}\right|<1$
+\end_inset
+
+, i.e.
+\begin_inset Formula 
+\begin{equation}
+|z-d|<|1-d|.\label{eq:conve}
+\end{equation}
+
+\end_inset
+
+Remember that 
+\begin_inset Formula $d$
+\end_inset
+
+ is complex, so we can really shift the complex origin around (try drawing
+ it), rather than just subtracting real numbers from 
+\begin_inset Formula $z$
+\end_inset
+
+.
+ Let's take 
+\begin_inset Formula $d=0.6$
+\end_inset
+
+ and 
+\begin_inset Formula $a=1$
+\end_inset
+
+.
+ Then for our case 
+\begin_inset Formula $z=0.8$
+\end_inset
+
+ we obtain 
+\begin_inset Formula 
+\begin{equation}
+w=\frac{z-d}{a}=0.2
+\end{equation}
+
+\end_inset
+
+ and approximations
+\begin_inset Formula 
+\begin{align}
+f_{[0]} & =\frac{1}{1-d}=\frac{1}{0.4}=2.5,\\
+f_{[1]} & =\frac{1}{0.4}\left(1+\frac{0.8}{0.4}\right)=3.75,\\
+f_{[2]} & =\frac{1}{0.4}\left(1+\frac{0.2}{0.4}+\left(\frac{0.2}{0.4}\right)^{2}\right)=4.375,\\
+f_{[3]} & =\frac{1}{0.4}\left(1+\frac{0.2}{0.4}+\left(\frac{0.2}{0.4}\right)^{2}+\left(\frac{0.2}{0.4}\right)^{3}\right)=4.6875,\\
+ & \vdots\nonumber 
+\end{align}
+
+\end_inset
+
+This is not quite as good as the case of 
+\begin_inset Formula $z=0.2$
+\end_inset
+
+, but already much better than the direct iterations in
+\begin_inset space ~
+\end_inset
+
+(
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:08"
+
+\end_inset
+
+-
+\begin_inset CommandInset ref
+LatexCommand ref
+reference "eq:08end"
+
+\end_inset
+
+).
+ Of course if we had taken 
+\begin_inset Formula $d=z$
+\end_inset
+
+ then 
+\begin_inset Formula $f_{[0]}=f$
+\end_inset
+
+ would have been the exact solution with guaranteed convergence everywhere
+ (except trivial 
+\begin_inset Formula $z=0$
+\end_inset
+
+) due to 
+\begin_inset Formula $0<|1-z|$
+\end_inset
+
+ in 
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:conve"
+
+\end_inset
+
+.
+\end_layout
+
+\begin_layout Subsection
+Preconditioning to enforce/accelerate iteration convergence
+\end_layout
+
+\begin_layout Standard
+In general we call a method to make an 
+\emph on
+operator series 
+\emph default
+converge by a linear transformation 
+\emph on
+preconditioned iterations.
+
+\emph default
+ More generally what we have done in the previous section for the seemingly
+ trivial optimum case 
+\begin_inset Formula $d=z$
+\end_inset
+
+ is related to 
+\emph on
+eigenvalues
+\emph default
+ of the operator where 
+\begin_inset Formula $\hat{K}\v v=\lambda\v v$
+\end_inset
+
+ for 
+\emph on
+eigenvectors 
+\begin_inset Formula $\v v$
+\end_inset
+
+
+\emph default
+.
+ Since for 
+\begin_inset Formula $\hat{K}=z\hat{I}$
+\end_inset
+
+ all vectors are eigenvectors with 
+\begin_inset Formula $\lambda=z$
+\end_inset
+
+ the solution becomes trivial in this sense.
+ Now we will extend the discussed concepts and preconditioning to general
+ linear operators and their eigenbasis.
+ TODO write operator series via eigenvalues...
+ finally preconditioner: 
+\begin_inset Formula $\hat{\Pi}$
+\end_inset
+
+
+\end_layout
+
+\begin_layout Section
+TODOs for the one who continues kinetic equilibria:
+\end_layout
+
+\begin_layout Subsection
+Perturbed problem for noisy matrices
+\end_layout
+
+\begin_layout Standard
+Check how sensitive the method is to random noise in the operator 
+\begin_inset Formula $\hat{A}$
+\end_inset
+
+ and possibly find some general rules of applicability.
+\end_layout
+
+\begin_layout Subsection
+Extension to nonlinear operators
+\end_layout
+
+\begin_layout Standard
+Extend the method to nonlinear operators.
+\end_layout
+
+\end_body
+\end_document

@@ -15,8 +15,8 @@ from readmsh import readmsh
 
 infile = '../PRELOAD/inputformaxwell_ext.msh'
 #currnfile = '../FEM/currtest.dat'
-#currnfile = '../MHD/Bn.dat'
-currnfile = '../MHD/Bn_fenics.dat'
+currnfile = '../MHD/Bn.dat'
+#currnfile = '../MHD/Bn_fenics.dat'
 #currnfile = '../MHD/currn.dat'
 
 [node, tri, edge, nlab, tlab, elab] = readmsh(infile)
