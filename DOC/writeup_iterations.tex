@@ -98,22 +98,28 @@ where
 \end{array}\right)=\v{\Lambda}\hat{I}
 \end{equation}
 is a diagonal matrix containing eigenvalues, 
-\[
+\begin{equation}
 \hat{V}=(\v v_{1},\v v_{2},\dots\v v_{N})
-\]
+\end{equation}
 is a matrix with respective eigenvectors as columns, and $\hat{V}^{-1}$
 is its inverse (for\emph{ normal }matrices this is equal to the transposed
 complex conjugate $\hat{V}^{\ast}$ of $\hat{V}$). Multiplying Eq.~(\ref{eq:ImK})
-from the left with $\hat{V}^{-1}$ and from the right with $\hat{V}$
-yields an equation 
+from the left with $\hat{V}^{-1}$ and defining components $\v x^{\prime}$
+in the eigenbasis via
+\begin{equation}
+\v x=\sum_{k}x_{k}^{\prime}\v v_{k}=\hat{V}\v x^{\prime},
+\end{equation}
+yields an equation
+
 \begin{equation}
 (\underbrace{\hat{V}^{-1}\hat{I}\hat{V}}_{\hat{I}}-\hat{\Lambda})\v x^{\prime}=\v x_{0}^{\prime},\label{eq:ImK-1}
 \end{equation}
 where components of $\v x^{\prime}$ and $\v x_{0}^{\prime}$ in the
 eigenbasis $(\v v_{1},\v v_{2},\dots\v v_{N})$ are related to $\v x$
-and $\v x_{0}$ in the original canonical basis by the basis transformation
+and $\v x_{0}$ in the original canonical basis by the inverse basis
+transformation
 \begin{equation}
-\v x^{\prime}=\hat{V}^{-1}\v x\hat{V}.
+\v x^{\prime}=\hat{V}^{-1}\v x.
 \end{equation}
 Thus we can directly write the solution in the eigenbasis,
 \begin{equation}
@@ -131,7 +137,7 @@ x_{0N}^{\prime}
 \end{equation}
 Finally we transform back to 
 \begin{equation}
-\v x=\hat{V}\v x^{\prime}\hat{V}^{-1}.
+\v x=\hat{V}\v x^{\prime}.
 \end{equation}
 Performing this procedure in an incomplete iterative way until convergence,
 starting at the largest eigenvalue using a Krylov/Arnoldi scheme is
@@ -233,6 +239,27 @@ close to $1$ for $z\rightarrow0$. In fact in the former case we
 have infinitely slow convergence due to the mentioned reason, whereas
 in the latter case we have the exact solution already in the $0$th
 iteration.
+
+For the operator series things work in a similar way but related to
+eigenvalues. Say we knew $\v x_{0}$ in the eigenbasis,
+\begin{equation}
+\v x_{0}=\hat{V}\v x_{0}^{\prime}.
+\end{equation}
+Then
+\begin{equation}
+\hat{K}\v x_{0}=\hat{V}\hat{\Lambda}\hat{V}^{-1}\v x_{0}=\hat{V}\hat{\Lambda}\v x_{0}^{\prime}=\sum_{k}\lambda_{k}x_{0k}^{\prime}\v v_{k}.
+\end{equation}
+Applying $\hat{K}$ for $n$ times yields
+\begin{equation}
+\hat{K}^{n}\v x_{0}=(\hat{V}\hat{\Lambda}\hat{V}^{-1})(\hat{V}\hat{\Lambda}\hat{V}^{-1})\dots(\hat{V}\hat{\Lambda}\hat{V}^{-1})\v x_{0}=\hat{V}\hat{\Lambda}^{n}\v x_{0}^{\prime}=\sum_{k}\lambda_{k}^{\,n}x_{0k}^{\prime}\v v_{k}.
+\end{equation}
+Thus \emph{all} eigenvalues $\lambda_{k}^{\,n}$ where $x_{0k}^{\prime}=\v v_{k}\cdot\v x_{0}\neq0$
+i.e. with eigenvectors present in the excitation $\v x_{0}$, have
+to fulfil $\lambda_{k}^{\,n}<1$ for convergence of
+\begin{equation}
+\hat{I}+\hat{K}+\hat{K}^{2}+\dots
+\end{equation}
+with direct iterations.
 
 \subsection{Enforcing convergence of a series by a transformation}
 

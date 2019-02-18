@@ -404,9 +404,9 @@ where
 
 is a diagonal matrix containing eigenvalues, 
 \begin_inset Formula 
-\[
+\begin{equation}
 \hat{V}=(\v v_{1},\v v_{2},\dots\v v_{N})
-\]
+\end{equation}
 
 \end_inset
 
@@ -442,11 +442,22 @@ reference "eq:ImK"
 \begin_inset Formula $\hat{V}^{-1}$
 \end_inset
 
- and from the right with 
-\begin_inset Formula $\hat{V}$
+ and defining components 
+\begin_inset Formula $\v x^{\prime}$
 \end_inset
 
- yields an equation 
+ in the eigenbasis via
+\begin_inset Formula 
+\begin{equation}
+\v x=\sum_{k}x_{k}^{\prime}\v v_{k}=\hat{V}\v x^{\prime},
+\end{equation}
+
+\end_inset
+
+yields an equation
+\end_layout
+
+\begin_layout Standard
 \begin_inset Formula 
 \begin{equation}
 (\underbrace{\hat{V}^{-1}\hat{I}\hat{V}}_{\hat{I}}-\hat{\Lambda})\v x^{\prime}=\v x_{0}^{\prime},\label{eq:ImK-1}
@@ -474,10 +485,10 @@ where components of
 \begin_inset Formula $\v x_{0}$
 \end_inset
 
- in the original canonical basis by the basis transformation
+ in the original canonical basis by the inverse basis transformation
 \begin_inset Formula 
 \begin{equation}
-\v x^{\prime}=\hat{V}^{-1}\v x\hat{V}.
+\v x^{\prime}=\hat{V}^{-1}\v x.
 \end{equation}
 
 \end_inset
@@ -503,7 +514,7 @@ x_{0N}^{\prime}
 Finally we transform back to 
 \begin_inset Formula 
 \begin{equation}
-\v x=\hat{V}\v x^{\prime}\hat{V}^{-1}.
+\v x=\hat{V}\v x^{\prime}.
 \end{equation}
 
 \end_inset
@@ -905,6 +916,76 @@ Here convergence is much worse and we would need a lot more iterations to
 \end_inset
 
 th iteration.
+\end_layout
+
+\begin_layout Standard
+For the operator series things work in a similar way but related to eigenvalues.
+ Say we knew 
+\begin_inset Formula $\v x_{0}$
+\end_inset
+
+ in the eigenbasis,
+\begin_inset Formula 
+\begin{equation}
+\v x_{0}=\hat{V}\v x_{0}^{\prime}.
+\end{equation}
+
+\end_inset
+
+Then
+\begin_inset Formula 
+\begin{equation}
+\hat{K}\v x_{0}=\hat{V}\hat{\Lambda}\hat{V}^{-1}\v x_{0}=\hat{V}\hat{\Lambda}\v x_{0}^{\prime}=\sum_{k}\lambda_{k}x_{0k}^{\prime}\v v_{k}.
+\end{equation}
+
+\end_inset
+
+Applying 
+\begin_inset Formula $\hat{K}$
+\end_inset
+
+ for 
+\begin_inset Formula $n$
+\end_inset
+
+ times yields
+\begin_inset Formula 
+\begin{equation}
+\hat{K}^{n}\v x_{0}=(\hat{V}\hat{\Lambda}\hat{V}^{-1})(\hat{V}\hat{\Lambda}\hat{V}^{-1})\dots(\hat{V}\hat{\Lambda}\hat{V}^{-1})\v x_{0}=\hat{V}\hat{\Lambda}^{n}\v x_{0}^{\prime}=\sum_{k}\lambda_{k}^{\,n}x_{0k}^{\prime}\v v_{k}.
+\end{equation}
+
+\end_inset
+
+Thus 
+\emph on
+all
+\emph default
+ eigenvalues 
+\begin_inset Formula $\lambda_{k}^{\,n}$
+\end_inset
+
+ where 
+\begin_inset Formula $x_{0k}^{\prime}=\v v_{k}\cdot\v x_{0}\neq0$
+\end_inset
+
+ i.e.
+ with eigenvectors present in the excitation 
+\begin_inset Formula $\v x_{0}$
+\end_inset
+
+, have to fulfil 
+\begin_inset Formula $\lambda_{k}^{\,n}<1$
+\end_inset
+
+ for convergence of
+\begin_inset Formula 
+\begin{equation}
+\hat{I}+\hat{K}+\hat{K}^{2}+\dots
+\end{equation}
+
+\end_inset
+
+with direct iterations.
 \end_layout
 
 \begin_layout Subsection
