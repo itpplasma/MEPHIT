@@ -2,16 +2,24 @@
    log_level = 4                                   ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
    runmode = 1                                     ! 0: single iteration, 1: direct iterations,
                                                    ! 2: preconditioned iterations
+<<<<<<< HEAD
    nonres = .false.                                 ! use non-resonant test case
    quad_avg = .true.                               ! average over quadrilaterals for non-resonant test case
 
    n = 2                                           ! harmonic index of perturbation
    niter = 1                                       ! number of iteration steps
+=======
+   nonres = .false.                                ! use non-resonant test case
+   quad_avg = .true.                               ! average over quadrilaterals for non-resonant test case
+
+   n = 2                                           ! harmonic index of perturbation
+   niter = 3                                       ! number of iteration steps
+>>>>>>> 7e9cacb5ab1f15396f3893fa737305fa4aa14597
    nkpol = 200                                     ! number of knots per poloidal loop
    nflux = 74                                      ! number of flux surfaces up to and counting LCFS
    ti0 = 3.d3                                      ! temparature interpolation step
    di0 = 5.d13                                     ! density interpolation step
-   damp = 5.d-2                                    ! damping factor for resonances
+   damp = 0d0                                      ! damping factor for resonances
    point_file = '../PRELOAD/points.dat'            ! mesh points from PRELOAD
    tri_file = '../PRELOAD/triangles.dat'           ! triangles and edges from PRELOAD
    Bn_vac_file = '../PRELOAD/VACFIELD/Bn_flux.dat' ! vacuum perturbation field from PRELOAD

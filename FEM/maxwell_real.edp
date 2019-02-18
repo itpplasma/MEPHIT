@@ -6,6 +6,7 @@
 //
 
 real c = 29979245800.0; // speed of light
+real eps = 1e-10;
 
 real nmode = 2.0; // mode number
 
@@ -23,7 +24,6 @@ Hrot [axRe, ayRe], [axIm, ayIm], [wx, wy];
 Hdiv [JrRe, JzRe], [JrIm, JzIm], [BrRe, BzRe], [BrIm, BzIm];
 
 Vh0 BphiRe, BphiIm, JphiRe, JphiIm;
-Vh0 brRe, brIm, bzRe, bzIm; // output on triangle faces
 
 real[int] JfluxRe(Hdiv.ndof);
 real[int] JfluxIm(Hdiv.ndof);
@@ -37,7 +37,7 @@ for (int k = 0; k < Th.nt; k++) {
     nti++;
 }
 
-cout << nti << endl;
+cout << "Number of triangles in internal region: " << nti << endl;
 
 ifstream ifile(currnfile);
 for (int k = 0; k < nti; k++) {
@@ -51,16 +51,16 @@ for (int k = 0; k < nti; k++) {
       JfluxRe[Hdiv(k, (j+1) % 3)] = -JfluxRe[Hdiv(k, (j+1) % 3)];
       JfluxIm[Hdiv(k, (j+1) % 3)] = -JfluxRe[Hdiv(k, (j+1) % 3)];
     }
-    if (abs(jotherRe)>1e-10 && abs(jotherRe-JfluxRe[Hdiv(k, (j+2) % 3)]) > 1e-10*abs(jotherRe))
+    if (abs(jotherRe)>eps && abs(jotherRe-JfluxRe[Hdiv(k, (j+2) % 3)]) > eps*abs(jotherRe))
       cout << "Error: Real flux inconsistent at cell" << k << " " << j << endl;
-    if (abs(jotherIm)>1e-10 && abs(jotherIm-JfluxIm[Hdiv(k, (j+2) % 3)]) > 1e-10*abs(jotherIm))
+    if (abs(jotherIm)>eps && abs(jotherIm-JfluxIm[Hdiv(k, (j+2) % 3)]) > eps*abs(jotherIm))
       cout << "Error: Imag flux inconsistent at cell" << k << " " << j << endl;
   }
   ifile >> JphiRe[][k] >> JphiIm[][k];
 }
 // Check:
-// JphiRe = -(dx(JrIm) + dy(JzIm)) / n;
-// JphiIm = (dx(JrRe) + dy(JzRe)) / n;
+// JphiRe = -(dx(JrIm) + dy(JzIm)) / nmode;
+// JphiIm = (dx(JrRe) + dy(JzRe)) / nmode;
 
 JrRe[] = JfluxRe;
 JrIm[] = JfluxIm;
@@ -110,3 +110,4 @@ if (doplot) {
   plot([BrRe, BzRe], wait = true, value = true);
   plot(BphiRe, wait = true, fill = true, value = true);
 }
+
