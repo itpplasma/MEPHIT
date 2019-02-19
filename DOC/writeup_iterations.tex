@@ -9,6 +9,13 @@
 \usepackage{amsmath}
 \usepackage[unicode=true]
  {hyperref}
+
+\makeatletter
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% User specified LaTeX commands.
+\usepackage{tikz}
+
+\makeatother
+
 \begin{document}
 \global\long\def\tht{\vartheta}%
 \global\long\def\ph{\varphi}%
@@ -81,7 +88,7 @@ so the solution is formally
 \end{equation}
 
 
-\subsection{Exact solution in the eigenbasis}
+\subsection{Exact solution in the eigenbasis\label{subsec:Exact-solution-in}}
 
 Assume we have have solved the eigenvalue problem for $\hat{K}$ and
 can write
@@ -102,12 +109,13 @@ is a diagonal matrix containing eigenvalues,
 \hat{V}=(\v v_{1},\v v_{2},\dots\v v_{N})
 \end{equation}
 is a matrix with respective eigenvectors as columns, and $\hat{V}^{-1}$
-is its inverse (for\emph{ normal }matrices this is equal to the transposed
-complex conjugate $\hat{V}^{\ast}$ of $\hat{V}$). Multiplying Eq.~(\ref{eq:ImK})
+is its inverse. For\emph{ normal }matrices the eigenvectors form an
+orthogonal basis and $\hat{V}^{-1}$ is equal to the transposed complex
+conjugate $\hat{V}^{\ast}$ of $\hat{V}$. Multiplying Eq.~(\ref{eq:ImK})
 from the left with $\hat{V}^{-1}$ and defining components $\v x^{\prime}$
 in the eigenbasis via
 \begin{equation}
-\v x=\sum_{k}x_{k}^{\prime}\v v_{k}=\hat{V}\v x^{\prime},
+\v x=\sum_{k}x_{k}^{\prime}\v v_{k}=(\v v_{1},\v v_{2},\dots\v v_{N})\v x^{\prime}=\hat{V}\v x^{\prime},
 \end{equation}
 yields an equation
 
@@ -121,7 +129,13 @@ transformation
 \begin{equation}
 \v x^{\prime}=\hat{V}^{-1}\v x.
 \end{equation}
-Thus we can directly write the solution in the eigenbasis,
+For normal matrices with $\hat{V}^{-1}=\hat{V}^{\ast}$ this reduces
+to a projection to eigenvectors
+\begin{equation}
+\v x^{\prime}=\hat{V}^{\ast}\v x\Rightarrow x_{k}^{\prime}=\v v_{k}^{\star}\cdot\v x.
+\end{equation}
+In any case we can directly write the solution of Eq.~(\ref{eq:ImK-1})
+in the eigenbasis,
 \begin{equation}
 \v x^{\prime}=(\hat{I}-\hat{\Lambda})^{-1}\v x_{0}^{\prime}=\left(\begin{array}{cccc}
 \frac{1}{1-\lambda_{1}}\\
@@ -139,6 +153,7 @@ Finally we transform back to
 \begin{equation}
 \v x=\hat{V}\v x^{\prime}.
 \end{equation}
+
 Performing this procedure in an incomplete iterative way until convergence,
 starting at the largest eigenvalue using a Krylov/Arnoldi scheme is
 known as the GMRES method. Since in the end our matrices will be noisy
@@ -240,27 +255,6 @@ have infinitely slow convergence due to the mentioned reason, whereas
 in the latter case we have the exact solution already in the $0$th
 iteration.
 
-For the operator series things work in a similar way but related to
-eigenvalues. Say we knew $\v x_{0}$ in the eigenbasis,
-\begin{equation}
-\v x_{0}=\hat{V}\v x_{0}^{\prime}.
-\end{equation}
-Then
-\begin{equation}
-\hat{K}\v x_{0}=\hat{V}\hat{\Lambda}\hat{V}^{-1}\v x_{0}=\hat{V}\hat{\Lambda}\v x_{0}^{\prime}=\sum_{k}\lambda_{k}x_{0k}^{\prime}\v v_{k}.
-\end{equation}
-Applying $\hat{K}$ for $n$ times yields
-\begin{equation}
-\hat{K}^{n}\v x_{0}=(\hat{V}\hat{\Lambda}\hat{V}^{-1})(\hat{V}\hat{\Lambda}\hat{V}^{-1})\dots(\hat{V}\hat{\Lambda}\hat{V}^{-1})\v x_{0}=\hat{V}\hat{\Lambda}^{n}\v x_{0}^{\prime}=\sum_{k}\lambda_{k}^{\,n}x_{0k}^{\prime}\v v_{k}.
-\end{equation}
-Thus \emph{all} eigenvalues $\lambda_{k}^{\,n}$ where $x_{0k}^{\prime}=\v v_{k}\cdot\v x_{0}\neq0$
-i.e. with eigenvectors present in the excitation $\v x_{0}$, have
-to fulfil $\lambda_{k}^{\,n}<1$ for convergence of
-\begin{equation}
-\hat{I}+\hat{K}+\hat{K}^{2}+\dots
-\end{equation}
-with direct iterations.
-
 \subsection{Enforcing convergence of a series by a transformation}
 
 Now the question is how we can extend our radius of convergence beyond
@@ -317,18 +311,146 @@ Of course if we had taken $d=z$ then $f_{[0]}=f$ would have been
 the exact solution with guaranteed convergence everywhere (except
 trivial $z=0$) due to $0<|1-z|$ in (\ref{eq:conve}).
 
-\subsection{Preconditioning to enforce/accelerate iteration convergence}
+\subsection{Extension to operator series}
+
+For the the operator series of $(\hat{I}-\hat{K})^{-1}$ things work
+in a similar way as for the scalar case $1/(1-z)\equiv(\hat{I}-z\hat{I})^{-1}$
+and can be understood in terms of \emph{eigenvalues}. Say we knew
+$\v x_{0}$ in the eigenbasis,
+\begin{equation}
+\v x_{0}=\sum_{k=1}^{N}x_{0k}^{\prime}\v v_{k}=\hat{V}\v x_{0}^{\prime}.\label{eq:eigdecomp}
+\end{equation}
+Then
+\begin{equation}
+\hat{K}\v x_{0}=\hat{V}\hat{\Lambda}\hat{V}^{-1}\v x_{0}=\hat{V}\hat{\Lambda}\v x_{0}^{\prime}=\sum_{k=1}^{N}\lambda_{k}x_{0k}^{\prime}\v v_{k}.
+\end{equation}
+Applying $\hat{K}$ for $n$ times yields
+\begin{equation}
+\hat{K}^{n}\v x_{0}=(\hat{V}\hat{\Lambda}\hat{V}^{-1})(\hat{V}\hat{\Lambda}\hat{V}^{-1})\dots(\hat{V}\hat{\Lambda}\hat{V}^{-1})\v x_{0}=\hat{V}\hat{\Lambda}^{n}\v x_{0}^{\prime}=\sum_{k=1}^{N}\lambda_{k}^{\,n}x_{0k}^{\prime}\v v_{k}.
+\end{equation}
+Thus \emph{all} eigenvalues $\lambda_{k}^{\,n}$ where $x_{0k}^{\prime}\neq0$
+i.e. for normal matrices with some components $\v v_{k}^{\star}\cdot\v x_{0}$
+of $\v v_{k}$ in the excitation $\v x_{0}$, have to fulfil $\lambda_{k}^{\,n}<1$
+for convergence of
+\begin{equation}
+\hat{I}+\hat{K}+\hat{K}^{2}+\dots
+\end{equation}
+with direct iterations. We summarize this feature of values for $z$
+inside the geometric series for $1/(1-z)$ as well as the spectrum
+of eigenvalues $\lambda_{k}$ of $\hat{K}$ for the operator series
+in a drawing:
+\begin{center}
+\scalebox{0.66}{\input{eigs.tpx}}
+\par\end{center}
+
+We must get rid of the \emph{ugly} points outside the unit circle
+that cause divergence, and would also like to remove \emph{bad} points
+close to the inside of the unit circle that cause slow convergence.
+With only \emph{good} points left direct iterations will be very fast.
 
 In general we call a method to make an \emph{operator series }converge
 by a linear transformation \emph{preconditioned iterations.} More
 generally what we have done in the previous section for the seemingly
-trivial optimum case $d=z$ is related to \emph{eigenvalues} of the
-operator where $\hat{K}\v v=\lambda\v v$ for \emph{eigenvectors $\v v$}.
+trivial optimum case $d=z$ is related to the eigenvalues of the operator
+where $\hat{K}\v v=\lambda\v v$ for \emph{eigenvectors $\v v$}.
 Since for $\hat{K}=z\hat{I}$ all vectors are eigenvectors with $\lambda=z$
 the solution becomes trivial in this sense. Now we will extend the
 discussed concepts and preconditioning to general linear operators
-and their eigenbasis. TODO write operator series via eigenvalues...
-finally preconditioner: $\hat{\Pi}$
+and their eigenbasis. From section~\ref{subsec:Exact-solution-in}
+we already know how to construct an exact solution via the eigenvalue
+problem. Now we will only solve a part of the problem in the eigenspace
+of the largest eigenvalues for preconditioning. Once we have reached
+$\lambda_{k}<1$ (or better $\ll1$) we use direct iterations for
+the rest that should rapidly converge if $\lambda_{k}\ll1$. In fact,
+for strictly analyzing convergence, one could use the operator norm,
+also related to eigenvalues, but here we are satisfied with the more
+qualitative explanation and analogy to the complex geometric series.
+Krylov/Arnoldi methods are ideally suited for this task, since they
+iteratively find the largest eigenvalues (Python and Matlab know this
+as ``eigs'' in contrast to the ``eig'' function). In the special
+case of Hermitian matrices (they are normal) the Arnoldi method is
+known as the Lanczos method.
+
+Let's assume we know the largest $m$ eigenvalues $\lambda_{k}$ of
+$\hat{K}$ with eigenvectors $\v v_{k}$, $k=1\dots m$. Then we introduce
+the $m\times N$ incomplete eigenvector matrix
+\begin{equation}
+\hat{V}_{m}=(\v v_{1},\v v_{2},\dots,\v v_{m}).
+\end{equation}
+Now for a \emph{normal }operator $\hat{K}$ it would be easy to just
+project down to the subspace spanned by $\v v_{1\dots m}$ via an
+inner product $\v v_{k}^{\star}\cdot\v x$. However, for a general
+(not necessarily normal) operator $\hat{K}$ the eigenvectors are
+not orthogonal, i.e. $\v v_{i}^{\star}\cdot\v v_{j}\neq|\v v_{j}|^{2}\delta_{ij}$.
+This case is similar to the extension of tensor calculus to a general
+non-orthogonal basis in co- and contravariant formalism. The case
+is handled by the metric tensor components in geometry, that has components
+\begin{equation}
+g_{ij}=\v e_{i}\cdot\v e_{j}
+\end{equation}
+and becomes $\delta_{ij}$ in an orthonormal system. We can convert
+between co- and contravariant components by $g_{ij}$ and its inverse
+matrix $g^{ij}$ for the reciprocal metric. Components of vectors
+can be found by projecting to the dual basis, i.e.
+\begin{align}
+\v a & =\sum_{k}a^{k}e_{k}=\sum_{k}(\v e^{k}\cdot\v a)\v e_{k}\nonumber \\
+ & =\sum_{i,k}a_{i}g^{ik}\v e_{k}=\sum_{i,k}(\v e_{i}\cdot\v a)g^{ik}\v e_{k}.
+\end{align}
+We see that in order to work fully in the usual basis $\v e_{k}$
+and avoid the dual basis $\v e^{k}$ we require the reciprocal metric
+$g^{ik}$. Also the ``bra-ket'' notation of quantum mechanics works
+the same way.
+
+Analogously in our complex linear operator space to be able to project
+to the partial eigenbasis in $\hat{V}_{m}$ we define a matrix $\hat{G}$
+with entries
+\begin{equation}
+G_{ij}=\v v_{i}^{\star}\cdot\v v_{j}
+\end{equation}
+corresponding to the projections between possibly non-orthogonal eigenvectors
+and invert it to $\hat{G}^{-1}$ with components $G^{ik}$. Remember
+that
+\begin{equation}
+\v x^{\prime}=\hat{V}^{-1}\v x
+\end{equation}
+in the full eigenspace. Now we cannot get $\hat{V}^{-1}$ of the full
+eigenspace here but at least project down to the partial eigenspace
+spanned by $\hat{V}_{m}$. There we have
+\begin{equation}
+\v x=\sum_{k=1}^{m}x_{k}^{\prime}\v v_{k}+\bar{\v x}_{0}\label{eq:eigbasis}
+\end{equation}
+where $\bar{\v x}_{0}$ is the part that cannot be written in terms
+of columns of $\hat{V}_{m}$, i.e. is orthogonal with
+\begin{equation}
+\v v_{k}^{\star}\cdot\bar{\v x}_{0}=0\quad\text{for }k=1\dots m.
+\end{equation}
+If we take an inner product Eq.~(\ref{eq:eigbasis}) with $\v v_{i}^{\star}$
+with $k<m$ we obtain
+\begin{equation}
+\v v_{i}^{\star}\cdot\v x=\sum_{k=1}^{m}x_{k}^{\prime}\v v_{i}^{\star}\cdot\v v_{k}=\sum_{k=1}^{m}G_{ik}x_{k}^{\prime},\label{eq:eigbasis-1}
+\end{equation}
+or, in operator notation
+\begin{equation}
+\hat{V}_{m}^{\star}\v x=\hat{G}\v x_{m}^{\prime},
+\end{equation}
+where $\v x_{m}^{\prime}$ contains the first $m$ entries of $\v x^{\prime}$.
+To obtain $\v x_{m}^{\prime}$ we transform this to
+\begin{equation}
+\v x_{m}^{\prime}=\hat{G}^{-1}\hat{V}_{m}^{\star}\v x.
+\end{equation}
+or, in components
+\begin{equation}
+x_{i}^{\prime}=\sum_{k=1}^{m}G^{ik}\v v_{k}^{\star}\cdot\v x\quad\text{for }i=1\dots m.\label{eq:eigbasis-1-1}
+\end{equation}
+Apply $\hat{G}^{-1}\hat{V}_{m}^{\star}$ to the original equation
+\begin{equation}
+(\hat{I}-\hat{K})\v x=\v x_{0},
+\end{equation}
+resulting in the left-hand side
+\begin{equation}
+\hat{G}^{-1}\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\v x=\hat{G}^{-1}((\hat{I}-\hat{K})^{-1}\hat{V}_{m}^{-1})^{-1}\v x
+\end{equation}
+
 
 \section{TODOs for the one who continues kinetic equilibria:}
 
