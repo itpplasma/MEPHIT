@@ -1029,7 +1029,7 @@ What works better for accelerating convergence is replacing
 , i.e.
 \begin_inset Formula 
 \begin{equation}
-\frac{1}{1-z}=\frac{1}{1-aw-d}=\frac{1}{1-d}\frac{1}{1-\frac{aw}{1-d}}.
+\frac{1}{1-z}=\frac{1}{1-aw-d}=\frac{1}{1-d}\frac{1}{1-\frac{aw}{1-d}}=\frac{1}{1-d}\frac{1}{1-\frac{z-d}{1-d}}.
 \end{equation}
 
 \end_inset
@@ -1051,9 +1051,10 @@ target "http://www.math.wisc.edu/~waleffe/M321/complex.pdf"
 
  as
 \begin_inset Formula 
-\begin{equation}
-\frac{1}{1-z}=\frac{1}{1-d}\left(1+\frac{aw}{1-d}+\left(\frac{aw}{1-d}\right)^{2}+\dots\right)
-\end{equation}
+\begin{align}
+\frac{1}{1-z} & =\frac{1}{1-d}\left(1+\frac{aw}{1-d}+\left(\frac{aw}{1-d}\right)^{2}+\dots\right)\\
+ & =\frac{1}{1-d}\left(1+\frac{z-d}{1-d}+\left(\frac{z-d}{1-d}\right)^{2}+\dots\right)
+\end{align}
 
 \end_inset
 
@@ -1440,11 +1441,11 @@ Let's assume we know the largest
 \end_inset
 
 .
- Then we introduce the 
-\begin_inset Formula $m\times N$
+ Then we introduce the incomplete eigenvector 
+\begin_inset Formula $N\times m$
 \end_inset
 
- incomplete eigenvector matrix
+ matrix
 \begin_inset Formula 
 \begin{equation}
 \hat{V}_{m}=(\v v_{1},\v v_{2},\dots,\v v_{m}).
@@ -1544,7 +1545,7 @@ Analogously in our complex linear operator space to be able to project to
 \end_inset
 
  we define a matrix 
-\begin_inset Formula $\hat{G}$
+\begin_inset Formula $\hat{G}_{m}$
 \end_inset
 
  with entries
@@ -1557,7 +1558,7 @@ G_{ij}=\v v_{i}^{\star}\cdot\v v_{j}
 
 corresponding to the projections between possibly non-orthogonal eigenvectors
  and invert it to 
-\begin_inset Formula $\hat{G}^{-1}$
+\begin_inset Formula $\hat{G}_{m}^{-1}$
 \end_inset
 
  with components 
@@ -1578,8 +1579,8 @@ in the full eigenspace.
 \begin_inset Formula $\hat{V}^{-1}$
 \end_inset
 
- of the full eigenspace here but at least project down to the partial eigenspace
- spanned by 
+ of the full eigenspace here but at least project down to the incomplete
+ eigensubspace spanned by 
 \begin_inset Formula $\hat{V}_{m}$
 \end_inset
 
@@ -1587,24 +1588,44 @@ in the full eigenspace.
  There we have
 \begin_inset Formula 
 \begin{equation}
-\v x=\sum_{k=1}^{m}x_{k}^{\prime}\v v_{k}+\bar{\v x}_{0}\label{eq:eigbasis}
+\v x=\sum_{k=1}^{m}x_{k}^{\prime}\v v_{k}+\bar{\v x}=\hat{V}_{m}\v x_{m}^{\prime}+\bar{\v x}.\label{eq:eigbasis}
 \end{equation}
 
 \end_inset
 
 where 
-\begin_inset Formula $\bar{\v x}_{0}$
+\begin_inset Formula $\v x_{m}^{\prime}$
 \end_inset
 
- is the part that cannot be written in terms of columns of 
+ is the representation of the projection of 
+\begin_inset Formula $\v x$
+\end_inset
+
+ in the subspace and 
+\begin_inset Formula $\bar{\v x}$
+\end_inset
+
+ is the part of 
+\begin_inset Formula $\v x$
+\end_inset
+
+ that cannot be written in terms of columns of 
 \begin_inset Formula $\hat{V}_{m}$
 \end_inset
 
 , i.e.
- is orthogonal with
+ is complex orthogonal to the all of them with
 \begin_inset Formula 
 \begin{equation}
-\v v_{k}^{\star}\cdot\bar{\v x}_{0}=0\quad\text{for }k=1\dots m.
+\v v_{k}^{\star}\cdot\bar{\v x}=0\quad\text{for }k=1\dots m
+\end{equation}
+
+\end_inset
+
+or
+\begin_inset Formula 
+\begin{equation}
+\hat{V}_{m}^{\star}\bar{\v x}=0.\label{eq:ortho}
 \end{equation}
 
 \end_inset
@@ -1639,7 +1660,7 @@ reference "eq:eigbasis"
 or, in operator notation
 \begin_inset Formula 
 \begin{equation}
-\hat{V}_{m}^{\star}\v x=\hat{G}\v x_{m}^{\prime},
+\hat{V}_{m}^{\star}\v x=\hat{G}_{m}\v x_{m}^{\prime},
 \end{equation}
 
 \end_inset
@@ -1661,10 +1682,22 @@ where
 \begin_inset Formula $\v x_{m}^{\prime}$
 \end_inset
 
- we transform this to
+ we transform this to a projection operator 
+\begin_inset Formula $\hat{G}^{-1}\hat{V}_{m}^{\star}$
+\end_inset
+
+ taking 
+\begin_inset Formula $\v x$
+\end_inset
+
+ to 
+\begin_inset Formula $\v x_{m}^{\prime}$
+\end_inset
+
+ via
 \begin_inset Formula 
 \begin{equation}
-\v x_{m}^{\prime}=\hat{G}^{-1}\hat{V}_{m}^{\star}\v x.
+\v x_{m}^{\prime}=\hat{G}_{m}^{-1}\hat{V}_{m}^{\star}\v x,\label{eq:proj}
 \end{equation}
 
 \end_inset
@@ -1677,11 +1710,31 @@ x_{i}^{\prime}=\sum_{k=1}^{m}G^{ik}\v v_{k}^{\star}\cdot\v x\quad\text{for }i=1\
 
 \end_inset
 
-Apply 
-\begin_inset Formula $\hat{G}^{-1}\hat{V}_{m}^{\star}$
+In particular application to an eigenvector 
+\begin_inset Formula $\v v_{k}$
 \end_inset
 
- to the original equation 
+ with 
+\begin_inset Formula $k\leq m$
+\end_inset
+
+ yields components
+\begin_inset Formula 
+\begin{equation}
+(\hat{G}_{m}^{-1}\hat{V}_{m}^{\star}\v v_{k})_{i}=\sum_{j=1}^{m}G^{ij}\v v_{j}^{\star}\cdot\v v_{k}=\sum_{j=1}^{m}G^{ij}G_{jk}=\delta_{ik},
+\end{equation}
+
+\end_inset
+
+or in matrix notation
+\begin_inset Formula 
+\begin{equation}
+\hat{G}_{m}^{-1}\hat{V}_{m}^{\star}\hat{V}_{m}=\hat{I}_{m},\quad\Leftrightarrow\quad\hat{V}_{m}^{\star}\hat{V}_{m}=\hat{G}_{m}.
+\end{equation}
+
+\end_inset
+
+We now look at the original equation
 \begin_inset Formula 
 \begin{equation}
 (\hat{I}-\hat{K})\v x=\v x_{0},
@@ -1689,11 +1742,526 @@ Apply
 
 \end_inset
 
-resulting in the left-hand side
+written in the partially expanded form
 \begin_inset Formula 
 \begin{equation}
-\hat{G}^{-1}\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\v x=\hat{G}^{-1}((\hat{I}-\hat{K})^{-1}\hat{V}_{m}^{-1})^{-1}\v x
+(\hat{I}-\hat{K})(\hat{V}_{m}\v x_{m}^{\prime}+\bar{\v x})=\v x_{0}.\label{eq:orig}
 \end{equation}
+
+\end_inset
+
+Multiply from the left with 
+\begin_inset Formula $\hat{V}_{m}^{\star}$
+\end_inset
+
+ to get projected equation in reduced dimension 
+\begin_inset Formula $m$
+\end_inset
+
+,
+\begin_inset Formula 
+\begin{equation}
+\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\hat{V}_{m}\v x_{m}^{\prime}=\hat{V}_{m}^{\star}\v x_{0}.\label{eq:orig-1}
+\end{equation}
+
+\end_inset
+
+Here 
+\begin_inset Formula $\hat{V}_{m}^{\star}\bar{\v x}$
+\end_inset
+
+ has vanished due to Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:ortho"
+
+\end_inset
+
+.
+ We can solve this equation
+\end_layout
+
+\begin_layout Standard
+where the operator 
+\begin_inset Formula $\hat{L}_{m}$
+\end_inset
+
+ represents 
+\begin_inset Formula $\hat{K}$
+\end_inset
+
+ in projected space and is given by
+\begin_inset Formula 
+\begin{align}
+\hat{L}_{m} & =\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\hat{V}_{m}.
+\end{align}
+
+\end_inset
+
+Components are
+\begin_inset Formula 
+\begin{equation}
+L_{ij}=\v v_{i}^{\star}\cdot(\hat{I}-\hat{K})\v v_{j}
+\end{equation}
+
+\end_inset
+
+so using the eigenvalue property
+\begin_inset Formula 
+\begin{equation}
+L_{ij}=\v v_{i}^{\star}\cdot\v v_{j}(1-\lambda_{j}),
+\end{equation}
+
+\end_inset
+
+or in matrix form
+\begin_inset Formula 
+\begin{equation}
+\hat{L}_{m}=\hat{V}_{m}^{\star}-\hat{V}_{m}\hat{\Lambda}_{m}.
+\end{equation}
+
+\end_inset
+
+We can invert the operator 
+\begin_inset Formula $\hat{L}_{m}$
+\end_inset
+
+ in a preprocessing step by solving multiple sets of linear equations with
+ canonical unit vectors on the right-hand side,
+\begin_inset Formula 
+\begin{equation}
+\hat{L}_{m}\hat{Y}_{m}=\hat{I}_{m}.
+\end{equation}
+
+\end_inset
+
+where the solution for the unknown 
+\begin_inset Formula $m\times m$
+\end_inset
+
+ matrix 
+\begin_inset Formula $\hat{Y}_{m}=\hat{L}_{m}^{-1}$
+\end_inset
+
+ gives the inverse of 
+\begin_inset Formula $\hat{L}_{m}$
+\end_inset
+
+.
+ Then we can easily compute
+\begin_inset Formula 
+\begin{equation}
+\v x_{m}^{\prime}=\hat{L}_{m}^{-1}\hat{V}_{m}^{\star}\v x_{0}\label{eq:orig-1-1}
+\end{equation}
+
+\end_inset
+
+and iterate only the remaing part
+\begin_inset Formula 
+\begin{equation}
+\bar{\v x}=\v x-\hat{V}_{m}\v x_{m}^{\prime}.
+\end{equation}
+
+\end_inset
+
+More precisely to solve
+\begin_inset Formula 
+\begin{equation}
+(\hat{I}-\hat{K})\v x=\v x_{0}
+\end{equation}
+
+\end_inset
+
+we insert 
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:orig-1-1"
+
+\end_inset
+
+ to obtain
+\begin_inset Formula 
+\begin{equation}
+(\hat{I}-\hat{K})(\hat{V}_{m}\hat{L}_{m}^{-1}\hat{V}_{m}^{\star}\v x_{0}+\bar{\v x})=\v x_{0}\label{eq:orig-2}
+\end{equation}
+
+\end_inset
+
+and finally write
+\begin_inset Formula 
+\begin{equation}
+(\hat{I}-\hat{K})\bar{\v x}=(\hat{I}-\hat{V}_{m}\hat{L}_{m}^{-1}\hat{V}_{m}^{\star})\v x_{0}.
+\end{equation}
+
+\end_inset
+
+This kind of transformation is also known as the Schur complement when applied
+ to a block of a matrix instead of the eigenbasis.
+ Since 
+\begin_inset Formula $\bar{\v x}$
+\end_inset
+
+ is orthogonal to the space spanned by 
+\begin_inset Formula $\hat{V}_{m}$
+\end_inset
+
+ and contains no contributions from 
+\begin_inset Formula $\v v_{k}$
+\end_inset
+
+ with 
+\begin_inset Formula $k\leq N$
+\end_inset
+
+ we know that this equation is purely in the remaining eigenspace of 
+\begin_inset Formula $\hat{K}$
+\end_inset
+
+.
+ Therefore we can iterate
+\begin_inset Formula 
+\begin{equation}
+\bar{\v x}^{(n+1)}=\bar{\v x}^{(n)}+\hat{K}\bar{\v x}^{(n)}
+\end{equation}
+
+\end_inset
+
+without the risk of divergence.
+ Projecting down in every step prevents the possibility that a small numerical
+ error will introduce contributions from the 
+\begin_inset Formula $k\leq N$
+\end_inset
+
+ eigenspace.
+ TODO.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Tabular
+<lyxtabular version="3" rows="6" columns="5">
+<features tabularvalignment="middle">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<column alignment="center" valignment="top">
+<row>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+Quantity
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+dimensions
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $\v x_{m}^{\prime}$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $m\times1$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $\hat{V}_{m}$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $N\times m$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $\hat{V}_{m}^{\star}$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $m\times N$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $\hat{G}_{m}=\hat{V}_{m}^{\star}\hat{V}_{m}$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $m\times m$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $\hat{M}_{m}=\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\hat{V}_{m}$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $m\times m$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\end_inset
+</cell>
+</row>
+</lyxtabular>
 
 \end_inset
 

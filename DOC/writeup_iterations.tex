@@ -1,4 +1,4 @@
-%% LyX 2.3.2 created this file.  For more info, see http://www.lyx.org/.
+%% LyX 2.3.0 created this file.  For more info, see http://www.lyx.org/.
 %% Do not edit unless you really know what you are doing.
 \documentclass[english,notitlepage]{revtex4-1}
 \usepackage{tgpagella}
@@ -11,37 +11,45 @@
  {hyperref}
 
 \makeatletter
+
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%% LyX specific LaTeX commands.
+%% Because html converters don't know tabularnewline
+\providecommand{\tabularnewline}{\\}
+
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%% User specified LaTeX commands.
 \usepackage{tikz}
 
 \makeatother
 
 \begin{document}
-\global\long\def\tht{\vartheta}%
-\global\long\def\ph{\varphi}%
-\global\long\def\balpha{\boldsymbol{\alpha}}%
-\global\long\def\btheta{\boldsymbol{\theta}}%
-\global\long\def\bJ{\boldsymbol{J}}%
-\global\long\def\bGamma{\boldsymbol{\Gamma}}%
-\global\long\def\bOmega{\boldsymbol{\Omega}}%
-\global\long\def\d{\text{d}}%
-\global\long\def\t#1{\text{#1}}%
-\global\long\def\m{\text{m}}%
-\global\long\def\v#1{\boldsymbol{#1}}%
-\global\long\def\u#1{\underline{#1}}%
+\global\long\def\tht{\vartheta}
+\global\long\def\ph{\varphi}
+\global\long\def\balpha{\boldsymbol{\alpha}}
+\global\long\def\btheta{\boldsymbol{\theta}}
+\global\long\def\bJ{\boldsymbol{J}}
+\global\long\def\bGamma{\boldsymbol{\Gamma}}
+\global\long\def\bOmega{\boldsymbol{\Omega}}
+\global\long\def\d{\text{d}}
+\global\long\def\t#1{\text{#1}}
+\global\long\def\m{\text{m}}
+\global\long\def\v#1{\boldsymbol{#1}}
+\global\long\def\u#1{\underline{#1}}
 
-\global\long\def\t#1{\mathbf{#1}}%
-\global\long\def\bA{\boldsymbol{A}}%
-\global\long\def\bB{\boldsymbol{B}}%
-\global\long\def\c{\mathrm{c}}%
-\global\long\def\difp#1#2{\frac{\partial#1}{\partial#2}}%
-\global\long\def\xset{{\bf x}}%
-\global\long\def\zset{{\bf z}}%
-\global\long\def\qset{{\bf q}}%
-\global\long\def\pset{{\bf p}}%
+\global\long\def\t#1{\mathbf{#1}}
+\global\long\def\bA{\boldsymbol{A}}
+\global\long\def\bB{\boldsymbol{B}}
+\global\long\def\c{\mathrm{c}}
+\global\long\def\difp#1#2{\frac{\partial#1}{\partial#2}}
+\global\long\def\xset{{\bf x}}
+\global\long\def\zset{{\bf z}}
+\global\long\def\qset{{\bf q}}
+\global\long\def\pset{{\bf p}}
+
 
 \title{Preconditioned iterations via the Arnoldi method aka incomplete GMRES}
+
 \author{Christopher Albert, Sergei Kasilov}
+
 \date{\today}
 \maketitle
 
@@ -276,16 +284,17 @@ us in this class or problems.
 What works better for accelerating convergence is replacing $z=aw+d$
 by a linear transformation with generally complex $a$ and $d$, i.e.
 \begin{equation}
-\frac{1}{1-z}=\frac{1}{1-aw-d}=\frac{1}{1-d}\frac{1}{1-\frac{aw}{1-d}}.
+\frac{1}{1-z}=\frac{1}{1-aw-d}=\frac{1}{1-d}\frac{1}{1-\frac{aw}{1-d}}=\frac{1}{1-d}\frac{1}{1-\frac{z-d}{1-d}}.
 \end{equation}
 More generally, to accelerate convergence of complex number series
 one would use conformal mappings (see e.g. \href{http://www.math.wisc.edu/~waleffe/M321/complex.pdf}{http://www.math.wisc.edu/$\sim$waleffe/M321/complex.pdf}),
 but for our purpose of treating operators, we limit ourselves to linear
 transformations. In that case we obtain a geometric series representation
 in $\frac{aw}{1-d}$ as
-\begin{equation}
-\frac{1}{1-z}=\frac{1}{1-d}\left(1+\frac{aw}{1-d}+\left(\frac{aw}{1-d}\right)^{2}+\dots\right)
-\end{equation}
+\begin{align}
+\frac{1}{1-z} & =\frac{1}{1-d}\left(1+\frac{aw}{1-d}+\left(\frac{aw}{1-d}\right)^{2}+\dots\right)\\
+ & =\frac{1}{1-d}\left(1+\frac{z-d}{1-d}+\left(\frac{z-d}{1-d}\right)^{2}+\dots\right)
+\end{align}
 that converges for $\left|\frac{aw}{1-d}\right|<1$, i.e.
 \begin{equation}
 |z-d|<|1-d|.\label{eq:conve}
@@ -373,7 +382,7 @@ known as the Lanczos method.
 
 Let's assume we know the largest $m$ eigenvalues $\lambda_{k}$ of
 $\hat{K}$ with eigenvectors $\v v_{k}$, $k=1\dots m$. Then we introduce
-the $m\times N$ incomplete eigenvector matrix
+the incomplete eigenvector $N\times m$ matrix
 \begin{equation}
 \hat{V}_{m}=(\v v_{1},\v v_{2},\dots,\v v_{m}).
 \end{equation}
@@ -402,27 +411,33 @@ $g^{ik}$. Also the ``bra-ket'' notation of quantum mechanics works
 the same way.
 
 Analogously in our complex linear operator space to be able to project
-to the partial eigenbasis in $\hat{V}_{m}$ we define a matrix $\hat{G}$
+to the partial eigenbasis in $\hat{V}_{m}$ we define a matrix $\hat{G}_{m}$
 with entries
 \begin{equation}
 G_{ij}=\v v_{i}^{\star}\cdot\v v_{j}
 \end{equation}
 corresponding to the projections between possibly non-orthogonal eigenvectors
-and invert it to $\hat{G}^{-1}$ with components $G^{ik}$. Remember
+and invert it to $\hat{G}_{m}^{-1}$ with components $G^{ik}$. Remember
 that
 \begin{equation}
 \v x^{\prime}=\hat{V}^{-1}\v x
 \end{equation}
 in the full eigenspace. Now we cannot get $\hat{V}^{-1}$ of the full
-eigenspace here but at least project down to the partial eigenspace
+eigenspace here but at least project down to the incomplete eigensubspace
 spanned by $\hat{V}_{m}$. There we have
 \begin{equation}
-\v x=\sum_{k=1}^{m}x_{k}^{\prime}\v v_{k}+\bar{\v x}_{0}\label{eq:eigbasis}
+\v x=\sum_{k=1}^{m}x_{k}^{\prime}\v v_{k}+\bar{\v x}=\hat{V}_{m}\v x_{m}^{\prime}+\bar{\v x}.\label{eq:eigbasis}
 \end{equation}
-where $\bar{\v x}_{0}$ is the part that cannot be written in terms
-of columns of $\hat{V}_{m}$, i.e. is orthogonal with
+where $\v x_{m}^{\prime}$ is the representation of the projection
+of $\v x$ in the subspace and $\bar{\v x}$ is the part of $\v x$
+that cannot be written in terms of columns of $\hat{V}_{m}$, i.e.
+is complex orthogonal to the all of them with
 \begin{equation}
-\v v_{k}^{\star}\cdot\bar{\v x}_{0}=0\quad\text{for }k=1\dots m.
+\v v_{k}^{\star}\cdot\bar{\v x}=0\quad\text{for }k=1\dots m
+\end{equation}
+or
+\begin{equation}
+\hat{V}_{m}^{\star}\bar{\v x}=0.\label{eq:ortho}
 \end{equation}
 If we take an inner product Eq.~(\ref{eq:eigbasis}) with $\v v_{i}^{\star}$
 with $k<m$ we obtain
@@ -431,26 +446,117 @@ with $k<m$ we obtain
 \end{equation}
 or, in operator notation
 \begin{equation}
-\hat{V}_{m}^{\star}\v x=\hat{G}\v x_{m}^{\prime},
+\hat{V}_{m}^{\star}\v x=\hat{G}_{m}\v x_{m}^{\prime},
 \end{equation}
 where $\v x_{m}^{\prime}$ contains the first $m$ entries of $\v x^{\prime}$.
-To obtain $\v x_{m}^{\prime}$ we transform this to
+To obtain $\v x_{m}^{\prime}$ we transform this to a projection operator
+$\hat{G}^{-1}\hat{V}_{m}^{\star}$ taking $\v x$ to $\v x_{m}^{\prime}$
+via
 \begin{equation}
-\v x_{m}^{\prime}=\hat{G}^{-1}\hat{V}_{m}^{\star}\v x.
+\v x_{m}^{\prime}=\hat{G}_{m}^{-1}\hat{V}_{m}^{\star}\v x,\label{eq:proj}
 \end{equation}
 or, in components
 \begin{equation}
 x_{i}^{\prime}=\sum_{k=1}^{m}G^{ik}\v v_{k}^{\star}\cdot\v x\quad\text{for }i=1\dots m.\label{eq:eigbasis-1-1}
 \end{equation}
-Apply $\hat{G}^{-1}\hat{V}_{m}^{\star}$ to the original equation
+In particular application to an eigenvector $\v v_{k}$ with $k\leq m$
+yields components
+\begin{equation}
+(\hat{G}_{m}^{-1}\hat{V}_{m}^{\star}\v v_{k})_{i}=\sum_{j=1}^{m}G^{ij}\v v_{j}^{\star}\cdot\v v_{k}=\sum_{j=1}^{m}G^{ij}G_{jk}=\delta_{ik},
+\end{equation}
+or in matrix notation
+\begin{equation}
+\hat{G}_{m}^{-1}\hat{V}_{m}^{\star}\hat{V}_{m}=\hat{I}_{m},\quad\Leftrightarrow\quad\hat{V}_{m}^{\star}\hat{V}_{m}=\hat{G}_{m}.
+\end{equation}
+We now look at the original equation
 \begin{equation}
 (\hat{I}-\hat{K})\v x=\v x_{0},
 \end{equation}
-resulting in the left-hand side
+written in the partially expanded form
 \begin{equation}
-\hat{G}^{-1}\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\v x=\hat{G}^{-1}((\hat{I}-\hat{K})^{-1}\hat{V}_{m}^{-1})^{-1}\v x
+(\hat{I}-\hat{K})(\hat{V}_{m}\v x_{m}^{\prime}+\bar{\v x})=\v x_{0}.\label{eq:orig}
 \end{equation}
+Multiply from the left with $\hat{V}_{m}^{\star}$ to get projected
+equation in reduced dimension $m$,
+\begin{equation}
+\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\hat{V}_{m}\v x_{m}^{\prime}=\hat{V}_{m}^{\star}\v x_{0}.\label{eq:orig-1}
+\end{equation}
+Here $\hat{V}_{m}^{\star}\bar{\v x}$ has vanished due to Eq.~(\ref{eq:ortho}).
+We can solve this equation
 
+where the operator $\hat{L}_{m}$ represents $\hat{K}$ in projected
+space and is given by
+\begin{align}
+\hat{L}_{m} & =\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\hat{V}_{m}.
+\end{align}
+Components are
+\begin{equation}
+L_{ij}=\v v_{i}^{\star}\cdot(\hat{I}-\hat{K})\v v_{j}
+\end{equation}
+so using the eigenvalue property
+\begin{equation}
+L_{ij}=\v v_{i}^{\star}\cdot\v v_{j}(1-\lambda_{j}),
+\end{equation}
+or in matrix form
+\begin{equation}
+\hat{L}_{m}=\hat{V}_{m}^{\star}-\hat{V}_{m}\hat{\Lambda}_{m}.
+\end{equation}
+We can invert the operator $\hat{L}_{m}$ in a preprocessing step
+by solving multiple sets of linear equations with canonical unit vectors
+on the right-hand side,
+\begin{equation}
+\hat{L}_{m}\hat{Y}_{m}=\hat{I}_{m}.
+\end{equation}
+where the solution for the unknown $m\times m$ matrix $\hat{Y}_{m}=\hat{L}_{m}^{-1}$
+gives the inverse of $\hat{L}_{m}$. Then we can easily compute
+\begin{equation}
+\v x_{m}^{\prime}=\hat{L}_{m}^{-1}\hat{V}_{m}^{\star}\v x_{0}\label{eq:orig-1-1}
+\end{equation}
+and iterate only the remaing part
+\begin{equation}
+\bar{\v x}=\v x-\hat{V}_{m}\v x_{m}^{\prime}.
+\end{equation}
+More precisely to solve
+\begin{equation}
+(\hat{I}-\hat{K})\v x=\v x_{0}
+\end{equation}
+we insert (\ref{eq:orig-1-1}) to obtain
+\begin{equation}
+(\hat{I}-\hat{K})(\hat{V}_{m}\hat{L}_{m}^{-1}\hat{V}_{m}^{\star}\v x_{0}+\bar{\v x})=\v x_{0}\label{eq:orig-2}
+\end{equation}
+and finally write
+\begin{equation}
+(\hat{I}-\hat{K})\bar{\v x}=(\hat{I}-\hat{V}_{m}\hat{L}_{m}^{-1}\hat{V}_{m}^{\star})\v x_{0}.
+\end{equation}
+This kind of transformation is also known as the Schur complement
+when applied to a block of a matrix instead of the eigenbasis. Since
+$\bar{\v x}$ is orthogonal to the space spanned by $\hat{V}_{m}$
+and contains no contributions from $\v v_{k}$ with $k\leq N$ we
+know that this equation is purely in the remaining eigenspace of $\hat{K}$.
+Therefore we can iterate
+\begin{equation}
+\bar{\v x}^{(n+1)}=\bar{\v x}^{(n)}+\hat{K}\bar{\v x}^{(n)}
+\end{equation}
+without the risk of divergence. Projecting down in every step prevents
+the possibility that a small numerical error will introduce contributions
+from the $k\leq N$ eigenspace. TODO.
+
+\begin{tabular}{|c|c|c|c|c|}
+\hline 
+Quantity & dimensions &  &  & \tabularnewline
+\hline 
+\hline 
+$\v x_{m}^{\prime}$ & $m\times1$ &  &  & \tabularnewline
+\hline 
+$\hat{V}_{m}$ & $N\times m$ &  &  & \tabularnewline
+\hline 
+$\hat{V}_{m}^{\star}$ & $m\times N$ &  &  & \tabularnewline
+\hline 
+$\hat{G}_{m}=\hat{V}_{m}^{\star}\hat{V}_{m}$ & $m\times m$ &  &  & \tabularnewline
+\hline 
+$\hat{M}_{m}=\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\hat{V}_{m}$ & $m\times m$ &  &  & \tabularnewline
+\hline 
+\end{tabular}
 
 \section{TODOs for the one who continues kinetic equilibria:}
 
