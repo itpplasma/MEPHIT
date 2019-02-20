@@ -1,4 +1,4 @@
-%% LyX 2.3.0 created this file.  For more info, see http://www.lyx.org/.
+%% LyX 2.3.2 created this file.  For more info, see http://www.lyx.org/.
 %% Do not edit unless you really know what you are doing.
 \documentclass[english,notitlepage]{revtex4-1}
 \usepackage{tgpagella}
@@ -22,38 +22,38 @@
 \makeatother
 
 \begin{document}
-\global\long\def\tht{\vartheta}
-\global\long\def\ph{\varphi}
-\global\long\def\balpha{\boldsymbol{\alpha}}
-\global\long\def\btheta{\boldsymbol{\theta}}
-\global\long\def\bJ{\boldsymbol{J}}
-\global\long\def\bGamma{\boldsymbol{\Gamma}}
-\global\long\def\bOmega{\boldsymbol{\Omega}}
-\global\long\def\d{\text{d}}
-\global\long\def\t#1{\text{#1}}
-\global\long\def\m{\text{m}}
-\global\long\def\v#1{\boldsymbol{#1}}
-\global\long\def\u#1{\underline{#1}}
+\global\long\def\tht{\vartheta}%
+\global\long\def\ph{\varphi}%
+\global\long\def\balpha{\boldsymbol{\alpha}}%
+\global\long\def\btheta{\boldsymbol{\theta}}%
+\global\long\def\bJ{\boldsymbol{J}}%
+\global\long\def\bGamma{\boldsymbol{\Gamma}}%
+\global\long\def\bOmega{\boldsymbol{\Omega}}%
+\global\long\def\d{\text{d}}%
+\global\long\def\t#1{\text{#1}}%
+\global\long\def\m{\text{m}}%
+\global\long\def\v#1{\boldsymbol{#1}}%
+\global\long\def\u#1{\underline{#1}}%
 
-\global\long\def\t#1{\mathbf{#1}}
-\global\long\def\bA{\boldsymbol{A}}
-\global\long\def\bB{\boldsymbol{B}}
-\global\long\def\c{\mathrm{c}}
-\global\long\def\difp#1#2{\frac{\partial#1}{\partial#2}}
-\global\long\def\xset{{\bf x}}
-\global\long\def\zset{{\bf z}}
-\global\long\def\qset{{\bf q}}
-\global\long\def\pset{{\bf p}}
-
+\global\long\def\t#1{\mathbf{#1}}%
+\global\long\def\bA{\boldsymbol{A}}%
+\global\long\def\bB{\boldsymbol{B}}%
+\global\long\def\c{\mathrm{c}}%
+\global\long\def\difp#1#2{\frac{\partial#1}{\partial#2}}%
+\global\long\def\xset{{\bf x}}%
+\global\long\def\zset{{\bf z}}%
+\global\long\def\qset{{\bf q}}%
+\global\long\def\pset{{\bf p}}%
 
 \title{Preconditioned iterations via the Arnoldi method aka incomplete GMRES}
-
 \author{Christopher Albert, Sergei Kasilov}
-
 \date{\today}
 \maketitle
 
 \section{Preconditioned iterative schemes}
+
+See also http://www.math.vt.edu/people/sturler/LectureNotes/IterMethods\_02.pdf
+and Albert, JPCS Varenna 2016 ``Kinetic Modeling''
 
 \subsection{Basics}
 
@@ -98,8 +98,8 @@ so the solution is formally
 
 \subsection{Exact solution in the eigenbasis\label{subsec:Exact-solution-in}}
 
-Assume we have have solved the eigenvalue problem for $\hat{K}$ and
-can write
+Assume we have have solved the eigenvalue problem for a full-rank
+operator $\hat{K}$ and can write
 \begin{equation}
 \hat{K}=\hat{V}\hat{\Lambda}\hat{V}^{-1},
 \end{equation}
@@ -281,10 +281,18 @@ same behavior as of the original series. This will turn out to be
 the reason why a relaxation factor for direct iterations doesn't help
 us in this class or problems.
 
-What works better for accelerating convergence is replacing $z=aw+d$
-by a linear transformation with generally complex $a$ and $d$, i.e.
+What works better for accelerating convergence is replacing 
+\begin{equation}
+z=aw+d
+\end{equation}
+ by a linear transformation with generally complex $a$ and $d$,
+i.e.
 \begin{equation}
 \frac{1}{1-z}=\frac{1}{1-aw-d}=\frac{1}{1-d}\frac{1}{1-\frac{aw}{1-d}}=\frac{1}{1-d}\frac{1}{1-\frac{z-d}{1-d}}.
+\end{equation}
+The inverse transformation is
+\begin{equation}
+w=\frac{z}{a}-\frac{d}{a}.\label{eq:zw}
 \end{equation}
 More generally, to accelerate convergence of complex number series
 one would use conformal mappings (see e.g. \href{http://www.math.wisc.edu/~waleffe/M321/complex.pdf}{http://www.math.wisc.edu/$\sim$waleffe/M321/complex.pdf}),
@@ -408,162 +416,283 @@ can be found by projecting to the dual basis, i.e.
 We see that in order to work fully in the usual basis $\v e_{k}$
 and avoid the dual basis $\v e^{k}$ we require the reciprocal metric
 $g^{ik}$. Also the ``bra-ket'' notation of quantum mechanics works
-the same way.
+the same way. Analogously in our complex linear operator space to
+be able to project to the partial eigenbasis in $\hat{V}_{m}$ we
+define a matrix $\hat{G}_{mm}$ with entries
+\begin{equation}
+G_{ij}=\v v_{i}^{\star}\cdot\v v_{j}.
+\end{equation}
+Remember that
+\begin{equation}
+\v x^{\prime}=\hat{V}^{-1}\v x\label{eq:vinv}
+\end{equation}
+in a full eigenspace of dimension $N$. Now we cannot get $\hat{V}^{-1}$
+of the full eigenspace here but at least project down to the incomplete
+eigensubspace spanned by $\hat{V}_{m}$. We split the vector $\v x$
+into contributions from the incomplete eigenspace of dimension $m$
+and the remaining eigenspace,
+\begin{equation}
+\v x=\sum_{k=1}^{M}x_{k}^{\prime}\v v_{k}=\sum_{k=1}^{m}x_{k}^{\prime}\v v_{k}+\sum_{k=m+1}^{M}x_{k}^{\prime}\v v_{k}=\hat{V}_{m}\v x_{m}^{\prime}+\hat{V}_{n}\v x_{n}^{\prime}.\label{eq:eigbasis}
+\end{equation}
 
-Analogously in our complex linear operator space to be able to project
-to the partial eigenbasis in $\hat{V}_{m}$ we define a matrix $\hat{G}_{m}$
-with entries
+Here we assumed the dimension of the eigenspace to be $N$ and span
+the whole space, so the operator $\hat{K}$ must be of full rank.
+The eigenvalue equation in full space is 
 \begin{equation}
-G_{ij}=\v v_{i}^{\star}\cdot\v v_{j}
-\end{equation}
-corresponding to the projections between possibly non-orthogonal eigenvectors
-and invert it to $\hat{G}_{m}^{-1}$ with components $G^{ik}$. Remember
-that
-\begin{equation}
-\v x^{\prime}=\hat{V}^{-1}\v x
-\end{equation}
-in the full eigenspace. Now we cannot get $\hat{V}^{-1}$ of the full
-eigenspace here but at least project down to the incomplete eigensubspace
-spanned by $\hat{V}_{m}$. There we have
-\begin{equation}
-\v x=\sum_{k=1}^{m}x_{k}^{\prime}\v v_{k}+\bar{\v x}=\hat{V}_{m}\v x_{m}^{\prime}+\bar{\v x}.\label{eq:eigbasis}
-\end{equation}
-where $\v x_{m}^{\prime}$ is the representation of the projection
-of $\v x$ in the subspace and $\bar{\v x}$ is the part of $\v x$
-that cannot be written in terms of columns of $\hat{V}_{m}$, i.e.
-is complex orthogonal to the all of them with
-\begin{equation}
-\v v_{k}^{\star}\cdot\bar{\v x}=0\quad\text{for }k=1\dots m
+\hat{K}\v v_{k}=\lambda_{k}\v v_{k}
 \end{equation}
 or
 \begin{equation}
-\hat{V}_{m}^{\star}\bar{\v x}=0.\label{eq:ortho}
+\hat{K}\hat{V}=\v{\lambda}\hat{V}=\hat{V}\hat{\Lambda}.
 \end{equation}
-If we take an inner product Eq.~(\ref{eq:eigbasis}) with $\v v_{i}^{\star}$
-with $k<m$ we obtain
+The reduced eigenvalue equation in $m$ dimensions of the subspace
+is
 \begin{equation}
-\v v_{i}^{\star}\cdot\v x=\sum_{k=1}^{m}x_{k}^{\prime}\v v_{i}^{\star}\cdot\v v_{k}=\sum_{k=1}^{m}G_{ik}x_{k}^{\prime},\label{eq:eigbasis-1}
+\hat{K}\hat{V}_{m}=\v{\lambda}_{m}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}.
 \end{equation}
-or, in operator notation
-\begin{equation}
-\hat{V}_{m}^{\star}\v x=\hat{G}_{m}\v x_{m}^{\prime},
-\end{equation}
-where $\v x_{m}^{\prime}$ contains the first $m$ entries of $\v x^{\prime}$.
-To obtain $\v x_{m}^{\prime}$ we transform this to a projection operator
-$\hat{G}^{-1}\hat{V}_{m}^{\star}$ taking $\v x$ to $\v x_{m}^{\prime}$
-via
-\begin{equation}
-\v x_{m}^{\prime}=\hat{G}_{m}^{-1}\hat{V}_{m}^{\star}\v x,\label{eq:proj}
-\end{equation}
-or, in components
-\begin{equation}
-x_{i}^{\prime}=\sum_{k=1}^{m}G^{ik}\v v_{k}^{\star}\cdot\v x\quad\text{for }i=1\dots m.\label{eq:eigbasis-1-1}
-\end{equation}
-In particular application to an eigenvector $\v v_{k}$ with $k\leq m$
-yields components
-\begin{equation}
-(\hat{G}_{m}^{-1}\hat{V}_{m}^{\star}\v v_{k})_{i}=\sum_{j=1}^{m}G^{ij}\v v_{j}^{\star}\cdot\v v_{k}=\sum_{j=1}^{m}G^{ij}G_{jk}=\delta_{ik},
-\end{equation}
-or in matrix notation
-\begin{equation}
-\hat{G}_{m}^{-1}\hat{V}_{m}^{\star}\hat{V}_{m}=\hat{I}_{m},\quad\Leftrightarrow\quad\hat{V}_{m}^{\star}\hat{V}_{m}=\hat{G}_{m}.
-\end{equation}
-We now look at the original equation
-\begin{equation}
-(\hat{I}-\hat{K})\v x=\v x_{0},
-\end{equation}
-written in the partially expanded form
-\begin{equation}
-(\hat{I}-\hat{K})(\hat{V}_{m}\v x_{m}^{\prime}+\bar{\v x})=\v x_{0}.\label{eq:orig}
-\end{equation}
-Multiply from the left with $\hat{V}_{m}^{\star}$ to get projected
-equation in reduced dimension $m$,
-\begin{equation}
-\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\hat{V}_{m}\v x_{m}^{\prime}=\hat{V}_{m}^{\star}\v x_{0}.\label{eq:orig-1}
-\end{equation}
-Here $\hat{V}_{m}^{\star}\bar{\v x}$ has vanished due to Eq.~(\ref{eq:ortho}).
-We can solve this equation
+Here the $(m\times m)$ matrix $\hat{\Lambda}_{m}$ must be on the
+right-hand side, since $\hat{V}_{m}$ is of size $(N\times m)$.
 
-where the operator $\hat{L}_{m}$ represents $\hat{K}$ in projected
-space and is given by
-\begin{align}
-\hat{L}_{m} & =\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\hat{V}_{m}.
-\end{align}
-Components are
-\begin{equation}
-L_{ij}=\v v_{i}^{\star}\cdot(\hat{I}-\hat{K})\v v_{j}
-\end{equation}
-so using the eigenvalue property
-\begin{equation}
-L_{ij}=\v v_{i}^{\star}\cdot\v v_{j}(1-\lambda_{j}),
-\end{equation}
-or in matrix form
-\begin{equation}
-\hat{L}_{m}=\hat{V}_{m}^{\star}-\hat{V}_{m}\hat{\Lambda}_{m}.
-\end{equation}
-We can invert the operator $\hat{L}_{m}$ in a preprocessing step
-by solving multiple sets of linear equations with canonical unit vectors
-on the right-hand side,
-\begin{equation}
-\hat{L}_{m}\hat{Y}_{m}=\hat{I}_{m}.
-\end{equation}
-where the solution for the unknown $m\times m$ matrix $\hat{Y}_{m}=\hat{L}_{m}^{-1}$
-gives the inverse of $\hat{L}_{m}$. Then we can easily compute
-\begin{equation}
-\v x_{m}^{\prime}=\hat{L}_{m}^{-1}\hat{V}_{m}^{\star}\v x_{0}\label{eq:orig-1-1}
-\end{equation}
-and iterate only the remaing part
-\begin{equation}
-\bar{\v x}=\v x-\hat{V}_{m}\v x_{m}^{\prime}.
-\end{equation}
-More precisely to solve
-\begin{equation}
-(\hat{I}-\hat{K})\v x=\v x_{0}
-\end{equation}
-we insert (\ref{eq:orig-1-1}) to obtain
-\begin{equation}
-(\hat{I}-\hat{K})(\hat{V}_{m}\hat{L}_{m}^{-1}\hat{V}_{m}^{\star}\v x_{0}+\bar{\v x})=\v x_{0}\label{eq:orig-2}
-\end{equation}
-and finally write
-\begin{equation}
-(\hat{I}-\hat{K})\bar{\v x}=(\hat{I}-\hat{V}_{m}\hat{L}_{m}^{-1}\hat{V}_{m}^{\star})\v x_{0}.
-\end{equation}
-This kind of transformation is also known as the Schur complement
-when applied to a block of a matrix instead of the eigenbasis. Since
-$\bar{\v x}$ is orthogonal to the space spanned by $\hat{V}_{m}$
-and contains no contributions from $\v v_{k}$ with $k\leq N$ we
-know that this equation is purely in the remaining eigenspace of $\hat{K}$.
-Therefore we can iterate
-\begin{equation}
-\bar{\v x}^{(n+1)}=\bar{\v x}^{(n)}+\hat{K}\bar{\v x}^{(n)}
-\end{equation}
-without the risk of divergence. Projecting down in every step prevents
-the possibility that a small numerical error will introduce contributions
-from the $k\leq N$ eigenspace. TODO.
-
-\begin{tabular}{|c|c|c|c|c|}
+\begin{table}
+\caption{Dimensions of various quantities.}
+\begin{tabular}{|c|c|}
 \hline 
-Quantity & dimensions &  &  & \tabularnewline
+Quantity & Dimensions\tabularnewline
 \hline 
 \hline 
-$\v x_{m}^{\prime}$ & $m\times1$ &  &  & \tabularnewline
+$\v x$ & $N\times1$\tabularnewline
 \hline 
-$\hat{V}_{m}$ & $N\times m$ &  &  & \tabularnewline
+$\v x_{m}^{\prime}$ & $m\times1$\tabularnewline
 \hline 
-$\hat{V}_{m}^{\star}$ & $m\times N$ &  &  & \tabularnewline
+$\hat{V}_{m}$ & $N\times m$\tabularnewline
 \hline 
-$\hat{G}_{m}=\hat{V}_{m}^{\star}\hat{V}_{m}$ & $m\times m$ &  &  & \tabularnewline
+$\hat{V}_{m}^{\star}$ & $m\times N$\tabularnewline
 \hline 
-$\hat{M}_{m}=\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\hat{V}_{m}$ & $m\times m$ &  &  & \tabularnewline
+$\hat{G}_{mm}=\hat{V}_{m}^{\star}\hat{V}_{m}$ & $m\times m$\tabularnewline
+\hline 
+$\v{\lambda}_{m}$ & $1\times m$\tabularnewline
+\hline 
+$\Lambda_{m}$ & $m\times N$\tabularnewline
 \hline 
 \end{tabular}
+\end{table}
+
+Now let's look at the original equation
+\begin{equation}
+(\hat{I}-\hat{K})\v x=\v x_{0}.\label{eq:eq}
+\end{equation}
+We want to find preconditioner of the that should modify (\ref{eq:eq})
+to a new equation where the largest $m$ eigenvalues don't contribute
+to iterations. Usually this is written by multiplying (\ref{eq:eq})
+with the inverse of a full-rank linear operator $\hat{\Pi}^{-1}$
+and
+\begin{equation}
+\hat{\Pi}^{-1}(\hat{I}-\hat{K})\v x=\Pi^{-1}\v x_{0}.\label{eq:precond}
+\end{equation}
+We choose $\hat{\Pi}^{-1}=\hat{I}-\hat{M}$ with some general $\hat{M}$.
+Then Eq.~(\ref{eq:precond}) becomes
+\begin{equation}
+(\hat{I}-\hat{M}-(\hat{I}-\hat{M})\hat{K})\v x=(\hat{I}-\hat{M})\v x_{0}
+\end{equation}
+or
+\begin{equation}
+(\hat{I}+\hat{\bar{K}})\v x=(\hat{I}-\hat{M})\v x_{0}
+\end{equation}
+with
+\begin{align}
+\hat{\bar{K}} & =\hat{M}+(\hat{I}-\hat{M})\hat{K}.
+\end{align}
+Our task to avoid the first $m$ largest eigenvalues of $\hat{K}$
+with index $k\leq m$. This means that $\hat{\bar{K}}\v v_{k}=0$,
+\begin{align}
+0=\hat{\bar{K}}\v v_{k} & =\hat{M}\v v_{k}+(\hat{I}-\hat{M})\lambda_{k}\v v_{k}\nonumber \\
+ & =\lambda_{k}\v v_{k}+\hat{M}(1-\lambda_{k})\v v_{k}.
+\end{align}
+Combining $\v v_{k}$ inside $\hat{V}_{m}$ equivalently yields
+\[
+\hat{\bar{K}}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}+\hat{M}\hat{V}_{m}(\hat{I}_{m}-\hat{\Lambda}_{m})=0
+\]
+so
+\begin{equation}
+\hat{M}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})=\hat{V}_{m}\hat{\Lambda}_{m}.
+\end{equation}
+Right-Multiplying with the inverse of $(\hat{\Lambda}_{m}-\hat{I}_{m})$
+yields
+\begin{equation}
+\hat{M}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}.
+\end{equation}
+Now we can apply the unity term $(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}\hat{V}$
+to the right-hand side from the right, which gives
+\begin{equation}
+\hat{M}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}\hat{V}.
+\end{equation}
+This trick is similar to expanding the identity operator into bras
+and kets in quantum mechanics. Now this equation is for sure solved
+by
+\begin{equation}
+\hat{M}=\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}.
+\end{equation}
+The inner part can be grouped to the inverse of an $m$-dimensional
+matrix
+\begin{equation}
+\hat{L}_{mm}=\hat{V}_{m}^{\star}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})
+\end{equation}
+that can be used to pre-compute $\hat{L}_{mm}^{-1}$ before iterations
+by solving the $m$-dimensional linear system
+\begin{equation}
+\hat{L}_{mm}\hat{Y}=\hat{I}_{m}.
+\end{equation}
+and setting $\hat{L}_{mm}^{-1}$ to its solution $\hat{Y}$. Of course
+this is only efficient if the number $m$ of large eigenvalues is
+much smaller than the total $N$. Finally we write $\hat{M}$ defining
+the preconditioner $\hat{\Pi}^{-1}=\hat{I}-\hat{M}$ as
+\begin{equation}
+\hat{M}=\hat{V}_{m}\hat{\Lambda}_{m}\hat{L}_{mm}^{-1}\hat{V}_{m}^{\star}
+\end{equation}
+and solve
+\[
+(\hat{I}-\hat{\bar{K}})\v x=\bar{\v x}_{0}
+\]
+wherehaving the same solution as the original equation, but with stable
+and fast iterations in
+\begin{equation}
+\hat{\bar{K}}=\hat{M}+(\hat{I}-\hat{M})\hat{K}
+\end{equation}
+with driving term
+\begin{equation}
+\bar{\v x}_{0}=(\hat{I}-\hat{M})\v x_{0}.
+\end{equation}
+Note that this is different to the scalar case Eq.~(\ref{eq:zw})
+where no concept of eigenvalues exists.
+
+\subsection{Application to self-consistent magnetic fields}
+
+Within kinetic or MHD equilibria we compute magnetic response due
+to plasma currents,
+\begin{equation}
+\delta\v B_{p}=\hat{K}(\delta\v B_{p}+\delta\v B_{v}),\label{eq:k}
+\end{equation}
+where $\hat{K}=\hat{M}\hat{P}$ first computes plasma currents 
+\begin{equation}
+\v J_{p}=\hat{P}(\delta\v B_{p}+\delta\v B_{v})\label{eq:equi}
+\end{equation}
+ from the total field and then Maxwell's equations (Ampere's law)
+\begin{equation}
+\delta\v B_{p}=\hat{M}\delta\v J_{p}\label{eq:ampi}
+\end{equation}
+only for the plasma currents that change in each iteration, but not
+for the coil currents producing $\delta\v B_{v}$ that remain fixed.
+The latter have been already processed before via Biot-Savart, yielding
+\begin{equation}
+\delta\v B_{v}=\hat{M}\delta\v J_{v}\label{eq:ampi2}
+\end{equation}
+independently. The combined Maxwell's equations 
+\begin{equation}
+\delta\v B_{p}+\delta\v B_{v}=\hat{M}(\delta\v J_{p}+\delta\v J_{v})
+\end{equation}
+are thus fulfilled by superposition of (\ref{eq:ampi}) and (\ref{eq:ampi2})
+
+For direct iterations solving Eq.~(\ref{eq:k}) we use the fixed-point
+equation
+\begin{equation}
+\delta\v B_{p}=\hat{K}(\delta\v B_{v}+\delta\v B_{p})=\hat{K}(\delta\v B_{v}+\hat{K}(\delta\v B_{v}+\delta\v B_{p}))=\dots,\label{eq:k-1}
+\end{equation}
+iterations
+\begin{align}
+\delta\v B_{p}^{[0]} & =\delta\v B_{v},\\
+\delta\v B_{p}^{[1]} & =\hat{K}\delta\v B_{p}^{(0)}=\hat{K}\delta\v B_{v}\\
+\delta\v B_{p}^{[n+1]} & =\hat{K}(\delta\v B_{v}+\delta\v B_{p}^{[n]}).
+\end{align}
+This application of $\hat{K}=\hat{M}\hat{P}$ to the combination of
+vacuum field plus previous iteration plus yields \emph{total }results,
+where $\delta\v B_{p}^{[n+1]}$ is an already an approximation of
+the total $\delta\v B_{p}^{[n+1]}$. This is what the call to \emph{next\_iteration}
+in \emph{kin2d.f90 }does with \emph{bnorm\_plas\_prev} = $\delta\v B_{p}^{[n]}$
+being computed from plasma currents 
+\begin{equation}
+\delta\v J_{p}^{[n+1]}=\hat{P}(\delta\v B_{p}^{[n]}+\delta\v B_{v})
+\end{equation}
+and then fields
+\begin{equation}
+\delta\v B_{v}^{[n+1]}=\hat{M}\delta\v J_{p}^{[n+1]}.\label{eq:ampi2-1}
+\end{equation}
+This corresponds to the operator series for $(\hat{I}-\hat{K})$ because
+\begin{align}
+\delta\v B_{p}^{(n)} & =\hat{K}(\delta\v B_{v}+\delta\v B_{p}^{(n-1)})\nonumber \\
+ & =\hat{K}(\delta\v B_{v}+\hat{K}(\delta\v B_{v}+\delta\v B_{p}^{(n-2)}))\nonumber \\
+ & =\hat{K}\delta\v B_{v}+\hat{K}^{2}\delta\v B_{v}+\hat{K}^{3}\delta\v B_{v}+\dots+\hat{K}^{n+1}\delta\v B_{v}\nonumber \\
+ & =(\hat{I}+\hat{K}+\hat{K}^{2}+\dots+\hat{K}^{n})\hat{K}\delta\v B_{v}.
+\end{align}
+Here we also call 
+\begin{equation}
+\v x_{0}=\hat{K}\delta\v B_{v}=\delta\v B_{p}^{[1]}\equiv\delta\v B_{pv}.
+\end{equation}
+the single-iteration plasma response $\delta\v B_{pv}$ to the vacuum
+field $\delta\v B_{v}$. The whole preocedure can also be written
+in the \emph{cumulative} way of the operator series described above
+by defining differences denoted by parantheses $(n)$ as
+\begin{equation}
+\delta\v B_{p}^{(n+1)}\equiv\delta\v B_{p}^{[n+1]}-\delta\v B_{p}^{[n]}
+\end{equation}
+with
+\begin{align}
+\delta\v B_{p}^{(1)} & =\delta\v B_{p}^{[1]}=\delta\v B_{pv},\\
+\delta\v B_{p}^{(n+1)} & =\hat{K}\delta\v B_{p}^{(n)}
+\end{align}
+and
+\begin{equation}
+\delta\v B_{p}^{[n]}=\sum_{k=1}^{n}\delta\v B_{p}^{(k)}.
+\end{equation}
+The correspondence to our operator series in $\hat{K}$ of these quantities
+is for
+\begin{align}
+\v x & \equiv\delta\v B_{p},\\
+\v x_{0} & =\delta\v B_{pv}.
+\end{align}
+where Eq.~(\ref{eq:k}) becomes of the form (\ref{eq:eq}) with
+\begin{equation}
+(\hat{I}-\hat{K})\delta\v B_{p}=\delta\v B_{pv}.\label{eq:k-2}
+\end{equation}
+A preconditioned iteration scheme defines an equivalent equation
+\begin{equation}
+(\hat{I}-\hat{\bar{K}})\delta\v B_{p}=\delta\bar{\v B}_{pv}
+\end{equation}
+with a new iteration rule
+\begin{align}
+\delta\v B_{p}^{(1)} & =\delta\bar{\v B}_{pv},\\
+\delta\v B_{p}^{(n+1)} & =\hat{\bar{K}}\delta\v B_{p}^{(n)}.
+\end{align}
+Here we repeat the definition based on the largest $m$ eigenvalues
+described in the general section above,
+\begin{align}
+\delta\bar{\v B}_{pv} & =(\hat{I}-\hat{M})\delta\v B_{pv}\\
+\hat{\bar{K}} & =(\hat{M}+(\hat{I}-\hat{M})\hat{K}),\\
+\hat{M} & =\hat{V}_{m}\hat{\Lambda}_{m}\hat{L}_{mm}^{-1}\hat{V}_{m}^{\star},\\
+\hat{L}_{mm} & =\hat{V}_{m}^{\star}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m}).
+\end{align}
+Then for preconditioned version of total (summed) field iterations
+$[n]$ it follows that
+\begin{align}
+\delta\v B^{[1]} & =\delta\bar{\v B}_{pv}\nonumber \\
+\delta\v B_{p}^{[n+1]} & =\delta\bar{\v B}_{pv}+\hat{\bar{K}}\delta\v B_{p}^{[n]}\nonumber \\
+ & =(\hat{I}-\hat{M})\hat{K}\delta\v B_{v}+(\hat{M}+(\hat{I}-\hat{M})\hat{K})\delta\v B_{p}^{[n]}\nonumber \\
+ & =\hat{K}(\delta\v B_{v}+\delta\v B_{p}^{[n]})-\hat{M}\hat{K}(\delta\v B_{v}+\delta\v B_{p}^{[n]}).
+\end{align}
+This is the way the algorithm is currently implemented in \emph{kin2d.f90
+}and tested in \emph{test\_arnoldi.f90}.
 
 \section{TODOs for the one who continues kinetic equilibria:}
 
 \subsection{Perturbed problem for noisy matrices}
 
 Check how sensitive the method is to random noise in the operator
-$\hat{A}$ and possibly find some general rules of applicability.
+$\hat{K}$ and possibly find some general rules of applicability.
+
+\subsection{Underdetermined systems}
+
+Extend the method to singular operators $\hat{K}$ with rank $M<N$.
+There the eigendecomposition is replaced by a singular value decomposition
+that can also rely on Krylov methods.
 
 \subsection{Extension to nonlinear operators}
 

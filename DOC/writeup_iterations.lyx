@@ -220,6 +220,19 @@ today
 Preconditioned iterative schemes
 \end_layout
 
+\begin_layout Standard
+See also http://www.math.vt.edu/people/sturler/LectureNotes/IterMethods_02.pdf
+ and Albert, JPCS Varenna 2016 
+\begin_inset Quotes eld
+\end_inset
+
+Kinetic Modeling
+\begin_inset Quotes erd
+\end_inset
+
+
+\end_layout
+
 \begin_layout Subsection
 Basics
 \end_layout
@@ -387,7 +400,8 @@ name "subsec:Exact-solution-in"
 \end_layout
 
 \begin_layout Standard
-Assume we have have solved the eigenvalue problem for 
+Assume we have have solved the eigenvalue problem for a full-rank operator
+ 
 \begin_inset Formula $\hat{K}$
 \end_inset
 
@@ -1015,7 +1029,11 @@ Unfortunately this doesn't help us at all, since the convergence radius
 
 \begin_layout Standard
 What works better for accelerating convergence is replacing 
-\begin_inset Formula $z=aw+d$
+\begin_inset Formula 
+\begin{equation}
+z=aw+d
+\end{equation}
+
 \end_inset
 
  by a linear transformation with generally complex 
@@ -1030,6 +1048,14 @@ What works better for accelerating convergence is replacing
 \begin_inset Formula 
 \begin{equation}
 \frac{1}{1-z}=\frac{1}{1-aw-d}=\frac{1}{1-d}\frac{1}{1-\frac{aw}{1-d}}=\frac{1}{1-d}\frac{1}{1-\frac{z-d}{1-d}}.
+\end{equation}
+
+\end_inset
+
+The inverse transformation is
+\begin_inset Formula 
+\begin{equation}
+w=\frac{z}{a}-\frac{d}{a}.\label{eq:zw}
 \end{equation}
 
 \end_inset
@@ -1536,45 +1562,36 @@ bra-ket
 \end_inset
 
  notation of quantum mechanics works the same way.
-\end_layout
-
-\begin_layout Standard
-Analogously in our complex linear operator space to be able to project to
- the partial eigenbasis in 
+ Analogously in our complex linear operator space to be able to project
+ to the partial eigenbasis in 
 \begin_inset Formula $\hat{V}_{m}$
 \end_inset
 
  we define a matrix 
-\begin_inset Formula $\hat{G}_{m}$
+\begin_inset Formula $\hat{G}_{mm}$
 \end_inset
 
  with entries
 \begin_inset Formula 
 \begin{equation}
-G_{ij}=\v v_{i}^{\star}\cdot\v v_{j}
+G_{ij}=\v v_{i}^{\star}\cdot\v v_{j}.
 \end{equation}
 
 \end_inset
 
-corresponding to the projections between possibly non-orthogonal eigenvectors
- and invert it to 
-\begin_inset Formula $\hat{G}_{m}^{-1}$
+Remember that
+\begin_inset Formula 
+\begin{equation}
+\v x^{\prime}=\hat{V}^{-1}\v x\label{eq:vinv}
+\end{equation}
+
 \end_inset
 
- with components 
-\begin_inset Formula $G^{ik}$
+in a full eigenspace of dimension 
+\begin_inset Formula $N$
 \end_inset
 
 .
- Remember that
-\begin_inset Formula 
-\begin{equation}
-\v x^{\prime}=\hat{V}^{-1}\v x
-\end{equation}
-
-\end_inset
-
-in the full eigenspace.
  Now we cannot get 
 \begin_inset Formula $\hat{V}^{-1}$
 \end_inset
@@ -1585,39 +1602,39 @@ in the full eigenspace.
 \end_inset
 
 .
- There we have
+ We split the vector 
+\begin_inset Formula $\v x$
+\end_inset
+
+ into contributions from the incomplete eigenspace of dimension 
+\begin_inset Formula $m$
+\end_inset
+
+ and the remaining eigenspace,
 \begin_inset Formula 
 \begin{equation}
-\v x=\sum_{k=1}^{m}x_{k}^{\prime}\v v_{k}+\bar{\v x}=\hat{V}_{m}\v x_{m}^{\prime}+\bar{\v x}.\label{eq:eigbasis}
+\v x=\sum_{k=1}^{M}x_{k}^{\prime}\v v_{k}=\sum_{k=1}^{m}x_{k}^{\prime}\v v_{k}+\sum_{k=m+1}^{M}x_{k}^{\prime}\v v_{k}=\hat{V}_{m}\v x_{m}^{\prime}+\hat{V}_{n}\v x_{n}^{\prime}.\label{eq:eigbasis}
 \end{equation}
 
 \end_inset
 
-where 
-\begin_inset Formula $\v x_{m}^{\prime}$
+
+\end_layout
+
+\begin_layout Standard
+Here we assumed the dimension of the eigenspace to be 
+\begin_inset Formula $N$
 \end_inset
 
- is the representation of the projection of 
-\begin_inset Formula $\v x$
+ and span the whole space, so the operator 
+\begin_inset Formula $\hat{K}$
 \end_inset
 
- in the subspace and 
-\begin_inset Formula $\bar{\v x}$
-\end_inset
-
- is the part of 
-\begin_inset Formula $\v x$
-\end_inset
-
- that cannot be written in terms of columns of 
-\begin_inset Formula $\hat{V}_{m}$
-\end_inset
-
-, i.e.
- is complex orthogonal to the all of them with
+ must be of full rank.
+ The eigenvalue equation in full space is 
 \begin_inset Formula 
 \begin{equation}
-\v v_{k}^{\star}\cdot\bar{\v x}=0\quad\text{for }k=1\dots m
+\hat{K}\v v_{k}=\lambda_{k}\v v_{k}
 \end{equation}
 
 \end_inset
@@ -1625,328 +1642,61 @@ where
 or
 \begin_inset Formula 
 \begin{equation}
-\hat{V}_{m}^{\star}\bar{\v x}=0.\label{eq:ortho}
+\hat{K}\hat{V}=\v{\lambda}\hat{V}=\hat{V}\hat{\Lambda}.
 \end{equation}
 
 \end_inset
 
-If we take an inner product Eq.
-\begin_inset space ~
-\end_inset
-
-
-\begin_inset CommandInset ref
-LatexCommand eqref
-reference "eq:eigbasis"
-
-\end_inset
-
- with 
-\begin_inset Formula $\v v_{i}^{\star}$
-\end_inset
-
- with 
-\begin_inset Formula $k<m$
-\end_inset
-
- we obtain
-\begin_inset Formula 
-\begin{equation}
-\v v_{i}^{\star}\cdot\v x=\sum_{k=1}^{m}x_{k}^{\prime}\v v_{i}^{\star}\cdot\v v_{k}=\sum_{k=1}^{m}G_{ik}x_{k}^{\prime},\label{eq:eigbasis-1}
-\end{equation}
-
-\end_inset
-
-or, in operator notation
-\begin_inset Formula 
-\begin{equation}
-\hat{V}_{m}^{\star}\v x=\hat{G}_{m}\v x_{m}^{\prime},
-\end{equation}
-
-\end_inset
-
-where 
-\begin_inset Formula $\v x_{m}^{\prime}$
-\end_inset
-
- contains the first 
+The reduced eigenvalue equation in 
 \begin_inset Formula $m$
 \end_inset
 
- entries of 
-\begin_inset Formula $\v x^{\prime}$
-\end_inset
-
-.
- To obtain 
-\begin_inset Formula $\v x_{m}^{\prime}$
-\end_inset
-
- we transform this to a projection operator 
-\begin_inset Formula $\hat{G}^{-1}\hat{V}_{m}^{\star}$
-\end_inset
-
- taking 
-\begin_inset Formula $\v x$
-\end_inset
-
- to 
-\begin_inset Formula $\v x_{m}^{\prime}$
-\end_inset
-
- via
+ dimensions of the subspace is
 \begin_inset Formula 
 \begin{equation}
-\v x_{m}^{\prime}=\hat{G}_{m}^{-1}\hat{V}_{m}^{\star}\v x,\label{eq:proj}
+\hat{K}\hat{V}_{m}=\v{\lambda}_{m}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}.
 \end{equation}
 
 \end_inset
 
-or, in components
-\begin_inset Formula 
-\begin{equation}
-x_{i}^{\prime}=\sum_{k=1}^{m}G^{ik}\v v_{k}^{\star}\cdot\v x\quad\text{for }i=1\dots m.\label{eq:eigbasis-1-1}
-\end{equation}
-
-\end_inset
-
-In particular application to an eigenvector 
-\begin_inset Formula $\v v_{k}$
-\end_inset
-
- with 
-\begin_inset Formula $k\leq m$
-\end_inset
-
- yields components
-\begin_inset Formula 
-\begin{equation}
-(\hat{G}_{m}^{-1}\hat{V}_{m}^{\star}\v v_{k})_{i}=\sum_{j=1}^{m}G^{ij}\v v_{j}^{\star}\cdot\v v_{k}=\sum_{j=1}^{m}G^{ij}G_{jk}=\delta_{ik},
-\end{equation}
-
-\end_inset
-
-or in matrix notation
-\begin_inset Formula 
-\begin{equation}
-\hat{G}_{m}^{-1}\hat{V}_{m}^{\star}\hat{V}_{m}=\hat{I}_{m},\quad\Leftrightarrow\quad\hat{V}_{m}^{\star}\hat{V}_{m}=\hat{G}_{m}.
-\end{equation}
-
-\end_inset
-
-We now look at the original equation
-\begin_inset Formula 
-\begin{equation}
-(\hat{I}-\hat{K})\v x=\v x_{0},
-\end{equation}
-
-\end_inset
-
-written in the partially expanded form
-\begin_inset Formula 
-\begin{equation}
-(\hat{I}-\hat{K})(\hat{V}_{m}\v x_{m}^{\prime}+\bar{\v x})=\v x_{0}.\label{eq:orig}
-\end{equation}
-
-\end_inset
-
-Multiply from the left with 
-\begin_inset Formula $\hat{V}_{m}^{\star}$
-\end_inset
-
- to get projected equation in reduced dimension 
-\begin_inset Formula $m$
-\end_inset
-
-,
-\begin_inset Formula 
-\begin{equation}
-\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\hat{V}_{m}\v x_{m}^{\prime}=\hat{V}_{m}^{\star}\v x_{0}.\label{eq:orig-1}
-\end{equation}
-
-\end_inset
-
-Here 
-\begin_inset Formula $\hat{V}_{m}^{\star}\bar{\v x}$
-\end_inset
-
- has vanished due to Eq.
-\begin_inset space ~
-\end_inset
-
-
-\begin_inset CommandInset ref
-LatexCommand eqref
-reference "eq:ortho"
-
-\end_inset
-
-.
- We can solve this equation
-\end_layout
-
-\begin_layout Standard
-where the operator 
-\begin_inset Formula $\hat{L}_{m}$
-\end_inset
-
- represents 
-\begin_inset Formula $\hat{K}$
-\end_inset
-
- in projected space and is given by
-\begin_inset Formula 
-\begin{align}
-\hat{L}_{m} & =\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\hat{V}_{m}.
-\end{align}
-
-\end_inset
-
-Components are
-\begin_inset Formula 
-\begin{equation}
-L_{ij}=\v v_{i}^{\star}\cdot(\hat{I}-\hat{K})\v v_{j}
-\end{equation}
-
-\end_inset
-
-so using the eigenvalue property
-\begin_inset Formula 
-\begin{equation}
-L_{ij}=\v v_{i}^{\star}\cdot\v v_{j}(1-\lambda_{j}),
-\end{equation}
-
-\end_inset
-
-or in matrix form
-\begin_inset Formula 
-\begin{equation}
-\hat{L}_{m}=\hat{V}_{m}^{\star}-\hat{V}_{m}\hat{\Lambda}_{m}.
-\end{equation}
-
-\end_inset
-
-We can invert the operator 
-\begin_inset Formula $\hat{L}_{m}$
-\end_inset
-
- in a preprocessing step by solving multiple sets of linear equations with
- canonical unit vectors on the right-hand side,
-\begin_inset Formula 
-\begin{equation}
-\hat{L}_{m}\hat{Y}_{m}=\hat{I}_{m}.
-\end{equation}
-
-\end_inset
-
-where the solution for the unknown 
-\begin_inset Formula $m\times m$
+Here the 
+\begin_inset Formula $(m\times m)$
 \end_inset
 
  matrix 
-\begin_inset Formula $\hat{Y}_{m}=\hat{L}_{m}^{-1}$
+\begin_inset Formula $\hat{\Lambda}_{m}$
 \end_inset
 
- gives the inverse of 
-\begin_inset Formula $\hat{L}_{m}$
-\end_inset
-
-.
- Then we can easily compute
-\begin_inset Formula 
-\begin{equation}
-\v x_{m}^{\prime}=\hat{L}_{m}^{-1}\hat{V}_{m}^{\star}\v x_{0}\label{eq:orig-1-1}
-\end{equation}
-
-\end_inset
-
-and iterate only the remaing part
-\begin_inset Formula 
-\begin{equation}
-\bar{\v x}=\v x-\hat{V}_{m}\v x_{m}^{\prime}.
-\end{equation}
-
-\end_inset
-
-More precisely to solve
-\begin_inset Formula 
-\begin{equation}
-(\hat{I}-\hat{K})\v x=\v x_{0}
-\end{equation}
-
-\end_inset
-
-we insert 
-\begin_inset CommandInset ref
-LatexCommand eqref
-reference "eq:orig-1-1"
-
-\end_inset
-
- to obtain
-\begin_inset Formula 
-\begin{equation}
-(\hat{I}-\hat{K})(\hat{V}_{m}\hat{L}_{m}^{-1}\hat{V}_{m}^{\star}\v x_{0}+\bar{\v x})=\v x_{0}\label{eq:orig-2}
-\end{equation}
-
-\end_inset
-
-and finally write
-\begin_inset Formula 
-\begin{equation}
-(\hat{I}-\hat{K})\bar{\v x}=(\hat{I}-\hat{V}_{m}\hat{L}_{m}^{-1}\hat{V}_{m}^{\star})\v x_{0}.
-\end{equation}
-
-\end_inset
-
-This kind of transformation is also known as the Schur complement when applied
- to a block of a matrix instead of the eigenbasis.
- Since 
-\begin_inset Formula $\bar{\v x}$
-\end_inset
-
- is orthogonal to the space spanned by 
+ must be on the right-hand side, since 
 \begin_inset Formula $\hat{V}_{m}$
 \end_inset
 
- and contains no contributions from 
-\begin_inset Formula $\v v_{k}$
-\end_inset
-
- with 
-\begin_inset Formula $k\leq N$
-\end_inset
-
- we know that this equation is purely in the remaining eigenspace of 
-\begin_inset Formula $\hat{K}$
+ is of size 
+\begin_inset Formula $(N\times m)$
 \end_inset
 
 .
- Therefore we can iterate
-\begin_inset Formula 
-\begin{equation}
-\bar{\v x}^{(n+1)}=\bar{\v x}^{(n)}+\hat{K}\bar{\v x}^{(n)}
-\end{equation}
-
-\end_inset
-
-without the risk of divergence.
- Projecting down in every step prevents the possibility that a small numerical
- error will introduce contributions from the 
-\begin_inset Formula $k\leq N$
-\end_inset
-
- eigenspace.
- TODO.
 \end_layout
 
 \begin_layout Standard
+\begin_inset Float table
+wide false
+sideways false
+status open
+
+\begin_layout Plain Layout
+\begin_inset Caption Standard
+
+\begin_layout Plain Layout
+Dimensions of various quantities.
+\end_layout
+
+\end_inset
+
+
 \begin_inset Tabular
-<lyxtabular version="3" rows="6" columns="5">
+<lyxtabular version="3" rows="8" columns="2">
 <features tabularvalignment="middle">
-<column alignment="center" valignment="top">
-<column alignment="center" valignment="top">
-<column alignment="center" valignment="top">
 <column alignment="center" valignment="top">
 <column alignment="center" valignment="top">
 <row>
@@ -1959,37 +1709,36 @@ Quantity
 
 \end_inset
 </cell>
-<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
-dimensions
-\end_layout
-
-\end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-</cell>
 <cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" rightline="true" usebox="none">
 \begin_inset Text
 
 \begin_layout Plain Layout
+Dimensions
+\end_layout
+
+\end_inset
+</cell>
+</row>
+<row>
+<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $\v x$
+\end_inset
+
+
+\end_layout
+
+\end_inset
+</cell>
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
+\begin_inset Text
+
+\begin_layout Plain Layout
+\begin_inset Formula $N\times1$
+\end_inset
+
 
 \end_layout
 
@@ -2009,40 +1758,13 @@ dimensions
 
 \end_inset
 </cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
 \begin_inset Text
 
 \begin_layout Plain Layout
 \begin_inset Formula $m\times1$
 \end_inset
 
-
-\end_layout
-
-\end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
 
 \end_layout
 
@@ -2062,40 +1784,13 @@ dimensions
 
 \end_inset
 </cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
 \begin_inset Text
 
 \begin_layout Plain Layout
 \begin_inset Formula $N\times m$
 \end_inset
 
-
-\end_layout
-
-\end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
 
 \end_layout
 
@@ -2115,7 +1810,7 @@ dimensions
 
 \end_inset
 </cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
 \begin_inset Text
 
 \begin_layout Plain Layout
@@ -2127,40 +1822,13 @@ dimensions
 
 \end_inset
 </cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-</cell>
 </row>
 <row>
 <cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
 \begin_inset Text
 
 \begin_layout Plain Layout
-\begin_inset Formula $\hat{G}_{m}=\hat{V}_{m}^{\star}\hat{V}_{m}$
+\begin_inset Formula $\hat{G}_{mm}=\hat{V}_{m}^{\star}\hat{V}_{m}$
 \end_inset
 
 
@@ -2168,7 +1836,7 @@ dimensions
 
 \end_inset
 </cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
+<cell alignment="center" valignment="top" topline="true" leftline="true" rightline="true" usebox="none">
 \begin_inset Text
 
 \begin_layout Plain Layout
@@ -2180,19 +1848,15 @@ dimensions
 
 \end_inset
 </cell>
+</row>
+<row>
 <cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
 \begin_inset Text
 
 \begin_layout Plain Layout
-
-\end_layout
-
+\begin_inset Formula $\v{\lambda}_{m}$
 \end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" leftline="true" usebox="none">
-\begin_inset Text
 
-\begin_layout Plain Layout
 
 \end_layout
 
@@ -2202,6 +1866,9 @@ dimensions
 \begin_inset Text
 
 \begin_layout Plain Layout
+\begin_inset Formula $1\times m$
+\end_inset
+
 
 \end_layout
 
@@ -2213,39 +1880,9 @@ dimensions
 \begin_inset Text
 
 \begin_layout Plain Layout
-\begin_inset Formula $\hat{M}_{m}=\hat{V}_{m}^{\star}(\hat{I}-\hat{K})\hat{V}_{m}$
+\begin_inset Formula $\Lambda_{m}$
 \end_inset
 
-
-\end_layout
-
-\end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
-\begin_inset Formula $m\times m$
-\end_inset
-
-
-\end_layout
-
-\end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
-
-\end_layout
-
-\end_inset
-</cell>
-<cell alignment="center" valignment="top" topline="true" bottomline="true" leftline="true" usebox="none">
-\begin_inset Text
-
-\begin_layout Plain Layout
 
 \end_layout
 
@@ -2255,6 +1892,9 @@ dimensions
 \begin_inset Text
 
 \begin_layout Plain Layout
+\begin_inset Formula $m\times N$
+\end_inset
+
 
 \end_layout
 
@@ -2268,6 +1908,598 @@ dimensions
 
 \end_layout
 
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Now let's look at the original equation
+\begin_inset Formula 
+\begin{equation}
+(\hat{I}-\hat{K})\v x=\v x_{0}.\label{eq:eq}
+\end{equation}
+
+\end_inset
+
+We want to find preconditioner of the that should modify 
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:eq"
+
+\end_inset
+
+ to a new equation where the largest 
+\begin_inset Formula $m$
+\end_inset
+
+ eigenvalues don't contribute to iterations.
+ Usually this is written by multiplying 
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:eq"
+
+\end_inset
+
+ with the inverse of a full-rank linear operator 
+\begin_inset Formula $\hat{\Pi}^{-1}$
+\end_inset
+
+ and
+\begin_inset Formula 
+\begin{equation}
+\hat{\Pi}^{-1}(\hat{I}-\hat{K})\v x=\Pi^{-1}\v x_{0}.\label{eq:precond}
+\end{equation}
+
+\end_inset
+
+We choose 
+\begin_inset Formula $\hat{\Pi}^{-1}=\hat{I}-\hat{M}$
+\end_inset
+
+ with some general 
+\begin_inset Formula $\hat{M}$
+\end_inset
+
+.
+ Then Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:precond"
+
+\end_inset
+
+ becomes
+\begin_inset Formula 
+\begin{equation}
+(\hat{I}-\hat{M}-(\hat{I}-\hat{M})\hat{K})\v x=(\hat{I}-\hat{M})\v x_{0}
+\end{equation}
+
+\end_inset
+
+or
+\begin_inset Formula 
+\begin{equation}
+(\hat{I}+\hat{\bar{K}})\v x=(\hat{I}-\hat{M})\v x_{0}
+\end{equation}
+
+\end_inset
+
+with
+\begin_inset Formula 
+\begin{align}
+\hat{\bar{K}} & =\hat{M}+(\hat{I}-\hat{M})\hat{K}.
+\end{align}
+
+\end_inset
+
+Our task to avoid the first 
+\begin_inset Formula $m$
+\end_inset
+
+ largest eigenvalues of 
+\begin_inset Formula $\hat{K}$
+\end_inset
+
+ with index 
+\begin_inset Formula $k\leq m$
+\end_inset
+
+.
+ This means that 
+\begin_inset Formula $\hat{\bar{K}}\v v_{k}=0$
+\end_inset
+
+,
+\begin_inset Formula 
+\begin{align}
+0=\hat{\bar{K}}\v v_{k} & =\hat{M}\v v_{k}+(\hat{I}-\hat{M})\lambda_{k}\v v_{k}\nonumber \\
+ & =\lambda_{k}\v v_{k}+\hat{M}(1-\lambda_{k})\v v_{k}.
+\end{align}
+
+\end_inset
+
+Combining 
+\begin_inset Formula $\v v_{k}$
+\end_inset
+
+ inside 
+\begin_inset Formula $\hat{V}_{m}$
+\end_inset
+
+ equivalently yields
+\begin_inset Formula 
+\[
+\hat{\bar{K}}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}+\hat{M}\hat{V}_{m}(\hat{I}_{m}-\hat{\Lambda}_{m})=0
+\]
+
+\end_inset
+
+so
+\begin_inset Formula 
+\begin{equation}
+\hat{M}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})=\hat{V}_{m}\hat{\Lambda}_{m}.
+\end{equation}
+
+\end_inset
+
+Right-Multiplying with the inverse of 
+\begin_inset Formula $(\hat{\Lambda}_{m}-\hat{I}_{m})$
+\end_inset
+
+ yields
+\begin_inset Formula 
+\begin{equation}
+\hat{M}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}.
+\end{equation}
+
+\end_inset
+
+Now we can apply the unity term 
+\begin_inset Formula $(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}\hat{V}$
+\end_inset
+
+ to the right-hand side from the right, which gives
+\begin_inset Formula 
+\begin{equation}
+\hat{M}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}\hat{V}.
+\end{equation}
+
+\end_inset
+
+This trick is similar to expanding the identity operator into bras and kets
+ in quantum mechanics.
+ Now this equation is for sure solved by
+\begin_inset Formula 
+\begin{equation}
+\hat{M}=\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}.
+\end{equation}
+
+\end_inset
+
+The inner part can be grouped to the inverse of an 
+\begin_inset Formula $m$
+\end_inset
+
+-dimensional matrix
+\begin_inset Formula 
+\begin{equation}
+\hat{L}_{mm}=\hat{V}_{m}^{\star}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})
+\end{equation}
+
+\end_inset
+
+that can be used to pre-compute 
+\begin_inset Formula $\hat{L}_{mm}^{-1}$
+\end_inset
+
+ before iterations by solving the 
+\begin_inset Formula $m$
+\end_inset
+
+-dimensional linear system
+\begin_inset Formula 
+\begin{equation}
+\hat{L}_{mm}\hat{Y}=\hat{I}_{m}.
+\end{equation}
+
+\end_inset
+
+and setting 
+\begin_inset Formula $\hat{L}_{mm}^{-1}$
+\end_inset
+
+ to its solution 
+\begin_inset Formula $\hat{Y}$
+\end_inset
+
+.
+ Of course this is only efficient if the number 
+\begin_inset Formula $m$
+\end_inset
+
+ of large eigenvalues is much smaller than the total 
+\begin_inset Formula $N$
+\end_inset
+
+.
+ Finally we write 
+\begin_inset Formula $\hat{M}$
+\end_inset
+
+ defining the preconditioner 
+\begin_inset Formula $\hat{\Pi}^{-1}=\hat{I}-\hat{M}$
+\end_inset
+
+ as
+\begin_inset Formula 
+\begin{equation}
+\hat{M}=\hat{V}_{m}\hat{\Lambda}_{m}\hat{L}_{mm}^{-1}\hat{V}_{m}^{\star}
+\end{equation}
+
+\end_inset
+
+and solve
+\begin_inset Formula 
+\[
+(\hat{I}-\hat{\bar{K}})\v x=\bar{\v x}_{0}
+\]
+
+\end_inset
+
+wherehaving the same solution as the original equation, but with stable
+ and fast iterations in
+\begin_inset Formula 
+\begin{equation}
+\hat{\bar{K}}=\hat{M}+(\hat{I}-\hat{M})\hat{K}
+\end{equation}
+
+\end_inset
+
+with driving term
+\begin_inset Formula 
+\begin{equation}
+\bar{\v x}_{0}=(\hat{I}-\hat{M})\v x_{0}.
+\end{equation}
+
+\end_inset
+
+Note that this is different to the scalar case Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:zw"
+
+\end_inset
+
+ where no concept of eigenvalues exists.
+\end_layout
+
+\begin_layout Subsection
+Application to self-consistent magnetic fields
+\end_layout
+
+\begin_layout Standard
+Within kinetic or MHD equilibria we compute magnetic response due to plasma
+ currents,
+\begin_inset Formula 
+\begin{equation}
+\delta\v B_{p}=\hat{K}(\delta\v B_{p}+\delta\v B_{v}),\label{eq:k}
+\end{equation}
+
+\end_inset
+
+where 
+\begin_inset Formula $\hat{K}=\hat{M}\hat{P}$
+\end_inset
+
+ first computes plasma currents 
+\begin_inset Formula 
+\begin{equation}
+\v J_{p}=\hat{P}(\delta\v B_{p}+\delta\v B_{v})\label{eq:equi}
+\end{equation}
+
+\end_inset
+
+ from the total field and then Maxwell's equations (Ampere's law) 
+\begin_inset Formula 
+\begin{equation}
+\delta\v B_{p}=\hat{M}\delta\v J_{p}\label{eq:ampi}
+\end{equation}
+
+\end_inset
+
+only for the plasma currents that change in each iteration, but not for
+ the coil currents producing 
+\begin_inset Formula $\delta\v B_{v}$
+\end_inset
+
+ that remain fixed.
+ The latter have been already processed before via Biot-Savart, yielding
+ 
+\begin_inset Formula 
+\begin{equation}
+\delta\v B_{v}=\hat{M}\delta\v J_{v}\label{eq:ampi2}
+\end{equation}
+
+\end_inset
+
+independently.
+ The combined Maxwell's equations 
+\begin_inset Formula 
+\begin{equation}
+\delta\v B_{p}+\delta\v B_{v}=\hat{M}(\delta\v J_{p}+\delta\v J_{v})
+\end{equation}
+
+\end_inset
+
+are thus fulfilled by superposition of 
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:ampi"
+
+\end_inset
+
+ and 
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:ampi2"
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+For direct iterations solving Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:k"
+
+\end_inset
+
+ we use the fixed-point equation
+\begin_inset Formula 
+\begin{equation}
+\delta\v B_{p}=\hat{K}(\delta\v B_{v}+\delta\v B_{p})=\hat{K}(\delta\v B_{v}+\hat{K}(\delta\v B_{v}+\delta\v B_{p}))=\dots,\label{eq:k-1}
+\end{equation}
+
+\end_inset
+
+iterations
+\begin_inset Formula 
+\begin{align}
+\delta\v B_{p}^{[0]} & =\delta\v B_{v},\\
+\delta\v B_{p}^{[1]} & =\hat{K}\delta\v B_{p}^{(0)}=\hat{K}\delta\v B_{v}\\
+\delta\v B_{p}^{[n+1]} & =\hat{K}(\delta\v B_{v}+\delta\v B_{p}^{[n]}).
+\end{align}
+
+\end_inset
+
+This application of 
+\begin_inset Formula $\hat{K}=\hat{M}\hat{P}$
+\end_inset
+
+ to the combination of vacuum field plus previous iteration plus yields
+ 
+\emph on
+total 
+\emph default
+results, where 
+\begin_inset Formula $\delta\v B_{p}^{[n+1]}$
+\end_inset
+
+ is an already an approximation of the total 
+\begin_inset Formula $\delta\v B_{p}^{[n+1]}$
+\end_inset
+
+.
+ This is what the call to 
+\emph on
+next_iteration
+\emph default
+ in 
+\emph on
+kin2d.f90 
+\emph default
+does with 
+\emph on
+bnorm_plas_prev
+\emph default
+ = 
+\begin_inset Formula $\delta\v B_{p}^{[n]}$
+\end_inset
+
+ being computed from plasma currents 
+\begin_inset Formula 
+\begin{equation}
+\delta\v J_{p}^{[n+1]}=\hat{P}(\delta\v B_{p}^{[n]}+\delta\v B_{v})
+\end{equation}
+
+\end_inset
+
+and then fields
+\begin_inset Formula 
+\begin{equation}
+\delta\v B_{v}^{[n+1]}=\hat{M}\delta\v J_{p}^{[n+1]}.\label{eq:ampi2-1}
+\end{equation}
+
+\end_inset
+
+This corresponds to the operator series for 
+\begin_inset Formula $(\hat{I}-\hat{K})$
+\end_inset
+
+ because
+\begin_inset Formula 
+\begin{align}
+\delta\v B_{p}^{(n)} & =\hat{K}(\delta\v B_{v}+\delta\v B_{p}^{(n-1)})\nonumber \\
+ & =\hat{K}(\delta\v B_{v}+\hat{K}(\delta\v B_{v}+\delta\v B_{p}^{(n-2)}))\nonumber \\
+ & =\hat{K}\delta\v B_{v}+\hat{K}^{2}\delta\v B_{v}+\hat{K}^{3}\delta\v B_{v}+\dots+\hat{K}^{n+1}\delta\v B_{v}\nonumber \\
+ & =(\hat{I}+\hat{K}+\hat{K}^{2}+\dots+\hat{K}^{n})\hat{K}\delta\v B_{v}.
+\end{align}
+
+\end_inset
+
+Here we also call 
+\begin_inset Formula 
+\begin{equation}
+\v x_{0}=\hat{K}\delta\v B_{v}=\delta\v B_{p}^{[1]}\equiv\delta\v B_{pv}.
+\end{equation}
+
+\end_inset
+
+the single-iteration plasma response 
+\begin_inset Formula $\delta\v B_{pv}$
+\end_inset
+
+ to the vacuum field 
+\begin_inset Formula $\delta\v B_{v}$
+\end_inset
+
+.
+ The whole preocedure can also be written in the 
+\emph on
+cumulative
+\emph default
+ way of the operator series described above by defining differences denoted
+ by parantheses 
+\begin_inset Formula $(n)$
+\end_inset
+
+ as
+\begin_inset Formula 
+\begin{equation}
+\delta\v B_{p}^{(n+1)}\equiv\delta\v B_{p}^{[n+1]}-\delta\v B_{p}^{[n]}
+\end{equation}
+
+\end_inset
+
+with
+\begin_inset Formula 
+\begin{align}
+\delta\v B_{p}^{(1)} & =\delta\v B_{p}^{[1]}=\delta\v B_{pv},\\
+\delta\v B_{p}^{(n+1)} & =\hat{K}\delta\v B_{p}^{(n)}
+\end{align}
+
+\end_inset
+
+and
+\begin_inset Formula 
+\begin{equation}
+\delta\v B_{p}^{[n]}=\sum_{k=1}^{n}\delta\v B_{p}^{(k)}.
+\end{equation}
+
+\end_inset
+
+The correspondence to our operator series in 
+\begin_inset Formula $\hat{K}$
+\end_inset
+
+ of these quantities is for
+\begin_inset Formula 
+\begin{align}
+\v x & \equiv\delta\v B_{p},\\
+\v x_{0} & =\delta\v B_{pv}.
+\end{align}
+
+\end_inset
+
+where Eq.
+\begin_inset space ~
+\end_inset
+
+
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:k"
+
+\end_inset
+
+ becomes of the form 
+\begin_inset CommandInset ref
+LatexCommand eqref
+reference "eq:eq"
+
+\end_inset
+
+ with
+\begin_inset Formula 
+\begin{equation}
+(\hat{I}-\hat{K})\delta\v B_{p}=\delta\v B_{pv}.\label{eq:k-2}
+\end{equation}
+
+\end_inset
+
+A preconditioned iteration scheme defines an equivalent equation
+\begin_inset Formula 
+\begin{equation}
+(\hat{I}-\hat{\bar{K}})\delta\v B_{p}=\delta\bar{\v B}_{pv}
+\end{equation}
+
+\end_inset
+
+with a new iteration rule
+\begin_inset Formula 
+\begin{align}
+\delta\v B_{p}^{(1)} & =\delta\bar{\v B}_{pv},\\
+\delta\v B_{p}^{(n+1)} & =\hat{\bar{K}}\delta\v B_{p}^{(n)}.
+\end{align}
+
+\end_inset
+
+Here we repeat the definition based on the largest 
+\begin_inset Formula $m$
+\end_inset
+
+ eigenvalues described in the general section above,
+\begin_inset Formula 
+\begin{align}
+\delta\bar{\v B}_{pv} & =(\hat{I}-\hat{M})\delta\v B_{pv}\\
+\hat{\bar{K}} & =(\hat{M}+(\hat{I}-\hat{M})\hat{K}),\\
+\hat{M} & =\hat{V}_{m}\hat{\Lambda}_{m}\hat{L}_{mm}^{-1}\hat{V}_{m}^{\star},\\
+\hat{L}_{mm} & =\hat{V}_{m}^{\star}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m}).
+\end{align}
+
+\end_inset
+
+Then for preconditioned version of total (summed) field iterations 
+\begin_inset Formula $[n]$
+\end_inset
+
+ it follows that
+\begin_inset Formula 
+\begin{align}
+\delta\v B^{[1]} & =\delta\bar{\v B}_{pv}\nonumber \\
+\delta\v B_{p}^{[n+1]} & =\delta\bar{\v B}_{pv}+\hat{\bar{K}}\delta\v B_{p}^{[n]}\nonumber \\
+ & =(\hat{I}-\hat{M})\hat{K}\delta\v B_{v}+(\hat{M}+(\hat{I}-\hat{M})\hat{K})\delta\v B_{p}^{[n]}\nonumber \\
+ & =\hat{K}(\delta\v B_{v}+\delta\v B_{p}^{[n]})-\hat{M}\hat{K}(\delta\v B_{v}+\delta\v B_{p}^{[n]}).
+\end{align}
+
+\end_inset
+
+This is the way the algorithm is currently implemented in 
+\emph on
+kin2d.f90 
+\emph default
+and tested in 
+\emph on
+test_arnoldi.f90
+\emph default
+.
+\end_layout
+
 \begin_layout Section
 TODOs for the one who continues kinetic equilibria:
 \end_layout
@@ -2278,10 +2510,28 @@ Perturbed problem for noisy matrices
 
 \begin_layout Standard
 Check how sensitive the method is to random noise in the operator 
-\begin_inset Formula $\hat{A}$
+\begin_inset Formula $\hat{K}$
 \end_inset
 
  and possibly find some general rules of applicability.
+\end_layout
+
+\begin_layout Subsection
+Underdetermined systems
+\end_layout
+
+\begin_layout Standard
+Extend the method to singular operators 
+\begin_inset Formula $\hat{K}$
+\end_inset
+
+ with rank 
+\begin_inset Formula $M<N$
+\end_inset
+
+.
+ There the eigendecomposition is replaced by a singular value decomposition
+ that can also rely on Krylov methods.
 \end_layout
 
 \begin_layout Subsection
