@@ -2011,19 +2011,19 @@ Our task to avoid the first
 
 .
  This means that 
-\begin_inset Formula $\hat{\bar{K}}\v v_{k}=0$
+\begin_inset Formula $\hat{\bar{K}}\v v_{k}\overset{!}{=}0$
 \end_inset
 
-,
+, so
 \begin_inset Formula 
 \begin{align}
-0=\hat{\bar{K}}\v v_{k} & =\hat{M}\v v_{k}+(\hat{I}-\hat{M})\lambda_{k}\v v_{k}\nonumber \\
+0\overset{!}{=}\hat{\bar{K}}\v v_{k} & =\hat{M}\v v_{k}+(\hat{I}-\hat{M})\lambda_{k}\v v_{k}\nonumber \\
  & =\lambda_{k}\v v_{k}+\hat{M}(1-\lambda_{k})\v v_{k}.
 \end{align}
 
 \end_inset
 
-Combining 
+Combining all 
 \begin_inset Formula $\v v_{k}$
 \end_inset
 
@@ -2034,7 +2034,7 @@ Combining
  equivalently yields
 \begin_inset Formula 
 \[
-\hat{\bar{K}}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}+\hat{M}\hat{V}_{m}(\hat{I}_{m}-\hat{\Lambda}_{m})=0
+\hat{\bar{K}}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}+\hat{M}\hat{V}_{m}(\hat{I}_{m}-\hat{\Lambda}_{m})\overset{!}{=}0
 \]
 
 \end_inset
@@ -2042,19 +2042,19 @@ Combining
 so
 \begin_inset Formula 
 \begin{equation}
-\hat{M}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})=\hat{V}_{m}\hat{\Lambda}_{m}.
+\hat{M}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})\overset{!}{=}\hat{V}_{m}\hat{\Lambda}_{m}.
 \end{equation}
 
 \end_inset
 
-Right-Multiplying with the inverse of 
+Right-multiplying with the inverse of 
 \begin_inset Formula $(\hat{\Lambda}_{m}-\hat{I}_{m})$
 \end_inset
 
  yields
 \begin_inset Formula 
 \begin{equation}
-\hat{M}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}.
+\hat{M}\hat{V}_{m}\overset{!}{=}\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}.
 \end{equation}
 
 \end_inset
@@ -2066,17 +2066,17 @@ Now we can apply the unity term
  to the right-hand side from the right, which gives
 \begin_inset Formula 
 \begin{equation}
-\hat{M}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}\hat{V}.
+\hat{M}\hat{V}_{m}\overset{!}{=}\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}\hat{V}.
 \end{equation}
 
 \end_inset
 
 This trick is similar to expanding the identity operator into bras and kets
  in quantum mechanics.
- Now this equation is for sure solved by
+ Now this equation is for sure solved by setting
 \begin_inset Formula 
 \begin{equation}
-\hat{M}=\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}.
+\hat{M}\equiv\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}.
 \end{equation}
 
 \end_inset
@@ -2088,7 +2088,7 @@ The inner part can be grouped to the inverse of an
 -dimensional matrix
 \begin_inset Formula 
 \begin{equation}
-\hat{L}_{mm}=\hat{V}_{m}^{\star}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})
+\hat{L}_{mm}\equiv\hat{V}_{m}^{\star}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})
 \end{equation}
 
 \end_inset
@@ -2101,7 +2101,19 @@ that can be used to pre-compute
 \begin_inset Formula $m$
 \end_inset
 
--dimensional linear system
+-dimensional linear system for 
+\begin_inset Formula $m$
+\end_inset
+
+ right-hand sides given by the canonical unit vectors 
+\begin_inset Formula $\hat{I}_{m}=(\v e_{1},\v e_{2},\dots\v e_{m})$
+\end_inset
+
+ in 
+\begin_inset Formula $m$
+\end_inset
+
+ dimensions,
 \begin_inset Formula 
 \begin{equation}
 \hat{L}_{mm}\hat{Y}=\hat{I}_{m}.
@@ -2132,13 +2144,13 @@ and setting
 \end_inset
 
  defining the preconditioner 
-\begin_inset Formula $\hat{\Pi}^{-1}=\hat{I}-\hat{M}$
+\begin_inset Formula $\hat{\Pi}^{-1}\equiv\hat{I}-\hat{M}$
 \end_inset
 
  as
 \begin_inset Formula 
 \begin{equation}
-\hat{M}=\hat{V}_{m}\hat{\Lambda}_{m}\hat{L}_{mm}^{-1}\hat{V}_{m}^{\star}
+\hat{M}\equiv\hat{V}_{m}\hat{\Lambda}_{m}\hat{L}_{mm}^{-1}\hat{V}_{m}^{\star}
 \end{equation}
 
 \end_inset
@@ -2151,8 +2163,8 @@ and solve
 
 \end_inset
 
-wherehaving the same solution as the original equation, but with stable
- and fast iterations in
+having the same solution as the original equation, but with stable and fast
+ iterations in
 \begin_inset Formula 
 \begin{equation}
 \hat{\bar{K}}=\hat{M}+(\hat{I}-\hat{M})\hat{K}

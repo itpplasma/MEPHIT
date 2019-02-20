@@ -503,57 +503,60 @@ with
 \hat{\bar{K}} & =\hat{M}+(\hat{I}-\hat{M})\hat{K}.
 \end{align}
 Our task to avoid the first $m$ largest eigenvalues of $\hat{K}$
-with index $k\leq m$. This means that $\hat{\bar{K}}\v v_{k}=0$,
+with index $k\leq m$. This means that $\hat{\bar{K}}\v v_{k}\overset{!}{=}0$,
+so
 \begin{align}
-0=\hat{\bar{K}}\v v_{k} & =\hat{M}\v v_{k}+(\hat{I}-\hat{M})\lambda_{k}\v v_{k}\nonumber \\
+0\overset{!}{=}\hat{\bar{K}}\v v_{k} & =\hat{M}\v v_{k}+(\hat{I}-\hat{M})\lambda_{k}\v v_{k}\nonumber \\
  & =\lambda_{k}\v v_{k}+\hat{M}(1-\lambda_{k})\v v_{k}.
 \end{align}
-Combining $\v v_{k}$ inside $\hat{V}_{m}$ equivalently yields
+Combining all $\v v_{k}$ inside $\hat{V}_{m}$ equivalently yields
 \[
-\hat{\bar{K}}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}+\hat{M}\hat{V}_{m}(\hat{I}_{m}-\hat{\Lambda}_{m})=0
+\hat{\bar{K}}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}+\hat{M}\hat{V}_{m}(\hat{I}_{m}-\hat{\Lambda}_{m})\overset{!}{=}0
 \]
 so
 \begin{equation}
-\hat{M}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})=\hat{V}_{m}\hat{\Lambda}_{m}.
+\hat{M}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})\overset{!}{=}\hat{V}_{m}\hat{\Lambda}_{m}.
 \end{equation}
-Right-Multiplying with the inverse of $(\hat{\Lambda}_{m}-\hat{I}_{m})$
+Right-multiplying with the inverse of $(\hat{\Lambda}_{m}-\hat{I}_{m})$
 yields
 \begin{equation}
-\hat{M}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}.
+\hat{M}\hat{V}_{m}\overset{!}{=}\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}.
 \end{equation}
 Now we can apply the unity term $(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}\hat{V}$
 to the right-hand side from the right, which gives
 \begin{equation}
-\hat{M}\hat{V}_{m}=\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}\hat{V}.
+\hat{M}\hat{V}_{m}\overset{!}{=}\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}\hat{V}.
 \end{equation}
 This trick is similar to expanding the identity operator into bras
 and kets in quantum mechanics. Now this equation is for sure solved
-by
+by setting
 \begin{equation}
-\hat{M}=\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}.
+\hat{M}\equiv\hat{V}_{m}\hat{\Lambda}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})^{-1}(\hat{V}_{m}^{\star}\hat{V}_{m})^{-1}\hat{V}_{m}^{\star}.
 \end{equation}
 The inner part can be grouped to the inverse of an $m$-dimensional
 matrix
 \begin{equation}
-\hat{L}_{mm}=\hat{V}_{m}^{\star}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})
+\hat{L}_{mm}\equiv\hat{V}_{m}^{\star}\hat{V}_{m}(\hat{\Lambda}_{m}-\hat{I}_{m})
 \end{equation}
 that can be used to pre-compute $\hat{L}_{mm}^{-1}$ before iterations
-by solving the $m$-dimensional linear system
+by solving the $m$-dimensional linear system for $m$ right-hand
+sides given by the canonical unit vectors $\hat{I}_{m}=(\v e_{1},\v e_{2},\dots\v e_{m})$
+in $m$ dimensions,
 \begin{equation}
 \hat{L}_{mm}\hat{Y}=\hat{I}_{m}.
 \end{equation}
 and setting $\hat{L}_{mm}^{-1}$ to its solution $\hat{Y}$. Of course
 this is only efficient if the number $m$ of large eigenvalues is
 much smaller than the total $N$. Finally we write $\hat{M}$ defining
-the preconditioner $\hat{\Pi}^{-1}=\hat{I}-\hat{M}$ as
+the preconditioner $\hat{\Pi}^{-1}\equiv\hat{I}-\hat{M}$ as
 \begin{equation}
-\hat{M}=\hat{V}_{m}\hat{\Lambda}_{m}\hat{L}_{mm}^{-1}\hat{V}_{m}^{\star}
+\hat{M}\equiv\hat{V}_{m}\hat{\Lambda}_{m}\hat{L}_{mm}^{-1}\hat{V}_{m}^{\star}
 \end{equation}
 and solve
 \[
 (\hat{I}-\hat{\bar{K}})\v x=\bar{\v x}_{0}
 \]
-wherehaving the same solution as the original equation, but with stable
+having the same solution as the original equation, but with stable
 and fast iterations in
 \begin{equation}
 \hat{\bar{K}}=\hat{M}+(\hat{I}-\hat{M})\hat{K}
