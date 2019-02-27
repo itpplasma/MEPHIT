@@ -283,15 +283,16 @@ contains
        Bnflux_sum = Bnflux_sum + Bnflux
        Bnphi_sum = Bnphi_sum + Bnphi
     end do
+    call write_triangle_flux(Bnflux_sum, Bnphi_sum, Bn_sum_file, .false.)
+    call write_triangle_flux(Bnflux_sum, Bnphi_sum, decorate_filename(Bn_sum_file, &
+         'plot_'), .true.)
 
     Bnflux = Bnflux_sum
     Bnphi = Bnphi_sum
     call compute_presn
+    call write_nodal_dof(presn, presn_file)
     call compute_currn
     call write_triangle_flux(jnflux, jnphi, decorate_filename(currn_file, 'plot_'), .true.)
-    call write_triangle_flux(Bnflux_sum, Bnphi_sum, Bn_sum_file, .false.)
-    call write_triangle_flux(Bnflux_sum, Bnphi_sum, decorate_filename(Bn_sum_file, &
-         'plot_'), .true.)
   end subroutine magdif_direct
 
   !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
@@ -1003,11 +1004,10 @@ inner: do kt = 1, kt_max(kf)
     logical :: orient
     integer :: common_tri(2)
     real(dp) :: lr, lz, Deltapsi, perps(2)
-    complex(dp) :: Bnpsi, Bnflux_avg
+    complex(dp) :: Bnpsi
     real(dp) :: r
 
     do kf = 1, nflux ! loop through flux surfaces
-       Bnflux_avg = (0d0, 0d0)
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
@@ -1024,18 +1024,16 @@ inner: do kt = 1, kt_max(kf)
           lz = tip%zcoord - base%zcoord
           common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
           perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz) * 0.5d0
-          Bnpsi = B0phi(kt_low(kf) + kt, ef) / r
+          Bnpsi = R0 * B0phi(kt_low(kf) + kt, ef) / r
           Bnflux(kt_low(kf) + kt, ef) = Bnpsi * r * hypot(lr, lz) * sum(perps) / Deltapsi
-          Bnflux_avg = Bnflux_avg + Bnflux(kt_low(kf) + kt, ef)
           Bnphi(kt_low(kf) + kt) = imun / n * Bnflux(kt_low(kf) + kt, ef) &
                / elem%det_3 * 2d0
        end do
-       Bnflux_avg = Bnflux_avg / kt_max(kf)
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          Bnflux(kt_low(kf) + kt, ei) = -2d0 * abs(Bnflux_avg)
-          Bnflux(kt_low(kf) + kt, eo) =  2d0 * abs(Bnflux_avg)
+          Bnflux(kt_low(kf) + kt, ei) = (0d0, 0d0)
+          Bnflux(kt_low(kf) + kt, eo) = (0d0, 0d0)
        end do
     end do
     if (quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)

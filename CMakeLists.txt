@@ -55,14 +55,3 @@ target_link_libraries(magdif_test.x
   blas
   lapack
 )
-
-### Maxwell solver with MFEM
-
-add_executable(maxwell.x
-  FEM/maxwell.cpp
-)
-
-target_link_libraries(maxwell.x
-  mfem
-)
-
