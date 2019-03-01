@@ -17,7 +17,7 @@
 \fontencoding global
 \font_roman "tgpagella" "default"
 \font_sans "default" "default"
-\font_typewriter "default" "default"
+\font_typewriter "beramono" "default"
 \font_math "auto" "auto"
 \font_default_family default
 \use_non_tex_fonts false
@@ -2192,6 +2192,259 @@ reference "eq:zw"
 \end_inset
 
  where no concept of eigenvalues exists.
+\end_layout
+
+\begin_layout Standard
+\begin_inset Newpage newpage
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset listings
+lstparams "language=Fortran,basicstyle={\ttfamily},showstringspaces=false"
+inline false
+status open
+
+\begin_layout Plain Layout
+
+! Arnoldi
+\end_layout
+
+\begin_layout Plain Layout
+
+print *, "Finding eigenvalues"
+\end_layout
+
+\begin_layout Plain Layout
+
+ieigen=1
+\end_layout
+
+\begin_layout Plain Layout
+
+tol = 0.7d0
+\end_layout
+
+\begin_layout Plain Layout
+
+call arnoldi(nsize, nritz, ritznum, next_iteration)    
+\end_layout
+
+\begin_layout Plain Layout
+
+do kit = 1, ngrow
+\end_layout
+
+\begin_layout Plain Layout
+
+   print *, ritznum(kit)
+\end_layout
+
+\begin_layout Plain Layout
+
+end do
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+! Here the matrix amat2 = L_mm and a matrix bvec2 = I_mm for 
+\end_layout
+
+\begin_layout Plain Layout
+
+! multiple right-hand sides when inverting to L_mm is constructed
+\end_layout
+
+\begin_layout Plain Layout
+
+print *, "Solving subsystem in eigenbasis"
+\end_layout
+
+\begin_layout Plain Layout
+
+allocate(amat2(ngrow,ngrow),bvec2(ngrow,ngrow),coefren(ngrow))
+\end_layout
+
+\begin_layout Plain Layout
+
+bvec2=(0.d0,0.d0)
+\end_layout
+
+\begin_layout Plain Layout
+
+do i=1,ngrow
+\end_layout
+
+\begin_layout Plain Layout
+
+   bvec2(i,i)=(1.d0,0.d0)
+\end_layout
+
+\begin_layout Plain Layout
+
+   do j=1,ngrow
+\end_layout
+
+\begin_layout Plain Layout
+
+      amat2(i,j)=sum(conjg(eigvecs(:,i))*eigvecs(:,j))*(ritznum(j)-(1.d0,0.d0))
+\end_layout
+
+\begin_layout Plain Layout
+
+   enddo
+\end_layout
+
+\begin_layout Plain Layout
+
+enddo
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+! Here amat2*x = bvec is solved, and result x = L_mm^-1 stored in bvec2
+\end_layout
+
+\begin_layout Plain Layout
+
+call zgesv(ngrow,ngrow,amat2,ngrow,ipiv,bvec2,ngrow,info)
+\end_layout
+
+\begin_layout Plain Layout
+
+\end_layout
+
+\begin_layout Plain Layout
+
+! Preconditioned iterative scheme with Arnoldi
+\end_layout
+
+\begin_layout Plain Layout
+
+!
+\end_layout
+
+\begin_layout Plain Layout
+
+! eigvecs(:,1:ngrow) = V_m
+\end_layout
+
+\begin_layout Plain Layout
+
+! conjg(eigvecs(:,1:ngrow)) = transpose of V_m^
+\backslash
+star
+\end_layout
+
+\begin_layout Plain Layout
+
+! coefren = 
+\backslash
+Lambda_mm*L_mm^-1*V_m^
+\backslash
+star*(Kx - x)
+\end_layout
+
+\begin_layout Plain Layout
+
+! V_m * coefren = M*(Kx - x) = M*(K - I)*x
+\end_layout
+
+\begin_layout Plain Layout
+
+!
+\end_layout
+
+\begin_layout Plain Layout
+
+! Line xnew = xnew - matmul(eigvecs(:,1:ngrow),coefren(1:ngrow)) means
+\end_layout
+
+\begin_layout Plain Layout
+
+! x_(n+1) = K x_(n) - M*(K - I)*x_(n) = (I - M)*K*x_(n) + M*x_(n) = Kbar*x_(n)
+\end_layout
+
+\begin_layout Plain Layout
+
+!
+\end_layout
+
+\begin_layout Plain Layout
+
+xold = (0d0,0d0)
+\end_layout
+
+\begin_layout Plain Layout
+
+do kit = 1,maxit
+\end_layout
+
+\begin_layout Plain Layout
+
+   call next_iteration(nsize, xold, xnew)
+\end_layout
+
+\begin_layout Plain Layout
+
+     
+\end_layout
+
+\begin_layout Plain Layout
+
+   do j=1,ngrow
+\end_layout
+
+\begin_layout Plain Layout
+
+      coefren(j)=ritznum(j)*sum(bvec2(j,:)                           &
+\end_layout
+
+\begin_layout Plain Layout
+
+           *matmul(transpose(conjg(eigvecs(:,1:ngrow))),xnew-xold))
+\end_layout
+
+\begin_layout Plain Layout
+
+   enddo
+\end_layout
+
+\begin_layout Plain Layout
+
+   xnew = xnew - matmul(eigvecs(:,1:ngrow),coefren(1:ngrow))
+\end_layout
+
+\begin_layout Plain Layout
+
+   xold = xnew 
+\end_layout
+
+\begin_layout Plain Layout
+
+end do
+\end_layout
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+\begin_inset Newpage newpage
+\end_inset
+
+
 \end_layout
 
 \begin_layout Subsection

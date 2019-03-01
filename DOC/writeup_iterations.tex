@@ -2,6 +2,7 @@
 %% Do not edit unless you really know what you are doing.
 \documentclass[english,notitlepage]{revtex4-1}
 \usepackage{tgpagella}
+\usepackage{beramono}
 \usepackage[T1]{fontenc}
 \usepackage[latin9]{inputenc}
 \setcounter{secnumdepth}{3}
@@ -20,6 +21,9 @@
 \usepackage{tikz}
 
 \makeatother
+
+\usepackage{listings}
+\renewcommand{\lstlistingname}{Listing}
 
 \begin{document}
 \global\long\def\tht{\vartheta}%
@@ -46,7 +50,7 @@
 \global\long\def\pset{{\bf p}}%
 
 \title{Preconditioned iterations via the Arnoldi method aka incomplete GMRES}
-\author{Christopher Albert, Sergei Kasilov}
+\author{Christopher Albert}
 \date{\today}
 \maketitle
 
@@ -567,6 +571,58 @@ with driving term
 \end{equation}
 Note that this is different to the scalar case Eq.~(\ref{eq:zw})
 where no concept of eigenvalues exists.
+
+\newpage{}
+
+\begin{lstlisting}[language=Fortran,basicstyle={\ttfamily},showstringspaces=false]
+! Arnoldi
+print *, "Finding eigenvalues"
+ieigen=1
+tol = 0.7d0
+call arnoldi(nsize, nritz, ritznum, next_iteration)    
+do kit = 1, ngrow
+   print *, ritznum(kit)
+end do
+
+! Here the matrix amat2 = L_mm and a matrix bvec2 = I_mm for 
+! multiple right-hand sides when inverting to L_mm is constructed
+print *, "Solving subsystem in eigenbasis"
+allocate(amat2(ngrow,ngrow),bvec2(ngrow,ngrow),coefren(ngrow))
+bvec2=(0.d0,0.d0)
+do i=1,ngrow
+   bvec2(i,i)=(1.d0,0.d0)
+   do j=1,ngrow
+      amat2(i,j)=sum(conjg(eigvecs(:,i))*eigvecs(:,j))*(ritznum(j)-(1.d0,0.d0))
+   enddo
+enddo
+
+! Here amat2*x = bvec is solved, and result x = L_mm^-1 stored in bvec2
+call zgesv(ngrow,ngrow,amat2,ngrow,ipiv,bvec2,ngrow,info)
+
+! Preconditioned iterative scheme with Arnoldi
+!
+! eigvecs(:,1:ngrow) = V_m
+! conjg(eigvecs(:,1:ngrow)) = transpose of V_m^\star
+! coefren = \Lambda_mm*L_mm^-1*V_m^\star*(Kx - x)
+! V_m * coefren = M*(Kx - x) = M*(K - I)*x
+!
+! Line xnew = xnew - matmul(eigvecs(:,1:ngrow),coefren(1:ngrow)) means
+! x_(n+1) = K x_(n) - M*(K - I)*x_(n) = (I - M)*K*x_(n) + M*x_(n) = Kbar*x_(n)
+!
+xold = (0d0,0d0)
+do kit = 1,maxit
+   call next_iteration(nsize, xold, xnew)
+     
+   do j=1,ngrow
+      coefren(j)=ritznum(j)*sum(bvec2(j,:)                           &
+           *matmul(transpose(conjg(eigvecs(:,1:ngrow))),xnew-xold))
+   enddo
+   xnew = xnew - matmul(eigvecs(:,1:ngrow),coefren(1:ngrow))
+   xold = xnew 
+end do
+\end{lstlisting}
+
+\newpage{}
 
 \subsection{Application to self-consistent magnetic fields}
 
