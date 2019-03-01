@@ -104,17 +104,17 @@ A_D = df.Constant((0, 0))
 bc = df.DirichletBC(Hcurl, A_D, boundary)
 
 rweight = df.Expression('x[0]', degree=1)
-#Jtest = df.Expression(('x[1]','-x[0]'), degree=1)
+Jtest = df.Expression(('x[1]','-x[0]'), degree=1)
 
 # variational bilinear form for 2D curl-curl harmonics (->stiffness matrix)
 a = (rweight*inner(curl(u), curl(v)) + n**2/rweight*inner(u,v)) * dx
 
 # linear form (->right-hand side vector)
 b = []
-b.append(4.0*np.pi/c*inner(J[0], v) * dx) # real part
-b.append(4.0*np.pi/c*inner(J[1], v) * dx) # imaginary part
-#b.append(inner(Jtest, v) * dx) # real part
-#b.append(inner(Jtest, v) * dx) # imaginary part
+#b.append(4.0*np.pi/c*inner(J[0], v) * dx) # real part
+#b.append(4.0*np.pi/c*inner(J[1], v) * dx) # imaginary part
+b.append(inner(Jtest, v) * dx) # real part
+b.append(inner(Jtest, v) * dx) # imaginary part
 
 
 A = [df.Function(Hcurl), df.Function(Hcurl)] # poloidal vector potential
