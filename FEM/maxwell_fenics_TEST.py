@@ -49,7 +49,7 @@ for kt in range(len(tri)):
 meshgen.close()
 
 # Map for re-ordering of indexes and orientations
-map2facing = np.array([1,2,0]) # index of edge facing vertex
+map2facing = np.array([2,0,1]) # index of edge facing vertex
 map2lex = np.argsort(tri[:,map2facing],1) # map to lexical order in each triangle cell
 assert np.max(mesh.cells()[:]+1 - np.sort(tri)) == 0, "triangle sort order"
 
@@ -104,7 +104,9 @@ A_D = df.Constant((0, 0))
 bc = df.DirichletBC(Hcurl, A_D, boundary)
 
 rweight = df.Expression('x[0]', degree=1)
-Jtest = df.Expression(('x[1]','-x[0]'), degree=1)
+#Jtest = df.Expression(('x[1]*(x[0]>150)*(x[0]<250)*(x[1]>-100)*(x[1]<100)',
+#                       '(-100 - x[0])*(x[0]>150)*(x[0]<250)*(x[1]>-100)*(x[1]<100)'), degree=1)
+Jtest = df.Expression(('x[1]', '-x[0]'), degree=1)
 
 # variational bilinear form for 2D curl-curl harmonics (->stiffness matrix)
 a = (rweight*inner(curl(u), curl(v)) + n**2/rweight*inner(u,v)) * dx
@@ -115,7 +117,6 @@ b = []
 #b.append(4.0*np.pi/c*inner(J[1], v) * dx) # imaginary part
 b.append(inner(Jtest, v) * dx) # real part
 b.append(inner(Jtest, v) * dx) # imaginary part
-
 
 A = [df.Function(Hcurl), df.Function(Hcurl)] # poloidal vector potential
 df.solve(a == b[0], A[0])#, bc) # real part
