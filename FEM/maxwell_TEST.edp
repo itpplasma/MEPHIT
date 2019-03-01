@@ -1,0 +1,106 @@
+//
+// Magnetostatics with Fourier modes in toroidal angle
+//
+// C. Albert, July 2016
+//
+//
+
+real c = 29979245800.0; // speed of light
+
+real nmode = 2.0; // mode number
+
+include "magdif.idp"  // config (incl. filenames)
+
+mesh Th = readmesh(meshfile);
+
+fespace Vh0(Th, P0);
+fespace Vh1(Th, P1);
+fespace Vh2(Th, P2);
+fespace Hrot(Th, RT0Ortho);
+fespace Hdiv(Th, RT0);
+
+Hrot <complex> [ax, ay], [wx, wy];
+Hdiv <complex> [Jr, Jz], [Br, Bz];
+[Jr, Jz] = [0.0, 0.0];
+
+Vh0 <complex> Bphi, Jphi;
+Jphi = 0.0;
+
+real JfluxRe, JfluxIm;
+complex redundancy;
+
+// count triangles in internal region 0
+int ntri = 0;
+for (int k = 0; k < Th.nt; k++) {
+  if (Th[k].label == 0)
+    ntri++;
+}
+
+cout << "Number of triangles in internal region: " << ntri << endl;
+
+ifstream ifile(currnfile);
+for (int k = 0; k < Th.nt; k++) {
+  for (int j = 0; j < 3; j++) {
+    redundancy = Jr[][Hdiv(k, (j+2) % 3)];
+    ifile >> JfluxRe >> JfluxIm;
+    // check orientation of edges and assign
+    // normal flux coordinate accordingly
+    if (redundancy != 0.0 && redundancy != Jr[][Hdiv(k, (j+2) % 3)]) {
+      cerr << "Flux inconsistent in file " << currnfile
+        << " at triangle " << k << " edge " << (j+2) % 3 << ": "
+        << redundancy << " != " << Jr[][Hdiv(k, (j+2) % 3)] << endl;
+    } else {
+      if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
+        Jr[][Hdiv(k, (j+2) % 3)] = JfluxRe + 1.0i * JfluxIm;
+      } else {
+        Jr[][Hdiv(k, (j+2) % 3)] = -JfluxRe - 1.0i * JfluxIm;
+      }
+    }
+  }
+  ifile >> JfluxRe >> JfluxIm;
+  Jphi[][k] = (JfluxRe + 1.0i * JfluxIm) / Th[k].area;
+}
+// Jphi = (dx(Jr) + dy(Jz)) * 1.0i / nmode;
+
+// TESTING
+[Jr, Jz] = [y,-x];
+
+solve Ampere([ax, ay], [wx, wy], solver = UMFPACK) = // defines the PDE
+  int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(ay) - dy(ax)))
+  + int2d(Th)(nmode^2 / x * (wx * ax + wy * ay))
+  - int2d(Th)(4.0 * pi / c * (wx * Jr + wy * Jz))
+  + on(1, ax = 0, ay = 0);
+
+[Br, Bz] = [1.0i * nmode * ay, -1.0i * nmode * ax];
+Bphi = -(dx(ay) - dy(ax));
+
+ofstream ofile(Bnfluxfile);
+ofile.scientific.precision(16);
+for (int k = 0; k < Th.nt; k++) {
+  for (int j = 0; j < 3; j++) {
+    if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
+      ofile
+        << real(Br[][Hdiv(k, (j+2) % 3)]) << "\t"
+        << imag(Br[][Hdiv(k, (j+2) % 3)]) << "\t";
+    } else {
+      ofile
+        << -real(Br[][Hdiv(k, (j+2) % 3)]) << "\t"
+        << -imag(Br[][Hdiv(k, (j+2) % 3)]) << "\t";
+    }
+  }
+  ofile
+    << real(Bphi[][k]) * Th[k].area << "\t"
+    << imag(Bphi[][k]) * Th[k].area << endl;
+}
+
+if (doplot) {
+  Hdiv [JrRe, JzRe], [JrIm, JzIm], [BrRe, BzRe], [BrIm, BzIm];
+  [JrRe, JzRe] = [real(Jr), real(Jz)];
+  [JrIm, JzIm] = [imag(Jr), imag(Jz)];
+  [BrRe, BzRe] = [real(Br), real(Bz)];
+  [BrIm, BzIm] = [imag(Br), imag(Bz)];
+  plot(Th, wait = true);
+  plot(JrRe, wait = true, value = true);
+  plot(BrRe, wait = true, value = true);
+  plot(Bphi, wait = true, fill = true, value = true);
+}
