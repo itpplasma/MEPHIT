@@ -14,13 +14,11 @@ from dolfin import div
 from readmsh import readmsh
 
 infile = '../PRELOAD/inputformaxwell_ext.msh'
-#currnfile = '../FEM/currtest.dat'
-currnfile = '../MHD/Bn.dat'
-#currnfile = '../MHD/Bn_fenics.dat'
-#currnfile = '../MHD/currn.dat'
+#vfile = '../MHD/Bn.dat'
+vfile = '../MHD/Bn_fenics.dat'
 
 [node, tri, edge, nlab, tlab, elab] = readmsh(infile)
-currn = np.loadtxt(currnfile)
+vdata = np.loadtxt(vfile)
 
 mesh = df.Mesh()
 meshgen = df.MeshEditor()
@@ -34,7 +32,7 @@ for kt in range(len(tri)):
 meshgen.close()
 
 # Map for re-ordering of indexes and orientations
-map2facing = np.array([1,2,0]) # index of edge facing vertex
+map2facing = np.array([2,0,1]) # index of edge facing vertex
 map2lex = np.argsort(tri[:,map2facing],1) # map to lexical order in each triangle cell
 assert np.max(mesh.cells()[:]+1 - np.sort(tri)) == 0, "triangle sort order"
 
@@ -57,7 +55,7 @@ J = [df.Function(Hdiv), df.Function(Hdiv)]
 Jphi = [df.Function(P0), df.Function(P0)]
 acell = np.zeros(ncells)
 
-for kcell in range(len(currn)):
+for kcell in range(len(vdata)):
     nodeind = cells[kcell]
     nodecoords = nodes[nodeind]
     cellarea = .5*np.linalg.det(np.concatenate(([[1,1,1]],nodecoords.T)))
@@ -68,12 +66,13 @@ for kcell in range(len(currn)):
                       nodeind[1]+(-1)*nodeind[0]]) # (-1) for signed int
     dofs = Hdivmap.cell_dofs(kcell) # DOFs in cell k
     for k in range(2): # real and imaginary part
-        Jvec[k][dofs] = cellorient*orient*currn[kcell,2*map2lex[kcell]+k]
-        Jphi[k].vector()[kcell] = currn[kcell, 6+k]/np.abs(cellarea)
+        Jvec[k][dofs] = cellorient*orient*vdata[kcell,2*map2lex[kcell]+k]
+        Jphi[k].vector()[kcell] = vdata[kcell, 6+k]/np.abs(cellarea)
         
     #print(np.sum(orient*Jvec[0][dofs])-n*Jphi[1].vector()[kcell]*cellarea)
     #print(np.sum(orient*Jvec[1][dofs])+n*Jphi[0].vector()[kcell]*cellarea)
         
+#%%
 J[0].vector()[:] = Jvec[0]
 J[1].vector()[:] = Jvec[1]
     

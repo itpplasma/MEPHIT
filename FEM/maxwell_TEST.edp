@@ -63,13 +63,13 @@ for (int k = 0; k < Th.nt; k++) {
 // Jphi = (dx(Jr) + dy(Jz)) * 1.0i / nmode;
 
 // TESTING
-[Jr, Jz] = [y,-x];
+[Jr, Jz] = [(1.0+1.0i)*y,-(1.0+1.0i)*x];
 
 solve Ampere([ax, ay], [wx, wy], solver = UMFPACK) = // defines the PDE
   int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(ay) - dy(ax)))
   + int2d(Th)(nmode^2 / x * (wx * ax + wy * ay))
-  - int2d(Th)(4.0 * pi / c * (wx * Jr + wy * Jz))
-  + on(1, ax = 0, ay = 0);
+  - int2d(Th)((wx * Jr + wy * Jz)); // REMOVED 4PI/C !!!
+  //+ on(1, ax = 0, ay = 0);
 
 [Br, Bz] = [1.0i * nmode * ay, -1.0i * nmode * ax];
 Bphi = -(dx(ay) - dy(ax));
@@ -95,12 +95,17 @@ for (int k = 0; k < Th.nt; k++) {
 
 if (doplot) {
   Hdiv [JrRe, JzRe], [JrIm, JzIm], [BrRe, BzRe], [BrIm, BzIm];
+  Vh0 BphiRe;
+
+  BphiRe = real(Bphi);
+
   [JrRe, JzRe] = [real(Jr), real(Jz)];
   [JrIm, JzIm] = [imag(Jr), imag(Jz)];
   [BrRe, BzRe] = [real(Br), real(Bz)];
   [BrIm, BzIm] = [imag(Br), imag(Bz)];
-  plot(Th, wait = true);
-  plot(JrRe, wait = true, value = true);
-  plot(BrRe, wait = true, value = true);
-  plot(Bphi, wait = true, fill = true, value = true);
+  //plot(Th, wait = true);
+  plot([JrRe, JzRe], wait = true, value = true);
+  plot([BrRe, BzRe], wait = true, value = true);
+  plot([BrIm, BzIm], wait = true, value = true);
+  plot(BphiRe, wait = true, fill = true, value = true);
 }
