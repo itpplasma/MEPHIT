@@ -47,7 +47,7 @@ print(sys.argv[3])
 val = data[:,int(float(sys.argv[3]))]
 
 plt.figure()
-plt.tripcolor(node[:, 0], node[:, 1], tri-1, val, cmap='RdBu')
+plt.tripcolor(node[:, 0], node[:, 1], tri-1, val, cmap='jet')
 plt.colorbar()
 plt.clim([-max(abs(val)), max(abs(val))])
 plt.axis('equal')

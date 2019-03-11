@@ -2,9 +2,6 @@
 cmake_minimum_required (VERSION 2.8.9)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR})
 
-include_directories($ENV{HOME}/src/mfem-3.4)
-link_directories($ENV{HOME}/src/mfem-3.4)
-
 ### Define the project
 project(NEO-EQ)
 enable_language(Fortran)
@@ -55,14 +52,3 @@ target_link_libraries(magdif_test.x
   blas
   lapack
 )
-
-### Maxwell solver with MFEM
-
-add_executable(maxwell.x
-  FEM/maxwell.cpp
-)
-
-target_link_libraries(maxwell.x
-  mfem
-)
-

@@ -1024,7 +1024,7 @@ inner: do kt = 1, kt_max(kf)
           lz = tip%zcoord - base%zcoord
           common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
           perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz) * 0.5d0
-          Bnpsi = B0phi(kt_low(kf) + kt, ef) / r
+          Bnpsi = R0 * B0phi(kt_low(kf) + kt, ef) / r
           Bnflux(kt_low(kf) + kt, ef) = Bnpsi * r * hypot(lr, lz) * sum(perps) / Deltapsi
           Bnflux_avg = Bnflux_avg + Bnflux(kt_low(kf) + kt, ef)
           Bnphi(kt_low(kf) + kt) = imun / n * Bnflux(kt_low(kf) + kt, ef) &
@@ -1034,8 +1034,8 @@ inner: do kt = 1, kt_max(kf)
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          Bnflux(kt_low(kf) + kt, ei) = -2d0 * abs(Bnflux_avg)
-          Bnflux(kt_low(kf) + kt, eo) =  2d0 * abs(Bnflux_avg)
+          Bnflux(kt_low(kf) + kt, ei) = -0d0 * abs(Bnflux_avg)  ! for comparison with reference
+          Bnflux(kt_low(kf) + kt, eo) =  0d0 * abs(Bnflux_avg)  ! for comparison with reference
        end do
     end do
     if (quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
