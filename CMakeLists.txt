@@ -2,9 +2,6 @@
 cmake_minimum_required (VERSION 2.8.9)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR})
 
-include_directories($ENV{HOME}/src/mfem-3.4)
-link_directories($ENV{HOME}/src/mfem-3.4)
-
 ### Define the project
 project(NEO-EQ)
 enable_language(Fortran)

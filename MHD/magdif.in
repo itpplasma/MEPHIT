@@ -2,15 +2,15 @@
    log_level = 4                                   ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
    runmode = 0                                     ! 0: single iteration, 1: direct iterations,
                                                    ! 2: preconditioned iterations
-   nonres = .false.                                ! use non-resonant test case
+   nonres = .true.                                 ! use non-resonant test case
    quad_avg = .true.                               ! average over quadrilaterals for non-resonant test case
 
    n = 2                                           ! harmonic index of perturbation
    niter = 3                                       ! number of iteration steps
    nkpol = 200                                     ! number of knots per poloidal loop
    nflux = 74                                      ! number of flux surfaces up to and counting LCFS
-   ti0 = 3.d3                                      ! temparature interpolation step
-   di0 = 5.d13                                     ! density interpolation step
+   ti0 = 3.d3                                      ! temperature on magnetic axis 
+   di0 = 5.d13                                     ! density on magnetic axis
    damp = 0d0                                      ! damping factor for resonances
    point_file = '../PRELOAD/points.dat'            ! mesh points from PRELOAD
    tri_file = '../PRELOAD/triangles.dat'           ! triangles and edges from PRELOAD
