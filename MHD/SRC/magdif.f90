@@ -1009,7 +1009,7 @@ inner: do kt = 1, kt_max(kf)
           lz = tip%zcoord - base%zcoord
           common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
           perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz) * 0.5d0
-          Bnpsi = R0 * B0phi(kt_low(kf) + kt, ef) / r
+          Bnpsi = -R0 * B0phi(kt_low(kf) + kt, ef) / r
           Bnflux(kt_low(kf) + kt, ef) = Bnpsi * r * hypot(lr, lz) * sum(perps) / Deltapsi
           Bnphi(kt_low(kf) + kt) = imun / n * Bnflux(kt_low(kf) + kt, ef) &
                / elem%det_3 * 2d0

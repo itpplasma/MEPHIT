@@ -49,11 +49,11 @@ val = data[:,int(float(sys.argv[3]))]
 plt.figure()
 plt.tripcolor(node[:, 0], node[:, 1], tri-1, val, cmap='jet')
 plt.colorbar()
-plt.clim([-max(abs(val)), max(abs(val))])
+# plt.clim([-max(abs(val)), max(abs(val))])
 plt.axis('equal')
 if (len(sys.argv) > 4):
     try:
-        plt.clim([float(sys.argv[4]), -float(sys.argv[4])])
+        plt.clim([float(sys.argv[4]), float(sys.argv[5])])
         plt.show()
     except:
         plt.savefig(sys.argv[4], format = 'pdf')
