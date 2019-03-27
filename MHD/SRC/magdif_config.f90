@@ -46,32 +46,18 @@ module magdif_config
   !> magdif::read_bn().
   character(len = 1024) :: Bn_vac_file
 
-  !> Formatted input data file for magnetic field perturbation (plasma response).
+  !> Formatted data file for accumulated magnetic field perturbation.
+  !>
+  !> This file is generated in every iteration in magdif::magdif_direct() and
+  !> contains the final solution as degrees of freedom, i.e. the same format as
+  !> #bn_vac_file.
+  character(len = 1024) :: Bn_file
+
+  !> Formatted output data file for magnetic field perturbation (plasma response).
   !>
   !> This file is generated in every iteration by magdif::compute_bn() and read in
   !> afterwards via magdif::read_bn().
-  character(len = 1024) :: Bn_file
-
-  !> Formatted output data file for accumulated magnetic field perturbation.
-  !>
-  !> This file is generated after the last iteration in magdif::magdif_direct() and
-  !> contains the final solution as degrees of freedom, i.e. the same format as
-  !> #bn_vac_file.
-  character(len = 1024) :: Bn_sum_file
-
-  !> Formatted output data file for the absolute error in magnetic field perturbation.
-  !>
-  !> This file is generated after the last iteration in magdif::magdif_direct() and
-  !> contains the absolute error of the final solution as degrees of freedom, i.e. the
-  !> same format as #bn_vac_file.
-  character(len = 1024) :: Bn_abs_err_file
-
-  !> Formatted output data file for the absolute error in magnetic field perturbation.
-  !>
-  !> This file is generated after the last iteration in magdif::magdif_direct() and
-  !> contains the absolute error of the final solution as degrees of freedom, i.e. the
-  !> same format as #bn_vac_file.
-  character(len = 1024) :: Bn_rel_err_file
+  character(len = 1024) :: Bn_diff_file
 
   !> Formatted output data file containing flux variables.
   !>
@@ -88,7 +74,7 @@ module magdif_config
   !> namelist for input parameters
   namelist / settings / log_level, runmode, nonres, quad_avg, niter, n, nkpol, nflux, &
        ti0, di0, damp, point_file, tri_file, Bn_nonres_file, Bn_vac_file, Bn_file, &
-       Bn_sum_file, Bn_abs_err_file, Bn_rel_err_file, fluxvar_file, presn_file, currn_file
+       Bn_diff_file, fluxvar_file, presn_file, currn_file
 
 contains
 

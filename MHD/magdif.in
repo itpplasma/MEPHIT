@@ -1,6 +1,6 @@
 &settings
    log_level = 4                                   ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
-   runmode = 0                                     ! 0: single iteration, 1: direct iterations,
+   runmode = 1                                     ! 0: single iteration, 1: direct iterations,
                                                    ! 2: preconditioned iterations
    nonres = .true.                                 ! use non-resonant test case
    quad_avg = .true.                               ! average over quadrilaterals for non-resonant test case
@@ -17,10 +17,8 @@
    Bn_vac_file = '../PRELOAD/VACFIELD/Bn_flux.dat' ! vacuum perturbation field from PRELOAD
 
    Bn_nonres_file = 'Bn_nonres.dat'                ! vacuum perturbation field from non-resonant test case
-   Bn_file = 'Bn.dat'                              ! plasma perturbation field from FEM
-   Bn_sum_file = 'Bn_sum.dat'                      ! accumulated perturbation field from iterations
-   Bn_abs_err_file = 'Bn_abs_err.dat'              ! absolute error in perturbation field
-   Bn_rel_err_file = 'Bn_rel_err.dat'              ! relative error in perturbation field
+   Bn_file = 'Bn.dat'                              ! accumulated plasma perturbation field from FEM
+   Bn_diff_file = 'Bn_diff.dat'                    ! perturbation field from iterations
    fluxvar_file = 'fluxvar.dat'                    ! output file for flux variables
    presn_file = 'presn.dat'                        ! output file for pressure perturbation
    currn_file = 'currn.dat'                        ! output file for current perturbation

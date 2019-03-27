@@ -205,9 +205,9 @@ contains
     Bnflux_vac = Bnflux
     Bnphi_vac = Bnphi
     if (log_debug) then
-       call write_triangle_flux(Bnflux_vac, Bnphi_vac, Bn_nonres_file, .false.)
-       call write_triangle_flux(Bnflux_vac, Bnphi_vac, decorate_filename(Bn_nonres_file, &
-            'plot_'), .true.)
+       call write_vector_dof(Bnflux_vac, Bnphi_vac, Bn_nonres_file)
+       call write_vector_plot(Bnflux_vac, Bnphi_vac, &
+            decorate_filename(Bn_nonres_file, 'plot_'))
     end if
     if (log_info) write(logfile, *) 'magdif initialized'
   end subroutine magdif_init
@@ -242,57 +242,43 @@ contains
   end subroutine magdif_cleanup
 
   subroutine magdif_single
-    call compute_presn
-    call compute_currn
-    call compute_Bn
-    call read_Bn(Bn_file)
+    call compute_presn     ! compute pressure based on previous perturbation field
+    call compute_currn     ! compute currents based on previous perturbation field
+    call compute_Bn        ! use field code to generate new field from currents
+    call read_Bn(Bn_file)  ! read new bnflux from field code
+    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'))
   end subroutine magdif_single
 
   subroutine magdif_direct
     integer :: kiter
-    complex(dp) :: Bnflux_sum(ntri, 3)
-    complex(dp) :: Bnphi_sum(ntri)
     complex(dp) :: Bnflux_prev(ntri, 3)
     complex(dp) :: Bnphi_prev(ntri)
     complex(dp) :: Bnflux_diff(ntri, 3)
     complex(dp) :: Bnphi_diff(ntri)
 
-    Bnflux_sum = 0.0d0
-    Bnphi_sum = 0.0d0
     do kiter = 1, niter
        if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter
-       call compute_presn     ! compute pressure based on previous perturbation field
-       call compute_currn     ! compute currents based on previous perturbation field
        Bnflux_prev = Bnflux
        Bnphi_prev = Bnphi
-       call compute_Bn        ! use field code to generate new field from currents
-       call read_Bn(Bn_file)  ! read new bnflux from field code
+       call magdif_single
+
        Bnflux_diff = Bnflux - Bnflux_prev
        Bnphi_diff = Bnphi - Bnphi_prev
-       call write_triangle_flux(Bnflux_diff, Bnphi_diff, &
-            decorate_filename(Bn_abs_err_file, '', kiter), .false.)
-       call write_triangle_flux(Bnflux_diff, Bnphi_diff, &
-            decorate_filename(Bn_abs_err_file, 'plot_', kiter), .true.)
-       call write_triangle_flux(Bnflux_diff / Bnflux_prev, Bnphi_diff / Bnphi_prev, &
-            decorate_filename(Bn_rel_err_file, '', kiter), .false.)
-       call write_triangle_flux(Bnflux, Bnphi, &
-            decorate_filename(Bn_file, 'plot_', kiter), .true.)
-       call write_triangle_flux(jnflux, jnphi, &
-            decorate_filename(currn_file, 'plot_', kiter), .true.)
-       call write_nodal_dof(presn, decorate_filename(presn_file, '', kiter))
-       Bnflux_sum = Bnflux_sum + Bnflux
-       Bnphi_sum = Bnphi_sum + Bnphi
-    end do
-    call write_triangle_flux(Bnflux_sum, Bnphi_sum, Bn_sum_file, .false.)
-    call write_triangle_flux(Bnflux_sum, Bnphi_sum, decorate_filename(Bn_sum_file, &
-         'plot_'), .true.)
+       call write_vector_dof(Bnflux_diff, Bnphi_diff, &
+            decorate_filename(Bn_diff_file, '', kiter))
+       call write_vector_plot(Bnflux_diff, Bnphi_diff, &
+            decorate_filename(Bn_diff_file, 'plot_', kiter))
+       call write_vector_plot(Bnflux, Bnphi, &
+            decorate_filename(Bn_file, 'plot_', kiter))
+       call write_vector_plot(jnflux, jnphi, &
+            decorate_filename(currn_file, 'plot_', kiter))
+       call write_scalar_dof(presn, decorate_filename(presn_file, '', kiter))
 
-    Bnflux = Bnflux_sum
-    Bnphi = Bnphi_sum
-    call compute_presn
-    call write_nodal_dof(presn, presn_file)
-    call compute_currn
-    call write_triangle_flux(jnflux, jnphi, decorate_filename(currn_file, 'plot_'), .true.)
+       if (kiter < niter) then
+          Bnflux = Bnflux + Bnflux_vac
+          Bnphi = Bnphi + Bnphi_vac
+       end if
+    end do
   end subroutine magdif_direct
 
   !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
@@ -790,7 +776,7 @@ inner: do kt = 1, kt_max(kf)
          ' max_rel_err = ', max_rel_err, ' avg_rel_err = ', avg_rel_err
     if (allocated(resid)) deallocate(resid)
 
-    call write_nodal_dof(presn, presn_file)
+    call write_scalar_dof(presn, presn_file)
   end subroutine compute_presn
 
   !> Map edge symbols to integer indices.
@@ -953,15 +939,14 @@ inner: do kt = 1, kt_max(kf)
        end do
     end do
     avg_rel_err = avg_rel_err / sum(kt_max(1:nflux))
-    if (log_debug) write (logfile, *) 'compute_triangle_flux: diagonalization' // &
+    if (log_debug) write (logfile, *) 'compute_currn: diagonalization' // &
          ' max_rel_err = ', max_rel_err, ' avg_rel_err = ', avg_rel_err
     if (allocated(resid)) deallocate(resid)
 
     call check_redundant_edges(jnflux, -1d0, 'jnflux')
 
-    call write_triangle_flux(jnflux, jnphi, currn_file, .false.)
-    call write_triangle_flux(jnflux, jnphi, decorate_filename(currn_file, 'plot_'), &
-         .true.)
+    call write_vector_dof(jnflux, jnphi, currn_file)
+    call write_vector_plot(jnflux, jnphi, decorate_filename(currn_file, 'plot_'))
   end subroutine compute_currn
 
   subroutine avg_flux_on_quad(pol_flux, tor_comp)
@@ -1041,11 +1026,10 @@ inner: do kt = 1, kt_max(kf)
     call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
-  subroutine write_triangle_flux(pol_flux, tor_comp, outfile, interpolate)
+  subroutine write_vector_plot(pol_flux, tor_comp, outfile)
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
-    logical, intent(in) :: interpolate
 
     integer :: ktri
     type(triangle) :: elem
@@ -1054,56 +1038,64 @@ inner: do kt = 1, kt_max(kf)
     real(dp) :: r, z
 
     open(1, file = outfile, recl = longlines)
-    if (interpolate) then
-       do ktri = 1, kt_low(nflux+1)
-          elem = mesh_element(ktri)
-          tri = mesh_point(elem%i_knot(:))
-          call ring_centered_avg_coord(elem, r, z)
-          pol_comp_r = 1d0 / elem%det_3 * ( &
-               pol_flux(ktri, 1) * (r - tri(3)%rcoord) + &
-               pol_flux(ktri, 2) * (r - tri(1)%rcoord) + &
-               pol_flux(ktri, 3) * (r - tri(2)%rcoord))
-          pol_comp_z = 1d0 / elem%det_3 * ( &
-               pol_flux(ktri, 1) * (z - tri(3)%zcoord) + &
-               pol_flux(ktri, 2) * (z - tri(1)%zcoord) + &
-               pol_flux(ktri, 3) * (z - tri(2)%zcoord))
-          write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), real(pol_comp_z), &
-               aimag(pol_comp_z), real(tor_comp(ktri)), aimag(tor_comp(ktri))
-       end do
-       r = mesh_point(1)%rcoord
-       z = mesh_point(1)%zcoord
-       do ktri = kt_low(nflux+1) + 1, ntri
-          write (1, *) r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
-       end do
-    else
-       do ktri = 1, kt_low(nflux+1)
-          write(1, *) &
-               real(pol_flux(ktri, 1)), aimag(pol_flux(ktri, 1)), &
-               real(pol_flux(ktri, 2)), aimag(pol_flux(ktri, 2)), &
-               real(pol_flux(ktri, 3)), aimag(pol_flux(ktri, 3)), &
-               real(tor_comp(ktri) * mesh_element(ktri)%det_3 * 0.5d0), &
-               aimag(tor_comp(ktri) * mesh_element(ktri)%det_3 * 0.5d0)
-       end do
-       do ktri = kt_low(nflux+1) + 1, ntri
-          write (1, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
-       end do
-    end if
+    do ktri = 1, kt_low(nflux+1)
+       elem = mesh_element(ktri)
+       tri = mesh_point(elem%i_knot(:))
+       call ring_centered_avg_coord(elem, r, z)
+       pol_comp_r = 1d0 / elem%det_3 * ( &
+            pol_flux(ktri, 1) * (r - tri(3)%rcoord) + &
+            pol_flux(ktri, 2) * (r - tri(1)%rcoord) + &
+            pol_flux(ktri, 3) * (r - tri(2)%rcoord))
+       pol_comp_z = 1d0 / elem%det_3 * ( &
+            pol_flux(ktri, 1) * (z - tri(3)%zcoord) + &
+            pol_flux(ktri, 2) * (z - tri(1)%zcoord) + &
+            pol_flux(ktri, 3) * (z - tri(2)%zcoord))
+       write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), real(pol_comp_z), &
+            aimag(pol_comp_z), real(tor_comp(ktri)), aimag(tor_comp(ktri))
+    end do
+    r = mesh_point(1)%rcoord
+    z = mesh_point(1)%zcoord
+    do ktri = kt_low(nflux+1) + 1, ntri
+       write (1, *) r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+    end do
     close(1)
-  end subroutine write_triangle_flux
+  end subroutine write_vector_plot
 
-  subroutine write_nodal_dof(nodal_dof, outfile)
-    complex(dp), intent(in) :: nodal_dof(:)
+  subroutine write_vector_dof(pol_flux, tor_comp, outfile)
+    complex(dp), intent(in) :: pol_flux(:,:)
+    complex(dp), intent(in) :: tor_comp(:)
+    character(len = *), intent(in) :: outfile
+
+    integer :: ktri
+
+    open(1, file = outfile, recl = longlines)
+    do ktri = 1, kt_low(nflux+1)
+       write(1, *) &
+            real(pol_flux(ktri, 1)), aimag(pol_flux(ktri, 1)), &
+            real(pol_flux(ktri, 2)), aimag(pol_flux(ktri, 2)), &
+            real(pol_flux(ktri, 3)), aimag(pol_flux(ktri, 3)), &
+            real(tor_comp(ktri) * mesh_element(ktri)%det_3 * 0.5d0), &
+            aimag(tor_comp(ktri) * mesh_element(ktri)%det_3 * 0.5d0)
+    end do
+    do ktri = kt_low(nflux+1) + 1, ntri
+       write (1, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+    end do
+    close(1)
+  end subroutine write_vector_dof
+
+  subroutine write_scalar_dof(scalar_dof, outfile)
+    complex(dp), intent(in) :: scalar_dof(:)
     character(len = *), intent(in) :: outfile
 
     integer :: kpoint
 
     open(1, file = outfile, recl = longlines)
     do kpoint = 1, kp_low(nflux+1)
-       write (1, *) real(nodal_dof(kpoint)), aimag(nodal_dof(kpoint))
+       write (1, *) real(scalar_dof(kpoint)), aimag(scalar_dof(kpoint))
     end do
     do kpoint = kp_low(nflux+1) + 1, npoint ! write zeroes in remaining points until end
        write (1, *) 0d0, 0d0
     end do
     close(1)
-  end subroutine write_nodal_dof
+  end subroutine write_scalar_dof
 end module magdif
