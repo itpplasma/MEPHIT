@@ -27,6 +27,18 @@
 \end{gather}
 
 
+\subsection{Sequence of partial sums}
+
+\begin{align}
+  \delta \vec{B}_{\text{p}}^{[n]} &= \hat{K} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}}^{[n-1]} \right ) \nonumber \\
+  &= \hat{K} \left ( \delta \vec{B}_{\text{v}} + \hat{K} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}}^{[n-2]} \right ) \right ) \nonumber \\
+  &= \hat{K} \left ( \delta \vec{B}_{\text{v}} + \hat{K} \left ( \delta \vec{B}_{\text{v}} + \hat{K} \left ( \delta \vec{B}_{\text{v}} + \dotsb \right ) \right ) \right ) \nonumber \\
+  &= \hat{K} \delta \vec{B}_{\text{v}} + \hat{K}^{2} \delta \vec{B}_{\text{v}} + \hat{K}^{3} \delta \vec{B}_{\text{v}} + \dotsb + \hat{K}^{n+1} \delta \vec{B}_{\text{v}} \nonumber \\
+  &= \left ( \hat{I} + \hat{K} + \hat{K}^{2} + \dotsb + \hat{K}^{n} \right ) \hat{K} \delta \vec{B}_{\text{v}} \nonumber \\
+  &= \sum_{k = 1}^{n} \hat{K}^{k} \delta \vec{B}_{\text{v}}.
+\end{align}
+
+
 \subsubsection{Alternative formulation for the current through flux surface edges}
 
 As an alternative to \cref{eq:If} it can be shown (see writeup on gyrokinetics) that

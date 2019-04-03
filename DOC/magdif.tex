@@ -157,14 +157,23 @@ Starting with a given MHD equilibrium fulfilling \cref{eq:mhd-gen,eq:divfree-gen
   \nabla \times (\nabla \times \delta \vec{A}) &= \frac{4 \pi}{c} \delta \vec{j}, \label{eq:ampere} \\
   \Rightarrow \nabla \cdot \delta \vec{B} &= \nabla \cdot \delta \vec{j} = 0. \label{eq:divfree}
 \end{align}
-Here the perturbation field in vacuum, $\delta \vec{B}_{\text{v}}$, is pre-evaluated by a \textsc{Biot-Savart} integral over external\footnote{i.e.\ entirely outside the plasma region} coil currents $I_{\text{c}} (\vec{r}')$. This induces a plasma response, resulting in the current density perturbation $\delta \vec{j}$. The perturbation field from currents within the plasma, $\delta \vec{B}_{\text{p}}$, is in turn computed from $\delta \vec{j}$, again giving rise to a plasma response current. Now, the linearized force balance \cref{eq:mhd} is used to compute $\delta \vec{j}$ for given $\delta \vec{B}$ whereas \cref{eq:ampere} yields $\delta \vec{B}_{\text{p}}$ for given $\delta \vec{j}$. With abstract operators $\hat{P}$ for the computation in \cref{eq:mhd} and $\hat{M}$ for the computation in \cref{eq:ampere}, this can be written in compact form:
+Here the perturbation field in vacuum, $\delta \vec{B}_{\text{v}}$, is pre-evaluated by a \textsc{Biot-Savart} integral over external\footnote{i.e.\ entirely outside the plasma region} coil currents $I_{\text{c}} (\vec{r}')$. This induces a plasma response, resulting in the current density perturbation $\delta \vec{j}$. The perturbation field from currents within the plasma, $\delta \vec{B}_{\text{p}}$, is in turn computed from $\delta \vec{j}$, again giving rise to a plasma response current. Now, the linearized force balance \cref{eq:mhd} is used to compute $\delta \vec{j}$ for given $\delta \vec{B}$ whereas \cref{eq:ampere} yields $\delta \vec{B}_{\text{p}}$ for given $\delta \vec{j}$.
+
+The solution of \cref{eq:mhd} can further be split into two steps: First the pressure perturbation $\delta p$ is found, and then the plasma current density $\delta \vec{j}$ is computed using the condition $\nabla \cdot \delta \vec{j} = 0$. For an unperturbed equilibrium with nested flux surfaces, both steps can be performed in a radially local manner if a field-aligned computational grid is used, which will become clear in the following sections. Radial coupling happens by the combination of the two individual steps since their effective radial locations of computation are shifted by a half-step in radial grid distance.
+
+\Cref{eq:mhd} and \cref{eq:ampere} are solved in an alternating way until convergence is reached, as described in \cref{sec:iteration}. In addition a preconditioner is used to enhance convergence, which is discussed in \cref{sec:Arnoldi}.
+
+\subsection{Iteration scheme}
+\label{sec:iteration}
+
+With abstract operators $\hat{P}$ for the computation in \cref{eq:mhd} and $\hat{M}$ for the computation in \cref{eq:ampere}, this can be written in compact form:
 \begin{align}
   \delta \vec{j} &= \hat{P} \delta \vec{B} = \hat{P} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}} \right ), \\
   \delta \vec{B}_{\text{p}} &= \hat{M} \delta \vec{j}.
 \end{align}
 Substituting for $\delta \vec{j}$ and using a shorthand $\hat{K} = \hat{M} \hat{P}$ gives
 \begin{align}
-  \hat{M} \hat{P} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}} \right ) &= \delta \vec{B}_{\text{p}}, \\
+  \hat{K} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}} \right ) &= \delta \vec{B}_{\text{p}}, \label{eq:K_fixed-point} \\
   \hat{K} \delta \vec{B}_{\text{v}} &= \left ( \hat{1} - \hat{K} \right ) \delta \vec{B}_{\text{p}}, \\
   \left ( \hat{1} - \hat{K} \right )^{-1} \hat{K} \delta \vec{B}_{\text{v}} &= \delta \vec{B}_{\text{p}}.
 \end{align}
@@ -172,21 +181,83 @@ The first term can be rewritten in the form of a \textsc{Neumann} series, a gene
 \begin{gather}
   \left ( \hat{1} - \hat{K} \right )^{-1} = \sum_{k = 0}^{\infty} \hat{K}^{k}.
 \end{gather}
-This way a consistent solution for $\delta \vec{B}_{\text{p}}$ can be computed from $\delta \vec{B}_{\text{v}}$ by repeated application of $\hat{K}$:
+This way a consistent solution for $\delta \vec{B}_{\text{p}}$ can be computed from $\delta \vec{B}_{\text{v}}$ by repeated application of $\hat{K}$, given explicitly by the infinite series
 \begin{gather}
-  \delta \vec{B}_{\text{p}} = \left ( \hat{1} + \hat{K} + \hat{K}^{2} + \dotsb \right ) \hat{K} \delta \vec{B}_{\text{v}}.
+  \delta \vec{B}_{\text{p}} = \left ( \hat{1} + \hat{K} + \hat{K}^{2} + \dotsb \right ) \hat{K} \delta \vec{B}_{\text{v}} = \sum_{k = 1}^{\infty} \hat{K}^{k} \delta \vec{B}_{\text{v}} = \sum_{k = 1}^{\infty} \delta \vec{B}_{\text{p}}^{(k)}. \label{eq:K_series}
 \end{gather}
-This means \cref{eq:mhd} and \cref{eq:ampere} are treated individually in an iterative way / solved in an alternating way until convergence is reached. The result is a fixed-point iteration for $\delta \vec{B}_{\text{p}}^{(k)}$ where $\delta \vec{B}_{\text{v}}$ is used as the initial value:
+In \cref{eq:K_series} each term is given by the recurrence relation
 \begin{gather}
-  \delta \vec{B}_{\text{p}}^{(k+1)} = \hat{K} \delta \vec{B}_{\text{p}}^{(k)}, \quad \delta \vec{B}_{\text{p}}^{(0)} = \delta \vec{B}_{\text{v}}.
+  \delta \vec{B}_{\text{p}}^{(k+1)} = \hat{K} \delta \vec{B}_{\text{p}}^{(k)}.
 \end{gather}
-The values are accumulated for the final result:
+Adding the vacuum field as the initial value,
 \begin{gather}
-  \delta \vec{B} = \sum_{k = 0} \delta \vec{B}_{\text{p}}^{(k)}.
+  \delta \vec{B}_{\text{p}}^{(0)} = \delta \vec{B}_{\text{v}}
 \end{gather}
-In addition a preconditioner is used to enhance convergence.
+the series' terms are accumulated for the self-consistent solution:
+\begin{gather}
+  \delta \vec{B} = \sum_{k = 0}^{\infty} \delta \vec{B}_{\text{p}}^{(k)}.
+\end{gather}
+Alternatively, \cref{eq:K_fixed-point} can be expanded,
+\begin{gather}
+  \delta \vec{B}_{\text{p}} = \hat{K} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}} \right ) = \hat{K} \left ( \delta \vec{B}_{\text{v}} + \hat{K} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}} \right ) \right ) = \dotsb,
+\end{gather}
+yielding a fixed-point iteration for $\delta \vec{B}_{\text{p}}$:
+\begin{gather}
+  \delta \vec{B}_{\text{p}}^{[k+1]} = \hat{K} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}}^{[k]} \right ).
+\end{gather}
+Compared to the previous approach, this one is cumulative, i.e. it immediately produces the next approximation of the plasma perturbation. In other words, it corresponds to the sequence of partial sums of the previous infinite series:
+\begin{gather}
+  \delta \vec{B}_{\text{p}}^{[n]} = \sum_{k = 1}^{n} \delta \vec{B}_{\text{v}}^{(k)}. \label{eq:K_partial_sum}
+\end{gather}
+For this to be consistent, the initial value is taken to be zero,
+\begin{gather}
+  \delta \vec{B}_{\text{p}}^{[0]} = \vec{0},
+\end{gather}
+which makes sense since it represents the empty sum. As a consequence, even though the vacuum field is added in every iteration step, the final result does not contain the vacuum field. In the previous approach, the sumamtion can simply be extended to $k = 0$; here, it has to be added explicitly after the last iteration. For illustration, both approaches are compared side-by-side in \cref{tab:comp_iter}.
+\begin{table}[htb]
+  \begin{align*}
+    \text{iteration step:} && \delta \vec{B}_{\text{p}}^{(k)} &= \hat{K} \delta \vec{B}_{\text{p}}^{(k-1)} & \delta \vec{B}_{\text{p}}^{[k]} &= \hat{K} \left ( \delta \vec{B}_{\text{p}}^{[k-1]} + \delta \vec{B}_{\text{v}} \right ), \\
+    \text{initial value:} && \delta \vec{B}_{\text{p}}^{(0)} &= \delta \vec{B}_{\text{v}} & \delta \vec{B}_{\text{p}}^{[0]} &= \vec{0}, \\
+    \text{step 1:} && \delta \vec{B}_{\text{p}}^{(1)} &= \hat{K} \delta \vec{B}_{\text{p}}^{(0)} = \hat{K} \delta \vec{B}_{\text{v}} & \delta \vec{B}_{\text{p}}^{[1]} &= \hat{K} \left ( \delta \vec{B}_{\text{p}}^{[0]} + \delta \vec{B}_{\text{v}} \right ) = \hat{K} \delta \vec{B}_{\text{v}}, \\
+    \text{step 2:} && \delta \vec{B}_{\text{p}}^{(2)} &= \hat{K} \delta \vec{B}_{\text{p}}^{(1)} = \hat{K}^{2} \delta \vec{B}_{\text{v}} & \delta \vec{B}_{\text{p}}^{[2]} &= \hat{K} \left ( \delta \vec{B}_{\text{p}}^{[1]} + \delta \vec{B}_{\text{v}} \right ) = \left ( \hat{K}^{2} + \hat{K} \right ) \delta \vec{B}_{\text{v}}, \\
+    \text{explicit form:} && \delta \vec{B}_{\text{p}}^{(n)} &= \hat{K}^{n} \delta \vec{B}_{\text{v}} & \delta \vec{B}_{\text{p}}^{[n]} &= \sum_{k = 1}^{n} \hat{K}^{k} \delta \vec{B}_{\text{v}}, \\
+    \text{full plasma response:} && \delta \vec{B}_{\text{p}} &= \sum_{k = 1}^{\infty} \hat{K}^{n} \delta \vec{B}_{\text{v}} & \delta \vec{B}_{\text{p}} &= \delta \vec{B}_{\text{p}}^{[\infty]}, \\
+    \text{full perturbation:} && \delta \vec{B} &= \sum_{k = 0}^{\infty} \hat{K}^{n} \delta \vec{B}_{\text{v}} & \delta \vec{B} &= \delta \vec{B}_{\text{p}}^{[\infty]} + \delta \vec{B}_{\text{v}}
+  \end{align*}
+  \caption{Comparison of iteration with series (non-cumulative) and sequence (cumulative)}
+  \label{tab:comp_iter}
+\end{table}
+For Arnoldi iterations, the cumulative approach is more convenient. To reproduce the intermediate summands, we use \cref{eq:K_partial_sum} and arrive at
+\begin{gather}
+  \delta \vec{B}_{\text{p}}^{(k)} = \delta \vec{B}_{\text{p}}^{[k]} - \delta \vec{B}_{\text{p}}^{[k-1]}.
+\end{gather}
 
-The solution of \cref{eq:mhd} can further be split into two steps: First the pressure perturbation $\delta p$ is found, and then the plasma current density $\delta \vec{j}$ is computed using the condition $\nabla \cdot \delta \vec{j} = 0$. For an unperturbed equilibrium with nested flux surfaces, both steps can be performed in a radially local manner if a field-aligned computational grid is used, which will become clear below. Radial coupling happens by the combination of the two individual steps since their effective radial locations of computation are shifted by a half-step in radial grid distance.
+\subsection{Enhanced convergence with Arnoldi iterations}
+\label{sec:Arnoldi}
+
+Assuming the linear operator $\hat{K}$ is non-singular, we get an eigendecomposition
+\begin{gather}
+  \hat{K} = \hat{V} \hat{\Lambda} \hat{V}^{-1},
+\end{gather}
+where $\hat{\Lambda}$ is a diagonal matrix with the eigenvalues,
+\begin{gather}
+  \hat{\Lambda} = \begin{pmatrix}
+    \lambda_{1} & & & \\
+    & \lambda_{2} & & \\
+    & & \ddots & \\
+    & & & \lambda_{N}
+  \end{pmatrix} = \vec{\lambda} \hat{I},
+\end{gather}
+and $\hat{V}$ contains the corresponding eigenvectors as its columns,
+\begin{gather}
+  \hat{V} = \left ( \vec{v}_{1}, \vec{v}_{2}, \dotsc, \vec{v}_{N} \right ),
+\end{gather}
+and $\hat{V}^{-1}$ is the inverse of $\hat{V}$. Repeated application of $\hat{K}$ then simplifies to
+\begin{gather}
+  \hat{K}^{k} = \underbrace{\left ( \hat{V} \hat{\Lambda} \hat{V}^{-1} \right ) \left ( \hat{V} \hat{\Lambda} \hat{V}^{-1} \right ) \dotsb \left ( \hat{V} \hat{\Lambda} \hat{V}^{-1} \right )}_{k} = \hat{V} \hat{\Lambda}^{k} \hat{V}^{-1}.
+\end{gather}
+
+[\ldots]
 
 \section{Geometrical considerations}
 
@@ -669,7 +740,7 @@ with a source term $s_{mn}$. This allows a simple algebraic solution where all q
 \end{gather}
 Now an approximation can be made by switching from contravariant components to covariant components which are (for some reason) assumed to be constant. The factor $R$ appearing in the metric components can also be considered constant over the domain in question -- the toroidal geometry is effectively transformed to cylindrical geometry with a very thin and elongated cylinder and periodic boundary conditions.
 
-\ldots
+[\ldots]
 
 \appendix
 \section{List of symbols}
@@ -698,6 +769,7 @@ Now an approximation can be made by switching from contravariant components to c
   $m$ & poloidal mode number \\
   $n$ & toroidal mode number \\
   $\vec{n}$ & outward pointing normal vector \\
+  $N$ & dimension of system of linear equations \\
   $p$ & pressure, measured in dyne per square centimetre \\
   $q$ & safety factor \\
   $R$ & radial coordinate in cylindrical coordinates \\
@@ -718,19 +790,21 @@ Now an approximation can be made by switching from contravariant components to c
   \textbf{Notation} & \textbf{Description} \\
   \midrule
   \endhead
-  $p_{0}$ & equilibrium quantity \\
-  $\delta p$ & perturbed quantity \\
-  $p_{n}$ & \textsc{Fourier} coefficient of perturbed quantity with toroidal mode number $n$ \\
-  $p_{m n}$ & \textsc{Fourier} coefficient of perturbed quantity with poloidal mode number $m$ and toroidal mode number $n$ \\
+  $p_{0}$ & equilibrium $p$ \\
+  $\delta p$ & perturbation of $p$ \\
+  $p_{n}$ & \textsc{Fourier} coefficient of perturbation of $p$ with toroidal mode number $n$ \\
+  $p_{m n}$ & \textsc{Fourier} coefficient of perturbation of $p$ with poloidal mode number $m$ and toroidal mode number $n$ \\
+  $p^{(k)}$ & $k$-th summand in series expansion of perturbed $p$ / $k$-th degree of freedom of $p$ in a particular loop \\
+  $p^{[k]}$ & $k$-th partial sum in series expansion of perturbed $p$ \\
   \midrule
-  $\vec{j}^{\pol}$ & poloidal component \\
-  $\vec{j}^{\tor}$ & toroidal component \\
-  $\vec{j}^{\parallel}$ & component parallel to $\vec{B}_{0}$ \\
-  $\vec{j}^{\perp}$ & component perpendicular to $\vec{B}_{0}$ \\
-  $j^{u}$ & contravariant component w.r.t.\ coordinate $u$ \\
-  $j_{u}$ & covariant component w.r.t.\ coordinate $u$ \\
-  $j_{(u)}$ & physical component w.r.t.\ coordinate $u$ \\
-  $\hat{\vec{n}}$ & unit vector \\
+  $\vec{j}^{\pol}$ & poloidal component of $\vec{j}$ \\
+  $\vec{j}^{\tor}$ & toroidal component of $\vec{j}$ \\
+  $\vec{j}^{\parallel}$ & component of $\vec{j}$ parallel to $\vec{B}_{0}$ \\
+  $\vec{j}^{\perp}$ & component of $\vec{j}$ perpendicular to $\vec{B}_{0}$ \\
+  $j^{u}$ & contravariant component of $\vec{j}$ w.r.t.\ coordinate $u$ \\
+  $j_{u}$ & covariant component of $\vec{j}$ w.r.t.\ coordinate $u$ \\
+  $j_{(u)}$ & physical component of $\vec{j}$ w.r.t.\ coordinate $u$ \\
+  $\hat{\vec{n}}$ & unit vector in direction of $\vec{n}$ \\
   \midrule
   $\vec{B} (\vec{r}^{(k)})$ & $\vec{B}$ evaluated at node with index $k$ \\
   $\vec{B} (\Gamma_{e}^{(k)})$ & $\vec{B}$ evaluated at midpoint of edge $e$ of triangle $k$ \\
