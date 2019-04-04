@@ -256,12 +256,15 @@ contains
     complex(dp) :: Bnflux_diff(ntri, 3)
     complex(dp) :: Bnphi_diff(ntri)
 
+    Bnflux = (0d0, 0d0)
+    Bnphi = (0d0, 0d0)
     do kiter = 1, niter
        if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter
        Bnflux_prev = Bnflux
        Bnphi_prev = Bnphi
+       Bnflux = Bnflux + Bnflux_vac
+       Bnphi = Bnphi + Bnphi_vac
        call magdif_single
-
        Bnflux_diff = Bnflux - Bnflux_prev
        Bnphi_diff = Bnphi - Bnphi_prev
        call write_vector_dof(Bnflux_diff, Bnphi_diff, &
@@ -273,12 +276,13 @@ contains
        call write_vector_plot(jnflux, jnphi, &
             decorate_filename(currn_file, 'plot_', kiter))
        call write_scalar_dof(presn, decorate_filename(presn_file, '', kiter))
-
-       if (kiter < niter) then
-          Bnflux = Bnflux + Bnflux_vac
-          Bnphi = Bnphi + Bnphi_vac
-       end if
     end do
+    Bnflux = Bnflux + Bnflux_vac
+    Bnphi = Bnphi + Bnphi_vac
+    call compute_presn
+    call compute_currn
+    call write_vector_dof(Bnflux, Bnphi, Bn_file)
+    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'))
   end subroutine magdif_direct
 
   !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
