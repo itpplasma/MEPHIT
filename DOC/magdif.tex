@@ -123,6 +123,9 @@
 \newcommand*\pd[2][]{\ensuremath{\frac{\partial #1}{\partial #2}}}  % partial derivative
 \newcommand*\td[2][]{\ensuremath{\frac{\diff #1}{\diff #2}}}  % total derivative
 \newcommand*\norm[1]{\ensuremath{\left \lVert #1 \right \rVert}}  % norm
+\newcommand*\Bvac{\ensuremath{\delta \vec{B}_{\text{v}}}}  % vacuum field
+\newcommand*\Bplas{\ensuremath{\delta \vec{B}_{\text{p}}}}  % plasma response
+\newcommand*\Bpert{\ensuremath{\delta \vec{B}}}  % full perturbation
 \newcommand*\pol{\ensuremath{\textrm{pol}}}  % poloidal
 \newcommand*\tor{\ensuremath{\textrm{tor}}}  % toroidal
 \newcommand*\fs{\ensuremath{\textrm{f}}}  % flux surface edge label
@@ -150,14 +153,14 @@ For the intended application on stationary (compared to MHD mode eigenfrequencie
 \end{align}
 Starting with a given MHD equilibrium fulfilling \cref{eq:mhd-gen,eq:divfree-gen} denoted by subscripts "$0$", linear order equations for an external magnetic perturbation (denoted by $\delta$) split into a vacuum and a plasma part (subscript $\text{v}$ and $\text{p}$, respectively) are
 \begin{align}
-  \nabla \delta p &= \frac{1}{c} \left( \vec{j}_{0} \times \delta \vec{B} + \delta \vec{j} \times \vec{B}_{0} \right), \label{eq:mhd} \\
-  \delta \vec{B} &= \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}}, \\
-  \delta \vec{B}_{\text{v}} &= \frac{1}{c} \oint \frac{I_{\text{c}}(\vec{r}') \, \diff \vec{l}' \times \vec{r}}{\lvert \vec{r} - \vec{r}' \rvert^{3}}, \\
-  \delta \vec{B}_{\text{p}} &= \nabla \times \delta \vec{A}, \\
+  \nabla \delta p &= \frac{1}{c} \left( \vec{j}_{0} \times \Bpert + \delta \vec{j} \times \vec{B}_{0} \right), \label{eq:mhd} \\
+  \Bpert &= \Bvac + \Bplas, \\
+  \Bvac &= \frac{1}{c} \oint \frac{I_{\text{c}}(\vec{r}') \, \diff \vec{l}' \times \vec{r}}{\lvert \vec{r} - \vec{r}' \rvert^{3}}, \\
+  \Bplas &= \nabla \times \delta \vec{A}, \\
   \nabla \times (\nabla \times \delta \vec{A}) &= \frac{4 \pi}{c} \delta \vec{j}, \label{eq:ampere} \\
-  \Rightarrow \nabla \cdot \delta \vec{B} &= \nabla \cdot \delta \vec{j} = 0. \label{eq:divfree}
+  \Rightarrow \nabla \cdot \Bpert &= \nabla \cdot \delta \vec{j} = 0. \label{eq:divfree}
 \end{align}
-Here the perturbation field in vacuum, $\delta \vec{B}_{\text{v}}$, is pre-evaluated by a \textsc{Biot-Savart} integral over external\footnote{i.e.\ entirely outside the plasma region} coil currents $I_{\text{c}} (\vec{r}')$. This induces a plasma response, resulting in the current density perturbation $\delta \vec{j}$. The perturbation field from currents within the plasma, $\delta \vec{B}_{\text{p}}$, is in turn computed from $\delta \vec{j}$, again giving rise to a plasma response current. Now, the linearized force balance \cref{eq:mhd} is used to compute $\delta \vec{j}$ for given $\delta \vec{B}$ whereas \cref{eq:ampere} yields $\delta \vec{B}_{\text{p}}$ for given $\delta \vec{j}$.
+Here the perturbation field in vacuum, $\Bvac$, is pre-evaluated by a \textsc{Biot-Savart} integral over external\footnote{i.e.\ entirely outside the plasma region} coil currents $I_{\text{c}} (\vec{r}')$. This induces a plasma response, resulting in the current density perturbation $\delta \vec{j}$. The perturbation field from currents within the plasma, $\Bplas$, is in turn computed from $\delta \vec{j}$, again giving rise to a plasma response current. Now, the linearized force balance \cref{eq:mhd} is used to compute $\delta \vec{j}$ for given $\Bpert$ whereas \cref{eq:ampere} yields $\Bplas$ for given $\delta \vec{j}$.
 
 The solution of \cref{eq:mhd} can further be split into two steps: First the pressure perturbation $\delta p$ is found, and then the plasma current density $\delta \vec{j}$ is computed using the condition $\nabla \cdot \delta \vec{j} = 0$. For an unperturbed equilibrium with nested flux surfaces, both steps can be performed in a radially local manner if a field-aligned computational grid is used, which will become clear in the following sections. Radial coupling happens by the combination of the two individual steps since their effective radial locations of computation are shifted by a half-step in radial grid distance.
 
@@ -168,74 +171,80 @@ The solution of \cref{eq:mhd} can further be split into two steps: First the pre
 
 With abstract operators $\hat{P}$ for the computation in \cref{eq:mhd} and $\hat{M}$ for the computation in \cref{eq:ampere}, this can be written in compact form:
 \begin{align}
-  \delta \vec{j} &= \hat{P} \delta \vec{B} = \hat{P} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}} \right ), \\
-  \delta \vec{B}_{\text{p}} &= \hat{M} \delta \vec{j}.
+  \delta \vec{j} &= \hat{P} \Bpert = \hat{P} \left ( \Bvac + \Bplas \right ), \\
+  \Bplas &= \hat{M} \delta \vec{j}.
 \end{align}
 Substituting for $\delta \vec{j}$ and using a shorthand $\hat{K} = \hat{M} \hat{P}$ gives
 \begin{align}
-  \hat{K} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}} \right ) &= \delta \vec{B}_{\text{p}}, \label{eq:K_fixed-point} \\
-  \hat{K} \delta \vec{B}_{\text{v}} &= \left ( \hat{1} - \hat{K} \right ) \delta \vec{B}_{\text{p}}, \\
-  \left ( \hat{1} - \hat{K} \right )^{-1} \hat{K} \delta \vec{B}_{\text{v}} &= \delta \vec{B}_{\text{p}}.
+  \hat{K} \left ( \Bvac + \Bplas \right ) &= \Bplas, \label{eq:K_fixed-point} \\
+  \hat{K} \Bvac &= \left ( \hat{1} - \hat{K} \right ) \Bplas, \\
+  \left ( \hat{1} - \hat{K} \right )^{-1} \hat{K} \Bvac &= \Bplas.
 \end{align}
 The first term can be rewritten in the form of a \textsc{Neumann} series, a generalisation of geometric series to operators, assuming the series converges:
 \begin{gather}
-  \left ( \hat{1} - \hat{K} \right )^{-1} = \sum_{k = 0}^{\infty} \hat{K}^{k}.
+  \left ( \hat{1} - \hat{K} \right )^{-1} = \sum_{k = 0}^{\infty} \hat{K}^{k}. \label{eq:Neumann_series}
 \end{gather}
-This way a consistent solution for $\delta \vec{B}_{\text{p}}$ can be computed from $\delta \vec{B}_{\text{v}}$ by repeated application of $\hat{K}$, given explicitly by the infinite series
+This way a consistent solution for $\Bplas$ can be computed from $\Bvac$ by repeated application of $\hat{K}$, given explicitly by the infinite series
 \begin{gather}
-  \delta \vec{B}_{\text{p}} = \left ( \hat{1} + \hat{K} + \hat{K}^{2} + \dotsb \right ) \hat{K} \delta \vec{B}_{\text{v}} = \sum_{k = 1}^{\infty} \hat{K}^{k} \delta \vec{B}_{\text{v}} = \sum_{k = 1}^{\infty} \delta \vec{B}_{\text{p}}^{(k)}. \label{eq:K_series}
+  \Bplas = \left ( \hat{1} + \hat{K} + \hat{K}^{2} + \dotsb \right ) \hat{K} \Bvac = \sum_{k = 1}^{\infty} \hat{K}^{k} \Bvac = \sum_{k = 1}^{\infty} \Bpert^{(k)}. \label{eq:K_series}
 \end{gather}
 In \cref{eq:K_series} each term is given by the recurrence relation
 \begin{gather}
-  \delta \vec{B}_{\text{p}}^{(k+1)} = \hat{K} \delta \vec{B}_{\text{p}}^{(k)}.
+  \Bpert^{(k+1)} = \hat{K} \Bpert^{(k)}.
 \end{gather}
 Adding the vacuum field as the initial value,
 \begin{gather}
-  \delta \vec{B}_{\text{p}}^{(0)} = \delta \vec{B}_{\text{v}}
+  \Bpert^{(0)} = \Bvac
 \end{gather}
 the series' terms are accumulated for the self-consistent solution:
 \begin{gather}
-  \delta \vec{B} = \sum_{k = 0}^{\infty} \delta \vec{B}_{\text{p}}^{(k)}.
+  \Bpert = \sum_{k = 0}^{\infty} \Bpert^{(k)}.
 \end{gather}
 Alternatively, \cref{eq:K_fixed-point} can be expanded,
 \begin{gather}
-  \delta \vec{B}_{\text{p}} = \hat{K} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}} \right ) = \hat{K} \left ( \delta \vec{B}_{\text{v}} + \hat{K} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}} \right ) \right ) = \dotsb,
+  \Bplas = \hat{K} \left ( \Bvac + \Bplas \right ) = \hat{K} \left ( \Bvac + \hat{K} \left ( \Bvac + \Bplas \right ) \right ) = \dotsb,
 \end{gather}
-yielding a fixed-point iteration for $\delta \vec{B}_{\text{p}}$:
+yielding a fixed-point iteration for $\Bpert$:
 \begin{gather}
-  \delta \vec{B}_{\text{p}}^{[k+1]} = \hat{K} \left ( \delta \vec{B}_{\text{v}} + \delta \vec{B}_{\text{p}}^{[k]} \right ).
+  \Bpert^{[k+1]} = \hat{K} \Bpert^{[k]} + \Bvac.
 \end{gather}
-Compared to the previous approach, this one is cumulative, i.e. it immediately produces the next approximation of the plasma perturbation. In other words, it corresponds to the sequence of partial sums of the previous infinite series:
+Compared to the previous approach, this one is cumulative, i.e. it immediately produces the next approximation of the full perturbation. In other words, it corresponds to the sequence of partial sums of the previous infinite series:
 \begin{gather}
-  \delta \vec{B}_{\text{p}}^{[n]} = \sum_{k = 1}^{n} \delta \vec{B}_{\text{v}}^{(k)}. \label{eq:K_partial_sum}
+  \Bpert^{[n]} = \sum_{k = 0}^{n} \Bpert^{(k)}. \label{eq:K_partial_sum}
 \end{gather}
-For this to be consistent, the initial value is taken to be zero,
+For this to be consistent, the initial value is also given by the vacuum field,
 \begin{gather}
-  \delta \vec{B}_{\text{p}}^{[0]} = \vec{0},
+  \Bpert^{[0]} = \Bvac.
 \end{gather}
-which makes sense since it represents the empty sum. As a consequence, even though the vacuum field is added in every iteration step, the final result does not contain the vacuum field. In the previous approach, the sumamtion can simply be extended to $k = 0$; here, it has to be added explicitly after the last iteration. For illustration, both approaches are compared side-by-side in \cref{tab:comp_iter}.
-\begin{table}[htb]
+For illustration, both approaches are compared side-by-side in \cref{tab:comp_iter}.
+\begin{table}[bth]
   \begin{align*}
-    \text{iteration step:} && \delta \vec{B}_{\text{p}}^{(k)} &= \hat{K} \delta \vec{B}_{\text{p}}^{(k-1)} & \delta \vec{B}_{\text{p}}^{[k]} &= \hat{K} \left ( \delta \vec{B}_{\text{p}}^{[k-1]} + \delta \vec{B}_{\text{v}} \right ), \\
-    \text{initial value:} && \delta \vec{B}_{\text{p}}^{(0)} &= \delta \vec{B}_{\text{v}} & \delta \vec{B}_{\text{p}}^{[0]} &= \vec{0}, \\
-    \text{step 1:} && \delta \vec{B}_{\text{p}}^{(1)} &= \hat{K} \delta \vec{B}_{\text{p}}^{(0)} = \hat{K} \delta \vec{B}_{\text{v}} & \delta \vec{B}_{\text{p}}^{[1]} &= \hat{K} \left ( \delta \vec{B}_{\text{p}}^{[0]} + \delta \vec{B}_{\text{v}} \right ) = \hat{K} \delta \vec{B}_{\text{v}}, \\
-    \text{step 2:} && \delta \vec{B}_{\text{p}}^{(2)} &= \hat{K} \delta \vec{B}_{\text{p}}^{(1)} = \hat{K}^{2} \delta \vec{B}_{\text{v}} & \delta \vec{B}_{\text{p}}^{[2]} &= \hat{K} \left ( \delta \vec{B}_{\text{p}}^{[1]} + \delta \vec{B}_{\text{v}} \right ) = \left ( \hat{K}^{2} + \hat{K} \right ) \delta \vec{B}_{\text{v}}, \\
-    \text{explicit form:} && \delta \vec{B}_{\text{p}}^{(n)} &= \hat{K}^{n} \delta \vec{B}_{\text{v}} & \delta \vec{B}_{\text{p}}^{[n]} &= \sum_{k = 1}^{n} \hat{K}^{k} \delta \vec{B}_{\text{v}}, \\
-    \text{full plasma response:} && \delta \vec{B}_{\text{p}} &= \sum_{k = 1}^{\infty} \hat{K}^{n} \delta \vec{B}_{\text{v}} & \delta \vec{B}_{\text{p}} &= \delta \vec{B}_{\text{p}}^{[\infty]}, \\
-    \text{full perturbation:} && \delta \vec{B} &= \sum_{k = 0}^{\infty} \hat{K}^{n} \delta \vec{B}_{\text{v}} & \delta \vec{B} &= \delta \vec{B}_{\text{p}}^{[\infty]} + \delta \vec{B}_{\text{v}}
+    \text{iteration step:} && \Bpert^{(k)} &= \hat{K} \Bpert^{(k-1)} & \Bpert^{[k]} &= \hat{K} \Bpert^{[k-1]} + \Bvac, \\
+    \text{initial value:} && \Bpert^{(0)} &= \Bvac & \Bpert^{[0]} &= \Bvac, \\
+    \text{step 1:} && \Bpert^{(1)} &= \hat{K} \Bpert^{(0)} = \hat{K} \Bvac & \Bpert^{[1]} &= \hat{K} \Bpert^{[0]} + \Bvac = \hat{K} \Bvac + \Bvac, \\
+    \text{step 2:} && \Bpert^{(2)} &= \hat{K} \Bpert^{(1)} = \hat{K}^{2} \Bvac & \Bpert^{[2]} &= \hat{K} \Bpert^{[1]} + \Bvac = \left ( \hat{K}^{2} + \hat{K} + \hat{I} \right ) \Bvac, \\
+    \text{explicit form:} && \Bpert^{(n)} &= \hat{K}^{n} \Bvac & \Bpert^{[n]} &= \sum_{k = 0}^{n} \hat{K}^{k} \Bvac, \\
+    \text{full perturbation:} && \Bpert &= \sum_{k = 0}^{\infty} \hat{K}^{n} \Bvac & \Bpert &= \Bpert^{[\infty]}, \\
+    \text{full plasma response:} && \Bplas &= \sum_{k = 1}^{\infty} \hat{K}^{n} \Bvac & \Bplas &= \Bpert^{[\infty]} - \Bvac.
   \end{align*}
   \caption{Comparison of iteration with series (non-cumulative) and sequence (cumulative)}
   \label{tab:comp_iter}
 \end{table}
-For Arnoldi iterations, the cumulative approach is more convenient. To reproduce the intermediate summands, we use \cref{eq:K_partial_sum} and arrive at
+For the implementation of preconditioned iterations (see \cref{sec:Arnoldi}), the cumulative approach is more convenient. To reproduce the intermediate summands, we use \cref{eq:K_partial_sum} and arrive at
 \begin{gather}
-  \delta \vec{B}_{\text{p}}^{(k)} = \delta \vec{B}_{\text{p}}^{[k]} - \delta \vec{B}_{\text{p}}^{[k-1]}.
+  \Bpert^{(k)} = \Bpert^{[k]} - \Bpert^{[k-1]}.
 \end{gather}
 
-\subsection{Enhanced convergence with Arnoldi iterations}
+\subsection{Enhanced convergence with preconditioned iterations}
 \label{sec:Arnoldi}
 
-Assuming the linear operator $\hat{K}$ is non-singular, we get an eigendecomposition
+Both approaches outlined in \cref{sec:iteration} hinge on the convergence of the \textsc{Neumann} series in \cref{eq:Neumann_series}. The convergence criterion for the similar geometric series of scalars is not directly applicable to operators, but to their corresponding spectrum of eigenvalues. Thus we shall now consider a discretized equation of finite dimension $N$.
+
+We start from the fixed-point iteration of the previous section which has the general form
+\begin{gather}
+  \vec{x} = \hat{K} \vec{x} + \vec{x}_{0}. \label{eq:Arnoldi_fixed_point}
+\end{gather}
+$\vec{x}$ serves as a shorthand for $\Bpert$ and a reminder that the derivations in this section are not just valid for the specific problem of calculating magnetic fields. Similarly, $\vec{x}_{0}$ stands in for $\Bvac$.  Assuming the linear operator $\hat{K}$ is non-singular, we can formally write down an eigendecomposition
 \begin{gather}
   \hat{K} = \hat{V} \hat{\Lambda} \hat{V}^{-1},
 \end{gather}
@@ -248,20 +257,48 @@ where $\hat{\Lambda}$ is a diagonal matrix with the eigenvalues,
     & & & \lambda_{N}
   \end{pmatrix} = \vec{\lambda} \hat{I},
 \end{gather}
-and $\hat{V}$ contains the corresponding eigenvectors as its columns,
+$\hat{V}$ contains the corresponding eigenvectors as its columns,
 \begin{gather}
   \hat{V} = \left ( \vec{v}_{1}, \vec{v}_{2}, \dotsc, \vec{v}_{N} \right ),
 \end{gather}
-and $\hat{V}^{-1}$ is the inverse of $\hat{V}$. Repeated application of $\hat{K}$ then simplifies to
+and $\hat{V}^{-1}$ is the inverse of $\hat{V}$. $\vec{x}$ can then be expressed in the eigenbasis with components $x_{k}'$,
 \begin{gather}
-  \hat{K}^{k} = \underbrace{\left ( \hat{V} \hat{\Lambda} \hat{V}^{-1} \right ) \left ( \hat{V} \hat{\Lambda} \hat{V}^{-1} \right ) \dotsb \left ( \hat{V} \hat{\Lambda} \hat{V}^{-1} \right )}_{k} = \hat{V} \hat{\Lambda}^{k} \hat{V}^{-1}.
+  \vec{x} = \sum_{k = 1}^{N} x_{k}' \vec{v}_{k} = \hat{V} \vec{x}',
 \end{gather}
+and transformed back to the original basis by the inverse,
+\begin{gather}
+  \vec{x}' = \hat{V}^{-1} \vec{x}.
+\end{gather}
+Rearrangig \cref{eq:Arnoldi_fixed_point} to
+\begin{gather}
+  \left ( \hat{I} - \hat{K} \right ) \vec{x} = \vec{x}_{0},
+\end{gather}
+multiplying from the left with $\hat{V}^{-1}$ and expanding in the eigenbasis yields
+\begin{gather}
+  \Bigl ( \underbrace{\hat{V}^{-1} \hat{I} \hat{V}}_{\hat{I}} - \hat{\Lambda} \Bigr ) \vec{x}' = \vec{x}_{0}'.
+\end{gather}
+Solving for $\vec{x}'$ gives
+\begin{gather}
+  \vec{x}' = \left ( \hat{I} - \hat{K} \right )^{-1} \vec{x}_{0}' = \begin{pmatrix}
+    \frac{1}{1 - \lambda_{1}} & & & \\
+    & \frac{1}{1 - \lambda_{2}} & & \\
+    & & \ddots & \\
+    & & & \frac{1}{1 - \lambda_{N}}
+  \end{pmatrix} \begin{pmatrix} x_{01}' \\ x_{02}' \\ \vdots \\ x_{0N}' \end{pmatrix}, \label{eq:direct_inversion}
+\end{gather}
+which can then be transformed back to the original basis. This approach yields a solution without resorting to series expansion and associated considerations of convergence, instead inverting the matrix directly. On the other hand, full diagonalization of $\hat{K}$ is computationally expensive, but partial diagonalization can be used to enhance convergence, or permit convergence at all, as will be seen below.
+
+Applying the eigendecomposition to the operator series, we see that repeated application of $\hat{K}$ simplifies to
+\begin{gather}
+  \hat{K}^{n} \vec{x}_{0} = \underbrace{\left ( \hat{V} \hat{\Lambda} \hat{V}^{-1} \right ) \left ( \hat{V} \hat{\Lambda} \hat{V}^{-1} \right ) \dotsb \left ( \hat{V} \hat{\Lambda} \hat{V}^{-1} \right )}_{k} \vec{x}_{0}= \hat{V} \hat{\Lambda}^{n} \hat{V}^{-1} \vec{x}_{0} = \hat{V} \hat{\Lambda}^{n} \vec{x}_{0}' = \sum_{k = 1}^{N} \lambda_{k}^{n} x_{0 k}' \vec{v}_{k}.
+\end{gather}
+Comparing this to the solution in \cref{eq:direct_inversion}, it becomes apparent that convergence of the \textsc{Neumann} operator series is equivalent the convergence of the geometric series of eigenvalues.
 
 [\ldots]
 
 \section{Geometrical considerations}
 
-Here we limit the analysis to an axisymmetric unperturbed equilibrium and a single toroidal perturbation harmonic $\delta \vec{B} = \Real (\vec{B}_{n} \e^{\im n \phi})$ with a similar notation for other perturbed quantities. As all equations are linear, a superposition of multiple harmonics is easily possible. Note that $n \neq 0$; such a perturbation is necessarily small and considered part of the axisymmetric equilibrium.
+Here we limit the analysis to an axisymmetric unperturbed equilibrium and a single toroidal perturbation harmonic $\Bpert = \Real (\vec{B}_{n} \e^{\im n \phi})$ with a similar notation for other perturbed quantities. As all equations are linear, a superposition of multiple harmonics is easily possible. Note that $n \neq 0$; such a perturbation is necessarily small and considered part of the axisymmetric equilibrium.
 % clarify why/whether $n = 0$ is in fact negligible
 
 In axisymmetric coordinate systems, such as cylindrical $(R, \phi, Z)$, the equations to solve for harmonics in the toroidal angle $\phi$ are
@@ -603,11 +640,11 @@ The axisymmetric equilibrium field $\vec{B}_{0}$ lies on nested flux surfaces $\
 \end{gather*}
 If the perturbed field shall still lie on distorted, but not broken, flux surfaces (non-resonant, without magnetic islands), a new flux surface label $\psi + \delta \psi$ must exist fulfilling
 \begin{gather*}
-  (\vec{B}_{0} + \delta \vec{B}) \cdot \nabla (\psi + \delta \psi) = 0
+  (\vec{B}_{0} + \Bpert) \cdot \nabla (\psi + \delta \psi) = 0
 \end{gather*}
-for the perturbed magnetic field $\vec{B}_{0} + \delta \vec{B}$, where $\delta \psi$ remains small and continuous within the plasma. In that case we can use a linear order expansion
+for the perturbed magnetic field $\vec{B}_{0} + \Bpert$, where $\delta \psi$ remains small and continuous within the plasma. In that case we can use a linear order expansion
 \begin{gather*}
-  \underbrace{\vec{B}_{0} \cdot \nabla \psi}_{= 0} + \vec{B}_{0} \cdot \nabla \delta \psi + \delta \vec{B} \cdot \nabla \psi + \mathcal{O}(\varepsilon^{2}) = 0,
+  \underbrace{\vec{B}_{0} \cdot \nabla \psi}_{= 0} + \vec{B}_{0} \cdot \nabla \delta \psi + \Bpert \cdot \nabla \psi + \mathcal{O}(\varepsilon^{2}) = 0,
 \end{gather*}
 or in coordinate form with symmetry flux coordinates $(\rho, \theta, \zeta)$,
 \begin{gather*}
@@ -640,7 +677,7 @@ so, to generate a non-resonant field, we are allowed to use any value
 \begin{gather*}
   B_{n}^{\psi} = C(\psi) \frac{B_{0 \phi}}{R^{2}},
 \end{gather*}
-where $C(\psi)$ is a flux function. The other components of $\delta \vec{B}$ are not relevant for the resonance condition and just need to fulfill divergence-freeness. Thus we proceed as in \cref{sec:compute_currn} and find fluxes through triangle edges:
+where $C(\psi)$ is a flux function. The other components of $\Bpert$ are not relevant for the resonance condition and just need to fulfill divergence-freeness. Thus we proceed as in \cref{sec:compute_currn} and find fluxes through triangle edges:
 \begin{gather}
   \int_{\Gamma_{\inw}, \Gamma_{\out}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} = -\int_{\Gamma_{\fs}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} - \im n \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi}. \label{eq:Bn_divfree}
 \end{gather}
@@ -752,8 +789,8 @@ Now an approximation can be made by switching from contravariant components to c
   \midrule
   \endhead
   $\vec{B}$ & magnetic field strength, measured in Gauss \\
-  $\delta \vec{B}_{\text{p}}$ & perturbation field from \emph{p}lasma current \\
-  $\delta \vec{B}_{\text{v}}$ & perturbation field in \emph{v}acuum (from external coils) \\
+  $\Bplas$ & perturbation field from \emph{p}lasma current \\
+  $\Bvac$ & perturbation field in \emph{v}acuum (from external coils) \\
   $C$ & arbitrary constant (of integration) \\
   $c$ & speed of light in centimetres per second \\
   $\e$ & \textsc{Euler}'s constant, base of natural logarithm \\
@@ -820,13 +857,13 @@ Now an approximation can be made by switching from contravariant components to c
 
 \section{Fourier transform of vector quantitites}
 
-$\delta \vec{B}$ in symmetry flux coordinates $(\rho, \theta, \phi)$ is given as the \textsc{Fourier} series
+$\Bpert$ in symmetry flux coordinates $(\rho, \theta, \phi)$ is given as the \textsc{Fourier} series
 \begin{gather}
   \delta B^{k} (\rho, \theta, \phi) = B_{m n}^{k}(\rho) \e^{-\im n \phi} \e^{-\im m \theta}.
 \end{gather}
-$\delta \vec{B}$ is also divergence-free and assuming $g = g(\rho, \theta)$, we get
+$\Bpert$ is also divergence-free and assuming $g = g(\rho, \theta)$, we get
 \begin{align}
-  0 &= \nabla \cdot \delta \vec{B} = \frac{1}{\sqrt{g}} \partial_{k} \left( \sqrt{g} \delta B^{k} \right) = \frac{1}{\sqrt{g}} \partial_{k} \left( \sqrt{g} B_{m n}^{k} \e^{-\im n \phi} \e^{-\im m \theta} \right) = \\
+  0 &= \nabla \cdot \Bpert = \frac{1}{\sqrt{g}} \partial_{k} \left( \sqrt{g} \delta B^{k} \right) = \frac{1}{\sqrt{g}} \partial_{k} \left( \sqrt{g} B_{m n}^{k} \e^{-\im n \phi} \e^{-\im m \theta} \right) = \\
     &= \frac{1}{\sqrt{g}} \partial_{\rho} \left( \sqrt{g} B_{m n}^{\rho} \right) \e^{-\im n \phi} \e^{-\im m \theta} + B_{m n}^{\phi} \partial_{\phi} \left( \e^{-\im n \phi} \right) \e^{-\im m \theta} + \frac{1}{\sqrt{g}} \partial_{\theta} \left( \sqrt{g} \e^{-\im m \theta} \right) B_{m n}^{\theta} \e^{-\im n \phi} = \\
     &= \underbrace{\e^{-\im n \phi} \e^{-\im m \theta}}_{\neq 0} \left( \frac{\partial_{\rho} \sqrt{g}}{\sqrt{g}} B_{m n}^{\rho} + \partial_{\rho} B_{m n}^{\rho} - \im n B_{m n}^{\phi}  + \frac{\partial_{\theta} \sqrt{g}}{\sqrt{g}} B_{m n}^{\theta} - \im m B_{m n}^{\theta} \right).
 \end{align}

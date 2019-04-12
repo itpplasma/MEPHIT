@@ -256,15 +256,13 @@ contains
     complex(dp) :: Bnflux_diff(ntri, 3)
     complex(dp) :: Bnphi_diff(ntri)
 
-    Bnflux = (0d0, 0d0)
-    Bnphi = (0d0, 0d0)
     do kiter = 1, niter
        if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter
        Bnflux_prev = Bnflux
        Bnphi_prev = Bnphi
+       call magdif_single
        Bnflux = Bnflux + Bnflux_vac
        Bnphi = Bnphi + Bnphi_vac
-       call magdif_single
        Bnflux_diff = Bnflux - Bnflux_prev
        Bnphi_diff = Bnphi - Bnphi_prev
        call write_vector_dof(Bnflux_diff, Bnphi_diff, &
@@ -277,8 +275,6 @@ contains
             decorate_filename(currn_file, 'plot_', kiter))
        call write_scalar_dof(presn, decorate_filename(presn_file, '', kiter))
     end do
-    Bnflux = Bnflux + Bnflux_vac
-    Bnphi = Bnphi + Bnphi_vac
     call compute_presn
     call compute_currn
     call write_vector_dof(Bnflux, Bnphi, Bn_file)
