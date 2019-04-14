@@ -15,9 +15,9 @@ FC = gfortran
 FD = -cpp
 endif
 #OPTS = -O3 -M OBJS  #-fp-model strict
-OPTS = -O3 -J OBJS  #-fp-model strict
+#OPTS = -O3 -J OBJS  #-fp-model strict
 ifeq ($(DEBUG), YES)
-OPTS= -O0 -cpp -g -J OBJS -fbounds-check
+OPTS= -O0 -cpp -g -J ../PRELOAD/OBJS -fbounds-check
 endif
 #OPTZ = -O3 -module OBJS  #-fp-model strict 
 

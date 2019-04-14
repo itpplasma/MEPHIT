@@ -22,7 +22,7 @@ find_package(SuperLU REQUIRED)
 include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
 
 ### Set compiler flags
-set(CMAKE_Fortran_FLAGS "-O2 -g -fbounds-check -Wall")
+set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fbounds-check -Wall")
 
 ### Define libraries
 add_library(magdif SHARED
@@ -32,6 +32,7 @@ add_library(magdif SHARED
   PRELOAD/SRC/bdivfree.f90
   PRELOAD/SRC/orbit_mod.f90
   PRELOAD/SRC/mesh_mod.f90
+  RUN/SRC/arnoldi.f90
   MHD/SRC/sparse_mod.f90
   MHD/SRC/magdif.f90
   MHD/SRC/magdif_config.f90

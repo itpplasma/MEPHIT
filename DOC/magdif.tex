@@ -1,4 +1,4 @@
-\documentclass[a4paper, 10pt, english]{article}
+\documentclass[a4paper, twoside, 10pt, english]{article}
 \setlength\overfullrule{5pt}
 
 % (La)TeX stuff
@@ -13,7 +13,7 @@
 \usepackage{ulem}
 \usepackage{amsmath}  % [fleqn]
 \allowdisplaybreaks[1]
-%\numberwithin{equation}{section}
+\numberwithin{equation}{section}
 \usepackage[math-style=ISO, bold-style=ISO]{unicode-math}
 \DeclareSymbolFont{AMSb}{U}{msb}{m}{n}
 \protected\def\mathbb#1{{\mathchar\numexpr256*\symAMSb+`#1\relax}}
@@ -75,7 +75,10 @@
 \usepackage[margin=2cm, head=15pt, includehead, includefoot]{geometry}
 \usepackage[bottom, stable, perpage]{footmisc}
 \usepackage{fancyhdr}
-\cfoot{\thepage/\pageref{LastPage}}
+\fancyhf{}
+\fancyfoot[C]{\thepage/\pageref{LastPage}}
+\fancyhead[RO]{\textsl{\rightmark}}
+\fancyhead[LE]{\textsl{\leftmark}}
 \pagestyle{fancy}
 \renewcommand{\sectionmark}[1]{\markboth{\thesection~#1}{}}
 \renewcommand{\subsectionmark}[1]{\markright{\thesubsection~#1}}
@@ -269,9 +272,9 @@ and transformed back to the original basis by the inverse,
 \begin{gather}
   \vec{x}' = \hat{V}^{-1} \vec{x}.
 \end{gather}
-Rearrangig \cref{eq:Arnoldi_fixed_point} to
+Rearranging \cref{eq:Arnoldi_fixed_point} to
 \begin{gather}
-  \left ( \hat{I} - \hat{K} \right ) \vec{x} = \vec{x}_{0},
+  \left ( \hat{I} - \hat{K} \right ) \vec{x} = \vec{x}_{0}, \label{eq:Arnoldi_direct}
 \end{gather}
 multiplying from the left with $\hat{V}^{-1}$ and expanding in the eigenbasis yields
 \begin{gather}
@@ -279,7 +282,7 @@ multiplying from the left with $\hat{V}^{-1}$ and expanding in the eigenbasis yi
 \end{gather}
 Solving for $\vec{x}'$ gives
 \begin{gather}
-  \vec{x}' = \left ( \hat{I} - \hat{K} \right )^{-1} \vec{x}_{0}' = \begin{pmatrix}
+  \vec{x}' = \left ( \hat{I} - \hat{\Lambda} \right )^{-1} \vec{x}_{0}' = \begin{pmatrix}
     \frac{1}{1 - \lambda_{1}} & & & \\
     & \frac{1}{1 - \lambda_{2}} & & \\
     & & \ddots & \\
@@ -292,9 +295,111 @@ Applying the eigendecomposition to the operator series, we see that repeated app
 \begin{gather}
   \hat{K}^{n} \vec{x}_{0} = \underbrace{\left ( \hat{V} \hat{\Lambda} \hat{V}^{-1} \right ) \left ( \hat{V} \hat{\Lambda} \hat{V}^{-1} \right ) \dotsb \left ( \hat{V} \hat{\Lambda} \hat{V}^{-1} \right )}_{k} \vec{x}_{0}= \hat{V} \hat{\Lambda}^{n} \hat{V}^{-1} \vec{x}_{0} = \hat{V} \hat{\Lambda}^{n} \vec{x}_{0}' = \sum_{k = 1}^{N} \lambda_{k}^{n} x_{0 k}' \vec{v}_{k}.
 \end{gather}
-Comparing this to the solution in \cref{eq:direct_inversion}, it becomes apparent that convergence of the \textsc{Neumann} operator series is equivalent the convergence of the geometric series of eigenvalues.
+Comparing this to the solution in \cref{eq:direct_inversion}, it becomes apparent that convergence of the \textsc{Neumann} operator series is equivalent to the convergence of the geometric series of all eigenvalues. Since the geometric series only converges for $\lvert \lambda_{k} \rvert < 1$ (and only reasonably fast for $\lvert \lambda_{k} \rvert \ll 1$), we need direct inversion for the largest eigenvalues, i.e.\ partial diagonalization. To find the largest eigenvalues, we use \textsc{Arnoldi} method summarized in \cref{app:Arnoldi}. This is a \textsc{Krylov} subspace method that reduces to the \textsc{Lanczos} method for Hermitian matrices and is also used as part of the generalized minimal residual method (GMRES). It does not involve matrix-matrix multiplication but only matrix-vector multiplication. Thus the matrix needs not be given explicitly, only its action on a given vector, which is fulfilled in our case for $\hat{K}$. Using the \textsc{Arnoldi} method will give us the largest $r$ eigenvalues, denoted as $\vec{\lambda}_{r}$ or equivalently $\hat{\Lambda}_{r}$ and commonly called \textsc{Ritz} eigenvalues, as well as an orthonormal set of associated eigenvectors, this time arranged in an $N \times r$ matrix $\hat{V}_{r}$. The latter span the \textsc{Krylov} subspace of the full eigenspace. Instead of the eigenvalue equation of full rank,
+\begin{gather}
+  \hat{K} \vec{v}_{k} = \lambda_{k} \vec{v}_{k} \quad \forall k = 1, 2, \dotsc, N,
+\end{gather}
+or equivalently,
+\begin{gather}
+  \hat{K} \hat{V} = \vec{\lambda} \hat{V} = \hat{V} \hat{\Lambda},
+\end{gather}
+we can write down the reduced eigenvalue equation in the \textsc{Krylov} subspace,
+\begin{gather}
+  \hat{K} \hat{V}_{r} = \vec{\lambda}_{r} \hat{V}_{r} = \hat{V}_{r} \hat{\Lambda}_{r}. \label{eq:reduced_eigvals}
+\end{gather}
+Note that, compared to the eigenvalue equation in full space, the $r \times r$ matrix $\hat{\Lambda}_{r}$ has to be to the right of the $N \times r$ matrix $\hat{V}_{r}$.
 
-[\ldots]
+With the largest $r$ eigenvalues now known, we want to find a preconditioner that modifies the direct iteration step in \cref{eq:Arnoldi_fixed_point} so that the largest eigenvalues don't contribute. Usually this is written by left-multiplying \cref{eq:Arnoldi_direct} by the inverse of a full-rank linear operator:
+\begin{gather}
+  \hat{\Pi}^{-1} \left ( \hat{I} - \hat{K} \right ) \vec{x} = \hat{\Pi}^{-1} \vec{x}_{0}. \label{eq:precon}
+\end{gather}
+We choose
+\begin{gather}
+  \hat{\Pi}^{-1} = \hat{I} - \hat{A}
+\end{gather}
+with some general matrix $\hat{A}$. \Cref{eq:precon} then becomes
+\begin{gather}
+  \left ( \hat{I} - \hat{A} - \left ( \hat{I} - \hat{A} \right ) \hat{K} \right ) \vec{x} = \left ( \hat{I} - \hat{A} \right ) \vec{x}_{0},
+\end{gather}
+which can be rearranged to resemble \cref{eq:Arnoldi_direct},
+\begin{gather}
+  \left ( \hat{I} - \hat{\bar{K}} \right ) \vec{x} = \bar{\vec{x}}_{0},
+\end{gather}
+with a modified iteration step
+\begin{gather}
+  \hat{\bar{K}} = \hat{A} + \left ( \hat{I} - \hat{A} \right ) \hat{K} \label{eq:Kbar}
+\end{gather}
+and a modified initial value
+\begin{gather}
+  \bar{\vec{x}}_{0} = \left ( \hat{I} - \hat{A} \right ) \vec{x}_{0}.
+\end{gather}
+By analogy, we can then write the explicit preconditioned iteration step as
+\begin{gather}
+  \bar{\vec{x}}^{[k+1]} = \hat{\bar{K}} \bar{\vec{x}}^{[k]} + \bar{\vec{x}}_{0}.
+\end{gather}
+Replacing the modified quantities according to their definitions and rearranging gives
+\begin{gather}
+  \bar{\vec{x}}^{[k+1]} = \hat{A} \bar{\vec{x}}^{[k]} + \left ( \hat{I} - \hat{A} \right ) \left ( \hat{K} \bar{\vec{x}}^{[k]} + \vec{x}_{0} \right ).
+\end{gather}
+Now the last term in parentheses reproduces the direct, unmodified iteration yielding an unmodified $\vec{x}^{[k+1]}$,
+\begin{gather}
+  \bar{\vec{x}}^{[k+1]} = \hat{A} \bar{\vec{x}}^{[k]} + \left ( \hat{I} - \hat{A} \right ) \vec{x}^{[k+1]},
+\end{gather}
+which can again be rearranged for a final result,
+\begin{gather}
+  \bar{\vec{x}}^{[k+1]} = \vec{x}^{[k+1]} - \hat{A} \left ( \vec{x}^{[k+1]} - \bar{\vec{x}}^{[k]} \right ).
+\end{gather}
+Compared to the direct iterations, only one additional matrix-vector multiplication is necessary. Now all we need is to compute $\hat{A}$. We required that the largest $r$ eigenvalues don't contribute to iterations, so we demand
+\begin{gather}
+  \hat{\bar{K}} \vec{v}_{k} \overset{!}{=} \vec{0} \quad \forall k \le r.
+\end{gather}
+This can be compactly rewritten and expanded via \cref{eq:Kbar,eq:reduced_eigvals} to give
+\begin{gather}
+  \hat{\bar{K}} \hat{V}_{r} = \hat{A} \hat{V}_{r} + \left ( \hat{I} - \hat{A} \right ) \hat{K} \hat{V}_{r} = \hat{A} \hat{V}_{r} + \left ( \hat{I} - \hat{A} \right ) \hat{V}_{r} \hat{\Lambda}_{r} \overset{!}{=} \hat{0}.
+\end{gather}
+This can in turn be rearranged to
+\begin{gather}
+  \hat{A} \hat{V}_{r} \left ( \hat{\Lambda}_{r} - \hat{I} \right ) \overset{!}{=} \hat{V}_{r} \hat{\Lambda}_{r}.
+\end{gather}
+Right-multiplying with the inverse of $\hat{\Lambda}_{r} - \hat{I}$ yields
+\begin{gather}
+  \hat{A} \hat{V}_{r} \overset{!}{=} \hat{V}_{r} \hat{\Lambda}_{r} \left ( \hat{\Lambda}_{r} - \hat{I} \right )^{-1}.
+\end{gather}
+Now $\hat{V}_{r}$ is not square and thus cannot be inverted, but we can add a unity term on the right-hand side:
+\begin{gather}
+  \hat{A} \hat{V}_{r} \overset{!}{=} \hat{V}_{r} \hat{\Lambda}_{r} \left ( \hat{\Lambda}_{r} - \hat{I} \right )^{-1} \left ( \hat{V}_{r}^{\dagger} \hat{V}_{r} \right )^{-1} \hat{V}_{r}^{\dagger} \hat{V}_{r}.
+\end{gather}
+By direct comparison it can be seen that a solution is given by
+\begin{gather}
+  \hat{A} \equiv \hat{V}_{r} \hat{\Lambda}_{r} \left ( \hat{\Lambda}_{r} - \hat{I} \right )^{-1} \left ( \hat{V}_{r}^{\dagger} \hat{V}_{r} \right )^{-1} \hat{V}_{r}^{\dagger}.
+\end{gather}
+The inner part can be grouped to the inverse of an $r \times r$ matrix $\hat{L}_{r}$,
+\begin{gather}
+  \hat{L}_{r} = \hat{V}_{r}^{\dagger} \hat{V}_{r} \left ( \hat{\Lambda}_{r} - \hat{I} \right ).
+\end{gather}
+This can then be conveniently inverted using the LAPACK routine \texttt{zgesv} to solve for $\hat{Y}$ in
+\begin{gather}
+  \hat{L}_{r} \hat{Y} = \hat{I}.
+\end{gather}
+Since $\hat{A}$ is constant during iterations, these computations only need to be done once before preconditioned iterations start.
+\begin{table}[htb]
+  \centering
+  \begin{tabular}{ll}
+    \toprule
+    Quantity & Dimension \\
+    \midrule
+    $\vec{x}$ & $N$ \\
+    $\vec{\lambda}_{r}$ & $r$ \\
+    $\vec{v}_{k}$ & $N$ \\
+    $\hat{\Lambda}_{r}$ & $r \times r$ \\
+    $\hat{V}_{r}$ & $N \times r$ \\
+    $\hat{V}_{r}^{\dagger}$ & $r \times N$ \\
+    $\hat{A}$ & $N \times N$ \\
+    $\hat{L}_{r}$ & $r \times r$ \\
+    \bottomrule
+  \end{tabular}
+  \caption{Dimensions of quantities used in derivation of preconditioned iterations}
+\end{table}
 
 \section{Geometrical considerations}
 
@@ -376,6 +481,8 @@ For each edge (length $l$) we use a local orthogonal coordinate system on each t
 \end{align}
 
 \section{Pre-processing of input data}
+
+[CLISTE / g-file / EQDSK]
 
 \subsection{Toroidal unperturbed current}
 
@@ -497,13 +604,13 @@ In matrix form this scheme is written as
 \begin{gather}
   K_{jk} p_{n}^{(k)} = s_{j},
 \end{gather}
-where the elements of the stiffness matrix $K$ are
+where the elements of the stiffness matrix $\hat{K}$ are
 \begin{gather}
   K_{jk} = (b_{j} + a_{j}) \delta_{j-1, k} + (b_{j} - a_{j}) \delta_{jk}.
 \end{gather}
 Note that for $N$ nodes with periodic boundary conditions $p_{n}^{(0)} = p_{n}^{(N)}$, indices "wrap around", resulting in the following shape for the stiffness matrix:
 \begin{gather*}
-  K = \begin{pmatrix}
+  \hat{K} = \begin{pmatrix}
     b_{1} - a_{1} &  b_{1} + a_{1} &        0       & \hdots &    0   \\
            0       & b_{2} - a_{2} &  b_{2} + a_{2} & \hdots &    0   \\
            0       &        0       & b_{3} - a_{3} & \hdots &    0   \\
@@ -624,7 +731,7 @@ For the global indexing scheme, we call the ingoing current into triangle $(k)$ 
 \begin{gather}
   K_{jk} I^{(k)} = s_{j},
 \end{gather}
-where the elements of the stiffness matrix $K$ are
+where the elements of the stiffness matrix $\hat{K}$ are
 \begin{gather}
   K_{jk} = \left( -1 - \frac{\im n S_{\Omega^{(j)}}}{2} \frac{B_{0 (\phi)} (\Gamma_{\inw}^{(j)})}{\symup{\Delta} \psi} \right) \delta_{jk} + \left( 1 - \frac{\im n S_{\Omega^{(j)}}}{2} \frac{B_{0 (\phi)} (\Gamma_{\out}^{(j)})}{\symup{\Delta} \psi} \right) \delta_{j+1, k}.
 \end{gather}
@@ -705,7 +812,7 @@ The system of linear equations to solve is
 \end{equation}
 with
 \begin{gather}
-  K_{jk} = \delta_{j-1, k} - \delta_{jk} = \begin{pmatrix}
+  K_{jk} = \delta_{j-1, k} - \delta_{jk} \rightarrow \hat{K} = \begin{pmatrix}
     -1   &    1   &    0   & \hdots &    0   \\
      0   &   -1   &    1   & \hdots &    0   \\
      0   &    0   &   -1   & \hdots &    0   \\
@@ -717,7 +824,7 @@ and
 \begin{gather}
   s_{j} = -\Psi_{\fs}^{(j)} - \im n \Psi_{\phi}^{(j)}.
 \end{gather}
-Since any one column in $K$ is a linear combination of all other columns, $K$ is of rank $N - 1$ and thus singular. To construct a solution, we first consider the homogenous case with $\vec{s} = \vec{0}$, which also determines the toroidal flux. The non-zero solution for the remaining degrees of freedom then assumes the simple form
+Since any one column in $\hat{K}$ is a linear combination of all other columns, $\hat{K}$ is of rank $N - 1$ and thus singular. To construct a solution, we first consider the homogenous case with $\vec{s} = \vec{0}$, which also determines the toroidal flux. The non-zero solution for the remaining degrees of freedom then assumes the simple form
 \begin{gather}
   \Psi^{(k)} = C_{0} \quad \forall k = 1, 2, \dotsc, N,
 \end{gather}
@@ -727,7 +834,7 @@ with an arbitrary constant $C_{0}$. With local indices, the degrees of freedom a
 \end{align}
 This means that flux conservation, i.e.\ divergence-freeness, is fulfilled by balancing $\Psi_{\phi}$ with $\Psi_{\fs}$ on each individual triangle and assigning a constant flux $C_{0}$ in poloidal direction to $\Psi_{\inw}$ and $\Psi_{\out}$ over the entire triangle strip.
 
-A consistent solution according to the \textsc{Rouché}-\textsc{Capelli} theorem can also be constructed for the inhomogeneous case, i.e.\ non-zero $\vec{s}$, as long as $\vec{s}$ is a linear combination of columns of $K$. Starting from the trivial (zero) solution to the homogeneous case and for a fixed $k$, we add to $\vec{s}$ the $(k+1)$-th column of $K$, multiplied by another arbitrary constant $C_{k}$, resulting in
+A consistent solution according to the \textsc{Rouché}-\textsc{Capelli} theorem can also be constructed for the inhomogeneous case, i.e.\ non-zero $\vec{s}$, as long as $\vec{s}$ is a linear combination of columns of $K$. Starting from the trivial (zero) solution to the homogeneous case and for a fixed $k$, we add to $\vec{s}$ the $(k+1)$-th column of $\hat{K}$, multiplied by another arbitrary constant $C_{k}$, resulting in
 \begin{align}
   s_{k} &= -\Psi_{\fs}^{(k)} - \im n \Psi_{\phi}^{(k)} = C_{k}, \\
   s_{k+1} &= -\Psi_{\fs}^{(k+1)} - \im n \Psi_{\phi}^{(k+1)} = -C_{k}.
@@ -796,17 +903,20 @@ Now an approximation can be made by switching from contravariant components to c
   $\e$ & \textsc{Euler}'s constant, base of natural logarithm \\
   $g$ & metric determinant \\
   $\vec{h}_{0}$ & unit vector of $\vec{B}_{0}$ \\
+  $\hat{I}$ & unit matrix \\
   $I$ & electric current \\
   $I_{\text{c}}$ & electric current produced by RMP \emph{c}oils \\
   $\im$ & imaginary unit, $\im^{2} = -1$ \\
   $\vec{j}$ & electric current density, measured in statampere \\
-  $K$ & stiffness matrix \\
+  $\hat{K}$ & combined linear operator $\hat{M} \hat{P}$ / stiffness matrix \\
   $\vec{l}$ & edge vector in counter-clockwise direction \\
   $l$ & length of edge \\
+  $\hat{M}$ & linear operator representing computation of the magnetic field from the currents via Ampère's equation \\
   $m$ & poloidal mode number \\
   $n$ & toroidal mode number \\
   $\vec{n}$ & outward pointing normal vector \\
   $N$ & dimension of system of linear equations \\
+  $\hat{P}$ & linear operator representing computation of the currents from the magnetic field via MHD equations \\
   $p$ & pressure, measured in dyne per square centimetre \\
   $q$ & safety factor \\
   $R$ & radial coordinate in cylindrical coordinates \\
@@ -854,6 +964,10 @@ Now an approximation can be made by switching from contravariant components to c
   \nabla \phi \perp \left( \nabla \psi, \nabla p_{0}, \vec{n}, \vec{l}, \vec{B}_{\bullet}^{\pol}, \vec{h}_{0}^{\pol}, \vec{j}_{\bullet}^{\pol}, \nabla p_{n} \right)
 \end{gather*}
 
+\section{\textsc{Arnoldi} iterations}
+\label{app:Arnoldi}
+
+[pseudocode \ldots]
 
 \section{Fourier transform of vector quantitites}
 
