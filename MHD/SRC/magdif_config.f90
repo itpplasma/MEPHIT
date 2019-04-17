@@ -17,7 +17,8 @@ module magdif_config
   logical :: nonres = .false.  !< use non-resonant test case
   logical :: quad_avg = .true. !< average over quadrilaterals for non-resonant test case
 
-  integer  :: niter = 20
+  integer  :: niter = 20      !< number of iterations
+  integer  :: nritz = 20      !< number of Ritz eigenvalues
   integer  :: n               !< harmonic index of perturbation
   integer  :: nkpol           !< number of knots per poloidal loop
   integer  :: nflux           !< number of flux surfaces
@@ -72,9 +73,9 @@ module magdif_config
   character(len = 1024) :: currn_file
 
   !> namelist for input parameters
-  namelist / settings / log_level, runmode, nonres, quad_avg, niter, n, nkpol, nflux, &
-       ti0, di0, damp, point_file, tri_file, Bn_nonres_file, Bn_vac_file, Bn_file, &
-       Bn_diff_file, fluxvar_file, presn_file, currn_file
+  namelist / settings / log_level, runmode, nonres, quad_avg, niter, nritz, n, &
+       nkpol, nflux, ti0, di0, damp, point_file, tri_file, Bn_nonres_file, &
+       Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, presn_file, currn_file
 
 contains
 

@@ -2,10 +2,10 @@ module magdif
   use from_nrtype, only: dp                                     ! PRELOAD/SRC/from_nrtype.f90
   use constants, only: pi, ev2erg                               ! PRELOAD/SRC/orbit_mod.f90
   use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, & ! PRELOAD/SRC/mesh_mod.f90
-       mesh_element_rmp, bphicovar, knot, triangle
-  use for_macrostep, only: t_min, d_min
-  use sparse_mod, only: sparse_solve, sparse_matmul
-  use magdif_config
+       bphicovar, knot, triangle
+  use for_macrostep, only: t_min, d_min                         ! PRELOAD/SRC/orbit_mod.f90
+  use sparse_mod, only: sparse_solve, sparse_matmul             ! MHD/SRC/sparse_mod.f90
+  use magdif_config                                             ! MHD/SRC/magdif_config.f90
 
   implicit none
 
@@ -233,7 +233,6 @@ contains
     if (allocated(j0phi)) deallocate(j0phi)
     if (allocated(mesh_point)) deallocate(mesh_point)
     if (allocated(mesh_element)) deallocate(mesh_element)
-    if (allocated(mesh_element_rmp)) deallocate(mesh_element_rmp)
     if (allocated(kp_max)) deallocate(kp_max)
     if (allocated(kt_max)) deallocate(kt_max)
     if (allocated(kp_low)) deallocate(kp_low)
@@ -280,6 +279,112 @@ contains
     call write_vector_dof(Bnflux, Bnphi, Bn_file)
     call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'))
   end subroutine magdif_direct
+
+  subroutine magdif_precon
+    use arnoldi_mod
+
+    integer :: kiter, ndim, i, j, info
+    complex(dp) :: Bnflux_diff(ntri, 3)
+    complex(dp) :: Bnphi_diff(ntri)
+    complex(dp) :: Bn(ntri * 4), Bn_prev(ntri * 4)
+    complex(dp) :: eigvals(nritz)
+    complex(dp), allocatable :: Lr(:,:), Yr(:,:)
+    integer, allocatable :: ipiv(:)
+
+    ! calculate eigenvectors
+    ieigen = 1
+    ! eigenvalues lower than this are not computed
+    ! currently redundant, as it is set within subroutine arnoldi
+    tol = 0.7d0
+    ! system dimension N ! - no need to include extended mesh
+    ndim = ntri * 4 ! kt_low(nflux+1) * 4
+    call arnoldi(ndim, nritz, eigvals, next_iteration)
+    if (log_info) then
+       write (logfile, *) 'Arnoldi method yields ', ngrow, ' Ritz eigenvalues < ', tol, ':'
+       do i = 1, ngrow
+          write (logfile, *) 'lambda ', i, ': ', eigvals(i)
+       end do
+    end if
+    allocate(Lr(ngrow, ngrow), Yr(ngrow,ngrow))
+    Yr = (0d0, 0d0)
+    do i = 1, ngrow
+       Yr(i, i) = (1d0, 0d0)
+       do j = 1, ngrow
+          Lr(i, j) = sum(conjg(eigvecs(:, i)) * eigvecs(:, j)) * (eigvals(j) - (1d0, 0d0))
+       end do
+    end do
+    allocate(ipiv(ngrow))
+    call zgesv(ngrow, ngrow, Lr, ngrow, ipiv, Yr, ngrow, info)
+    if (allocated(ipiv)) deallocate(ipiv)
+    if (log_info) then
+       if (info == 0) then
+          write (logfile, *) 'Successfully inverted matrix for preconditioner'
+       else
+          write (logfile, *) 'Matrix inversion for preconditioner failed: zgesv returns error', info
+          stop
+       end if
+    end if
+    do i = 1, ngrow
+       Lr(i, :) = eigvals(i) * Yr(i, :)
+    end do
+    if (allocated(Yr)) deallocate(Yr)
+
+    call pack2(Bnflux_vac, Bnphi_vac, Bn_prev)
+    Bn_prev = Bn_prev - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
+         matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn_prev)))
+    do kiter = 1, niter
+       if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter
+
+       call next_iteration(ndim, Bn_prev, Bn)
+       Bn = Bn - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
+            matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn - Bn_prev)))
+       call unpack2(Bnflux, Bnphi, Bn)
+       call check_redundant_edges(Bnflux, -1d0, 'B_n')
+       call check_div_free(Bnflux, Bnphi, 1d-3, 'B_n')
+
+       call unpack2(Bnflux_diff, Bnphi_diff, Bn - Bn_prev)
+       call write_vector_dof(Bnflux_diff, Bnphi_diff, &
+            decorate_filename(Bn_diff_file, '', kiter))
+       call write_vector_plot(Bnflux_diff, Bnphi_diff, &
+            decorate_filename(Bn_diff_file, 'plot_', kiter))
+       call write_vector_plot(Bnflux, Bnphi, &
+            decorate_filename(Bn_file, 'plot_', kiter))
+       call write_vector_plot(jnflux, jnphi, &
+            decorate_filename(currn_file, 'plot_', kiter))
+       call write_scalar_dof(presn, decorate_filename(presn_file, '', kiter))
+
+       call pack2(Bnflux, Bnphi, Bn_prev)
+    end do
+
+    if (allocated(Lr)) deallocate(Lr)
+
+  contains
+
+    pure subroutine pack2(pol_flux, tor_comp, packed)
+      complex(dp), intent(in) :: pol_flux(ntri, 3), tor_comp(ntri)
+      complex(dp), intent(out) :: packed(ndim)
+      packed(1:ntri*3) = reshape(pol_flux, (/ ntri * 3 /))
+      packed(ntri*3+1:ndim) = tor_comp
+    end subroutine pack2
+
+    pure subroutine unpack2(pol_flux, tor_comp, packed)
+      complex(dp), intent(out) :: pol_flux(ntri, 3), tor_comp(ntri)
+      complex(dp), intent(in) :: packed(ndim)
+      pol_flux = reshape(packed(1:ntri*3), (/ ntri, 3 /))
+      tor_comp = packed(ntri*3+1:ndim)
+    end subroutine unpack2
+
+    subroutine next_iteration(n, xold, xnew)
+      integer, intent(in) :: n
+      complex(dp), intent(in) :: xold(n)
+      complex(dp), intent(out) :: xnew(n)
+      call unpack2(Bnflux, Bnphi, xold)
+      call magdif_single
+      Bnflux = Bnflux + Bnflux_vac
+      Bnphi = Bnphi + Bnphi_vac
+      call pack2(Bnflux, Bnphi, xnew)
+    end subroutine next_iteration
+  end subroutine magdif_precon
 
   !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
   !> of #magdif_config::nflux and #magdif_config::nkpol. Deallocation is done in
@@ -334,7 +439,6 @@ contains
     read(1) bphicovar
     close(1)
 
-    allocate(mesh_element_rmp(ntri))
     allocate(B0r(ntri, 3))
     allocate(B0phi(ntri, 3))
     allocate(B0z(ntri, 3))
