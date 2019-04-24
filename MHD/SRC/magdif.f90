@@ -300,12 +300,17 @@ contains
     ndim = ntri * 4 ! kt_low(nflux+1) * 4
     call arnoldi(ndim, nritz, eigvals, next_iteration)
     if (log_info) then
-       write (logfile, *) 'Arnoldi method yields ', ngrow, ' Ritz eigenvalues < ', tol, ':'
+       write (logfile, *) 'Arnoldi method yields ', ngrow, ' Ritz eigenvalues > ', tol, ':'
        do i = 1, ngrow
           write (logfile, *) 'lambda ', i, ': ', eigvals(i)
        end do
     end if
-    allocate(Lr(ngrow, ngrow), Yr(ngrow,ngrow))
+    do i = 1, ngrow
+       call unpack2(Bnflux, Bnphi, eigvecs(:, i))
+       call write_vector_dof(Bnflux, Bnphi, decorate_filename(eigvec_file, '', i))
+       call write_vector_plot(Bnflux, Bnphi, decorate_filename(eigvec_file, 'plot_', i))
+    end do
+    allocate(Lr(ngrow, ngrow), Yr(ngrow, ngrow))
     Yr = (0d0, 0d0)
     do i = 1, ngrow
        Yr(i, i) = (1d0, 0d0)
@@ -611,7 +616,7 @@ contains
   !> place the centroid closer to the inner flux surface for one orientation and closer
   !> to the outer one for the other. To counteract this, the "lonely" knot is counted
   !> twice in the averaging procedure, i.e. with double weighting.
-  subroutine ring_centered_avg_coord(elem, r, z)
+  pure subroutine ring_centered_avg_coord(elem, r, z)
     type(triangle), intent(in) :: elem
     real(dp), intent(out) :: r, z
     type(knot), dimension(3) :: knots

@@ -72,10 +72,14 @@ module magdif_config
   !> output data file for current perturbation
   character(len = 1024) :: currn_file
 
+  !> output data file for eigenvectors in magdif::magdif_precon().
+  character(len = 1024) :: eigvec_file
+
   !> namelist for input parameters
   namelist / settings / log_level, runmode, nonres, quad_avg, niter, nritz, n, &
        nkpol, nflux, ti0, di0, damp, point_file, tri_file, Bn_nonres_file, &
-       Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, presn_file, currn_file
+       Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, presn_file, currn_file, &
+       eigvec_file
 
 contains
 
