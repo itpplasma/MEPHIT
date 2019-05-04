@@ -1,0 +1,47 @@
+\begin{tikzpicture}[> = Stealth, line join = round, shape = circle, scale = 1]  % , font = \small
+  \tikzmath{
+    real \ri, \ro;
+    int \sector, \overshoot, \arcstart, \arcend;
+    \ri = 10; % 6;
+    \ro = 12.5; % 7.5;
+    \sector = 30;
+    \overshoot = 3;
+    \arcstart = 90 - \sector - \overshoot;
+    \arcend = 90 + \sector + \overshoot;
+  };
+  \draw (\arcstart:\ri) arc [start angle = \arcstart, end angle = \arcend, radius = \ri, very thin, color = gray];
+  \draw (\arcstart:\ro) arc [start angle = \arcstart, end angle = \arcend, radius = \ro, very thin, color = gray];
+  \coordinate (ri1) at (60:\ri); \coordinate (ro1) at (60:\ro);
+  \coordinate (ri2) at (75:\ri); \coordinate (ro2) at (75:\ro);
+  \coordinate (ri3) at (90:\ri); \coordinate (ro3) at (90:\ro);
+  \coordinate (ri4) at (105:\ri); \coordinate (ro4) at (105:\ro);
+  \coordinate (ri5) at (120:\ri); \coordinate (ro5) at (120:\ro);
+  \draw (ri1) -- (ri2) -- (ri3) -- (ri4) -- (ri5);
+  \draw (ro1) -- (ro2) -- (ro3) -- (ro4) -- (ro5);
+  \draw (ri1) -- (ro1) -- (ri2) -- (ro2) -- (ri3) -- (ro3) -- (ri4) -- (ro4) -- (ri5) -- (ro5);
+
+  \draw[thick, ->] (ri2) -- node [very near end, auto, swap] {$\vec{l}_{\inw}$} (ro1);
+  \draw[thick, ->] (ro1) -- node [very near end, auto, swap] {$\vec{l}_{\fs}$} (ro2);
+  \draw[thick, ->] (ro2) -- node [very near end, auto, swap] {$\vec{l}_{\out}$} (ri2);
+  \coordinate (Gi2) at ($ (ri2) ! 0.5 ! (ro1) $);
+  \coordinate (Gf2) at ($ (ro1) ! 0.5 ! (ro2) $);
+  \coordinate (Go2) at ($ (ro2) ! 0.5 ! (ri2) $);
+  \draw[thick, ->] (Gi2) -- node [near end, auto, swap] {$\vec{n}_{\inw}$} ($ (Gi2) ! 2 ! 90:(ri2) $);
+  \draw[thick, ->] (Gf2) -- node [very near end, auto, swap] {$\vec{n}_{\fs}$} ($ (Gf2) ! 2 ! 90:(ro1) $);
+  \draw[thick, ->] (Go2) -- node [very near end, auto, swap] {$\vec{n}_{\out}$} ($ (Go2) ! 2 ! 90:(ro2) $);
+
+  \draw[thick, ->] (ro4) -- node [very near end, auto, swap] {$\vec{l}_{\out}$} (ri5);
+  \draw[thick, ->] (ri5) -- node [very near end, auto, swap] {$\vec{l}_{\fs}$} (ri4);
+  \draw[thick, ->] (ri4) -- node [very near end, auto, swap] {$\vec{l}_{\inw}$} (ro4);
+  \coordinate (Go7) at ($ (ro4) ! 0.5 ! (ri5) $);
+  \coordinate (Gf7) at ($ (ri5) ! 0.5 ! (ri4) $);
+  \coordinate (Gi7) at ($ (ri4) ! 0.5 ! (ro4) $);
+  \draw[thick, ->] (Go7) -- node [very near end, auto, swap] {$\vec{n}_{\out}$} ($ (Go7) ! 2 ! 90:(ro4) $);
+  \draw[thick, ->] (Gf7) -- node [near end, auto, swap] {$\vec{n}_{\fs}$} ($ (Gf7) ! 2 ! 90:(ri5) $);
+  \draw[thick, ->] (Gi7) -- node [very near end, auto] {$\vec{n}_{\inw}$} ($ (Gi7) ! 2 ! 90:(ri4) $);
+
+  \node (O2) at ($ 0.5*(ri2) + 0.25*(ro1) + 0.25*(ro2) $) {$\odot$};
+  \node (O7) at ($ 0.5*(ro4) + 0.25*(ri5) + 0.25*(ri4) $) {$\odot$};
+  \node[circle, above right] at (O2) {$\nabla \phi$};
+  \node[circle, below] at (O7) {$\nabla \phi$};
+\end{tikzpicture}
