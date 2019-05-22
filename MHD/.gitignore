@@ -1,5 +1,4 @@
-Bn_flux_test.dat
-currents_toplot.dat
+*.dat
 fort.1000
 fort.1001
 fort.1002
@@ -9,10 +8,6 @@ fort.1005
 fort.1006
 fort.1007
 fort.333
-q.out
-test_bnflux.out
-test_bnp.out
-test_pressure_x.out
 *~
 *.mod
 *.o

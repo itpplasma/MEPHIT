@@ -71,14 +71,15 @@ equil_input = glob.glob(os.path.join(datadir, 'fluxvar.dat'))
 vector_re = re.compile(r"(?<=plot_)([^/]+)\.dat$")
 scalar_re = re.compile(r"presn([^/]*)\.dat$")
 equil_re = re.compile(r"fluxvar\.dat$")
-vector_infix = ['ReR', 'ImR', 'ReZ', 'ImZ', 'Rephi', 'Imphi']
+# vector_infix = ['ReR', 'ImR', 'ReZ', 'ImZ', 'Rephi', 'Imphi']
+vector_infix = ['Reproj', 'Improj']
 scalar_infix = ['Re', 'Im']
 equil_infix = ['psi', 'q', 'dens', 'temp', 'pres0']
 
 for datafile in vector_input:
 	print('reading contents of ', datafile)
 	contents = np.genfromtxt(datafile)
-	for column, infix in enumerate(vector_infix, 2):
+	for column, infix in enumerate(vector_infix, 8):
 		plots.append(TriPlot(
 			data = contents[:, column],
 			limits = [-max(abs(contents[:, column])),
@@ -110,5 +111,5 @@ def wrapper(index):
 	plots[index].plot_and_dump()
 
 if __name__ == '__main__':
-	with Pool(max(1, len(os.sched_getaffinity(0)) - 1)) as p:
+	with Pool(max(1, os.cpu_count() - 1)) as p:
 		p.map(wrapper, range(len(plots)))
