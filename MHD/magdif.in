@@ -2,16 +2,17 @@
    log_level = 4                                   ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
    runmode = 2                                     ! 0: single iteration, 1: direct iterations,
                                                    ! 2: preconditioned iterations
-   nonres = .true.                                 ! use non-resonant test case
+   nonres = .false.                                ! use non-resonant test case
    quad_avg = .true.                               ! average over quadrilaterals for non-resonant test case
 
    n = 2                                           ! harmonic index of perturbation
-   niter = 5                                       ! number of iteration steps
-   nritz = 12                                      ! number of Ritz eigenvalues
+   niter = 9                                       ! number of iteration steps
+   nritz = 60                                      ! number of Ritz eigenvalues
+   tol = 5d-2                                      ! threshold for eigenvalues in preconditioner
    nkpol = 200                                     ! number of knots per poloidal loop
    nflux = 74                                      ! number of flux surfaces up to and counting LCFS
    ti0 = 3.d3                                      ! temperature on magnetic axis 
-   di0 = 5.d13                                     ! density on magnetic axis
+   di0 = 5.d11                                     ! density on magnetic axis
    damp = 0d0                                      ! damping factor for resonances
    point_file = '../PRELOAD/points.dat'            ! mesh points from PRELOAD
    tri_file = '../PRELOAD/triangles.dat'           ! triangles and edges from PRELOAD

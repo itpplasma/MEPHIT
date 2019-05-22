@@ -293,9 +293,6 @@ contains
 
     ! calculate eigenvectors
     ieigen = 1
-    ! eigenvalues lower than this are not computed
-    ! currently redundant, as it is set within subroutine arnoldi
-    tol = 0.7d0
     ! system dimension N ! - no need to include extended mesh
     ndim = ntri * 4 ! kt_low(nflux+1) * 4
     call arnoldi(ndim, nritz, eigvals, next_iteration)

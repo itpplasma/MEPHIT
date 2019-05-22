@@ -2,7 +2,7 @@
   module arnoldi_mod
     integer :: ieigen=0
     integer :: ngrow,ierr
-    double precision :: tol
+    double precision :: tol = 0.7d0
     double complex, dimension(:,:), allocatable :: eigvecs
   end module arnoldi_mod
 !
@@ -82,7 +82,7 @@
   enddo
 !
   if (mype == mpi_p_root) then
-     tol=0.7d0
+     ! tol=0.7d0
      allocate(eigh(m,m))
      print *,'in'
      print *,m,size(hmat,1),size(hmat,2),size(ritznum),size(eigh,1),size(eigh,2)

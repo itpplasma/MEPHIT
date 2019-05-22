@@ -1,5 +1,6 @@
 module magdif_config
-  use from_nrtype, only: dp                                     ! PRELOAD/SRC/from_nrtype.f90
+  use from_nrtype, only: dp  ! PRELOAD/SRC/from_nrtype.f90
+  use arnoldi_mod, only: tol ! RUN/SRC/arnoldi.f90
 
   implicit none
 
@@ -79,7 +80,7 @@ module magdif_config
   namelist / settings / log_level, runmode, nonres, quad_avg, niter, nritz, n, &
        nkpol, nflux, ti0, di0, damp, point_file, tri_file, Bn_nonres_file, &
        Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, presn_file, currn_file, &
-       eigvec_file
+       eigvec_file, tol
 
 contains
 
