@@ -14,13 +14,13 @@ ifeq ($(MODE), SEQUENCIAL)
 FC = gfortran
 FD = -cpp 
 endif
-#OPTS = -O3 -M OBJS  #-fp-model strict
-OPTS = -O3 -J OBJS  #-fp-model strict
+#OPTS = -O3 -M ../PRELOAD/OBJS  #-fp-model strict
+OPTS = -O3 -J ../PRELOAD/OBJS  #-fp-model strict
 ifeq ($(DEBUG), YES)
-#OPTS= -O0 -cpp -g -J OBJS -fbounds-check
-OPTS= -O0 -cpp -g -J OBJS -fbounds-check -ffpe-trap=invalid,zero,overflow
+#OPTS= -O0 -cpp -g -J ../PRELOAD/OBJS -fbounds-check
+OPTS= -O0 -cpp -g -J ../PRELOAD/OBJS -fbounds-check -ffpe-trap=invalid,zero,overflow
 endif
-#OPTZ = -O3 -module OBJS  #-fp-model strict 
+#OPTZ = -O3 -module ../PRELOAD/OBJS  #-fp-model strict 
 
 OBJS =  OBJS/from_nrtype.o \
 	OBJS/orbit_mod.o \

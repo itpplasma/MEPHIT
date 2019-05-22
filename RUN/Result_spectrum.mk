@@ -15,12 +15,12 @@ FC = gfortran
 #FD = -Cpp
 FD = 
 endif
-#OPTS = -O3 -M OBJS  #-fp-model strict
-OPTS = -O -J OBJS  #-fp-model strict
+#OPTS = -O3 -M ../PRELOAD/OBJS  #-fp-model strict
+OPTS = -O -J ../PRELOAD/OBJS  #-fp-model strict
 ifeq ($(DEBUG), YES)
-OPTS= -O0 --trace -g  -J  OBJS   
+OPTS= -O0 --trace -g  -J  ../PRELOAD/OBJS   
 endif
-#OPTZ = -O3 -module OBJS  #-fp-model strict 
+#OPTZ = -O3 -module ../PRELOAD/OBJS  #-fp-model strict 
 
 OBJS =  OBJS/from_nrtype.o \
 	OBJS/orbit_mod.o \

@@ -2,4 +2,4 @@ int ktlownfluxp1 = 29400;
 string meshfile = "../PRELOAD/inputformaxwell_ext.msh";
 string currnfile = "../MHD/currn.dat";
 string Bnfluxfile = "../MHD/Bn.dat";
-bool doplot = true;
+bool doplot = false;
