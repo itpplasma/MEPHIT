@@ -13,6 +13,7 @@
 \usepackage{microtype}
 \usepackage[normalem]{ulem}
 \usepackage{amsmath}  % [fleqn]
+\usepackage{cancel}
 \allowdisplaybreaks[1]
 \numberwithin{equation}{section}
 \usepackage[math-style=ISO, bold-style=ISO]{unicode-math}
@@ -535,6 +536,19 @@ This is illustrated for a small sector on one loop in \cref{fig:local_coordinate
   \label{fig:local_coordinates}
 \end{figure}
 
+\subsection{Implementation details}
+\label{sec:implementation}
+
+In the formulae derived in \cref{sec:linmhd}, terms of the form $\vec{v} \cdot \nabla \psi$ appear, where $\vec{v}$ is an arbitrary vector, usually the vector of a triangle edge or some field quantity. In the latter case, this reduces to the projection on the normal vector of an edge, since perturbed vector fields are represented by \textsc{Raviart}-\textsc{Thomas} elements. [\ldots] The relation of the degrees of freedom to the contravariant field component on edge \fs\ is given as an example:
+\begin{gather}
+  B_{n}^{\psi} (\Gamma_{\fs}) = \vec{B}_{n} (\Gamma_{\fs}) \cdot \nabla \psi (\Gamma_{\fs}) = \vec{B}_{n} (\Gamma_{\fs}) \cdot \hat{\vec{n}}_{\fs} \pd[\psi]{n_{\fs}} (\Gamma_{\fs}) \approx \vec{B}_{n} (\Gamma_{\fs}) \cdot \hat{\vec{n}}_{\fs} \frac{\psi^{(+1)} - \psi^{(-1)}}{a_{\fs} (\Omega^{(+1)}) + a_{\fs} (\Omega^{(-1)})}
+\end{gather}
+Here, the indices $\pm 1$ refer to the adjacent outer and inner flux surface that are realized on the grid. Likewise, $\Omega^{(\pm 1)}$ refers to the triangles that touch the adjacent flux surfaces and edge \fs\ in question. $a_{\fs}$ refers to the altitude of edge \fs\ on a given triangle. Now, remembering that $\vec{n}$ is of length $l$ and that the degrees of freedom are given by $\Psi = R \vec{B}_{n} \cdot \vec{n}$, we can further simplify and arrive at
+\begin{gather}
+  B_{n}^{\psi} = \frac{\Psi_{\fs}}{R l} \frac{\psi^{(+1)} - \psi^{(-1)}}{a_{\fs} (\Omega^{(+1)}) + a_{\fs} (\Omega^{(-1)})} = \frac{\Psi_{\fs}}{R \cancel{l_{\fs}}} \frac{\psi^{(+1)} - \psi^{(-1)}}{S_{\Omega^{(+1)}} + S_{\Omega^{(-1)}}} \cancel{l_{\fs}}.
+\end{gather}
+[\ldots]
+
 \clearpage
 \section{Pre-processing of input data}
 \label{sec:inputs}
@@ -640,6 +654,7 @@ where the sum is taken over all triangles $\Omega$ inside a triangle strip, and 
 
 \clearpage
 \section{Linearized MHD force balance}
+\label{sec:linmhd}
 
 [\ldots]
 
