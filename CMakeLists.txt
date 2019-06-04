@@ -44,12 +44,22 @@ add_library(magdif SHARED
 add_executable(magdif_test.x
   MHD/SRC/magdif_test.f90
 )
+add_executable(minimal_example.x
+  PRELOAD/SRC/minimal_example.f90
+)
 
 ### Linking
 target_link_libraries(magdif_test.x
   magdif
   ${SUPERLU_LIBRARIES}
-	${SUITESPARSE_LIBRARIES}
+  ${SUITESPARSE_LIBRARIES}
+  blas
+  lapack
+)
+target_link_libraries(minimal_example.x
+  magdif
+  ${SUPERLU_LIBRARIES}
+  ${SUITESPARSE_LIBRARIES}
   blas
   lapack
 )
