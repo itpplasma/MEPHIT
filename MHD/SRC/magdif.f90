@@ -897,10 +897,11 @@ inner: do kt = 1, kt_max(kf)
   !> @param ef index of edge f, e.g. for #bnflux
   !> @param orient true if edge f lies on the outer flux surface, false otherwise
   !>
-  !> It is assumed that the knots are numbered in ascending order starting from the
-  !> magnetic axis and going counter-clockwise around each flux surface. Furthermore it
-  !> is assumed that edge 1 goes from knot 1 to knot 2, edge 2 from knot 2 to knot 3 and
-  !> edge 3 from knot 3 to knot 1.
+  !> It is assumed that the knots are globally numbered in ascending order starting from
+  !> the magnetic axis and going counter-clockwise around each flux surface. Furthermore
+  !> it is assumed that edge 1 goes from knot 1 to knot 2, edge 2 from knot 2 to knot 3
+  !> and edge 3 from knot 3 to knot 1. It is not assumed that knots are orderd
+  !> counter-clockwise locally.
 
   subroutine get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
     type(triangle), intent(in) :: elem
@@ -913,9 +914,11 @@ inner: do kt = 1, kt_max(kf)
     logical :: closing_loop
     character(len = *), parameter :: errmsg = 'cannot find correct label for triangle edges'
 
+    ! initialize to suppress compiler warnings
     i1 = 0
     i2 = 0
-    select case (elem%knot_h)
+    knot_f = elem%knot_h
+    select case (knot_f)
     case (1)
        i1 = 2
        i2 = 3
@@ -932,20 +935,19 @@ inner: do kt = 1, kt_max(kf)
     end if
     ! last triangle in strip if indices not next to each other
     closing_loop = abs(elem%i_knot(i1) - elem%i_knot(i2)) /= 1
-    if ((elem%i_knot(i1) > elem%i_knot(i2)) .neqv. closing_loop) then
-       ! i1 is next counter-clockwise
-       knot_i = i1
-       knot_o = i2
-    else
-       ! i2 is next counter-clockwise
-       knot_i = i2
-       knot_o = i1
-    end if
-    knot_f = elem%knot_h
     i_knot_diff = elem%i_knot - elem%i_knot(knot_f)
     if (all(i_knot_diff >= 0)) then
        ! knot_f lies on inner surface
        orient = .true.
+       if ((elem%i_knot(i1) < elem%i_knot(i2)) .neqv. closing_loop) then
+          ! i1 is next after knot_f counter-clockwise
+          knot_o = i1
+          knot_i = i2
+       else
+          ! i2 is next after knot_f counter-clockwise
+          knot_o = i2
+          knot_i = i1
+       end if
        ei = knot_f
        eo = knot_i
        ef = knot_o
@@ -955,6 +957,15 @@ inner: do kt = 1, kt_max(kf)
     else if (all(i_knot_diff <= 0)) then
        ! knot_f lies on outer surface
        orient = .false.
+       if ((elem%i_knot(i1) > elem%i_knot(i2)) .neqv. closing_loop) then
+          ! i1 is next after knot_f counter-clockwise
+          knot_i = i1
+          knot_o = i2
+       else
+          ! i2 is next after knot_f counter-clockwise
+          knot_i = i2
+          knot_o = i1
+       end if
        ei = knot_o
        eo = knot_f
        ef = knot_i
@@ -966,7 +977,6 @@ inner: do kt = 1, kt_max(kf)
        stop errmsg
     end if
   end subroutine get_labeled_edges
-
 
   !> Computes current perturbation #jnflux and #jnphi from equilibrium quantities,
   !> #presn, #bnflux and #bnphi.
@@ -1156,6 +1166,7 @@ inner: do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
           tri = mesh_point(elem%i_knot(:))
           call ring_centered_avg_coord(elem, r, z)
+          ! edge 1 lies opposite to knot 3, etc.
           pol_comp_r = 1d0 / elem%det_3 * ( &
                pol_flux(kt_low(kf) + kt, 1) * (r - tri(3)%rcoord) + &
                pol_flux(kt_low(kf) + kt, 2) * (r - tri(1)%rcoord) + &
