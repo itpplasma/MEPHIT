@@ -825,7 +825,6 @@ contains
     logical :: orient
     type(knot) :: base, tip
     integer :: common_tri(2)
-    real(dp) :: perps(2)
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
@@ -842,15 +841,10 @@ inner: do kt = 1, kt_max(kf)
           lr = tip%rcoord - base%rcoord
           lz = tip%zcoord - base%zcoord
 
-          perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz) * 0.5d0
-          Bnpsi = Bnflux(kt_low(kf) + kt, ef) / r / hypot(lr, lz) * &
-               (psi(kf+1) - psi(kf-1)) / sum(perps)
+          Bnpsi = Bnflux(kt_low(kf) + kt, ef) / r * (psi(kf+1) - psi(kf-1)) / &
+               sum(mesh_element(common_tri(:))%det_3)
 
-          if (kf == 1) then
-             kp = kt
-          else
-             kp = kt / 2 + mod(kt, 2)
-          end if
+          kp = lf(1) - kp_low(kf)
 
           x(kp) = -dpres0_dpsi(kf) * Bnpsi
 
@@ -1107,7 +1101,7 @@ inner: do kt = 1, kt_max(kf)
     integer :: ei, eo, ef
     logical :: orient
     integer :: common_tri(2)
-    real(dp) :: lr, lz, Deltapsi, perps(2)
+    real(dp) :: lr, lz, Deltapsi
     complex(dp) :: Bnpsi
     real(dp) :: r
 
@@ -1127,15 +1121,11 @@ inner: do kt = 1, kt_max(kf)
           lr = tip%rcoord - base%rcoord
           lz = tip%zcoord - base%zcoord
           common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
-          perps = mesh_element(common_tri(:))%det_3 / hypot(lr, lz) * 0.5d0
           Bnpsi = -R0 * B0phi(kt_low(kf) + kt, ef) / r
-          Bnflux(kt_low(kf) + kt, ef) = Bnpsi * r * hypot(lr, lz) * sum(perps) / Deltapsi
+          Bnflux(kt_low(kf) + kt, ef) = Bnpsi * r / Deltapsi * &
+               sum(mesh_element(common_tri(:))%det_3)
           Bnphi(kt_low(kf) + kt) = imun / n * Bnflux(kt_low(kf) + kt, ef) &
                / elem%det_3 * 2d0
-       end do
-       do kt = 1, kt_max(kf)
-          elem = mesh_element(kt_low(kf) + kt)
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           Bnflux(kt_low(kf) + kt, ei) = (0d0, 0d0)
           Bnflux(kt_low(kf) + kt, eo) = (0d0, 0d0)
        end do
@@ -1196,7 +1186,7 @@ inner: do kt = 1, kt_max(kf)
              end if
           end if
           pol_comp_proj = (pol_comp_r * pr + pol_comp_z * pz) * (psi(kf) - psi(kf-1)) &
-               / elem%det_3 * 2d0
+               / elem%det_3
           write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), real(pol_comp_z), &
                aimag(pol_comp_z), real(tor_comp(kt_low(kf) + kt)), &
                aimag(tor_comp(kt_low(kf) + kt)), real(pol_comp_proj), aimag(pol_comp_proj)
