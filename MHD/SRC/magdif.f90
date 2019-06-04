@@ -2,7 +2,7 @@ module magdif
   use from_nrtype, only: dp                                     ! PRELOAD/SRC/from_nrtype.f90
   use constants, only: pi, ev2erg                               ! PRELOAD/SRC/orbit_mod.f90
   use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, & ! PRELOAD/SRC/mesh_mod.f90
-       bphicovar, knot, triangle
+       knot, triangle
   use for_macrostep, only: t_min, d_min                         ! PRELOAD/SRC/orbit_mod.f90
   use sparse_mod, only: sparse_solve, sparse_matmul             ! MHD/SRC/sparse_mod.f90
   use magdif_config                                             ! MHD/SRC/magdif_config.f90
@@ -427,6 +427,8 @@ contains
   !> #bnflux_vac, #bnphi_vac, #j0phi, #jnphi and #jnflux are allocated and initialized to
   !> zero. Deallocation is done in magdif_cleanup().
   subroutine read_mesh
+    use mesh_mod, only: bphicovar
+
     open(1, file = point_file, form = 'unformatted')
     read(1) npoint
     if (log_info) write(logfile, *) 'npoint = ', npoint
