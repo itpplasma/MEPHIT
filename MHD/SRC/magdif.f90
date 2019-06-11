@@ -176,26 +176,13 @@ contains
 
   !> Initialize magdif module
   subroutine magdif_init
-    integer :: kf, kp
-
     call init_indices
     call read_mesh
     call init_flux_variables
     call cache_equilibrium_field
     call compute_safety_factor
+    call write_fluxvar
     call compute_j0phi
-
-    open(1, file = fluxvar_file, recl = longlines)
-    write (1, *) psi(0), 0d0, dens(0), temp(0), pres0(0)
-    do kf = 1, nflux
-       do kp = 1, kp_max(kf)
-          write (1, *) psi(kf), q(kf), dens(kf), temp(kf), pres0(kf)
-       end do
-    end do
-    do kp = kp_low(nflux+1) + 1, npoint
-       write (1, *) 0d0, 0d0, 0d0, 0d0, 0d0
-    end do
-    close(1)
 
     if (nonres) then
        call compute_Bn_nonres
@@ -204,11 +191,8 @@ contains
     end if
     Bnflux_vac = Bnflux
     Bnphi_vac = Bnphi
-    if (log_debug) then
-       call write_vector_dof(Bnflux_vac, Bnphi_vac, Bn_nonres_file)
-       call write_vector_plot(Bnflux_vac, Bnphi_vac, &
-            decorate_filename(Bn_nonres_file, 'plot_'), .true.)
-    end if
+    call write_vector_plot(Bnflux_vac, Bnphi_vac, &
+         decorate_filename(Bn_vacout_file, 'plot_'), .true.)
     if (log_info) write(logfile, *) 'magdif initialized'
   end subroutine magdif_init
 
@@ -707,6 +691,7 @@ contains
     integer :: ei, eo, ef
     logical :: orient
 
+    open(1, file = j0phi_file, recl = longlines)
     B2avg = 0d0
     B2avg_half = 0d0
     do kf = 1, nflux
@@ -748,10 +733,31 @@ contains
           j0phi(kt_low(kf) + kt, eo) = clight * (pres0(kf) - pres0(kf-1)) / &
                (psi(kf) - psi(kf-1)) * (Btor2 / B2avg_half(kf) + &
                (Bpol2 - Btor2) / (Bpol2 + Btor2)) * r
+          write (1, *) j0phi(kt_low(kf) + kt, 1), j0phi(kt_low(kf) + kt, 2), &
+               j0phi(kt_low(kf) + kt, 3), ring_centered_avg_j0phi()
        end do
     end do
+    do kt = kt_low(nflux+1) + 1, ntri
+       write (1, *) j0phi(kt, 1), j0phi(kt, 2), j0phi(kt, 3), 0d0
+    end do
+    close(1)
 
     call check_redundant_edges(cmplx(j0phi, 0d0, dp), 1d0, 'j0phi')
+
+  contains
+    function ring_centered_avg_j0phi() result(plot_j0phi)
+      real(dp) :: plot_j0phi
+      real(dp) :: z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+      call ring_centered_avg_coord(elem, r, z)
+      call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+      Bpol2 = Br ** 2 + Bz ** 2
+      Btor2 = Bp ** 2
+      plot_j0phi = clight * (pres0(kf) - pres0(kf-1)) / &
+           (psi(kf) - psi(kf-1)) * (Btor2 / B2avg_half(kf) + &
+           (Bpol2 - Btor2) / (Bpol2 + Btor2)) * r
+    end function ring_centered_avg_j0phi
   end subroutine compute_j0phi
 
   !> Assembles a sparse matrix in coordinate list (COO) representation for use with
@@ -1131,6 +1137,7 @@ inner: do kt = 1, kt_max(kf)
        end do
     end do
     if (quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
+    call write_vector_dof(Bnflux_vac, Bnphi_vac, Bn_vacout_file)
     call check_div_free(Bnflux, Bnphi, 1d-09, 'non-resonant B_n')
     call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
@@ -1237,4 +1244,18 @@ inner: do kt = 1, kt_max(kf)
     end do
     close(1)
   end subroutine write_scalar_dof
+
+  subroutine write_fluxvar
+    integer :: kf
+    real(dp) :: rho_r, rho_z
+
+    open(1, file = fluxvar_file, recl = longlines)
+    write (1, *) 0d0, psi(0), 0d0, dens(0), temp(0), pres0(0)
+    do kf = 1, nflux
+       rho_r = mesh_point(kp_low(kf) + 1)%rcoord - mesh_point(1)%rcoord
+       rho_z = mesh_point(kp_low(kf) + 1)%zcoord - mesh_point(1)%zcoord
+       write (1, *) hypot(rho_r, rho_z), psi(kf), q(kf), dens(kf), temp(kf), pres0(kf)
+    end do
+    close(1)
+  end subroutine write_fluxvar
 end module magdif

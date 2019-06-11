@@ -63,7 +63,7 @@ program result_spectrum
   
   double precision :: q
   double complex, allocatable :: bpsi(:)
-  integer, parameter :: mmax = 20
+  integer, parameter :: mmax = 24
   double complex :: bpsim(2*mmax+1)
 
   character(len=1024) :: temp
