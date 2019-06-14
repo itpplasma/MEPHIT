@@ -6,7 +6,7 @@
    quad_avg = .true.                               ! average over quadrilaterals for non-resonant test case
 
    n = 2                                           ! harmonic index of perturbation
-   niter = 9                                       ! number of iteration steps
+   niter = 20                                      ! number of iteration steps
    nritz = 60                                      ! number of Ritz eigenvalues
    tol = 0.7d0                                     ! threshold for eigenvalues in preconditioner
    nkpol = 200                                     ! number of knots per poloidal loop

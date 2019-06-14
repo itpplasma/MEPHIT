@@ -13,6 +13,8 @@ import f90nml.parser
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy import interpolate
+from scipy import optimize
 try:
     from StringIO import StringIO
 except ImportError:
@@ -38,6 +40,9 @@ matplotlib.use('Qt5Agg')
 #==============================================================================
 
 class magdif_2d_triplot:
+    scifmt = matplotlib.ticker.ScalarFormatter()
+    scifmt.set_powerlimits((-3, 4))
+
     def __init__(self, node, tri, data, filename):
         self.node = node
         self.tri = tri
@@ -52,7 +57,7 @@ class magdif_2d_triplot:
             self.data, cmap = 'RdBu')
         plt.xlim([min(self.node[:,0]) * 0.9, max(self.node[:,0]) * 1.1])
         plt.axis('equal')
-        plt.colorbar()
+        plt.colorbar(format = self.__class__.scifmt)
         plt.clim([-max(abs(self.data)), max(abs(self.data))])
         plt.xlabel(r'$R$ / cm')
         plt.ylabel(r'$Z$ / cm')
@@ -73,6 +78,7 @@ class magdif_1d_cutplot:
         print('plotting ', self.filename)
         plt.figure()
         plt.plot(self.x, self.y, '-k')
+        plt.ticklabel_format(style = 'sci', scilimits = (-3, 4))
         plt.xlabel(self.xlabel)
         plt.ylabel(self.ylabel)
         plt.title(self.title)
@@ -80,7 +86,10 @@ class magdif_1d_cutplot:
         plt.close()
 
 class magdif_poloidal_modes:
-    def __init__(self, datadir, datafile, reffile):
+    def __init__(self, n, s, q, datadir, datafile, reffile):
+        self.n = n
+        self.s_mhd = s
+        self.q_mhd = q
         self.datadir = datadir
         self.datafile = datafile
         self.reffile = reffile
@@ -90,41 +99,90 @@ class magdif_poloidal_modes:
         data = np.loadtxt(os.path.join(self.datadir, self.datafile))
         ref = np.loadtxt(os.path.join(self.datadir, self.reffile))
         
-        psi_n = (np.max(data[:,0]) - data[:,0]) / np.max(data[:,0])
+        # normalize psi
+        s = (data[:,0] - data[0,0]) / (data[-1,0] - data[0,0])
+        q = data[:,1]
+        q_neg = np.any(q < 0.0)
         
-        M_data = (np.shape(data)[1] - 2) // 2
-        abs_data = np.hypot(data[:, 2:(2 + M_data)], data[:, (2 + M_data):])
-        M_ref = (np.shape(ref)[1] - 2) // 2
-        abs_ref = np.hypot(ref[:, 2:(2 + M_ref)], ref[:, (2 + M_ref):])
+        # s values neeed to be strictly increasing for interpolation
+        s_uniq_sort, sorted_indices = np.unique(s, return_index = True)
+        q_uniq_sort = q[sorted_indices]
+        q_min = np.amin(np.abs(q_uniq_sort))
+        q_max = np.amax(np.abs(q_uniq_sort))
+        q_interp = interpolate.interp1d(s_uniq_sort, q_uniq_sort, kind = 'cubic')
         
-        horz_plot = 3
-        vert_plot = 2
-        k2_max = horz_plot * vert_plot
-        k1_max = M_data // 2 // k2_max
-        for k1 in range(k1_max):
-            yrang = [0, np.amax([
-                np.amax(abs_data[:, (k1 * k2_max):((k1 + 1) * k2_max - 1)]),
-                np.amax(abs_ref[:, (k1 * k2_max):((k1 + 1) * k2_max - 1)])])]
-            plt.figure(figsize = (7.2, 3.6))
-            for k2 in range(k2_max):
-                m = k1 * k2_max + k2
-                plt.subplot(vert_plot, horz_plot, k2 + 1)
-                plt.plot(psi_n, abs_data[:, m])
-                plt.plot(psi_n, abs_ref[:, m], 'r--')
-                plt.title('$m = {}$'.format(m))
-                plt.plot(np.array([0.608, 0.608])**2, yrang, 'b' ,alpha=.5)#1.5
-                plt.plot(np.array([0.760, 0.760])**2, yrang, 'b' ,alpha=.5)#2
-                plt.plot(np.array([0.823, 0.823])**2, yrang, 'b' ,alpha=.5)#2.5
-                plt.plot(np.array([0.861, 0.861])**2, yrang, 'b' ,alpha=.5)#3
-                plt.plot(np.array([0.891, 0.891])**2, yrang, 'b' ,alpha=.5)#3.5
-                plt.plot(np.array([0.918, 0.918])**2, yrang, 'b' ,alpha=.5)#4
-                plt.xlabel(r'$\psi / \psi_{\max}$')
-                plt.ylabel(r'$\left\vert B_{mn}^{\psi} \right\vert$')
-                plt.ylim(yrang)
-                plt.tight_layout()
-            plt.savefig(os.path.splitext(self.datafile)[0] + 
-                '_{}.pdf'.format(k1+1))
+        m_resonant = np.arange(np.amax([np.ceil(q_min * self.n), self.n + 1]),
+            np.floor(q_max * self.n) + 1, dtype = int)  # +1 to include end point
+        if not q_neg: m_resonant = -m_resonant
+        q_resonant = -m_resonant / self.n
+        s_resonant = np.zeros_like(m_resonant, dtype = float)
+        for k, m in enumerate(m_resonant):
+            def q_resonant_interp(x):
+                return q_interp(x) - q_resonant[k]
+            s_resonant[k] = optimize.brentq(q_resonant_interp,
+                np.amin(s_uniq_sort), np.amax(s_uniq_sort))
+        print(s_resonant)
+        print(np.array([0.608, 0.760, 0.823, 0.861, 0.891, 0.918])**2)
+        
+        data_range = (np.shape(data)[1] - 2) // 2
+        abs_data = np.hypot(data[:, 2:(2 + data_range)], data[:, (2 + data_range):])
+        ref_range = (np.shape(ref)[1] - 2) // 2
+        abs_ref = np.hypot(ref[:, 2:(2 + ref_range)], ref[:, (2 + ref_range):])
+        
+        if data_range != ref_range:
+            raise RuntimeError('Different m_max for vacuum and full perturbation field')
+        m_max = (data_range - 1) // 2
+        offset = m_max
+        
+        horz_plot = 2
+        vert_plot = 1
+        for m in range(1, m_max + 1):
+            yrang = [0, max(np.amax(abs_data[:, offset - m]), np.amax(abs_data[:, offset + m]),
+                np.amax(abs_ref[:, offset - m]), np.amax(abs_ref[:, offset + m]))]
+            plt.figure(figsize = (9.6, 4.8))
+            ax = plt.subplot(vert_plot, horz_plot, 1)
+            plt.plot(s, abs_ref[:, offset - m], 'r--')
+            plt.plot(s, abs_data[:, offset - m])
+            ax.ticklabel_format(style = 'sci', scilimits = (-3, 4))
+            plt.ylim(yrang)
+            plt.title('$m = {}$'.format(-m))
+            plt.ylabel(r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx')
+            plt.xlabel(r'$s$')
+            index = [i for (i, val) in enumerate(m_resonant) if val == -m]
+            if len(index) == 1:
+                plt.plot([s_resonant[index], s_resonant[index]], yrang, 'b', alpha = 0.5)
+            ax = plt.subplot(vert_plot, horz_plot, 2)
+            plt.plot(s, abs_ref[:, offset + m], 'r--')
+            plt.plot(s, abs_data[:, offset + m])
+            ax.ticklabel_format(style = 'sci', scilimits = (-3, 4))
+            plt.ylim(yrang)
+            plt.title('$m = {}$'.format(m))
+            plt.xlabel(r'$s$')
+            plt.ylabel(r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx')
+            index = [i for (i, val) in enumerate(m_resonant) if val == m]
+            if len(index) == 1:
+                plt.plot([s_resonant[index], s_resonant[index]], yrang, 'b', alpha = 0.5)
+            plt.tight_layout()
+            plt.savefig(os.path.splitext(self.datafile)[0] + '_{}.pdf'.format(m))
             plt.close()
+        plt.figure(figsize = (9.6, 4.8))
+        ax = plt.subplot(vert_plot, horz_plot, 1)
+        plt.plot(s_uniq_sort, abs_ref[sorted_indices, offset], 'r--')
+        plt.plot(s_uniq_sort, abs_data[sorted_indices, offset])
+        ax.ticklabel_format(style = 'sci', scilimits = (-3, 4))
+        plt.title('$m = 0$')
+        plt.xlabel(r'$s$')
+        plt.ylabel(r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx')
+        ax = plt.subplot(vert_plot, horz_plot, 2)
+        plt.plot(s, q, label = 'kinetic')
+        plt.plot(self.s_mhd, self.q_mhd, 'r--', label = 'MHD')
+        ax.legend()
+        plt.xlabel(r'$s$')
+        plt.ylabel(r'$q$')
+        plt.tight_layout()
+        plt.savefig(os.path.splitext(self.datafile)[0] + '_0.pdf')
+        plt.close()
+
 
 class magdif:
         
@@ -141,7 +199,7 @@ class magdif:
     def read_configfile(self):
         print('reading configuration from ', self.configfile)
         p = f90nml.parser.Parser()
-        nml = p.read(os.path.join(self.datadir, self.configfile))
+        nml = p.read(self.configfile)
         self.config = nml['settings']
 
     def read_fluxvar(self):
@@ -153,8 +211,7 @@ class magdif:
         self.dens  = fluxvar[:,3]
         self.temp  = fluxvar[:,4]
         self.pres0 = fluxvar[:,5]
-        self.s = self.rho / np.amax(self.rho)
-        self.s_2 = np.square(self.s)
+        self.s = (self.psi - self.psi[0]) / (self.psi[-1] - self.psi[0])
 
     def load_mesh(self):
         with open(self.meshfile, 'r') as f:
@@ -212,8 +269,8 @@ class magdif:
         Bn_datafiles = ['plot_Bn.dat', 'plot_Bn_001.dat', 'plot_Bn_vac.dat']
         currn_datafiles = ['plot_currn.dat', 'plot_currn_001.dat']
         presn_datafiles = ['presn.dat', 'presn_001.dat']
-        vector_infix = ['_ReR', '_ImR', '_ReZ', '_ImZ', '_Rephi', '_Imphi',
-                        '_Reproj', '_Improj']
+        vector_infix = ['_R_Re', '_R_Im', '_Z_Re', '_Z_Im', '_phi_Re', '_phi_Im',
+                        '_contradenspsi_Re', '_contradenspsi_Im', '_cotheta_Re', '_cotheta_Im']
         scalar_infix = ['_Re', '_Im']
 
         for datafile in Bn_datafiles + currn_datafiles:
@@ -223,8 +280,8 @@ class magdif:
             self.generate_2d_triplots(datafile, 0, scalar_infix,
                 self.__class__.decorate_filename_presnplot)
         
-        self.plots.append(magdif_poloidal_modes(self.datadir,
-            'Bmn_psi.dat', 'Bmn_vac_psi.dat'))
+        self.plots.append(magdif_poloidal_modes(self.config['n'], self.s, self.q,
+            self.datadir, 'Bmn_psi.dat', 'Bmn_vac_psi.dat'))
 
     def dump_plots(self):
         for p in self.plots:

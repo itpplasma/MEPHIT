@@ -192,7 +192,7 @@ contains
     Bnflux_vac = Bnflux
     Bnphi_vac = Bnphi
     call write_vector_plot(Bnflux_vac, Bnphi_vac, &
-         decorate_filename(Bn_vacout_file, 'plot_'), .true.)
+         decorate_filename(Bn_vacout_file, 'plot_'))
     if (log_info) write(logfile, *) 'magdif initialized'
   end subroutine magdif_init
 
@@ -229,7 +229,7 @@ contains
     call compute_currn     ! compute currents based on previous perturbation field
     call compute_Bn        ! use field code to generate new field from currents
     call read_Bn(Bn_file)  ! read new bnflux from field code
-    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'), .true.)
+    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'))
   end subroutine magdif_single
 
   subroutine magdif_direct
@@ -251,17 +251,19 @@ contains
        call write_vector_dof(Bnflux_diff, Bnphi_diff, &
             decorate_filename(Bn_diff_file, '', kiter))
        call write_vector_plot(Bnflux_diff, Bnphi_diff, &
-            decorate_filename(Bn_diff_file, 'plot_', kiter), .true.)
+            decorate_filename(Bn_diff_file, 'plot_', kiter))
+       call write_vector_dof(Bnflux, Bnphi, &
+            decorate_filename(Bn_file, '', kiter))
        call write_vector_plot(Bnflux, Bnphi, &
-            decorate_filename(Bn_file, 'plot_', kiter), .true.)
+            decorate_filename(Bn_file, 'plot_', kiter))
        call write_vector_plot(jnflux, jnphi, &
-            decorate_filename(currn_file, 'plot_', kiter), .false.)
+            decorate_filename(currn_file, 'plot_', kiter))
        call write_scalar_dof(presn, decorate_filename(presn_file, '', kiter))
     end do
     call compute_presn
     call compute_currn
     call write_vector_dof(Bnflux, Bnphi, Bn_file)
-    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'), .true.)
+    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'))
   end subroutine magdif_direct
 
   subroutine magdif_precon
@@ -290,7 +292,7 @@ contains
        call unpack2(Bnflux, Bnphi, eigvecs(:, i))
        call write_vector_dof(Bnflux, Bnphi, decorate_filename(eigvec_file, '', i))
        call write_vector_plot(Bnflux, Bnphi, &
-            decorate_filename(eigvec_file, 'plot_', i), .true.)
+            decorate_filename(eigvec_file, 'plot_', i))
     end do
     allocate(Lr(ngrow, ngrow), Yr(ngrow, ngrow))
     Yr = (0d0, 0d0)
@@ -333,11 +335,13 @@ contains
        call write_vector_dof(Bnflux_diff, Bnphi_diff, &
             decorate_filename(Bn_diff_file, '', kiter))
        call write_vector_plot(Bnflux_diff, Bnphi_diff, &
-            decorate_filename(Bn_diff_file, 'plot_', kiter), .true.)
+            decorate_filename(Bn_diff_file, 'plot_', kiter))
+       call write_vector_dof(Bnflux, Bnphi, &
+            decorate_filename(Bn_file, '', kiter))
        call write_vector_plot(Bnflux, Bnphi, &
-            decorate_filename(Bn_file, 'plot_', kiter), .true.)
+            decorate_filename(Bn_file, 'plot_', kiter))
        call write_vector_plot(jnflux, jnphi, &
-            decorate_filename(currn_file, 'plot_', kiter), .false.)
+            decorate_filename(currn_file, 'plot_', kiter))
        call write_scalar_dof(presn, decorate_filename(presn_file, '', kiter))
 
        call pack2(Bnflux, Bnphi, Bn_prev)
@@ -1065,7 +1069,7 @@ inner: do kt = 1, kt_max(kf)
     call check_redundant_edges(jnflux, -1d0, 'jnflux')
 
     call write_vector_dof(jnflux, jnphi, currn_file)
-    call write_vector_plot(jnflux, jnphi, decorate_filename(currn_file, 'plot_'), .false.)
+    call write_vector_plot(jnflux, jnphi, decorate_filename(currn_file, 'plot_'))
   end subroutine compute_currn
 
   subroutine avg_flux_on_quad(pol_flux, tor_comp)
@@ -1142,22 +1146,21 @@ inner: do kt = 1, kt_max(kf)
     call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
-  subroutine write_vector_plot(pol_flux, tor_comp, outfile, proj_type)
+  subroutine write_vector_plot(pol_flux, tor_comp, outfile)
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
-    logical, intent(in) :: proj_type
 
     integer :: kf, kt
     type(triangle) :: elem
     type(knot) :: tri(3)
-    complex(dp) :: pol_comp_r, pol_comp_z, pol_comp_proj
+    complex(dp) :: pol_comp_r, pol_comp_z, pol_comp_normal, pol_comp_parallel
     real(dp) :: r, z
 
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     logical :: orient
-    real(dp) :: pr, pz
+    real(dp) :: n_f_r, n_f_z, l_f_r, l_f_z
 
     open(1, file = outfile, recl = longlines)
     do kf = 1, nflux
@@ -1175,36 +1178,48 @@ inner: do kt = 1, kt_max(kf)
                pol_flux(kt_low(kf) + kt, 2) * (z - tri(1)%zcoord) + &
                pol_flux(kt_low(kf) + kt, 3) * (z - tri(2)%zcoord))
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          if (proj_type) then  ! projection to psi (i.e. normal) component
-             if (orient) then
-                pr = mesh_point(lf(2))%zcoord - mesh_point(lf(1))%zcoord
-                pz = mesh_point(lf(1))%rcoord - mesh_point(lf(2))%rcoord
-             else
-                pr = mesh_point(lf(1))%zcoord - mesh_point(lf(2))%zcoord
-                pz = mesh_point(lf(2))%rcoord - mesh_point(lf(1))%rcoord
-             end if
-          else  ! projection to theta (i.e. parallel) component
-             if (orient) then
-                pr = mesh_point(lf(2))%rcoord - mesh_point(lf(1))%rcoord
-                pz = mesh_point(lf(2))%zcoord - mesh_point(lf(1))%zcoord
-             else
-                pr = mesh_point(lf(1))%rcoord - mesh_point(lf(2))%rcoord
-                pz = mesh_point(lf(1))%zcoord - mesh_point(lf(2))%zcoord
-             end if
+          ! projection to psi (i.e. normal) component
+          if (orient) then
+             n_f_r = mesh_point(lf(2))%zcoord - mesh_point(lf(1))%zcoord
+             n_f_z = mesh_point(lf(1))%rcoord - mesh_point(lf(2))%rcoord
+          else
+             n_f_r = mesh_point(lf(1))%zcoord - mesh_point(lf(2))%zcoord
+             n_f_z = mesh_point(lf(2))%rcoord - mesh_point(lf(1))%rcoord
           end if
-          pol_comp_proj = (pol_comp_r * pr + pol_comp_z * pz) * (psi(kf) - psi(kf-1)) &
-               / elem%det_3
+          pol_comp_normal = (pol_comp_r * n_f_r + pol_comp_z * n_f_z) * &
+               (psi(kf) - psi(kf-1)) / elem%det_3 * ring_centered_avg_B0phicontra()
+          ! projection to theta (i.e. parallel) component
+          if (orient) then
+             l_f_r = mesh_point(lf(2))%rcoord - mesh_point(lf(1))%rcoord
+             l_f_z = mesh_point(lf(2))%zcoord - mesh_point(lf(1))%zcoord
+          else
+             l_f_r = mesh_point(lf(1))%rcoord - mesh_point(lf(2))%rcoord
+             l_f_z = mesh_point(lf(1))%zcoord - mesh_point(lf(2))%zcoord
+          end if
+          pol_comp_parallel = (pol_comp_r * l_f_r + pol_comp_z * l_f_z) * &
+               (psi(kf) - psi(kf-1)) / elem%det_3 / r
           write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), real(pol_comp_z), &
                aimag(pol_comp_z), real(tor_comp(kt_low(kf) + kt)), &
-               aimag(tor_comp(kt_low(kf) + kt)), real(pol_comp_proj), aimag(pol_comp_proj)
+               aimag(tor_comp(kt_low(kf) + kt)), real(pol_comp_normal), &
+               aimag(pol_comp_normal), real(pol_comp_parallel), aimag(pol_comp_parallel)
        end do
     end do
     r = mesh_point(1)%rcoord
     z = mesh_point(1)%zcoord
     do kt = kt_low(nflux+1) + 1, ntri
-       write (1, *) r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+       write (1, *) r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
     end do
     close(1)
+
+  contains
+    function ring_centered_avg_B0phicontra() result(sqrt_g)
+      real(dp) :: sqrt_g
+      real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+      call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+      sqrt_g = r / Bp
+    end function ring_centered_avg_B0phicontra
   end subroutine write_vector_plot
 
   subroutine write_vector_dof(pol_flux, tor_comp, outfile)
@@ -1250,7 +1265,7 @@ inner: do kt = 1, kt_max(kf)
     real(dp) :: rho_r, rho_z
 
     open(1, file = fluxvar_file, recl = longlines)
-    write (1, *) 0d0, psi(0), 0d0, dens(0), temp(0), pres0(0)
+    write (1, *) 0d0, psi(0), q(1), dens(0), temp(0), pres0(0)
     do kf = 1, nflux
        rho_r = mesh_point(kp_low(kf) + 1)%rcoord - mesh_point(1)%rcoord
        rho_z = mesh_point(kp_low(kf) + 1)%zcoord - mesh_point(1)%zcoord
