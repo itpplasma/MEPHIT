@@ -1,8 +1,7 @@
 program magdif_test
   use magdif_config, only: read_config, runmode, runmode_single, &
        runmode_direct, runmode_precon
-  use magdif, only: magdif_init, magdif_cleanup, magdif_single, magdif_direct, &
-       magdif_precon
+  use magdif, only: magdif_init, magdif_cleanup, magdif_single, magdif_iterated
 
   implicit none
 
@@ -20,9 +19,9 @@ program magdif_test
   case (runmode_single)
      call magdif_single
   case (runmode_direct)
-     call magdif_direct
+     call magdif_iterated
   case (runmode_precon)
-     call magdif_precon
+     call magdif_iterated
   case default
      stop 'Error: unknown runmode'
   end select

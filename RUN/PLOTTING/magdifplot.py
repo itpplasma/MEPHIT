@@ -24,7 +24,7 @@ from multiprocessing import Pool
 matplotlib.rcParams['text.usetex'] = True
 matplotlib.rcParams['font.family'] = 'serif'
 matplotlib.rcParams['mathtext.fontset'] = 'cm'
-matplotlib.use('Qt5Agg')
+matplotlib.use('Agg')
 #==============================================================================
 # pgf_config = {
 #     'pgf.texsystem': 'lualatex',
@@ -83,6 +83,40 @@ class magdif_1d_cutplot:
         plt.ylabel(self.ylabel)
         plt.title(self.title)
         plt.savefig(self.filename)
+        plt.close()
+
+class magdif_conv_plot:
+    def __init__(self, datadir, conv_sum_file, conv_diff_file):
+        self.datadir = datadir
+        self.conv_sum_file = conv_sum_file
+        self.conv_diff_file = conv_diff_file
+
+    def dump_plot(self):
+        conv_sum = np.loadtxt(os.path.join(self.datadir, self.conv_sum_file))
+        conv_diff = np.loadtxt(os.path.join(self.datadir, self.conv_diff_file))
+        niter = len(conv_diff)
+        kiter = np.arange(0, niter + 1)
+        plt.figure(figsize = (9.6, 4.8))
+        
+        plt.subplot(1, 2, 1)
+        plt.semilogy(kiter, conv_sum / conv_sum[0], 'xk')
+        plt.ylim(np.array([0.95 * np.amin(conv_sum), 1.05 * np.amax(conv_sum)]) / conv_sum[0])
+        plt.xticks(kiter)
+        plt.xlabel('iteration step $k$')
+        plt.ylabel(r'$\Vert \vec{B}_{n}^{[k]} \Vert_{2}$ /'
+            r'$\Vert \vec{B}_{n}^{[0]} \Vert_{2}$')
+        plt.title('partial sums of perturbation field in terms of vacuum perturbation')
+        
+        plt.subplot(1, 2, 2)
+        plt.semilogy(kiter[1:], conv_diff / conv_sum[:-1], 'xk')
+        plt.xticks(kiter[1:])
+        plt.xlabel('iteration step $k$')
+        plt.ylabel(r'$\Vert \vec{B}_{n}^{[k]} - \vec{B}_{n}^{[k-1]} \Vert_{2}$ /'
+            r'$\Vert \vec{B}_{n}^{[k-1]} \Vert_{2}$')
+        plt.title('sequential relative differences of perturbation field')
+        
+        plt.tight_layout()
+        plt.savefig('convergence.pdf')
         plt.close()
 
 class magdif_poloidal_modes:
@@ -148,7 +182,7 @@ class magdif_poloidal_modes:
             plt.title('$m = {}$'.format(-m))
             plt.ylabel(r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx')
             plt.xlabel(r'$s$')
-            index = [i for (i, val) in enumerate(m_resonant) if val == -m]
+            index = [i for (i, val) in enumerate(m_resonant) if abs(val) == m]
             if len(index) == 1:
                 plt.plot([s_resonant[index], s_resonant[index]], yrang, 'b', alpha = 0.5)
             ax = plt.subplot(vert_plot, horz_plot, 2)
@@ -159,7 +193,7 @@ class magdif_poloidal_modes:
             plt.title('$m = {}$'.format(m))
             plt.xlabel(r'$s$')
             plt.ylabel(r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx')
-            index = [i for (i, val) in enumerate(m_resonant) if val == m]
+            index = [i for (i, val) in enumerate(m_resonant) if abs(val) == m]
             if len(index) == 1:
                 plt.plot([s_resonant[index], s_resonant[index]], yrang, 'b', alpha = 0.5)
             plt.tight_layout()
@@ -280,6 +314,7 @@ class magdif:
             self.generate_2d_triplots(datafile, 0, scalar_infix,
                 self.__class__.decorate_filename_presnplot)
         
+        self.plots.append(magdif_conv_plot(self.datadir, 'conv_sum.dat', 'conv_diff.dat'))
         self.plots.append(magdif_poloidal_modes(self.config['n'], self.s, self.q,
             self.datadir, 'Bmn_psi.dat', 'Bmn_vac_psi.dat'))
 

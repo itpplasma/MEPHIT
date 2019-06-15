@@ -6,11 +6,11 @@
    quad_avg = .true.                               ! average over quadrilaterals for non-resonant test case
 
    n = 2                                           ! harmonic index of perturbation
-   niter = 9                                       ! number of iteration steps
+   niter = 30                                      ! number of iteration steps
    nritz = 60                                      ! number of Ritz eigenvalues
    tol = 0.7d0                                     ! threshold for eigenvalues in preconditioner
    nkpol = 200                                     ! number of knots per poloidal loop
-   nflux = 74                                      ! number of flux surfaces up to and counting LCFS
+   nflux = 75                                      ! number of flux surfaces up to and counting LCFS
    ti0 = 3.d3                                      ! temperature on magnetic axis 
    di0 = 5.d13                                     ! density on magnetic axis
    damp = 0d0                                      ! damping factor for resonances

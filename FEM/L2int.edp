@@ -1,0 +1,49 @@
+include "magdif.idp"  // config (incl. filenames)
+
+mesh Th = readmesh(meshfile);
+fespace Vh0(Th, P0);
+fespace Hdiv(Th, RT0);
+
+Hdiv <complex> [Br, Bz];
+Vh0 <complex> Bphi;
+
+real BfluxRe, BfluxIm;
+complex redundancy;
+
+// count triangles in internal region 0
+int ntri = 0;
+for (int k = 0; k < Th.nt; k++) {
+  if (Th[k].label == 0)
+    ntri++;
+}
+cout << "Number of triangles in internal region: " << ntri << endl;
+
+ifstream ifile(ARGV[2]);
+for (int k = 0; k < Th.nt; k++) {
+  for (int j = 0; j < 3; j++) {
+    redundancy = Br[][Hdiv(k, (j+2) % 3)];
+    ifile >> BfluxRe >> BfluxIm;
+    // check orientation of edges and assign
+    // normal flux coordinate accordingly
+    if (redundancy != 0.0 && redundancy != Br[][Hdiv(k, (j+2) % 3)]) {
+      cerr << "Flux inconsistent in file " << currnfile
+        << " at triangle " << k << " edge " << (j+2) % 3 << ": "
+        << redundancy << " != " << Br[][Hdiv(k, (j+2) % 3)] << endl;
+    } else {
+      if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
+        Br[][Hdiv(k, (j+2) % 3)] = BfluxRe + 1.0i * BfluxIm;
+      } else {
+        Br[][Hdiv(k, (j+2) % 3)] = -BfluxRe - 1.0i * BfluxIm;
+      }
+    }
+  }
+  ifile >> BfluxRe >> BfluxIm;
+  Bphi[][k] = (BfluxRe + 1.0i * BfluxIm) / Th[k].area;
+}
+
+{
+  ofstream cfile(ARGV[3], append);
+  cfile.scientific.precision(16);
+  cfile << real(int2d(Th)(Br * conj(Br) * x + Bz * conj(Bz) * x +
+    Bphi * conj(Bphi) / x)) << endl;
+}

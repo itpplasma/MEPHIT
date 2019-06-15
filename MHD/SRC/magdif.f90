@@ -191,6 +191,7 @@ contains
     end if
     Bnflux_vac = Bnflux
     Bnphi_vac = Bnphi
+    call write_vector_dof(Bnflux_vac, Bnphi_vac, Bn_vacout_file)
     call write_vector_plot(Bnflux_vac, Bnphi_vac, &
          decorate_filename(Bn_vacout_file, 'plot_'))
     if (log_info) write(logfile, *) 'magdif initialized'
@@ -232,43 +233,10 @@ contains
     call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'))
   end subroutine magdif_single
 
-  subroutine magdif_direct
-    integer :: kiter
-    complex(dp) :: Bnflux_prev(ntri, 3)
-    complex(dp) :: Bnphi_prev(ntri)
-    complex(dp) :: Bnflux_diff(ntri, 3)
-    complex(dp) :: Bnphi_diff(ntri)
-
-    do kiter = 1, niter
-       if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter
-       Bnflux_prev = Bnflux
-       Bnphi_prev = Bnphi
-       call magdif_single
-       Bnflux = Bnflux + Bnflux_vac
-       Bnphi = Bnphi + Bnphi_vac
-       Bnflux_diff = Bnflux - Bnflux_prev
-       Bnphi_diff = Bnphi - Bnphi_prev
-       call write_vector_dof(Bnflux_diff, Bnphi_diff, &
-            decorate_filename(Bn_diff_file, '', kiter))
-       call write_vector_plot(Bnflux_diff, Bnphi_diff, &
-            decorate_filename(Bn_diff_file, 'plot_', kiter))
-       call write_vector_dof(Bnflux, Bnphi, &
-            decorate_filename(Bn_file, '', kiter))
-       call write_vector_plot(Bnflux, Bnphi, &
-            decorate_filename(Bn_file, 'plot_', kiter))
-       call write_vector_plot(jnflux, jnphi, &
-            decorate_filename(currn_file, 'plot_', kiter))
-       call write_scalar_dof(presn, decorate_filename(presn_file, '', kiter))
-    end do
-    call compute_presn
-    call compute_currn
-    call write_vector_dof(Bnflux, Bnphi, Bn_file)
-    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'))
-  end subroutine magdif_direct
-
-  subroutine magdif_precon
+  subroutine magdif_iterated
     use arnoldi_mod
 
+    logical :: preconditioned
     integer :: kiter, ndim, i, j, info
     complex(dp) :: Bnflux_diff(ntri, 3)
     complex(dp) :: Bnphi_diff(ntri)
@@ -277,59 +245,70 @@ contains
     complex(dp), allocatable :: Lr(:,:), Yr(:,:)
     integer, allocatable :: ipiv(:)
 
-    ! calculate eigenvectors
-    ieigen = 1
-    ! system dimension N ! - no need to include extended mesh
-    ndim = ntri * 4 ! kt_low(nflux+1) * 4
-    call arnoldi(ndim, nritz, eigvals, next_iteration)
-    if (log_info) then
-       write (logfile, *) 'Arnoldi method yields ', ngrow, ' Ritz eigenvalues > ', tol, ':'
-       do i = 1, ngrow
-          write (logfile, *) 'lambda ', i, ': ', eigvals(i)
-       end do
-    end if
-    do i = 1, ngrow
-       call unpack2(Bnflux, Bnphi, eigvecs(:, i))
-       call write_vector_dof(Bnflux, Bnphi, decorate_filename(eigvec_file, '', i))
-       call write_vector_plot(Bnflux, Bnphi, &
-            decorate_filename(eigvec_file, 'plot_', i))
-    end do
-    allocate(Lr(ngrow, ngrow), Yr(ngrow, ngrow))
-    Yr = (0d0, 0d0)
-    do i = 1, ngrow
-       Yr(i, i) = (1d0, 0d0)
-       do j = 1, ngrow
-          Lr(i, j) = sum(conjg(eigvecs(:, i)) * eigvecs(:, j)) * (eigvals(j) - (1d0, 0d0))
-       end do
-    end do
-    allocate(ipiv(ngrow))
-    call zgesv(ngrow, ngrow, Lr, ngrow, ipiv, Yr, ngrow, info)
-    if (allocated(ipiv)) deallocate(ipiv)
-    if (log_info) then
-       if (info == 0) then
-          write (logfile, *) 'Successfully inverted matrix for preconditioner'
+    preconditioned = runmode_precon == runmode
+    if (preconditioned) then
+       ! calculate eigenvectors
+       ieigen = 1
+       ! system dimension N ! - no need to include extended mesh
+       ndim = ntri * 4 ! kt_low(nflux+1) * 4
+       call arnoldi(ndim, nritz, eigvals, next_iteration)
+       if (log_info) then
+          write (logfile, *) 'Arnoldi method yields ', ngrow, ' Ritz eigenvalues > ', tol
+          do i = 1, ngrow
+             write (logfile, *) 'lambda ', i, ': ', eigvals(i)
+          end do
+       end if
+       if (ngrow > 0) then
+          do i = 1, ngrow
+             call unpack2(Bnflux, Bnphi, eigvecs(:, i))
+             call write_vector_dof(Bnflux, Bnphi, decorate_filename(eigvec_file, '', i))
+             call write_vector_plot(Bnflux, Bnphi, &
+                  decorate_filename(eigvec_file, 'plot_', i))
+          end do
+          allocate(Lr(ngrow, ngrow), Yr(ngrow, ngrow))
+          Yr = (0d0, 0d0)
+          do i = 1, ngrow
+             Yr(i, i) = (1d0, 0d0)
+             do j = 1, ngrow
+                Lr(i, j) = sum(conjg(eigvecs(:, i)) * eigvecs(:, j)) * (eigvals(j) - (1d0, 0d0))
+             end do
+          end do
+          allocate(ipiv(ngrow))
+          call zgesv(ngrow, ngrow, Lr, ngrow, ipiv, Yr, ngrow, info)
+          if (allocated(ipiv)) deallocate(ipiv)
+          if (log_info) then
+             if (info == 0) then
+                write (logfile, *) 'Successfully inverted matrix for preconditioner'
+             else
+                write (logfile, *) 'Matrix inversion for preconditioner failed: zgesv returns error', info
+                stop
+             end if
+          end if
+          do i = 1, ngrow
+             Lr(i, :) = eigvals(i) * Yr(i, :)
+          end do
+          if (allocated(Yr)) deallocate(Yr)
        else
-          write (logfile, *) 'Matrix inversion for preconditioner failed: zgesv returns error', info
-          stop
+          preconditioned = .false.
        end if
     end if
-    do i = 1, ngrow
-       Lr(i, :) = eigvals(i) * Yr(i, :)
-    end do
-    if (allocated(Yr)) deallocate(Yr)
 
     call pack2(Bnflux_vac, Bnphi_vac, Bn_prev)
-    Bn_prev = Bn_prev - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
-         matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn_prev)))
+    if (preconditioned) then
+       Bn_prev = Bn_prev - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
+            matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn_prev)))
+    end if
     do kiter = 1, niter
        if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter
 
        call next_iteration(ndim, Bn_prev, Bn)
-       Bn = Bn - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
-            matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn - Bn_prev)))
-       call unpack2(Bnflux, Bnphi, Bn)
-       call check_redundant_edges(Bnflux, -1d0, 'B_n')
-       call check_div_free(Bnflux, Bnphi, 1d-3, 'B_n')
+       if (preconditioned) then
+          Bn = Bn - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
+               matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn - Bn_prev)))
+          call unpack2(Bnflux, Bnphi, Bn)
+          call check_redundant_edges(Bnflux, -1d0, 'B_n')
+          call check_div_free(Bnflux, Bnphi, 1d-3, 'B_n')
+       end if
 
        call unpack2(Bnflux_diff, Bnphi_diff, Bn - Bn_prev)
        call write_vector_dof(Bnflux_diff, Bnphi_diff, &
@@ -375,7 +354,7 @@ contains
       Bnphi = Bnphi + Bnphi_vac
       call pack2(Bnflux, Bnphi, xnew)
     end subroutine next_iteration
-  end subroutine magdif_precon
+  end subroutine magdif_iterated
 
   !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
   !> of #magdif_config::nflux and #magdif_config::nkpol. Deallocation is done in
@@ -1141,7 +1120,6 @@ inner: do kt = 1, kt_max(kf)
        end do
     end do
     if (quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
-    call write_vector_dof(Bnflux_vac, Bnphi_vac, Bn_vacout_file)
     call check_div_free(Bnflux, Bnphi, 1d-09, 'non-resonant B_n')
     call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
