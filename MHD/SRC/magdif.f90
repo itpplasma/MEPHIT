@@ -245,12 +245,12 @@ contains
     complex(dp), allocatable :: Lr(:,:), Yr(:,:)
     integer, allocatable :: ipiv(:)
 
+    ! system dimension N ! - no need to include extended mesh
+    ndim = ntri * 4 ! kt_low(nflux+1) * 4
     preconditioned = runmode_precon == runmode
     if (preconditioned) then
        ! calculate eigenvectors
        ieigen = 1
-       ! system dimension N ! - no need to include extended mesh
-       ndim = ntri * 4 ! kt_low(nflux+1) * 4
        call arnoldi(ndim, nritz, eigvals, next_iteration)
        if (log_info) then
           write (logfile, *) 'Arnoldi method yields ', ngrow, ' Ritz eigenvalues > ', tol

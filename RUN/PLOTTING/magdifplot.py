@@ -52,15 +52,14 @@ class magdif_2d_triplot:
 
     def dump_plot(self):
         print('plotting ', self.filename)
-        plt.figure(figsize = (5.2, 4.8))
-        plt.tripcolor(self.node[:, 0], self.node[:, 1], self.tri - 1,
-            self.data, cmap = 'RdBu')
-        plt.xlim([min(self.node[:,0]) * 0.9, max(self.node[:,0]) * 1.1])
-        plt.axis('equal')
+        plt.figure(figsize = (3.6, 4.8))
+        plt.tripcolor(self.node[:, 0] * 0.01, self.node[:, 1] * 0.01, self.tri - 1,
+            self.data, cmap = 'RdBu_r')
+        plt.gca().set_aspect('equal')
         plt.colorbar(format = self.__class__.scifmt)
         plt.clim([-max(abs(self.data)), max(abs(self.data))])
-        plt.xlabel(r'$R$ / cm')
-        plt.ylabel(r'$Z$ / cm')
+        plt.xlabel(r'$R$ / m')
+        plt.ylabel(r'$Z$ / m')
         #plt.title(self.title)
         plt.savefig(self.filename)
         plt.close()
@@ -96,27 +95,19 @@ class magdif_conv_plot:
         conv_diff = np.loadtxt(os.path.join(self.datadir, self.conv_diff_file))
         niter = len(conv_diff)
         kiter = np.arange(0, niter + 1)
-        plt.figure(figsize = (9.6, 4.8))
-        
-        plt.subplot(1, 2, 1)
-        plt.semilogy(kiter, conv_sum / conv_sum[0], 'xk')
-        plt.ylim(np.array([0.95 * np.amin(conv_sum), 1.05 * np.amax(conv_sum)]) / conv_sum[0])
-        plt.xticks(kiter)
-        plt.xlabel('iteration step $k$')
-        plt.ylabel(r'$\Vert \vec{B}_{n}^{[k]} \Vert_{2}$ /'
-            r'$\Vert \vec{B}_{n}^{[0]} \Vert_{2}$')
-        plt.title('partial sums of perturbation field in terms of vacuum perturbation')
-        
-        plt.subplot(1, 2, 2)
-        plt.semilogy(kiter[1:], conv_diff / conv_sum[:-1], 'xk')
+        plt.figure(figsize = (8, 4.5))
+        plt.semilogy(kiter[1:], np.sqrt(conv_sum[0]) * 1e-6 / kiter[1:]**2, 'r-',
+            label = r'$\frac{1}{k^{2}} \Vert \delta \mathbf{B}_{\mathrm{v}} \Vert_{2}$')
+        plt.semilogy(kiter[1:], np.sqrt(conv_diff) * 1e-6, 'xk',
+            label = r'$\Vert \delta \mathbf{B}^{(k)} \Vert_{2}$')
+        plt.gca().legend(loc = 'lower left', fontsize = 'large')
         plt.xticks(kiter[1:])
         plt.xlabel('iteration step $k$')
-        plt.ylabel(r'$\Vert \vec{B}_{n}^{[k]} - \vec{B}_{n}^{[k-1]} \Vert_{2}$ /'
-            r'$\Vert \vec{B}_{n}^{[k-1]} \Vert_{2}$')
-        plt.title('sequential relative differences of perturbation field')
+        plt.ylabel(r'$\Vert \delta \mathbf{B} \Vert_{2}$ / T m')
+        plt.title('magnitude of terms in series expansion of perturbation field')
         
         plt.tight_layout()
-        plt.savefig('convergence.pdf')
+        plt.savefig(os.path.join(self.datadir, 'convergence.pdf'))
         plt.close()
 
 class magdif_poloidal_modes:
@@ -336,3 +327,45 @@ if __name__ == '__main__':
     testcase.load_mesh()
     testcase.generate_default_plots()
     testcase.dump_plots_parallel()
+
+#==============================================================================
+#     testcase = magdif(
+#         '/temp/lainer_p/NEO-EQ/coarse_grid/test_res_precon_lowdens',
+#         'test_res_precon_lowdens.in',
+#         '../PRELOAD/inputformaxwell.msh'
+#     )
+#     testcase.load_mesh()
+#     vacuum = np.loadtxt('/temp/lainer_p/NEO-EQ/coarse_grid/test_res_precon_highdens/plot_Bn_vac.dat')
+#     precon = np.loadtxt('/temp/lainer_p/NEO-EQ/coarse_grid/test_res_precon_lowdens/plot_Bn.dat')
+#     direct = np.loadtxt('/temp/lainer_p/NEO-EQ/coarse_grid/test_res_direct_lowdens/plot_Bn.dat')
+#     highdens = np.loadtxt('/temp/lainer_p/NEO-EQ/coarse_grid/test_res_precon_highdens/plot_Bn.dat')
+#     vacuum = vacuum[:,4] + 1j * vacuum[:,5]
+#     precon = precon[:,4] + 1j * precon[:,5]
+#     direct = direct[:,4] + 1j * direct[:,5]
+#     highdens = highdens[:,4] + 1j * highdens[:,5]
+#     testcase.plots.append(magdif_2d_triplot(
+#         node = testcase.node, tri = testcase.tri,
+#         data = 1e-4 * np.real(vacuum),
+#         title = r'$\mathrm{Re} \: \delta B_{\mathrm{v}}^{Z}$ / T',
+#         filename = '/temp/lainer_p/NEO-EQ/coarse_grid/Bn_vac_Z_Re.pdf'
+#     ))
+#     testcase.plots.append(magdif_2d_triplot(
+#         node = testcase.node, tri = testcase.tri,
+#         data = 1e-4 * np.real(precon),
+#         title = r'$\mathrm{Re} \: \delta B^{Z}$ / T',
+#         filename = '/temp/lainer_p/NEO-EQ/coarse_grid/Bn_Z_Re.pdf'
+#     ))
+#     testcase.plots.append(magdif_2d_triplot(
+#         node = testcase.node, tri = testcase.tri,
+#         data = 1e-4 * np.real(precon - direct),
+#         title = r'$\mathrm{Re} \: \Delta \delta B^{Z}$ / T',
+#         filename = '/temp/lainer_p/NEO-EQ/coarse_grid/Bn_diff_Z_Re.pdf'
+#     ))
+#     testcase.plots.append(magdif_2d_triplot(
+#         node = testcase.node, tri = testcase.tri,
+#         data = 1e-4 * np.real(highdens),
+#         title = r'$\mathrm{Re} \: \delta B^{Z}$ / T',
+#         filename = '/temp/lainer_p/NEO-EQ/coarse_grid/Bn_highdens_Z_Re.pdf'
+#     ))
+#     testcase.dump_plots()
+#==============================================================================

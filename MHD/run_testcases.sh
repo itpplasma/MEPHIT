@@ -7,4 +7,5 @@ do
     ./magdif_test.sh $testcase
     make plots config="$testcase"
     mv -t $target/${testcase%.*} *.pdf *.dat
+    cp -t $target/${testcase%.*} $testcase
 done
