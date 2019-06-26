@@ -164,10 +164,10 @@ program minimal_example
 
   open(newunit = fid, file = 'inputformaxwell.msh')
   write (fid, *) npoint, ntri, kp_max(nflux+1) - 1
-  do k = 1, kp_low(nflux)
+  do k = 1, kp_low(nflux+1)
      write (fid, *) mesh_point(k)%rcoord, mesh_point(k)%zcoord, 0
   end do
-  do k = kp_low(nflux) + 1, npoint
+  do k = kp_low(nflux+1) + 1, npoint
      write (fid, *) mesh_point(k)%rcoord, mesh_point(k)%zcoord, 1
   end do
   do k = 1, ntri
