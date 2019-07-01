@@ -179,6 +179,10 @@
 \tableofcontents
 
 \newpage
+\section{Ideal magneotohydrodynamics}
+
+[derivation of the stationary equilibrium, flux surfaces and \textsc{Grad}--\textsc{Shafranov} equation, flux surface quantities, \ldots]
+
 \section{Stationary linear perturbation of ideal MHD equilibrium}
 
 For the intended application on stationary (compared to MHD mode eigenfrequencies) non-axisymmetric magnetic perturbations by external coils, we consider a perturbed ideal MHD equilibrium for pressure $p$, currents $\vec{J}$ and magnetic field $\vec{B}$ fulfilling
@@ -200,7 +204,7 @@ Here the perturbation field in vacuum, $\Bvac$, is pre-evaluated by a \textsc{Bi
 
 The solution of \cref{eq:mhd} can further be split into two steps: First the pressure perturbation $\delta p$ is found, and then the plasma current density $\delta \vec{J}$ is computed using the condition $\divg \delta \vec{J} = 0$. For an unperturbed equilibrium with nested flux surfaces, both steps can be performed in a radially local manner if a field-aligned computational grid is used, which will become clear in the following sections. Radial coupling happens by the combination of the two individual steps since their effective radial locations of computation are shifted by a half-step in radial grid distance.
 
-\Cref{eq:mhd} and \cref{eq:ampere} are solved in an alternating way until convergence is reached, as described in \cref{sec:iteration}. In addition a preconditioner is used to enhance convergence, which is discussed in \cref{sec:Arnoldi}.
+\Cref{eq:mhd} and \cref{eq:ampere} are solved in an alternating way until convergence is reached, as described in \cref{sec:iteration}. In addition a preconditioner is used to enhance convergence, which is discussed in \cref{sec:Arnoldi}. This approach is also used by \cite{Albert16}.
 
 \subsection{Iteration scheme}
 \label{sec:iteration}
@@ -440,25 +444,111 @@ Since $\hat{A}$ is constant during iterations, these computations would only nee
   $\hat{L}_{r}$ & $r \times r$ \\
   \bottomrule
 \end{longtable}
+It should be noted that the approximation error of the \textsc{Ritz} eigenvalues relative to the true eigenvalues decreases with the size of the \textsc{Krylov} subspace. This means that more \textsc{Arnoldi} iterations should be completed than is purely necessary for the expected number of eigenvalues with absolute value below a given threshold. Even if most of them are not used in the preconditioner, without sufficient accurcy in the largest eigenvalues the preconditioner will fail to assure convergence.
 
 \clearpage
 \section{Geometrical considerations}
 
-Here we limit the analysis to an axisymmetric unperturbed equilibrium and a single toroidal perturbation harmonic $\Bpert = \Real (\vec{B}_{n} \e^{\im n \phi})$ with a similar notation for other perturbed quantities. As all equations are linear, a superposition of multiple harmonics is easily possible. Note that $n \neq 0$; such a perturbation is necessarily small and considered part of the axisymmetric equilibrium.
-% clarify why/whether $n = 0$ is in fact negligible
+Even when the magnetic field is not axisymmetric, the axisymmetry of the tokamak device carries over to the computational domain. It stands to reason to take the periodicity in the symmetry direction, i.e. the cylindrical angle $\phi$, into account. The non-axisymmetric magnetic perturbation field in cylindrical coordinates $(R, \phi, Z)$ can then be expanded as a \textsc{Fourier} series:
+\begin{gather}
+  \Bpert (R, \phi, Z) = \sum_{n = -\infty}^{\infty} \vec{B}_{n} (R, Z) \e^{\im n \phi}
+\end{gather}
+Note that only the component functions are transformed; the basis vectors which generally depend on the transformation variable are unaffected. This means $\Bpert$ and $\vec{B}_{n}$ share the same geometrical basis.
 
-In axisymmetric coordinate systems, such as cylindrical $(R, \phi, Z)$, the equations to solve for harmonics in the toroidal angle $\phi$ are
+As all equations are linear, a superposition of multiple harmonics is easily possible. Here we limit the analysis to an axisymmetric unperturbed equilibrium and a single toroidal perturbation harmonic
+\begin{gather}
+  \Bpert = \Real (\vec{B}_{n} \e^{\im n \phi})
+\end{gather}
+with fixed $n$ and a similar notation for other perturbed quantities. Note that $n \neq 0$; such a perturbation is necessarily small and considered part of the axisymmetric equilibrium. Thus an index $0$ unambiguously refers to equilibrium quantities. This choice and further conventions are also listed in \cref{tab:decorations}.
+
+In axisymmetric coordinate systems, such as the aforementioned cylindrical system $(R, \phi, Z)$, \cref{eq:mhd,eq:divfree} are to be solved for harmonics in the toroidal angle $\phi$:
 \begin{align}
   \grad p_{n} + \im n p_{n} \grad \phi &= \frac{1}{c} \left( \vec{J}_{0} \times \vec{B}_{n} + \vec{J}_{n} \times \vec{B}_{0} \right), \label{eq:mhd-phi} \\
   \divg \vec{J}_{n}^{\pol}+ \im n J_{n}^{\phi} &= 0. \label{eq:divfree-phi}
 \end{align}
-now with a 2D $\grad$ operator acting in the poloidal ($RZ$) plane. The divergence operator is defined via
-\begin{gather*}
-  \divg \vec{u} = \frac{1}{R \sqrt{g_{\pol}}} \pd{x^{k}} (R \sqrt{g_{\pol}} u^{k}),
-\end{gather*}
-where $\sqrt{g_{\pol}}$ is the metric tensor of the coordinates in the poloidal plane, which is equal to $1$ for cylindrical coordinates.
+now with a 2D $\grad$ operator acting in the poloidal ($RZ$) plane. The explicit definition depends on the coordinate system used and is outlined in \cref{sec:cocos}.
 
-The representation of equilibrium field $\vec{B}_{0}$ is given by
+\subsection{Coordinate conventions}
+\label{sec:cocos}
+
+We generally follow the notational convention of \textcite{dHaeseleer91}, which will be succinctly summarized in this section. When using curvilinear coordinates in three-dimensional Euclidean space, two complementary vector bases can be defined. Using coordinates $u^{1}, u^{2}, u^{3}$, the basis vectors $\vec{e}_{1}, \vec{e}_{2}, \vec{e}_{3}$ are defined as tangent-basis vectors, which means they follow the coordinate curves at a given point $\vec{R}$:
+\begin{gather}
+  \vec{e}_{k} (\vec{R}) = \pd[\vec{R}]{u^{k}}, \quad k = 1, 2, 3.
+\end{gather}
+This means that the corresponding coordinate $u^{k}$ is varied while the other two are held constant. Alternatively, the direction of a basis vector may be defined as normal vector on the associated coordinate surface, i.e. where $u^{k}$ is held constant and the other two coordinates are varied. These reciprocal basis vectores are then related to the gradient:
+\begin{gather}
+  \vec{e}^{k} (\vec{R}) = \grad u^{k} (\vec{R}), \quad k = 1, 2, 3.
+\end{gather}
+Note that with this definition, neither basis set is necessarily normalized or even orthogonal. They are however pairwise orthonormal by definition, so that
+\begin{gather}
+  \vec{e}_{i} \cdot \vec{e}^{j} = \delta_{i}^{j},
+\end{gather}
+where the indices are kept in the same position with the \textsc{Kronecker} delta. As a consequence, the following relations between basis vectors are also given, where $\varepsilon_{ijk} = 1$:
+\begin{gather}
+  \vec{e}_{i} = \frac{\vec{e}^{j} \times \vec{e}^{k}}{\vec{e}^{i} \cdot (\vec{e}^{j} \times \vec{e}^{k})}, \quad \vec{e}^{i} = \frac{\vec{e}_{j} \times \vec{e}_{k}}{\vec{e}_{i} \cdot (\vec{e}_{j} \times \vec{e}_{k})}.
+\end{gather}
+An abstract vector $\vec{v}$ can be expanded in either basis, using the \textsc{Einstein} summation convention:
+\begin{gather}
+  \vec{v} = (\vec{v} \cdot \vec{e}^{k}) \vec{e}_{k} = v^{k} \vec{e}_{k}, \quad \vec{v} = (\vec{v} \cdot \vec{e}_{k}) \vec{e}^{k} = v_{k} \vec{e}^{k}.
+\end{gather}
+In the first case using tangent-basis vectors, the component $v^{k}$ is called the contravariant component. In the second case using reciprocal basis vectors, the component $v_{k}$ is called the covariant component. Conversion between the two bases is accomplished via the components of the metric tensor $\symsf{g}$,
+\begin{gather}
+  v_{i} = g_{ij} v^{j}, \quad v^{i} = g^{ij} v_{j},
+\end{gather}
+where the summation convention is implicit and the metric tensor components are defined as
+\begin{gather}
+  g_{ij} = \vec{e}_{i} \cdot \vec{e}_{j}, \quad g^{ij} = \vec{e}^{i} \cdot \vec{e}^{j}.
+\end{gather}
+The determinant $g = \det \symsf{g}$ of the metric tensor appears further in the following vector calculations and is related to the Jacobian $J$ of the coordinate system defined by the $u^{k}$, again with $\varepsilon_{ijk} = 1$:
+\begin{gather}
+  J = \sqrt{g} = \sqrt{\det \symsf{g}} = \vec{e}_{i} \cdot (\vec{e}_{j} \times \vec{e}_{k}).
+\end{gather}
+With the nabla operator represented as
+\begin{gather}
+  \nabla = \vec{e}^{k} \pd{u^{k}},
+\end{gather}
+the gradient follows:
+\begin{gather}
+  \grad f = \pd[f]{u^{k}} \vec{e}^{k}.
+\end{gather}
+The divergence is most simply defined in terms of contravariant components,
+\begin{gather}
+  \divg \vec{v} = \frac{1}{\sqrt{g}} \pd{u^{k}} (\sqrt{g} v^{k}),
+\end{gather}
+while the curl in its simplest form uses covariant components and returns contravariant components:
+\begin{gather}
+  \curl \vec{v} = \frac{\varepsilon_{ijk}}{\sqrt{g}} \pd[v_{j}]{u^{i}} \vec{e}_{k}.
+\end{gather}
+On occasion, parallel or perpendicular components with respect to the magnetic field $\vec{B}$ are needed:
+\begin{gather}
+  \vec{v}^{\parallel} = (\vec{v} \cdot \hat{\vec{B}}) \hat{\vec{B}} = (\vec{v} \cdot \vec{h}) \vec{h}, \\
+  \vec{v}^{\perp} = -\hat{\vec{B}} \times (\hat{\vec{B}} \times \vec{v}) = -\vec{h} \times (\vec{h} \times \vec{v}).
+\end{gather}
+Here, $\hat{\vec{B}}$ denotes the unit vector of $\vec{B}$, but in the special case of the magnetic field, $\vec{h}$ may be used as well.
+
+Note that in general curvilinear coordinates, different basis vectors and vector components can have different physical dimensions depending on the coordinates used. Especially when dealing with numerical data, it would be desirable to use a representation with the \enquote{right} units and a normalized basis. In order to do so, one has to divide the vector component by the absolute value of its corresponding basis vector including physical units. To this end, the following representation will be used in this thesis, here with the example of the toroidal component of the magnetic field:
+\begin{gather}
+  B_{(\phi)} = \frac{B_{\phi}}{\lvert \vec{e}^{\phi} \rvert} = \frac{B^{\phi}}{\lvert \vec{e}_{\phi} \rvert}.
+\end{gather}
+With these conventions set forth, we can define the necessary coordinate systems.
+
+We use two different right-handed coordinate systems, one cylindrical and one pseudotoroidal. As cylindrical coordinates we use $(R, \phi, Z)$ with $\phi$ running counterclockwise as seen from above, so
+\begin{gather}
+  x = R \cos \phi, \quad y = R \sin \phi, \quad z = Z.
+\end{gather}
+These coordinates are used in computations and for meshes. They are orthogonal, as can be seen from the metric tensor, which is given by
+\begin{gather}
+  \symsf{g} = \begin{pmatrix}
+    1 & 0 & 0 \\
+    0 & R^{2} & 0 \\
+    0 & 0 & 1
+  \end{pmatrix},
+\end{gather}
+and only one basis vector is not normalized:
+\begin{gather}
+  \vec{e}_{(\phi)} = \frac{1}{R} \vec{e}_{\phi} = R \vec{e}^{\phi}.
+\end{gather}
+In regards to this coordinate system, the experimental setup can be characterized. When viewing the poloidal plane, $B_{0 (\phi)}$ points in the negative $\phi$ direction, the plasma current $I_{\text{p}}$ points in the positive $\phi$ direction and the poloidal field $\vec{B}_{0}^{\pol}$ is going in the clockwise direction. Poloidal-toroidal decomposition of the equilibrium field $\vec{B}_{0}$ then yields the representation
 \begin{gather}
   \vec{B}_{0} = \vec{B}_{0}^{\pol} + \vec{B}_{0}^{\tor},
 \end{gather}
@@ -467,31 +557,26 @@ where
   \vec{B}_{0}^{\pol} &= \grad \psi \times \grad \phi, \\
   \vec{B}_{0}^{\tor} &= B_{0 \phi} \grad \phi.
 \end{align}
-Here, $\psi$ is the disc poloidal flux $\Psi_{\pol}$ divided by $2 \pi$ and the sign chosen so that increases towards the magnetic axis -- $\psi_{\text{min}}$ is located at the outermost surface and $\psi_{\text{max}}$ is located at the magnetic axis. With $\phi$ increasing counter-clockwise when viewed from the top, this still constitutes a right-handed system.
-
-This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in cylindrical coordinates:
+Here, $\psi$ is the normalized \emph{disc} poloidal flux, i.e.
+\begin{gather}
+  \psi = \frac{1}{2 \pi} \Psi_{\pol} = \frac{1}{2 \pi} \int \vec{B}_{0} \cdot \diff \vec{S},
+\end{gather}
+where $\vec{S}$ is the disc that at a point of evaluation $(R_{S}, Z_{S})$ is given by $R \leq R_{S}, Z = Z_{S}$. The orientation of $\vec{S}$ and thus the sign of $\psi$ is chosen so that it increases towards the magnetic axis -- $\psi_{\text{min}}$ is located at the outermost flux surface and $\psi_{\text{max}}$ is located at the magnetic axis. This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in cylindrical coordinates:
 \begin{align}
   B_{0}^{R} &= (\grad \psi \times \grad \phi)^{R} = -\frac{1}{R} \pd[\psi]{Z}, \\
   B_{0}^{Z} &= (\grad \psi \times \grad \phi)^{Z} = \frac{1}{R} \pd[\psi]{R}.
 \end{align}
-Note that the toroidal field coils produce a magnetic field that is roughly proportional to $\frac{1}{R}$, so $B_{0 \phi}$ is assumed to be constant over the entire plasma volume.
+Note that the toroidal field coils produce a magnetic field that is roughly proportional to $\frac{1}{R}$, so $B_{0 \phi}$ is roughly constant over the entire plasma volume.
 
-\subsection{Coordinate conventions}
-\label{sec:cocos}
-
-We use two different right-handed coordinate systems: Firstly cylindrical coordinates $(R, \phi, Z)$ with $\phi$ running counterclockwise as seen from above, so
-\begin{gather*}
-  x = R \cos \phi, \quad y = R \sin \phi, \quad z = Z.
-\end{gather*}
-Those coordinates are used in computations and for meshes. Secondly, also symmetry flux coordinates $(\rho, \theta, \zeta)$ are used at some point for derivations. Here, we use the convention of \cite{dHaeseleer91} with radial coordinate growing towards the outside of the torus. An overview of possible conventions is given in \cite{Sauter13}, whose notation we will follow in this section. As a radial variable we use $\rho = \sigma_{\pol} \psi$ with $\sigma_{\pol} = +1$ for counterclockwise poloidal field $\vec{B}_{0}^{\pol}$ and $\sigma_{\pol} = -1$ for clockwise field. Here $\psi$ is the normalized ribbon poloidal flux also usually used in MHD for the \textsc{Grad}--\textsc{Shafranov} equation. The toroidal symmetry angle is defined in the direction opposite to $\phi$ with
-\begin{gather*}
-  \zeta = \frac{\pi}{2} - \phi.
-\end{gather*}
-The flux angle $\theta$ has the same orientation as $\vartheta = \arctan \frac{Z}{R}$, so the sign $\sigma_{\pol} = \sgn B^{\theta} = \sgn B^{\vartheta}$ is positive for counter-clockwise and negative for clockwise orientation in the poloidal plane. The Jacobian of symmetry flux coordinates $(\rho, \theta, \zeta) = (\sigma_{\pol} \psi, \theta, \frac{\pi}{2} - \phi)$ is
+The second set of coordinates represent a distorted pseudotoroidal system used as symmetry flux coordinates for derivations in \cref{sec:j0phi,sec:nonres}. Keeping the toroidal angle $\phi$, the poloidal plane is spanned by a pseudoradius $\rho$ centered at the magnetic axis and a poloidal angle $\theta$. While it is common to use $\psi$ as the pseudoradial coordinate, we keep the more intuitive notation of \textcite{dHaeseleer91} where $\rho$ is increasing towards the outside of the torus, i.e. $\rho = -\psi$. With $\theta$ pointing in the counter-clockwise direction, $(\rho, \phi, \theta)$ constitutes a right-hand system. While this deviates from \textcite{dHaeseleer91}, where $\zeta = \frac{\pi}{2} - \phi$ is used instead, it is consistent with the COCOS~3 convention of \textcite{Sauter13}, where an overview of possible combinations of coordinates are considered along with conversion between these choices and a procedure to check the consistency. As a consequence, the safety factor $q$ is positive and one of a few equivalent definitons is
 \begin{gather}
-  \sqrt{g} = \frac{\sigma_{\pol}}{B_{0}^{\theta}} = \sigma_{\pol} \frac{q}{B_{0}^{\zeta}} = -\sigma_{\pol} \frac{q}{B_{0}^{\phi}} = -\sigma_{\pol} \frac{q R^{2}}{B_{0 \phi}}.
+  q = \frac{B_{0}^{\phi}}{B_{0}^{\theta}}. \label{eq:q_field_line_pitch}
 \end{gather}
-If $B_{0}^{\theta}$ changes sign, both $\sigma_{\pol}$ and $q$ change sign, and a sign change in $B_{0}^{\phi}$ leads to a sign change also in $q$. Thus, $\sqrt{g}$ is always positive. The sign of $q$ describes the sign of the helicity in $(\theta, \zeta)$ and can be computed as described in \cref{sec:safety_factor}. Note that in our configuration (ASDEX Upgrade) $\sigma_{\pol} = -1$ and $B_{0 \phi}$ is positive, so $q$ is negative.
+The sign of $q$ describes the sign of the helicity in $(\phi, \theta)$ and can be explicitly computed as described in \cref{sec:safety_factor}. The Jacobian of symmetry flux coordinates $(\rho, \phi, \theta)$ is
+\begin{gather}
+  \sqrt{g} = \frac{-1}{B_{0}^{\theta}} = -\frac{q}{B_{0}^{\phi}} = -\frac{q R^{2}}{B_{0 \phi}}. \label{eq:flux_metric}
+\end{gather}
+The change of sign in comparison to \textcite{dHaeseleer91} is due to the reversed toroidal angle. This way, $\sqrt{g}$ is still positive.
 
 \subsection{Discretization and local coordinate system}
 \label{sec:grid}
@@ -560,6 +645,7 @@ The equilibrium field $\vec{B}_{0}$ is assumed to be available in GEQDSK format,
 [grid implementation \ldots]
 
 \subsection{Toroidal unperturbed current}
+\label{sec:j0phi}
 
 Since $\vec{B}_{0}$ and $p_{0}$ are directly available as input data, but $\vec{J}_{0}$ is not, the latter will be derived below from \cref{eq:mhd-gen}, the condition of divergence-freeness and symmetry considerations.
 
@@ -578,19 +664,19 @@ which is the diamagnetic current density. For the parallel current density we us
  0 = \divg \vec{J}_{0} &= \divg \vec{J}_{0}^{\perp} + \divg (J_{0}^{\parallel} \vec{h}_{0}) \nonumber \\
  &= -c \divg \frac{\grad p_{0} \times \vec{B}_{0}}{B_{0}^{2}} + \vec{B}_{0} \cdot \grad \frac{J_{0}^{\parallel}}{B_{0}}.
 \end{align}
-In straight-field line magnetic flux coordinates $(\rho, \theta, \zeta) = (-\psi, \theta, \frac{\pi}{2} - \phi)$ and Jacobian $\sqrt{g}$, the divergence of the diamagnetic current is
+In symmetry flux coordinates $(\rho, \phi, \theta)$ and Jacobian $\sqrt{g}$ outlined in \cref{sec:cocos}, the divergence of the diamagnetic current is
 \begin{align}
-  \divg \vec{J}_{0}^{\perp} &= -\frac{c}{\sqrt{g}} \pd{x^{k}} \left[ \frac{\sqrt{g}}{B_{0}^{2}} \left( \grad p_{0} \times \vec{B}_{0} \right)^{k} \right] \nonumber \\
-  &= -\frac{c}{\sqrt{g}} \pd{x^{k}} \left( \frac{\sqrt{g}}{B_{0}^{2}} \frac{\varepsilon^{ijk}}{\sqrt{g}} \pd[p_{0}]{x^{i}} B_{0 j} \right) \nonumber \\
-  &= \frac{c p_{0}' (\rho) B_{0 \zeta}}{\sqrt{g}} \pd{\theta} \frac{1}{B_{0}^{2}},
+  \divg \vec{J}_{0}^{\perp} &= -\frac{c}{\sqrt{g}} \pd{u^{k}} \left[ \frac{\sqrt{g}}{B_{0}^{2}} \left( \grad p_{0} \times \vec{B}_{0} \right)^{k} \right] \nonumber \\
+  &= -\frac{c}{\sqrt{g}} \pd{u^{k}} \left( \frac{\sqrt{g}}{B_{0}^{2}} \frac{\varepsilon^{ijk}}{\sqrt{g}} \pd[p_{0}]{u^{i}} B_{0 j} \right) \nonumber \\
+  &= -\frac{c p_{0}' (\rho) B_{0 \phi}}{\sqrt{g}} \pd{\theta} \frac{1}{B_{0}^{2}},
 \end{align}
-since $p_{0}$ and $B_{0 \zeta}$ are constant on a flux surface, $\pd[p_{0}]{\theta} = 0$ and due to axisymmetry $\pd{\zeta} = 0$. The divergence of the parallel current is
+since $p_{0}$ and $B_{0 \phi}$ are constant on a flux surface, $\pd[p_{0}]{\theta} = 0$ and due to axisymmetry $\pd{\zeta} = 0$ for equilibrium quantities. The divergence of the parallel current is
 \begin{gather}
   \divg(J_{0}^{\parallel} \vec{h}_{0}) = \vec{B}_{0} \cdot \grad \frac{J_{0}^{\parallel}}{B_{0}} = B_{0}^{\theta} \pd{\theta} \frac{J_{0}^{\parallel}}{B_{0}}.
 \end{gather}
-With $\sqrt{g} B_{0}^{\theta} = -\psi'(\rho)$ as a flux surface quantity, there are no dependencies of $\theta$ in front of the derivatives:
+With $\sqrt{g} B_{0}^{\theta} = \psi'(\rho) = -1$ as a flux surface quantity, there are no dependencies of $\theta$ in front of the derivatives:
 \begin{gather}
-  c p_{0}' (\rho) B_{0 \zeta} \pd{\theta} \frac{1}{B_{0}^{2}} - \psi'(\rho) \pd{\theta} \frac{J_{0}^{\parallel}}{B_{0}} = 0.
+  -c p_{0}' (\rho) B_{0 \phi} \pd{\theta} \frac{1}{B_{0}^{2}} + \psi'(\rho) \pd{\theta} \frac{J_{0}^{\parallel}}{B_{0}} = 0.
 \end{gather}
 Direct integration and a change of variables and notation as in
 \begin{gather}
@@ -598,7 +684,7 @@ Direct integration and a change of variables and notation as in
 \end{gather}
 yields
 \begin{gather}
-  \frac{-c p_{0}' (\psi) B_{0 \phi}}{B_{0}^{2}} - \frac{J_{0}^{\parallel}}{B_{0}} = C(\psi). \label{eq:j0parallel_general}
+  \frac{-c p_{0}' (\psi) B_{0 \phi}}{B_{0}^{2}} + \frac{J_{0}^{\parallel}}{B_{0}} = C(\psi). \label{eq:j0parallel_general}
 \end{gather}
 With the extra condition of the flux-surface average $\left\langle J_{0}^{\parallel} B_{0} \right\rangle = 0$ for testing without bootstrap current and the assumption $\left\langle B_{0 \phi} \right\rangle \approx B_{0 \phi}$, we obtain
 \begin{gather}
@@ -610,7 +696,7 @@ In general,
 \end{gather}
 with $D(\psi)$ set to 1 for now and modified for the more general case $\left\langle J_{0}^{\parallel} B_{0} \right\rangle \not\equiv 0$. Inserting this back into \cref{eq:j0parallel_general} yields
 \begin{gather}
-  J_{0}^{\parallel} = \frac{c p_{0}'(\psi) B_{0 \phi}}{B_{0}} \left( \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) - 1 \right).
+  J_{0}^{\parallel} = \frac{c p_{0}'(\psi) B_{0 \phi}}{B_{0}} \left( 1 - \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) \right).
 \end{gather}
 
 For the unperturbed toroidal current density we have
@@ -619,9 +705,9 @@ For the unperturbed toroidal current density we have
 \end{gather}
 where
 \begin{align}
-  J_{0}^{\parallel} h_{0}^{\phi} &= \frac{1}{B_{0}} c p_{0}'(\psi) B_{0 \phi} \frac{B_{0}^{\phi}}{B_{0}} \left( \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) - 1 \right) \nonumber \\
-  &= c p_{0}'(\psi) \frac{\left( B_{0}^{\tor} \right)^{2}}{B_0^2} \left( \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) - 1 \right) \nonumber \\
-  &= c p_{0}'(\psi) \left( B_{0}^{\tor} \right)^{2} \left( \frac{D(\psi)}{\left\langle B_{0}^{2} \right\rangle} - \frac{1}{B_{0}^{2}} \right).
+  J_{0}^{\parallel} h_{0}^{\phi} &= \frac{c p_{0}'(\psi) B_{0 \phi}}{B_{0}} \frac{B_{0}^{\phi}}{B_{0}} \left( 1 - \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) \right) \nonumber \\
+  &= c p_{0}'(\psi) \frac{\left( B_{0}^{\tor} \right)^{2}}{B_0^2} \left( 1 - \frac{B_{0}^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) \right) \nonumber \\
+  &= c p_{0}'(\psi) \left( B_{0}^{\tor} \right)^{2} \left( \frac{1}{B_{0}^{2}} - \frac{D(\psi)}{\left\langle B_{0}^{2} \right\rangle} \right).
 \end{align}
 and
 \begin{align}
@@ -632,25 +718,25 @@ and
 \end{align}
 It follows that
 \begin{gather}
-  J_{0}^{\phi} = c p_{0}'(\psi) \left( \frac{\left( B_{0}^{\tor} \right)^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi) + \frac{\left( B_{0}^{\pol} \right)^2 - \left( B_{0}^{\tor} \right)^2}{B_{0}^{2}} \right).
+  J_{0}^{\phi} = c p_{0}'(\psi) \left( \frac{\left( B_{0}^{\pol} \right)^{2} + \left( B_{0}^{\tor} \right)^{2}}{B_{0}^{2}} - \frac{\left( B_{0}^{\tor} \right)^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi)\right) = c p_{0}'(\psi) \left( 1 - \frac{\left( B_{0}^{\tor} \right)^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi)\right).
 \end{gather}
 
 \subsection{Safety factor}
 \label{sec:safety_factor}
 
-With the usual toroidal flux angle $\zeta = \frac{\pi}{2} - \phi$ used by \cite{dHaeseleer91}, the toroidal flux $\psi_{\tor}$ is given by
+Computing the safety factor from \cref{eq:q_field_line_pitch} would require the calculation of $\theta$ coordinate lines from $\vec{B}_{0}$. An equivalent definition from \cite{dHaeseleer91} involves the toroidal flux $\psi_{\tor}$, which in our choice of coordinates is given by
 \begin{gather}
-  \psi_{\tor} = \frac{1}{(2 \pi)^{2}} \int \diff V \, \vec{B} \cdot \grad \zeta = -\frac{1}{(2 \pi)^{2}} \int \diff V \, \vec{B} \cdot \grad \phi = -\frac{1}{2 \pi} \int \diff R \, \diff Z \, R B^{\phi} = -\frac{1}{2 \pi} \int \diff R \, \diff Z \, B_{(\phi)}.
+  \psi_{\tor} = \frac{1}{(2 \pi)^{2}} \int \diff V \, \vec{B}_{0} \cdot \grad \phi = \frac{1}{2 \pi} \int \diff R \, \diff Z \, R B_{0}^{\phi} = \frac{1}{2 \pi} \int \diff R \, \diff Z \, B_{0 (\phi)}.
 \end{gather}
-The safety factor is then given by
-\begin{gather*}
-  q = \frac{\psi_{\tor}' (\rho)}{\psi_{\pol}' (\rho)} = \frac{\psi_{\tor}' (\sigma_{\pol} \psi)}{\psi_{\pol}' (\sigma_{\pol} \psi)} = \td[\psi_{\tor}]{\psi} = -\frac{1}{2 \pi} \td{\psi} \int \diff R \, \diff Z \, B_{(\phi)}.
-\end{gather*}
-This quantity can be evaluated numerically by adding up $B_{(\phi)}$ inside the volume between two flux surfaces and dividing by the the difference in $\psi$:
+Note that $\psi_{\tor} < 0$ and $\psi_{\tor}' (\rho) < 0$. The safety factor is then given by
 \begin{gather}
-  q \approx -\frac{1}{2 \pi \symup{\Delta} \psi} \sum_{k} B_{(\phi)} (\Omega^{(k)}) S_{\Omega^{(k)}},
+  q = \frac{\psi_{\tor}' (\rho)}{\psi_{\pol}' (\rho)} = \frac{-\psi_{\tor}' (\psi)}{-\psi_{\pol}' (\psi)} = \td[\psi_{\tor}]{\psi} = \frac{1}{2 \pi} \td{\psi} \int \diff R \, \diff Z \, B_{0 (\phi)}.
 \end{gather}
-where the sum is taken over all triangles $\Omega$ inside a triangle strip, and $S_{\Omega}$ is the respective triangle surface area.
+This flux quantity can be evaluated numerically at half-grid steps by adding up $B_{0 (\phi)}$ inside the volume between two flux surfaces and dividing by the the difference in $\psi$:
+\begin{gather}
+  q \approx \frac{1}{2 \pi \symup{\Delta} \psi} \sum_{k} B_{0 (\phi)} (\Omega^{(k)}) S_{\Omega^{(k)}},
+\end{gather}
+where the sum is taken over all triangles $\Omega$ inside a triangle strip, and $S_{\Omega}$ is the respective triangle surface area. Note that both $B_{0 (\phi)}$ and $\symup{\Delta} \psi$ are negative, so $q$ is positive overall.
 
 \clearpage
 \section{Linearized MHD force balance}
@@ -852,36 +938,35 @@ If the perturbed field shall still lie on distorted, but not broken, flux surfac
   (\vec{B}_{0} + \Bpert) \cdot \grad (\psi + \delta \psi) = 0
 \end{gather*}
 for the perturbed magnetic field $\vec{B}_{0} + \Bpert$, where $\delta \psi$ remains small and continuous within the plasma. In that case we can use a linear order expansion
+\begin{gather}
+  \underbrace{\vec{B}_{0} \cdot \grad \psi}_{= 0} + \vec{B}_{0} \cdot \grad \delta \psi + \Bpert \cdot \grad \psi + \mathcal{O}(\delta^{2}) = 0,
+\end{gather}
+or in coordinate form with symmetry flux coordinates $(\rho, \phi, \theta)$ outlined in \cref{sec:cocos},
+\begin{gather}
+  B_{0}^{\theta} \pd{\theta} \delta \psi + B_{0}^{\phi} \pd{\phi} \delta \psi + \delta B^{\rho} \psi' (\rho) = 0.
+\end{gather}
+Here we have used $\grad \psi = \psi' (\rho) \grad \rho$. Further, $\psi' (\rho) = -1$. With safety factor
 \begin{gather*}
-  \underbrace{\vec{B}_{0} \cdot \grad \psi}_{= 0} + \vec{B}_{0} \cdot \grad \delta \psi + \Bpert \cdot \grad \psi + \mathcal{O}(\varepsilon^{2}) = 0,
+  q = \frac{B_{0}^{\phi}}{B_{0}^{\theta}}
 \end{gather*}
-or in coordinate form with symmetry flux coordinates $(\rho, \theta, \zeta)$,
-\begin{gather*}
-  B_{0}^{\theta} \pd[\delta \psi]{\theta} + B_{0}^{\zeta} \pd[\delta \psi]{\zeta} + \delta B^{\rho} \psi' (\rho) = 0.
-\end{gather*}
-Here we have used $\grad \psi = \psi' (\rho) \grad \rho$. Further, $\psi' (\rho) = \sigma_{\pol}$. With safety factor
-\begin{gather*}
-  q = \frac{B_{0}^{\zeta}}{B_{0}^{\theta}}
-\end{gather*}
-defined for clockwise toroidal direction $\diff \zeta = -\diff \phi$ (see \cref{sec:cocos}) by dividing through $B_{0}^{\theta}$, we obtain
-\begin{align*}
-  \left( \pd{\theta} + q \pd{\zeta} \right) \delta \psi = \left( \pd{\theta} - q \pd{\phi} \right) \delta \psi &= -\sigma_{\pol} \frac{\delta B^{\rho}}{B_{0}^{\theta}} = -\sigma_{\pol} \frac{\sqrt{g} \delta B^{\rho}}{\psi_{\tor}' (\rho)} = -\sigma_{\pol} \frac{\sqrt{g} \delta B^{\rho}}{\sigma_{\pol} \psi_{\tor}' (\psi)} = \\
-  &= -\frac{\sqrt{g} \delta B^{\rho}}{q} = -\sigma_{\pol} \frac{\sqrt{g} \delta B^{\psi}}{q}.
-\end{align*}
+and dividing by $B_{0}^{\theta}$, we obtain
+\begin{gather}
+  \left ( \pd{\theta} + q \pd{\phi} \right ) \delta \psi = \frac{\delta B^{\rho}}{B_{0}^{\theta}} = -\sqrt{g} \delta B^{\rho} = \sqrt{g} \delta B^{\psi}.
+\end{gather}
 Written in terms of toroidal Fourier harmonics $m, n$ in $\theta, \phi$ the equation becomes
 \begin{gather*}
-  \psi_{m n} = -\sigma_{\pol} \frac{\left( \sqrt{g} \delta B^{\psi} \right)_{m n}}{q (m - n q)} = -\sigma_{\pol} \frac{\left( \sqrt{g} B_{n}^{\psi} \right)_{m}}{q (m - n q)}.
+  \psi_{m n} = \frac{\left ( \sqrt{g} \delta B^{\psi} \right )_{m n}}{m + n q} = \frac{\left ( \sqrt{g} B_{n}^{\psi} \right )_{m}}{m + n q}.
 \end{gather*}
-The safety factor $q$ is a flux function, but $\sqrt{g}$ depends also on $\theta$, so poloidal harmonics $m$ have to be taken outside the bracket here. In order to fulfill the original requirement not to break flux surfaces, $\psi_{m n}$ must never diverge, so $(m - n q)$ must not become zero. We can avoid such resonant surfaces if
-\begin{gather*}
-  \left( \sqrt{g} B_{n}^{\psi} \right)_{m} = 0
-\end{gather*}
-for all possible $m$ that could lead to a resonance. The simplest way to do so is to make $\sqrt{g} B_{n}^{\psi}$ a flux function, possessing only the poloidally symmetric harmonic $m = 0$. More generally, also $m < n q_{\text{min}}$ and $m > n q_{\text{max}}$ are possible, but for nonzero $m$ a transformation to the flux angle $\theta$ has to be computed explicitly.
+$\sqrt{g}$ depends also on $\theta$, so poloidal harmonics $m$ have to be taken outside the bracket here. In order to fulfill the original requirement not to break flux surfaces, $\psi_{m n}$ must never diverge, so $m + n q$ must not become zero. We can avoid such resonant surfaces if
+\begin{gather}
+  \left ( \sqrt{g} B_{n}^{\psi} \right )_{m} \overset{!}{=} 0
+\end{gather}
+for all possible $m$ that could lead to a resonance. The simplest way to do so is to make $\sqrt{g} B_{n}^{\psi}$ a flux function, possessing only the poloidally symmetric harmonic $m = 0$. More generally, also $-m < n q_{\text{min}}$ and $-m > n q_{\text{max}}$ are possible, but for nonzero $m$ a transformation to the flux angle $\theta$ has to be computed explicitly.
 
-Using the Jacobian of symmetry flux coordinates we obtain
-\begin{gather*}
-  \psi_{m n} = \frac{1}{m - n q} \left( \frac{R^{2}}{B_{0 \phi}} B_{n}^{\psi} \right)_{m}
-\end{gather*}
+Using the Jacobian of symmetry flux coordinates from \cref{eq:flux_metric}, we obtain
+\begin{gather}
+  \psi_{m n} = \frac{q}{m + n q} \left( \frac{R^{2}}{B_{0 \phi}} B_{n}^{\psi} \right)_{m}
+\end{gather}
 and so, to generate a non-resonant field, we are allowed to use any value
 \begin{gather*}
   B_{n}^{\psi} = C(\psi) \frac{B_{0 \phi}}{R^{2}},
@@ -999,6 +1084,7 @@ Now an approximation can be made by switching from contravariant components to c
   \textbf{Notation} & \textbf{Description} \\
   \midrule
   \endhead
+  \label{tab:symbols}
   $\vec{B}$ & magnetic field strength, measured in Gauss \\
   $\Bplas$ & perturbation field from \emph{p}lasma current \\
   $\Bvac$ & perturbation field in \emph{v}acuum (from external coils) \\
@@ -1041,6 +1127,7 @@ Now an approximation can be made by switching from contravariant components to c
   \textbf{Notation} & \textbf{Description} \\
   \midrule
   \endhead
+  \label{tab:decorations}
   $p_{0}$ & equilibrium $p$ \\
   $\delta p$ & perturbation of $p$ \\
   $p_{n}$ & \textsc{Fourier} coefficient of perturbation of $p$ with toroidal mode number $n$ \\
@@ -1063,7 +1150,7 @@ Now an approximation can be made by switching from contravariant components to c
   \bottomrule
 \end{longtable}
 
-\section{\textsc{Arnoldi} iterations}
+\section{Arnoldi iterations}
 \label{app:Arnoldi}
 
 For an $N \times N$ matrix $\hat{K}$, the \textsc{Arnoldi} algorithm gives the largest $n_{r}$ \textsc{Ritz} eigenvalues $\lambda_{k}$  and the associated eigenvectors $\vec{v}_{k}$ which span the \textsc{Krylov} subspace of $\hat{K}$. To accomplish this, $\hat{K}$ is repeatedly applied to an arbitrary initial vector $\vec{q}_{1}$. In each iteration step, the next \textsc{Arnoldi} vector $\vec{q}_{k}$ is generated and orthonormalized with respect to the previously generated vectors by \textsc{Gram}-\textsc{Schmidt} orthogonalization. Also, entries of an upper \textsc{Hessenberg} matrix $\hat{H}$ are constructed, as outlined in \cref{alg:arnoldi}.
