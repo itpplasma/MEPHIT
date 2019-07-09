@@ -127,25 +127,20 @@ class magdif_poloidal_modes:
         # normalize psi
         s = (data[:,0] - data[0,0]) / (data[-1,0] - data[0,0])
         q = data[:,1]
-        q_neg = np.any(q < 0.0)
         
-        # s values neeed to be strictly increasing for interpolation
-        s_uniq_sort, sorted_indices = np.unique(s, return_index = True)
-        q_uniq_sort = q[sorted_indices]
-        q_min = np.amin(np.abs(q_uniq_sort))
-        q_max = np.amax(np.abs(q_uniq_sort))
-        q_interp = interpolate.interp1d(s_uniq_sort, q_uniq_sort, kind = 'cubic')
+        q_min = np.amin(self.q_mhd)
+        q_max = np.amax(self.q_mhd)
+        q_interp = interpolate.interp1d(self.s_mhd, self.q_mhd, kind = 'cubic')
         
-        m_resonant = np.arange(np.amax([np.ceil(q_min * self.n), self.n + 1]),
+        m_resonant = -np.arange(np.amax([np.ceil(q_min * self.n), self.n + 1]),
             np.floor(q_max * self.n) + 1, dtype = int)  # +1 to include end point
-        if not q_neg: m_resonant = -m_resonant
         q_resonant = -m_resonant / self.n
         s_resonant = np.zeros_like(m_resonant, dtype = float)
         for k, m in enumerate(m_resonant):
             def q_resonant_interp(x):
                 return q_interp(x) - q_resonant[k]
             s_resonant[k] = optimize.brentq(q_resonant_interp,
-                np.amin(s_uniq_sort), np.amax(s_uniq_sort))
+                np.amin(self.s_mhd), np.amax(self.s_mhd))
         print(s_resonant)
         print(np.array([0.608, 0.760, 0.823, 0.861, 0.891, 0.918])**2)
         
@@ -175,7 +170,7 @@ class magdif_poloidal_modes:
             plt.xlabel(r'$s$')
             index = [i for (i, val) in enumerate(m_resonant) if abs(val) == m]
             if len(index) == 1:
-                plt.plot([s_resonant[index], s_resonant[index]], yrang, 'b', alpha = 0.5)
+                ax.axvline(s_resonant[index], color = 'b', alpha = 0.5)
             ax = plt.subplot(vert_plot, horz_plot, 2)
             plt.plot(s, abs_ref[:, offset + m], 'r--')
             plt.plot(s, abs_data[:, offset + m])
@@ -186,20 +181,20 @@ class magdif_poloidal_modes:
             plt.ylabel(r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx')
             index = [i for (i, val) in enumerate(m_resonant) if abs(val) == m]
             if len(index) == 1:
-                plt.plot([s_resonant[index], s_resonant[index]], yrang, 'b', alpha = 0.5)
+                ax.axvline(s_resonant[index], color = 'b', alpha = 0.5)
             plt.tight_layout()
             plt.savefig(os.path.splitext(self.datafile)[0] + '_{}.pdf'.format(m))
             plt.close()
         plt.figure(figsize = (9.6, 4.8))
         ax = plt.subplot(vert_plot, horz_plot, 1)
-        plt.plot(s_uniq_sort, abs_ref[sorted_indices, offset], 'r--')
-        plt.plot(s_uniq_sort, abs_data[sorted_indices, offset])
+        plt.plot(s, abs_ref[:, offset], 'r--')
+        plt.plot(s, abs_data[:, offset])
         ax.ticklabel_format(style = 'sci', scilimits = (-3, 4))
         plt.title('$m = 0$')
         plt.xlabel(r'$s$')
         plt.ylabel(r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx')
         ax = plt.subplot(vert_plot, horz_plot, 2)
-        plt.plot(s, q, label = 'kinetic')
+        plt.plot(s, np.abs(q), label = 'kinetic')
         plt.plot(self.s_mhd, self.q_mhd, 'r--', label = 'MHD')
         ax.legend()
         plt.xlabel(r'$s$')

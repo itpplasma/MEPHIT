@@ -33,7 +33,7 @@ Bmn_vac_psi.dat: plot_Bn_vac.dat
 conv_sum.dat: $(Bn_sums)
 	rm -f $@
 	cd ../FEM
-	FreeFem++-nw L2int.edp ../MHD/Bn_vac.dat ../MHD/$@
+	FreeFem++-nw L2int.edp ../MHD/Bn_vac.dat ../MHD/$@ 1>/tmp/freefem.out 2>&1
 	for file in $^
 	do
 	FreeFem++-nw L2int.edp ../MHD/$$file ../MHD/$@ 1>/tmp/freefem.out 2>&1
@@ -45,6 +45,6 @@ conv_diff.dat: $(Bn_diffs)
 	cd ../FEM
 	for file in $^
 	do
-	FreeFem++-nw L2int.edp ../MHD/$$file ../MHD/$@ > 1>/tmp/freefem.out 2>&1
+	FreeFem++-nw L2int.edp ../MHD/$$file ../MHD/$@ 1>/tmp/freefem.out 2>&1
 	done
 	cd ../MHD

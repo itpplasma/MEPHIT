@@ -566,7 +566,7 @@ contains
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
           q(kf) = q(kf) + Bp * elem%det_3 * 0.5d0
        end do
-       q(kf) = -q(kf) * 0.5d0 / pi / (psi(kf) - psi(kf-1))  ! check sign
+       q(kf) = q(kf) * 0.5d0 / pi / (psi(kf) - psi(kf-1))
     end do
   end subroutine compute_safety_factor
 
@@ -665,10 +665,12 @@ contains
   !> necessary in the derivation, while Ampere's equation is not used.
   subroutine compute_j0phi
     integer :: kf, kt
-    real(dp) :: Bpol2, Btor2
+    real(dp) :: Btor2
     real(dp) :: B2avg(nflux)
     real(dp) :: B2avg_half(nflux)
-    real(dp) :: r
+    real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+    real(dp) :: plot_j0phi
     type(triangle) :: elem
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
@@ -694,30 +696,36 @@ contains
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+
           r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
-          Bpol2 = B0r(kt_low(kf) + kt, ef) ** 2 + B0z(kt_low(kf) + kt, ef) ** 2
           Btor2 = B0phi(kt_low(kf) + kt, ef) ** 2
           if (kf > 1 .and. .not. orient) then
-             j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf-1) * (Bpol2 / &
-                  B2avg(kf-1) + (Bpol2 - Btor2) / (Bpol2 + Btor2)) * r
+             j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf-1) * (1d0 - Btor2 / &
+                  B2avg(kf-1)) * r
           else
-             j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf) * (Bpol2 / &
-                  B2avg(kf) + (Bpol2 - Btor2) / (Bpol2 + Btor2)) * r
+             j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf) * (1d0 - Btor2 / &
+                  B2avg(kf)) * r
           end if
+
           r = sum(mesh_point(li(:))%rcoord) * 0.5d0
-          Bpol2 = B0r(kt_low(kf) + kt, ei) ** 2 + B0z(kt_low(kf) + kt, ei) ** 2
           Btor2 = B0phi(kt_low(kf) + kt, ei) ** 2
           j0phi(kt_low(kf) + kt, ei) = clight * (pres0(kf) - pres0(kf-1)) / &
-               (psi(kf) - psi(kf-1)) * (Btor2 / B2avg_half(kf) + &
-               (Bpol2 - Btor2) / (Bpol2 + Btor2)) * r
+               (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+
           r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
-          Bpol2 = B0r(kt_low(kf) + kt, eo) ** 2 + B0z(kt_low(kf) + kt, eo) ** 2
           Btor2 = B0phi(kt_low(kf) + kt, eo) ** 2
           j0phi(kt_low(kf) + kt, eo) = clight * (pres0(kf) - pres0(kf-1)) / &
-               (psi(kf) - psi(kf-1)) * (Btor2 / B2avg_half(kf) + &
-               (Bpol2 - Btor2) / (Bpol2 + Btor2)) * r
+               (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+
+          call ring_centered_avg_coord(elem, r, z)
+          call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+          Btor2 = Bp ** 2
+          plot_j0phi = clight * (pres0(kf) - pres0(kf-1)) / &
+               (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+
           write (1, *) j0phi(kt_low(kf) + kt, 1), j0phi(kt_low(kf) + kt, 2), &
-               j0phi(kt_low(kf) + kt, 3), ring_centered_avg_j0phi()
+               j0phi(kt_low(kf) + kt, 3), plot_j0phi
        end do
     end do
     do kt = kt_low(nflux+1) + 1, ntri
@@ -726,21 +734,6 @@ contains
     close(1)
 
     call check_redundant_edges(cmplx(j0phi, 0d0, dp), 1d0, 'j0phi')
-
-  contains
-    function ring_centered_avg_j0phi() result(plot_j0phi)
-      real(dp) :: plot_j0phi
-      real(dp) :: z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-      call ring_centered_avg_coord(elem, r, z)
-      call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-      Bpol2 = Br ** 2 + Bz ** 2
-      Btor2 = Bp ** 2
-      plot_j0phi = clight * (pres0(kf) - pres0(kf-1)) / &
-           (psi(kf) - psi(kf-1)) * (Btor2 / B2avg_half(kf) + &
-           (Bpol2 - Btor2) / (Bpol2 + Btor2)) * r
-    end function ring_centered_avg_j0phi
   end subroutine compute_j0phi
 
   !> Assembles a sparse matrix in coordinate list (COO) representation for use with
