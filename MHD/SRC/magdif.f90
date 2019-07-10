@@ -41,9 +41,6 @@ module magdif
   !> non-closed flux surface.
   real(dp), allocatable :: psi(:)
 
-  real(dp) :: psimin  !< Minimum flux surface label, located at the LCFS
-  real(dp) :: psimax  !< Maximum flux surface label, located at the magnetic axis
-
   !> Safety factor \f$ q \f$ (dimensionless).
   !>
   !> Values are taken between two flux surfaces with indices running from 1 to
@@ -477,7 +474,7 @@ contains
 
     do kt = 1, ntri
        div = abs((sum(pol_flux(kt,:)) + imun * n * tor_comp(kt) * &
-            mesh_element(kt)%det_3 * 0.5d0) / sum(pol_flux(kt,:)))
+            mesh_element(kt)%det_3 * 0.5d0)) / sum(abs(pol_flux(kt,:)))
        if (div > abs_err) then
           if (log_err) write(logfile, *) err_msg, ': ', div
           stop err_msg
@@ -604,14 +601,6 @@ contains
     integer :: kf
     real(dp) :: ddens_dpsi, dtemp_dpsi
 
-    psimin = minval(mesh_point%psi_pol)
-    psimax = maxval(mesh_point%psi_pol)
-
-    if (log_info) write(logfile,*) 'psimin = ', psimin, '  psimax = ', psimax
-
-    ddens_dpsi = di0 / psimax
-    dtemp_dpsi = ti0 / psimax
-
     allocate(pres0(0:nflux+1))
     allocate(dpres0_dpsi(0:nflux+1))
     allocate(dens(0:nflux+1))
@@ -625,8 +614,11 @@ contains
        ! average over the loop to smooth out numerical errors
        psi(kf) = sum(mesh_point((kp_low(kf) + 1):kp_low(kf+1))%psi_pol) / kp_max(kf)
     end do
-    dens = (psi - psimin) / psimax * di0 + d_min
-    temp = (psi - psimin) / psimax * ti0 + t_min
+
+    ddens_dpsi = di0 / (psi(0) - psi(nflux+1))
+    dtemp_dpsi = ti0 / (psi(0) - psi(nflux+1))
+    dens = (psi - psi(nflux+1)) / (psi(0) - psi(nflux+1)) * di0 + d_min
+    temp = (psi - psi(nflux+1)) / (psi(0) - psi(nflux+1)) * ti0 + t_min
     pres0 = dens * temp * ev2erg
     dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
   end subroutine init_flux_variables
