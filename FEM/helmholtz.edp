@@ -38,8 +38,8 @@ for (int k = 0; k < ntri; k++) {
 }
 
 solve Helmholtz(phi, psi, solver = UMFPACK) =               // defines the PDE
-  - int2d(Th)(x * (dx(psi) * dx(phi) + dy(psi) * dy(phi)))  // Laplacian
-  + int2d(Th)(x * psi * (lam - nmode^2) * phi )             // Helmholtz + harmonic part
+    int2d(Th)(x * (dx(psi) * dx(phi) + dy(psi) * dy(phi)))  // negative Laplacian
+  + int2d(Th)(x * psi * (lam + nmode^2) * phi )             // Helmholtz + harmonic part
   - int2d(Th)(x * psi * rho);                               // Sources
 
 Vh0 <complex> phi0 = phi;

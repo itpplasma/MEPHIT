@@ -30,7 +30,7 @@ ofstream rhof(rhofile);
 rhof.scientific.precision(16);
 
 rho = cos(x/200)*sin(y/200);
-lam = -x;
+lam = x;
 for (int k = 0; k < ntri; k++) {
   lamf << lam[][k] << endl;
   rhof << real(rho[][k]) << "\t" << imag(rho[][k]) << endl; 
