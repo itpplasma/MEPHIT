@@ -42,18 +42,20 @@ solve Helmholtz(phi, psi, solver = UMFPACK) =               // defines the PDE
   + int2d(Th)(x * psi * (lam - nmode^2) * phi )             // Helmholtz + harmonic part
   - int2d(Th)(x * psi * rho);                               // Sources
 
+Vh0 <complex> phi0 = phi;
+
 ofstream ofile("phi.dat");
 ofile.scientific.precision(16);
 for (int k = 0; k < ntri; k++) {
-  ofile << real(psi[][k]) << imag(psi[][k]) << endl;
+  ofile << real(phi0[][k]) << "\t" << imag(phi0[][k]) << endl;
 }
 
 if (doplot) {
-  real plotvar;
+  Vh0 plotvar;
   plotvar = lam; plot(plotvar, wait = true, value = true);
   plotvar = real(rho); plot(plotvar, wait = true, value = true);
   plotvar = imag(rho); plot(plotvar, wait = true, value = true);
-  plotvar = real(phi); plot(plotvar, wait = true, value = true);
-  plotvar = imag(phi); plot(plotvar, wait = true, value = true);
+  plotvar = real(phi0); plot(plotvar, wait = true, value = true);
+  plotvar = imag(phi0); plot(plotvar, wait = true, value = true);
 }
 
