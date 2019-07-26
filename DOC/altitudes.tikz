@@ -1,0 +1,42 @@
+\begin{tikzpicture}[> = Stealth, line join = round, shape = circle, scale = 1]  % , font = \small
+  \tikzmath{
+    real \ri, \rm, \ro;
+    int \sector, \overshoot, \arcstart, \arcend;
+    \ri = 10; % 6;
+    \rm = 12.5; % 7.5;
+    \ro = 15; % 9;
+    \sector = 7.5;
+    \overshoot = 3;
+    \arcstart = 90 - \sector - \overshoot;
+    \arcend = 90 + \sector + \overshoot;
+  };
+  \draw (\arcstart:\ri) arc [start angle = \arcstart, end angle = \arcend, radius = \ri, very thin, color = gray];
+  \draw (\arcstart:\rm) arc [start angle = \arcstart, end angle = \arcend, radius = \rm, very thin, color = gray];
+  \draw (\arcstart:\ro) arc [start angle = \arcstart, end angle = \arcend, radius = \ro, very thin, color = gray];
+  \coordinate (ri1) at (82.5:\ri); \coordinate (rm1) at (82.5:\rm); \coordinate (ro1) at (82.5:\ro);
+  \coordinate (ri2) at (97.5:\ri); \coordinate (rm2) at (97.5:\rm); \coordinate (ro2) at (97.5:\ro);
+  \draw (rm1) -- (rm2);
+  \draw (rm1) -- (ri2) -- (rm2) -- (ro1) -- cycle;
+
+  \coordinate (rm1e) at ($ (rm1) + (1, 0) $);
+  \path [name path = edge] (rm1e) -- (rm2);
+  \path [name path = inner altitude] (ri2) -- ($ (rm1)!(ri2)!(rm2) $) ++(90:0.02);
+  \path [name path = outer altitude] (ro1) -- ($ (rm2)!(ro1)!(rm1) $) ++(270:0.02);
+  \draw [name intersections = {of = edge and inner altitude, by = Fi}] (ri2) -- (Fi);
+  \draw [name intersections = {of = edge and outer altitude, by = Fo}] (ro1) -- (Fo);
+  \draw [dotted] (rm1) -- (Fo);
+
+  % \draw (90:\ri) -- (90:\ro);
+  \coordinate (Gf) at ($ (rm1) ! 0.5 ! (rm2) $);
+  \draw[thick, ->] (Gf) -- node [very near end, auto] {$\vec{n}_{\fs}$} ($ (Gf) ! 2 ! 90:(rm1) $);
+
+  \node[circle, above left] at (\arcend:\ri) {$\psi^{(-1)}$};
+  \node[circle, above left] at (\arcend:\rm) {$\psi^{(0)}$};
+  \node[circle, above left] at (\arcend:\ro) {$\psi^{(+1)}$};
+
+  \node[circle, above right] at (Fo) {$a_{\fs}^{(+1)}$};
+  \node[circle, below right] at (Fi) {$a_{\fs}^{(-1)}$};
+  \node[circle, below right] at (Gf) {$l_{\fs}$};
+  \node at ($ 1/4*(rm1) + 1/4*(rm2) + 1/2*(ri2) $) {$\Omega^{(-1)}$};
+  \node at ($ 1/4*(rm1) + 1/4*(rm2) + 1/2*(ro1) $) {$\Omega^{(+1)}$};
+\end{tikzpicture}
