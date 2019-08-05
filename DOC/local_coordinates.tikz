@@ -40,8 +40,8 @@
   \draw[thick, ->] (Gf7) -- node [near end, auto, swap] {$\vec{n}_{\fs}$} ($ (Gf7) ! 2 ! 90:(ri5) $);
   \draw[thick, ->] (Gi7) -- node [very near end, auto] {$\vec{n}_{\inw}$} ($ (Gi7) ! 2 ! 90:(ri4) $);
 
-  \node (O2) at ($ 0.5*(ri2) + 0.25*(ro1) + 0.25*(ro2) $) {$\odot$};
-  \node (O7) at ($ 0.5*(ro4) + 0.25*(ri5) + 0.25*(ri4) $) {$\odot$};
+  \node (O2) at ($ 0.5*(ri2) + 0.25*(ro1) + 0.25*(ro2) $) {$\otimes$};
+  \node (O7) at ($ 0.5*(ro4) + 0.25*(ri5) + 0.25*(ri4) $) {$\otimes$};
   \node[circle, above right] at (O2) {$\nabla \phi$};
   \node[circle, below] at (O7) {$\nabla \phi$};
 \end{tikzpicture}
