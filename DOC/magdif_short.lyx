@@ -1,0 +1,238 @@
+#LyX 2.3 created this file. For more info see http://www.lyx.org/
+\lyxformat 544
+\begin_document
+\begin_header
+\save_transient_properties true
+\origin unavailable
+\textclass article
+\use_default_options true
+\maintain_unincluded_children false
+\language english
+\language_package default
+\inputencoding auto
+\fontencoding global
+\font_roman "default" "default"
+\font_sans "default" "default"
+\font_typewriter "default" "default"
+\font_math "auto" "auto"
+\font_default_family default
+\use_non_tex_fonts false
+\font_sc false
+\font_osf false
+\font_sf_scale 100 100
+\font_tt_scale 100 100
+\use_microtype false
+\use_dash_ligatures true
+\graphics default
+\default_output_format default
+\output_sync 0
+\bibtex_command default
+\index_command default
+\paperfontsize 12
+\spacing single
+\use_hyperref false
+\papersize default
+\use_geometry true
+\use_package amsmath 1
+\use_package amssymb 1
+\use_package cancel 1
+\use_package esint 1
+\use_package mathdots 1
+\use_package mathtools 1
+\use_package mhchem 1
+\use_package stackrel 1
+\use_package stmaryrd 1
+\use_package undertilde 1
+\cite_engine basic
+\cite_engine_type default
+\biblio_style plain
+\use_bibtopic false
+\use_indices false
+\paperorientation portrait
+\suppress_date false
+\justification true
+\use_refstyle 1
+\use_minted 0
+\index Index
+\shortcut idx
+\color #008000
+\end_index
+\leftmargin 2cm
+\topmargin 2cm
+\rightmargin 2cm
+\bottommargin 2cm
+\secnumdepth 3
+\tocdepth 3
+\paragraph_separation skip
+\defskip smallskip
+\is_math_indent 0
+\math_numbering_side default
+\quotes_style english
+\dynamic_quotes 0
+\papercolumns 1
+\papersides 1
+\paperpagestyle default
+\tracking_changes false
+\output_changes false
+\html_math_output 0
+\html_css_as_file 0
+\html_be_strict false
+\end_header
+
+\begin_body
+
+\begin_layout Standard
+
+\lang british
+\begin_inset FormulaMacro
+\newcommand{\tht}{\vartheta}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\ph}{\varphi}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\balpha}{\boldsymbol{\alpha}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\btheta}{\boldsymbol{\theta}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bJ}{\boldsymbol{J}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bGamma}{\boldsymbol{\Gamma}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bOmega}{\boldsymbol{\Omega}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\d}{\text{d}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\t}[1]{\text{#1}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\m}{\text{m}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\bm}{\text{\textbf{m}}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\k}{\text{k}}
+\end_inset
+
+
+\begin_inset FormulaMacro
+\newcommand{\i}{\text{i}}
+\end_inset
+
+
+\end_layout
+
+\begin_layout Title
+Short comment on chapter 5 of linear ideal MHD by Patrick Lainer
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{J}_{0}\times\nabla\varphi & =\frac{1}{B_{0\varphi}}\left(c\nabla p_{0}-\frac{J_{0\varphi}}{R^{2}}\right)\nabla\psi\\
+ & =\frac{1}{B_{0\varphi}}\left(cp_{0}^{\prime}(\psi)-J_{0}^{\varphi}\right)\nabla\psi.
+\end{align}
+
+\end_inset
+
+We have (5.21)
+\begin_inset Formula 
+\begin{equation}
+\boldsymbol{l}\cdot(\nabla\varphi\times\boldsymbol{B}_{n}^{\mathrm{pol}})=-\frac{1}{R}\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}.
+\end{equation}
+
+\end_inset
+
+So (5.18) becomes
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{l}\cdot(\boldsymbol{J}_{0}\times\boldsymbol{B}_{n}) & =\boldsymbol{l}\cdot(B_{n\varphi}\boldsymbol{J}_{0}^{\mathrm{pol}}\times\nabla\varphi+J_{0\varphi}\nabla\varphi\times\boldsymbol{B}_{n}^{\mathrm{pol}})\\
+ & =\frac{B_{n\varphi}}{B_{0\varphi}}\left(cp_{0}^{\prime}(\psi)-J_{0}^{\varphi}\right)\boldsymbol{l}\cdot\nabla\psi+J_{0\varphi}\boldsymbol{l}\cdot(\nabla\varphi\times\boldsymbol{B}_{n}^{\mathrm{pol}})\\
+ & =\frac{B_{n\varphi}}{B_{0\varphi}}\left(cp_{0}^{\prime}(\psi)-J_{0}^{\varphi}\right)\boldsymbol{l}\cdot\nabla\psi-RJ_{0}^{\varphi}\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}.
+\end{align}
+
+\end_inset
+
+According to (5.14) and (5.16)
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{l}\cdot(\boldsymbol{J}_{n}\times\boldsymbol{B}_{0}) & =(\boldsymbol{l}\cdot\nabla\psi)J_{n}^{\varphi}+RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}\\
+ & =RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}-RJ_{n}^{\varphi}\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}.
+\end{align}
+
+\end_inset
+
+we can insert into multiplication of 
+\begin_inset Formula $\boldsymbol{l}\cdot$
+\end_inset
+
+(5.12) to obtain (5.22)
+\begin_inset Formula 
+\begin{equation}
+(\boldsymbol{l}\cdot\nabla\psi)J_{n}^{\varphi}+RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}=c\boldsymbol{l}\cdot\nabla p_{n}-\frac{B_{n\varphi}}{B_{0\varphi}}\left(cp_{0}^{\prime}(\psi)-J_{0}^{\varphi}\right)\boldsymbol{l}\cdot\nabla\psi+RJ_{0}^{\varphi}\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}.
+\end{equation}
+
+\end_inset
+
+Multiplying by 
+\begin_inset Formula $R$
+\end_inset
+
+ and dividing by 
+\begin_inset Formula $(\boldsymbol{l}\cdot\nabla\psi)$
+\end_inset
+
+ yields
+\begin_inset Formula 
+\begin{equation}
+RJ_{n}^{\varphi}=-RB_{0}^{\varphi}\frac{\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}}{\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}}+\frac{c}{\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}}\left(\boldsymbol{l}\cdot\nabla p_{n}-\frac{B_{n\varphi}}{B_{0\varphi}}\boldsymbol{l}\cdot\nabla p_{0}\right)+RJ_{0}^{\varphi}\left(\frac{B_{n\varphi}}{B_{0\varphi}}-\frac{\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}}{\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}}\right).
+\end{equation}
+
+\end_inset
+
+On edge f some terms vanish, as 
+\begin_inset Formula $\boldsymbol{l}\cdot\nabla\psi=0$
+\end_inset
+
+, so from (5.22) we get directly to (5.24) with
+\begin_inset Formula 
+\begin{equation}
+RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}_{\mathrm{f}}=c\boldsymbol{l}_{\mathrm{f}}\cdot\nabla p_{n}+RJ_{0}^{\varphi}\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}_{\mathrm{f}}.
+\end{equation}
+
+\end_inset
+
+
+\end_layout
+
+\end_body
+\end_document

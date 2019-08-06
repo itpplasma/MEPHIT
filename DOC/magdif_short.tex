@@ -1,0 +1,67 @@
+%% LyX 2.3.2 created this file.  For more info, see http://www.lyx.org/.
+%% Do not edit unless you really know what you are doing.
+\documentclass[12pt,british,english]{article}
+\usepackage[T1]{fontenc}
+\usepackage[latin9]{inputenc}
+\usepackage{geometry}
+\geometry{verbose,tmargin=2cm,bmargin=2cm,lmargin=2cm,rmargin=2cm}
+\setlength{\parskip}{\smallskipamount}
+\setlength{\parindent}{0pt}
+\usepackage{amsmath}
+\usepackage{babel}
+\begin{document}
+\selectlanguage{british}%
+\global\long\def\tht{\vartheta}%
+\global\long\def\ph{\varphi}%
+\global\long\def\balpha{\boldsymbol{\alpha}}%
+\global\long\def\btheta{\boldsymbol{\theta}}%
+\global\long\def\bJ{\boldsymbol{J}}%
+\global\long\def\bGamma{\boldsymbol{\Gamma}}%
+\global\long\def\bOmega{\boldsymbol{\Omega}}%
+\global\long\def\d{\text{d}}%
+\global\long\def\t#1{\text{#1}}%
+\global\long\def\m{\text{m}}%
+\global\long\def\bm{\text{\textbf{m}}}%
+\global\long\def\k{\text{k}}%
+\global\long\def\i{\text{i}}%
+
+\title{\selectlanguage{english}%
+Short comment on chapter 5 of linear ideal MHD by Patrick Lainer}
+
+\maketitle
+\begin{align}
+\boldsymbol{J}_{0}\times\nabla\varphi & =\frac{1}{B_{0\varphi}}\left(c\nabla p_{0}-\frac{J_{0\varphi}}{R^{2}}\right)\nabla\psi\\
+ & =\frac{1}{B_{0\varphi}}\left(cp_{0}^{\prime}(\psi)-J_{0}^{\varphi}\right)\nabla\psi.
+\end{align}
+We have (5.21)
+\begin{equation}
+\boldsymbol{l}\cdot(\nabla\varphi\times\boldsymbol{B}_{n}^{\mathrm{pol}})=-\frac{1}{R}\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}.
+\end{equation}
+So (5.18) becomes
+\begin{align}
+\boldsymbol{l}\cdot(\boldsymbol{J}_{0}\times\boldsymbol{B}_{n}) & =\boldsymbol{l}\cdot(B_{n\varphi}\boldsymbol{J}_{0}^{\mathrm{pol}}\times\nabla\varphi+J_{0\varphi}\nabla\varphi\times\boldsymbol{B}_{n}^{\mathrm{pol}})\\
+ & =\frac{B_{n\varphi}}{B_{0\varphi}}\left(cp_{0}^{\prime}(\psi)-J_{0}^{\varphi}\right)\boldsymbol{l}\cdot\nabla\psi+J_{0\varphi}\boldsymbol{l}\cdot(\nabla\varphi\times\boldsymbol{B}_{n}^{\mathrm{pol}})\\
+ & =\frac{B_{n\varphi}}{B_{0\varphi}}\left(cp_{0}^{\prime}(\psi)-J_{0}^{\varphi}\right)\boldsymbol{l}\cdot\nabla\psi-RJ_{0}^{\varphi}\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}.
+\end{align}
+According to (5.14) and (5.16)
+\begin{align}
+\boldsymbol{l}\cdot(\boldsymbol{J}_{n}\times\boldsymbol{B}_{0}) & =(\boldsymbol{l}\cdot\nabla\psi)J_{n}^{\varphi}+RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}\\
+ & =RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}-RJ_{n}^{\varphi}\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}.
+\end{align}
+we can insert into multiplication of $\boldsymbol{l}\cdot$(5.12)
+to obtain (5.22)
+\begin{equation}
+(\boldsymbol{l}\cdot\nabla\psi)J_{n}^{\varphi}+RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}=c\boldsymbol{l}\cdot\nabla p_{n}-\frac{B_{n\varphi}}{B_{0\varphi}}\left(cp_{0}^{\prime}(\psi)-J_{0}^{\varphi}\right)\boldsymbol{l}\cdot\nabla\psi+RJ_{0}^{\varphi}\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}.
+\end{equation}
+Multiplying by $R$ and dividing by $(\boldsymbol{l}\cdot\nabla\psi)$
+yields
+\begin{equation}
+RJ_{n}^{\varphi}=-RB_{0}^{\varphi}\frac{\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}}{\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}}+\frac{c}{\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}}\left(\boldsymbol{l}\cdot\nabla p_{n}-\frac{B_{n\varphi}}{B_{0\varphi}}\boldsymbol{l}\cdot\nabla p_{0}\right)+RJ_{0}^{\varphi}\left(\frac{B_{n\varphi}}{B_{0\varphi}}-\frac{\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}}{\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}}\right).
+\end{equation}
+On edge f some terms vanish, as $\boldsymbol{l}\cdot\nabla\psi=0$,
+so from (5.22) we get directly to (5.24) with
+\begin{equation}
+RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}_{\mathrm{f}}=c\boldsymbol{l}_{\mathrm{f}}\cdot\nabla p_{n}+RJ_{0}^{\varphi}\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}_{\mathrm{f}}.
+\end{equation}
+
+\end{document}

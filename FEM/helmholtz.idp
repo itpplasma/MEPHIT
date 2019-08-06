@@ -1,0 +1,8 @@
+// Config file for Helmholtz cylindrical harmonic solver
+
+real nmode = 2.0;                                        // toroidal harmonic
+string meshfile = "../PRELOAD/inputformaxwell_ext.msh";  // mesh file (extended)
+string rhofile = "rho.dat";                              // charge density on triangles
+string lamfile = "lam.dat";                              // Helmholtz factor on triangles
+bool doplot = true;                                      // plot or not
+

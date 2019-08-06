@@ -1,0 +1,38 @@
+//
+// Helmholtz equation for a single Fourier harmonic in toroidal angle
+//
+// C. Albert, July 2019
+//
+//
+
+include "helmholtz.idp"  // config (incl. filenames)
+
+mesh Th = readmesh(meshfile);
+
+fespace Vh0(Th, P0);
+fespace Vh1(Th, P1);
+
+Vh0 lam;
+Vh0 <complex> rho;
+
+// count triangles in internal region 0
+int ntri = 0;
+for (int k = 0; k < Th.nt; k++) {
+  if (Th[k].label == 0)
+    ntri++;
+}
+
+cout << "Number of triangles in internal region: " << ntri << endl;
+
+ofstream lamf(lamfile);
+lamf.scientific.precision(16);
+ofstream rhof(rhofile);
+rhof.scientific.precision(16);
+
+rho = cos(x/200)*sin(y/200);
+lam = x;
+for (int k = 0; k < ntri; k++) {
+  lamf << lam[][k] << endl;
+  rhof << real(rho[][k]) << "\t" << imag(rho[][k]) << endl; 
+}
+
