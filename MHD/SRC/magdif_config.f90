@@ -27,6 +27,9 @@ module magdif_config
   real(dp) :: di0             !< interpolation step for density
   real(dp) :: damp            !< damping factor for resonances
 
+  !> Free parameter setting the magnitude of sheet currents.
+  complex(dp) :: sheet_current_factor
+
   !> Unformatted input data file containing mesh points.
   !>
   !> This file is generated in PRELOAD and is read in by magdif::read_mesh().
@@ -80,10 +83,10 @@ module magdif_config
   character(len = 1024) :: eigvec_file
 
   !> namelist for input parameters
-  namelist / settings / log_level, runmode, nonres, quad_avg, niter, nritz, n, &
-       nkpol, nflux, ti0, di0, damp, point_file, tri_file, Bn_vacout_file, &
-       Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, presn_file, &
-       currn_file, eigvec_file, tol
+  namelist / settings / log_level, runmode, nonres, quad_avg, niter, nritz, tol, n, &
+       nkpol, nflux, ti0, di0, damp, sheet_current_factor, point_file, tri_file, &
+       Bn_vacout_file, Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, &
+       presn_file, currn_file, eigvec_file
 
 contains
 

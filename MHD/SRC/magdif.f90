@@ -48,7 +48,13 @@ module magdif
   !> to the triangle strip just inside the last closed flux surface.
   real(dp), allocatable :: q(:)
 
-  !> \f$ R \$ component of equilibrium magnetic field \f$ B_{0} \f$.
+  !> Poloidal mode number \f$ m \f$ (dimensionless) in resonance at given flux surface.
+  !>
+  !> Indexing is the same as for #q, on which the values depend. If no resonances are
+  !> expected at a given index, #m_res is 0.
+  integer, allocatable :: m_res(:)
+
+  !> \f$ R \f$ component of equilibrium magnetic field \f$ B_{0} \f$.
   !>
   !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
   !> refers to the triangle and the indexing scheme is the same as for
@@ -56,7 +62,7 @@ module magdif
   !> by get_labeled_edges().
   real(dp), allocatable :: B0r(:,:)
 
-  !> \f$ \phi \$ component of equilibrium magnetic field \f$ B_{0} \f$.
+  !> \f$ \phi \f$ component of equilibrium magnetic field \f$ B_{0} \f$.
   !>
   !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
   !> refers to the triangle and the indexing scheme is the same as for
@@ -64,13 +70,31 @@ module magdif
   !> by get_labeled_edges().
   real(dp), allocatable :: B0phi(:,:)
 
-  !> \f$ Z \$ component of equilibrium magnetic field \f$ B_{0} \f$.
+  !> \f$ Z \f$ component of equilibrium magnetic field \f$ B_{0} \f$.
   !>
   !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
   !> refers to the triangle and the indexing scheme is the same as for
   !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
   !> by get_labeled_edges().
   real(dp), allocatable :: B0z(:,:)
+
+  !> \f$ \phi \f$ component of equilibrium magnetic field \f$ B_{0} (\Omega) \f$.
+  !>
+  !> Values are stored seprately for each triangle and the indexing scheme is the same as
+  !> for #mesh_mod::mesh_element.
+  real(dp), allocatable :: B0r_Omega(:)
+
+  !> \f$ Z \f$ component of equilibrium magnetic field \f$ B_{0} (\Omega) \f$.
+  !>
+  !> Values are stored seprately for each triangle and the indexing scheme is the same as
+  !> for #mesh_mod::mesh_element.
+  real(dp), allocatable :: B0phi_Omega(:)
+
+  !> \f$ R \f$ component of equilibrium magnetic field \f$ B_{0} (\Omega) \f$.
+  !>
+  !> Values are stored seprately for each triangle and the indexing scheme is the same as
+  !> for #mesh_mod::mesh_element.
+  real(dp), allocatable :: B0z_Omega(:)
 
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   !>
@@ -91,6 +115,13 @@ module magdif
   !> Values are taken at each triangle and the indexing scheme is the same as for
   !> #mesh_mod::mesh_element.
   complex(dp), allocatable :: Bnphi(:)
+
+  !> Contravariant \f$ \psi \f$ component of magnetic perturbation: \f$ B_{n}^{\psi}
+  !> (\Omega) \f$
+  !>
+  !> Values are stored seprately for each triangle and the indexing scheme is the same as
+  !> for #mesh_mod::mesh_element.
+  complex(dp), allocatable :: Bnpsi_Omega(:)
 
   !> Vacuum perturbation edge fluxes \f$ R \vec{B}_{n} \cdot \vec{n} \f$ in G cm^2.
   !>
@@ -197,6 +228,7 @@ contains
   !> Deallocates all previously allocated variables.
   subroutine magdif_cleanup
     if (allocated(q)) deallocate(q)
+    if (allocated(m_res)) deallocate(m_res)
     if (allocated(pres0)) deallocate(pres0)
     if (allocated(dpres0_dpsi)) deallocate(dpres0_dpsi)
     if (allocated(dens)) deallocate(dens)
@@ -205,10 +237,14 @@ contains
     if (allocated(B0r)) deallocate(B0r)
     if (allocated(B0phi)) deallocate(B0phi)
     if (allocated(B0z)) deallocate(B0z)
+    if (allocated(B0r_Omega)) deallocate(B0r_Omega)
+    if (allocated(B0phi_Omega)) deallocate(B0phi_Omega)
+    if (allocated(B0z_Omega)) deallocate(B0z_Omega)
     if (allocated(presn)) deallocate(presn)
     if (allocated(jnflux)) deallocate(jnflux)
     if (allocated(Bnflux)) deallocate(Bnflux)
     if (allocated(Bnphi)) deallocate(Bnphi)
+    if (allocated(Bnpsi_Omega)) deallocate(Bnpsi_Omega)
     if (allocated(Bnflux_vac)) deallocate(Bnflux_vac)
     if (allocated(Bnphi_vac)) deallocate(Bnphi_vac)
     if (allocated(jnphi)) deallocate(jnphi)
@@ -227,7 +263,7 @@ contains
     call compute_currn     ! compute currents based on previous perturbation field
     call compute_Bn        ! use field code to generate new field from currents
     call read_Bn(Bn_file)  ! read new bnflux from field code
-    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'))
+    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'), Bnpsi_Omega)
   end subroutine magdif_single
 
   subroutine magdif_iterated
@@ -304,21 +340,23 @@ contains
                matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn - Bn_prev)))
           call unpack2(Bnflux, Bnphi, Bn)
           call check_redundant_edges(Bnflux, -1d0, 'B_n')
-          call check_div_free(Bnflux, Bnphi, 1d-3, 'B_n')
+          call check_div_free(Bnflux, Bnphi, 1d-8, 'B_n')
        end if
 
        call unpack2(Bnflux_diff, Bnphi_diff, Bn - Bn_prev)
        call write_vector_dof(Bnflux_diff, Bnphi_diff, &
-            decorate_filename(Bn_diff_file, '', kiter))
-       call write_vector_plot(Bnflux_diff, Bnphi_diff, &
-            decorate_filename(Bn_diff_file, 'plot_', kiter))
-       call write_vector_dof(Bnflux, Bnphi, &
-            decorate_filename(Bn_file, '', kiter))
-       call write_vector_plot(Bnflux, Bnphi, &
-            decorate_filename(Bn_file, 'plot_', kiter))
-       call write_vector_plot(jnflux, jnphi, &
-            decorate_filename(currn_file, 'plot_', kiter))
-       call write_scalar_dof(presn, decorate_filename(presn_file, '', kiter))
+               decorate_filename(Bn_diff_file, '', kiter))
+       if (kiter <= 2) then
+          call write_vector_plot(Bnflux_diff, Bnphi_diff, &
+               decorate_filename(Bn_diff_file, 'plot_', kiter))
+          call write_vector_dof(Bnflux, Bnphi, &
+               decorate_filename(Bn_file, '', kiter))
+          call write_vector_plot(Bnflux, Bnphi, &
+               decorate_filename(Bn_file, 'plot_', kiter))
+          call write_vector_plot(jnflux, jnphi, &
+               decorate_filename(currn_file, 'plot_', kiter))
+          call write_scalar_dof(presn, decorate_filename(presn_file, '', kiter))
+       end if
 
        call pack2(Bnflux, Bnphi, Bn_prev)
     end do
@@ -411,9 +449,13 @@ contains
     allocate(B0r(ntri, 3))
     allocate(B0phi(ntri, 3))
     allocate(B0z(ntri, 3))
+    allocate(B0r_Omega(ntri))
+    allocate(B0phi_Omega(ntri))
+    allocate(B0z_Omega(ntri))
     allocate(presn(npoint))
     allocate(Bnflux(ntri, 3))
     allocate(Bnphi(ntri))
+    allocate(Bnpsi_Omega(ntri))
     allocate(Bnflux_vac(ntri, 3))
     allocate(Bnphi_vac(ntri))
     allocate(jnphi(ntri))
@@ -423,9 +465,13 @@ contains
     B0r = 0d0
     B0phi = 0d0
     B0z = 0d0
+    B0r_Omega = 0d0
+    B0phi_Omega = 0d0
+    B0z_Omega = 0d0
     presn = 0d0
     Bnflux = 0d0
     Bnphi = 0d0
+    Bnpsi_Omega = 0d0
     Bnflux_vac = 0d0
     Bnphi_vac = 0d0
     jnphi = 0d0
@@ -540,17 +586,17 @@ contains
     end do
     close(1)
 
-    call check_div_free(Bnflux, Bnphi, 1d-3, 'B_n')
+    call check_div_free(Bnflux, Bnphi, 1d-8, 'B_n')
     call check_redundant_edges(Bnflux, -1d0, 'B_n')
   end subroutine read_Bn
 
-  !> Allocates and computes the safety factor #q. Deallocation is done in
+  !> Allocates and computes the safety factor #q and #m_res. Deallocation is done in
   !> magdif_cleanup().
   subroutine compute_safety_factor
     integer :: kf, kt
     type(triangle) :: elem
-    real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+    integer :: m_res_min, m_res_max, m
+    real(dp), allocatable :: abs_err(:)
 
     allocate(q(nflux))
     q = 0d0
@@ -558,13 +604,21 @@ contains
     do kf = 1, nflux
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
-          call ring_centered_avg_coord(elem, r, z)
-          call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          q(kf) = q(kf) + Bp * elem%det_3 * 0.5d0
+          q(kf) = q(kf) + B0phi_Omega(kt_low(kf) + kt) * elem%det_3 * 0.5d0
        end do
        q(kf) = q(kf) * 0.5d0 / pi / (psi(kf) - psi(kf-1))
     end do
+
+    allocate(m_res(nflux))
+    m_res = 0
+    m_res_min = max(ceiling(minval(q) * n), n + 1)
+    m_res_max = floor(maxval(q) * n)
+    allocate(abs_err(nflux))
+    do m = m_res_max, m_res_min, -1
+       abs_err = [(abs(q(kf) - dble(m) / dble(n)), kf = 1, nflux)]
+       m_res(minloc(abs_err, 1)) = m
+    end do
+    if (allocated(abs_err)) deallocate(abs_err)
   end subroutine compute_safety_factor
 
   !> Computes the "weighted" centroid for a triangle so that it is approximately
@@ -645,6 +699,12 @@ contains
              B0phi(kt_low(kf) + kt, ke) = Bp
              B0z(kt_low(kf) + kt, ke) = Bz
           end do
+          call ring_centered_avg_coord(elem, r, z)
+          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+          B0r_Omega(kt_low(kf) + kt) = Br
+          B0phi_Omega(kt_low(kf) + kt) = Bp
+          B0z_Omega(kt_low(kf) + kt) = Bz
        end do
     end do
   end subroutine cache_equilibrium_field
@@ -657,11 +717,10 @@ contains
   !> necessary in the derivation, while Ampere's equation is not used.
   subroutine compute_j0phi
     integer :: kf, kt
+    real(dp) :: r, z
     real(dp) :: Btor2
     real(dp) :: B2avg(nflux)
     real(dp) :: B2avg_half(nflux)
-    real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
     real(dp) :: plot_j0phi
     type(triangle) :: elem
     integer, dimension(2) :: li, lo, lf
@@ -710,9 +769,7 @@ contains
                (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
 
           call ring_centered_avg_coord(elem, r, z)
-          call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          Btor2 = Bp ** 2
+          Btor2 = B0phi_Omega(kt_low(kf) + kt) ** 2
           plot_j0phi = clight * (pres0(kf) - pres0(kf-1)) / &
                (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
 
@@ -968,7 +1025,9 @@ inner: do kt = 1, kt_max(kf)
     integer :: ei, eo, ef
     logical :: orient
     real(dp) :: Deltapsi
-    real(dp) :: r
+    real(dp) :: r, z
+    real(dp) :: n_r, n_z
+    complex(dp) :: presn_Omega
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
@@ -1023,6 +1082,29 @@ inner: do kt = 1, kt_max(kf)
           jnflux(kt_low(kf) + kt, ei) = -x(kt)
           jnflux(kt_low(kf) + kt, eo) = x(mod(kt, kt_max(kf)) + 1)
           jnphi(kt_low(kf) + kt) = sum(jnflux(kt_low(kf) + kt, :)) * imun / n / area
+          if (sheet_current_factor /= 0d0 .and. m_res(kf) > 0) then
+             ! add sheet current on edge i
+             r = sum(mesh_point(li(:))%rcoord) * 0.5d0
+             n_r = mesh_point(li(2))%zcoord - mesh_point(li(1))%zcoord
+             n_z = mesh_point(li(1))%rcoord - mesh_point(li(2))%rcoord
+             jnflux(kt_low(kf) + kt, ei) = jnflux(kt_low(kf) + kt, ei) + r * &
+                  (B0r(kt_low(kf) + kt, ei) * n_r + B0z(kt_low(kf) + kt, ei) * n_z) * &
+                  sum(presn(li(:))) * 0.5d0 * sheet_current_factor
+             ! add sheet current on edge o
+             r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
+             n_r = mesh_point(lo(2))%zcoord - mesh_point(lo(1))%zcoord
+             n_z = mesh_point(lo(1))%rcoord - mesh_point(lo(2))%rcoord
+             jnflux(kt_low(kf) + kt, eo) = jnflux(kt_low(kf) + kt, eo) + r * &
+                  (B0r(kt_low(kf) + kt, eo) * n_r + B0z(kt_low(kf) + kt, eo) * n_z) * &
+                  sum(presn(lo(:))) * 0.5d0 * sheet_current_factor
+             ! add toroidal sheet current
+             call ring_centered_avg_coord(elem, r, z)
+             presn_Omega = (sum(presn(elem%i_knot)) + presn(elem%knot_h)) * 0.25d0
+             jnphi(kt_low(kf) + kt) = jnphi(kt_low(kf) + kt) + sheet_current_factor * &
+                  (B0phi_Omega(kt_low(kf) + kt) * presn_Omega - imun / n * r * &
+                  Bnpsi_Omega(kt_low(kf) + kt) * (pres0(kf) - pres0(kf-1)) / &
+                  (psi(kf) - psi(kf-1)))
+          end if
        end do
     end do
     avg_rel_err = avg_rel_err / sum(kt_max(1:nflux))
@@ -1105,25 +1187,27 @@ inner: do kt = 1, kt_max(kf)
        end do
     end do
     if (quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
-    call check_div_free(Bnflux, Bnphi, 1d-09, 'non-resonant B_n')
+    call check_div_free(Bnflux, Bnphi, 1d-9, 'non-resonant B_n')
     call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
-  subroutine write_vector_plot(pol_flux, tor_comp, outfile)
+  subroutine write_vector_plot(pol_flux, tor_comp, outfile, proj_psi_contravar)
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
+    complex(dp), intent(out), optional :: proj_psi_contravar(:)
 
     integer :: kf, kt
     type(triangle) :: elem
     type(knot) :: tri(3)
-    complex(dp) :: pol_comp_r, pol_comp_z, pol_comp_normal, pol_comp_parallel
+    complex(dp) :: pol_comp_r, pol_comp_z, dens_psi_contravar, proj_theta_covar
     real(dp) :: r, z
+    real(dp) :: sqrt_g
 
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     logical :: orient
-    real(dp) :: n_f_r, n_f_z, l_f_r, l_f_z
+    real(dp) :: n_r, n_z
 
     open(1, file = outfile, recl = longlines)
     do kf = 1, nflux
@@ -1141,30 +1225,27 @@ inner: do kt = 1, kt_max(kf)
                pol_flux(kt_low(kf) + kt, 2) * (z - tri(1)%zcoord) + &
                pol_flux(kt_low(kf) + kt, 3) * (z - tri(2)%zcoord))
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          ! projection to psi (i.e. normal) component
+          sqrt_g = -q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
+          ! projection to contravariant psi component
           if (orient) then
-             n_f_r = mesh_point(lf(2))%zcoord - mesh_point(lf(1))%zcoord
-             n_f_z = mesh_point(lf(1))%rcoord - mesh_point(lf(2))%rcoord
+             n_r = mesh_point(lf(2))%zcoord - mesh_point(lf(1))%zcoord
+             n_z = mesh_point(lf(1))%rcoord - mesh_point(lf(2))%rcoord
           else
-             n_f_r = mesh_point(lf(1))%zcoord - mesh_point(lf(2))%zcoord
-             n_f_z = mesh_point(lf(2))%rcoord - mesh_point(lf(1))%rcoord
+             n_r = mesh_point(lf(1))%zcoord - mesh_point(lf(2))%zcoord
+             n_z = mesh_point(lf(2))%rcoord - mesh_point(lf(1))%rcoord
           end if
-          pol_comp_normal = (pol_comp_r * n_f_r + pol_comp_z * n_f_z) * &
-               (psi(kf) - psi(kf-1)) / elem%det_3 * ring_centered_avg_B0phicontra()
-          ! projection to theta (i.e. parallel) component
-          if (orient) then
-             l_f_r = mesh_point(lf(2))%rcoord - mesh_point(lf(1))%rcoord
-             l_f_z = mesh_point(lf(2))%zcoord - mesh_point(lf(1))%zcoord
-          else
-             l_f_r = mesh_point(lf(1))%rcoord - mesh_point(lf(2))%rcoord
-             l_f_z = mesh_point(lf(1))%zcoord - mesh_point(lf(2))%zcoord
+          dens_psi_contravar = (pol_comp_r * n_r + pol_comp_z * n_z) * &
+               (psi(kf) - psi(kf-1)) / elem%det_3 * sqrt_g
+          if (present(proj_psi_contravar)) then
+             proj_psi_contravar(kt_low(kf) + kt) = dens_psi_contravar / sqrt_g
           end if
-          pol_comp_parallel = (pol_comp_r * l_f_r + pol_comp_z * l_f_z) * &
-               (psi(kf) - psi(kf-1)) / elem%det_3 / r
+          ! projection to covariant theta component
+          proj_theta_covar = -(pol_comp_r * B0r_Omega(kt_low(kf) + kt) + &
+               pol_comp_z * B0z_Omega(kt_low(kf) + kt)) * sqrt_g
           write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), real(pol_comp_z), &
                aimag(pol_comp_z), real(tor_comp(kt_low(kf) + kt)), &
-               aimag(tor_comp(kt_low(kf) + kt)), real(pol_comp_normal), &
-               aimag(pol_comp_normal), real(pol_comp_parallel), aimag(pol_comp_parallel)
+               aimag(tor_comp(kt_low(kf) + kt)), real(dens_psi_contravar), &
+               aimag(dens_psi_contravar), real(proj_theta_covar), aimag(proj_theta_covar)
        end do
     end do
     r = mesh_point(1)%rcoord
@@ -1173,16 +1254,6 @@ inner: do kt = 1, kt_max(kf)
        write (1, *) r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
     end do
     close(1)
-
-  contains
-    function ring_centered_avg_B0phicontra() result(sqrt_g)
-      real(dp) :: sqrt_g
-      real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-      call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-      sqrt_g = r / Bp
-    end function ring_centered_avg_B0phicontra
   end subroutine write_vector_plot
 
   subroutine write_vector_dof(pol_flux, tor_comp, outfile)

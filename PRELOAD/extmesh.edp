@@ -1,3 +1,5 @@
+load "medit"
+
 real rmaxis = 1000.0 * 1e2;
 real zmaxis = 0.0 * 1e2;
 real rdim = 1.34 * 1e2;
@@ -18,4 +20,10 @@ border outer(t = 0, 2 * pi) {
 mesh Thouter = buildmesh(inner(nkpol) + outer(nkpol * 3 / 2));
 mesh Thinner = readmesh("inputformaxwell.msh");
 mesh Th = Thinner + Thouter;
+
+medit("in", Thinner);
+medit("out", Thouter);
+medit("total", Th);
+
 savemesh(Th, "inputformaxwell_ext.msh");
+
