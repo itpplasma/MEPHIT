@@ -22,7 +22,7 @@ find_package(SuperLU REQUIRED)
 include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
 
 ### Set compiler flags
-set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fbounds-check -Wall")
+set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fbounds-check -Wall -ffpe-trap=invalid,zero,overflow")
 
 ### Define libraries
 add_library(magdif SHARED
