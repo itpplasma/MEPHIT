@@ -34,8 +34,8 @@
   \draw[thick, ->] (Gf7) -- node [very near end, auto] {$I^{(7)}_{\fs}$} ($ (Gf7) ! 0.8 ! 90:(ri5) $);
   \draw[thick, ->] (Gi7) -- node [near end, above right] {$I^{(7)}_{\inw}$} ($ (Gi7) ! 0.8 ! 90:(ri4) $);
 
-  \node[label={[label distance=-5mm]90:$I^{(2)}_{\phi}$}] (O2) at ($ 0.5*(ri2) + 0.25*(ro1) + 0.25*(ro2) $) {$\odot$};
-  \node[label={[label distance=-5mm]270:$I^{(7)}_{\phi}$}] (O7) at ($ 0.5*(ro4) + 0.25*(ri5) + 0.25*(ri4) $) {$\odot$};
+  \node[label={[label distance=-5mm]90:$I^{(2)}_{\phi}$}] (O2) at ($ 0.5*(ri2) + 0.25*(ro1) + 0.25*(ro2) $) {$\otimes$};
+  \node[label={[label distance=-5mm]270:$I^{(7)}_{\phi}$}] (O7) at ($ 0.5*(ro4) + 0.25*(ri5) + 0.25*(ri4) $) {$\otimes$};
 
   \coordinate (Gi5) at ($ (ri3) ! 0.5 ! (ro3) $);
   \draw[red, ->] ($ (Gi5) + (0.5, 0) $) -- node [at start, above, red] {$I^{(5)}$} ($ (Gi5) - (0.5, 0) $);

@@ -562,18 +562,18 @@ where the parentheses signify that it is the physical component and not the cova
 
 In regards to this coordinate system, the experimental setup can be characterized. When viewing the poloidal plane, $B_{0 (\phi)}$ points in the negative $\phi$ direction, the plasma current $I_{\text{p}}$ points in the positive $\phi$ direction and the poloidal field $\vec{B}_{0}^{\pol}$ is going in the clockwise direction. Poloidal-toroidal decomposition of the equilibrium field $\vec{B}_{0}$ then yields the representation
 \begin{gather}
-  \vec{B}_{0} = \vec{B}_{0}^{\pol} + \vec{B}_{0}^{\tor},
+  \vec{B}_{0} = \vec{B}_{0}^{\pol} + \vec{B}_{0}^{\tor}, \label{eq:B_pol_tor}
 \end{gather}
 where 
 \begin{align}
-  \vec{B}_{0}^{\pol} &= \grad \psi \times \grad \phi, \\
-  \vec{B}_{0}^{\tor} &= B_{0 \phi} \grad \phi.
+  \vec{B}_{0}^{\pol} &= \grad \psi \times \grad \phi, \label{eq:B_pol} \\
+  \vec{B}_{0}^{\tor} &= B_{0 \phi} \grad \phi. \label{eq:B_tor}
 \end{align}
 Here, $\psi$ is the normalized \emph{disc} poloidal flux, i.e.
 \begin{gather}
   \psi = \frac{1}{2 \pi} \Psi_{\pol} = \frac{1}{2 \pi} \int \vec{B}_{0} \cdot \diff \vec{S},
 \end{gather}
-where $\vec{S}$ is the disc that at a point of evaluation $(R_{S}, Z_{S})$ is given by $R \leq R_{S}, Z = Z_{S}$. The orientation of $\vec{S}$ fixes the sign\footnote{Since $\vec{B}_{0}$ is not defined outside the plasma volume and only $\nabla \psi$ enters calculations, $\psi$ is defined up to a constant and thus could be shifted to change sign. However, the sign of $\nabla \psi$ is fixed.} of $\psi$. Here, $\psi$ is expected to increase towards the magnetic axis -- $\psi_{\text{min}}$ is located at the outermost flux surface and $\psi_{\text{max}}$ is located at the magnetic axis. This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in cylindrical coordinates:
+where $\vec{S}$ is the disc that at a point of evaluation $(R_{S}, Z_{S})$ is given by $R \leq R_{S}, Z = Z_{S}$. The orientation of $\vec{S}$ fixes the sign\footnote{Since $\vec{B}_{0}$ is not defined outside the plasma volume and only $\grad \psi$ enters calculations, $\psi$ is defined up to a constant and thus could be shifted to change sign. However, the sign of $\grad \psi$ is fixed.} of $\psi$. Here, $\psi$ is expected to increase towards the magnetic axis -- $\psi_{\text{min}}$ is located at the outermost flux surface and $\psi_{\text{max}}$ is located at the magnetic axis. This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in cylindrical coordinates:
 \begin{align}
   B_{0}^{R} &= (\grad \psi \times \grad \phi)^{R} = -\frac{1}{R} \pd[\psi]{Z}, \\
   B_{0}^{Z} &= (\grad \psi \times \grad \phi)^{Z} = \frac{1}{R} \pd[\psi]{R}.
@@ -593,12 +593,9 @@ The change of sign in comparison to \textcite{dHaeseleer91} is due to the revers
 \subsection{Discretization and local coordinate system}
 \label{sec:grid}
 
-[\textsc{Raviart}--\textsc{Thomas} elements: DOFs are fluxes across edges, interpolation, \ldots]
-\begin{gather*}
-  \grad \psi \parallel \grad p_{0} \parallel \vec{n}_{\fs} \\
-  \grad \phi \perp \left( \grad \psi, \grad p_{0}, \vec{n}, \vec{l}, \vec{B}_{\bullet}^{\pol}, \vec{h}_{0}^{\pol}, \vec{J}_{\bullet}^{\pol}, \grad p_{n} \right)
-\end{gather*}
+So far, we have given a fairly general description of the problem without explicit refernce to numerical methods, apart maybe from the iteration scheme in \cref{sec:iteration}. One necessary modification is the discretization of the problem. The finite element method outlined in \cref{sec:compute_Bn} uses a discretization of the computational domain, i.e. it introduces a triangular grid. While other tilings are possible, triangulation is the simplest and for triangles, the \textsc{Delaunay} algorithm is unique. The latter maximizes the triangles' minimal interior angle, which is desirable because a more elongated triangle shape reduces the quality of approximations on it. However, we choose to align the grid on flux surfaces in order to use the associated special properties.
 
+A set of nested flux surfaces is chosen, e.g. a number $n_{\text{flux}}$ of curves of constant $\psi$ which are equidistant between the magnetic Axis and the X point. These are then intersected by rays originating from the magnetic axis. Note that these rays are not curves of constant $\theta$, as these are generally not straight in $(R, Z)$ coordinates. As a result, between any two flux surfaces there is a \emph{ring} or \emph{strip} of quadrangles going around in poloidal direction. These quadrangles are then diagonally split into triangles, yielding two types of triangles. An exception is the innermost ring containing the magnetic axis, where there is only one type of triangle and no quadrangles to split. This kind of grid is depicted in \cref{fig:grid} where concentric circles are used to illustrate the nested flux surfaces.
 \begin{figure}[bth]
   \centering
   \begin{subfigure}[b]{0.33\textwidth}
@@ -618,14 +615,15 @@ The change of sign in comparison to \textcite{dHaeseleer91} is due to the revers
   \label{fig:grid}
 \end{figure}
 
-For each edge (length $l$) we use a local orthogonal coordinate system on each triangle edge with $\vec{l}$ the vector of length $l$ along the edge in counter-clockwise orientation, $\vec{n}$ the outward normal of length $l$ and $\grad \phi$ pointing inside the plane. We obtain relations
-\begin{align}
-  \vec{l} \times \vec{n} &= l^{2} R \grad \phi, \\
-  \vec{n} \times R \grad \phi &= \vec{l}, \\
-  R \grad \phi \times \vec{l} &= \vec{n}.
-\end{align}
-This is illustrated for a small sector on one loop in \cref{fig:local_coordinates}.
+For reasons that will become more apparent in \cref{sec:compute_currn,sec:nonres}, we use symbolic names instead of numbers to refer to edges and nodes. In the implementation, these names are mapped to their numerical index (see \cref{sec:inputs}). The label \fs\ designates the edge that approximates the flux surface, i.e. it is parallel to the flux surface in the infinitesimal limit. The labels \inw\ and \out\ are chosen so that some flux is imagined to enter the triangle at edge \inw\ and exit at edge \out, again entering the next triangle through edge \inw\ and so on, going around the ring in poloidal direction. The nodes are labeled by the corresponding uppercase letter of the opposite edge. These labels are also annoted in \cref{fig:grid}. Note that the labels are necessarily local to each triangle.
 
+Furthermore, for each edge we use a local orthogonal coordinate system on each triangle edge with $\vec{l}$ the vector of length $l$ along the edge in counter-clockwise orientation, $\vec{n}$ the outward normal of length $l$ and $\grad \phi$ pointing inside the plane. We obtain relations
+\begin{align}
+  \vec{l} \times \vec{n} &= l^{2} R \grad \phi, \label{eq:edge_phi} \\
+  \vec{n} \times R \grad \phi &= \vec{l}, \label{eq:edge_l} \\
+  R \grad \phi \times \vec{l} &= \vec{n}. \label{eq:edge_n}
+\end{align}
+This is illustrated for a small sector on one ring in \cref{fig:local_coordinates}.
 \begin{figure}[bth]
   \centering
   \input{./local_coordinates.tikz}
@@ -633,14 +631,43 @@ This is illustrated for a small sector on one loop in \cref{fig:local_coordinate
   \label{fig:local_coordinates}
 \end{figure}
 
-\subsection{Implementation details}
-\label{sec:implementation}
-
-In the formulae derived in \cref{sec:linmhd}, terms of the form $\vec{v} \cdot \nabla \psi$ appear, where $\vec{v}$ is an arbitrary vector, usually the vector of a triangle edge or some field quantity. In the latter case, this reduces to the projection on the normal vector of an edge, since perturbed vector fields are represented by \textsc{Raviart}-\textsc{Thomas} elements. [\ldots]
-
-The relation of the degrees of freedom to the contravariant $\psi$ component of the magnetic perturbation on edge \fs\ is derived here as an example, as it is used for computations in \cref{sec:compute_presn,sec:nonres}. The general expression on a given triangle is given by
+Since edge \fs\ is approximated to lie on the flux surface, some properties carry over. In particular, since flux surfaces are surfaces of constant $\psi$ and $p_{0}$, we have
 \begin{gather}
-  B_{n}^{\psi} (\Gamma_{\fs}) = \vec{B}_{n} (\Gamma_{\fs}) \cdot \nabla \psi (\Gamma_{\fs}) = \vec{B}_{n} (\Gamma_{\fs}) \cdot \hat{\vec{n}}_{\fs} \pd[\psi]{n_{\fs}} (\Gamma_{\fs}).
+  \vec{n}_{\fs} \parallel \grad \psi \parallel \grad p_{0},
+\end{gather}
+as well as
+\begin{gather}
+  \vec{B}_{0} \cdot \vec{n}_{\fs} = 0, \quad \vec{J}_{0} \cdot \vec{n}_{\fs} = 0.
+\end{gather}
+Likewise, it should be noted that $\nabla \phi$ is perpendicular to all purely poloidal quantities which includes, apart from those designated with superscript \pol, all local coordinate vectors $\vec{l}$ and $\vec{n}$, \textsc{Fourier} components with subscript $n$, as well as $\grad \psi$ and $\grad p_{0}$.
+
+\subsection{Representation of fields on the grid}
+\label{sec:dofs}
+
+Another approximation made in the finite element method is the choice of a \emph{basis} to represent a scalar or vector field locally on one element of the grid. Scalar fields like the pressure perturbation can be approximated with \textsc{Lagrange} elements of the lowest order where the \emph{degrees of freedom} are the values on the nodes and any value within the triangle is interpolated from the values of its nodes. Many other choices are available, but this is the simplest option to implement and it is sufficient for our needs. For vector fields some more considerations are necessary; see \cref{sec:compute_Bn} for more details. We are mostly interested in representation of the magnetic flux density and the current density, both of which characteristically show zero divergence. Thus it is necessary to choose a basis that yields a well-defined convergence. This is guaranteed by \textsc{Raviart}--\textsc{Thomas} elements, where in the lowest-order case, the degrees of freedom are the fluxes of the vector field across the triangle edges:
+\begin{gather}
+  \Psi_{k} = \int_{\Gamma_{k}} R \vec{B}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l \approx R (\Gamma_{k}) \vec{B}_{n}^{\pol} (\Gamma_{k}) \cdot \vec{n}_{k}, \label{eq:Psi_k} \\
+  I_{k} = \int_{\Gamma_{k}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l \approx R (\Gamma_{k}) \vec{J}_{n}^{\pol} (\Gamma_{k}) \cdot \vec{n}_{k}. \label{eq:I_k}
+\end{gather}
+There are a few things to note here. Firstly, the factor $R$ is included due to the metric in cylindrical coordinates and the fact that the integrand derives from the divergence theorem. Secondly, $\hat{\vec{n}}$ is normalized, but $\vec{n}$ is not, so the length of the edge is included as a factor. Lastly, the integral is approximated by evaluation at only a single point, the edge midpoint $\Gamma_{k}$. Conversely, to interpolate the value at given point $\vec{r}$ within a triangle, each degree of freedom $\Psi_{k}$ or $I_{k}$ is multiplied by the vectorial basis formed by the vector connecting $\vec{r}$ and the node opposing edge $k$, weighted with the triangle area $S_{\Omega}$:
+\begin{gather}
+  \vec{B}_{n} (\vec{r}) = \frac{\Psi_{\fs} (\vec{r} - \vec{r}_{\vfs}) + \Psi_{\inw} (\vec{r} - \vec{r}_{\vinw}) + \Psi_{\out} (\vec{r} - \vec{r}_{\vout})}{2 S_{\Omega}}, \\
+  \vec{J}_{n} (\vec{r}) = \frac{I_{\fs} (\vec{r} - \vec{r}_{\vfs}) + I_{\inw} (\vec{r} - \vec{r}_{\vinw}) + I_{\out} (\vec{r} - \vec{r}_{\vout})}{2 S_{\Omega}},
+\end{gather}
+Note that the value is well-defined only within the triangle but not on the edge: while the flux across the edge, i.e. the normal component of the field is consistent with the neighbouring triangle, the component \emph{along} the edge is not necessarily continuous across triangles.
+
+On a general note, we indicate the point of evaluation in parentheses after the field in question: $\vec{r}$ refers to a node, as in $p_{n} (\vec{r})$, $\Gamma_{k}$ refers to the midpoint of edge $k$, as in $p_{n} (\Gamma_{k})$ or $\vec{B}_{n} (\Gamma_{k})$, and $\Omega$ refers to a \enquote{shifted centroid}, as in $p_{n} (\Omega)$ or $\vec{B}_{n} (\Omega)$. This shifted centroid is calculated by assigning double weight to node $\vfs$, i.e. $\left ( \frac{1}{2}, \frac{1}{4}, \frac{1}{4} \right )$ in barycentric coordinates where the first coordinate is defined relative to node $\vfs$. This assures that this shifted centroid is halfway between flux surfaces, as the actual centroid is closer to the flux surface on which nodes $\vinw$ and $\vout$ lie, thus alternating between the two flux surfaces from one triangle to the next. To get an idea of this behaviour, refer to \cref{fig:local_coordinates}, where the $\otimes$ symbols indicating the $\grad \phi$ basis vectors are placed at these shifted centroids.
+
+Furthermore, toroidal components of vector fields are approximated by a single value, evaluated at the aforementioned shifted centroid:
+\begin{gather}
+  \Psi_{\phi} = \int_{\Omega} R B_{n}^{\phi} \, \diff S \approx S_{\Omega} R (\Omega) B_{n}^{\phi} (\Omega), \label{eq:Psi_phi} \\
+  I_{(\phi)} = \int_{\Omega} R J_{n}^{\phi} \, \diff S \approx S_{\Omega} R (\Omega) J_{n}^{\phi} (\Omega). \label{eq:I_phi}
+\end{gather}
+These degrees of freedom are usually set to a value that assures zero divergence in conjunction with the degrees of freedom of the associated triangle in the poloidal plane.
+
+Some further interpolations will become necessary, using the approximations now established. In the formulae derived in \cref{sec:linmhd}, terms of the form $\vec{v} \cdot \grad \psi$ appear, where $\vec{v}$ is an arbitrary vector, usually the vector of a triangle edge or some field quantity. In the latter case, this reduces to the projection on the normal vector of an edge, since perturbed vector fields are represented by \textsc{Raviart}--\textsc{Thomas} elements. The relation of the degrees of freedom to the contravariant $\psi$ component of the magnetic perturbation on edge \fs\ is derived here as an example, as it is used for computations in \cref{sec:compute_presn,sec:nonres}. The general expression on a given triangle is given by
+\begin{gather}
+  B_{n}^{\psi} (\Gamma_{\fs}) = \vec{B}_{n} (\Gamma_{\fs}) \cdot \grad \psi (\Gamma_{\fs}) = \vec{B}_{n} (\Gamma_{\fs}) \cdot \hat{\vec{n}}_{\fs} \pd[\psi]{n_{\fs}} (\Gamma_{\fs}).
 \end{gather}
 Here we used the fact that the gradient of $\psi$ is parallel to $\vec{n}_{\fs}$. To approximate the directional derivative on $\Gamma_{\fs}$, first consider \cref{fig:altitudes}. The indices $\pm 1$ here refer to the adjacent outer and inner flux surface that are realized on grid points. Likewise, $\Omega^{(\pm 1)}$ refers to the triangles that touch the adjacent flux surfaces and edge \fs\ in question. $a_{\fs}$ refers to the altitude of edge \fs\ on a given triangle.
 \begin{figure}[bth]
@@ -666,6 +693,12 @@ Now, remembering that $\vec{n}_{\fs} = l_{\fs} \hat{\vec{n}}_{\fs}$ and that the
   B_{n}^{\psi} (\Gamma_{\fs}) \approx \frac{\vec{B}_{n} (\Gamma_{\fs}) \cdot l_{\fs} \hat{\vec{n}}_{\fs}}{2} \frac{\psi^{(+1)} - \psi^{(-1)}}{S_{\Omega^{(+1)}} + S_{\Omega^{(-1)}}} = \frac{\Psi_{\fs}}{2 R} \frac{\psi^{(+1)} - \psi^{(-1)}}{S_{\Omega^{(+1)}} + S_{\Omega^{(-1)}}}. \label{eq:Bnpsi}
 \end{gather}
 When $\vec{n}_{\fs}$ and $\Psi_{\fs}$ are defined in regard to $\Omega^{(+1)}$ instead, both quantities switch sign. Since $B_{n}^{\psi}$ does not depend on the choice of triangle, \cref{eq:Bnpsi} would gain a minus sign in this case.
+
+Another useful quantity is the covariant $\theta$ component of a vector field, here derived for the example of the current perturbation,
+\begin{gather}
+  J_{n \theta} = \vec{J}_{n} \cdot \vec{e}_{\theta} = \vec{J}_{n} \cdot \sqrt{g} \left ( \vec{e}^{\rho} \times \vec{e}^{\phi} \right ) = -\vec{J}_{n} \cdot \sqrt{g} (\grad \psi \times \grad \phi) = \vec{J}_{n} \cdot \frac{q \vec{B}_{0}^{\pol}}{B_{0}^{\phi}},
+\end{gather}
+where we used \cref{eq:flux_metric} in the last step.
 
 \clearpage
 \section{Pre-processing of input data}
@@ -789,7 +822,7 @@ Multiplying \cref{eq:mhd-phi} by $\vec{B}_{0}$ yields
 \end{align}
 To solve this equation on one flux surface, we use a lowest-order finite difference method. Nodes are indexed by superscript $(k)$ and $\vec{r}^{(k)}$ is the position of node $(k)$, whereas $\vec{l}_{\fs}^{(k)} = \vec{r}^{(k+1)} - \vec{r}^{(k)}$ is the counter-clockwise vector between nodes on edge $\Gamma_{\fs}^{(k)}$. $\grad p_{n}$ is approximated at the midpoint of edge $\Gamma_{\fs}^{(k)}$ as finite difference of $p_{n}$ at nodes $(k)$ and $(k+1)$. $p_{n}$ is accordingly approximated at the midpoint as the arithmetic mean of the values at these nodes. With a shorthand $p_{n}^{(k)} = p_{n} (\vec{r}^{(k)})$ for the degrees of freedom we get
 \begin{gather}
-  \vec{B}_{0}^{\pol} (\Gamma_{\fs}^{(k)}) \cdot \frac{\vec{l}_{\fs}^{(k)}}{l_{\fs}^{(k)}} \frac{p_{n}^{(k+1)} - p_{n}^{(k)}}{l_{\fs}^{(k)}} + \im n B_{0}^{\phi} (\Gamma_{\fs}^{(k)}) \frac{p_{n}^{(k+1)} + p_{n}^{(k)}}{2} = -\pd[p_{0}]{\psi} (\Gamma_{\fs}^{(k)}) B_{n}^{\psi} (\Gamma_{\fs}^{(k)}),
+  \vec{B}_{0}^{\pol} (\Gamma_{\fs}^{(k)}) \cdot \frac{\vec{l}_{\fs}^{(k)}}{l_{\fs}^{(k)}} \frac{p_{n}^{(k+1)} - p_{n}^{(k)}}{l_{\fs}^{(k)}} + \im n B_{0}^{\phi} (\Gamma_{\fs}^{(k)}) \frac{p_{n}^{(k+1)} + p_{n}^{(k)}}{2} = -\td[p_{0}]{\psi} (\Gamma_{\fs}^{(k)}) B_{n}^{\psi} (\Gamma_{\fs}^{(k)}),
 \end{gather}
 where a unit vector along the edge is used to get the correct sign for the gradient in the direction of the poloidal magnetic field. Reordering in terms of the unknowns yields
 \begin{gather}
@@ -799,7 +832,7 @@ with
 \begin{align}
   a_{k} &= \vec{B}_{0}^{\pol} (\Gamma_{\fs}^{(k)}) \cdot \frac{\hat{\vec{l}}_{\fs}^{(k)}}{l_{\fs}^{(k)}}, \\
   b_{k} &= \frac{\im n B_{0}^{\phi} (\Gamma_{\fs}^{(k)})}{2}, \\
-  s_{k} &= -\pd[p_{0}]{\psi} (\Gamma_{\fs}^{(k)}) B_{n}^{\psi} (\Gamma_{\fs}^{(k)}).
+  s_{k} &= -\td[p_{0}]{\psi} (\Gamma_{\fs}^{(k)}) B_{n}^{\psi} (\Gamma_{\fs}^{(k)}).
 \end{align}
 In matrix form this scheme is written as
 \begin{gather}
@@ -823,6 +856,89 @@ Note that for $N$ nodes with periodic boundary conditions $p_{n}^{(0)} = p_{n}^{
 \subsection{Current perturbation}
 \label{sec:compute_currn}
 
+To derive an expression for the degrees of freedom of $\vec{J}_{n}$, we start from the linear force balance in \cref{eq:mhd-phi} and put the unknown current perturbation on one side:
+\begin{gather}
+  \underbrace{\vec{J}_{n} \times \vec{B}_{0}}_{\text{(I)}} = \underbrace{c (\grad p_{n} + \im n p_{n} \grad \phi)}_{\text{(II)}} - \underbrace{\vec{J}_{0} \times \vec{B}_{n}}_{\text{(III)}}. \label{eq:jnxB0}
+\end{gather}
+Taking a scalar product of some edge $\vec{l}$ -- in the course of this derivation, we don't indicate evaluation at the edge midpoint $\Gamma$ to avoid cluttering up the equations -- with term (I) in \cref{eq:jnxB0} yields
+\begin{align}
+  \vec{l} \cdot (\vec{J}_{n} \times \vec{B}_{0}) &= \vec{l} \cdot (\vec{J}_{n} \times (\grad \psi \times \grad \phi + B_{0 \phi} \grad \phi)) \\
+  \intertext{with the definiton of the equilibrium field from \cref{eq:B_pol_tor}. Cyclic permutation gives}
+  \vec{l} \cdot (\vec{J}_{n} \times \vec{B}_{0}) &= \vec{J}_{n} \cdot ((\grad \psi \times \grad \phi) \times \vec{l} + B_{0 \phi} \grad \phi \times \vec{l}), \\
+  \intertext{where another triple product formula and the definition of the local coordinates from \cref{eq:edge_n} can be applied:}
+  \vec{l} \cdot (\vec{J}_{n} \times \vec{B}_{0}) &= \vec{J}_{n} \cdot \left ( (\vec{l} \cdot \grad \psi) \grad \phi + \frac{B_{0 \phi}}{R} \vec{n} \right ). \\
+  \intertext{Changing from co- to contravariant coordinates and carrying out the scalar product yields}
+  \vec{l} \cdot (\vec{J}_{n} \times \vec{B}_{0}) &= (\vec{l} \cdot \grad \psi) J_{n}^{\phi} + R B_{0}^{\phi} \vec{J}_{n}^{\pol} \cdot \vec{n}.
+\end{align}
+On the right-hand side, we can insert the definition from \cref{eq:edge_l}, reorder and in the result replace the definition from \cref{eq:B_pol}, giving
+\begin{gather}
+  \vec{l} \cdot \grad \psi = \left( \vec{n} \times R \grad \phi \right) \cdot \grad \psi = -R \vec{B}_{0}^{\pol} \cdot \vec{n}. \label{eq:l_grad_psi}
+\end{gather}
+Finally,
+\begin{gather}
+  \vec{l} \cdot (\vec{J}_{n} \times \vec{B}_{0}) = R B_{0}^{\phi} \vec{J}_{n}^{\pol} \cdot \vec{n} - R J_{n}^{\phi} \vec{B}_{0}^{\pol} \cdot \vec{n}. \label{eq:jnxB0_I}
+\end{gather}
+Multiplying term (II) of \cref{eq:jnxB0} by $\vec{l}$ simply gives
+\begin{gather}
+  \vec{l} \cdot (\grad p_{n} + \im n p_{n} \grad \phi) = \vec{l} \cdot \grad p_{n}. \label{eq:jnxB0_II}
+\end{gather}
+We repeat the same procedure for term (III) of \cref{eq:jnxB0} and expand the cross product by poloidal-toroidal decomposition:
+\begin{gather}
+  \vec{l} \cdot (\vec{J}_{0} \times \vec{B}_{n}) = \vec{l} \cdot (B_{n \phi} \vec{J}_{0}^{\pol} \times \grad \phi + J_{0 \phi} \grad \phi \times \vec{B}_{n}^{\pol}).
+\end{gather}
+For the second term in parentheses, we again use cyclic permutation and the definition from \cref{eq:edge_n}:
+\begin{align}
+  \vec{l} \cdot (\grad \phi \times \vec{B}_{n}^{\pol}) &= \vec{B}_{n}^{\pol} \cdot (\vec{l} \times \grad \phi) \nonumber \\
+  &= -\frac{1}{R} \vec{B}_{n}^{\pol} \cdot \vec{n}.
+\end{align}
+To simplify the first term in parentheses, we start from the equilibrium in \cref{eq:mhd-gen} and apply some of the previously used identities:
+\begin{align}
+  c \grad p_{0} &= \vec{J}_{0} \times \vec{B}_{0} \nonumber \\
+  &= \vec{J}_{0}^{\pol} \times (B_{0 \phi} \grad \phi) + J_{0 \phi} \grad \phi \times (\grad \psi \times \grad \phi) \nonumber \\
+  &= \vec{J}_{0}^{\pol} \times (B_{0 \phi} \grad \phi) + \frac{J_{0 \phi}}{R^{2}} \grad \psi \nonumber \\
+  &= \vec{J}_{0}^{\pol} \times (B_{0 \phi} \grad \phi) + J_{0}^{\phi} \grad \psi.
+\end{align}
+Rearrangement yields
+\begin{gather}
+  \vec{J}_{0}^{\pol} \times \grad \phi = \frac{1}{B_{0 \phi}} \left( c \grad p_{0} - J_{0}^{\phi} \grad \psi \right).
+\end{gather}
+The intermediate result is
+\begin{gather}
+  \vec{l} \cdot (\vec{J}_{0} \times \vec{B}_{n}) = \frac{B_{n \phi}}{B_{0 \phi}} \left ( c \grad p_{0} - J_{0}^{\phi} \grad \psi \right ) \cdot \vec{l} - \frac{J_{0 \phi}}{R} \vec{B}_{n}^{\pol} \cdot \vec{n}.
+\end{gather}
+Reusing \cref{eq:l_grad_psi} and rearranging, we get
+\begin{gather}
+  \vec{l} \cdot (\vec{J}_{0} \times \vec{B}_{n}) = \frac{B_{n \phi}}{B_{0 \phi}} c \grad p_{0} \cdot \vec{l} + R J_{0}^{\phi} \left ( \frac{B_{n \phi}}{B_{0 \phi}} \vec{B}_{0}^{\pol} \cdot \vec{n} - \vec{B}_{n}^{\pol} \cdot \vec{n} \right ). \label{eq:jnxB0_III}
+\end{gather}
+Combining \cref{eq:jnxB0_I,eq:jnxB0_II,eq:jnxB0_III}, \cref{eq:jnxB0} is transformed to \cref{eq:jnphi-jnpol}:
+\begin{gather}
+  R B_{0}^{\phi} \vec{J}_{n}^{\pol} \cdot \vec{n} - R J_{n}^{\phi} \vec{B}_{0}^{\pol} \cdot \vec{n} = c \left ( \grad p_{n} - \frac{B_{n \phi}}{B_{0 \phi}} \grad p_{0} \right ) \cdot \vec{l} - R J_{0}^{\phi} \left ( \frac{B_{n \phi}}{B_{0 \phi}} \vec{B}_{0}^{\pol} \cdot \vec{n} - \vec{B}_{n}^{\pol} \cdot \vec{n} \right ). \label{eq:jnphi-jnpol}
+\end{gather}
+On edges \inw\ and \out\ where $\vec{B}_{0}^{\pol} \cdot \vec{n} \neq 0$, we can divide by this term and we obtain an expression for $J_{n}^{\phi}$ in terms of $\vec{J}_{n}^{\pol} \cdot \vec{n}$ and quantities which are known at this point:
+\begin{gather}
+  R J_{n}^{\phi} = J_{n (\phi)} = R B_{0}^{\phi} \frac{\vec{J}_{n}^{\pol} \cdot \vec{n}}{\vec{B}_{0}^{\pol} \cdot \vec{n}} + \frac{c}{\vec{B}_{0}^{\pol} \cdot \vec{n}} \left ( \frac{B_{n \phi}}{B_{0 \phi}} \grad p_{0} - \grad p_{n} \right ) \cdot \vec{l} + R J_{0}^{\phi} \left ( \frac{B_{n \phi}}{B_{0 \phi}} - \frac{\vec{B}_{n}^{\pol} \cdot \vec{n}}{\vec{B}_{0}^{\pol} \cdot \vec{n}} \right ). \label{eq:jnphi}
+\end{gather}
+On edge \fs, $\vec{B}_{0}^{\pol} \cdot \vec{n} = 0$ and $\grad p_{0} \cdot \vec{l} = 0$ (compare \cref{eq:l_grad_psi}), thus from \cref{eq:jnphi-jnpol}, no connection between $J_{n}^{\phi}$ and $\vec{J}_{n}^{\pol} \cdot \vec{n}$ can be made, but the latter expression can be given in terms of already knwown quantities:
+\begin{gather}
+  R \vec{J}_{n}^{\pol} \cdot \vec{n} = \frac{c \grad p_{n} \cdot \vec{l}}{B_{0}^{\phi}} + R \frac{J_{0}^{\phi}}{B_{0}^{\phi}} \vec{B}_{n}^{\pol} \cdot \vec{n}. \label{eq:If}
+\end{gather}
+With these relations established, we now consider the divergence of the perturbation current from \cref{eq:divfree-phi}. In cylindrical coordinates it reads, after multiplication by $R$,
+\begin{gather}
+  \pd{R} (R J_{n}^{k}) + \im n R J_{n}^{\phi} + \pd{Z} (R J_{n}^{k}) = 0.
+\end{gather}
+Using the divergence theorem this can also be written in integral form in a specific triangular mesh element $\Omega^{(k)}$ as
+\begin{gather}
+  \oint_{\partial \Omega^{(k)}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l + \im n \int_{\Omega^{(k)}} R J_{n}^{\phi} \, \diff R \, \diff Z = 0.
+\end{gather}
+Here the first integral is performed over the 1-dimensional element boundary $\partial \Omega^{(k)} = \Gamma^{(k)}$. The first term is split into three contributions,
+\begin{gather}
+  \oint_{\partial \Omega^{(k)}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l = \int_{\Gamma_{\inw}^{(k)}, \Gamma_{\out}^{(k)}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l + \int_{\Gamma_{\fs}^{(k)}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff lx,
+\end{gather}
+where edge \fs\ is tangential to an adjacent flux surface and edges \inw\ and \out\ are not. Using the notation for currents established in \cref{eq:I_k}, we have
+\begin{gather}
+  I_{\inw} + I_{\out} + \im n \int_{\Omega} R J_{n}^{\phi} \diff S = -I_{\fs}.
+\end{gather}
+ $I_{\fs}$ is already known from \cref{eq:If} and therefore acts as a source on the right-hand side. The remaining currents $I_{\inw}$ and $I_{\out}$ are taken as unknowns. Since the current $I_{\out}$ flowing out of one triangle is equalto the current $-I_{\inw}$ flowing into the next triangle, these unknowns are connected on one strip of triangles and we expect a system of equations similar to the one in \cref{sec:compute_presn}. The degrees of freedom and the unknowns are illustrated in \cref{fig:current_perturbation} with the unknowns marked in red, along with the indexing described further below. 
 \begin{figure}[bth]
   \centering
   \input{./current_perturbation.tikz}
@@ -830,122 +946,39 @@ Note that for $N$ nodes with periodic boundary conditions $p_{n}^{(0)} = p_{n}^{
   \label{fig:current_perturbation}
 \end{figure}
 
-Multiplying \cref{eq:divfree-phi} by $R$ yields
+Now, we deviate from \cref{eq:I_phi} and use a different approximation for the remaining integral:
 \begin{gather}
-  \pd{x^{k}} (R J_{n}^{k}) + \im n R J_{n}^{\phi} = 0.
+  \im n I_{\phi} = \im n \int_{\Omega} R J_{n}^{\phi} \, \diff S \approx \im n S_{\Omega} \frac{R (\Gamma_{\inw}) J_{n}^{\phi} (\Gamma_{\inw}) + R (\Gamma_{\out}) J_{n}^{\phi} (\Gamma_{\out})}{2}.
 \end{gather}
-Using the divergence theorem this can also be written in integral form in a specific triangular mesh element $\Omega^{(k)}$ as
+In this approximation, a term $R (\Gamma_{\fs}) J_{n}^{\phi} (\Gamma_{\fs})$ is neglected because within one strip of triangles, edge \fs\ alternates between the inner and outer flux surface and this \enquote{oscillation} of sample points would carry over to the approximation values, which is similar to the argument regarding the shifted centroid in \cref{sec:dofs}. Furthermore, $J_{n}^{\phi} (\Gamma_{\fs}) \cdot \vec{n}$ can't be reformulated in terms of $\vec{J}_{n}^{\pol} (\Gamma_{\fs})$ via \cref{eq:jnphi}, which would introduce the former as another unknown and lead to an overdetermined set of equations, possibly violating divergence-freeness. So instead, $I_{\phi}$ on each triangle is given by
 \begin{gather}
-  \oint_{\partial \Omega^{(k)}} \diff l \, R \vec{J}_{n} \cdot \hat{\vec{n}} + \im n \int_{\Omega^{(k)}} \diff R \, \diff Z \, R J_{n}^{\phi} = 0.
+  \im n I_{\phi} = \im n \int_{\Omega} R J_{n}^{\phi} \, \diff S \approx \frac{\im n S_{\Omega}}{2} \left ( \frac{B_{0}^{\phi} (\Gamma_{\inw})}{\vec{B}_{0}^{\pol} (\Gamma_{\inw}) \cdot \vec{n}_{\inw}} I_{\inw} + \frac{B_{0}^{\phi} (\Gamma_{\out})}{\vec{B}_{0}^{\pol} (\Gamma_{\out}) \cdot \vec{n}_{\out}} I_{\out} + \dotsb \right ),
 \end{gather}
-Here the first integral is performed over the 1-dimensional element boundary $\partial \Omega^{(k)} = \Gamma^{(k)}$. The first term is split into three contributions,
+where we effectively reduced $I_{\phi}$ to $I_{\inw}$, $I_{\out}$ and already known terms by the relation between $\vec{J}_{n}^{\pol} \cdot \vec{n}$ and $J_{n}^{\phi}$ in \cref{eq:jnphi}. The remaining terms are moved to the right-hand-side as sources $s$, so the discretized equation in each triangle $\Omega$ is
 \begin{gather}
-  \oint_{\partial \Omega^{(k)}} \diff l \, R \vec{J}_{n} \cdot \hat{\vec{n}} = \int_{\Gamma_{\inw}^{(k)}, \Gamma_{\out}^{(k)}} \diff l \, R \vec{J}_{n} \cdot \hat{\vec{n}} + \int_{\Gamma_{\fs}^{(k)}} \diff l \, R \vec{J}_{n} \cdot \hat{\vec{n}},
-\end{gather}
-where edge \fs\ is tangential to an adjacent flux surface and edges \inw\ and \out\ are not. For the grid it is important to distinguish two types of triangles, starting from the second loop outside the magnetic axis, see \cref{fig:grid}.
-
-For the computation of toroidal $J_{n}^{\phi}$ in the element volume we start from \cref{eq:mhd-phi} with
-\begin{gather}
-  \vec{J}_{n} \times \vec{B}_{0} = c (\grad p_{n} + \im n p_{n} \grad \phi) - \vec{J}_{0} \times \vec{B}_{n} \label{eq:jnxB0}
-\end{gather}
-and
-\begin{gather}
-  \vec{B}_{0} = \grad \psi \times \grad \phi + B_{0 \phi} \grad \phi.
-\end{gather}
-Taking a scalar product of $\vec{l}$ with \cref{eq:jnxB0} on some edge yields
-\begin{align}
-  \vec{l} \cdot (\vec{J}_{n} \times \vec{B}_{0}) &= \vec{l} \cdot (\vec{J}_{n} \times (\grad \psi \times \grad \phi + B_{0 \phi} \grad \phi)) \nonumber \\
-  &= \vec{J}_{n} \cdot ((\grad \psi \times \grad \phi) \times \vec{l} + B_{0 \phi} \grad \phi \times \vec{l}) \nonumber \\
-  &= \vec{J}_{n} \cdot ((\grad \psi \times \grad \phi) \times \vec{l} + B_{0 \phi} \vec{n} / R) \nonumber \\
-  &= \vec{J}_{n} \cdot \left( (\vec{l} \cdot \grad \psi) \grad \phi + R B_{0}^{\phi} \vec{n} \right) \nonumber \\
-  &= (\vec{l} \cdot \grad \psi) J_{n}^{\phi} + R B_{0}^{\phi} \vec{J}_{n}^{\pol} \cdot \vec{n}.
-\end{align}
-Further,
-\begin{gather}
-  \vec{l} \cdot \grad \psi = R \grad \psi \cdot \left( \vec{n} \times \grad \phi \right) = -R \vec{n} \cdot \vec{B}_{0}^{\pol}.
-\end{gather}
-Finally,
-\begin{gather}
-  \vec{l} \cdot (\vec{J}_{n} \times \vec{B}_{0}) = R B_{0}^{\phi} \vec{J}_{n}^{\pol} \cdot \vec{n} - R J_{n}^{\phi} \vec{B}_{0}^{\pol} \cdot \vec{n}.
-\end{gather}
-The right-hand side of \cref{eq:jnxB0} yields:
-\begin{align}
-  \vec{l} \cdot (\grad p_{n} + \im n p_{n} \grad \phi) &= \vec{l} \cdot \grad p_{n} \\
-  \vec{l} \cdot (\vec{J}_{0} \times \vec{B}_{n}) &= \vec{l} \cdot (B_{n \phi} \vec{J}_{0}^{\pol} \times \grad \phi + J_{0 \phi} \grad \phi \times \vec{B}_{n}^{\pol}).
-\end{align}
-We use the fact that $\grad p_{0}$ is parallel to $\grad \psi$, so the cross product in the equilibrium is purely radial,
-\begin{align}
-  \vec{J}_{0} \times \vec{B}_{0} &= c \grad p_{0} \nonumber \\
-  &= \vec{J}_{0}^{\pol} \times (B_{0 \phi} \grad \phi) + J_{0 \phi} \grad \phi \times (\grad \psi \times \grad \phi) \nonumber \\
-  &= \vec{J}_{0}^{\pol} \times (B_{0 \phi} \grad \phi) + \frac{J_{0 \phi}}{R^{2}} \grad \psi \nonumber \\
-  &= \vec{J}_{0}^{\pol} \times (B_{0 \phi} \grad \phi) + J_{0}^{\phi} \grad \psi.
-\end{align}
-Thus
-\begin{align}
-  \vec{J}_{0}^{\pol} \times \grad \phi &= \frac{1}{B_{0 \phi}} \left( c \grad p_{0} - J_{0}^{\phi} \grad \psi \right) \nonumber \\
-  &= \frac{c p_{0}' (\psi) - J_{0}^{\phi}}{B_{0 \phi}}  \grad \psi.
-\end{align}
-Also
-\begin{align}
-  \vec{l} \cdot (\grad \phi \times \vec{B}_{n}^{\pol}) &= \vec{B}_{n}^{\pol} \cdot (\vec{l} \times \grad \phi) \nonumber \\
-  &= -\frac{1}{R} \vec{B}_{n}^{\pol} \cdot \vec{n}.
-\end{align}
-Finally
-\begin{gather}
-  (\vec{l} \cdot \grad \psi) J_{n}^{\phi} + R B_{0}^{\phi} \vec{J}_{n}^{\pol} \cdot \vec{n} = c \vec{l} \cdot \grad p_{n} - \frac{B_{n \phi}}{B_{0 \phi}} \left( c \grad p_{0}' (\psi) - J_{0}^{\phi} \right) \vec{l} \cdot \grad \psi + R J_{0}^{\phi} \vec{B}_{n}^{\pol} \cdot \vec{n} \label{eq:jnphi-jnpol}
-\end{gather}
-This term is only meaningful to obtain $J_{n}^{\phi}$ on edges where $\vec{l} \cdot \grad \psi \neq 0$ (\inw\ and \out\ in \cref{fig:grid}) and we obtain
-\begin{gather}
-  R J_{n}^{\phi} = J_{n (\phi)} = -\frac{B_{0 \phi}}{\vec{l} \cdot \grad \psi} \vec{J}_{n}^{\pol} \cdot \vec{n} + \frac{c R}{\vec{l} \cdot \grad \psi} \left( \vec{l} \cdot \grad p_{n} - \frac{B_{n \phi}}{B_{0 \phi}} \vec{l} \cdot \grad p_{0} \right) + J_{0 \phi} \left( \frac{B_{n \phi}}{R B_{0 \phi}} + \frac{\vec{B}_{n}^{\pol} \cdot \vec{n}}{\vec{l} \cdot \grad \psi} \right). \label{eq:jnphi}
-\end{gather}
-In the implementation, an average over edge \inw\ and \out\ will be taken for this quantity.
-
-On edge \fs, no connection between $J_{n}^{\phi}$ and $\vec{J}_{n}^{\pol} \cdot \vec{n}$ can be made, but the latter expression can be given in terms of already knwown quantities:
-\begin{gather}
-  R \vec{J}_{n}^{\pol} \cdot \vec{n} = \frac{c R}{B_{0 (\phi)}} \vec{l} \cdot \grad p_{n} + \frac{J_{0 \phi}}{B_{0 (\phi)}} \vec{B}_{n}^{\pol} \cdot \vec{n}. \label{eq:If}
-\end{gather}
-
-We start with
-\begin{gather}
-  I_{\inw} + I_{\out} + \im n \int_{\Omega} R J_{n}^{\phi} \diff S = -I_{\fs},
-\end{gather}
-where the notation for currents through edges, weighted by $R$, is
-\begin{gather}
-  I_{k} = \int_{\Gamma_{k}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l \approx R (\Gamma_{k}) \vec{J}_{n}^{\pol} (\Gamma_{k}) \cdot \vec{n}_{k},
-\end{gather}
-where values are taken at the midpoint of edge $\Gamma_{k}$ and assumed to be constant along that edge. $I_{\fs}$ is already known from \cref{eq:If} and therefore acts as a source on the right-hand side. The remaining currents $I_{\inw}$ and $I_{\out}$ are taken as unknowns and appear also in the last term of the left-hand side as
-\begin{align}
-  \im n \int_{\Omega} R J_{n}^{\phi} \, \diff S & \approx \im n S_{\Omega} \frac{R (\Gamma_{\inw}) J_{n}^{\phi} (\Gamma_{\inw}) + R (\Gamma_{\out}) J_{n}^{\phi} (\Gamma_{\out})}{2} \nonumber \\
-  &= -\frac{\im n S_{\Omega}}{2} \left( \frac{B_{0 (\phi)} (\Gamma_{\inw})}{\vec{l}_{\inw} \cdot \grad \psi (\Gamma_{\inw})} I_{\inw} + \frac{B_{0 (\phi)} (\Gamma_{\out})}{\vec{l}_{\out} \cdot \grad \psi (\Gamma_{\out})} I_{\out} + \dotsb \right),
-\end{align}
-where $S_{\Omega}$ is the triangle surface area. In the approximation above, a term $R (\Gamma_{\fs}) J_{n}^{\phi} (\Gamma_{\fs})$ is neglected because within one loop of triangles in \cref{fig:grid1}, edge \fs\ alternates between the inner and outer flux surface and this "oscillation" of sample points would carry over to the approximation values. Furthermore, $R (\Gamma_{\fs}) J_{n}^{\phi} (\Gamma_{\fs})$ can't be reformulated in terms of $R (\Gamma_{\fs}) \vec{J}_{n}^{\pol} (\Gamma_{\fs})$, introducing another unknown. This would lead to an overdetermined set of equations, possibly violating divergence-freeness. Instead, $I_{(\phi)}$ is approximated for each triangle by
-\begin{gather}
-  I_{(\phi)} = \int_{\Omega} R J_{n}^{\phi} \, \diff S \approx S_{\Omega} R (\Omega) J_{n}^{\phi} (\Omega).
-\end{gather}
-The remaining terms are moved to the right-hand-side as sources $s$, so the discretized equation in each triangle $\Omega$ is
-\begin{gather}
-  \left( 1 - \frac{\im n S_{\Omega}}{2} \frac{B_{0 (\phi)} (\Gamma_{\inw})}{\vec{l}_{\inw} \cdot \grad \psi (\Gamma_{\inw})} \right) I_{\inw} + \left( 1 - \frac{\im n S_{\Omega}}{2} \frac{B_{0 (\phi)} (\Gamma_{\out})}{\vec{l}_{\out} \cdot \grad \psi (\Gamma_{\out})} \right) I_{\out} = s. \label{eq:Ii-Io}
+  \left ( 1 + \frac{\im n S_{\Omega}}{2} \frac{B_{0}^{\phi} (\Gamma_{\inw})}{\vec{B}_{0}^{\pol} (\Gamma_{\inw}) \cdot \vec{n}_{\inw}} \right ) I_{\inw} + \left ( 1 + \frac{\im n S_{\Omega}}{2} \frac{B_{0}^{\phi} (\Gamma_{\out})}{\vec{B}_{0}^{\pol} (\Gamma_{\out}) \cdot \vec{n}_{\out}} \right ) I_{\out} = s. \label{eq:Ii-Io}
 \end{gather}
 The source term is given by
 \begin{gather}
-  s = -I_{\fs} - \frac{\im n S_{\Omega}}{2} \sum_{k = \inw, \out} \frac{c R}{\vec{l}_{k} \cdot \grad \psi} \left( \vec{l}_{k} \cdot \grad p_{n} - \frac{B_{n \phi}}{B_{0 \phi}} \vec{l}_{k} \cdot \grad p_{0} \right) + J_{0 \phi} \left( \frac{B_{n \phi}}{R B_{0 \phi}} + \frac{\vec{B}_{n}^{\pol} \cdot \vec{n}}{\vec{l}_{k} \cdot \grad \psi} \right).
+  s = -I_{\fs} - \frac{\im n S_{\Omega}}{2} \sum_{k = \inw, \out} \frac{c}{\vec{B}_{0}^{\pol} \cdot \vec{n}_{k}} \left ( \frac{B_{n \phi}}{B_{0 \phi}} \grad p_{0} - \grad p_{n} \right ) \cdot \vec{l}_{k} + R J_{0}^{\phi} \left ( \frac{B_{n \phi}}{B_{0 \phi}} - \frac{\vec{B}_{n}^{\pol} \cdot \vec{n}_{k}}{\vec{B}_{0}^{\pol} \cdot \vec{n}_{k}} \right ),
 \end{gather}
-The directional derivatives $\vec{l}_{k} \cdot \grad \psi$ are approximated by a difference quotient with values taken at the nodes (for indexing see \cref{fig:grid}),
+where we again ommited evaluation at $\Gamma_{k}$ for the sake of brevity. Note that $\vec{B}_{n} (\Gamma_{k}) \cdot \vec{n}_{k}$ can be directly retrieved from $\Psi_{k}$, while $B_{n \phi} (\Gamma_{k})$ has to be calculated by averaging adjacent $B_{n \phi} (\Omega)$. The directional derivatives $\vec{l}_{k} \cdot \grad p_{n} (\Gamma_{k})$ are approximated by a difference quotient with values taken at the nodes (for indexing see \cref{fig:grid}),
 \begin{align}
-  \vec{l}_{\inw} \cdot \grad \psi = l_{\inw} \hat{\vec{l}}_{\inw} \cdot \grad \psi = l_{\inw} \pd[\psi]{\vec{l}_{\inw}} & \approx l_{\inw} \frac{-\symup{\Delta} \psi}{l_{\inw}} = -\symup{\Delta} \psi, \\
-  \vec{l}_{\out} \cdot \grad \psi = l_{\out} \hat{\vec{l}}_{\out} \cdot \grad \psi = l_{\out} \pd[\psi]{\vec{l}_{\out}} & \approx l_{\out} \frac{\symup{\Delta} \psi}{l_{\out}} = \symup{\Delta} \psi.
+  \vec{l}_{\inw} \cdot \grad p_{n} (\Gamma_{\inw}) = l_{\inw} \hat{\vec{l}}_{\inw} \cdot \grad p_{n} (\Gamma_{\inw}) = l_{\inw} \pd[p_{n}]{\vec{l}_{\inw}} (\Gamma_{\inw}) & \approx l_{\inw} \frac{p_{n} (\vec{r}_{\vout}) - p_{n} (\vec{r}_{\vfs})}{\norm{\vec{r}_{\vout} - \vec{r}_{\vfs}}} = p_{n} (\vec{r}_{\vout}) - p_{n} (\vec{r}_{\vfs}), \\
+  \vec{l}_{\out} \cdot \grad p_{n} (\Gamma_{\out}) = l_{\out} \hat{\vec{l}}_{\out} \cdot \grad p_{n} (\Gamma_{\out}) = l_{\out} \pd[p_{n}]{\vec{l}_{\out}} (\Gamma_{\out}) & \approx l_{\out} \frac{p_{n} (\vec{r}_{\vfs}) - p_{n} (\vec{r}_{\vinw})}{\norm{\vec{r}_{\vfs} - \vec{r}_{\vinw}}} = p_{n} (\vec{r}_{\vfs}) - p_{n} (\vec{r}_{\vinw}),
 \end{align}
-Note that $\psi \vert_{\vfs} \neq \psi \vert_{\vinw} = \psi \vert_{\vout}$ for each triangle because values are taken from the nodes at adjacent flux surfaces. Thus $\symup{\Delta} \psi$ is identical for the entire loop, but signs change depending on the direction of $\vec{l}_{k}$, alternating between triangles. It takes a positive value for $\vec{l}_{k}$ pointing in the radially inward direction. The same logic applies to $\vec{l} \cdot \grad p_{0}$ terms.
+where the sign has to be reversed for the type of triangle with node \vfs\ on the outer flux surface. This is actually a shortcoming of the convention that nodes are named according to their opposite edges; in the implementation, we use a subroutine that gives the nodes of edges in consistent counter-clockwise order, so this case distinction is not necessary at this level. The same logic applies to $\vec{l} \cdot \grad p_{0}$ terms.
 
-For the global indexing scheme, we call the ingoing current into triangle $(k)$ counted in clockwise direction $I^{(k)}$. In triangle $(k)$, this is equal to $I_{\inw} = -I^{(k)}$ and $I_{\out} = I^{(k+1)}$. The matrix form of \cref{eq:Ii-Io} is then
+For the global\footnote{in this case only referring to the current triangle strip, as opposed to the local indexing of individual triangles} indexing scheme, we call the ingoing current into triangle $(k)$ counted in clockwise direction $I^{(k)}$. In triangle $(k)$, this is equal to $I_{\inw} = -I^{(k)}$ and $I_{\out} = I^{(k+1)}$. This is also illustrated in \cref{fig:current_perturbation}, where triangles are counted from one starting at the right end of the sketch. The matrix form of \cref{eq:Ii-Io} is then
 \begin{gather}
   K_{jk} I^{(k)} = s_{j},
 \end{gather}
 where the elements of the stiffness matrix $\hat{K}$ are
 \begin{gather}
-  K_{jk} = \left( -1 - \frac{\im n S_{\Omega^{(j)}}}{2} \frac{B_{0 (\phi)} (\Gamma_{\inw}^{(j)})}{\symup{\Delta} \psi} \right) \delta_{jk} + \left( 1 - \frac{\im n S_{\Omega^{(j)}}}{2} \frac{B_{0 (\phi)} (\Gamma_{\out}^{(j)})}{\symup{\Delta} \psi} \right) \delta_{j+1, k}.
+  K_{jk} = -\left ( 1 + \frac{\im n S_{\Omega^{(j)}}}{2} \frac{B_{0}^{\phi} (\Gamma_{\inw}^{(j)})}{\vec{B}_{0}^{\pol} (\Gamma_{\inw}^{(j)}) \cdot \vec{n}_{\inw}^{(j)}} \right) \delta_{jk} + \left( 1 + \frac{\im n S_{\Omega^{(j)}}}{2} \frac{B_{0}^{\phi} (\Gamma_{\out}^{(j)})}{\vec{B}_{0}^{\pol} (\Gamma_{\out}^{(j)}) \cdot \vec{n}_{\out}^{(j)}} \right) \delta_{j+1, k}.
 \end{gather}
 
+\clearpage
 \section{Magnetic field perturbation}
 \label{sec:compute_Bn}
 
@@ -1005,30 +1038,30 @@ Using the Jacobian of symmetry flux coordinates from \cref{eq:flux_metric}, we o
   \psi_{m n} = \frac{q}{m + n q} \left( \frac{R^{2}}{B_{0 \phi}} B_{n}^{\psi} \right)_{m}
 \end{gather}
 and so, to generate a non-resonant field, we are allowed to use any value
-\begin{gather*}
-  B_{n}^{\psi} = C(\psi) \frac{B_{0 \phi}}{R^{2}},
-\end{gather*}
+\begin{gather}
+  B_{n}^{\psi} = C(\psi) \frac{B_{0 \phi}}{R^{2}}, \label{eq:Bnpsi_vac}
+\end{gather}
 where $C(\psi)$ is a flux function. The other components of $\Bpert$ are not relevant for the resonance condition and just need to fulfill divergence-freeness. Thus we proceed as in \cref{sec:compute_currn} and find fluxes through triangle edges:
 \begin{gather}
-  \int_{\Gamma_{\inw}, \Gamma_{\out}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} = -\int_{\Gamma_{\fs}} \diff l \, R \vec{B}_{n}^{\pol} \cdot \vec{n} - \im n \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi}. \label{eq:Bn_divfree}
+  \int_{\Gamma_{\inw}, \Gamma_{\out}} R \vec{B}_{n}^{\pol} \cdot \vec{n} \, \diff l = -\int_{\Gamma_{\fs}} R \vec{B}_{n}^{\pol} \cdot \vec{n} \, \diff l - \im n \int_{\Omega} R B_{n}^{\phi} \, \diff R \, \diff Z. \label{eq:Bn_divfree}
 \end{gather}
-As for currents we use the notation for weighted magnetic fluxes through edges,
+As for currents we use the notation $\Psi_{k}$ for weighted magnetic fluxes through edges as in \cref{eq:Psi_k},
 \begin{gather}
   \Psi_{k} = \int_{\Gamma_{k}} R \vec{B}_{n}^{\pol} \cdot \vec{n} \, \diff l \approx R (\Gamma_{k}) \vec{B}_{n}^{\pol} (\Gamma_{k}) \cdot \vec{n}_{k},
 \end{gather}
-and the same for the weighted toroidal magnetic flux,
+and, differing from the procedure in \cref{sec:compute_currn}, the same for the weighted toroidal magnetic flux $\Psi_{\phi}$ as per \cref{eq:Psi_phi},
 \begin{gather}
-  \Psi_{\phi} = \int_{\Omega} \diff R \, \diff Z \, R B_{n}^{\phi} \approx S_{\Omega} \, R (\Omega) B_{n}^{\phi} (\Omega),
+  \Psi_{\phi} = \int_{\Omega} R B_{n}^{\phi} \, \diff R \, \diff Z \approx S_{\Omega} \, R (\Omega) B_{n}^{\phi} (\Omega),
 \end{gather}
 resulting in a shortened notation for \cref{eq:Bn_divfree} where the system of equations to be assembled is more apparent:
 \begin{gather}
   \Psi_{\inw} + \Psi_{\out} = -\Psi_{\fs} - \im n \Psi_{\phi}.
 \end{gather}
-The term through edge \fs\ orthogonal to $\vec{n}_{\fs} \parallel \grad \psi$ is
+Again, the flux through edge \fs\ is fixed, so we rearrange \cref{eq:Bnpsi} and get
 \begin{gather}
-  \Psi_{\fs} \approx B_{n}^{\psi} (\Gamma_{\fs}) \frac{R (\Gamma_{\fs}) l_{\fs}}{\vec{n}_{\fs} \cdot \grad \psi (\Gamma_{\fs})} \label{eq:Psi_f}
+  \Psi_{\fs} \approx 2 R (\Gamma_{\fs}) B_{n}^{\psi} (\Gamma_{\fs}) \frac{S_{\Omega^{(+1)}} + S_{\Omega^{(-1)}}}{\psi^{(+1)} - \psi^{(-1)}}, \label{eq:Psi_f}
 \end{gather}
-with the sign of the directional derivative depending on edge orientation.
+where $B_{n}^{\psi}$ is given by \cref{eq:Bnpsi_vac}.
 
 The system of linear equations to solve is
 \begin{gather}
@@ -1121,7 +1154,7 @@ Now an approximation can be made by switching from contravariant components to c
   \textbf{Notation} & \textbf{Description} \\
   \midrule
   \endhead
-  \label{tab:symbols}
+  \label{tab:symbols}%
   $\vec{B}$ & magnetic field strength, measured in Gauss \\
   $\Bplas$ & perturbation field from \emph{p}lasma current \\
   $\Bvac$ & perturbation field in \emph{v}acuum (from external coils) \\
@@ -1164,7 +1197,7 @@ Now an approximation can be made by switching from contravariant components to c
   \textbf{Notation} & \textbf{Description} \\
   \midrule
   \endhead
-  \label{tab:decorations}
+  \label{tab:decorations}%
   $p_{0}$ & equilibrium $p$ \\
   $\delta p$ & perturbation of $p$ \\
   $p_{n}$ & \textsc{Fourier} coefficient of perturbation of $p$ with toroidal mode number $n$ \\
