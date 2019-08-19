@@ -520,7 +520,7 @@ contains
 
     do kt = 1, ntri
        div = abs((sum(pol_flux(kt,:)) + imun * n * tor_comp(kt) * &
-            mesh_element(kt)%det_3 * 0.5d0)) / sum(abs(pol_flux(kt,:)))
+            mesh_element(kt)%det_3 * 0.5d0)) / sum(abs(pol_flux(kt,:))+1d-15)
        if (div > abs_err) then
           if (log_err) write(logfile, *) err_msg, ': ', div
           stop err_msg
