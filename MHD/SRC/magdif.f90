@@ -179,7 +179,7 @@ module magdif
   !> #kp_low (kf)+1 to #kp_low (kf)+#kp_max (kf), so #kp_low is determined by cumulatively
   !> adding consecutive values of #kp_max. The array index ranges from 1, giving the
   !> global index of the knot on the magnetic axis (which has to be 1), to
-  !> #magdif_config::nflux+2, giving the last knot on the flux surface just outside the
+  !> #magdif_config::nflux+1, giving the last knot on the flux surface just outside the
   !> last closed flux surface. The latter is needed for some interpolations.
   integer, allocatable :: kp_low(:)
 
@@ -397,9 +397,9 @@ contains
   subroutine init_indices
     integer :: kf
 
-    allocate (kp_max(nflux+2))
+    allocate (kp_max(nflux+1))
     allocate (kt_max(nflux+1))
-    allocate (kp_low(nflux+2))
+    allocate (kp_low(nflux+1))
     allocate (kt_low(nflux+1))
 
     kp_max = nkpol
@@ -407,7 +407,7 @@ contains
     kt_max(1) = nkpol
 
     kp_low(1) = 1
-    do kf = 2, nflux+2
+    do kf = 2, nflux+1
        kp_low(kf) = kp_low(kf-1) + kp_max(kf-1)
     end do
     kt_low(1) = 0
@@ -501,29 +501,34 @@ contains
   !> triangle, second index refers to the edge on that triangle, as per
   !> #mesh_mod::mesh_element
   !> @param tor_comp toroidal field components, e.g. #jnphi - index refers to the triangle
-  !> @param abs_err absolute error threshold, i.e. maximum acceptable value for divergence
+  !> @param rel_err relative error threshold, i.e. maximum acceptable value for divergence
+  !> after division by absolute flux through the triangle
   !> @param field_name name given to the vector field in the error message
   !>
   !> This subroutine calculates the divergence via the divergence theorem, i.e. by adding
-  !> up the fluxes of the vector field through triangle edges. If this sum is higher than
-  !> \p abs_err on any triangle, it halts the program.
-  subroutine check_div_free(pol_flux, tor_comp, abs_err, field_name)
+  !> up the fluxes of the vector field through triangle edges. If this sum, divided by the
+  !> absolute flux, is higher than \p rel_err on any triangle, it halts the program.
+  subroutine check_div_free(pol_flux, tor_comp, rel_err, field_name)
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
-    real(dp), intent(in) :: abs_err
+    real(dp), intent(in) :: rel_err
     character(len = *), intent(in) :: field_name
 
     integer :: kt
-    real(dp) :: div
+    real(dp) :: div, abs_flux
     character(len = len_trim(field_name) + 20) :: err_msg
     err_msg = trim(field_name) // ' not divergence-free'
 
     do kt = 1, ntri
-       div = abs((sum(pol_flux(kt,:)) + imun * n * tor_comp(kt) * &
-            mesh_element(kt)%det_3 * 0.5d0)) / sum(abs(pol_flux(kt,:))+1d-15)
-       if (div > abs_err) then
-          if (log_err) write(logfile, *) err_msg, ': ', div
-          stop err_msg
+       abs_flux = sum(abs(pol_flux(kt,:))) + abs(imun * n * tor_comp(kt) * &
+            mesh_element(kt)%det_3 * 0.5d0)
+       if (abs_flux > 0d0) then
+          div = abs((sum(pol_flux(kt,:)) + imun * n * tor_comp(kt) * &
+               mesh_element(kt)%det_3 * 0.5d0)) / abs_flux
+          if (div > rel_err) then
+             if (log_err) write(logfile, *) err_msg, ': ', div
+             stop err_msg
+          end if
        end if
     end do
   end subroutine check_div_free
@@ -664,15 +669,18 @@ contains
     ! magnetic axis at k == 0 is not counted as flux surface
     psi(0) = mesh_point(1)%psi_pol
 
-    do kf = 1, nflux+1
+    do kf = 1, nflux
        ! average over the loop to smooth out numerical errors
        psi(kf) = sum(mesh_point((kp_low(kf) + 1):kp_low(kf+1))%psi_pol) / kp_max(kf)
     end do
 
-    ddens_dpsi = di0 / (psi(0) - psi(nflux+1))
-    dtemp_dpsi = ti0 / (psi(0) - psi(nflux+1))
-    dens = (psi - psi(nflux+1)) / (psi(0) - psi(nflux+1)) * di0 + d_min
-    temp = (psi - psi(nflux+1)) / (psi(0) - psi(nflux+1)) * ti0 + t_min
+    ! linear extrapolation for value just outside LCFS
+    psi(nflux+1) = psi(nflux) + (psi(nflux) - psi(nflux-1))
+
+    ddens_dpsi = di0 / (psi(0) - psi(nflux))
+    dtemp_dpsi = ti0 / (psi(0) - psi(nflux))
+    dens = (psi - psi(nflux)) / (psi(0) - psi(nflux)) * di0 + d_min
+    temp = (psi - psi(nflux)) / (psi(0) - psi(nflux)) * ti0 + t_min
     pres0 = dens * temp * ev2erg
     dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
   end subroutine init_flux_variables
@@ -750,7 +758,7 @@ contains
 
           r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
           Btor2 = B0phi(kt_low(kf) + kt, ef) ** 2
-          if (kf > 1 .and. .not. orient) then
+          if (.not. orient) then
              j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf-1) * (1d0 - Btor2 / &
                   B2avg(kf-1)) * r
           else
@@ -864,7 +872,13 @@ inner: do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           if (.not. orient) cycle inner
-          common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
+          if (kf < nflux) then
+             common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
+          else
+             ! triangles outside LCFS are comparatively distorted
+             ! use linear extrapolation instead, i.e. a triangle of the same size
+             common_tri = (/ kt_low(kf) + kt, kt_low(kf) + kt /)
+          end if
           ! use midpoint of edge f
           base = mesh_point(lf(1))
           tip = mesh_point(lf(2))
@@ -893,11 +907,15 @@ inner: do kt = 1, kt_max(kf)
        call sparse_solve(nkpol, nkpol, nz, irow, icol, aval, x)
        call sparse_matmul(nkpol, nkpol, irow, icol, aval, x, resid)
        resid = resid - inhom
-       rel_err = abs(resid) / abs(inhom)
+       where (inhom /= 0d0)
+          rel_err = abs(resid) / abs(inhom)
+       elsewhere
+          rel_err = 0d0
+       end where
        max_rel_err = max(max_rel_err, maxval(rel_err))
        avg_rel_err = avg_rel_err + sum(rel_err)
 
-       if (kf == 1) then ! first point on axis before actual output
+       if (kf == 1) then ! first point on axis - average over enclosing flux surface
           presn(1) = sum(x) / size(x)
        end if
        do kp = 1, kp_max(kf)
@@ -1072,7 +1090,11 @@ inner: do kt = 1, kt_max(kf)
        call sparse_matmul(kt_max(kf), kt_max(kf), irow(:nz), icol(:nz), aval(:nz), &
             x(:kt_max(kf)), resid)
        resid = resid - inhom(:kt_max(kf))
-       rel_err(:kt_max(kf)) = abs(resid(:kt_max(kf))) / abs(inhom(:kt_max(kf)))
+       where (inhom(:kt_max(kf)) /= 0d0)
+          rel_err(:kt_max(kf)) = abs(resid(:kt_max(kf))) / abs(inhom(:kt_max(kf)))
+       elsewhere
+          rel_err(:kt_max(kf)) = 0d0
+       end where
        max_rel_err = max(max_rel_err, maxval(rel_err(:kt_max(kf))))
        avg_rel_err = avg_rel_err + sum(rel_err(:kt_max(kf)))
        do kt = 1, kt_max(kf)
@@ -1176,7 +1198,13 @@ inner: do kt = 1, kt_max(kf)
           r = (base%rcoord + tip%rcoord) * 0.5d0
           lr = tip%rcoord - base%rcoord
           lz = tip%zcoord - base%zcoord
-          common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
+          if (kf < nflux) then
+             common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
+          else
+             ! triangles outside LCFS are comparatively distorted
+             ! use linear extrapolation instead, i.e. a triangle of the same size
+             common_tri = (/ kt_low(kf) + kt, kt_low(kf) + kt /)
+          end if
           Bnpsi = -R0 * B0phi(kt_low(kf) + kt, ef) / r
           Bnflux(kt_low(kf) + kt, ef) = Bnpsi * r / Deltapsi * &
                sum(mesh_element(common_tri(:))%det_3)
