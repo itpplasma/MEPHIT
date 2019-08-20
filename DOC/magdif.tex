@@ -172,6 +172,7 @@
 \newcommand*\vfs{\ensuremath{\textrm{F}}}  % label for vertex opposite flux surface edge
 \newcommand*\vinw{\ensuremath{\textrm{I}}}  % label for vertex opposite inward current edge
 \newcommand*\vout{\ensuremath{\textrm{O}}}  % label for vertex opposite outward current edge
+\newcommand*\nflux{\ensuremath{n_{\text{flux}}}}  % number of flux surfaces on the grid
 
 \begin{document}
 
@@ -575,8 +576,8 @@ Here, $\psi$ is the normalized \emph{disc} poloidal flux, i.e.
 \end{gather}
 where $\vec{S}$ is the disc that at a point of evaluation $(R_{S}, Z_{S})$ is given by $R \leq R_{S}, Z = Z_{S}$. The orientation of $\vec{S}$ fixes the sign\footnote{Since $\vec{B}_{0}$ is not defined outside the plasma volume and only $\grad \psi$ enters calculations, $\psi$ is defined up to a constant and thus could be shifted to change sign. However, the sign of $\grad \psi$ is fixed.} of $\psi$. Here, $\psi$ is expected to increase towards the magnetic axis -- $\psi_{\text{min}}$ is located at the outermost flux surface and $\psi_{\text{max}}$ is located at the magnetic axis. This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in cylindrical coordinates:
 \begin{align}
-  B_{0}^{R} &= (\grad \psi \times \grad \phi)^{R} = -\frac{1}{R} \pd[\psi]{Z}, \\
-  B_{0}^{Z} &= (\grad \psi \times \grad \phi)^{Z} = \frac{1}{R} \pd[\psi]{R}.
+  B_{0}^{R} &= (\grad \psi \times \grad \phi)^{R} = -\frac{1}{R} \pd[\psi]{Z}, \label{eq:B0R} \\
+  B_{0}^{Z} &= (\grad \psi \times \grad \phi)^{Z} = \frac{1}{R} \pd[\psi]{R}. \label{eq:B0Z}
 \end{align}
 Note that the toroidal field coils produce a magnetic field that is roughly proportional to $\frac{1}{R}$, so $B_{0 \phi}$ is assumed to be constant over the entire plasma volume.
 
@@ -704,11 +705,53 @@ where we used \cref{eq:flux_metric} in the last step.
 \section{Pre-processing of input data}
 \label{sec:inputs}
 
-The equilibrium field $\vec{B}_{0}$ is assumed to be available in GEQDSK format, shortly summarized in \cite{Lao97}. It consists of data points given on a rectangular grid which are fitted from measurements to the \textsc{Grad}--\textsc{Shafranov} equation. Parts of NEO-2 code import such a file, generate a field-aligned grid as described in \cref{sec:grid} and supply values of $\vec{B}_{0}$ and its partial derivatives on arbitrary $R, Z$ coordinates by interpolation with splines of fifth order in $R$ and $Z$. In the implementation of NEO-EQ, the necessary values on edge midpoints are cached once before calculations starts as to avoid repeated function calls to spline interpolation.
+Prior to starting iterations, some input data has to supplied, namely the following:
+\begin{itemize}
+\item coordinates of grid points, numbering of grid points and triangles including edge adjacency list -- described in \cref{sec:grid-impl};
+\item the equilibrium magnetic field $\vec{B}_{0}$ from which the grid is generated;
+\item the vacuum perturbation field $\Bvac$ described in \cref{sec:Bvac} and
+\item optionally the equilibrium pressure $p_{0}$.
+\end{itemize}
+Additonally, a configuration file exists to specify behaviour of the implemented algorithms and data input/output.
 
-[\Bvac \ldots]
+The equilibrium field $\vec{B}_{0}$ is assumed to be available in GEQDSK format, shortly summarized in \cite{Lao97}. It consists of data points given on a rectangular grid which are fitted from measurements to the \textsc{Grad}--\textsc{Shafranov} equation. Parts of NEO-2 code import such a file and generate a field-aligned grid as described in \cref{sec:grid} and specified in \cref{sec:grid-impl}. It also supplies values of $\vec{B}_{0}$ and its partial derivatives on arbitrary $R, Z$ coordinates by interpolation with splines of fifth order in $R$ and $Z$ based on \cref{eq:B0R,eq:B0Z}. In the implementation of NEO-EQ, the necessary values on edge midpoints and shifted centroids are cached once before calculations starts as to avoid repeated function calls to spline interpolation and possibly allow for other data sources. From $\vec{B}_{0}$, the safety factor $q$ is computed as described in \cref{sec:safety_factor}.
 
-[grid implementation \ldots]
+While the equilibrium pressure $p_{0}$ should be available from the GEQDSK file and and the equilibrium current $\vec{J}_{0}$ can be computed from the equilibrium field via Ampère's law as in \cref{eq:ampere-gen}, another approach is possible. Since Ampère's law is never used for equilibrium quantities, it is possible to choose a pressure profile and calculate $J_0^{\phi}$ to be consistent with the MHD equilibrium in \cref{eq:mhd-gen}. The latter is the \textsc{Pfirsch}--\textsc{Schlüter} current and its calculation is outlined in \cref{sec:j0phi}. The simplest approach to the pressure profile assumes a linear profile for the particle density $n$ and temperature $T$,
+\begin{align}
+  n^{(k)} &= n_{\text{LCFS}} + \frac{\psi^{(k)} - \psi_{\text{LCFS}}}{\psi_{\text{axis}} - \psi_{\text{LCFS}}} n_{\text{step}}, \label{eq:dens} \\
+  T^{(k)} &= T_{\text{LCFS}} + \frac{\psi^{(k)} - \psi_{\text{LCFS}}}{\psi_{\text{axis}} - \psi_{\text{LCFS}}} T_{\text{step}}, \label{eq:temp}
+\end{align}
+where $k$ refers to the index of the flux surface. The subscripts LCFS and axis indicate the value at the separatrix and the magnetic axis, respectively. The configurable values are then the step sizes $n_{\text{step}}$ and $T_{\text{step}}$ as well as $n_{\text{LCFS}}$ and $T_{\text{LCFS}}$. From these, the pressure is calculated by the ideal gas law:
+\begin{gather}
+  p_{0} = n k_{\text{B}} T.
+\end{gather}
+Additionally, with the formulae given above, one can also derive an expression for the equilibrium pressure gradient:
+\begin{gather}
+  p_{0}' (\psi) = n' (\psi) k_{\text{B}} T + n k_{\text{B}} T' (\psi) = \frac{n_{\text{step}} k_{\text{B}} T + n k_{\text{B}} T_{\text{step}}}{\psi_{\text{axis}} - \psi_{\text{LCFS}}}.
+\end{gather}
+Thus all necessary equilibrium quantities are established.
+
+\subsection{Grid implementation}
+\label{sec:grid-impl}
+
+Since the grid is field-aligned, there are a few conventions to be considered compared to more arbitrary grids. The code has to \enquote{find its way}, so we make assumptions on numbering.
+
+The number of flux surfaces realized on the grid is known and referred to as \nflux. The numbers increase going outward from the magnetic axis which is \emph{not} included and thus gets the index 0. Flux variables like $\psi$, $p_{0}$ and $p_{0}' (\psi)$ are calculated at these flux surfaces and use the same indexing scheme. Others, like $q$ are calculated \emph{between} flux surfaces and are called half-grid quantities. In this case, the index refers to the outer or enclosing flux surface and starts at 1. When half-grid quantities are needed at full-grid positions or vice versa, they are linearly interpolated between neighbouring values, with one exception: if an interpolation point lies outside the separatrix, an appropriate interpolation point on the separatrix is used instead.
+
+Node numbering starts from 1 at the magnetic axis, increasing towards the separatrix. Then, the nodes on the enclosing flux surface (index 1) are enumerated counter-clockwise, starting with the node lying on the line connecting the magnetic axis and the X point. Then the next enclosing flux surface (index 2) is enumerated and so on. This way a simple bijection between \enquote{global} node numbering and the \enquote{local} numbering on a specific flux surface can be implemented. The flux surface indexing is the same as for full-grid quantities and the number of nodes per flux surface needs to be known.
+
+Triangle numbering operates on similar assumptions, albeit with flux surface indexing akin to half-grid quantities. The innermost triangle strip (index 1) is enumerated first, starting at index 1 for the triangle formed by nodes 1, 2 and 3. It also goes counterclockwise and on each flux surface starts with the triangle whose edge \inw\ lies on the line between the magnetic axis and the X point, i.e. it follows node numbering. Again, local numbering on a triangle strip can be converted to global numbering when the number of triangles is known.
+
+Associated with each triangle are local indices, i.e. 1 to 3, for nodes and edges. The global node number is saved for each local node number. The edges don't have a global index and are numbered so that edge 1 connects node 1 to 2, edge 2 connects node 2 to 3 and edge 3 connects node 3 to 1. When the index of node \vfs\ is known and the aforementioned conventions are followed, the symbolic designations \fs, \inw, \out\ can be mapped to the local edge index, \vfs, \vinw, \vout\ to the local (and global) node index and edge vectors $\vec{l}$ can be given in counter-clockwise direction. Furthermore, an adjacency list is constructed, giving any triangle's neighbour on a given edge and the local edge number in the neighbouring triangke.
+
+Scalar quantities like $p_{n}$ are indexed by global node number and vector quantities like $\vec{B}_{n}$ and $\vec{J}_{n}$ are indexed by global triangle number and local edge number. The latter convention involves some redundancy as it takes twice the storage that would be necessary, but it also allows for consistency checks and a simpler implementation.
+
+[illustrations \ldots]
+
+\subsection{Vacuum perturbation field}
+\label{sec:Bvac}
+
+[\ldots]
 
 \subsection{Toroidal unperturbed current}
 \label{sec:j0phi}
