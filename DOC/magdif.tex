@@ -180,7 +180,7 @@
 \tableofcontents
 
 \newpage
-\section{Ideal magneotohydrodynamics}
+\section{Ideal magnetohydrodynamics}
 
 [derivation of the stationary equilibrium, flux surfaces and \textsc{Grad}--\textsc{Shafranov} equation, flux surface quantities, \ldots]
 
@@ -189,6 +189,7 @@
   \langle \Phi \rangle = \frac{\int_{0}^{2 \pi} \int_{0}^{2 \pi} \sqrt{g} \Phi \, \diff \phi \, \diff \theta}{\int_{0}^{2 \pi} \int_{0}^{2 \pi} \sqrt{g} \, \diff \phi \, \diff \theta}. \label{eq:flux_surface_avg}
 \end{gather}
 
+\clearpage
 \section{Stationary linear perturbation of ideal MHD equilibrium}
 
 For the intended application on stationary (compared to MHD mode eigenfrequencies) non-axisymmetric magnetic perturbations by external coils, we consider a perturbed ideal MHD equilibrium for pressure $p$, currents $\vec{J}$ and magnetic field $\vec{B}$ fulfilling
@@ -594,9 +595,9 @@ The change of sign in comparison to \textcite{dHaeseleer91} is due to the revers
 \subsection{Discretization and local coordinate system}
 \label{sec:grid}
 
-So far, we have given a fairly general description of the problem without explicit refernce to numerical methods, apart maybe from the iteration scheme in \cref{sec:iteration}. One necessary modification is the discretization of the problem. The finite element method outlined in \cref{sec:compute_Bn} uses a discretization of the computational domain, i.e. it introduces a triangular grid. While other tilings are possible, triangulation is the simplest and for triangles, the \textsc{Delaunay} algorithm is unique. The latter maximizes the triangles' minimal interior angle, which is desirable because a more elongated triangle shape reduces the quality of approximations on it. However, we choose to align the grid on flux surfaces in order to use the associated special properties.
+So far, we have given a fairly general description of the problem without explicit reference to numerical methods, apart maybe from the iteration scheme in \cref{sec:iteration}. One necessary modification is the discretization of the problem. The finite element method outlined in \cref{sec:compute_Bn} uses a discretization of the computational domain, i.e. it introduces a triangular grid. While other tilings are possible, triangulation is the simplest and for triangles, the \textsc{Delaunay} algorithm is unique. The latter maximizes the triangles' minimal interior angle, which is desirable because a more elongated triangle shape reduces the quality of approximations on it. However, we choose to align the grid on flux surfaces in order to use the associated special properties.
 
-A set of nested flux surfaces is chosen, e.g. a number $n_{\text{flux}}$ of curves of constant $\psi$ which are equidistant between the magnetic Axis and the X point. These are then intersected by rays originating from the magnetic axis. Note that these rays are not curves of constant $\theta$, as these are generally not straight in $(R, Z)$ coordinates. As a result, between any two flux surfaces there is a \emph{ring} or \emph{strip} of quadrangles going around in poloidal direction. These quadrangles are then diagonally split into triangles, yielding two types of triangles. An exception is the innermost ring containing the magnetic axis, where there is only one type of triangle and no quadrangles to split. This kind of grid is depicted in \cref{fig:grid} where concentric circles are used to illustrate the nested flux surfaces.
+A set of nested flux surfaces is chosen, e.g. a number $n_{\text{flux}}$ of curves of constant $\psi$ which are equidistant between the magnetic axis and the X-point. These are then intersected by rays originating from the magnetic axis. Note that these rays are not curves of constant $\theta$, as these are generally not straight in $(R, Z)$ coordinates. As a result, between any two flux surfaces there is a \emph{ring} or \emph{strip} of quadrangles going around in poloidal direction. These quadrangles are then diagonally split into triangles, yielding two types of triangles. An exception is the innermost ring containing the magnetic axis, where there is only one type of triangle and no quadrangles to split. This kind of grid is depicted in \cref{fig:grid} where concentric circles are used to illustrate the nested flux surfaces.
 \begin{figure}[bth]
   \centering
   \begin{subfigure}[b]{0.33\textwidth}
@@ -632,7 +633,7 @@ This is illustrated for a small sector on one ring in \cref{fig:local_coordinate
   \label{fig:local_coordinates}
 \end{figure}
 
-Since edge \fs\ is approximated to lie on the flux surface, some properties carry over. In particular, since flux surfaces are surfaces of constant $\psi$ and $p_{0}$, we have
+Since edge \fs\ is approximated to lie on the flux surface, some properties carry over. In particular, since flux surfaces are surfaces of constant $\psi$ and $p_{0}$, in the infinitesimal limit we have
 \begin{gather}
   \vec{n}_{\fs} \parallel \grad \psi \parallel \grad p_{0},
 \end{gather}
@@ -640,7 +641,7 @@ as well as
 \begin{gather}
   \vec{B}_{0} \cdot \vec{n}_{\fs} = 0, \quad \vec{J}_{0} \cdot \vec{n}_{\fs} = 0.
 \end{gather}
-Likewise, it should be noted that $\nabla \phi$ is perpendicular to all purely poloidal quantities which includes, apart from those designated with superscript \pol, all local coordinate vectors $\vec{l}$ and $\vec{n}$, \textsc{Fourier} components with subscript $n$, as well as $\grad \psi$ and $\grad p_{0}$.
+Likewise, it should be noted that $\nabla \phi$ is perpendicular to all purely poloidal quantities which includes, apart from those designated with superscript \enquote{\pol}, all local coordinate vectors $\vec{l}$ and $\vec{n}$, \textsc{Fourier} components with subscript $n$, as well as $\grad \psi$ and $\grad p_{0}$.
 
 \subsection{Representation of fields on the grid}
 \label{sec:dofs}
@@ -657,12 +658,12 @@ There are a few things to note here. Firstly, the factor $R$ is included due to 
 \end{gather}
 Note that the value is well-defined only within the triangle but not on the edge: while the flux across the edge, i.e. the normal component of the field is consistent with the neighbouring triangle, the component \emph{along} the edge is not necessarily continuous across triangles.
 
-On a general note, we indicate the point of evaluation in parentheses after the field in question: $\vec{r}$ refers to a node, as in $p_{n} (\vec{r})$, $\Gamma_{k}$ refers to the midpoint of edge $k$, as in $p_{n} (\Gamma_{k})$ or $\vec{B}_{n} (\Gamma_{k})$, and $\Omega$ refers to a \enquote{shifted centroid}, as in $p_{n} (\Omega)$ or $\vec{B}_{n} (\Omega)$. This shifted centroid is calculated by assigning double weight to node $\vfs$, i.e. $\left ( \frac{1}{2}, \frac{1}{4}, \frac{1}{4} \right )$ in barycentric coordinates where the first coordinate is defined relative to node $\vfs$. This assures that this shifted centroid is halfway between flux surfaces, as the actual centroid is closer to the flux surface on which nodes $\vinw$ and $\vout$ lie, thus alternating between the two flux surfaces from one triangle to the next. To get an idea of this behaviour, refer to \cref{fig:local_coordinates}, where the $\otimes$ symbols indicating the $\grad \phi$ basis vectors are placed at these shifted centroids.
+On a general note, we indicate the point of evaluation in parentheses after the field in question: $\vec{r}^{(k)}$ refers to the node with number $k$, as in $p_{n} (\vec{r}^{(k)})$, $\Gamma_{e}^{(k)}$ refers to the midpoint of edge $e$ on triangle with number $k$, as in $p_{n} (\Gamma_{e}^{(k)})$ or $\vec{B}_{n} (\Gamma_{k}^{(k)})$, and $\Omega^{(k)}$ refers to a \enquote{shifted centroid}, as in $p_{n} (\Omega^{(k)})$ or $\vec{B}_{n} (\Omega^{(k)})$. This shifted centroid is calculated by assigning double weight to node $\vfs$, i.e. $\left ( \frac{1}{2}, \frac{1}{4}, \frac{1}{4} \right )$ in barycentric coordinates where the first coordinate is defined relative to node $\vfs$. This assures that this shifted centroid is halfway between flux surfaces, as the actual centroid is closer to the flux surface on which nodes $\vinw$ and $\vout$ lie, thus alternating between the two flux surfaces from one triangle to the next. To get an idea of this behaviour, refer to \cref{fig:local_coordinates}, where the $\otimes$ symbols indicating the $\grad \phi$ basis vectors are placed at these shifted centroids.
 
 Furthermore, toroidal components of vector fields are approximated by a single value, evaluated at the aforementioned shifted centroid:
 \begin{gather}
   \Psi_{\phi} = \int_{\Omega} R B_{n}^{\phi} \, \diff S \approx S_{\Omega} R (\Omega) B_{n}^{\phi} (\Omega), \label{eq:Psi_phi} \\
-  I_{(\phi)} = \int_{\Omega} R J_{n}^{\phi} \, \diff S \approx S_{\Omega} R (\Omega) J_{n}^{\phi} (\Omega). \label{eq:I_phi}
+  I_{\phi} = \int_{\Omega} R J_{n}^{\phi} \, \diff S \approx S_{\Omega} R (\Omega) J_{n}^{\phi} (\Omega). \label{eq:I_phi}
 \end{gather}
 These degrees of freedom are usually set to a value that assures zero divergence in conjunction with the degrees of freedom of the associated triangle in the poloidal plane.
 
@@ -714,7 +715,7 @@ Prior to starting iterations, some input data has to supplied, namely the follow
 \end{itemize}
 Additonally, a configuration file exists to specify behaviour of the implemented algorithms and data input/output.
 
-The equilibrium field $\vec{B}_{0}$ is assumed to be available in GEQDSK format, shortly summarized in \cite{Lao97}. It consists of data points given on a rectangular grid which are fitted from measurements to the \textsc{Grad}--\textsc{Shafranov} equation. Parts of NEO-2 code import such a file and generate a field-aligned grid as described in \cref{sec:grid} and specified in \cref{sec:grid-impl}. It also supplies values of $\vec{B}_{0}$ and its partial derivatives on arbitrary $R, Z$ coordinates by interpolation with splines of fifth order in $R$ and $Z$ based on \cref{eq:B0R,eq:B0Z}. In the implementation of NEO-EQ, the necessary values on edge midpoints and shifted centroids are cached once before calculations starts as to avoid repeated function calls to spline interpolation and possibly allow for other data sources. From $\vec{B}_{0}$, the safety factor $q$ is computed as described in \cref{sec:safety_factor}.
+The equilibrium field $\vec{B}_{0}$ is assumed to be available in GEQDSK format, shortly summarized in \cite{Lao97}. It consists of data points given on a rectangular grid which are fitted from measurements to the \textsc{Grad}--\textsc{Shafranov} equation. Parts of already existing code import such a file and generate a field-aligned grid as described in \cref{sec:grid} and specified in \cref{sec:grid-impl}. It also supplies values of $\vec{B}_{0}$ and its partial derivatives on arbitrary $R, Z$ coordinates by interpolation with splines of fifth order in $R$ and $Z$ based on \cref{eq:B0R,eq:B0Z}. In the implementation of NEO-EQ, the necessary values on edge midpoints and shifted centroids are cached once before calculations starts as to avoid repeated function calls to spline interpolation and possibly allow for other data sources. From $\vec{B}_{0}$, the safety factor $q$ is computed as described in \cref{sec:safety_factor}.
 
 While the equilibrium pressure $p_{0}$ should be available from the GEQDSK file and and the equilibrium current $\vec{J}_{0}$ can be computed from the equilibrium field via Ampère's law as in \cref{eq:ampere-gen}, another approach is possible. Since Ampère's law is never used for equilibrium quantities, it is possible to choose a pressure profile and calculate $J_0^{\phi}$ to be consistent with the MHD equilibrium in \cref{eq:mhd-gen}. The latter is the \textsc{Pfirsch}--\textsc{Schlüter} current and its calculation is outlined in \cref{sec:j0phi}. The simplest approach to the pressure profile assumes a linear profile for the particle density $n$ and temperature $T$,
 \begin{align}
@@ -742,7 +743,7 @@ Node numbering starts from 1 at the magnetic axis, increasing towards the separa
 
 Triangle numbering operates on similar assumptions, albeit with flux surface indexing akin to half-grid quantities. The innermost triangle strip (index 1) is enumerated first, starting at index 1 for the triangle formed by nodes 1, 2 and 3. It also goes counterclockwise and on each flux surface starts with the triangle whose edge \inw\ lies on the line between the magnetic axis and the X point, i.e. it follows node numbering. Again, local numbering on a triangle strip can be converted to global numbering when the number of triangles is known.
 
-Associated with each triangle are local indices, i.e. 1 to 3, for nodes and edges. The global node number is saved for each local node number. The edges don't have a global index and are numbered so that edge 1 connects node 1 to 2, edge 2 connects node 2 to 3 and edge 3 connects node 3 to 1. When the index of node \vfs\ is known and the aforementioned conventions are followed, the symbolic designations \fs, \inw, \out\ can be mapped to the local edge index, \vfs, \vinw, \vout\ to the local (and global) node index and edge vectors $\vec{l}$ can be given in counter-clockwise direction. Furthermore, an adjacency list is constructed, giving any triangle's neighbour on a given edge and the local edge number in the neighbouring triangke.
+Associated with each triangle are local indices, i.e. 1 to 3, for nodes and edges. The global node number is saved for each local node number. The edges don't have a global index and are numbered so that edge 1 connects node 1 to 2, edge 2 connects node 2 to 3 and edge 3 connects node 3 to 1. When the index of node \vfs\ is known and the aforementioned conventions are followed, the symbolic designations \fs, \inw, \out\ can be mapped to the local edge index, \vfs, \vinw, \vout\ to the local (and global) node index and edge vectors $\vec{l}$ can be given in counter-clockwise direction. Furthermore, an adjacency list is constructed, giving any triangle's neighbour on a given edge and the local edge number in the neighbouring triangle.
 
 Scalar quantities like $p_{n}$ are indexed by global node number and vector quantities like $\vec{B}_{n}$ and $\vec{J}_{n}$ are indexed by global triangle number and local edge number. The latter convention involves some redundancy as it takes twice the storage that would be necessary, but it also allows for consistency checks and a simpler implementation.
 
@@ -961,7 +962,7 @@ On edges \inw\ and \out\ where $\vec{B}_{0}^{\pol} \cdot \vec{n} \neq 0$, we can
 \begin{gather}
   R J_{n}^{\phi} = J_{n (\phi)} = R B_{0}^{\phi} \frac{\vec{J}_{n}^{\pol} \cdot \vec{n}}{\vec{B}_{0}^{\pol} \cdot \vec{n}} + \frac{c}{\vec{B}_{0}^{\pol} \cdot \vec{n}} \left ( \frac{B_{n \phi}}{B_{0 \phi}} \grad p_{0} - \grad p_{n} \right ) \cdot \vec{l} + R J_{0}^{\phi} \left ( \frac{B_{n \phi}}{B_{0 \phi}} - \frac{\vec{B}_{n}^{\pol} \cdot \vec{n}}{\vec{B}_{0}^{\pol} \cdot \vec{n}} \right ). \label{eq:jnphi}
 \end{gather}
-On edge \fs, $\vec{B}_{0}^{\pol} \cdot \vec{n} = 0$ and $\grad p_{0} \cdot \vec{l} = 0$ (compare \cref{eq:l_grad_psi}), thus from \cref{eq:jnphi-jnpol}, no connection between $J_{n}^{\phi}$ and $\vec{J}_{n}^{\pol} \cdot \vec{n}$ can be made, but the latter expression can be given in terms of already knwown quantities:
+On edge \fs, $\vec{B}_{0}^{\pol} \cdot \vec{n} = 0$ and $\grad p_{0} \cdot \vec{l} = 0$ (compare \cref{eq:l_grad_psi}), thus from \cref{eq:jnphi-jnpol}, no connection between $J_{n}^{\phi}$ and $\vec{J}_{n}^{\pol} \cdot \vec{n}$ can be made, but the latter expression can be given in terms of already known quantities:
 \begin{gather}
   R \vec{J}_{n}^{\pol} \cdot \vec{n} = \frac{c \grad p_{n} \cdot \vec{l}}{B_{0}^{\phi}} + R \frac{J_{0}^{\phi}}{B_{0}^{\phi}} \vec{B}_{n}^{\pol} \cdot \vec{n}. \label{eq:If}
 \end{gather}
@@ -1037,7 +1038,7 @@ The weak form used in \texttt{FreeFEM++} is given by  % rework!
 \clearpage
 \section{Construction of test cases and analysis of results}
 
-Along with comparison to results from NEO-2, special test cases altering different components of the calculation are considered. In \cref{sec:nonres}, $\Bvac$ is not taken from \textsc{Biot}--\textsc{Savart} calculations of currents in external coils as per \cref{eq:biot-savart,sec:inputs}, but constructed directly to avoid resonances, at least in the first iteration step. \Cref{sec:analytical} instead looks at the analytical solution in the cylindrical limit on a circular cross-section obtained from KilCa, effectively changing the grid geometry.
+Along with comparison to results from kinetic computations, special test cases altering different components of the calculation are considered. In \cref{sec:nonres}, $\Bvac$ is not taken from \textsc{Biot}--\textsc{Savart} calculations of currents in external coils as per \cref{eq:biot-savart,sec:inputs}, but constructed directly to avoid resonances, at least in the first iteration step. \Cref{sec:analytical} instead looks at the analytical solution in the cylindrical limit on a circular cross-section obtained from KilCa, effectively changing the grid geometry.
 
 \subsection{Generating a non-resonant test field}
 \label{sec:nonres}

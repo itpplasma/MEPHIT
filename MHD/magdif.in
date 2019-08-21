@@ -14,7 +14,7 @@
    ti0 = 3.d3                                      ! temperature on magnetic axis 
    di0 = 5.d13                                     ! density on magnetic axis
    damp = 0d0                                      ! damping factor for resonances
-   sheet_current_factor = (0d0, 0d0)               ! coefficient for sheet currents
+   sheet_current_factor = (1d3, 0d0)               ! coefficient for sheet currents
    point_file = '../PRELOAD/points.dat'            ! mesh points from PRELOAD
    tri_file = '../PRELOAD/triangles.dat'           ! triangles and edges from PRELOAD
    Bn_vac_file = '../PRELOAD/VACFIELD/Bn_flux.dat' ! vacuum perturbation field from PRELOAD

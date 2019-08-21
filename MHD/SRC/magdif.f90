@@ -1198,12 +1198,12 @@ inner: do kt = 1, kt_max(kf)
           r = (base%rcoord + tip%rcoord) * 0.5d0
           lr = tip%rcoord - base%rcoord
           lz = tip%zcoord - base%zcoord
-          if (kf < nflux) then
-             common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
-          else
+          if (kf == nflux .and. orient) then
              ! triangles outside LCFS are comparatively distorted
              ! use linear extrapolation instead, i.e. a triangle of the same size
              common_tri = (/ kt_low(kf) + kt, kt_low(kf) + kt /)
+          else
+             common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
           end if
           Bnpsi = -R0 * B0phi(kt_low(kf) + kt, ef) / r
           Bnflux(kt_low(kf) + kt, ef) = Bnpsi * r / Deltapsi * &

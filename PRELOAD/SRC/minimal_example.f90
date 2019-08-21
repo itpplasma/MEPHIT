@@ -46,16 +46,16 @@ program minimal_example
        zdim * 0.5d0 + zmid - zmaxis, zdim * 0.5d0 - zmid + zmaxis)
 
   call init_indices
-  ntri = kt_low(nflux+1) + kt_max(nflux+1)
-  npoint = kp_low(nflux+1) + kp_max(nflux+1)
+  ntri = kt_low(nflux+1)
+  npoint = kp_low(nflux+1)
   allocate (mesh_element(ntri))
   allocate (mesh_point(npoint))
 
   mesh_point(1)%rcoord = rmaxis
   mesh_point(1)%zcoord = zmaxis
   mesh_point(1)%psi_pol = interp_psi_pol(rmaxis, zmaxis)
-  do kf = 1, nflux+1
-     rho = dble(kf) / dble(nflux+2) * rho_max
+  do kf = 1, nflux
+     rho = dble(kf) / dble(nflux+1) * rho_max
      do kp = 1, kp_max(kf)
         theta = dble(kp-1) / dble(kp_max(kf)) * 2d0 * pi  ! [0, 2\pi)
         mesh_point(kp_low(kf) + kp)%rcoord = rmaxis + rho * cos(theta)
@@ -100,7 +100,7 @@ program minimal_example
   allocate (kq(maxval(kt_max)))
   kq = (kt + 1) / 2
   allocate (quad(4, maxval(kt_max)))
-  do kf = 2, nflux+1
+  do kf = 2, nflux
      ! assign nodes of quadrilaterals in ascending global order
      quad(1,:) = kp_low(kf-1) + kq
      quad(2,:) = kp_low(kf-1) + mod(kq, kt_max(kf) / 2) + 1
@@ -117,7 +117,7 @@ program minimal_example
      tri_i = kt_low(kf) + mod(kt + kt_max(kf) - 2, kt_max(kf)) + 1
      if (kf == 2) then
         tri_f = interleave(kt_low(kf+1) + kt + 1, kt_low(kf-1) + kq, kt_max(kf))
-     elseif (kf == nflux+1) then
+     elseif (kf == nflux) then
         tri_f = interleave(0, kt_low(kf-1) + kt - 1, kt_max(kf))
      else
         tri_f = interleave(kt_low(kf+1) + kt + 1, kt_low(kf-1) + kt - 1, kt_max(kf))
