@@ -152,10 +152,163 @@
 \end_layout
 
 \begin_layout Title
-Short comment on chapter 5 of linear ideal MHD by Patrick Lainer
+Short comments on magdif.pdf
+\end_layout
+
+\begin_layout Section*
+Section 2.1: Iteration scheme
 \end_layout
 
 \begin_layout Standard
+Iterations in the kinetic code and in 
+\emph on
+test_arnoldi.f90
+\emph default
+ proceed in the following way in 
+\emph on
+next_iteration
+\emph default
+:
+\end_layout
+
+\begin_layout Enumerate
+Add vacuum field to right-hand side
+\end_layout
+
+\begin_layout Enumerate
+Perform calculation including vacuum field
+\end_layout
+
+\begin_layout Standard
+So
+\begin_inset Formula 
+\begin{align*}
+B_{k+1} & =K(B_{k}+B_{v})\\
+\\
+B_{0} & =0\\
+B_{1} & =K(B_{0}+B_{v})=KB_{v}\\
+B_{2} & =K(B_{1}+B_{v})=K(KB_{v}+B_{v})=(K^{2}+K)B_{v}\\
+B_{3} & =K(B_{2}+B_{v})=K((K^{2}+K)B_{v}+B_{v})=(K^{3}+K^{2}+K)B_{v}
+\end{align*}
+
+\end_inset
+
+and so on.
+\end_layout
+
+\begin_layout Standard
+The MHD code proceeds as follows:
+\end_layout
+
+\begin_layout Enumerate
+Perform calculation excluding vacuum field
+\end_layout
+
+\begin_layout Enumerate
+Add vacuum field to the right-hand side
+\end_layout
+
+\begin_layout Standard
+So
+\begin_inset Formula 
+\begin{align*}
+B_{k+1} & =KB_{k}+B_{v}\\
+\\
+B_{0} & =B_{v}\\
+B_{1} & =KB_{0}+B_{v}=KB_{v}+B_{v}\\
+B_{2} & =KB_{1}+B_{v}=K(KB_{v}+B_{v})+B_{v}=(K^{2}+K+I)B_{v}\\
+B_{3} & =KB_{2}+B_{v}=K(K^{2}+K+I)B_{v}+B_{v}=(K^{3}+K^{2}+K+I)B_{v}
+\end{align*}
+
+\end_inset
+
+and so on.
+ This means in each iteration 
+\begin_inset Formula $B_{\mathrm{MHD}}=B_{\mathrm{kin}}+B_{v}$
+\end_inset
+
+.
+ Since this includes the zeroeth iteration, one may not initialize 
+\begin_inset Formula $B$
+\end_inset
+
+ with zeroes inside Arnoldi, but rather initialize it with 
+\begin_inset Formula $B_{v}$
+\end_inset
+
+.
+ Then again Arnoldi requires the iterations without the added 
+\begin_inset Formula $B_{v}$
+\end_inset
+
+, which would have to be subtracted in the result (only plasma response
+ field, no vacuum field).
+ The easiest way around is to define another routine 
+\emph on
+next_iteration_arnoldi
+\emph default
+ that works in the kinetic way, just to get eigenvalues and -vectors.
+ The remaining calculation can proceed in the MHD way.
+\end_layout
+
+\begin_layout Section*
+Section 5.2: Current perturbation
+\end_layout
+
+\begin_layout Standard
+Start with (5.9)
+\begin_inset Formula 
+\begin{equation}
+\boldsymbol{J}_{n}\times\boldsymbol{B}_{0}=c(\nabla p_{n}+inp_{n}\nabla\ph)-\boldsymbol{J}_{0}\times\boldsymbol{B}_{n}.
+\end{equation}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+We have (5.14)
+\end_layout
+
+\begin_layout Standard
+\begin_inset Formula 
+\begin{equation}
+\boldsymbol{l}\cdot\nabla\psi=(\boldsymbol{n}\times R\nabla\ph)\cdot\nabla\psi=-R\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}.
+\end{equation}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+Then follows (5.15) with
+\begin_inset Formula 
+\begin{align}
+\boldsymbol{l}\cdot(\boldsymbol{J}_{n}\times\boldsymbol{B}_{0}) & =(\boldsymbol{l}\cdot\nabla\psi)J_{n}^{\varphi}+RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}\\
+ & =RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}-RJ_{n}^{\varphi}\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}.
+\end{align}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+First use (5.18)
+\begin_inset Formula 
+\begin{equation}
+\boldsymbol{l}\cdot(\nabla\varphi\times\boldsymbol{B}_{n}^{\mathrm{pol}})=-\frac{1}{R}\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}.
+\end{equation}
+
+\end_inset
+
+
+\end_layout
+
+\begin_layout Standard
+The result in (5.20) is
 \begin_inset Formula 
 \begin{align}
 \boldsymbol{J}_{0}\times\nabla\varphi & =\frac{1}{B_{0\varphi}}\left(c\nabla p_{0}-\frac{J_{0\varphi}}{R^{2}}\right)\nabla\psi\\
@@ -164,15 +317,7 @@ Short comment on chapter 5 of linear ideal MHD by Patrick Lainer
 
 \end_inset
 
-We have (5.21)
-\begin_inset Formula 
-\begin{equation}
-\boldsymbol{l}\cdot(\nabla\varphi\times\boldsymbol{B}_{n}^{\mathrm{pol}})=-\frac{1}{R}\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}.
-\end{equation}
-
-\end_inset
-
-So (5.18) becomes
+So (5.21) becomes
 \begin_inset Formula 
 \begin{align}
 \boldsymbol{l}\cdot(\boldsymbol{J}_{0}\times\boldsymbol{B}_{n}) & =\boldsymbol{l}\cdot(B_{n\varphi}\boldsymbol{J}_{0}^{\mathrm{pol}}\times\nabla\varphi+J_{0\varphi}\nabla\varphi\times\boldsymbol{B}_{n}^{\mathrm{pol}})\\
@@ -182,11 +327,13 @@ So (5.18) becomes
 
 \end_inset
 
-According to (5.14) and (5.16)
+With (5.14) we obtain (5.22)
+\end_layout
+
+\begin_layout Standard
 \begin_inset Formula 
 \begin{align}
-\boldsymbol{l}\cdot(\boldsymbol{J}_{n}\times\boldsymbol{B}_{0}) & =(\boldsymbol{l}\cdot\nabla\psi)J_{n}^{\varphi}+RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}\\
- & =RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}-RJ_{n}^{\varphi}\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}.
+\boldsymbol{l}\cdot(\boldsymbol{J}_{0}\times\boldsymbol{B}_{n}) & =\frac{B_{n\varphi}}{B_{0\varphi}}c\nabla p_{0}(\psi)\cdot\boldsymbol{l}+RJ_{0}^{\varphi}\left(\frac{B_{n\varphi}}{B_{0\varphi}}\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}-\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}\right).
 \end{align}
 
 \end_inset
@@ -195,38 +342,38 @@ we can insert into multiplication of
 \begin_inset Formula $\boldsymbol{l}\cdot$
 \end_inset
 
-(5.12) to obtain (5.22)
+(5.9) to obtain (5.23) with
 \begin_inset Formula 
 \begin{equation}
-(\boldsymbol{l}\cdot\nabla\psi)J_{n}^{\varphi}+RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}=c\boldsymbol{l}\cdot\nabla p_{n}-\frac{B_{n\varphi}}{B_{0\varphi}}\left(cp_{0}^{\prime}(\psi)-J_{0}^{\varphi}\right)\boldsymbol{l}\cdot\nabla\psi+RJ_{0}^{\varphi}\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}.
+RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}-RJ_{n}^{\varphi}\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}=c\left(\nabla p_{n}-\frac{B_{n\varphi}}{B_{0\varphi}}\nabla p_{0}\right)\cdot\boldsymbol{l}-RJ_{0}^{\varphi}\left(\frac{B_{n\varphi}}{B_{0\varphi}}\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}-\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}\right).
 \end{equation}
 
 \end_inset
 
-Multiplying by 
-\begin_inset Formula $R$
+Dividing by 
+\begin_inset Formula $\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}=-(\boldsymbol{l}\cdot\nabla\psi)/R$
 \end_inset
 
- and dividing by 
-\begin_inset Formula $(\boldsymbol{l}\cdot\nabla\psi)$
-\end_inset
-
- yields
+ yields (5.24) with
 \begin_inset Formula 
 \begin{equation}
-RJ_{n}^{\varphi}=-RB_{0}^{\varphi}\frac{\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}}{\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}}+\frac{c}{\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}}\left(\boldsymbol{l}\cdot\nabla p_{n}-\frac{B_{n\varphi}}{B_{0\varphi}}\boldsymbol{l}\cdot\nabla p_{0}\right)+RJ_{0}^{\varphi}\left(\frac{B_{n\varphi}}{B_{0\varphi}}-\frac{\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}}{\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}}\right).
+RJ_{n}^{\varphi}=RB_{0}^{\varphi}\frac{\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}}{\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}}+\frac{c}{\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}}\left(\frac{B_{n\varphi}}{B_{0\varphi}}\nabla p_{0}-\nabla p_{n}\right)\cdot\boldsymbol{l}+RJ_{0}^{\varphi}\left(\frac{B_{n\varphi}}{B_{0\varphi}}-\frac{\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}}{\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}}\right).
 \end{equation}
 
 \end_inset
 
 On edge f some terms vanish, as 
-\begin_inset Formula $\boldsymbol{l}\cdot\nabla\psi=0$
+\begin_inset Formula $\boldsymbol{B}_{0}^{\mathrm{pol}}\cdot\boldsymbol{n}=0$
 \end_inset
 
-, so from (5.22) we get directly to (5.24) with
+ and 
+\begin_inset Formula $\nabla p_{0}\cdot\boldsymbol{l}=0$
+\end_inset
+
+, so from (5.23) we get directly to (5.25) with
 \begin_inset Formula 
 \begin{equation}
-RB_{0}^{\varphi}\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}_{\mathrm{f}}=c\boldsymbol{l}_{\mathrm{f}}\cdot\nabla p_{n}+RJ_{0}^{\varphi}\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}_{\mathrm{f}}.
+R\boldsymbol{J}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}_{\mathrm{f}}=\frac{c\nabla p_{n}\cdot\boldsymbol{l}_{\mathrm{f}}}{B_{0}^{\varphi}}+R\frac{J_{0}^{\varphi}}{B_{0}^{\varphi}}\boldsymbol{B}_{n}^{\mathrm{pol}}\cdot\boldsymbol{n}_{\mathrm{f}}.
 \end{equation}
 
 \end_inset

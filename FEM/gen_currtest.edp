@@ -1,0 +1,50 @@
+//
+// Magnetostatics with Fourier modes in toroidal angle
+//
+// C. Albert, July 2016
+//
+//
+
+real c = 29979245800.0; // speed of light
+
+real nmode = 2.0; // mode number
+
+include "magdif.idp"  // config (incl. filenames)
+
+mesh Th = readmesh(meshfile);
+
+fespace Vh0(Th, P0);
+fespace Vh1(Th, P1);
+fespace Vh2(Th, P2);
+fespace Hrot(Th, RT0Ortho);
+fespace Hdiv(Th, RT0);
+
+Hdiv [JrRe, JzRe] = [y,-x];
+Hdiv [JrIm, JzIm] = [y,-x];
+Vh0 JphiRe = 0.0;
+Vh0 JphiIm = 0.0;
+
+ofstream ofile("currtest.dat");
+ofile.scientific.precision(16);
+for (int k = 0; k < Th.nt; k++) {
+  for (int j = 0; j < 3; j++) {
+    if ((Th[k][(j+0) % 3] - Th[k][(j+2) % 3]) > 0) {
+      ofile
+        << JrRe[][Hdiv(k, (j+1) % 3)] << "\t"
+        << JrIm[][Hdiv(k, (j+1) % 3)] << "\t";
+    } else {
+      ofile
+        << -JrRe[][Hdiv(k, (j+1) % 3)] << "\t"
+        << -JrIm[][Hdiv(k, (j+1) % 3)] << "\t";
+    }
+  }
+  ofile
+    << JphiRe[][k] * Th[k].area << "\t"
+    << JphiIm[][k] * Th[k].area << endl;
+}
+
+if (doplot) {
+  plot(Th, wait = true);
+  plot([JrRe, JzRe], wait = true, value = true);
+  plot(JphiRe, wait = true, fill = true, value = true);
+}

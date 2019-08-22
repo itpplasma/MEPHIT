@@ -1,0 +1,96 @@
+//
+// Magnetostatics with Fourier modes in toroidal angle
+//
+// C. Albert, July 2016
+//
+//
+
+real c = 29979245800.0; // speed of light
+real eps = 1e-10;
+
+real nmode = 2.0; // mode number
+
+include "magdif.idp"  // config (incl. filenames)
+
+mesh Th = readmesh(meshfile);
+
+fespace Vh0(Th, P0);
+fespace Vh1(Th, P1);
+fespace Vh2(Th, P2);
+fespace Hrot(Th, RT0Ortho);
+fespace Hdiv(Th, RT0);
+
+Hrot [axRe, ayRe], [axIm, ayIm], [wx, wy], [vx, vy];
+Hdiv [JrRe, JzRe], [JrIm, JzIm], [BrRe, BzRe], [BrIm, BzIm];
+
+Vh0 BphiRe, BphiIm, JphiRe, JphiIm;
+
+real[int] JfluxRe(Hdiv.ndof);
+real[int] JfluxIm(Hdiv.ndof);
+JfluxRe = 0.0;
+JfluxIm = 0.0;
+
+// count triangles in internal region 0
+int ntri = 0;
+for (int k = 0; k < Th.nt; k++) {
+  if (Th[k].label == 0)
+    ntri++;
+}
+
+cout << "Number of triangles in internal region: " << ntri << endl;
+
+JrRe[] = JfluxRe;
+JrIm[] = JfluxIm;
+
+// TESTING
+[JrRe, JzRe] = [y*(x>150)*(x<250)*(y>-100)*(y<100), (-100.0-x)*(x>150)*(x<250)*(y>-100)*(y<100)];
+[JrIm, JzIm] = [y*(x>150)*(x<250)*(y>-100)*(y<100), (-100.0-x)*(x>150)*(x<250)*(y>-100)*(y<100)];
+
+solve AmpereRe([axRe, ayRe], [wx, wy], solver = UMFPACK) = // defines the PDE
+  int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(ayRe) - dy(axRe)))
+  + int2d(Th)(nmode^2 / x * [wx, wy] '* [axRe, ayRe])
+  - int2d(Th)([wx, wy] '* [JrRe,JzRe])
+  + on(1, axRe = 0, ayRe = 0);
+
+solve AmpereIm([axIm, ayIm], [wx, wy], solver = UMFPACK) = // defines the PDE
+  int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(ayIm) - dy(axIm)))
+  + int2d(Th)(nmode^2 / x * [wx, wy] '* [axIm, ayIm])
+  - int2d(Th)([wx, wy] '* [JrIm,JzIm])
+  + on(1, axIm = 0, ayIm = 0);
+
+
+[BrRe, BzRe] = [-nmode * ayIm, nmode * axIm];
+[BrIm, BzIm] = [nmode * ayRe, -nmode * axRe];
+BphiRe = -(dx(ayRe) - dy(axRe));
+BphiIm = -(dx(ayIm) - dy(axIm));
+
+ofstream ofile(Bnfluxfile);
+ofile.scientific.precision(16);
+for (int k = 0; k < Th.nt; k++) {
+  for (int j = 0; j < 3; j++) {
+    if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
+      ofile
+        << BrRe[][Hdiv(k, (j+2) % 3)] << "\t"
+        << BrIm[][Hdiv(k, (j+2) % 3)] << "\t";
+    } else {
+      ofile
+        << -BrRe[][Hdiv(k, (j+2) % 3)] << "\t"
+        << -BrIm[][Hdiv(k, (j+2) % 3)] << "\t";
+    }
+  }
+  ofile
+    << BphiRe[][k] * Th[k].area << "\t"
+    << BphiIm[][k] * Th[k].area << endl;
+}
+
+if (doplot) {
+  //plot(Th, wait = true);
+  //plot(JphiRe, wait = true, fill = true, value = true);
+  plot([JrRe, JzRe], wait = true, value = true);
+  plot([axRe, ayRe], wait = true, value = true);
+  plot([axIm, ayIm], wait = true, value = true);
+  plot([BrRe, BzRe], wait = true, value = true);
+  plot([BrIm, BzIm], wait = true, value = true);
+  plot(BphiRe, wait = true, fill = true, value = true);
+}
+

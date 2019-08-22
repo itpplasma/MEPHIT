@@ -1,5 +1,6 @@
 OBJS
 BUILD*
+MHDRUN/
 *~
 *.mod
 *.o
@@ -20,3 +21,13 @@ DOC/doxygen
 __pycache__
 .vscode
 ProjectConfig.cmake.in
+*.dat
+*.msh
+*.mesh
+*.vtk
+*.vtu
+*Notes.bib
+*.exo
+*.ppm
+*.ps
+*.pvd
