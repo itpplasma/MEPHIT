@@ -284,7 +284,7 @@ contains
     if (preconditioned) then
        ! calculate eigenvectors
        ieigen = 1
-       call arnoldi(ndim, nritz, eigvals, next_iteration)
+       call arnoldi(ndim, nritz, eigvals, next_iteration_arnoldi)
        if (log_info) then
           write (logfile, *) 'Arnoldi method yields ', ngrow, ' Ritz eigenvalues > ', tol
           do i = 1, ngrow
@@ -380,6 +380,7 @@ contains
     end subroutine unpack2
 
     subroutine next_iteration(n, xold, xnew)
+      ! computes B_(n+1) = K*B_n + B_vac ... different from kin2d.f90
       integer, intent(in) :: n
       complex(dp), intent(in) :: xold(n)
       complex(dp), intent(out) :: xnew(n)
@@ -389,6 +390,18 @@ contains
       Bnphi = Bnphi + Bnphi_vac
       call pack2(Bnflux, Bnphi, xnew)
     end subroutine next_iteration
+
+    subroutine next_iteration_arnoldi(n, xold, xnew)
+      ! computes B_(n+1) = K*(B_n + B_vac) ... as in kin2d.f90
+      integer, intent(in) :: n
+      complex(dp), intent(in) :: xold(n)
+      complex(dp), intent(out) :: xnew(n)
+      call unpack2(Bnflux, Bnphi, xold)
+      Bnflux = Bnflux + Bnflux_vac
+      Bnphi = Bnphi + Bnphi_vac
+      call magdif_single
+      call pack2(Bnflux, Bnphi, xnew)
+    end subroutine next_iteration_arnoldi
   end subroutine magdif_iterated
 
   !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
