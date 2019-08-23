@@ -85,23 +85,26 @@ class magdif_1d_cutplot:
         plt.close()
 
 class magdif_conv_plot:
-    def __init__(self, datadir, conv_sum_file, conv_diff_file):
+    def __init__(self, datadir, conv_file, max_eigval):
         self.datadir = datadir
-        self.conv_sum_file = conv_sum_file
-        self.conv_diff_file = conv_diff_file
+        self.conv_file = conv_file
+        self.max_eigval = max_eigval
 
     def dump_plot(self):
-        conv_sum = np.loadtxt(os.path.join(self.datadir, self.conv_sum_file))
-        conv_diff = np.loadtxt(os.path.join(self.datadir, self.conv_diff_file))
-        niter = len(conv_diff)
-        kiter = np.arange(0, niter + 1)
+        try:
+            conv = np.loadtxt(os.path.join(self.datadir, self.conv_file))
+        except Exception as err:
+            print('Error: {}'.format(err))
+            return
+        niter = len(conv) - 1
+        kiter = np.arange(1, niter + 1)
         plt.figure(figsize = (8, 4.5))
-        plt.semilogy(kiter[1:], np.sqrt(conv_sum[0]) * 1e-6 / kiter[1:]**2, 'r-',
-            label = r'$\frac{1}{k^{2}} \Vert \delta \mathbf{B}_{\mathrm{v}} \Vert_{2}$')
-        plt.semilogy(kiter[1:], np.sqrt(conv_diff) * 1e-6, 'xk',
+        plt.semilogy(kiter, conv[0] * 1e-6 * self.max_eigval ** kiter, 'r-',
+            label = r'$\lambda_{\mathrm{max}}^{k} \Vert \delta \mathbf{B}_{\mathrm{v}} \Vert_{2}$')
+        plt.semilogy(kiter, conv[1:] * 1e-6, 'xk',
             label = r'$\Vert \delta \mathbf{B}^{(k)} \Vert_{2}$')
         plt.gca().legend(loc = 'lower left', fontsize = 'large')
-        plt.xticks(kiter[1:])
+        plt.xticks(kiter)
         plt.xlabel('iteration step $k$')
         plt.ylabel(r'$\Vert \delta \mathbf{B} \Vert_{2}$ / T m')
         plt.title('magnitude of terms in series expansion of perturbation field')
@@ -111,18 +114,28 @@ class magdif_conv_plot:
         plt.close()
 
 class magdif_poloidal_modes:
-    def __init__(self, n, s, q, datadir, datafile, reffile):
+    def __init__(self, n, s, q, datadir, datafile, label, reffile = None):
         self.n = n
         self.s_mhd = s
         self.q_mhd = q
         self.datadir = datadir
         self.datafile = datafile
+        self.label = label
         self.reffile = reffile
 
     def dump_plot(self):
         print('plotting poloidal modes from', self.datafile)
-        data = np.loadtxt(os.path.join(self.datadir, self.datafile))
-        ref = np.loadtxt(os.path.join(self.datadir, self.reffile))
+        try:
+            data = np.loadtxt(os.path.join(self.datadir, self.datafile))
+        except Exception as err:
+            print('Error: {}'.format(err))
+            return
+        if self.reffile is not None:
+            try:
+                ref = np.loadtxt(os.path.join(self.datadir, self.reffile))
+            except Exception as err:
+                print('Error: {}'.format(err))
+                return
         
         # normalize psi
         s = (data[:,0] - data[0,0]) / (data[-1,0] - data[0,0])
@@ -146,39 +159,46 @@ class magdif_poloidal_modes:
         
         data_range = (np.shape(data)[1] - 2) // 2
         abs_data = np.hypot(data[:, 2:(2 + data_range)], data[:, (2 + data_range):])
-        ref_range = (np.shape(ref)[1] - 2) // 2
-        abs_ref = np.hypot(ref[:, 2:(2 + ref_range)], ref[:, (2 + ref_range):])
-        
-        if data_range != ref_range:
-            raise RuntimeError('Different m_max for vacuum and full perturbation field')
+        if self.reffile is not None:
+            ref_range = (np.shape(ref)[1] - 2) // 2
+            abs_ref = np.hypot(ref[:, 2:(2 + ref_range)], ref[:, (2 + ref_range):])
+            
+            if data_range != ref_range:
+                print('Different m_max for vacuum and full perturbation field')
+                return
         m_max = (data_range - 1) // 2
         offset = m_max
         
         horz_plot = 2
         vert_plot = 1
         for m in range(1, m_max + 1):
-            yrang = [0, max(np.amax(abs_data[:, offset - m]), np.amax(abs_data[:, offset + m]),
-                np.amax(abs_ref[:, offset - m]), np.amax(abs_ref[:, offset + m]))]
+            if self.reffile is not None:
+                yrang = [0, max(np.amax(abs_data[:, offset - m]), np.amax(abs_data[:, offset + m]),
+                                np.amax(abs_ref[:, offset - m]), np.amax(abs_ref[:, offset + m]))]
+            else:
+                yrang = [0, max(np.amax(abs_data[:, offset - m]), np.amax(abs_data[:, offset + m]))]
             plt.figure(figsize = (9.6, 4.8))
             ax = plt.subplot(vert_plot, horz_plot, 1)
-            plt.plot(s, abs_ref[:, offset - m], 'r--')
+            if self.reffile is not None:
+                plt.plot(s, abs_ref[:, offset - m], 'r--')
             plt.plot(s, abs_data[:, offset - m])
             ax.ticklabel_format(style = 'sci', scilimits = (-3, 4))
             plt.ylim(yrang)
             plt.title('$m = {}$'.format(-m))
-            plt.ylabel(r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx')
+            plt.ylabel(self.label)
             plt.xlabel(r'$s$')
             index = [i for (i, val) in enumerate(m_resonant) if abs(val) == m]
             if len(index) == 1:
                 ax.axvline(s_resonant[index], color = 'b', alpha = 0.5)
             ax = plt.subplot(vert_plot, horz_plot, 2)
-            plt.plot(s, abs_ref[:, offset + m], 'r--')
+            if self.reffile is not None:
+                plt.plot(s, abs_ref[:, offset + m], 'r--')
             plt.plot(s, abs_data[:, offset + m])
             ax.ticklabel_format(style = 'sci', scilimits = (-3, 4))
             plt.ylim(yrang)
             plt.title('$m = {}$'.format(m))
             plt.xlabel(r'$s$')
-            plt.ylabel(r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx')
+            plt.ylabel(self.label)
             index = [i for (i, val) in enumerate(m_resonant) if abs(val) == m]
             if len(index) == 1:
                 ax.axvline(s_resonant[index], color = 'b', alpha = 0.5)
@@ -187,12 +207,13 @@ class magdif_poloidal_modes:
             plt.close()
         plt.figure(figsize = (9.6, 4.8))
         ax = plt.subplot(vert_plot, horz_plot, 1)
-        plt.plot(s, abs_ref[:, offset], 'r--')
+        if self.reffile is not None:
+            plt.plot(s, abs_ref[:, offset], 'r--')
         plt.plot(s, abs_data[:, offset])
         ax.ticklabel_format(style = 'sci', scilimits = (-3, 4))
         plt.title('$m = 0$')
         plt.xlabel(r'$s$')
-        plt.ylabel(r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx')
+        plt.ylabel(self.label)
         ax = plt.subplot(vert_plot, horz_plot, 2)
         plt.plot(s, np.abs(q), label = 'kinetic')
         plt.plot(self.s_mhd, self.q_mhd, 'r--', label = 'MHD')
@@ -259,7 +280,11 @@ class magdif:
 
     def generate_2d_triplots(self, datafile, start_column, infix_list, filename_decorator):
         print('reading contents of ', datafile)
-        contents = np.loadtxt(os.path.join(self.datadir, datafile))
+        try:
+            contents = np.loadtxt(os.path.join(self.datadir, datafile))
+        except Exception as err:
+            print('Error: {}'.format(err))
+            return
         for column, infix in enumerate(infix_list, start_column):
             self.plots.append(magdif_2d_triplot(
                 node = self.node, tri = self.tri,
@@ -300,9 +325,14 @@ class magdif:
             self.generate_2d_triplots(datafile, 0, scalar_infix,
                 self.__class__.decorate_filename_presnplot)
         
-        self.plots.append(magdif_conv_plot(self.datadir, 'conv_sum.dat', 'conv_diff.dat'))
+        self.plots.append(magdif_conv_plot(self.datadir, 'convergence.dat', self.config['tol']))
         self.plots.append(magdif_poloidal_modes(self.config['n'], self.s, self.q,
-            self.datadir, 'Bmn_psi.dat', 'Bmn_vac_psi.dat'))
+            self.datadir, 'Bmn_psi.dat',
+            r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx',
+            'Bmn_vac_psi.dat'))
+        self.plots.append(magdif_poloidal_modes(self.config['n'], self.s, self.q,
+            self.datadir, 'currmn_001_theta.dat',
+            r'$\left\vert J_{mn \theta}^{(1)} \right\vert$ [statA / cm]'))
 
     def dump_plots(self):
         for p in self.plots:

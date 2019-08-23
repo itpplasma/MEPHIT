@@ -5,6 +5,7 @@ for testcase in $*
 do
     mkdir -p $target/${testcase%.*}
     ./magdif_test.sh $testcase
+    make spectra
     make plots config="$testcase"
     mv -t $target/${testcase%.*} *.pdf *.dat
     cp -t $target/${testcase%.*} $testcase
