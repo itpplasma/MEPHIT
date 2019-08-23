@@ -65,9 +65,13 @@ FORTRAN_MESH_FILE := inputformaxwell.msh
 FREEFEM_MESH_FILE := inputformaxwell_ext.msh
 VACFIELD_FILE := VACFIELD/Bn_flux.dat
 
-.PHONY: all clean
+.PHONY: asdex kilca clean
 
-all: $(VACFIELD_FILE) $(FORTRAN_MESH_FILE) $(FREEFEM_MESH_FILE)
+asdex: $(VACFIELD_FILE) $(FORTRAN_MESH_FILE) $(FREEFEM_MESH_FILE)
+
+kilca:
+	../BUILD/bin/minimal_example.x ../MHD/magdif_minimal_example.in
+	FreeFem++ extmesh.edp
 
 clean:
 	rm -f $(AXIS_OBJS) $(TRI_OBJS) $(RC_OBJS) $(WRITEOUT_OBJS) $(VACFIELD_OBJS) $(FORTRAN_MESH_FILE) $(FREEFEM_MESH_FILE)

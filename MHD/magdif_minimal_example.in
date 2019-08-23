@@ -1,30 +1,30 @@
 &settings
-   log_level = 4                                   ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
-   runmode = 2                                     ! 0: single iteration, 1: direct iterations,
-                                                   ! 2: preconditioned iterations
-   nonres = .true.                                 ! use non-resonant test case
-   quad_avg = .true.                               ! average over quadrilaterals for non-resonant test case
+   log_level = 4                                         ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
+   runmode = 2                                           ! 0: single iteration, 1: direct iterations,
+                                                         ! 2: preconditioned iterations
+   nonres = .true.                                       ! use non-resonant test case
+   quad_avg = .true.                                     ! average over quadrilaterals for non-resonant test case
 
-   n = 2                                           ! harmonic index of perturbation
-   niter = 30                                      ! number of iteration steps
-   nritz = 150                                     ! number of Ritz eigenvalues
-   tol = 0.5d0                                     ! threshold for eigenvalues in preconditioner
-   nkpol = 300                                     ! number of knots per poloidal loop
-   nflux = 64                                      ! number of flux surfaces up to and counting LCFS
-   ti0 = 3.d3                                      ! temperature on magnetic axis 
-   di0 = 5.d13                                     ! density on magnetic axis
-   damp = 0d0                                      ! damping factor for resonances
-   sheet_current_factor = (0d0, 0d0)               ! coefficient for sheet currents
-   point_file = '../PRELOAD/points.dat'            ! mesh points from PRELOAD
-   tri_file = '../PRELOAD/triangles.dat'           ! triangles and edges from PRELOAD
-   Bn_vac_file = '../PRELOAD/VACFIELD/Bn_flux.dat' ! vacuum perturbation field from PRELOAD
+   n = 2                                                 ! harmonic index of perturbation
+   niter = 30                                            ! number of iteration steps
+   nritz = 150                                           ! number of Ritz eigenvalues
+   tol = 0.5d0                                           ! threshold for eigenvalues in preconditioner
+   nkpol = 300                                           ! number of knots per poloidal loop
+   nflux = 64                                            ! number of flux surfaces up to and counting LCFS
+   ti0 = 3.d3                                            ! temperature on magnetic axis
+   di0 = 5.d13                                           ! density on magnetic axis
+   damp = 0d0                                            ! damping factor for resonances
+   sheet_current_factor = (0d0, 0d0)                     ! coefficient for sheet currents
+   point_file = '../PRELOAD/points_kilca.dat'            ! mesh points from PRELOAD
+   tri_file = '../PRELOAD/triangles_kilca.dat'           ! triangles and edges from PRELOAD
+   Bn_vac_file = '../PRELOAD/VACFIELD/Bn_flux_kilca.dat' ! vacuum perturbation field from PRELOAD
 
-   Bn_vacout_file = 'Bn_vac.dat'                   ! output vacuum perturbation field
-   Bn_file = 'Bn.dat'                              ! accumulated perturbation field from FEM
-   Bn_diff_file = 'Bn_diff.dat'                    ! perturbation field from iterations
-   fluxvar_file = 'fluxvar.dat'                    ! output file for flux variables
-   j0phi_file = 'j0phi.dat'                        ! output file for equilibrium current
-   presn_file = 'presn.dat'                        ! output file for pressure perturbation
-   currn_file = 'currn.dat'                        ! output file for current perturbation
-   eigvec_file = 'eigvec.dat'                      ! output file for eigenvectors
+   Bn_vacout_file = 'Bn_vac.dat'                         ! output vacuum perturbation field
+   Bn_file = 'Bn.dat'                                    ! accumulated perturbation field from FEM
+   Bn_diff_file = 'Bn_diff.dat'                          ! perturbation field from iterations
+   fluxvar_file = 'fluxvar.dat'                          ! output file for flux variables
+   j0phi_file = 'j0phi.dat'                              ! output file for equilibrium current
+   presn_file = 'presn.dat'                              ! output file for pressure perturbation
+   currn_file = 'currn.dat'                              ! output file for current perturbation
+   eigvec_file = 'eigvec.dat'                            ! output file for eigenvectors
 /

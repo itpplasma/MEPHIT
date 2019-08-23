@@ -5,4 +5,5 @@ then
 else
     config="$1"
 fi
+./fem_config.py $config
 ../BUILD/bin/magdif_test.x $config

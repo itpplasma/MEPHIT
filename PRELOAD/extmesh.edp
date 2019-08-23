@@ -20,7 +20,7 @@ border outer(t = 0, 2 * pi) {
 mesh Thouter = buildmesh(inner(nkpol) + outer(nkpol * 3 / 2));
 int[int] regionmap = [0, 1];
 Thouter = change(Thouter, region = regionmap);
-mesh Thinner = readmesh("inputformaxwell.msh");
+mesh Thinner = readmesh("inputformaxwell_kilca.msh");
 mesh Th = Thinner + Thouter;
 savemesh(Th, "inputformaxwell_ext.msh");
 

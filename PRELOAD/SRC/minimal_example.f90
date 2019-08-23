@@ -164,7 +164,7 @@ program minimal_example
   write (fid) bphicovar
   close(fid)
 
-  open(newunit = fid, file = 'inputformaxwell.msh')
+  open(newunit = fid, file = 'inputformaxwell_kilca.msh')
   write (fid, *) npoint, ntri, kp_max(nflux+1) - 1
   do k = 1, kp_low(nflux+1)
      write (fid, *) mesh_point(k)%rcoord, mesh_point(k)%zcoord, 0

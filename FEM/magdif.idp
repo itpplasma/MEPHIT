@@ -1,4 +1,4 @@
-int ktlownfluxp1 = 37500;
+int ktlownfluxp1 = 29800;
 string meshfile = "../PRELOAD/inputformaxwell_ext.msh";
 string currnfile = "../MHD/currn.dat";
 string Bnfluxfile = "../MHD/Bn.dat";

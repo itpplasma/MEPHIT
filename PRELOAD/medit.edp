@@ -1,0 +1,3 @@
+load "medit"
+mesh Th = readmesh("inputformaxwell_ext.msh");
+medit("mesh", Th);
