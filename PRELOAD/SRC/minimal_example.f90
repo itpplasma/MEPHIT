@@ -17,11 +17,13 @@ program minimal_example
   character(len = 1024) :: config_file
   real(dp) :: rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr
 
-  integer :: fid, kf, kp, k
+  integer :: fid, kf, kp, k, ke
   integer, dimension(:), allocatable :: kq, kt, tri_f, tri_i, tri_o
   integer, dimension(:,:), allocatable :: quad
   real(dp) :: rho, rho_max, theta
   integer, parameter :: nrz = 64  ! at most 100 values are read in by field_divB0.f90
+
+  type(triangle) :: elem
 
   if (command_argument_count() >= 1) then
      call get_command_argument(1, config_file)
@@ -117,8 +119,8 @@ program minimal_example
      tri_i = kt_low(kf) + mod(kt + kt_max(kf) - 2, kt_max(kf)) + 1
      if (kf == 2) then
         tri_f = interleave(kt_low(kf+1) + kt + 1, kt_low(kf-1) + kq, kt_max(kf))
-     elseif (kf == nflux) then
-        tri_f = interleave(0, kt_low(kf-1) + kt - 1, kt_max(kf))
+!!$     elseif (kf == nflux) then
+!!$        tri_f = interleave(0, kt_low(kf-1) + kt - 1, kt_max(kf))
      else
         tri_f = interleave(kt_low(kf+1) + kt + 1, kt_low(kf-1) + kt - 1, kt_max(kf))
      end if
@@ -142,14 +144,14 @@ program minimal_example
   if (allocated(kq)) deallocate(kq)
   if (allocated(quad)) deallocate(quad)
 
-!!$  open(newunit = fid, file = 'mesh_new.asc', recl = longlines)
-!!$  do k = 1, ntri
-!!$     elem = mesh_element(k)
-!!$     write (fid, '(i5,1x,i5,1x,i5,1x,i1,1x,i5,1x,i5,1x,i5,1x,i3,1x,i3,1x,i3)') &
-!!$          (elem%i_knot(ke), ke = 1, 3), elem%knot_h, &
-!!$          (elem%neighbour(ke), ke = 1, 3), (elem%neighbour_edge(ke), ke = 1, 3)
-!!$  end do
-!!$  close(fid)
+  open(newunit = fid, file = 'mesh_new.asc', recl = longlines)
+  do k = 1, ntri
+     elem = mesh_element(k)
+     write (fid, '(i5,1x,i5,1x,i5,1x,i1,1x,i5,1x,i5,1x,i5,1x,i3,1x,i3,1x,i3)') &
+          (elem%i_knot(ke), ke = 1, 3), elem%knot_h, &
+          (elem%neighbour(ke), ke = 1, 3), (elem%neighbour_edge(ke), ke = 1, 3)
+  end do
+  close(fid)
 
   open(newunit = fid, file = point_file, form = 'unformatted')
   write (fid) npoint

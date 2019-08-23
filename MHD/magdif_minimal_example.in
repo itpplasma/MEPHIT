@@ -10,7 +10,7 @@
    nritz = 150                                     ! number of Ritz eigenvalues
    tol = 0.5d0                                     ! threshold for eigenvalues in preconditioner
    nkpol = 300                                     ! number of knots per poloidal loop
-   nflux = 63                                      ! number of flux surfaces up to and counting LCFS
+   nflux = 64                                      ! number of flux surfaces up to and counting LCFS
    ti0 = 3.d3                                      ! temperature on magnetic axis 
    di0 = 5.d13                                     ! density on magnetic axis
    damp = 0d0                                      ! damping factor for resonances

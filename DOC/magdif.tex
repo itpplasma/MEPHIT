@@ -982,7 +982,7 @@ where edge \fs\ is tangential to an adjacent flux surface and edges \inw\ and \o
 \begin{gather}
   I_{\inw} + I_{\out} + \im n \int_{\Omega} R J_{n}^{\phi} \diff S = -I_{\fs}.
 \end{gather}
- $I_{\fs}$ is already known from \cref{eq:If} and therefore acts as a source on the right-hand side. The remaining currents $I_{\inw}$ and $I_{\out}$ are taken as unknowns. Since the current $I_{\out}$ flowing out of one triangle is equalto the current $-I_{\inw}$ flowing into the next triangle, these unknowns are connected on one strip of triangles and we expect a system of equations similar to the one in \cref{sec:compute_presn}. The degrees of freedom and the unknowns are illustrated in \cref{fig:current_perturbation} with the unknowns marked in red, along with the indexing described further below. 
+ $I_{\fs}$ is already known from \cref{eq:If} and therefore acts as a source on the right-hand side. The remaining currents $I_{\inw}$ and $I_{\out}$ are taken as unknowns. Since the current $I_{\out}$ flowing out of one triangle is equal to the current $-I_{\inw}$ flowing into the next triangle, these unknowns are connected on one strip of triangles and we expect a system of equations similar to the one in \cref{sec:compute_presn}. The degrees of freedom and the unknowns are illustrated in \cref{fig:current_perturbation} with the unknowns marked in red, along with the indexing described further below.
 \begin{figure}[bth]
   \centering
   \input{./current_perturbation.tikz}
@@ -1013,7 +1013,7 @@ where we again ommited evaluation at $\Gamma_{k}$ for the sake of brevity. Note 
 \end{align}
 where the sign has to be reversed for the type of triangle with node \vfs\ on the outer flux surface. This is actually a shortcoming of the convention that nodes are named according to their opposite edges; in the implementation, we use a subroutine that gives the nodes of edges in consistent counter-clockwise order, so this case distinction is not necessary at this level. The same logic applies to $\vec{l} \cdot \grad p_{0}$ terms.
 
-For the global\footnote{in this case only referring to the current triangle strip, as opposed to the local indexing of individual triangles} indexing scheme, we call the ingoing current into triangle $(k)$ counted in clockwise direction $I^{(k)}$. In triangle $(k)$, this is equal to $I_{\inw} = -I^{(k)}$ and $I_{\out} = I^{(k+1)}$. This is also illustrated in \cref{fig:current_perturbation}, where triangles are counted from one starting at the right end of the sketch. The matrix form of \cref{eq:Ii-Io} is then
+For the global\footnote{in this case only referring to the current triangle strip, as opposed to the local indexing of individual triangles} indexing scheme, we call the ingoing current into triangle $(k)$ counted in counter-clockwise direction $I^{(k)}$. In triangle $(k)$, this is equal to $I_{\inw} = -I^{(k)}$ and $I_{\out} = I^{(k+1)}$. This is also illustrated in \cref{fig:current_perturbation}, where triangles are counted from one starting at the right end of the sketch. The matrix form of \cref{eq:Ii-Io} is then
 \begin{gather}
   K_{jk} I^{(k)} = s_{j},
 \end{gather}
@@ -1154,7 +1154,7 @@ The degrees of freedom differing from the solution to the zero solution (\cref{e
   \Psi_{\inw}^{(k)} &= 0, & \Psi_{\out}^{(k)} &= C_{k}, & \Psi_{\phi}^{(k)} &= \frac{\im}{n} \Psi_{\fs}^{(k)} - \frac{\im}{n} C_{k}, \\
   \Psi_{\inw}^{(k+1)} &= -C_{k}, & \Psi_{\out}^{(k+1)} &= 0, & \Psi_{\phi}^{(k+1)} &= \frac{\im}{n} \Psi_{\fs}^{(k+1)} + \frac{\im}{n} C_{k}.
 \end{align}
-This means that, compared to the zero solution, a change $C_{k}$ in the flux across the associated edge of adjacent triangles in one triangle strip is accomdated by a change in the toroidal flux of these triangles.
+This means that, compared to the zero solution, a change $C_{k}$ in the flux across the associated edge of adjacent triangles in one triangle strip is accomodated by a change in the toroidal flux of these triangles.
 
 The approach outlined above can be repeated for different values of $k$. Linear superposition of the solutions to the homogeneous and inhomogeneous cases then yields the most general solution,
 \begin{align}

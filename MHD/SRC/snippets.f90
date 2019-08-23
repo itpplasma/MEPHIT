@@ -108,6 +108,8 @@ subroutine read_hpsi
 end subroutine read_hpsi
 
 
+    integer, dimension(:,:), allocatable :: connections
+    integer :: low, kt, ke, kt_adj, ke_adj
     allocate(connections(ntri, 3))
     connections = 0
     low = 1

@@ -4,9 +4,9 @@
 81                                           ntor         ! number of toroidal harmonics
 0.99                                         cutoff       ! inner cutoff in psi/psi_a units
 4                                            icftype      ! type of coil file
-'../../RUN/test_case_for_patrick/g000001.0001_TCFP'  gfile        ! equilibrium file
-'/proj/plasma/RMP/DATA/ASDEX/MESH3D_30835/field.dat'                    pfile        ! coil        file
-'../FIELD/convexwall.kilca'  convexfile   ! convex file for stretchcoords
+'../FIELD/17151.3800.AUGD.EQI.00.efit'  gfile        ! equilibrium file
+'./DATA_ASDEX_MESH3D_30835/field.dat'                    pfile        ! coil        file
+'../FIELD/convexwall.asdex'  convexfile   ! convex file for stretchcoords
 'FROMQQ/FLUXDATA'                            fluxdatapath ! directory with data in flux coord.(not used now, 12.07.16)
 0                                            nwindow_r    ! window size for filtering of psi array over R
 0                                            nwindow_z    ! window size for filtering of psi array over Z

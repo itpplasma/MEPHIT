@@ -5,25 +5,25 @@ real zmaxis = 0.0 * 1e2;
 real rdim = 1.34 * 1e2;
 real zdim = 1.34 * 1e2;
 int nkpol = 300;
-int nflux = 63;
+int nflux = 64;
 
 border inner(t = 0, 2 * pi) {
-  x = rmaxis + 0.5 * real(nflux + 1) / real(nflux + 2) * rdim * cos(t);
-  y = zmaxis - 0.5 * real(nflux + 1) / real(nflux + 2) * zdim * sin(t);
-  label = 1;
+  x = rmaxis + 0.5 * real(nflux) / real(nflux+1) * rdim * cos(t);
+  y = zmaxis - 0.5 * real(nflux) / real(nflux+1) * zdim * sin(t);
+  label = 0;
 }
 border outer(t = 0, 2 * pi) {
   x = rmaxis + 0.75 * rdim * cos(t);
   y = zmaxis + 0.75 * zdim * sin(t);
-  label = 2;
+  label = 1;
 }
 mesh Thouter = buildmesh(inner(nkpol) + outer(nkpol * 3 / 2));
+int[int] regionmap = [0, 1];
+Thouter = change(Thouter, region = regionmap);
 mesh Thinner = readmesh("inputformaxwell.msh");
 mesh Th = Thinner + Thouter;
+savemesh(Th, "inputformaxwell_ext.msh");
 
 medit("in", Thinner);
 medit("out", Thouter);
 medit("total", Th);
-
-savemesh(Th, "inputformaxwell_ext.msh");
-
