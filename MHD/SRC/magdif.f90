@@ -340,17 +340,17 @@ contains
                matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn - Bn_prev)))
           call unpack2(Bnflux, Bnphi, Bn)
           call check_redundant_edges(Bnflux, -1d0, 'B_n')
-          call check_div_free(Bnflux, Bnphi, 1d-8, 'B_n')
+          call check_div_free(Bnflux, Bnphi, 1d-7, 'B_n')
        end if
 
        call unpack2(Bnflux_diff, Bnphi_diff, Bn - Bn_prev)
        call write_vector_dof(Bnflux_diff, Bnphi_diff, &
-               decorate_filename(Bn_diff_file, '', kiter))
+            decorate_filename(Bn_diff_file, '', kiter))
+       call write_vector_dof(Bnflux, Bnphi, &
+            decorate_filename(Bn_file, '', kiter))
        if (kiter <= 2) then
           call write_vector_plot(Bnflux_diff, Bnphi_diff, &
                decorate_filename(Bn_diff_file, 'plot_', kiter))
-          call write_vector_dof(Bnflux, Bnphi, &
-               decorate_filename(Bn_file, '', kiter))
           call write_vector_plot(Bnflux, Bnphi, &
                decorate_filename(Bn_file, 'plot_', kiter))
           call write_vector_plot(jnflux, jnphi, &
@@ -604,7 +604,7 @@ contains
     end do
     close(1)
 
-    call check_div_free(Bnflux, Bnphi, 1d-8, 'B_n')
+    call check_div_free(Bnflux, Bnphi, 1d-7, 'B_n')
     call check_redundant_edges(Bnflux, -1d0, 'B_n')
   end subroutine read_Bn
 
@@ -1046,7 +1046,7 @@ inner: do kt = 1, kt_max(kf)
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(2 * nkpol) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kt
+    integer :: kf, kt, ktri
     integer :: nz
     integer, dimension(4 * nkpol) :: irow, icol
     complex(dp), dimension(4 * nkpol) :: aval
@@ -1055,7 +1055,8 @@ inner: do kt = 1, kt_max(kf)
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     logical :: orient
-    real(dp) :: Deltapsi
+    real(dp) :: B0flux
+    complex(dp) :: Bnphi_Gamma
     real(dp) :: r, z
     real(dp) :: n_r, n_z
     complex(dp) :: presn_Omega
@@ -1063,37 +1064,42 @@ inner: do kt = 1, kt_max(kf)
     max_rel_err = 0d0
     avg_rel_err = 0d0
     do kf = 1, nflux ! loop through flux surfaces
-       Deltapsi = psi(kf) - psi(kf-1)
        do kt = 1, kt_max(kf)
-          elem = mesh_element(kt_low(kf) + kt)
+          ktri = kt_low(kf) + kt
+          elem = mesh_element(ktri)
           area = elem%det_3 * 0.5d0
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           ! first term on source side: flux through edge f
           r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
-          jnflux(kt_low(kf) + kt, ef) = clight * r / B0phi(kt_low(kf) + kt, ef) * &
-          (presn(lf(2)) - presn(lf(1))) + j0phi(kt_low(kf) + kt, ef) / &
-          B0phi(kt_low(kf) + kt, ef) * Bnflux(kt_low(kf) + kt, ef)
-          x(kt) = -jnflux(kt_low(kf) + kt, ef)
+          jnflux(ktri, ef) = j0phi(ktri, ef) / B0phi(ktri, ef) * Bnflux(ktri, ef) + &
+               clight * r / B0phi(ktri, ef) * (presn(lf(2)) - presn(lf(1)))
+          x(kt) = -jnflux(ktri, ef)
           ! diagonal matrix element - edge i
+          n_r = mesh_point(li(2))%zcoord - mesh_point(li(1))%zcoord
+          n_z = mesh_point(li(1))%rcoord - mesh_point(li(2))%rcoord
+          B0flux = r * (B0r(ktri, ei) * n_r + B0z(ktri, ei) * n_z)
           d(kt) = -1d0 - imun * (n + imun * damp) * area * 0.5d0 * &
-               B0phi(kt_low(kf) + kt, ei) / Deltapsi
+               B0phi(ktri, ei) / B0flux
           ! additional term from edge i on source side
           r = sum(mesh_point(li(:))%rcoord) * 0.5d0
-          x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / (-Deltapsi) * &
-               (presn(li(2)) - presn(li(1)) - Bnphi(kt_low(kf) + kt) / &
-               B0phi(kt_low(kf) + kt, ei) * (pres0(kf) - pres0(kf-1))) + &
-               j0phi(kt_low(kf) + kt, ei) * (Bnphi(kt_low(kf) + kt) / &
-               B0phi(kt_low(kf) + kt, ei) + Bnflux(kt_low(kf) + kt, ei) / r / (-Deltapsi)))
+          Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(ei)))
+          x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / B0flux * &
+               (Bnphi_Gamma / B0phi(ktri, ei) * (pres0(kf) - pres0(kf-1)) - &
+               (presn(li(2)) - presn(li(1)))) + j0phi(ktri, ei) * &
+               (Bnphi_Gamma / B0phi(ktri, ei) - Bnflux(ktri, ei) / B0flux))
           ! superdiagonal matrix element - edge o
-          du(kt) = 1d0 - imun * (n + imun * damp) * area * 0.5d0 * &
-               B0phi(kt_low(kf) + kt, eo) / Deltapsi
+          n_r = mesh_point(lo(2))%zcoord - mesh_point(lo(1))%zcoord
+          n_z = mesh_point(lo(1))%rcoord - mesh_point(lo(2))%rcoord
+          B0flux = r * (B0r(ktri, eo) * n_r + B0z(ktri, eo) * n_z)
+          du(kt) = 1d0 + imun * (n + imun * damp) * area * 0.5d0 * &
+               B0phi(ktri, eo) / B0flux
           ! additional term from edge o on source side
           r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
-          x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / Deltapsi * &
-               (presn(lo(2)) - presn(lo(1)) - Bnphi(kt_low(kf) + kt) / &
-               B0phi(kt_low(kf) + kt, ei) * (pres0(kf-1) - pres0(kf))) + &
-               j0phi(kt_low(kf) + kt, eo) * (Bnphi(kt_low(kf) + kt) / &
-               B0phi(kt_low(kf) + kt, ei) + Bnflux(kt_low(kf) + kt, eo) / r / Deltapsi))
+          Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(eo)))
+          x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / B0flux * &
+               (Bnphi_Gamma / B0phi(ktri, eo) * (pres0(kf-1) - pres0(kf)) - &
+               (presn(lo(2)) - presn(lo(1)))) + j0phi(ktri, eo) * &
+               (Bnphi_Gamma / B0phi(ktri, eo) - Bnflux(ktri, eo) / B0flux))
        end do
        call assemble_sparse(kt_max(kf), d(:kt_max(kf)), du(:kt_max(kf)), nz, &
             irow(:(2*kt_max(kf))), icol(:(2*kt_max(kf))), aval(:(2*kt_max(kf))))
@@ -1111,34 +1117,34 @@ inner: do kt = 1, kt_max(kf)
        max_rel_err = max(max_rel_err, maxval(rel_err(:kt_max(kf))))
        avg_rel_err = avg_rel_err + sum(rel_err(:kt_max(kf)))
        do kt = 1, kt_max(kf)
-          elem = mesh_element(kt_low(kf) + kt)
+          ktri = kt_low(kf) + kt
+          elem = mesh_element(ktri)
           area = elem%det_3 * 0.5d0
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          jnflux(kt_low(kf) + kt, ei) = -x(kt)
-          jnflux(kt_low(kf) + kt, eo) = x(mod(kt, kt_max(kf)) + 1)
-          jnphi(kt_low(kf) + kt) = sum(jnflux(kt_low(kf) + kt, :)) * imun / n / area
+          jnflux(ktri, ei) = -x(kt)
+          jnflux(ktri, eo) = x(mod(kt, kt_max(kf)) + 1)
+          jnphi(ktri) = sum(jnflux(ktri, :)) * imun / n / area
           if (sheet_current_factor /= 0d0 .and. m_res(kf) > 0) then
              ! add sheet current on edge i
              r = sum(mesh_point(li(:))%rcoord) * 0.5d0
              n_r = mesh_point(li(2))%zcoord - mesh_point(li(1))%zcoord
              n_z = mesh_point(li(1))%rcoord - mesh_point(li(2))%rcoord
-             jnflux(kt_low(kf) + kt, ei) = jnflux(kt_low(kf) + kt, ei) + r * &
-                  (B0r(kt_low(kf) + kt, ei) * n_r + B0z(kt_low(kf) + kt, ei) * n_z) * &
-                  sum(presn(li(:))) * 0.5d0 * sheet_current_factor
+             B0flux = r * (B0r(ktri, ei) * n_r + B0z(ktri, ei) * n_z)
+             jnflux(ktri, ei) = jnflux(ktri, ei) + sheet_current_factor * B0flux * &
+                  sum(presn(li(:))) * 0.5d0
              ! add sheet current on edge o
              r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
              n_r = mesh_point(lo(2))%zcoord - mesh_point(lo(1))%zcoord
              n_z = mesh_point(lo(1))%rcoord - mesh_point(lo(2))%rcoord
-             jnflux(kt_low(kf) + kt, eo) = jnflux(kt_low(kf) + kt, eo) + r * &
-                  (B0r(kt_low(kf) + kt, eo) * n_r + B0z(kt_low(kf) + kt, eo) * n_z) * &
-                  sum(presn(lo(:))) * 0.5d0 * sheet_current_factor
+             B0flux = r * (B0r(ktri, eo) * n_r + B0z(ktri, eo) * n_z)
+             jnflux(ktri, eo) = jnflux(ktri, eo) + sheet_current_factor * B0flux * &
+                  sum(presn(lo(:))) * 0.5d0
              ! add toroidal sheet current
              call ring_centered_avg_coord(elem, r, z)
              presn_Omega = (sum(presn(elem%i_knot)) + presn(elem%knot_h)) * 0.25d0
-             jnphi(kt_low(kf) + kt) = jnphi(kt_low(kf) + kt) + sheet_current_factor * &
-                  (B0phi_Omega(kt_low(kf) + kt) * presn_Omega - imun / n * r * &
-                  Bnpsi_Omega(kt_low(kf) + kt) * (pres0(kf) - pres0(kf-1)) / &
-                  (psi(kf) - psi(kf-1)))
+             jnphi(ktri) = jnphi(ktri) + sheet_current_factor * (B0phi_Omega(ktri) * &
+                  presn_Omega - imun / n * r * Bnpsi_Omega(ktri) * &
+                  (pres0(kf) - pres0(kf-1)) / (psi(kf) - psi(kf-1)))
           end if
        end do
     end do
