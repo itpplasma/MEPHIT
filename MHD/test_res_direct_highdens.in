@@ -8,12 +8,13 @@
    n = 2                                           ! harmonic index of perturbation
    niter = 30                                      ! number of iteration steps
    nritz = 60                                      ! number of Ritz eigenvalues
-   tol = 0.7d0                                     ! threshold for eigenvalues in preconditioner
+   tol = 5d-3                                      ! threshold for eigenvalues in preconditioner
    nkpol = 200                                     ! number of knots per poloidal loop
    nflux = 75                                      ! number of flux surfaces up to and counting LCFS
    ti0 = 3.d3                                      ! temperature on magnetic axis 
    di0 = 5.d13                                     ! density on magnetic axis
    damp = 0d0                                      ! damping factor for resonances
+   R0 = 172.74467899999999d0                       ! distance of magnetic axis from center in cm
    sheet_current_factor = (0d0, 0d0)               ! coefficient for sheet currents
    point_file = '../PRELOAD/points.dat'            ! mesh points from PRELOAD
    tri_file = '../PRELOAD/triangles.dat'           ! triangles and edges from PRELOAD
@@ -27,4 +28,6 @@
    presn_file = 'presn.dat'                        ! output file for pressure perturbation
    currn_file = 'currn.dat'                        ! output file for current perturbation
    eigvec_file = 'eigvec.dat'                      ! output file for eigenvectors
+   rel_err_Bn = 1d-7                               ! error threshold for magnetic field perturbation
+   rel_err_currn = 1d-8                            ! error threshold for current perturbation
 /

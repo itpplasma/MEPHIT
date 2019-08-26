@@ -332,7 +332,7 @@ class magdif:
             'Bmn_vac_psi.dat'))
         self.plots.append(magdif_poloidal_modes(self.config['n'], self.s, self.q,
             self.datadir, 'currmn_001_theta.dat',
-            r'$\left\vert J_{mn \theta}^{(1)} \right\vert$ [statA / cm]'))
+            r'$\left\vert J_{mn \theta}^{(1)} \right\vert$ / statA cm\textsuperscript{-1}'))
 
     def dump_plots(self):
         for p in self.plots:

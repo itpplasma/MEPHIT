@@ -194,9 +194,6 @@ module magdif
   !> last closed flux surface. The latter is needed for some interpolations.
   integer, allocatable :: kt_low(:)
 
-  !> Distance of magnetic axis from center \f$ R_{0} \f$ in cm.
-  real(dp), parameter :: R0 = 172.74467899999999d0
-
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
 
@@ -340,7 +337,7 @@ contains
                matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn - Bn_prev)))
           call unpack2(Bnflux, Bnphi, Bn)
           call check_redundant_edges(Bnflux, -1d0, 'B_n')
-          call check_div_free(Bnflux, Bnphi, 1d-7, 'B_n')
+          call check_div_free(Bnflux, Bnphi, rel_err_Bn, 'B_n')
        end if
 
        call unpack2(Bnflux_diff, Bnphi_diff, Bn - Bn_prev)
@@ -604,7 +601,7 @@ contains
     end do
     close(1)
 
-    call check_div_free(Bnflux, Bnphi, 1d-7, 'B_n')
+    call check_div_free(Bnflux, Bnphi, rel_err_Bn, 'B_n')
     call check_redundant_edges(Bnflux, -1d0, 'B_n')
   end subroutine read_Bn
 
@@ -1123,7 +1120,6 @@ inner: do kt = 1, kt_max(kf)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           jnflux(ktri, ei) = -x(kt)
           jnflux(ktri, eo) = x(mod(kt, kt_max(kf)) + 1)
-          jnphi(ktri) = sum(jnflux(ktri, :)) * imun / n / area
           if (sheet_current_factor /= 0d0 .and. m_res(kf) > 0) then
              ! add sheet current on edge i
              r = sum(mesh_point(li(:))%rcoord) * 0.5d0
@@ -1139,13 +1135,8 @@ inner: do kt = 1, kt_max(kf)
              B0flux = r * (B0r(ktri, eo) * n_r + B0z(ktri, eo) * n_z)
              jnflux(ktri, eo) = jnflux(ktri, eo) + sheet_current_factor * B0flux * &
                   sum(presn(lo(:))) * 0.5d0
-             ! add toroidal sheet current
-             call ring_centered_avg_coord(elem, r, z)
-             presn_Omega = (sum(presn(elem%i_knot)) + presn(elem%knot_h)) * 0.25d0
-             jnphi(ktri) = jnphi(ktri) + sheet_current_factor * (B0phi_Omega(ktri) * &
-                  presn_Omega - imun / n * r * Bnpsi_Omega(ktri) * &
-                  (pres0(kf) - pres0(kf-1)) / (psi(kf) - psi(kf-1)))
           end if
+          jnphi(ktri) = sum(jnflux(ktri, :)) * imun / n / area
        end do
     end do
     avg_rel_err = avg_rel_err / sum(kt_max(1:nflux))
@@ -1154,7 +1145,7 @@ inner: do kt = 1, kt_max(kf)
     if (allocated(resid)) deallocate(resid)
 
     call check_redundant_edges(jnflux, -1d0, 'jnflux')
-
+    call check_div_free(jnflux, jnphi, rel_err_currn, 'jnflux')
     call write_vector_dof(jnflux, jnphi, currn_file)
     call write_vector_plot(jnflux, jnphi, decorate_filename(currn_file, 'plot_'))
   end subroutine compute_currn
@@ -1234,7 +1225,7 @@ inner: do kt = 1, kt_max(kf)
        end do
     end do
     if (quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
-    call check_div_free(Bnflux, Bnphi, 1d-9, 'non-resonant B_n')
+    call check_div_free(Bnflux, Bnphi, rel_err_Bn, 'non-resonant B_n')
     call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 

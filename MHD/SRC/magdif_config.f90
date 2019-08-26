@@ -27,6 +27,9 @@ module magdif_config
   real(dp) :: di0             !< interpolation step for density
   real(dp) :: damp            !< damping factor for resonances
 
+  !> Distance of magnetic axis from center \f$ R_{0} \f$ in cm.
+  real(dp) :: R0 = 172.74467899999999d0
+
   !> Free parameter setting the magnitude of sheet currents.
   complex(dp) :: sheet_current_factor
 
@@ -84,7 +87,7 @@ module magdif_config
 
   !> namelist for input parameters
   namelist / settings / log_level, runmode, nonres, quad_avg, niter, nritz, tol, n, &
-       nkpol, nflux, ti0, di0, damp, sheet_current_factor, point_file, tri_file, &
+       nkpol, nflux, ti0, di0, damp, R0, sheet_current_factor, point_file, tri_file, &
        Bn_vacout_file, Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, &
        presn_file, currn_file, eigvec_file
 
