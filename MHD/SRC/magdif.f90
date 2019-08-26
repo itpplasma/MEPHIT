@@ -116,13 +116,6 @@ module magdif
   !> #mesh_mod::mesh_element.
   complex(dp), allocatable :: Bnphi(:)
 
-  !> Contravariant \f$ \psi \f$ component of magnetic perturbation: \f$ B_{n}^{\psi}
-  !> (\Omega) \f$
-  !>
-  !> Values are stored seprately for each triangle and the indexing scheme is the same as
-  !> for #mesh_mod::mesh_element.
-  complex(dp), allocatable :: Bnpsi_Omega(:)
-
   !> Vacuum perturbation edge fluxes \f$ R \vec{B}_{n} \cdot \vec{n} \f$ in G cm^2.
   !>
   !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
@@ -241,7 +234,6 @@ contains
     if (allocated(jnflux)) deallocate(jnflux)
     if (allocated(Bnflux)) deallocate(Bnflux)
     if (allocated(Bnphi)) deallocate(Bnphi)
-    if (allocated(Bnpsi_Omega)) deallocate(Bnpsi_Omega)
     if (allocated(Bnflux_vac)) deallocate(Bnflux_vac)
     if (allocated(Bnphi_vac)) deallocate(Bnphi_vac)
     if (allocated(jnphi)) deallocate(jnphi)
@@ -260,7 +252,7 @@ contains
     call compute_currn     ! compute currents based on previous perturbation field
     call compute_Bn        ! use field code to generate new field from currents
     call read_Bn(Bn_file)  ! read new bnflux from field code
-    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'), Bnpsi_Omega)
+    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'))
   end subroutine magdif_single
 
   subroutine magdif_iterated
@@ -465,7 +457,6 @@ contains
     allocate(presn(npoint))
     allocate(Bnflux(ntri, 3))
     allocate(Bnphi(ntri))
-    allocate(Bnpsi_Omega(ntri))
     allocate(Bnflux_vac(ntri, 3))
     allocate(Bnphi_vac(ntri))
     allocate(jnphi(ntri))
@@ -481,7 +472,6 @@ contains
     presn = 0d0
     Bnflux = 0d0
     Bnphi = 0d0
-    Bnpsi_Omega = 0d0
     Bnflux_vac = 0d0
     Bnphi_vac = 0d0
     jnphi = 0d0
@@ -1054,9 +1044,8 @@ inner: do kt = 1, kt_max(kf)
     logical :: orient
     real(dp) :: B0flux
     complex(dp) :: Bnphi_Gamma
-    real(dp) :: r, z
+    real(dp) :: r
     real(dp) :: n_r, n_z
-    complex(dp) :: presn_Omega
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
@@ -1229,11 +1218,10 @@ inner: do kt = 1, kt_max(kf)
     call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
-  subroutine write_vector_plot(pol_flux, tor_comp, outfile, proj_psi_contravar)
+  subroutine write_vector_plot(pol_flux, tor_comp, outfile)
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
-    complex(dp), intent(out), optional :: proj_psi_contravar(:)
 
     integer :: kf, kt
     type(triangle) :: elem
@@ -1274,9 +1262,6 @@ inner: do kt = 1, kt_max(kf)
           end if
           dens_psi_contravar = (pol_comp_r * n_r + pol_comp_z * n_z) * &
                (psi(kf) - psi(kf-1)) / elem%det_3 * sqrt_g
-          if (present(proj_psi_contravar)) then
-             proj_psi_contravar(kt_low(kf) + kt) = dens_psi_contravar / sqrt_g
-          end if
           ! projection to covariant theta component
           proj_theta_covar = -(pol_comp_r * B0r_Omega(kt_low(kf) + kt) + &
                pol_comp_z * B0z_Omega(kt_low(kf) + kt)) * sqrt_g
