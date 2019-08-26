@@ -85,11 +85,17 @@ module magdif_config
   !> output data file for eigenvectors in magdif::magdif_precon().
   character(len = 1024) :: eigvec_file
 
+  !> error threshold for divergence-freeness of #bnflux and #bnphi
+  real(dp) :: rel_err_Bn = 1d-7
+
+  !> error threshold for divergence-freeness of #jnflux and #jnphi
+  real(dp) :: rel_err_currn = 1d-8
+
   !> namelist for input parameters
   namelist / settings / log_level, runmode, nonres, quad_avg, niter, nritz, tol, n, &
        nkpol, nflux, ti0, di0, damp, R0, sheet_current_factor, point_file, tri_file, &
        Bn_vacout_file, Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, &
-       presn_file, currn_file, eigvec_file
+       presn_file, currn_file, eigvec_file, rel_err_Bn, rel_err_currn
 
 contains
 
