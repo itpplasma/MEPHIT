@@ -6,7 +6,8 @@ program minimal_example
   use input_files, only: gfile, convexfile
   use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, & ! PRELOAD/SRC/mesh_mod.f90
        bphicovar, knot, triangle
-  use magdif, only: init_indices, kt_max, kt_low, kp_max, kp_low
+  use magdif, only: init_indices, kt_max, kt_low, kp_max, kp_low, Bnflux, Bnphi, &
+       get_labeled_edges, check_redundant_edges, check_div_free, write_vector_dof
 
   implicit none
 
@@ -24,6 +25,13 @@ program minimal_example
   integer, parameter :: nrz = 64  ! at most 100 values are read in by field_divB0.f90
 
   type(triangle) :: elem
+  integer, dimension(2) :: li, lo, lf
+  integer :: ei, eo, ef
+  logical :: orient
+  real(dp) :: r, z, n_r, n_z
+  complex(dp) :: Br, Bp, Bz
+
+  complex(dp), parameter :: imun = (0d0, 1d0)
 
   if (command_argument_count() >= 1) then
      call get_command_argument(1, config_file)
@@ -180,6 +188,49 @@ program minimal_example
   end do
   close(fid)
 
+  ! calculate resonant vacuum perturbation
+  allocate(Bnflux(ntri, 3))
+  allocate(Bnphi(ntri))
+  do k = 1, ntri
+        elem = mesh_element(k)
+        call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+        ! flux through edge f
+        n_r = mesh_point(lf(2))%zcoord - mesh_point(lf(1))%zcoord
+        n_z = mesh_point(lf(1))%rcoord - mesh_point(lf(2))%rcoord
+        r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
+        z = sum(mesh_point(lf(:))%zcoord) * 0.5d0
+        rho = hypot(r - rmaxis, z - zmaxis)
+        theta = atan2(z - zmaxis, r - rmaxis)
+        call kilca_vacuum(int(n), kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
+        Bnflux(k, ef) = (Br * n_r + Bz * n_z) * r
+        ! flux through edge i
+        n_r = mesh_point(li(2))%zcoord - mesh_point(li(1))%zcoord
+        n_z = mesh_point(li(1))%rcoord - mesh_point(li(2))%rcoord
+        r = sum(mesh_point(li(:))%rcoord) * 0.5d0
+        z = sum(mesh_point(li(:))%zcoord) * 0.5d0
+        rho = hypot(r - rmaxis, z - zmaxis)
+        theta = atan2(z - zmaxis, r - rmaxis)
+        call kilca_vacuum(int(n), kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
+        Bnflux(k, ei) = (Br * n_r + Bz * n_z) * r
+        ! flux through edge o
+        n_r = mesh_point(lo(2))%zcoord - mesh_point(lo(1))%zcoord
+        n_z = mesh_point(lo(1))%rcoord - mesh_point(lo(2))%rcoord
+        r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
+        z = sum(mesh_point(lo(:))%zcoord) * 0.5d0
+        rho = hypot(r - rmaxis, z - zmaxis)
+        theta = atan2(z - zmaxis, r - rmaxis)
+        call kilca_vacuum(int(n), kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
+        Bnflux(k, eo) = (Br * n_r + Bz * n_z) * r
+        ! toroidal flux
+        Bnphi(k) = imun / n * sum(Bnflux(k, :)) / elem%det_3 * 2d0
+  end do
+  call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
+  call check_div_free(Bnflux, Bnphi, 1d-9, 'non-resonant B_n')
+  Bnphi = Bnphi / R0 * kilca_major_radius
+  call write_vector_dof(Bnflux, Bnphi, Bn_vac_file)
+
+  if (allocated(Bnflux)) deallocate(Bnflux)
+  if (allocated(Bnphi)) deallocate(Bnphi)
   if (allocated(mesh_element)) deallocate(mesh_element)
   if (allocated(mesh_point)) deallocate(mesh_point)
 
@@ -189,8 +240,8 @@ contains
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
 
-    r = rmaxis
-    z = zmaxis
+    r = R0
+    z = 0d0
     p = 0d0
     call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
@@ -281,4 +332,25 @@ contains
     merged = [([first_s, second_s], k = 1, num / 2)]
   end function interleave_ss
 
+  subroutine kilca_vacuum(tor_mode, pol_mode, R_0, r, theta, Br, Bp, Bz)
+    use fgsl, only: fgsl_double, fgsl_int, fgsl_success, fgsl_sf_bessel_icn_array
+    integer, intent(in) :: tor_mode, pol_mode
+    real(dp), intent(in) :: R_0, r, theta
+    complex(dp), intent(out) :: Br, Bp, Bz
+    complex(dp) :: B_r, B_theta, B_z
+    real(fgsl_double) :: I_m(-1:1), k_z_r
+    integer(fgsl_int) :: status
+
+    k_z_r = tor_mode / R_0 * r
+    status = fgsl_sf_bessel_icn_array(pol_mode-1, pol_mode+1, k_z_r, I_m)
+    if (status /= fgsl_success .and. log_err) then
+       write (logfile, *) 'fgsl_sf_bessel_icn_array returned error ', status
+    end if
+    B_r = (0.5d0, 0d0) * (I_m(-1) + I_m(1)) * exp(imun * pol_mode * theta)
+    B_theta = imun * pol_mode / k_z_r * I_m(0) * exp(imun * pol_mode * theta)
+    B_z = imun * I_m(0) * exp(imun * pol_mode * theta)
+    Br = B_r * cos(theta) - B_theta * sin(theta)
+    Bp = B_z
+    Bz = B_r * sin(theta) + B_theta * cos(theta)
+  end subroutine kilca_vacuum
 end program minimal_example

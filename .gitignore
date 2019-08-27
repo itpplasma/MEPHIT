@@ -31,3 +31,4 @@ ProjectConfig.cmake.in
 *.ppm
 *.ps
 *.pvd
+FEM/magdif.idp

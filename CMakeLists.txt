@@ -22,7 +22,7 @@ find_package(SuperLU REQUIRED)
 include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
 
 ### Set compiler flags
-set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fbounds-check -Wall -ffpe-trap=invalid,zero,overflow")
+set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fbounds-check -Wall")  # -ffpe-trap=invalid,zero,overflow
 
 ### Define libraries
 add_library(magdif SHARED
@@ -40,6 +40,15 @@ add_library(magdif SHARED
   ${SUPERLU_SRC_FILES}
 )
 
+# GSL
+find_library(gsl_lib gsl ${GSL_LIB})
+
+# FGSL
+set(FGSL_LIB ${FGSL_PATH}/lib/ CACHE STRING "FGSL lib")
+set(FGSL_INC ${FGSL_PATH}/include/fgsl/ CACHE STRING "FGSL include")
+find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
+set(FGSL_FLAGS "${CMAKE_Fortran_FLAGS} -I${FGSL_INC}")
+
 ### Define executables
 add_executable(magdif_test.x
   MHD/SRC/magdif_test.f90
@@ -47,6 +56,8 @@ add_executable(magdif_test.x
 add_executable(minimal_example.x
   PRELOAD/SRC/minimal_example.f90
 )
+
+set_target_properties(minimal_example.x PROPERTIES COMPILE_FLAGS ${FGSL_FLAGS})
 
 ### Linking
 target_link_libraries(magdif_test.x
@@ -62,4 +73,5 @@ target_link_libraries(minimal_example.x
   ${SUITESPARSE_LIBRARIES}
   blas
   lapack
+  ${gsl_lib} ${fgsl_lib}
 )

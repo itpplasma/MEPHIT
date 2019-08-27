@@ -11,7 +11,7 @@ extract_theta = sed -e 's/ \+/\t/g; s/^\t//g' $(1) | cut -f 11-12 > $(2)
 poloidal_modes = cd ../RUN && ./result_spectrum.x $(1) > $(2) && cd ../MHD
 
 .PHONY: run plots spectra clean
-.ONESHELL: conv_sum.dat conv_diff.dat
+.ONESHELL: convergence.dat
 
 run: $(config) $(mesh)
 	./magdif_test.sh $(config)
@@ -23,7 +23,7 @@ plots:  convergence.dat \
 spectra: Bmn_psi.dat Bmn_vac_psi.dat currmn_001_theta.dat
 
 clean:
-	rm -f *.pdf Bn*.dat plot*.dat *.out presn*.dat currn*.dat fluxvar.dat fort.333
+	rm -f *.pdf *.out Bn*.dat presn*.dat currn*.dat eigvec*.dat plot*.dat j0phi.dat fluxvar.dat Bmn_psi.dat Bmn_vac_psi.dat currmn_001_theta.dat convergence.dat fort.333
 
 Bmn_psi.dat: plot_Bn.dat
 	$(call extract_psi, $<, Bn_psi.dat)

@@ -196,6 +196,7 @@ contains
   subroutine magdif_init
     call init_indices
     call read_mesh
+    if (kilca_major_radius /= 0d0) n = n * R0 / kilca_major_radius
     call init_flux_variables
     call cache_equilibrium_field
     call compute_safety_factor
@@ -526,7 +527,7 @@ contains
           div = abs((sum(pol_flux(kt,:)) + imun * n * tor_comp(kt) * &
                mesh_element(kt)%det_3 * 0.5d0)) / abs_flux
           if (div > rel_err) then
-             if (log_err) write(logfile, *) err_msg, ': ', div
+             if (log_err) write(logfile, *) err_msg, ' in triangle ', kt, ': ', div
              stop err_msg
           end if
        end if
@@ -616,7 +617,7 @@ contains
 
     allocate(m_res(nflux))
     m_res = 0
-    m_res_min = max(ceiling(minval(q) * n), n + 1)
+    m_res_min = max(ceiling(minval(q) * n), ceiling(n + 1))
     m_res_max = floor(maxval(q) * n)
     allocate(abs_err(nflux))
     do m = m_res_max, m_res_min, -1
