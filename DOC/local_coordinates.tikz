@@ -19,7 +19,7 @@
   \draw (ri1) -- (ri2) -- (ri3) -- (ri4) -- (ri5);
   \draw (ro1) -- (ro2) -- (ro3) -- (ro4) -- (ro5);
   \draw (ri1) -- (ro1) -- (ri2) -- (ro2) -- (ri3) -- (ro3) -- (ri4) -- (ro4) -- (ri5) -- (ro5);
-
+  % triangle 2
   \draw[thick, ->] (ri2) -- node [very near end, auto, swap] {$\vec{l}_{\inw}$} (ro1);
   \draw[thick, ->] (ro1) -- node [very near end, auto, swap] {$\vec{l}_{\fs}$} (ro2);
   \draw[thick, ->] (ro2) -- node [very near end, auto, swap] {$\vec{l}_{\out}$} (ri2);
@@ -29,7 +29,7 @@
   \draw[thick, ->] (Gi2) -- node [near end, auto, swap] {$\vec{n}_{\inw}$} ($ (Gi2) ! 2 ! 90:(ri2) $);
   \draw[thick, ->] (Gf2) -- node [very near end, auto, swap] {$\vec{n}_{\fs}$} ($ (Gf2) ! 2 ! 90:(ro1) $);
   \draw[thick, ->] (Go2) -- node [very near end, auto, swap] {$\vec{n}_{\out}$} ($ (Go2) ! 2 ! 90:(ro2) $);
-
+  % triangle 7
   \draw[thick, ->] (ro4) -- node [very near end, auto, swap] {$\vec{l}_{\out}$} (ri5);
   \draw[thick, ->] (ri5) -- node [very near end, auto, swap] {$\vec{l}_{\fs}$} (ri4);
   \draw[thick, ->] (ri4) -- node [very near end, auto, swap] {$\vec{l}_{\inw}$} (ro4);
@@ -39,7 +39,7 @@
   \draw[thick, ->] (Go7) -- node [very near end, auto, swap] {$\vec{n}_{\out}$} ($ (Go7) ! 2 ! 90:(ro4) $);
   \draw[thick, ->] (Gf7) -- node [near end, auto, swap] {$\vec{n}_{\fs}$} ($ (Gf7) ! 2 ! 90:(ri5) $);
   \draw[thick, ->] (Gi7) -- node [very near end, auto] {$\vec{n}_{\inw}$} ($ (Gi7) ! 2 ! 90:(ri4) $);
-
+  % toroidal basis vectors
   \node (O2) at ($ 0.5*(ri2) + 0.25*(ro1) + 0.25*(ro2) $) {$\otimes$};
   \node (O7) at ($ 0.5*(ro4) + 0.25*(ri5) + 0.25*(ri4) $) {$\otimes$};
   \node[circle, above right] at (O2) {$\nabla \phi$};

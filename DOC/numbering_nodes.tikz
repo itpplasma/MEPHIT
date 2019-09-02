@@ -1,0 +1,48 @@
+\begin{tikzpicture}[> = Stealth, line join = round, shape = circle, scale = 0.9, font = \scriptsize]
+  \tikzmath{
+    real \ri, \rm, \ro;
+    \ri = 2.5;
+    \rm = 5;
+    \ro = 7.5;
+  };
+  % nodes
+  \coordinate (r1) at (0:0); \node[anchor=45] at (r1) {1};
+  \coordinate (r2) at (0:\ri); \node[anchor=45] at (r2) {2};
+  \coordinate (r3) at (15:\ri); \node[anchor=60] at (r3) {3};
+  \coordinate (r4) at (30:\ri); \node[anchor=75] at (r4) {4};
+  \coordinate (r24) at (-30:\ri); \node[anchor=15] at (r24) {24};
+  \coordinate (r25) at (-15:\ri); \node[anchor=30] at (r25) {25};
+  \coordinate (r26) at (0:\rm); \node[anchor=45] at (r26) {26};
+  \coordinate (r27) at (15:\rm); \node[anchor=60] at (r27) {27};
+  \coordinate (r28) at (30:\rm); \node[anchor=75] at (r28) {28};
+  \coordinate (r48) at (-30:\rm); \node[anchor=15] at (r48) {48};
+  \coordinate (r49) at (-15:\rm); \node[anchor=30] at (r49) {49};
+  \coordinate (r50) at (0:\ro); \node[anchor=45] at (r50) {50};
+  \coordinate (r51) at (15:\ro); \node[anchor=60] at (r51) {51};
+  \coordinate (r52) at (30:\ro); \node[anchor=75] at (r52) {52};
+  \coordinate (r72) at (-30:\ro); \node[anchor=15] at (r72) {72};
+  \coordinate (r73) at (-15:\ro); \node[anchor=30] at (r73) {73};
+  % theta lines
+  \draw (r1) -- (r50);
+  \draw (r1) -- (r51);
+  \draw (r1) -- (r52);
+  \draw (r1) -- (r72);
+  \draw (r1) -- (r73);
+  % psi lines
+  \draw (r4) -- (r3) -- (r2) -- (r25) -- (r24);
+  \draw (r28) -- (r27) -- (r26) -- (r49) -- (r48);
+  \draw (r52) -- (r51) -- (r50) -- (r73) -- (r72);
+  \node[anchor=300] at (r1) {$\psi^{(0)}$};
+  \node[anchor=300] at (r4) {$\psi^{(1)}$};
+  \node[anchor=300] at (r28) {$\psi^{(2)}$};
+  \node[anchor=300] at (r52) {$\psi^{(3)}$};
+  % quadrilaterals
+  \draw (r4) -- (r27);
+  \draw (r3) -- (r26);
+  \draw (r2) -- (r49);
+  \draw (r25) -- (r48);
+  \draw (r28) -- (r51);
+  \draw (r27) -- (r50);
+  \draw (r26) -- (r73);
+  \draw (r49) -- (r72);
+\end{tikzpicture}

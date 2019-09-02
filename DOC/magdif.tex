@@ -57,6 +57,7 @@
 \usepackage{grffile}
 \usepackage{tikz}
 \usetikzlibrary{math, arrows.meta, calc, intersections}
+\newsavebox{\imagebox}
 
 % import and display data
 \usepackage{siunitx}
@@ -710,7 +711,7 @@ Prior to starting iterations, some input data has to supplied, namely the follow
 \begin{itemize}
 \item coordinates of grid points, numbering of grid points and triangles including edge adjacency list -- described in \cref{sec:grid-impl};
 \item the equilibrium magnetic field $\vec{B}_{0}$ from which the grid is generated;
-\item the vacuum perturbation field $\Bvac$ described in \cref{sec:Bvac} and
+\item the vacuum perturbation field $\Bvac$ and
 \item optionally the equilibrium pressure $p_{0}$.
 \end{itemize}
 Additonally, a configuration file exists to specify behaviour of the implemented algorithms and data input/output.
@@ -732,6 +733,8 @@ Additionally, with the formulae given above, one can also derive an expression f
 \end{gather}
 Thus all necessary equilibrium quantities are established.
 
+The vacuum perturbation field $\Bvac$ is calculated beforehand by the \textsc{Biot}--\textsc{Savart} law (\cref{eq:biot-savart}) on a regular grid in $(R, \phi, Z)$ coordinates, from which the fluxes through triangle edges are computed for representation as \textsc{Raviart}--\textsc{Thomas} elements.
+
 \subsection{Grid implementation}
 \label{sec:grid-impl}
 
@@ -739,20 +742,33 @@ Since the grid is field-aligned, there are a few conventions to be considered co
 
 The number of flux surfaces realized on the grid is known and referred to as \nflux. The numbers increase going outward from the magnetic axis which is \emph{not} included and thus gets the index 0. Flux variables like $\psi$, $p_{0}$ and $p_{0}' (\psi)$ are calculated at these flux surfaces and use the same indexing scheme. Others, like $q$ are calculated \emph{between} flux surfaces and are called half-grid quantities. In this case, the index refers to the outer or enclosing flux surface and starts at 1. When half-grid quantities are needed at full-grid positions or vice versa, they are linearly interpolated between neighbouring values, with one exception: if an interpolation point lies outside the separatrix, an appropriate interpolation point on the separatrix is used instead.
 
-Node numbering starts from 1 at the magnetic axis, increasing towards the separatrix. Then, the nodes on the enclosing flux surface (index 1) are enumerated counter-clockwise, starting with the node lying on the line connecting the magnetic axis and the X point. Then the next enclosing flux surface (index 2) is enumerated and so on. This way a simple bijection between \enquote{global} node numbering and the \enquote{local} numbering on a specific flux surface can be implemented. The flux surface indexing is the same as for full-grid quantities and the number of nodes per flux surface needs to be known.
+Node numbering starts from 1 at the magnetic axis, increasing towards the separatrix. Then, the nodes on the enclosing flux surface (index 1) are enumerated counter-clockwise, starting with the node lying on the line connecting the magnetic axis and the X point. Then the next enclosing flux surface (index 2) is enumerated and so on. This way a simple bijection between \enquote{global} node numbering and the \enquote{local} numbering on a specific flux surface can be implemented. The flux surface indexing is the same as for full-grid quantities and the number of nodes per flux surface needs to be known. \Cref{fig:numbering_nodes} illustrates global node numbering.
 
-Triangle numbering operates on similar assumptions, albeit with flux surface indexing akin to half-grid quantities. The innermost triangle strip (index 1) is enumerated first, starting at index 1 for the triangle formed by nodes 1, 2 and 3. It also goes counterclockwise and on each flux surface starts with the triangle whose edge \inw\ lies on the line between the magnetic axis and the X point, i.e. it follows node numbering. Again, local numbering on a triangle strip can be converted to global numbering when the number of triangles is known.
+Triangle numbering operates on similar assumptions, albeit with flux surface indexing akin to half-grid quantities. The innermost triangle strip (index 1) is enumerated first, starting at index 1 for the triangle formed by nodes 1, 2 and 3. It also goes counterclockwise and on each flux surface starts with the triangle whose edge \inw\ lies on the line between the magnetic axis and the X point, i.e. it follows node numbering. Again, local numbering on a triangle strip can be converted to global numbering when the number of triangles is known. \Cref{fig:numbering_triangles} illustrates global triangle numbering.
+
+\savebox{\imagebox}{\input{./numbering_nodes.tikz}}%
+\begin{figure}[bth]
+  \centering
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \usebox{\imagebox}
+    \caption{Global numbering scheme for nodes. Local indices refer to the flux surfaces on which the nodes reside. The mapping from local to global numbering would then produce, for example, $(0, 1) \to 1$, $(1, 1) \to 2$, $(1, 24) \to 25$, $(2, 1) \to 26$, $(2, 24) \to 49$, $(3, 1) \to 50$ and so on.}
+    \label{fig:numbering_nodes}
+  \end{subfigure}
+  \quad
+  \begin{subfigure}[t]{0.48\textwidth}
+    \centering
+    \raisebox{\dimexpr\ht\imagebox-\height}{\input{./numbering_triangles.tikz}}
+    \caption{Global numbering scheme for triangles. Local indices refer to the \emph{enclosing} flux surface of the triangle. The mapping from local to global numbering would then produce, for example, $(1, 1) \to 1$, $(1, 24) \to 24$, $(2, 1) \to 25$, $(2, 48) \to 72$, $(3, 1) \to 73$ and so on.}
+    \label{fig:numbering_triangles}
+  \end{subfigure}
+  \caption{Juxtaposition of numbering schemes for nodes and triangles. In both drawings, the flux surfaces are indicated by $\psi^{(k)}$ with $k$ being the index of the flux surface. There are 24 nodes on each flux surface and the horizontal line connects to the X point, which means numbering on each flux surface starts there.}
+  \label{fig:numbering_scheme}
+\end{figure}
 
 Associated with each triangle are local indices, i.e. 1 to 3, for nodes and edges. The global node number is saved for each local node number. The edges don't have a global index and are numbered so that edge 1 connects node 1 to 2, edge 2 connects node 2 to 3 and edge 3 connects node 3 to 1. When the index of node \vfs\ is known and the aforementioned conventions are followed, the symbolic designations \fs, \inw, \out\ can be mapped to the local edge index, \vfs, \vinw, \vout\ to the local (and global) node index and edge vectors $\vec{l}$ can be given in counter-clockwise direction. Furthermore, an adjacency list is constructed, giving any triangle's neighbour on a given edge and the local edge number in the neighbouring triangle.
 
 Scalar quantities like $p_{n}$ are indexed by global node number and vector quantities like $\vec{B}_{n}$ and $\vec{J}_{n}$ are indexed by global triangle number and local edge number. The latter convention involves some redundancy as it takes twice the storage that would be necessary, but it also allows for consistency checks and a simpler implementation.
-
-[illustrations \ldots]
-
-\subsection{Vacuum perturbation field}
-\label{sec:Bvac}
-
-[\ldots]
 
 \subsection{Toroidal unperturbed current}
 \label{sec:j0phi}
@@ -780,7 +796,7 @@ In symmetry flux coordinates $(\rho, \phi, \theta)$ and Jacobian $\sqrt{g}$ outl
   &= -\frac{c}{\sqrt{g}} \pd{u^{k}} \left( \frac{\sqrt{g}}{B_{0}^{2}} \frac{\varepsilon^{ijk}}{\sqrt{g}} \pd[p_{0}]{u^{i}} B_{0 j} \right) \nonumber \\
   &= -\frac{c p_{0}' (\rho) B_{0 \phi}}{\sqrt{g}} \pd{\theta} \frac{1}{B_{0}^{2}},
 \end{align}
-since $p_{0}$ and $B_{0 \phi}$ are constant on a flux surface, $\pd[p_{0}]{\theta} = 0$ and due to axisymmetry $\pd{\zeta} = 0$ for equilibrium quantities. The divergence of the parallel current is
+since $p_{0}$ and $B_{0 \phi}$ are constant on a flux surface, $\pd[p_{0}]{\theta} = 0$ and due to axisymmetry $\pd{\phi} = 0$ for equilibrium quantities. The divergence of the parallel current is
 \begin{gather}
   \divg(J_{0}^{\parallel} \vec{h}_{0}) = \vec{B}_{0} \cdot \grad \frac{J_{0}^{\parallel}}{B_{0}} = B_{0}^{\theta} \pd{\theta} \frac{J_{0}^{\parallel}}{B_{0}}.
 \end{gather}

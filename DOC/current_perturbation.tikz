@@ -19,24 +19,24 @@
   \draw (ri1) -- (ri2) -- (ri3) -- (ri4) -- (ri5);
   \draw (ro1) -- (ro2) -- (ro3) -- (ro4) -- (ro5);
   \draw (ri1) -- (ro1) -- (ri2) -- (ro2) -- (ri3) -- (ro3) -- (ri4) -- (ro4) -- (ri5) -- (ro5);
-
+  % triangle 2
   \coordinate (Gi2) at ($ (ri2) ! 0.5 ! (ro1) $);
   \coordinate (Gf2) at ($ (ro1) ! 0.5 ! (ro2) $);
   \coordinate (Go2) at ($ (ro2) ! 0.5 ! (ri2) $);
   \draw[thick, ->] (Gi2) -- node [very near end, right, swap] {$I^{(2)}_{\inw}$} ($ (Gi2) ! 0.8 ! 90:(ri2) $);
   \draw[thick, ->] (Gf2) -- node [near end, right, swap] {$I^{(2)}_{\fs}$} ($ (Gf2) ! 0.8 ! 90:(ro1) $);
   \draw[thick, ->] (Go2) -- node [very near end, auto] {$I^{(2)}_{\out}$} ($ (Go2) ! 0.8 ! 90:(ro2) $);
-
+  % triangle 7
   \coordinate (Go7) at ($ (ro4) ! 0.5 ! (ri5) $);
   \coordinate (Gf7) at ($ (ri5) ! 0.5 ! (ri4) $);
   \coordinate (Gi7) at ($ (ri4) ! 0.5 ! (ro4) $);
   \draw[thick, ->] (Go7) -- node [near end, below] {$I^{(7)}_{\out}$} ($ (Go7) ! 0.8 ! 90:(ro4) $);
   \draw[thick, ->] (Gf7) -- node [very near end, auto] {$I^{(7)}_{\fs}$} ($ (Gf7) ! 0.8 ! 90:(ri5) $);
   \draw[thick, ->] (Gi7) -- node [near end, above right] {$I^{(7)}_{\inw}$} ($ (Gi7) ! 0.8 ! 90:(ri4) $);
-
+  % toroidal currents
   \node[label={[label distance=-5mm]90:$I^{(2)}_{\phi}$}] (O2) at ($ 0.5*(ri2) + 0.25*(ro1) + 0.25*(ro2) $) {$\otimes$};
   \node[label={[label distance=-5mm]270:$I^{(7)}_{\phi}$}] (O7) at ($ 0.5*(ro4) + 0.25*(ri5) + 0.25*(ri4) $) {$\otimes$};
-
+  % degree of freedom
   \coordinate (Gi5) at ($ (ri3) ! 0.5 ! (ro3) $);
   \draw[red, ->] ($ (Gi5) + (0.5, 0) $) -- node [at start, above, red] {$I^{(5)}$} ($ (Gi5) - (0.5, 0) $);
 \end{tikzpicture}

@@ -17,7 +17,7 @@
   \coordinate (ri2) at (97.5:\ri); \coordinate (rm2) at (97.5:\rm); \coordinate (ro2) at (97.5:\ro);
   \draw (rm1) -- (rm2);
   \draw (rm1) -- (ri2) -- (rm2) -- (ro1) -- cycle;
-
+  % altitudes construction
   \coordinate (rm1e) at ($ (rm1) + (1, 0) $);
   \path [name path = edge] (rm1e) -- (rm2);
   \path [name path = inner altitude] (ri2) -- ($ (rm1)!(ri2)!(rm2) $) ++(90:0.02);
@@ -25,18 +25,19 @@
   \draw [name intersections = {of = edge and inner altitude, by = Fi}] (ri2) -- (Fi);
   \draw [name intersections = {of = edge and outer altitude, by = Fo}] (ro1) -- (Fo);
   \draw [dotted] (rm1) -- (Fo);
-
+  % normal vector
   % \draw (90:\ri) -- (90:\ro);
   \coordinate (Gf) at ($ (rm1) ! 0.5 ! (rm2) $);
   \draw[thick, ->] (Gf) -- node [very near end, auto] {$\vec{n}_{\fs}$} ($ (Gf) ! 2 ! 90:(rm1) $);
-
+  % flux surfaces
   \node[circle, above left] at (\arcend:\ri) {$\psi^{(-1)}$};
   \node[circle, above left] at (\arcend:\rm) {$\psi^{(0)}$};
   \node[circle, above left] at (\arcend:\ro) {$\psi^{(+1)}$};
-
+  % edges and altitudes
   \node[circle, above right] at (Fo) {$a_{\fs}^{(+1)}$};
   \node[circle, below right] at (Fi) {$a_{\fs}^{(-1)}$};
   \node[circle, below right] at (Gf) {$l_{\fs}$};
+  % triangles
   \node at ($ 1/4*(rm1) + 1/4*(rm2) + 1/2*(ri2) $) {$\Omega^{(-1)}$};
   \node at ($ 1/4*(rm1) + 1/4*(rm2) + 1/2*(ro1) $) {$\Omega^{(+1)}$};
 \end{tikzpicture}
