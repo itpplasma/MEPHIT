@@ -26,6 +26,42 @@
   \left( B_{0}^{\pol} \right)^{2} + \left( B_{0}^{\tor} \right)^{2} = B_{0}^{2}
 \end{gather}
 
+\subsection{Maxwell's equations}
+
+\textsc{Maxwell}'s equations in their differential and microscopic formulation:
+\begin{align}
+  \divg \vec{E} &= 4 \pi \rho_{\text{e}}, \label{eq:gauss_field} \\
+  \divg \vec{B} &= 0, \label{eq:no_monopoles_field} \\
+  \curl \vec{E} &= -\frac{1}{c_{0}} \pd[\vec{B}]{t}, \label{eq:faraday_field} \\
+  \curl \vec{B} &= \frac{4 \pi}{c_{0}} \vec{J} + \frac{1}{c_{0}} \pd[\vec{E}]{t}. \label{eq:ampere_field}
+\end{align}
+The fields $\vec{E}$ and $\vec{B}$ can be expressed via electrical potential $\phi_{\text{e}}$ and magnetic vector potential $\vec{A}$:
+\begin{align}
+  \vec{E} &= -\grad \phi_{\text{e}} - \frac{1}{c_{0}} \pd[\vec{A}]{t}, \label{eq:electric_field} \\
+  \vec{B} &= \curl \vec{A}. \label{eq:magnetic_field}
+\end{align}
+With these definitions, the equations are invariant under gauge transformations involving a gauge potential $\chi$:
+\begin{align*}
+  \phi_{\text{e}} &\to \phi_{\text{e}}' = \phi_{\text{e}} - \frac{1}{c_{0}} \pd[\chi]{t}, \\
+  \vec{A} &\to \vec{A}' = \vec{A} + \grad \chi.
+\end{align*}
+Common gauges are the \textsc{Coulomb} gauge with
+\begin{gather*}
+  \divg \vec{A}' = 0
+\end{gather*}
+and the \textsc{Lorenz} gauge with
+\begin{gather*}
+  \divg \vec{A}' + \frac{1}{c_{0}} \pd[\phi_{\text{e}}']{t} = 0.
+\end{gather*}
+Since we neglect time derivatives, these gauges are equal in our case. The potential equations are then given by
+\begin{align}
+  \divg \nabla \phi_{\text{e}} &= -4 \pi \rho_{\text{e}}, \label{eq:gauss_potential} \\
+  \divg (\curl \vec{A}) &= 0, \label{eq:no_monopoles_potential} \\
+  \curl \nabla \phi_{\text{e}} &= 0, \label{eq:faraday_potential} \\
+  \curl (\curl \vec{A}) &= \frac{4 \pi}{c_{0}} \vec{J}, \label{eq:ampere_vector}
+\end{align}
+where the homogeneous \cref{eq:no_monopoles_potential,eq:faraday_potential} are trivially true. Since $\vec{A}$ can be gauged independently, we can continue with \cref{eq:ampere_vector} alone.
+
 
 \subsection{Sequence of partial sums}
 
