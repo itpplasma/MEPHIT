@@ -14,6 +14,11 @@ p = f90nml.parser.Parser()
 nml = p.read(sys.argv[1])
 config = nml['settings']
 
+R_KiLCA = config['kilca_major_radius']
+if (R_KiLCA == 0.0):
+    nmode = config['n']
+else:
+    nmode = config['n'] * config['R0'] / R_KiLCA
 ktlownfluxp1 = (2 * config['nflux'] - 1) * config['nkpol']
 if (os.path.isabs(config['currn_file'])):
     currnfile = config['currn_file']
@@ -25,6 +30,7 @@ else:
     Bnfluxfile = os.path.relpath(config['Bn_file'], '../FEM')
 
 with open('../FEM/magdif.idp', 'w') as f:
+    f.write('real nmode = {};\n'.format(nmode))
     f.write('int ktlownfluxp1 = {};\n'.format(ktlownfluxp1))
     f.write('string meshfile = "../PRELOAD/inputformaxwell_ext.msh";\n')
     f.write('string currnfile = "{}";\n'.format(currnfile))

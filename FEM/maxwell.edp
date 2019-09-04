@@ -7,8 +7,6 @@
 
 real c = 29979245800.0; // speed of light
 
-real nmode = 2.0; // mode number
-
 include "magdif.idp"  // config (incl. filenames)
 
 mesh Th = readmesh(meshfile);
