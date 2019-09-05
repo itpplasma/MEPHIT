@@ -7,7 +7,7 @@
 
 % fonts and maths
 \usepackage{fontspec}
-%\setmainfont{TeX Gyre Pagella}
+%\setmainfont{TeX Gyre Pagella}[Numbers=Monospaced]
 %\setsansfont{TeX Gyre Heros}
 %\setmonofont[Scale=MatchLowercase]{Source Code Pro}
 \usepackage{luatexbase} % needed to correct bug in microtype w.r.t. LuaTeX
@@ -91,8 +91,8 @@
 \usepackage{fancyhdr}
 \fancyhf{}
 \fancyfoot[C]{\thepage/\pageref{LastPage}}
-\fancyhead[RO]{\textsl{\rightmark}}
-\fancyhead[LE]{\textsl{\leftmark}}
+\fancyhead[RO]{\slshape\rightmark}
+\fancyhead[LE]{\slshape\leftmark}
 \pagestyle{fancy}
 \renewcommand{\sectionmark}[1]{\markboth{\thesection~#1}{}}
 \renewcommand{\subsectionmark}[1]{\markright{\thesubsection~#1}}
@@ -113,7 +113,8 @@
   andmore          = {et\,al\adddot}
 }
 \addbibresource{magdif.bib}
-\usepackage[
+%\usepackage{hyperxmp}
+\usepackage[english,
 % pdfa         = true,
   unicode      = true,
   bookmarks    = true,
@@ -144,28 +145,19 @@
 \subimport{SRC/}{definitions.tex}
 \begin{document}
 \maketitle
+\pdfbookmark[0]{\contentsname}{toc}
 \tableofcontents
-\clearpage
 \subimport{SRC/}{idealmhd.tex}
-\clearpage
 \subimport{SRC/}{task.tex}
-\clearpage
 \subimport{SRC/}{geometry.tex}
-\clearpage
-\subimport{SRC/}{inputs.tex}
-\clearpage
-\subimport{SRC/}{linmhd.tex}
-\clearpage
 \subimport{SRC/}{fem.tex}
-\clearpage
+\subimport{SRC/}{linmhd.tex}
+\subimport{SRC/}{inputs.tex}
 \subimport{SRC/}{tests.tex}
-\clearpage
 \subimport{SRC/}{results.tex}
-\clearpage
 \appendix
 \subimport{SRC/}{appendix.tex}
-\clearpage
-\printbibliography
+\printbibliography[heading=bibintoc]
 \end{document}
 
 %%% Local Variables: 

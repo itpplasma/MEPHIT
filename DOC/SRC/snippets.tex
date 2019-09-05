@@ -62,6 +62,39 @@ Since we neglect time derivatives, these gauges are equal in our case. The poten
 \end{align}
 where the homogeneous \cref{eq:no_monopoles_potential,eq:faraday_potential} are trivially true. Since $\vec{A}$ can be gauged independently, we can continue with \cref{eq:ampere_vector} alone.
 
+\subsection{Regularization (by Sergei Kasilov)}
+
+Both equations (for pressure and for current) are magnetic differential equations of the form
+\begin{gather*}
+  \vec{B}_{0} \cdot \nabla f = q
+\end{gather*}
+where $q$ is the source and $f$ is the unknown. We are solving for a single Fourier mode over the toroidal angle to transform it to
+\begin{gather*}
+  \vec{B}_{0}^{\pol} \cdot \nabla f + \im n {B}_{0}^{\phi} f = s
+\end{gather*}
+If this equation is written in symmetry flux coordinates it becomes
+\begin{gather*}
+  B_{0}^{\theta} \pd[f]{\theta} + \im n B_{0}^{\phi} f = s
+\end{gather*}
+which is better re-written as
+\begin{gather*}
+  \pd[f]{\theta} + \im n q f = \frac{s}{B_{0}^{\theta}}.
+\end{gather*}
+Fourier analysis over $\theta$ makes it algebraic and shows resonant denominators
+\begin{gather*}
+  \im (m + n q) f_{m} = \left [ \frac{s}{B_{0}^{\theta}} \right ]_{m}.
+\end{gather*}
+The suggestion is to add a small imaginary part to the resonant denominator (the sign does not matter). This can be done if one replaces the toroidal wavenumber $n$ in the right-hand side with the product $n (1 + \im \epsilon)$ where $\epsilon \ll 1$. This should be done in two places:
+\begin{enumerate}
+\item in the equation for the perturbed pressure, $n$ should be modified in the quantity $b_{k}$ given by eq.~(61);
+\item in the equation for the current, $n$ should be modified in the matrix $K_{jk}$ given by eq.~(90).
+\end{enumerate}
+The value of the regularization parameter $\epsilon$, on one hand, should be small, but on the other hand it should be large enough in order that the resonant factor $1 / (m + n q + \im \epsilon n q)$ does not change much for neighbourig radial grid points. If we denote the distance between radial grid points with $\symup{\Delta} r$, the criteria for $\epsilon$ look as follows,
+\begin{gather*}
+  \symup{\Delta} r \frac{q'}{q} \ll \epsilon \ll 1,
+\end{gather*}
+where $q'$ is the radial derivative of the safety factor $q$.
+Obvioulsy, the better the refinement of the grid around the resonant suface, the smaller are $\epsilon$ values needed to satisfy the first criterion (and the smaller is the error introduced by the regularization).
 
 \subsection{Sequence of partial sums}
 
