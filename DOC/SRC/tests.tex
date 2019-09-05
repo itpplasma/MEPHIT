@@ -1,0 +1,156 @@
+\section{Construction of test cases}
+
+Along with comparison to results from kinetic computations, special test cases altering different components of the calculation are considered. In \cref{sec:nonres}, $\Bvac$ is not taken from \textsc{Biot}--\textsc{Savart} calculations of currents in external coils as per \cref{eq:biot-savart,sec:inputs}, but constructed directly to avoid resonances, at least in the first iteration step. \Cref{sec:analytical} instead looks at the analytical solution in the cylindrical limit on a circular cross-section obtained from KiLCA, effectively changing the grid geometry.
+
+\subsection{Generating a non-resonant vacuum perturbation}
+\label{sec:nonres}
+
+The axisymmetric equilibrium field $\vec{B}_{0}$ lies on nested flux surfaces $\psi = \text{const.}$, meaning
+\begin{gather*}
+  \vec{B}_{0} \cdot \grad \psi = B_{0}^{\psi} = 0.
+\end{gather*}
+If the perturbed field shall still lie on distorted, but not broken, flux surfaces (non-resonant, without magnetic islands), a new flux surface label $\psi + \delta \psi$ must exist fulfilling
+\begin{gather*}
+  (\vec{B}_{0} + \Bpert) \cdot \grad (\psi + \delta \psi) = 0
+\end{gather*}
+for the perturbed magnetic field $\vec{B}_{0} + \Bpert$, where $\delta \psi$ remains small and continuous within the plasma. In that case we can use a linear order expansion
+\begin{gather}
+  \underbrace{\vec{B}_{0} \cdot \grad \psi}_{= 0} + \vec{B}_{0} \cdot \grad \delta \psi + \Bpert \cdot \grad \psi + \mathcal{O}(\delta^{2}) = 0,
+\end{gather}
+or in coordinate form with symmetry flux coordinates $(\rho, \phi, \theta)$ outlined in \cref{sec:cocos},
+\begin{gather}
+  B_{0}^{\theta} \pd{\theta} \delta \psi + B_{0}^{\phi} \pd{\phi} \delta \psi + \delta B^{\rho} \psi' (\rho) = 0.
+\end{gather}
+Here we have used $\grad \psi = \psi' (\rho) \grad \rho$. Further, $\psi' (\rho) = -1$. With safety factor
+\begin{gather*}
+  q = \frac{B_{0}^{\phi}}{B_{0}^{\theta}}
+\end{gather*}
+and dividing by $B_{0}^{\theta}$, we obtain
+\begin{gather}
+  \left ( \pd{\theta} + q \pd{\phi} \right ) \delta \psi = \frac{\delta B^{\rho}}{B_{0}^{\theta}} = -\sqrt{g} \delta B^{\rho} = \sqrt{g} \delta B^{\psi}.
+\end{gather}
+Written in terms of toroidal Fourier harmonics $m, n$ in $\theta, \phi$ the equation becomes
+\begin{gather*}
+  \psi_{m n} = \frac{\left ( \sqrt{g} \delta B^{\psi} \right )_{m n}}{m + n q} = \frac{\left ( \sqrt{g} B_{n}^{\psi} \right )_{m}}{m + n q}.
+\end{gather*}
+$\sqrt{g}$ depends also on $\theta$, so poloidal harmonics $m$ have to be taken outside the bracket here. In order to fulfill the original requirement not to break flux surfaces, $\psi_{m n}$ must never diverge, so $m + n q$ must not become zero. We can avoid such resonant surfaces if
+\begin{gather}
+  \left ( \sqrt{g} B_{n}^{\psi} \right )_{m} \overset{!}{=} 0
+\end{gather}
+for all possible $m$ that could lead to a resonance. The simplest way to do so is to make $\sqrt{g} B_{n}^{\psi}$ a flux function, possessing only the poloidally symmetric harmonic $m = 0$. More generally, also $-m < n q_{\text{min}}$ and $-m > n q_{\text{max}}$ are possible, but for nonzero $m$ a transformation to the flux angle $\theta$ has to be computed explicitly.
+
+Using the Jacobian of symmetry flux coordinates from \cref{eq:flux_metric}, we obtain
+\begin{gather}
+  \psi_{m n} = \frac{q}{m + n q} \left( \frac{R^{2}}{B_{0 \phi}} B_{n}^{\psi} \right)_{m}
+\end{gather}
+and so, to generate a non-resonant field, we are allowed to use any value
+\begin{gather}
+  B_{n}^{\psi} = C(\psi) \frac{B_{0 \phi}}{R^{2}}, \label{eq:Bnpsi_vac}
+\end{gather}
+where $C(\psi)$ is a flux function. The other components of $\Bpert$ are not relevant for the resonance condition and just need to fulfill divergence-freeness. Thus we proceed as in \cref{sec:compute_currn} and find fluxes through triangle edges:
+\begin{gather}
+  \int_{\Gamma_{\inw}, \Gamma_{\out}} R \vec{B}_{n}^{\pol} \cdot \vec{n} \, \diff l = -\int_{\Gamma_{\fs}} R \vec{B}_{n}^{\pol} \cdot \vec{n} \, \diff l - \im n \int_{\Omega} R B_{n}^{\phi} \, \diff R \, \diff Z. \label{eq:Bn_divfree}
+\end{gather}
+As for currents we use the notation $\Psi_{k}$ for weighted magnetic fluxes through edges as in \cref{eq:Psi_k},
+\begin{gather}
+  \Psi_{k} = \int_{\Gamma_{k}} R \vec{B}_{n}^{\pol} \cdot \vec{n} \, \diff l \approx R (\Gamma_{k}) \vec{B}_{n}^{\pol} (\Gamma_{k}) \cdot \vec{n}_{k},
+\end{gather}
+and, differing from the procedure in \cref{sec:compute_currn}, the same for the weighted toroidal magnetic flux $\Psi_{\phi}$ as per \cref{eq:Psi_phi},
+\begin{gather}
+  \Psi_{\phi} = \int_{\Omega} R B_{n}^{\phi} \, \diff R \, \diff Z \approx S_{\Omega} \, R (\Omega) B_{n}^{\phi} (\Omega),
+\end{gather}
+resulting in a shortened notation for \cref{eq:Bn_divfree} where the system of equations to be assembled is more apparent:
+\begin{gather}
+  \Psi_{\inw} + \Psi_{\out} = -\Psi_{\fs} - \im n \Psi_{\phi}.
+\end{gather}
+Again, the flux through edge \fs\ is fixed, so we rearrange \cref{eq:Bnpsi} and get
+\begin{gather}
+  \Psi_{\fs} \approx 2 R (\Gamma_{\fs}) B_{n}^{\psi} (\Gamma_{\fs}) \frac{S_{\Omega^{(+1)}} + S_{\Omega^{(-1)}}}{\psi^{(+1)} - \psi^{(-1)}}, \label{eq:Psi_f}
+\end{gather}
+where $B_{n}^{\psi}$ is given by \cref{eq:Bnpsi_vac}.
+
+The system of linear equations to solve is
+\begin{gather}
+  K_{jk} \Psi^{(k)} = s_{j} \quad \forall j, k = 1, 2, \dotsc, N,
+\end{gather}
+with
+\begin{gather}
+  K_{jk} = \delta_{j-1, k} - \delta_{jk} \rightarrow \hat{K} = \begin{pmatrix}
+    -1   &    1   &    0   & \hdots &    0   \\
+     0   &   -1   &    1   & \hdots &    0   \\
+     0   &    0   &   -1   & \hdots &    0   \\
+  \vdots & \vdots & \vdots & \ddots & \vdots \\
+     1   &    0   &    0   & \hdots &   -1
+  \end{pmatrix}
+\end{gather}
+and
+\begin{gather}
+  s_{j} = -\Psi_{\fs}^{(j)} - \im n \Psi_{\phi}^{(j)}.
+\end{gather}
+Since any one column in $\hat{K}$ is a linear combination of all other columns, $\hat{K}$ is of rank $N - 1$ and thus singular. To construct a solution, we first consider the homogenous case with $\vec{s} = \vec{0}$, which also determines the toroidal flux. The non-zero solution for the remaining degrees of freedom then assumes the simple form
+\begin{gather}
+  \Psi^{(k)} = C_{0} \quad \forall k = 1, 2, \dotsc, N,
+\end{gather}
+with an arbitrary constant $C_{0}$. With local indices, the degrees of freedom are written as 
+\begin{align}
+  \Psi_{\inw}^{(k)} &= -C_{0}, & \Psi_{\out}^{(k)} &= C_{0} & \Psi_{\phi}^{(k)} &= \frac{\im}{n} \Psi_{\fs}^{(k)} \quad \forall k = 1, 2, \dotsc, N. \label{eq:Psi_hom}
+\end{align}
+This means that flux conservation, i.e.\ divergence-freeness, is fulfilled by balancing $\Psi_{\phi}$ with $\Psi_{\fs}$ on each individual triangle and assigning a constant flux $C_{0}$ in poloidal direction to $\Psi_{\inw}$ and $\Psi_{\out}$ over the entire triangle strip.
+
+A consistent solution according to the \textsc{Rouché}-\textsc{Capelli} theorem can also be constructed for the inhomogeneous case, i.e.\ non-zero $\vec{s}$, as long as $\vec{s}$ is a linear combination of columns of $K$. Starting from the trivial (zero) solution to the homogeneous case and for a fixed $k$, we add to $\vec{s}$ the $(k+1)$-th column of $\hat{K}$, multiplied by another arbitrary constant $C_{k}$, resulting in
+\begin{align}
+  s_{k} &= -\Psi_{\fs}^{(k)} - \im n \Psi_{\phi}^{(k)} = C_{k}, \\
+  s_{k+1} &= -\Psi_{\fs}^{(k+1)} - \im n \Psi_{\phi}^{(k+1)} = -C_{k}.
+\end{align}
+Considering the two equations affected compared to the homogeneous case,
+\begin{align}
+  -\Psi^{(k-1)} + \Psi^{(k)} &= C_{k}, \\
+  -\Psi^{(k)} + \Psi^{(k+1)} &= -C_{k},
+\end{align}
+we arrive at a particular solution
+\begin{gather}
+  \Psi^{(k)} = C_{k}, \quad \Psi^{(j)} = 0 \quad \forall j \neq k.
+\end{gather}
+The degrees of freedom differing from the solution to the zero solution (\cref{eq:Psi_hom} with $C_{0} = 0$) are, given with local indices:
+\begin{align}
+  \Psi_{\inw}^{(k)} &= 0, & \Psi_{\out}^{(k)} &= C_{k}, & \Psi_{\phi}^{(k)} &= \frac{\im}{n} \Psi_{\fs}^{(k)} - \frac{\im}{n} C_{k}, \\
+  \Psi_{\inw}^{(k+1)} &= -C_{k}, & \Psi_{\out}^{(k+1)} &= 0, & \Psi_{\phi}^{(k+1)} &= \frac{\im}{n} \Psi_{\fs}^{(k+1)} + \frac{\im}{n} C_{k}.
+\end{align}
+This means that, compared to the zero solution, a change $C_{k}$ in the flux across the associated edge of adjacent triangles in one triangle strip is accomodated by a change in the toroidal flux of these triangles.
+
+The approach outlined above can be repeated for different values of $k$. Linear superposition of the solutions to the homogeneous and inhomogeneous cases then yields the most general solution,
+\begin{align}
+  \Psi_{\inw}^{(k)} &= -C_{0} - C_{k-1}, & \Psi_{\out}^{(k)} &= C_{0} + C_{k}, & \Psi_{\phi}^{(k)} &= \frac{\im}{n} \Psi_{\fs}^{(k)} + \frac{\im}{n} C_{k-1} - \frac{\im}{n} C_{k} \quad \forall k = 1, 2, \dotsc, N.
+\end{align}
+Now, to assign sensible values to the arbitrary constants, consider the solution to the homogeneous sytem of equations. Since edge \fs\ alternates between inner and outer flux surface for all but the innermost triangle strip, $\vec{n}_{\fs}$ will also alternate between pointing inwards and outwards. Thus $\Psi_{\fs}$ will alternate signs too, but it is consistent along one flux surface. Since $\Psi_{\phi}$ depends linearly on $\Psi_{\fs}$, on any one triangle the sign of $B_{n (\phi)}$ will differ from all three adjacent triangles, except for the innermost triangle strip. The resulting field is then clearly dependent on the choice of the grid. The procedure described before can be used to alleviate this problem. On every pair of triangles $\Omega^{(2k)}$ and $\Omega^{(2k+1)}$ -- which originally result from diagonally dividing a more regular quadrilateral -- we average $\Psi_{\phi}$ and set $C_{2k}$ to the deviation to counterbalance the change:
+\begin{align}
+  C_{2k} &= \frac{\im}{2 n} \left( \Psi_{\fs}^{(2k)} - \Psi_{\fs}^{(2k+1)} \right) \quad \forall k = 0, 1, \dotsc, \frac{N}{2} - 1.
+\end{align}
+
+\subsection{Analytical solution for very large aspect ratios}
+\label{sec:analytical}
+
+Using flux coordinates $(r, \theta, \phi)$, a term in \cref{eq:pn} can be simplified:
+\begin{gather}
+  \vec{B}_{0}^{\pol} \cdot \grad p_{n} = B_{0}^{\theta} \vec{e}_{\theta} \cdot \grad p_{n} = B_{0}^{\theta} \pd[p_{n}]{\theta}.
+\end{gather}
+Now when we expand the perturbed quantities as series in $\theta$ as well as $\phi$ so that
+\begin{gather}
+  \delta p = \sum_{n} p_n(r, \theta) \e^{\im n \phi} = \sum_{m, n} p_{mn}(r) \e^{\im m \theta + \im n \phi},
+\end{gather}
+\cref{eq:pn} reduces to
+\begin{gather}
+  \im m p_{mn} B_{0}^{\theta} + \im n p_{mn} B_{0}^{\phi} = -B_{mn}^{r} p_{0}'(r) =: -s_{mn}
+\end{gather}
+with a source term $s_{mn}$. This allows a simple algebraic solution where all quantities depend only on $r$:
+\begin{gather}
+  p_{mn} =  \frac{\im s_{mn}}{m B_{0}^{\theta} + n B_{0}^{\phi}}.
+\end{gather}
+Now an approximation can be made by switching from contravariant components to covariant components which are (for some reason) assumed to be constant. The factor $R$ appearing in the metric components can also be considered constant over the domain in question -- the toroidal geometry is effectively transformed to cylindrical geometry with a very thin and elongated cylinder and periodic boundary conditions.
+
+[See \cite{Heyn08} \ldots]
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "../magdif"
+%%% End: 

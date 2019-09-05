@@ -1,0 +1,261 @@
+\section{Geometrical considerations}
+
+Even when the magnetic field is not axisymmetric, the axisymmetry of the tokamak device carries over to the computational domain. It stands to reason to take the periodicity in the symmetry direction, i.e. the cylindrical angle $\phi$, into account. The non-axisymmetric magnetic perturbation field in cylindrical coordinates $(R, \phi, Z)$ can then be expanded as a \textsc{Fourier} series:
+\begin{gather}
+  \Bpert (R, \phi, Z) = \sum_{n = -\infty}^{\infty} \vec{B}_{n} (R, Z) \e^{\im n \phi}
+\end{gather}
+Note that only the component functions are transformed; the basis vectors which generally depend on the transformation variable are unaffected. This means $\Bpert$ and $\vec{B}_{n}$ share the same geometrical basis.
+
+As all equations are linear, a superposition of multiple harmonics is easily possible. Here we limit the analysis to an axisymmetric unperturbed equilibrium and a single toroidal perturbation harmonic
+\begin{gather}
+  \Bpert = \Real (\vec{B}_{n} \e^{\im n \phi})
+\end{gather}
+with fixed $n$ and a similar notation for other perturbed quantities. Note that $n \neq 0$; such a perturbation is necessarily small and considered part of the axisymmetric equilibrium. Thus an index $0$ unambiguously refers to equilibrium quantities. This choice and further conventions are also listed in \cref{tab:decorations}.
+
+In axisymmetric coordinate systems, such as the aforementioned cylindrical system $(R, \phi, Z)$, \cref{eq:mhd,eq:divfree} are to be solved for harmonics in the toroidal angle $\phi$:
+\begin{align}
+  \grad p_{n} + \im n p_{n} \grad \phi &= \frac{1}{c} \left( \vec{J}_{0} \times \vec{B}_{n} + \vec{J}_{n} \times \vec{B}_{0} \right), \label{eq:mhd-phi} \\
+  \divg \vec{J}_{n}^{\pol}+ \im n J_{n}^{\phi} &= 0. \label{eq:divfree-phi}
+\end{align}
+now with a two-dimensional $\nabla$ operator acting in the poloidal ($RZ$) plane. The explicit definition depends on the coordinate system used and is outlined in \cref{sec:cocos}.
+
+\subsection{Coordinate conventions}
+\label{sec:cocos}
+
+We generally follow the notational convention of \textcite{dHaeseleer91}, which will be succinctly summarized in this section. When using curvilinear coordinates in three-dimensional Euclidean space, two complementary vector bases can be defined. Using coordinates $u^{1}, u^{2}, u^{3}$, the basis vectors $\vec{e}_{1}, \vec{e}_{2}, \vec{e}_{3}$ are defined as tangent-basis vectors, which means they follow the coordinate curves at a given point $\vec{R}$:
+\begin{gather}
+  \vec{e}_{k} (\vec{R}) = \pd[\vec{R}]{u^{k}}, \quad k = 1, 2, 3.
+\end{gather}
+This means that the corresponding coordinate $u^{k}$ is varied while the other two are held constant. Alternatively, the direction of a basis vector may be defined as normal vector on the associated coordinate surface, i.e. where $u^{k}$ is held constant and the other two coordinates are varied. These reciprocal basis vectores are then related to the gradient:
+\begin{gather}
+  \vec{e}^{k} (\vec{R}) = \grad u^{k} (\vec{R}), \quad k = 1, 2, 3.
+\end{gather}
+Note that with this definition, neither basis set is necessarily normalized or even orthogonal. They are however pairwise orthonormal by definition, so that
+\begin{gather}
+  \vec{e}_{i} \cdot \vec{e}^{j} = \delta_{i}^{j},
+\end{gather}
+where the indices are kept in the same position with the \textsc{Kronecker} delta. As a consequence, the following relations between basis vectors are also given, where $\varepsilon_{ijk} = 1$:
+\begin{gather}
+  \vec{e}_{i} = \frac{\vec{e}^{j} \times \vec{e}^{k}}{\vec{e}^{i} \cdot (\vec{e}^{j} \times \vec{e}^{k})}, \quad \vec{e}^{i} = \frac{\vec{e}_{j} \times \vec{e}_{k}}{\vec{e}_{i} \cdot (\vec{e}_{j} \times \vec{e}_{k})}.
+\end{gather}
+An abstract vector $\vec{v}$ can be expanded in either basis, using the \textsc{Einstein} summation convention:
+\begin{gather}
+  \vec{v} = (\vec{v} \cdot \vec{e}^{k}) \vec{e}_{k} = v^{k} \vec{e}_{k}, \quad \vec{v} = (\vec{v} \cdot \vec{e}_{k}) \vec{e}^{k} = v_{k} \vec{e}^{k}.
+\end{gather}
+In the first case using tangent-basis vectors, the component $v^{k}$ is called the contravariant component. In the second case using reciprocal basis vectors, the component $v_{k}$ is called the covariant component. Conversion between the two bases is accomplished via the components of the metric tensor $\symsf{g}$,
+\begin{gather}
+  v_{i} = g_{ij} v^{j}, \quad v^{i} = g^{ij} v_{j},
+\end{gather}
+where the summation convention is implicit and the metric tensor components are defined as
+\begin{gather}
+  g_{ij} = \vec{e}_{i} \cdot \vec{e}_{j}, \quad g^{ij} = \vec{e}^{i} \cdot \vec{e}^{j}.
+\end{gather}
+The determinant $g = \det \symsf{g}$ of the metric tensor appears further in the following vector calculations and is related to the Jacobian $J$ of the coordinate system defined by the $u^{k}$, again with $\varepsilon_{ijk} = 1$:
+\begin{gather}
+  J = \sqrt{g} = \sqrt{\det \symsf{g}} = \vec{e}_{i} \cdot (\vec{e}_{j} \times \vec{e}_{k}).
+\end{gather}
+With the nabla operator represented as
+\begin{gather}
+  \nabla = \vec{e}^{k} \pd{u^{k}},
+\end{gather}
+the gradient follows:
+\begin{gather}
+  \grad f = \pd[f]{u^{k}} \vec{e}^{k}.
+\end{gather}
+The divergence is most simply defined in terms of contravariant components,
+\begin{gather}
+  \divg \vec{v} = \frac{1}{\sqrt{g}} \pd{u^{k}} (\sqrt{g} v^{k}),
+\end{gather}
+while the curl in its simplest form uses covariant components and returns contravariant components:
+\begin{gather}
+  \curl \vec{v} = \frac{\varepsilon_{ijk}}{\sqrt{g}} \pd[v_{j}]{u^{i}} \vec{e}_{k}.
+\end{gather}
+On occasion, parallel or perpendicular components with respect to the magnetic field $\vec{B}$ are needed:
+\begin{gather}
+  \vec{v}^{\parallel} = (\vec{v} \cdot \hat{\vec{B}}) \hat{\vec{B}} = (\vec{v} \cdot \vec{h}) \vec{h}, \\
+  \vec{v}^{\perp} = -\hat{\vec{B}} \times (\hat{\vec{B}} \times \vec{v}) = -\vec{h} \times (\vec{h} \times \vec{v}).
+\end{gather}
+Here, $\hat{\vec{B}}$ denotes the unit vector of $\vec{B}$, but in the special case of the magnetic field, $\vec{h}$ may be used as well.
+
+With these conventions set forth, we can define the necessary coordinate systems. We use two different right-handed coordinate systems, one cylindrical and one pseudotoroidal. As cylindrical coordinates we use $(R, \phi, Z)$ with $\phi$ running counterclockwise as seen from above, so
+\begin{gather}
+  x = R \cos \phi, \quad y = R \sin \phi, \quad z = Z.
+\end{gather}
+These coordinates are used in computations and for meshes. They are orthogonal, as can be seen from the metric tensor, which is given by
+\begin{gather}
+  \symsf{g} = \begin{pmatrix}
+    1 & 0 & 0 \\
+    0 & R^{2} & 0 \\
+    0 & 0 & 1
+  \end{pmatrix}.
+\end{gather}
+In general curvilinear coordinates, different basis vectors and vector components can have different physical dimensions depending on the coordinates used. Especially when dealing with numerical data, it would be desirable to use a representation with the \enquote{right} units and a normalized basis. In the given cylindrical coordinates, $\vec{e}_{R}$ and $\vec{e}_{Z}$ are normalized and equal to $\vec{e}^{R}$ and $\vec{e}^{Z}$ respectively, as are the corresponding components. In Cartesian coordinates, the basis vectors in toroidal direction are given by
+\begin{gather}
+  \vec{e}_{\phi} = R \cos \phi \, \vec{e}_{x} + R \sin \phi \, \vec{e}_{y}, \quad \vec{e}^{\phi} = \frac{1}{R} \cos \phi \, \vec{e}_{x} + \frac{1}{R} \sin \phi \, \vec{e}_{y}.
+\end{gather}
+These point in the same direction and are easily normalized. Taking into account these dimensions of the basis vectors, we can write the physical toroidal component as
+\begin{gather}
+  B_{(\phi)} = \frac{1}{R} B_{\phi} = R B^{\phi}, \label{eq:physical_phi}
+\end{gather}
+where the parentheses signify that it is the physical component and not the covariant component. Note that \cref{eq:physical_phi} is not necessarily true in other coordinate systems using the $\phi$ coordinate because $\vec{e}^{\phi}$ and $\vec{e}_{\phi}$ might not point in the same direction.
+
+In regards to this coordinate system, the experimental setup can be characterized. When viewing the poloidal plane, $B_{0 (\phi)}$ points in the negative $\phi$ direction, the plasma current $I_{\text{p}}$ points in the positive $\phi$ direction and the poloidal field $\vec{B}_{0}^{\pol}$ is going in the clockwise direction. Poloidal-toroidal decomposition of the equilibrium field $\vec{B}_{0}$ then yields the representation
+\begin{gather}
+  \vec{B}_{0} = \vec{B}_{0}^{\pol} + \vec{B}_{0}^{\tor}, \label{eq:B_pol_tor}
+\end{gather}
+where 
+\begin{align}
+  \vec{B}_{0}^{\pol} &= \grad \psi \times \grad \phi, \label{eq:B_pol} \\
+  \vec{B}_{0}^{\tor} &= B_{0 \phi} \grad \phi. \label{eq:B_tor}
+\end{align}
+Here, $\psi$ is the normalized \emph{disc} poloidal flux, i.e.
+\begin{gather}
+  \psi = \frac{1}{2 \pi} \Psi_{\pol} = \frac{1}{2 \pi} \int \vec{B}_{0} \cdot \diff \vec{S},
+\end{gather}
+where $\vec{S}$ is the disc that at a point of evaluation $(R_{S}, Z_{S})$ is given by $R \leq R_{S}, Z = Z_{S}$. The orientation of $\vec{S}$ fixes the sign\footnote{Since $\vec{B}_{0}$ is not defined outside the plasma volume and only $\grad \psi$ enters calculations, $\psi$ is defined up to a constant and thus could be shifted to change sign. However, the sign of $\grad \psi$ is fixed.} of $\psi$. Here, $\psi$ is expected to increase towards the magnetic axis -- $\psi_{\text{min}}$ is located at the outermost flux surface and $\psi_{\text{max}}$ is located at the magnetic axis. This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in cylindrical coordinates:
+\begin{align}
+  B_{0}^{R} &= (\grad \psi \times \grad \phi)^{R} = -\frac{1}{R} \pd[\psi]{Z}, \label{eq:B0R} \\
+  B_{0}^{Z} &= (\grad \psi \times \grad \phi)^{Z} = \frac{1}{R} \pd[\psi]{R}. \label{eq:B0Z}
+\end{align}
+Note that the toroidal field coils produce a magnetic field that is roughly proportional to $\frac{1}{R}$, so $B_{0 \phi}$ is assumed to be constant over the entire plasma volume.
+
+The second set of coordinates represent a distorted pseudotoroidal system used as symmetry flux coordinates for derivations in \cref{sec:j0phi,sec:nonres}. Keeping the toroidal angle $\phi$, the poloidal plane is spanned by a pseudoradial \emph{flux surface label} $\rho$ centered at the magnetic axis and a poloidal angle $\theta$. While it is common to use $\psi$ as the flux surface label, for derivations we keep the more intuitive notation of \textcite{dHaeseleer91} where $\rho$ is increasing towards the outside of the torus, i.e. $\rho = -\psi$. With $\theta$ pointing in the counter-clockwise direction, $(\rho, \phi, \theta)$ constitutes a right-hand system. While this deviates from \textcite{dHaeseleer91}, where $\zeta = \frac{\pi}{2} - \phi$ is used instead, it is consistent with the COCOS~3 convention of \textcite{Sauter13}, where an overview of possible combinations of coordinates are considered along with conversion between these choices and a procedure to check the consistency. As a consequence, the safety factor $q$ is positive and one of a few equivalent definitons is
+\begin{gather}
+  q = \frac{B_{0}^{\phi}}{B_{0}^{\theta}}. \label{eq:q_field_line_pitch}
+\end{gather}
+The sign of $q$ describes the sign of the helicity in $(\phi, \theta)$ and can be explicitly computed as described in \cref{sec:safety_factor}. The Jacobian of symmetry flux coordinates $(\rho, \phi, \theta)$ is
+\begin{gather}
+  \sqrt{g} = \frac{-1}{B_{0}^{\theta}} = -\frac{q}{B_{0}^{\phi}} = -\frac{q R^{2}}{B_{0 \phi}}. \label{eq:flux_metric}
+\end{gather}
+The change of sign in comparison to \textcite{dHaeseleer91} is due to the reversed toroidal angle. This way, $\sqrt{g}$ is still positive.
+
+For the sake of completeness and since it will be used extensively in \cref{sec:linmhd}, the $\nabla$ operator shall be given explicitly for the gradient and divergence in cylindrical coordinates:
+\begin{gather}
+  \grad f = \pd[f]{R} \vec{e}^{R} + \pd[f]{\phi} \vec{e}^{\phi} + \pd[f]{Z} \vec{e}^{Z}, \\
+  \divg \vec{v} = \frac{1}{R} \pd{R} (R v^{k}) + \pd{\phi} v^{\phi} + \frac{1}{R} \pd{Z} (R v^{Z}).
+\end{gather}
+In the last term, a factor of $R$ is kept for the sake of symmetry. Now, when we apply the \textsc{Fourier} transform $\pd{\phi} \to \im n$, we get
+\begin{gather}
+  \grad f = \pd[f_{n}]{R} \vec{e}^{R} + \im n f_{n} \vec{e}^{\phi} + \pd[f_{n}]{Z} \vec{e}^{Z}, \\
+  \divg \vec{v} = \frac{1}{R} \pd{R} (R v_{n}^{k}) + \im n v_{n}^{\phi} + \frac{1}{R} \pd{Z} (R v_{n}^{Z}).
+\end{gather}
+For convenience, we will sometimes use the $\nabla$ operator in two-dimensional form as a notational shorthand with the gradient:
+\begin{gather}
+  \grad f = \grad f_{n} + \im n f_{n} \vec{e}^{\phi}.
+\end{gather}
+It should be clear from context wheter $\nabla$ is supposed to be two- or three-dimensional, so for example, in $\grad \phi$ it is three-dimensional since $\grad \phi$ only has a toroidal component, while for purely poloidal $\grad \psi$ it makes no difference.
+
+\subsection{Discretization and local coordinate system}
+\label{sec:grid}
+
+So far, we have given a fairly general description of the problem without explicit reference to numerical methods, apart maybe from the iteration scheme in \cref{sec:iteration}. One necessary modification is the discretization of the problem. The finite element method outlined in \cref{sec:compute_Bn} uses a discretization of the computational domain, i.e. it introduces a triangular grid. While other tilings are possible, triangulation is the simplest and for triangles, the \textsc{Delaunay} algorithm is unique. The latter maximizes the triangles' minimal interior angle, which is desirable because a more elongated triangle shape reduces the quality of approximations on it. However, we choose to align the grid on flux surfaces in order to use the associated special properties.
+
+A set of nested flux surfaces is chosen, e.g. a number $n_{\text{flux}}$ of curves of constant $\psi$ which are equidistant between the magnetic axis and the X-point. These are then intersected by rays originating from the magnetic axis. Note that these rays are not curves of constant $\theta$, as these are generally not straight in $(R, Z)$ coordinates. As a result, between any two flux surfaces there is a \emph{ring} or \emph{strip} of quadrangles going around in poloidal direction. These quadrangles are then diagonally split into triangles, yielding two types of triangles. An exception is the innermost ring containing the magnetic axis, where there is only one type of triangle and no quadrangles to split. This kind of grid is depicted in \cref{fig:grid} where concentric circles are used to illustrate the nested flux surfaces.
+\begin{figure}[bth]
+  \centering
+  \begin{subfigure}[b]{0.33\textwidth}
+    \centering
+    \input{grid0.tpx}
+    \caption{The innermost loop of the grid with the magnetic axis at its center. Edge \fs\ lies on the flux surface in the infinitesimal limit.}
+    \label{fig:grid0}
+  \end{subfigure}
+  \quad
+  \begin{subfigure}[b]{0.5\textwidth}
+    \centering
+    \input{grid1.tpx}
+    \caption{One of the outer loops of the grid with two alternating kinds of triangles with edge \fs\ lying on the inner and outer flux surface respectively.}
+    \label{fig:grid1}
+  \end{subfigure}
+  \caption{The 2D mesh is given by a triangulation of poloidal cross-sections of the nested flux surfaces, resulting in \enquote{loops}. The cross-sections are assumed to be circular for illustration purposes.}
+  \label{fig:grid}
+\end{figure}
+
+For reasons that will become more apparent in \cref{sec:compute_currn,sec:nonres}, we use symbolic names instead of numbers to refer to edges and nodes. In the implementation, these names are mapped to their numerical index (see \cref{sec:inputs}). The label \fs\ designates the edge that approximates the flux surface, i.e. it is parallel to the flux surface in the infinitesimal limit. The labels \inw\ and \out\ are chosen so that some flux is imagined to enter the triangle at edge \inw\ and exit at edge \out, again entering the next triangle through edge \inw\ and so on, going around the ring in poloidal direction. The nodes are labeled by the corresponding uppercase letter of the opposite edge. These labels are also annoted in \cref{fig:grid}. Note that the labels are necessarily local to each triangle.
+
+Furthermore, for each edge we use a local orthogonal coordinate system on each triangle edge with $\vec{l}$ the vector of length $l$ along the edge in counter-clockwise orientation, $\vec{n}$ the outward normal of length $l$ and $\grad \phi$ pointing inside the plane. We obtain relations
+\begin{align}
+  \vec{l} \times \vec{n} &= l^{2} R \grad \phi, \label{eq:edge_phi} \\
+  \vec{n} \times R \grad \phi &= \vec{l}, \label{eq:edge_l} \\
+  R \grad \phi \times \vec{l} &= \vec{n}. \label{eq:edge_n}
+\end{align}
+This is illustrated for a small sector on one ring in \cref{fig:local_coordinates}.
+\begin{figure}[bth]
+  \centering
+  \input{./local_coordinates.tikz}
+  \caption{Schematic of the local coordinate system.}
+  \label{fig:local_coordinates}
+\end{figure}
+
+Since edge \fs\ is approximated to lie on the flux surface, some properties carry over. In particular, since flux surfaces are surfaces of constant $\psi$ and $p_{0}$, in the infinitesimal limit we have
+\begin{gather}
+  \vec{n}_{\fs} \parallel \grad \psi \parallel \grad p_{0},
+\end{gather}
+as well as
+\begin{gather}
+  \vec{B}_{0} \cdot \vec{n}_{\fs} = 0, \quad \vec{J}_{0} \cdot \vec{n}_{\fs} = 0.
+\end{gather}
+Likewise, it should be noted that $\grad \phi$ is perpendicular to all purely poloidal quantities which includes, apart from those designated with superscript \enquote{\pol}, all local coordinate vectors $\vec{l}$ and $\vec{n}$, \textsc{Fourier} components with subscript $n$, as well as $\grad \psi$ and $\grad p_{0}$.
+
+\subsection{Representation of fields on the grid}
+\label{sec:dofs}
+
+Another approximation made in the finite element method is the choice of a \emph{basis} to represent a scalar or vector field locally on one element of the grid. Scalar fields like the pressure perturbation can be approximated with \textsc{Lagrange} elements of the lowest order where the \emph{degrees of freedom} are the values on the nodes and any value within the triangle is interpolated from the values of its nodes. Many other choices are available, but this is the simplest option to implement and it is sufficient for our needs. For vector fields some more considerations are necessary; see \cref{sec:compute_Bn} for more details. We are mostly interested in representation of the magnetic flux density and the current density, both of which characteristically show zero divergence. Thus it is necessary to choose a basis that yields a well-defined divergence. This is guaranteed by \textsc{Raviart}--\textsc{Thomas} elements, where in the lowest-order case, the degrees of freedom are the fluxes of the vector field across the triangle edges:
+\begin{gather}
+  \Psi_{k} = \int_{\Gamma_{k}} R \vec{B}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l \approx R (\Gamma_{k}) \vec{B}_{n}^{\pol} (\Gamma_{k}) \cdot \vec{n}_{k}, \label{eq:Psi_k} \\
+  I_{k} = \int_{\Gamma_{k}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l \approx R (\Gamma_{k}) \vec{J}_{n}^{\pol} (\Gamma_{k}) \cdot \vec{n}_{k}. \label{eq:I_k}
+\end{gather}
+There are a few things to note here. Firstly, the factor $R$ is included due to the metric in cylindrical coordinates and the fact that the integrand derives from the divergence theorem. Secondly, $\hat{\vec{n}}$ is normalized, but $\vec{n}$ is not, so the length of the edge is included as a factor. Lastly, the integral is approximated by evaluation at only a single point, the edge midpoint $\Gamma_{k}$. Conversely, to interpolate the value at given point $\vec{r}$ within a triangle, each degree of freedom $\Psi_{k}$ or $I_{k}$ is multiplied by the vectorial basis formed by the vector connecting $\vec{r}$ and the node opposing edge $k$, weighted with the triangle area $S_{\Omega}$:
+\begin{gather}
+  \vec{B}_{n} (\vec{r}) = \frac{\Psi_{\fs} (\vec{r} - \vec{r}_{\vfs}) + \Psi_{\inw} (\vec{r} - \vec{r}_{\vinw}) + \Psi_{\out} (\vec{r} - \vec{r}_{\vout})}{2 S_{\Omega}}, \\
+  \vec{J}_{n} (\vec{r}) = \frac{I_{\fs} (\vec{r} - \vec{r}_{\vfs}) + I_{\inw} (\vec{r} - \vec{r}_{\vinw}) + I_{\out} (\vec{r} - \vec{r}_{\vout})}{2 S_{\Omega}},
+\end{gather}
+Note that the value is well-defined only within the triangle but not on the edge: while the flux across the edge, i.e. the normal component of the field is consistent with the neighbouring triangle, the component \emph{along} the edge is not necessarily continuous across triangles.
+
+On a general note, we indicate the point of evaluation in parentheses after the field in question: $\vec{r}^{(k)}$ refers to the node with number $k$, as in $p_{n} (\vec{r}^{(k)})$, $\Gamma_{e}^{(k)}$ refers to the midpoint of edge $e$ on triangle with number $k$, as in $p_{n} (\Gamma_{e}^{(k)})$ or $\vec{B}_{n} (\Gamma_{k}^{(k)})$, and $\Omega^{(k)}$ refers to a \enquote{shifted centroid}, as in $p_{n} (\Omega^{(k)})$ or $\vec{B}_{n} (\Omega^{(k)})$. This shifted centroid is calculated by assigning double weight to node $\vfs$, i.e. $\left ( \frac{1}{2}, \frac{1}{4}, \frac{1}{4} \right )$ in barycentric coordinates where the first coordinate is defined relative to node $\vfs$. This assures that this shifted centroid is halfway between flux surfaces, as the actual centroid is closer to the flux surface on which nodes $\vinw$ and $\vout$ lie, thus alternating between the two flux surfaces from one triangle to the next. To get an idea of this behaviour, refer to \cref{fig:local_coordinates}, where the $\otimes$ symbols indicating the $\grad \phi$ basis vectors are placed at these shifted centroids.
+
+Furthermore, toroidal components of vector fields are approximated by a single value, evaluated at the aforementioned shifted centroid:
+\begin{gather}
+  \Psi_{\phi} = \int_{\Omega} R B_{n}^{\phi} \, \diff S \approx S_{\Omega} R (\Omega) B_{n}^{\phi} (\Omega), \label{eq:Psi_phi} \\
+  I_{\phi} = \int_{\Omega} R J_{n}^{\phi} \, \diff S \approx S_{\Omega} R (\Omega) J_{n}^{\phi} (\Omega). \label{eq:I_phi}
+\end{gather}
+These degrees of freedom are usually set to a value that assures zero divergence in conjunction with the degrees of freedom of the associated triangle in the poloidal plane.
+
+Some further interpolations will become necessary, using the approximations now established. In the formulae derived in \cref{sec:linmhd}, terms of the form $\vec{v} \cdot \grad \psi$ appear, where $\vec{v}$ is an arbitrary vector, usually the vector of a triangle edge or some field quantity. In the latter case, this reduces to the projection on the normal vector of an edge, since perturbed vector fields are represented by \textsc{Raviart}--\textsc{Thomas} elements. The relation of the degrees of freedom to the contravariant $\psi$ component of the magnetic perturbation on edge \fs\ is derived here as an example, as it is used for computations in \cref{sec:compute_presn,sec:nonres}. The general expression on a given triangle is given by
+\begin{gather}
+  B_{n}^{\psi} (\Gamma_{\fs}) = \vec{B}_{n} (\Gamma_{\fs}) \cdot \grad \psi (\Gamma_{\fs}) = \vec{B}_{n} (\Gamma_{\fs}) \cdot \hat{\vec{n}}_{\fs} \pd[\psi]{n_{\fs}} (\Gamma_{\fs}).
+\end{gather}
+Here we used the fact that the gradient of $\psi$ is parallel to $\vec{n}_{\fs}$. To approximate the directional derivative on $\Gamma_{\fs}$, first consider \cref{fig:altitudes}. The indices $\pm 1$ here refer to the adjacent outer and inner flux surface that are realized on grid points. Likewise, $\Omega^{(\pm 1)}$ refers to the triangles that touch the adjacent flux surfaces and edge \fs\ in question. $a_{\fs}$ refers to the altitude of edge \fs\ on a given triangle.
+\begin{figure}[bth]
+  \centering
+  \input{./altitudes.tikz}
+  \caption{Geometrical considerations in the calculation of $B_{n}^{\psi} (\Gamma_{\fs})$.}
+  \label{fig:altitudes}
+\end{figure}
+Since $\vec{n}_{\fs}$ is pointing toward the outer flux surface, i.e. it is defined in regard to $\Omega^{(-1)}$, the difference in $\psi$ is computed in the same direction, while the distance between the flux surfaces is approximated by the sum of the altitudes:
+\begin{gather}
+  \pd[\psi]{n_{\fs}} (\Gamma_{\fs}) \approx \frac{\psi^{(+1)} - \psi^{(-1)}}{a_{\fs}^{(+1)} + a_{\fs}^{(-1)}}.
+\end{gather}
+The altitudes can be calculated via triangle area and edge length,
+\begin{gather}
+  S_{\Omega^{(\pm 1)}} = \frac{l_{\fs} a_{\fs}^{(\pm 1)}}{2},
+\end{gather}
+yielding
+\begin{gather}
+  \pd[\psi]{n_{\fs}} (\Gamma_{\fs}) \approx \frac{l_{\fs}}{2} \frac{\psi^{(+1)} - \psi^{(-1)}}{S_{\Omega^{(+1)}} + S_{\Omega^{(-1)}}}.
+\end{gather}
+Now, remembering that $\vec{n}_{\fs} = l_{\fs} \hat{\vec{n}}_{\fs}$ and that the degrees of freedom are given by $\Psi_{\fs} = R (\Gamma_{\fs}) \vec{B}_{n} (\Gamma_{\fs}) \cdot \vec{n}_{\fs}$, we can put everything together and arrive at a direct relation between $B_{n}^{\psi}$ and the degrees of freedom:
+\begin{gather}
+  B_{n}^{\psi} (\Gamma_{\fs}) \approx \frac{\vec{B}_{n} (\Gamma_{\fs}) \cdot l_{\fs} \hat{\vec{n}}_{\fs}}{2} \frac{\psi^{(+1)} - \psi^{(-1)}}{S_{\Omega^{(+1)}} + S_{\Omega^{(-1)}}} = \frac{\Psi_{\fs}}{2 R} \frac{\psi^{(+1)} - \psi^{(-1)}}{S_{\Omega^{(+1)}} + S_{\Omega^{(-1)}}}. \label{eq:Bnpsi}
+\end{gather}
+When $\vec{n}_{\fs}$ and $\Psi_{\fs}$ are defined in regard to $\Omega^{(+1)}$ instead, both quantities switch sign. Since $B_{n}^{\psi}$ does not depend on the choice of triangle, \cref{eq:Bnpsi} would gain a minus sign in this case.
+
+Another useful quantity is the covariant $\theta$ component of a vector field, here derived for the example of the current perturbation,
+\begin{gather}
+  J_{n \theta} = \vec{J}_{n} \cdot \vec{e}_{\theta} = \vec{J}_{n} \cdot \sqrt{g} \left ( \vec{e}^{\rho} \times \vec{e}^{\phi} \right ) = -\vec{J}_{n} \cdot \sqrt{g} (\grad \psi \times \grad \phi) = \vec{J}_{n} \cdot \frac{q \vec{B}_{0}^{\pol}}{B_{0}^{\phi}},
+\end{gather}
+where we used \cref{eq:flux_metric} in the last step.
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "../magdif"
+%%% End: 

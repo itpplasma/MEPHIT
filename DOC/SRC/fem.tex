@@ -1,0 +1,139 @@
+\section{Magnetic field perturbation}
+\label{sec:compute_Bn}
+
+In this section, the calculation of the magnetic field from the current density is described, i.e. the explicit form of $\hat{M}$ in \cref{eq:M_operator}. The implementation uses \texttt{FreeFem++} by \textcite{Hecht12}, while the mathematical background is outlined in \cref{sec:ritz-galerkin}, which is based on the book by \textcite{Jin02}. For a more specific discussion of the problem at hand, see \cite{Seeber18}. Finally, the application of the \textsc{Fourier} transform is elaborated in \cref{sec:fourier-fem}, based on \cite{Albert19}.
+
+The finite element method can be used to numerically solve partial differential equations, specifically boundary value problems. Before delving into the details of the method, we shall look at how this applies to \cref{eq:ampere}. Using an identity from vector analysis, we get
+\begin{gather}
+  \curl (\curl \vec{A}) = \grad (\divg \vec{A}) - (\nabla \cdot \nabla) \vec{A} = \frac{4 \pi}{c} \vec{J}. \label{eq:ampere-laplacian}
+\end{gather}
+Without loss of generality, we use the \textsc{Coulomb} gauge with
+\begin{gather}
+  \divg \vec{A} = 0
+\end{gather}
+and \cref{eq:ampere-laplacian} reduces to
+\begin{gather}
+  (\nabla \cdot \nabla) \vec{A} =: \symup{\Delta} \vec{A} = -\frac{4 \pi}{c} \vec{J},
+\end{gather}
+where $\symup{\Delta}$ is the Laplacian. For vector arguments, the latter only takes on a simple form for Cartesian coordinates:
+\begin{gather}
+  \left ( \frac{\partial^{2}}{\partial x^{2}} + \frac{\partial^{2}}{\partial y^{2}} + \frac{\partial^{2}}{\partial z^{2}} \right ) A_{k} = -\frac{4 \pi}{c} J_{k} \quad \forall k = x, y, z.
+\end{gather}
+Thus the differential equation for the Cartesian components of the magnetic vector potential is of the \textsc{Poisson} type,
+\begin{gather}
+  \symup{\Delta} \Phi = f.
+\end{gather}
+This is an elliptical partial differential equation of second order, so the solution shall be twice continuously differentiable on the given domain, i.e. $\Phi \in C^{2} (\Omega)$. For this type of PDE, a unique solution exists when one of the following boundary conditions is imposed on the boundary $\Gamma = \partial \Omega$.
+\begin{itemize}
+\item A \textsc{Dirichlet} boundary condition imposes functional values on the boundary:
+  \begin{gather*}
+    \Phi (\vec{r}) = \gamma_{\text{D}} (\vec{r}) \quad \forall \vec{r} \in \Gamma.
+  \end{gather*}
+\item A \textsc{Neumann} boundary condition imposes normal derivatives on the boundary:
+  \begin{gather*}
+    \grad \Phi (\vec{r}) \cdot \vec{n} (\vec{r}) = \gamma_{\text{N}} (\vec{r}) \quad \forall \vec{r} \in \Gamma.
+  \end{gather*}
+  There is an additional compatibility condition that has to be satisfied by the inhomogeneities of \textsc{Poisson}'s equation and the boundary condition:
+  \begin{gather*}
+    \oint_{\Gamma} \gamma_{\text{N}} (\vec{r}) \, \diff \Gamma = \int_{\Omega} f (\vec{r}) \, \diff \Omega.
+  \end{gather*}
+\item A \textsc{Robin} boundary condition imposes a weigehted sum of \textsc{Dirichlet} and \textsc{Neumann} boundary conditions:
+  \begin{gather*}
+    C_{\text{D}} \Phi (\vec{r}) + C_{N} \grad \Phi (\vec{r}) \cdot \vec{n} (\vec{r}) = \gamma_{\text{R}} (\vec{r}) \quad \forall \vec{r} \in \Gamma.
+  \end{gather*}
+  This has to be differentiated from a \textsc{Cauchy} boundary condition where \textsc{Dirichlet} and \textsc{Neumann} boundary conditions are imposed on the same point independently of each other. For elliptical PDEs, this usually is not a well-posed problem and may lead to an overdetermined set of equations.
+\item Mixed boundary conditions are enforced when any of the above is imposed on each piece of the boundary, e.g. \textsc{Dirichlet} boundary conditions on $\Gamma_{\text{D}}$ and \textsc{Neumann} boundary conditions on $\Gamma_{\text{N}}$. In the latter example, it is necessary that
+  \begin{gather*}
+    \Gamma_{\text{N}} \cup \Gamma_{\text{D}} = \Gamma, \quad \Gamma_{\text{N}} \cap \Gamma_{\text{D}} = \emptyset
+  \end{gather*}
+  holds to avoid the aforementioned problem with \textsc{Cauchy} boundary conditions.
+\end{itemize}
+Even though this categorization was applied to Cartesian components it holds in any coordinate system since a simple geometrical coordinate transform does not change the type of the PDE and thus the finite element method is applicable. It should be noted, however, that not all vector components can be prescribed at the same time; according to \cite{Biro15}, the normal and tangential components have to be separated. For the normal components, the magnetic surface charge density $b$ can be prescribed,
+\begin{gather*}
+  \vec{B} \cdot \vec{n} = -b,
+\end{gather*}
+which has to fulfill the additional condition that
+\begin{gather*}
+  \oint_{\Gamma} b \, \symup{d} \Gamma = -\oint_{\Gamma} \symbf{B} \cdot \symbf{n} \, \symup{d} \Gamma = -\int_{\Omega} \nabla \cdot \symbf{B} \, \symup{d} \Omega = 0.
+\end{gather*}
+For the tangential component, the magnetic surface current density $\vec{K}$ can be prescribed,
+\begin{gather*}
+  \vec{B} \times \vec{n} = \frac{4 \pi}{c} \vec{K},
+\end{gather*}
+which has to fulfill the additional condition that
+\begin{gather*}
+  \frac{4 \pi}{c} \oint_{\Gamma} \vec{K} \, \symup{d} \Gamma = \oint_{\Gamma} \vec{B} \times \vec{n} \, \symup{d} \Gamma = -\int_{\Omega} \curl \vec{B} \, \symup{d} \Omega = -\frac{4 \pi}{c} \int_{\Omega} \vec{J} \, \symup{d} \Omega.
+\end{gather*}
+When deriving the weak formulation in the following section, these two options will be assigned to their corresponding boundary conditions.
+
+\subsection{Outline of the Ritz and Galerkin methods}
+\label{sec:ritz-galerkin}
+
+The finite element method is used to solve problems of the general form
+\begin{gather}
+  \symcal{L} \Phi = f, \label{eq:fem}
+\end{gather}
+where $\Phi$ and $f$ are arbitrary functions and $\symcal{L}$ is a differential operator. For the \textsc{Ritz} method, $\symcal{L}$ is assumed to be a real differential operator that is self-adjoint and positive definite, i.e.
+\begin{align}
+  \langle \symcal{L} u, v \rangle &= \langle u, \symcal{L} v \rangle, \label{eq:self-adjoint} \\
+  \langle \symcal{L} u, u \rangle & \begin{cases}
+    > 0 & u \neq 0, \\
+    = 0 & u = 0
+  \end{cases} \label{eq:positive_definite}
+\end{align}
+in regard to a scalar product defined by
+\begin{gather}
+  \langle u, v \rangle = \int_{\Omega} u v^{*} \, \symup{d} \Omega. \label{eq:scalar_prod}
+\end{gather}
+The solution of the differential equation corresponds to the minimum of the functional
+\begin{gather}
+  F(\Phi) = \tfrac{1}{2} \langle \symcal{L} \Phi, \Phi \rangle - \tfrac{1}{2} \langle \Phi, f \rangle - \tfrac{1}{2} \langle f, \Phi \rangle, \label{eq:variational}
+\end{gather}
+i.e. $\delta F = 0$ and $\delta (\delta F) > 0$, where $\delta F$ is the variation. Now, the problem is discretized by projecting $\Phi$ into a finite subspace of the full solution space, i.e. it is approximated by
+\begin{gather}
+  \tilde{\Phi} = \sum_{k = 1}^{N} C_{k} v_{k} = \vec{C} \cdot \vec{v},
+\end{gather}
+where $C_{k}$ are constant expansion coefficients and $v_{k}$ are basis functions which will be defined later. Now, the variational form in \cref{eq:variational} can be cast into an algebraic form,
+\begin{gather}
+  \pd{C_{k}} F(\tilde{\Phi}) = 0 \quad \forall k = 1, 2, \dotsc, N.
+\end{gather}
+This results in a system of $N$ linear equations of $N$ unknowns,
+\begin{gather}
+  \hat{K} \vec{c} = \vec{s}. \label{eq:ritz}
+\end{gather}
+Here, $\hat{K}$ is the \emph{stiffness matrix}\footnote{\label{fn:zienkiewicz}These quantities derive their names from the application of the method to problems of solid mechanics in civil engineering.} given by
+\begin{gather}
+  K_{ij} = \frac{1}{2} \int_{\Omega} v_{i} \symcal{L} v_{j} + v_{j} \symcal{L} v_{i} \, \symup{d} \Omega = \int_{\Omega} v_{i} \symcal{L} v_{j} \, \symup{d} \Omega \quad \forall i, j = 1, 2, \dotsc, N,
+\end{gather}
+where we used \cref{eq:self-adjoint} in the last equality. The \emph{load vector}\footref{fn:zienkiewicz} $\vec{s}$ is given by
+\begin{gather}
+  s_{i} = \int_{\Omega} v_{i} f \, \symup{d} \Omega \quad \forall i = 1, 2, \dotsc, N.
+\end{gather}
+When $\symcal{L}$ is not self-adjoint or positve definite, the \textsc{Ritz} method has to be modified. For example, complex $\symcal{L}$ are not self-adjoint with the scalar product defined in \cref{eq:scalar_prod}. Furthermore, if inhomogeneous boundary conditions are applied, the functional $F$ has to be extended by a function that fulfills this boundary condition. For all these generalized cases, the \textsc{Galerkin} method may be used instead, which also does not require the construction of a variational form.
+
+Since $\tilde{\Phi}$ is only an approximation to $\Phi$, inserting the former into the original differential \cref{eq:fem} will leave a residue, i.e.
+\begin{gather}
+  \symcal{L} \tilde{\Phi} - f \neq 0.
+\end{gather}
+Now, another approach to approximate the minimum of the functional $F$ is to minimize the residues $r_{k}$ with regard to weighting functions $w_{k}$,
+\begin{gather}
+  r_{k} = \int_{\Omega} w_{k} \underbrace{(\symcal{L} \tilde{\Phi} - f)}_{\neq 0} \, \symup{d} \Omega.
+\end{gather}
+For the \textsc{Galerkin} method, the weighting functions $w_{k}$ are the same as the basis functions $v_{k}$. This approach also results in a system of $N$ linear equations of $N$ unknowns, as in \cref{eq:ritz}. Here, $\hat{K}$ is only symmetric if $\symcal{L}$ is self-adjoint, in which case the equations are the same as with the \textsc{Ritz} method.
+
+[weak formulation -- boundary conditions, basis functions, \textsc{Sobolev} spaces?, \textsc{de Rham} complex?, \ldots]
+
+\subsection{Reduction to two dimensions}
+\label{sec:fourier-fem}
+
+[\ldots]
+
+The weak formulation used in \texttt{FreeFEM++} is given by  % rework!
+\begin{gather}
+  \int_{\Omega} \left ( \polCurl \vec{w} R \polCurl \vec{a} + \frac{1}{R} n^{2} w_{k} a_{k} \right ) \, \diff \Omega + \frac{4 \pi}{c} \int_{\Omega} w_{k} j_{k} = 0.
+\end{gather}
+
+%%% Local Variables: 
+%%% mode: latex
+%%% TeX-master: "../magdif"
+%%% End: 
