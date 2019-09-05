@@ -481,7 +481,7 @@ In axisymmetric coordinate systems, such as the aforementioned cylindrical syste
   \grad p_{n} + \im n p_{n} \grad \phi &= \frac{1}{c} \left( \vec{J}_{0} \times \vec{B}_{n} + \vec{J}_{n} \times \vec{B}_{0} \right), \label{eq:mhd-phi} \\
   \divg \vec{J}_{n}^{\pol}+ \im n J_{n}^{\phi} &= 0. \label{eq:divfree-phi}
 \end{align}
-now with a 2D $\grad$ operator acting in the poloidal ($RZ$) plane. The explicit definition depends on the coordinate system used and is outlined in \cref{sec:cocos}.
+now with a two-dimensional $\nabla$ operator acting in the poloidal ($RZ$) plane. The explicit definition depends on the coordinate system used and is outlined in \cref{sec:cocos}.
 
 \subsection{Coordinate conventions}
 \label{sec:cocos}
@@ -593,6 +593,22 @@ The sign of $q$ describes the sign of the helicity in $(\phi, \theta)$ and can b
 \end{gather}
 The change of sign in comparison to \textcite{dHaeseleer91} is due to the reversed toroidal angle. This way, $\sqrt{g}$ is still positive.
 
+For the sake of completeness and since it will be used extensively in \cref{sec:linmhd}, the $\nabla$ operator shall be given explicitly for the gradient and divergence in cylindrical coordinates:
+\begin{gather}
+  \grad f = \pd[f]{R} \vec{e}^{R} + \pd[f]{\phi} \vec{e}^{\phi} + \pd[f]{Z} \vec{e}^{Z}, \\
+  \divg \vec{v} = \frac{1}{R} \pd{R} (R v^{k}) + \pd{\phi} v^{\phi} + \frac{1}{R} \pd{Z} (R v^{Z}).
+\end{gather}
+In the last term, a factor of $R$ is kept for the sake of symmetry. Now, when we apply the \textsc{Fourier} transform $\pd{\phi} \to \im n$, we get
+\begin{gather}
+  \grad f = \pd[f_{n}]{R} \vec{e}^{R} + \im n f_{n} \vec{e}^{\phi} + \pd[f_{n}]{Z} \vec{e}^{Z}, \\
+  \divg \vec{v} = \frac{1}{R} \pd{R} (R v_{n}^{k}) + \im n v_{n}^{\phi} + \frac{1}{R} \pd{Z} (R v_{n}^{Z}).
+\end{gather}
+For convenience, we will sometimes use the $\nabla$ operator in two-dimensional form as a notational shorthand with the gradient:
+\begin{gather}
+  \grad f = \grad f_{n} + \im n f_{n} \vec{e}^{\phi}.
+\end{gather}
+It should be clear from context wheter $\nabla$ is supposed to be two- or three-dimensional, so for example, in $\grad \phi$ it is three-dimensional since $\grad \phi$ only has a toroidal component, while for purely poloidal $\grad \psi$ it makes no difference.
+
 \subsection{Discretization and local coordinate system}
 \label{sec:grid}
 
@@ -647,7 +663,7 @@ Likewise, it should be noted that $\grad \phi$ is perpendicular to all purely po
 \subsection{Representation of fields on the grid}
 \label{sec:dofs}
 
-Another approximation made in the finite element method is the choice of a \emph{basis} to represent a scalar or vector field locally on one element of the grid. Scalar fields like the pressure perturbation can be approximated with \textsc{Lagrange} elements of the lowest order where the \emph{degrees of freedom} are the values on the nodes and any value within the triangle is interpolated from the values of its nodes. Many other choices are available, but this is the simplest option to implement and it is sufficient for our needs. For vector fields some more considerations are necessary; see \cref{sec:compute_Bn} for more details. We are mostly interested in representation of the magnetic flux density and the current density, both of which characteristically show zero divergence. Thus it is necessary to choose a basis that yields a well-defined convergence. This is guaranteed by \textsc{Raviart}--\textsc{Thomas} elements, where in the lowest-order case, the degrees of freedom are the fluxes of the vector field across the triangle edges:
+Another approximation made in the finite element method is the choice of a \emph{basis} to represent a scalar or vector field locally on one element of the grid. Scalar fields like the pressure perturbation can be approximated with \textsc{Lagrange} elements of the lowest order where the \emph{degrees of freedom} are the values on the nodes and any value within the triangle is interpolated from the values of its nodes. Many other choices are available, but this is the simplest option to implement and it is sufficient for our needs. For vector fields some more considerations are necessary; see \cref{sec:compute_Bn} for more details. We are mostly interested in representation of the magnetic flux density and the current density, both of which characteristically show zero divergence. Thus it is necessary to choose a basis that yields a well-defined divergence. This is guaranteed by \textsc{Raviart}--\textsc{Thomas} elements, where in the lowest-order case, the degrees of freedom are the fluxes of the vector field across the triangle edges:
 \begin{gather}
   \Psi_{k} = \int_{\Gamma_{k}} R \vec{B}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l \approx R (\Gamma_{k}) \vec{B}_{n}^{\pol} (\Gamma_{k}) \cdot \vec{n}_{k}, \label{eq:Psi_k} \\
   I_{k} = \int_{\Gamma_{k}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l \approx R (\Gamma_{k}) \vec{J}_{n}^{\pol} (\Gamma_{k}) \cdot \vec{n}_{k}. \label{eq:I_k}
@@ -733,7 +749,7 @@ Additionally, with the formulae given above, one can also derive an expression f
 \end{gather}
 Thus all necessary equilibrium quantities are established.
 
-The vacuum perturbation field $\Bvac$ is calculated beforehand by the \textsc{Biot}--\textsc{Savart} law (\cref{eq:biot-savart}) on a regular grid in $(R, \phi, Z)$ coordinates, from which the fluxes through triangle edges are computed for representation as \textsc{Raviart}--\textsc{Thomas} elements.
+The vacuum perturbation field $\Bvac$ is calculated beforehand from the external coil currents $I_{\text{c}}$ by the \textsc{Biot}--\textsc{Savart} law (\cref{eq:biot-savart}) on a regular grid in $(R, \phi, Z)$ coordinates, from which the fluxes through triangle edges are computed for representation as \textsc{Raviart}--\textsc{Thomas} elements.
 
 \subsection{Grid implementation}
 \label{sec:grid-impl}
@@ -1042,9 +1058,11 @@ where the elements of the stiffness matrix $\hat{K}$ are
 \section{Magnetic field perturbation}
 \label{sec:compute_Bn}
 
+In this section, the calculation of the magnetic field from the current density is described, i.e. the explicit form of $\hat{M}$ in \cref{eq:M_operator}. The implementation uses \texttt{FreeFem++} by \textcite{Hecht12}, while the mathematical background is outlined in \cref{sec:ritz-galerkin}, which is based on the book by \textcite{Jin02}. For a more specific discussion of the problem at hand, see \cite{Seeber18}. Finally, the application of the \textsc{Fourier} transform is elaborated in \cref{sec:fourier-fem}, based on \cite{Albert19}.
+
 The finite element method can be used to numerically solve partial differential equations, specifically boundary value problems. Before delving into the details of the method, we shall look at how this applies to \cref{eq:ampere}. Using an identity from vector analysis, we get
 \begin{gather}
-  \curl (\curl \vec{A}) = \grad (\divg \vec{A}) - (\nabla \cdot \nabla) \vec{A} = \frac{4 \pi}{c_{0}} \vec{J}. \label{eq:ampere-laplacian}
+  \curl (\curl \vec{A}) = \grad (\divg \vec{A}) - (\nabla \cdot \nabla) \vec{A} = \frac{4 \pi}{c} \vec{J}. \label{eq:ampere-laplacian}
 \end{gather}
 Without loss of generality, we use the \textsc{Coulomb} gauge with
 \begin{gather}
@@ -1052,29 +1070,33 @@ Without loss of generality, we use the \textsc{Coulomb} gauge with
 \end{gather}
 and \cref{eq:ampere-laplacian} reduces to
 \begin{gather}
-  (\nabla \cdot \nabla) \vec{A} =: \symup{\Delta} \vec{A} = -\frac{4 \pi}{c_{0}} \vec{J},
+  (\nabla \cdot \nabla) \vec{A} =: \symup{\Delta} \vec{A} = -\frac{4 \pi}{c} \vec{J},
 \end{gather}
 where $\symup{\Delta}$ is the Laplacian. For vector arguments, the latter only takes on a simple form for Cartesian coordinates:
 \begin{gather}
-  \left ( \frac{\partial^{2}}{\partial x^{2}} + \frac{\partial^{2}}{\partial y^{2}} + \frac{\partial^{2}}{\partial z^{2}} \right ) A_{k} = -\frac{4 \pi}{c_{0}} J_{k} \quad \forall k = x, y, z.
+  \left ( \frac{\partial^{2}}{\partial x^{2}} + \frac{\partial^{2}}{\partial y^{2}} + \frac{\partial^{2}}{\partial z^{2}} \right ) A_{k} = -\frac{4 \pi}{c} J_{k} \quad \forall k = x, y, z.
 \end{gather}
-Thus the differential equation for the Cartesian components of the magnetic vector potential is of the \textsc{Poisson} type. This is an elliptical partial differential equation of second order, so the solution shall be twice continuously differentiable on the given domain, i.e. $A_{k} \in C^{2} (\Omega)$. For this type of PDE, a unique solution exists when one of the following boundary conditions is imposed on the boundary $\Gamma = \partial \Omega$.
+Thus the differential equation for the Cartesian components of the magnetic vector potential is of the \textsc{Poisson} type,
+\begin{gather}
+  \symup{\Delta} \Phi = f.
+\end{gather}
+This is an elliptical partial differential equation of second order, so the solution shall be twice continuously differentiable on the given domain, i.e. $\Phi \in C^{2} (\Omega)$. For this type of PDE, a unique solution exists when one of the following boundary conditions is imposed on the boundary $\Gamma = \partial \Omega$.
 \begin{itemize}
 \item A \textsc{Dirichlet} boundary condition imposes functional values on the boundary:
   \begin{gather*}
-    A_{k} (\vec{r}) = f_{\text{D}} (\vec{r}) \quad \forall \vec{r} \in \Gamma.
+    \Phi (\vec{r}) = \gamma_{\text{D}} (\vec{r}) \quad \forall \vec{r} \in \Gamma.
   \end{gather*}
 \item A \textsc{Neumann} boundary condition imposes normal derivatives on the boundary:
   \begin{gather*}
-    \grad A_{k} (\vec{r}) \cdot \vec{n} (\vec{r}) = f_{\text{N}} (\vec{r}) \quad \forall \vec{r} \in \Gamma.
+    \grad \Phi (\vec{r}) \cdot \vec{n} (\vec{r}) = \gamma_{\text{N}} (\vec{r}) \quad \forall \vec{r} \in \Gamma.
   \end{gather*}
   There is an additional compatibility condition that has to be satisfied by the inhomogeneities of \textsc{Poisson}'s equation and the boundary condition:
   \begin{gather*}
-    \oint_{\Gamma} f_{\text{N}} (\vec{r}) \, \diff \Gamma = \frac{4 \pi}{c_{0}} \int_{\Omega} J_{k} (\vec{r}) \, \diff \Omega.
+    \oint_{\Gamma} \gamma_{\text{N}} (\vec{r}) \, \diff \Gamma = \int_{\Omega} f (\vec{r}) \, \diff \Omega.
   \end{gather*}
 \item A \textsc{Robin} boundary condition imposes a weigehted sum of \textsc{Dirichlet} and \textsc{Neumann} boundary conditions:
   \begin{gather*}
-    C_{\text{D}} A_{k} (\vec{r}) + C_{N} \grad A_{k} (\vec{r}) \cdot \vec{n} (\vec{r}) = f_{\text{R}} (\vec{r}) \quad \forall \vec{r} \in \Gamma.
+    C_{\text{D}} \Phi (\vec{r}) + C_{N} \grad \Phi (\vec{r}) \cdot \vec{n} (\vec{r}) = \gamma_{\text{R}} (\vec{r}) \quad \forall \vec{r} \in \Gamma.
   \end{gather*}
   This has to be differentiated from a \textsc{Cauchy} boundary condition where \textsc{Dirichlet} and \textsc{Neumann} boundary conditions are imposed on the same point independently of each other. For elliptical PDEs, this usually is not a well-posed problem and may lead to an overdetermined set of equations.
 \item Mixed boundary conditions are enforced when any of the above is imposed on each piece of the boundary, e.g. \textsc{Dirichlet} boundary conditions on $\Gamma_{\text{D}}$ and \textsc{Neumann} boundary conditions on $\Gamma_{\text{N}}$. In the latter example, it is necessary that
@@ -1093,21 +1115,75 @@ which has to fulfill the additional condition that
 \end{gather*}
 For the tangential component, the magnetic surface current density $\vec{K}$ can be prescribed,
 \begin{gather*}
-  \vec{B} \times \vec{n} = \frac{4 \pi}{c_{0}} \vec{K},
+  \vec{B} \times \vec{n} = \frac{4 \pi}{c} \vec{K},
 \end{gather*}
 which has to fulfill the additional condition that
 \begin{gather*}
-  \frac{4 \pi}{c_{0}} \oint_{\Gamma} \vec{K} \, \symup{d} \Gamma = \oint_{\Gamma} \vec{B} \times \vec{n} \, \symup{d} \Gamma = -\int_{\Omega} \curl \vec{B} \, \symup{d} \Omega = -\frac{4 \pi}{c_{0}} \int_{\Omega} \vec{J} \, \symup{d} \Omega.
+  \frac{4 \pi}{c} \oint_{\Gamma} \vec{K} \, \symup{d} \Gamma = \oint_{\Gamma} \vec{B} \times \vec{n} \, \symup{d} \Gamma = -\int_{\Omega} \curl \vec{B} \, \symup{d} \Omega = -\frac{4 \pi}{c} \int_{\Omega} \vec{J} \, \symup{d} \Omega.
 \end{gather*}
 When deriving the weak formulation in the following section, these two options will be assigned to their corresponding boundary conditions.
 
-\subsection{Galerkin method and weak formulation}
+\subsection{Outline of the Ritz and Galerkin methods}
+\label{sec:ritz-galerkin}
 
-[\textsc{Ritz} and \textsc{Galerkin} methods, weak formulation -- boundary conditions, \textsc{Sobolev} spaces?, \textsc{de Rham} complex?; see \cite{Biro15,Hecht12,Jin02}, \ldots]
+The finite element method is used to solve problems of the general form
+\begin{gather}
+  \symcal{L} \Phi = f, \label{eq:fem}
+\end{gather}
+where $\Phi$ and $f$ are arbitrary functions and $\symcal{L}$ is a differential operator. For the \textsc{Ritz} method, $\symcal{L}$ is assumed to be a real differential operator that is self-adjoint and positive definite, i.e.
+\begin{align}
+  \langle \symcal{L} u, v \rangle &= \langle u, \symcal{L} v \rangle, \label{eq:self-adjoint} \\
+  \langle \symcal{L} u, u \rangle & \begin{cases}
+    > 0 & u \neq 0, \\
+    = 0 & u = 0
+  \end{cases} \label{eq:positive_definite}
+\end{align}
+in regard to a scalar product defined by
+\begin{gather}
+  \langle u, v \rangle = \int_{\Omega} u v^{*} \, \symup{d} \Omega. \label{eq:scalar_prod}
+\end{gather}
+The solution of the differential equation corresponds to the minimum of the functional
+\begin{gather}
+  F(\Phi) = \tfrac{1}{2} \langle \symcal{L} \Phi, \Phi \rangle - \tfrac{1}{2} \langle \Phi, f \rangle - \tfrac{1}{2} \langle f, \Phi \rangle, \label{eq:variational}
+\end{gather}
+i.e. $\delta F = 0$ and $\delta (\delta F) > 0$, where $\delta F$ is the variation. Now, the problem is discretized by projecting $\Phi$ into a finite subspace of the full solution space, i.e. it is approximated by
+\begin{gather}
+  \tilde{\Phi} = \sum_{k = 1}^{N} C_{k} v_{k} = \vec{C} \cdot \vec{v},
+\end{gather}
+where $C_{k}$ are constant expansion coefficients and $v_{k}$ are basis functions which will be defined later. Now, the variational form in \cref{eq:variational} can be cast into an algebraic form,
+\begin{gather}
+  \pd{C_{k}} F(\tilde{\Phi}) = 0 \quad \forall k = 1, 2, \dotsc, N.
+\end{gather}
+This results in a system of $N$ linear equations of $N$ unknowns,
+\begin{gather}
+  \hat{K} \vec{c} = \vec{s}. \label{eq:ritz}
+\end{gather}
+Here, $\hat{K}$ is the \emph{stiffness matrix}\footnote{\label{fn:zienkiewicz}These quantities derive their names from the application of the method to problems of solid mechanics in civil engineering.} given by
+\begin{gather}
+  K_{ij} = \frac{1}{2} \int_{\Omega} v_{i} \symcal{L} v_{j} + v_{j} \symcal{L} v_{i} \, \symup{d} \Omega = \int_{\Omega} v_{i} \symcal{L} v_{j} \, \symup{d} \Omega \quad \forall i, j = 1, 2, \dotsc, N,
+\end{gather}
+where we used \cref{eq:self-adjoint} in the last equality. The \emph{load vector}\footref{fn:zienkiewicz} $\vec{s}$ is given by
+\begin{gather}
+  s_{i} = \int_{\Omega} v_{i} f \, \symup{d} \Omega \quad \forall i = 1, 2, \dotsc, N.
+\end{gather}
+When $\symcal{L}$ is not self-adjoint or positve definite, the \textsc{Ritz} method has to be modified. For example, complex $\symcal{L}$ are not self-adjoint with the scalar product defined in \cref{eq:scalar_prod}. Furthermore, if inhomogeneous boundary conditions are applied, the functional $F$ has to be extended by a function that fulfills this boundary condition. For all these generalized cases, the \textsc{Galerkin} method may be used instead, which also does not require the construction of a variational form.
+
+Since $\tilde{\Phi}$ is only an approximation to $\Phi$, inserting the former into the original differential \cref{eq:fem} will leave a residue, i.e.
+\begin{gather}
+  \symcal{L} \tilde{\Phi} - f \neq 0.
+\end{gather}
+Now, another approach to approximate the minimum of the functional $F$ is to minimize the residues $r_{k}$ with regard to weighting functions $w_{k}$,
+\begin{gather}
+  r_{k} = \int_{\Omega} w_{k} \underbrace{(\symcal{L} \tilde{\Phi} - f)}_{\neq 0} \, \symup{d} \Omega.
+\end{gather}
+For the \textsc{Galerkin} method, the weighting functions $w_{k}$ are the same as the basis functions $v_{k}$. This approach also results in a system of $N$ linear equations of $N$ unknowns, as in \cref{eq:ritz}. Here, $\hat{K}$ is only symmetric if $\symcal{L}$ is self-adjoint, in which case the equations are the same as with the \textsc{Ritz} method.
+
+[weak formulation -- boundary conditions, basis functions, \textsc{Sobolev} spaces?, \textsc{de Rham} complex?, \ldots]
 
 \subsection{Reduction to two dimensions}
+\label{sec:fourier-fem}
 
-[For details see \cite{Albert19}.]
+[\ldots]
 
 The weak formulation used in \texttt{FreeFEM++} is given by  % rework!
 \begin{gather}
@@ -1116,11 +1192,11 @@ The weak formulation used in \texttt{FreeFEM++} is given by  % rework!
 
 
 \clearpage
-\section{Construction of test cases and analysis of results}
+\section{Construction of test cases}
 
-Along with comparison to results from kinetic computations, special test cases altering different components of the calculation are considered. In \cref{sec:nonres}, $\Bvac$ is not taken from \textsc{Biot}--\textsc{Savart} calculations of currents in external coils as per \cref{eq:biot-savart,sec:inputs}, but constructed directly to avoid resonances, at least in the first iteration step. \Cref{sec:analytical} instead looks at the analytical solution in the cylindrical limit on a circular cross-section obtained from KilCa, effectively changing the grid geometry.
+Along with comparison to results from kinetic computations, special test cases altering different components of the calculation are considered. In \cref{sec:nonres}, $\Bvac$ is not taken from \textsc{Biot}--\textsc{Savart} calculations of currents in external coils as per \cref{eq:biot-savart,sec:inputs}, but constructed directly to avoid resonances, at least in the first iteration step. \Cref{sec:analytical} instead looks at the analytical solution in the cylindrical limit on a circular cross-section obtained from KiLCA, effectively changing the grid geometry.
 
-\subsection{Generating a non-resonant test field}
+\subsection{Generating a non-resonant vacuum perturbation}
 \label{sec:nonres}
 
 The axisymmetric equilibrium field $\vec{B}_{0}$ lies on nested flux surfaces $\psi = \text{const.}$, meaning
@@ -1266,7 +1342,13 @@ with a source term $s_{mn}$. This allows a simple algebraic solution where all q
 \end{gather}
 Now an approximation can be made by switching from contravariant components to covariant components which are (for some reason) assumed to be constant. The factor $R$ appearing in the metric components can also be considered constant over the domain in question -- the toroidal geometry is effectively transformed to cylindrical geometry with a very thin and elongated cylinder and periodic boundary conditions.
 
-[\ldots]
+[See \cite{Heyn08} \ldots]
+
+\clearpage
+\section{Results and analysis}
+\label{sec:results}
+
+[see seminar presentation]
 
 \clearpage
 \appendix
@@ -1279,12 +1361,15 @@ Now an approximation can be made by switching from contravariant components to c
   \midrule
   \endhead
   \label{tab:symbols}%
+  $\hat{A}$ & matrix applied to precondition iterations \\
+  $\vec{A}$ & magnetic vector potential \\
   $\vec{B}$ & magnetic field strength, measured in Gauss \\
   $\Bplas$ & perturbation field from \emph{p}lasma current \\
   $\Bvac$ & perturbation field in \emph{v}acuum (from external coils) \\
   $C$ & arbitrary constant (of integration) \\
   $c$ & speed of light in centimetres per second \\
   $\e$ & \textsc{Euler}'s constant, base of natural logarithm \\
+  $\vec{e}$ & basis vector \\
   $g$ & metric determinant \\
   $\vec{h}_{0}$ & unit vector of $\vec{B}_{0}$ \\
   $\hat{I}$ & unit matrix \\
@@ -1293,25 +1378,33 @@ Now an approximation can be made by switching from contravariant components to c
   $\im$ & imaginary unit, $\im^{2} = -1$ \\
   $\vec{J}$ & electric current density, measured in statampere \\
   $\hat{K}$ & combined linear operator $\hat{M} \hat{P}$ / stiffness matrix \\
+  $k_{\text{B}}$ & \textsc{Boltzmann} constant \\
   $\vec{l}$ & edge vector in counter-clockwise direction \\
   $l$ & length of edge \\
   $\hat{M}$ & linear operator representing computation of the magnetic field from the currents via \textsc{Ampère}'s equation \\
   $m$ & poloidal mode number \\
-  $n$ & toroidal mode number \\
+  $n$ & toroidal mode number / density of particles \\
   $\vec{n}$ & outward pointing normal vector \\
   $N$ & dimension of system of linear equations \\
-  $\hat{P}$ & linear operator representing computation of the currents from the magnetic field via MHD equations \\
+  $\hat{P}$ & linear operator representing computation of the currents from the magnetic field \\
   $p$ & pressure, measured in dyne per square centimetre \\
   $q$ & safety factor \\
   $R$ & radial coordinate in cylindrical coordinates \\
   $R_{0}$ & major radius of the tokamak \\
+  $r$ & arbitrary point in a domain $\Omega$ \\
   $S$ & area in poloidal cross-section \\
+  $\vec{s}$ & source term in systems of linear equations \\
+  $T$ & temperature \\
   $Z$ & axial coordinate in cylindrical coordinates \\
+  $\Gamma$ & border of a domain $\Omega$, e.g. edge of a triangle \\
   $\delta_{ij}$ & \textsc{Kronecker} delta \\
+  $\lambda$ & eigenvalue \\
   $\theta$ & poloidal angle \\
+  $\rho$ & flux surface label \\
   $\phi$ & toroidal angle \\
   $\Psi$ & magnetic flux \\
   $\psi$ & flux surface label \\
+  $\Omega$ & domain of computation, e.g. a triangle \\
   \bottomrule
 \end{longtable}
 
