@@ -103,11 +103,11 @@ This results in a system of $N$ linear equations of $N$ unknowns,
 \end{gather}
 Here, $\hat{K}$ is the \emph{stiffness matrix}\footnote{\label{fn:zienkiewicz}These quantities derive their names from the application of the method to problems of solid mechanics in civil engineering.} given by
 \begin{gather}
-  K_{ij} = \frac{1}{2} \int_{\Omega} v_{i} \symcal{L} v_{j} + v_{j} \symcal{L} v_{i} \, \symup{d} \Omega = \int_{\Omega} v_{i} \symcal{L} v_{j} \, \symup{d} \Omega \quad \forall i, j = 1, 2, \dotsc, N,
+  K_{jk} = \frac{1}{2} \int_{\Omega} v_{j} \symcal{L} v_{k} + v_{k} \symcal{L} v_{j} \, \symup{d} \Omega = \int_{\Omega} v_{j} \symcal{L} v_{k} \, \symup{d} \Omega \quad \forall j, k = 1, 2, \dotsc, N,
 \end{gather}
 where we used \cref{eq:self-adjoint} in the last equality. The \emph{load vector}\footref{fn:zienkiewicz} $\vec{s}$ is given by
 \begin{gather}
-  s_{i} = \int_{\Omega} v_{i} f \, \symup{d} \Omega \quad \forall i = 1, 2, \dotsc, N.
+  s_{k} = \int_{\Omega} v_{k} f \, \symup{d} \Omega \quad \forall k = 1, 2, \dotsc, N.
 \end{gather}
 When $\symcal{L}$ is not self-adjoint or positve definite, the \textsc{Ritz} method has to be modified. For example, complex $\symcal{L}$ are not self-adjoint with the scalar product defined in \cref{eq:scalar_prod}. Furthermore, if inhomogeneous boundary conditions are applied, the functional $F$ has to be extended by a function that fulfills this boundary condition. For all these generalized cases, the \textsc{Galerkin} method may be used instead, which also does not require the construction of a variational form.
 

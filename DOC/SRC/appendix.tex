@@ -1,66 +1,17 @@
-\section{List of symbols}
+\section{Notational conventions}
 
-\begin{longtable}{l >{\RaggedRight}p{0.8\textwidth}}
-  \caption{Base symbols} \\
+\setglossarypreamble[main]{\label{tab:symbols}}
+
+\printglossary[type=main, title={Base symbols}]
+
+\subsection{Symbol decorations}
+\label{tab:decorations}
+
+\begin{longtable*}{l >{\RaggedRight}p{0.8\textwidth}}
   \toprule
   \textbf{Notation} & \textbf{Description} \\
   \midrule
   \endhead
-  \label{tab:symbols}%
-  $\hat{A}$ & matrix applied to precondition iterations \\
-  $\vec{A}$ & magnetic vector potential \\
-  $\vec{B}$ & magnetic field strength, measured in Gauss \\
-  $\Bplas$ & perturbation field from \emph{p}lasma current \\
-  $\Bvac$ & perturbation field in \emph{v}acuum (from external coils) \\
-  $C$ & arbitrary constant (of integration) \\
-  $c$ & speed of light in centimetres per second \\
-  $\e$ & \textsc{Euler}'s constant, base of natural logarithm \\
-  $\vec{e}$ & basis vector \\
-  $g$ & metric determinant \\
-  $\vec{h}_{0}$ & unit vector of $\vec{B}_{0}$ \\
-  $\hat{I}$ & unit matrix \\
-  $I$ & electric current \\
-  $I_{\text{c}}$ & electric current produced by RMP \emph{c}oils \\
-  $\im$ & imaginary unit, $\im^{2} = -1$ \\
-  $\vec{J}$ & electric current density, measured in statampere \\
-  $\hat{K}$ & combined linear operator $\hat{M} \hat{P}$ / stiffness matrix \\
-  $k_{\text{B}}$ & \textsc{Boltzmann} constant \\
-  $\vec{l}$ & edge vector in counter-clockwise direction \\
-  $l$ & length of edge \\
-  $\hat{M}$ & linear operator representing computation of the magnetic field from the currents via \textsc{Ampère}'s equation \\
-  $m$ & poloidal mode number \\
-  $n$ & toroidal mode number / density of particles \\
-  $\vec{n}$ & outward pointing normal vector \\
-  $N$ & dimension of system of linear equations \\
-  $\hat{P}$ & linear operator representing computation of the currents from the magnetic field \\
-  $p$ & pressure, measured in dyne per square centimetre \\
-  $q$ & safety factor \\
-  $R$ & radial coordinate in cylindrical coordinates \\
-  $R_{0}$ & major radius of the tokamak \\
-  $r$ & arbitrary point in a domain $\Omega$ \\
-  $S$ & area in poloidal cross-section \\
-  $\vec{s}$ & source term in systems of linear equations \\
-  $T$ & temperature \\
-  $Z$ & axial coordinate in cylindrical coordinates \\
-  $\Gamma$ & border of a domain $\Omega$, e.g. edge of a triangle \\
-  $\delta_{ij}$ & \textsc{Kronecker} delta \\
-  $\lambda$ & eigenvalue \\
-  $\theta$ & poloidal angle \\
-  $\rho$ & flux surface label \\
-  $\phi$ & toroidal angle \\
-  $\Psi$ & magnetic flux \\
-  $\psi$ & flux surface label \\
-  $\Omega$ & domain of computation, e.g. a triangle \\
-  \bottomrule
-\end{longtable}
-
-\begin{longtable}{l >{\RaggedRight}p{0.8\textwidth}}
-  \caption{Symbol decorations} \\
-  \toprule
-  \textbf{Notation} & \textbf{Description} \\
-  \midrule
-  \endhead
-  \label{tab:decorations}%
   $p_{0}$ & equilibrium $p$ \\
   $\delta p$ & perturbation of $p$ \\
   $p_{n}$ & \textsc{Fourier} coefficient of perturbation of $p$ with toroidal mode number $n$ \\
@@ -81,7 +32,7 @@
   $\vec{B} (\Gamma_{e}^{(k)})$ & $\vec{B}$ evaluated at midpoint of edge $e$ of triangle $k$ \\
   $\vec{B} (\Omega^{(k)})$ & $\vec{B}$ evaluated at weighted centroid of triangle $k$ \\
   \bottomrule
-\end{longtable}
+\end{longtable*}
 
 \section{Arnoldi iterations}
 \label{app:Arnoldi}
@@ -108,19 +59,6 @@ Grouping together the $\vec{q}_{k}$ vectors in an $N \times n_{r}$ matrix $\hat{
   \hat{K} \approx \hat{Q} \hat{H} \hat{Q}^{\dagger}.
 \end{gather}
 Diagonalization of $\hat{H}$ via the LAPACK routine \texttt{zhseqr} yields the \textsc{Ritz} eigenvalues $\lambda_{k}$ and application of $\hat{Q}$ on the eigenvectors of $\hat{H}$ obtained via \texttt{zhsein} gives the eigenvectors $\vec{v}_{k}$ associated with $\hat{K}$.
-
-\section{Fourier series of vector quantitites}
-
-$\Bpert$ in symmetry flux coordinates $(\rho, \theta, \phi)$ is given as the \textsc{Fourier} series
-\begin{gather}
-  \delta B^{k} (\rho, \theta, \phi) = B_{n}^{k}(\rho, \theta) \e^{\im n \phi}.
-\end{gather}
-$\Bpert$ is also divergence-free and assuming $g = g(\rho, \theta)$, we get
-\begin{align}
-  0 &= \sqrt{g} \divg \Bpert = \partial_{k} \left( \sqrt{g} \delta B^{k} \right) = \partial_{k} \left( \sqrt{g} B_{n}^{k} \e^{\im n \phi} \right) = \partial_{k} \left( \mathcal{B}_{n}^{k} \e^{\im n \phi} \right) = \\
-    &= \partial_{\rho} \left( \mathcal{B}_{n}^{\rho} \right) \e^{\im n \phi} + \mathcal{B}_{n}^{\phi} \partial_{\phi} \left( \e^{\im n \phi} \right) + \partial_{\theta} \left( \mathcal{B}_{n}^{\theta} \right) \e^{\im n \phi} = \\
-    &= \underbrace{\e^{\im n \phi}}_{\neq 0} \left( \partial_{\rho} \mathcal{B}_{n}^{\rho} + \im n \mathcal{B}_{n}^{\phi} + \partial_{\theta} \mathcal{B}_{n}^{\theta} \right).
-\end{align}
 
 %%% Local Variables: 
 %%% mode: latex

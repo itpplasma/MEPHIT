@@ -131,6 +131,28 @@
   pdfkeywords = {magnetohydrodynamics},
   pdflang     = {en}
 }
+\usepackage[
+  xindy,
+  numberedsection,
+  section=subsection,
+  toc,
+% nonumberlist,
+  nopostdot,
+  nogroupskip
+]{glossaries}
+\makeglossaries
+\glsdisablehyper
+\AtEndDocument{%
+  \glsaddallunused
+}
+%\newglossary[nlg]{base}{ntn}{not}{Base symbols}
+%\newglossary[dlg]{deco}{dcn}{dec}{Symbol decorations}
+\AfterPreamble{%
+  \input{SRC/notation.tex}
+}
+\usepackage{glossary-longbooktabs}
+\setglossarystyle{longragged-booktabs}
+\renewcommand*\glsdescwidth{0.8\textwidth}
 
 % references
 \usepackage{cleveref}
@@ -147,6 +169,7 @@
 \maketitle
 \pdfbookmark[0]{\contentsname}{toc}
 \tableofcontents
+\clearpage
 \subimport{SRC/}{idealmhd.tex}
 \subimport{SRC/}{task.tex}
 \subimport{SRC/}{geometry.tex}
@@ -157,6 +180,7 @@
 \subimport{SRC/}{results.tex}
 \appendix
 \subimport{SRC/}{appendix.tex}
+\subimport{SRC/}{snippets.tex}
 \printbibliography[heading=bibintoc]
 \end{document}
 

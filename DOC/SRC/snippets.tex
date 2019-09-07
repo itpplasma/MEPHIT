@@ -1,20 +1,4 @@
-\iffalse
-% glossary
-\usepackage[
-  xindy,
-  numberedsection,
-  toc,
-  nonumberlist,
-  nopostdot
-]{glossaries}
-\usepackage{glossary-longbooktabs}
-\setglossarystyle{longragged-booktabs}
-\makeglossaries
-\AfterPreamble{%
-  \input{notation.tex}
-}
-\fi
-
+\section{Snippets}
 
 \begin{align}
   \vec{j}_{0 \perp} &= \frac{-c \nabla p_{0} \times \vec{B}_{0}}{B_{0}^{2}} \\
@@ -108,7 +92,7 @@ Obvioulsy, the better the refinement of the grid around the resonant suface, the
 \end{align}
 
 
-\subsubsection{Alternative formulation for the current through flux surface edges}
+\subsection{Alternative formulation for the current through flux surface edges}
 
 As an alternative to \cref{eq:If} it can be shown (see writeup on gyrokinetics) that
 \begin{align}
@@ -124,7 +108,7 @@ Scalar multiplication with $\vec{n}_{\fs} \parallel \nabla p_{0} \parallel \nabl
   &= j_{0}^{\parallel} \frac{\vec{B}_{n} \cdot \vec{n}_{\fs}}{B_{0}} + \frac{c}{B_{0}^{2}} \vec{l}_{\fs} \cdot \left( B_{0 (\phi)} \nabla p_{n} - \frac{\im n}{R} p_{n} \vec{B}_{0}^{\pol} \right). \label{eq:I3_alt}
 \end{align}
 
-\section{Current perturbation -- alternative}
+\subsection{Current perturbation -- alternative}
 
 We split the current into parallel and perpendicular current:
 \begin{gather}
@@ -175,7 +159,7 @@ Flux
   &= c_{1} (\vec{n}^{1} \cdot \vec{B}_{n}^{\pol}) \vec{n}^{1} \cdot \vec{h}^{\pol} + c_{2} (\vec{n}^{2} \cdot \vec{B}_{n}^{\pol}) \vec{n}^{2} \cdot \vec{h}^{\pol} + B_{n (\phi)} h_{(\phi)}.
 \end{align}
 
-\section{Reduced MHD (unfinished)}
+\subsection{Reduced MHD (unfinished)}
 
 We take
 \begin{gather*}
@@ -190,7 +174,7 @@ Ampere's law becomes
   \nabla \times \vec{B}_{n} = \frac{1}{4 \pi} \vec{J}_{n}.
 \end{gather*}
 
-\subsubsection{Non-resonant test field: alternative version including safety factor}
+\subsection{Non-resonant test field: alternative version including safety factor}
 
 We would like to have a completely non-resonant field
 \begin{gather*}

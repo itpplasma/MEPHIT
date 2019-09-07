@@ -72,7 +72,7 @@ yielding a fixed-point iteration for $\Bpert$:
 \end{gather}
 Compared to the previous approach, this one is cumulative, i.e. it immediately produces the next approximation of the full perturbation. In other words, it corresponds to the sequence of partial sums of the previous infinite series:
 \begin{gather}
-  \Bpert^{[n]} = \sum_{k = 0}^{n} \Bpert^{(k)}. \label{eq:K_partial_sum}
+  \Bpert^{[\kappa]} = \sum_{k = 0}^{\kappa} \Bpert^{(k)}. \label{eq:K_partial_sum}
 \end{gather}
 For this to be consistent, the initial value is also given by the vacuum field,
 \begin{gather}
@@ -83,13 +83,15 @@ For illustration, both approaches are compared side-by-side in \cref{tab:comp_it
   \caption{Comparison of iteration with series (non-cumulative) and sequence (cumulative)}
   \label{tab:comp_iter}
   \begin{align*}
+    \toprule
     \text{iteration step:} && \Bpert^{(k)} &= \hat{K} \Bpert^{(k-1)} & \Bpert^{[k]} &= \hat{K} \Bpert^{[k-1]} + \Bvac, \\
     \text{initial value:} && \Bpert^{(0)} &= \Bvac & \Bpert^{[0]} &= \Bvac, \\
     \text{step 1:} && \Bpert^{(1)} &= \hat{K} \Bpert^{(0)} = \hat{K} \Bvac & \Bpert^{[1]} &= \hat{K} \Bpert^{[0]} + \Bvac = \hat{K} \Bvac + \Bvac, \\
     \text{step 2:} && \Bpert^{(2)} &= \hat{K} \Bpert^{(1)} = \hat{K}^{2} \Bvac & \Bpert^{[2]} &= \hat{K} \Bpert^{[1]} + \Bvac = \left ( \hat{K}^{2} + \hat{K} + \hat{I} \right ) \Bvac, \\
-    \text{explicit form:} && \Bpert^{(n)} &= \hat{K}^{n} \Bvac & \Bpert^{[n]} &= \sum_{k = 0}^{n} \hat{K}^{k} \Bvac, \\
-    \text{full perturbation:} && \Bpert &= \sum_{k = 0}^{\infty} \hat{K}^{n} \Bvac & \Bpert &= \Bpert^{[\infty]}, \\
-    \text{full plasma response:} && \Bplas &= \sum_{k = 1}^{\infty} \hat{K}^{n} \Bvac & \Bplas &= \Bpert^{[\infty]} - \Bvac.
+    \text{explicit form:} && \Bpert^{(\kappa)} &= \hat{K}^{\kappa} \Bvac & \Bpert^{[\kappa]} &= \sum_{k = 0}^{\kappa} \hat{K}^{k} \Bvac, \\
+    \text{full perturbation:} && \Bpert &= \sum_{k = 0}^{\infty} \hat{K}^{k} \Bvac & \Bpert &= \Bpert^{[\infty]}, \\
+    \text{full plasma response:} && \Bplas &= \sum_{k = 1}^{\infty} \hat{K}^{k} \Bvac & \Bplas &= \Bpert^{[\infty]} - \Bvac. \\
+    \bottomrule
   \end{align*}
 \end{table}
 For the implementation of preconditioned iterations (see \cref{sec:Arnoldi}), the cumulative approach is more convenient. To reproduce the intermediate summands, we use \cref{eq:K_partial_sum} and arrive at

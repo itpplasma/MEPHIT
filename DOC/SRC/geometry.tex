@@ -203,7 +203,7 @@ Another approximation made in the finite element method is the choice of a \emph
 \begin{gather}
   \Psi_{k} = \int_{\Gamma_{k}} R \vec{B}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l \approx R (\Gamma_{k}) \vec{B}_{n}^{\pol} (\Gamma_{k}) \cdot \vec{n}_{k}, \label{eq:Psi_k} \\
   I_{k} = \int_{\Gamma_{k}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l \approx R (\Gamma_{k}) \vec{J}_{n}^{\pol} (\Gamma_{k}) \cdot \vec{n}_{k}. \label{eq:I_k}
-\end{gather}
+\end{gather}%
 There are a few things to note here. Firstly, the factor $R$ is included due to the metric in cylindrical coordinates and the fact that the integrand derives from the divergence theorem. Secondly, $\hat{\vec{n}}$ is normalized, but $\vec{n}$ is not, so the length of the edge is included as a factor. Lastly, the integral is approximated by evaluation at only a single point, the edge midpoint $\Gamma_{k}$. Conversely, to interpolate the value at given point $\vec{r}$ within a triangle, each degree of freedom $\Psi_{k}$ or $I_{k}$ is multiplied by the vectorial basis formed by the vector connecting $\vec{r}$ and the node opposing edge $k$, weighted with the triangle area $S_{\Omega}$:
 \begin{gather}
   \vec{B}_{n} (\vec{r}) = \frac{\Psi_{\fs} (\vec{r} - \vec{r}_{\vfs}) + \Psi_{\inw} (\vec{r} - \vec{r}_{\vinw}) + \Psi_{\out} (\vec{r} - \vec{r}_{\vout})}{2 S_{\Omega}}, \\
