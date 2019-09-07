@@ -31,17 +31,17 @@ and dividing by $B_{0}^{\theta}$, we obtain
 \end{gather}
 Written in terms of toroidal Fourier harmonics $m, n$ in $\theta, \phi$ the equation becomes
 \begin{gather*}
-  \psi_{m n} = \frac{\left ( \sqrt{g} \delta B^{\psi} \right )_{m n}}{m + n q} = \frac{\left ( \sqrt{g} B_{n}^{\psi} \right )_{m}}{m + n q}.
+  \psi_{m n} = \frac{\left [ \sqrt{g} \delta B^{\psi} \right ]_{m n}}{\im (m + n q)} = \frac{\left [ \sqrt{g} B_{n}^{\psi} \right ]_{m}}{\im (m + n q)}.
 \end{gather*}
 $\sqrt{g}$ depends also on $\theta$, so poloidal harmonics $m$ have to be taken outside the bracket here. In order to fulfill the original requirement not to break flux surfaces, $\psi_{m n}$ must never diverge, so $m + n q$ must not become zero. We can avoid such resonant surfaces if
 \begin{gather}
-  \left ( \sqrt{g} B_{n}^{\psi} \right )_{m} \overset{!}{=} 0
+  \left [ \sqrt{g} B_{n}^{\psi} \right ]_{m} \overset{!}{=} 0
 \end{gather}
 for all possible $m$ that could lead to a resonance. The simplest way to do so is to make $\sqrt{g} B_{n}^{\psi}$ a flux function, possessing only the poloidally symmetric harmonic $m = 0$. More generally, also $-m < n q_{\text{min}}$ and $-m > n q_{\text{max}}$ are possible, but for nonzero $m$ a transformation to the flux angle $\theta$ has to be computed explicitly.
 
 Using the Jacobian of symmetry flux coordinates from \cref{eq:flux_metric}, we obtain
 \begin{gather}
-  \psi_{m n} = \frac{q}{m + n q} \left( \frac{R^{2}}{B_{0 \phi}} B_{n}^{\psi} \right)_{m}
+  \psi_{m n} = \frac{q}{\im (m + n q)} \left [ \frac{R^{2}}{B_{0 \phi}} B_{n}^{\psi} \right ]_{m} \label{eq:psi_mn}
 \end{gather}
 and so, to generate a non-resonant field, we are allowed to use any value
 \begin{gather}

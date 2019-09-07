@@ -33,7 +33,7 @@ where the elements of the matrix $\hat{K}$ are
 \begin{gather}
   K_{jk} = (b_{j} + a_{j}) \delta_{j-1, k} + (b_{j} - a_{j}) \delta_{jk}.
 \end{gather}
-Note that for $N$ nodes with periodic boundary conditions $p_{n}^{(0)} = p_{n}^{(N)}$, indices "wrap around", resulting in the following shape for the stiffness matrix:
+Note that for $N$ nodes with periodic boundary conditions $p_{n}^{(0)} = p_{n}^{(N)}$, indices \enquote{wrap around}, resulting in the following shape for the stiffness matrix:
 \begin{gather*}
   \hat{K} = \begin{pmatrix}
     b_{1} - a_{1} &  b_{1} + a_{1} &        0       & \hdots &    0   \\
@@ -167,6 +167,70 @@ For the global\footnote{in this case only referring to the current triangle stri
 where the elements of the stiffness matrix $\hat{K}$ are
 \begin{gather}
   K_{jk} = -\left ( 1 + \frac{\im n S_{\Omega^{(j)}}}{2} \frac{B_{0}^{\phi} (\Gamma_{\inw}^{(j)})}{\vec{B}_{0}^{\pol} (\Gamma_{\inw}^{(j)}) \cdot \vec{n}_{\inw}^{(j)}} \right) \delta_{jk} + \left( 1 + \frac{\im n S_{\Omega^{(j)}}}{2} \frac{B_{0}^{\phi} (\Gamma_{\out}^{(j)})}{\vec{B}_{0}^{\pol} (\Gamma_{\out}^{(j)}) \cdot \vec{n}_{\out}^{(j)}} \right) \delta_{j+1, k}.
+\end{gather}
+
+\subsection{Current sheets}
+\label{sec:sheets}
+
+One aspect of resonances has not been considered yet. Starting from the static MHD equilibrium in \cref{eq:mhd-gen}, we see that only the normal component of the current density is relevant, i.e.
+\begin{gather}
+  \grad p = \frac{1}{c} \vec{J}^{\perp} \times \vec{B},
+\end{gather}
+while the parallel component $\vec{J}^{\parallel} = J^{\parallel} \vec{h}$ is not fixed. Nevertheless, $\vec{J}$ must have zero divergence:
+\begin{gather}
+  -\divg \vec{J}^{\perp} = \divg \frac{J^{\parallel} \vec{B}}{B} = \vec{B} \cdot \grad \frac{J^{\parallel}}{B}.
+\end{gather}
+Expanding in flux symmetry coordinates gives
+\begin{gather}
+  -\divg \vec{J}^{\perp} = \left ( B^{\theta} \pd{\theta} + B^{\phi} \pd{\phi} \right ) \frac{J^{\parallel}}{B} = B^{\theta} \left ( \pd{\theta} + q \pd{\phi} \right ) \frac{J^{\parallel}}{B},
+\end{gather}
+which is rearranged to
+\begin{gather}
+  -\frac{\divg \vec{J}^{\perp}}{B^{\theta}} = \left ( \pd{\theta} + q \pd{\phi} \right ) \frac{J^{\parallel}}{B}
+\end{gather}
+and \textsc{Fourier} transformed to
+\begin{gather}
+  s_{m n} = \im (m + n q) \left [ \frac{J^{\parallel}}{B} \right ]_{m n},
+\end{gather}
+where the left-hand side has been grouped together in the \textsc{Fourier} coefficient \ensuremath{s_{m n}}. Rearranging yields
+\begin{gather}
+  \frac{s_{m n}}{\im (m + n q)} = \left [ \frac{J^{\parallel}}{B} \right ]_{m n}.
+\end{gather}
+For comparison, eq.~(1) in \cite{Waelbroeck09} gives -- after translation to the conventions of this thesis --
+\begin{gather}
+  \left [ \frac{J^{\parallel}}{B} \right ]_{m n} = \frac{4 \pi p'(\rho)}{\langle B^{2} \rangle} \sum_{m, n} \frac{\symcal{G}_{m n} (\rho)}{q(\rho) - \frac{m}{n}} + C_{m n} \delta \left ( q(\rho) - \frac{m}{n} \right ), \label{eq:resonances}
+\end{gather}
+where the $\symcal{G}_{m n}$ are geometric factors and the $C_{m n}$ are integration constants. To approximate the delta distribution, we consider the distortion $\delta \psi$ of flux surfaces, specifically \cref{eq:psi_mn}. A similar expression can be derived by expanding \cref{eq:pn} in flux symmetry coordinates, giving
+\begin{gather}
+  B_{0}^{\theta} \pd{\theta} p_{n} + \im n p_{n} B_{0}^{\phi} = -B_{n}^{\psi} p_{0}'(\psi),
+\end{gather}
+which is again rearranged to
+\begin{gather}
+  \pd{\theta} p_{n} + \im n q p_{n} = -p_{0}'(\psi) \frac{B_{n}^{\psi}}{B_{0}^{\theta}}
+\end{gather}
+and \textsc{Fourier} transformed to
+\begin{gather}
+  \im m p_{m n} + \im n q p_{m n} = -p_{0}'(\psi) \left [ \frac{B_{n}^{\psi}}{B_{0}^{\theta}} \right ]_{m},
+\end{gather}
+which is finally rearranged to
+\begin{gather}
+  p_{m n} = \frac{-p_{0}'(\psi)}{\im (m + n q)} \left [ \frac{B_{n}^{\psi}}{B_{0}^{\theta}} \right ]_{m}.
+\end{gather}
+When a resonance occurs at poloidal mode number $m_{0}$, around the affected flux surface the pressure perturbation is dominated by the associated \textsc{Fourier} coefficient,
+\begin{gather}
+  p_{m_{0} n} \gg p_{m n} \quad \forall m \neq m_{0}
+\end{gather}
+and thus
+\begin{gather}
+  p_{n} \approx \e^{\im m_{0} \theta} p_{m_{0} n}.
+\end{gather}
+Putting everything together, we approximate the sheet current by
+\begin{gather}
+  \left [ \frac{J^{\parallel}}{B} \right ]_{m n} = C_{m n} p_{m n} \delta_{m m_{0}},
+\end{gather}
+or, after an inverse \textsc{Fourier} transform,
+\begin{gather}
+  J_{n}^{\parallel} = C_{m_{0} n} B_{0} p_{n}.
 \end{gather}
 
 %%% Local Variables: 
