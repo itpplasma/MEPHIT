@@ -94,12 +94,12 @@ program q_profile
      read (1,*) restart                    ! restart from last output
      close(1)
 
-     open(1,file='START_PRFS/points.dat',form='unformatted')
+     open(1,file='../PRELOAD/points.dat',form='unformatted')
      read(1) npoint
      allocate(mesh_point(npoint))
      read(1) mesh_point
      close(1)
-     open(1,file='START_PRFS/triangles.dat',form='unformatted')
+     open(1,file='../PRELOAD/triangles.dat',form='unformatted')
      read(1) ntri
      allocate(mesh_element(ntri))
      read(1) mesh_element
@@ -118,7 +118,7 @@ program q_profile
 
 !print *,sum(flux_j),sum(flux_q),sum(tor_mom)
 !stop
-     open(1,file='START_PRFS/thermostat.dat',form='unformatted')
+     open(1,file='../PRELOAD/thermostat.dat',form='unformatted')
      read(1) n_therm
      allocate(D_therm(n_therm,nsorts),V_therm(n_therm,nsorts),T_therm(n_therm,nsorts))
      allocate(vol_therm(n_therm))
@@ -133,7 +133,7 @@ program q_profile
 !!$v3_sum_out(:) = 0.d0
 !!$part_num = 0.d0
 
-     open(1,file='START_PRFS/boundary.dat',form='unformatted')
+     open(1,file='../PRELOAD/boundary.dat',form='unformatted')
      read(1) ntri_inbou
      allocate(inbou_list(ntri_inbou))
      read(1) inbou_list
@@ -143,7 +143,7 @@ program q_profile
 !!$     read(1) R_bou, Z_bou, S_bou
      close(1)
 
-     open(1,file='START_PRFS/wall_loads.dat',form='unformatted')
+     open(1,file='../PRELOAD/wall_loads.dat',form='unformatted')
      read(1) nboucell
      allocate(flux_j(nboucell,nsorts), flux_q(nboucell,nsorts), tor_mom(nboucell,nsorts))
      read(1) flux_j
