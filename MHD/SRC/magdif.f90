@@ -196,7 +196,10 @@ contains
   subroutine magdif_init
     call init_indices
     call read_mesh
-    if (kilca_major_radius /= 0d0) n = n * R0 / kilca_major_radius
+    if (kilca_scale_factor /= 0) then
+       n = n * kilca_scale_factor
+       R0 = R0 * kilca_scale_factor
+    end if
     call init_flux_variables
     call cache_equilibrium_field
     call compute_safety_factor
@@ -212,7 +215,7 @@ contains
     Bnphi_vac = Bnphi
     call write_vector_dof(Bnflux_vac, Bnphi_vac, Bn_vacout_file)
     call write_vector_plot(Bnflux_vac, Bnphi_vac, &
-         decorate_filename(Bn_vacout_file, 'plot_'))
+         decorate_filename(Bn_vacout_file, 'plot_', ''))
     if (log_info) write(logfile, *) 'magdif initialized'
   end subroutine magdif_init
 
@@ -253,7 +256,7 @@ contains
     call compute_currn     ! compute currents based on previous perturbation field
     call compute_Bn        ! use field code to generate new field from currents
     call read_Bn(Bn_file)  ! read new bnflux from field code
-    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_'))
+    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_', ''))
   end subroutine magdif_single
 
   subroutine magdif_iterated
@@ -267,6 +270,8 @@ contains
     complex(dp) :: eigvals(nritz)
     complex(dp), allocatable :: Lr(:,:), Yr(:,:)
     integer, allocatable :: ipiv(:)
+    character(len = 4) :: postfix
+    character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
 
     ! system dimension N ! - no need to include extended mesh
     ndim = ntri * 4 ! kt_low(nflux+1) * 4
@@ -283,10 +288,12 @@ contains
        end if
        if (ngrow > 0) then
           do i = 1, ngrow
+             write (postfix, postfix_fmt) i
              call unpack2(Bnflux, Bnphi, eigvecs(:, i))
-             call write_vector_dof(Bnflux, Bnphi, decorate_filename(eigvec_file, '', i))
+             call write_vector_dof(Bnflux, Bnphi, &
+                  decorate_filename(eigvec_file, '', postfix))
              call write_vector_plot(Bnflux, Bnphi, &
-                  decorate_filename(eigvec_file, 'plot_', i))
+                  decorate_filename(eigvec_file, 'plot_', postfix))
           end do
           allocate(Lr(ngrow, ngrow), Yr(ngrow, ngrow))
           Yr = (0d0, 0d0)
@@ -323,6 +330,7 @@ contains
     end if
     do kiter = 1, niter
        if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter
+       write (postfix, postfix_fmt) kiter
 
        call next_iteration(ndim, Bn_prev, Bn)
        if (preconditioned) then
@@ -335,21 +343,24 @@ contains
 
        call unpack2(Bnflux_diff, Bnphi_diff, Bn - Bn_prev)
        call write_vector_dof(Bnflux_diff, Bnphi_diff, &
-            decorate_filename(Bn_diff_file, '', kiter))
+            decorate_filename(Bn_diff_file, '', postfix))
        call write_vector_dof(Bnflux, Bnphi, &
-            decorate_filename(Bn_file, '', kiter))
+            decorate_filename(Bn_file, '', postfix))
        if (kiter <= 2) then
           call write_vector_plot(Bnflux_diff, Bnphi_diff, &
-               decorate_filename(Bn_diff_file, 'plot_', kiter))
+               decorate_filename(Bn_diff_file, 'plot_', postfix))
           call write_vector_plot(Bnflux, Bnphi, &
-               decorate_filename(Bn_file, 'plot_', kiter))
+               decorate_filename(Bn_file, 'plot_', postfix))
           call write_vector_plot(jnflux, jnphi, &
-               decorate_filename(currn_file, 'plot_', kiter))
-          call write_scalar_dof(presn, decorate_filename(presn_file, '', kiter))
+               decorate_filename(currn_file, 'plot_', postfix))
+          call write_scalar_dof(presn, decorate_filename(presn_file, '', postfix))
        end if
 
        call pack2(Bnflux, Bnphi, Bn_prev)
     end do
+    if (kilca_scale_factor /= 0) then
+       call write_kilca_modes(Bnflux, Bnphi, kilca_pol_mode_file)
+    end if
 
     if (allocated(Lr)) deallocate(Lr)
 
@@ -617,7 +628,7 @@ contains
 
     allocate(m_res(nflux))
     m_res = 0
-    m_res_min = max(ceiling(minval(q) * n), ceiling(n + 1))
+    m_res_min = max(ceiling(minval(q) * n), n + 1)
     m_res_max = floor(maxval(q) * n)
     allocate(abs_err(nflux))
     do m = m_res_max, m_res_min, -1
@@ -1137,7 +1148,7 @@ inner: do kt = 1, kt_max(kf)
     call check_redundant_edges(jnflux, -1d0, 'jnflux')
     call check_div_free(jnflux, jnphi, rel_err_currn, 'jnflux')
     call write_vector_dof(jnflux, jnphi, currn_file)
-    call write_vector_plot(jnflux, jnphi, decorate_filename(currn_file, 'plot_'))
+    call write_vector_plot(jnflux, jnphi, decorate_filename(currn_file, 'plot_', ''))
   end subroutine compute_currn
 
   subroutine avg_flux_on_quad(pol_flux, tor_comp)
@@ -1331,4 +1342,74 @@ inner: do kt = 1, kt_max(kf)
     end do
     close(1)
   end subroutine write_fluxvar
+
+  subroutine write_kilca_modes(pol_flux, tor_comp, outfile)
+    complex(dp), intent(in) :: pol_flux(:,:)
+    complex(dp), intent(in) :: tor_comp(:)
+    character(len = *), intent(in) :: outfile
+
+    integer, parameter :: mmax = 24
+    character(len = 17) :: fmt
+    complex(dp), dimension(-mmax:mmax) :: coeff_rho, coeff_theta, coeff_zeta, fourier_basis
+    integer :: kf, kt, m, fid_rho, fid_theta, fid_zeta
+    type(triangle) :: elem
+    type(knot) :: tri(3)
+    complex(dp) :: pol_comp_r, pol_comp_z, pol_comp_rho, pol_comp_theta
+    real(dp) :: r, z, rmaxis, zmaxis, rho_max, rho, theta, psi_avg
+
+    write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(1e16.9, 1x))'
+    rmaxis = mesh_point(1)%rcoord
+    zmaxis = mesh_point(1)%zcoord
+    rho_max = hypot(mesh_point(kp_low(nflux)+1)%rcoord - rmaxis, &
+         mesh_point(kp_low(nflux)+1)%zcoord - zmaxis)
+    open(newunit = fid_rho, recl = 2 * longlines, &
+         file = decorate_filename(outfile, '', '_r'))
+    open(newunit = fid_theta, recl = 2 * longlines, &
+         file = decorate_filename(outfile, '', '_theta'))
+    open(newunit = fid_zeta, recl = 2 * longlines, &
+         file = decorate_filename(outfile, '', '_z'))
+    do kf = 1, nflux
+       coeff_rho = 0d0
+       coeff_theta = 0d0
+       coeff_zeta = 0d0
+       rho = rho_max * (dble(kf) - 0.5) / dble(nflux)
+       do kt = 1, kt_max(kf)
+          theta = (dble(kt) - 0.5d0) / dble(kt_max(kf)) * 2d0 * pi
+          fourier_basis = [(exp(-2d0 * pi * imun * m * theta), m = -mmax, mmax)]
+          r = rmaxis + rho * cos(theta)
+          z = zmaxis + rho * sin(theta)
+          elem = mesh_element(kt_low(kf) + kt)
+          tri = mesh_point(elem%i_knot(:))
+          ! edge 1 lies opposite to knot 3, etc.
+          pol_comp_r = 1d0 / elem%det_3 * ( &
+               pol_flux(kt_low(kf) + kt, 1) * (r - tri(3)%rcoord) + &
+               pol_flux(kt_low(kf) + kt, 2) * (r - tri(1)%rcoord) + &
+               pol_flux(kt_low(kf) + kt, 3) * (r - tri(2)%rcoord))
+          pol_comp_z = 1d0 / elem%det_3 * ( &
+               pol_flux(kt_low(kf) + kt, 1) * (z - tri(3)%zcoord) + &
+               pol_flux(kt_low(kf) + kt, 2) * (z - tri(1)%zcoord) + &
+               pol_flux(kt_low(kf) + kt, 3) * (z - tri(2)%zcoord))
+          pol_comp_rho = pol_comp_r * cos(theta) + pol_comp_z * sin(theta)
+          pol_comp_theta = pol_comp_z * cos(theta) - pol_comp_r * sin(theta)
+          coeff_rho = coeff_rho + pol_comp_rho * fourier_basis
+          coeff_theta = coeff_theta + pol_comp_theta * fourier_basis
+          coeff_zeta = coeff_zeta + R0 * tor_comp(kt_low(kf) + kt) * fourier_basis
+       end do
+       coeff_rho = coeff_rho / kt_max(kf)
+       coeff_theta = coeff_theta / kt_max(kf)
+       coeff_zeta = coeff_zeta / kt_max(kf)
+       psi_avg = 0.5d0 * (psi(kf) + psi(kf-1))
+       write (fid_rho, fmt) psi_avg, q(kf), real(coeff_rho), aimag(coeff_rho)
+       write (fid_theta, fmt) psi_avg, q(kf), real(coeff_theta), aimag(coeff_theta)
+       write (fid_zeta, fmt) psi_avg, q(kf), real(coeff_zeta), aimag(coeff_zeta)
+    end do
+    do kt = kt_low(nflux+1) + 1, ntri
+       write (fid_rho, fmt) psi(nflux), q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
+       write (fid_theta, fmt) psi(nflux), q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
+       write (fid_zeta, fmt) psi(nflux), q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
+    end do
+    close(fid_rho)
+    close(fid_theta)
+    close(fid_zeta)
+  end subroutine write_kilca_modes
 end module magdif

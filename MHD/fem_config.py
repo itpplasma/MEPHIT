@@ -14,11 +14,11 @@ p = f90nml.parser.Parser()
 nml = p.read(sys.argv[1])
 config = nml['settings']
 
-R_KiLCA = config['kilca_major_radius']
-if (R_KiLCA == 0.0):
+KiLCA_scale_factor = config['kilca_scale_factor']
+if (KiLCA_scale_factor == 0):
     nmode = config['n']
 else:
-    nmode = config['n'] * config['R0'] / R_KiLCA
+    nmode = config['n'] * KiLCA_scale_factor
 ktlownfluxp1 = (2 * config['nflux'] - 1) * config['nkpol']
 if (os.path.isabs(config['currn_file'])):
     currnfile = config['currn_file']

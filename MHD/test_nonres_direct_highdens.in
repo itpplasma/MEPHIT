@@ -31,5 +31,5 @@
    rel_err_Bn = 1d-7                               ! error threshold for magnetic field perturbation
    rel_err_currn = 1d-8                            ! error threshold for current perturbation
    kilca_pol_mode = 0                              ! single poloidal mode number used with KiLCA
-   kilca_major_radius = 0d0                        ! major radius used in KiLCA configuration
+   kilca_scale_factor = 0                          ! scaling factor used in EFIT rmaxis from KiLCA
 /

@@ -1,6 +1,6 @@
 &settings
    log_level = 4                                         ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
-   runmode = 2                                           ! 0: single iteration, 1: direct iterations,
+   runmode = 1                                           ! 0: single iteration, 1: direct iterations,
                                                          ! 2: preconditioned iterations
    nonres = .false.                                      ! use non-resonant test case
    quad_avg = .true.                                     ! average over quadrilaterals for non-resonant test case
@@ -14,7 +14,7 @@
    ti0 = 3.d3                                            ! temperature on magnetic axis
    di0 = 5.d13                                           ! density on magnetic axis
    damp = 0d0                                            ! damping factor for resonances
-   R0 = 1d5                                              ! distance of magnetic axis from center in cm
+   R0 = 172.74467899999999d0                             ! distance of magnetic axis from center in cm
    sheet_current_factor = (0d0, 0d0)                     ! coefficient for sheet currents
    point_file = '../PRELOAD/points_kilca.dat'            ! mesh points from PRELOAD
    tri_file = '../PRELOAD/triangles_kilca.dat'           ! triangles and edges from PRELOAD
@@ -31,5 +31,6 @@
    rel_err_Bn = 1d-6                                     ! error threshold for magnetic field perturbation
    rel_err_currn = 1d-8                                  ! error threshold for current perturbation
    kilca_pol_mode = 3                                    ! single poloidal mode number used with KiLCA
-   kilca_major_radius = 172.74467899999999d0             ! major radius used in KiLCA configuration
+   kilca_scale_factor = 579                              ! scaling factor used in EFIT rmaxis from KiLCA
+   kilca_pol_mode_file = 'Bmn.dat'                       ! output file for Fourier coefficients
 /

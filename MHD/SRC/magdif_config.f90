@@ -20,7 +20,7 @@ module magdif_config
 
   integer  :: niter = 20      !< number of iterations
   integer  :: nritz = 20      !< number of Ritz eigenvalues
-  real(dp) :: n               !< harmonic index of perturbation
+  integer  :: n               !< harmonic index of perturbation
   integer  :: nkpol           !< number of knots per poloidal loop
   integer  :: nflux           !< number of flux surfaces
   real(dp) :: ti0             !< interpolation step for temperature
@@ -85,6 +85,9 @@ module magdif_config
   !> output data file for eigenvectors in magdif::magdif_precon().
   character(len = 1024) :: eigvec_file
 
+  !> output data file for poloidal_modes in magdif::magdif_iterated().
+  character(len = 1024) :: kilca_pol_mode_file
+
   !> error threshold for divergence-freeness of #bnflux and #bnphi
   real(dp) :: rel_err_Bn = 1d-7
 
@@ -94,15 +97,18 @@ module magdif_config
   !> single poloidal mode used in comparison with KiLCA code
   integer :: kilca_pol_mode
 
-  !> major radius used in KiLCA configuration
-  real(dp) :: kilca_major_radius
+  !> Scaling factor used for comparison with results from KiLCA code.
+  !>
+  !> If non-zero, #n and #r0 are scaled by this factor to approximate the cylindrical
+  !> topology assumed in KiLCA.
+  integer :: kilca_scale_factor
 
   !> namelist for input parameters
   namelist / settings / log_level, runmode, nonres, quad_avg, niter, nritz, tol, n, &
        nkpol, nflux, ti0, di0, damp, R0, sheet_current_factor, point_file, tri_file, &
        Bn_vacout_file, Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, &
        presn_file, currn_file, eigvec_file, rel_err_Bn, rel_err_currn, kilca_pol_mode, &
-       kilca_major_radius
+       kilca_scale_factor, kilca_pol_mode_file
 
 contains
 
@@ -130,15 +136,14 @@ contains
   !>
   !> @param in_name undecorated filename
   !> @param prefix string to be prefixed to the file basename
-  !> @param iter optional postfix indicating an iteration step
+  !> @param postfix string to be postfixed to the file basename
   !>
   !> No attempt is made to check whether the given filename is valid or accessible.
-  !> Without an \p iter and an empty prefix, \p in_name is returned.
-  function decorate_filename(in_name, prefix, iter) result(out_name)
+  function decorate_filename(in_name, prefix, postfix) result(out_name)
     character(len = *), intent(in) :: in_name
     character(len = *), intent(in) :: prefix
-    integer, intent(in), optional :: iter
-    character(len = len_trim(in_name) + len_trim(prefix) + 4) :: out_name
+    character(len = *), intent(in) :: postfix
+    character(len = len_trim(in_name) + len_trim(prefix) + len_trim(postfix)) :: out_name
 
     integer :: basename_start, basename_end, name_end
 
@@ -147,11 +152,7 @@ contains
     basename_end = basename_start - 2 + scan(in_name(basename_start:), '.', .true.)
     if (basename_end - basename_start == -1) basename_start = basename_start + 1 ! dotfile
     if (basename_end < basename_start) basename_end = name_end
-    if (present(iter)) then
-       write (out_name, "(a, '_', i0.3, a)") in_name(:basename_start-1) // prefix // &
-            in_name(basename_start:basename_end), iter, in_name(basename_end+1:name_end)
-    else
-       out_name = in_name(:basename_start-1) // prefix // in_name(basename_start:name_end)
-    end if
+    out_name = in_name(:basename_start-1) // prefix // in_name(basename_start: &
+         basename_end) // postfix // in_name(basename_end+1:name_end)
   end function decorate_filename
 end module magdif_config
