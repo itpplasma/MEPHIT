@@ -635,11 +635,12 @@ contains
     m_res = 0
     m_res_min = max(ceiling(minval(q) * n), n + 1)
     m_res_max = floor(maxval(q) * n)
-    allocate(sheet_current_factor(m_res_min:m_res_max))
     do m = m_res_max, m_res_min, -1
        abs_err = [(abs(q(kf) - dble(m) / dble(n)), kf = 1, nflux)]
        m_res(minloc(abs_err, 1)) = m
     end do
+    allocate(sheet_current_factor(m_res_min:m_res_max))
+    sheet_current_factor = (0d0, 0d0)
   end subroutine compute_safety_factor
 
   !> Computes the "weighted" centroid for a triangle so that it is approximately
