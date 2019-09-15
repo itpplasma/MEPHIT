@@ -28,6 +28,7 @@
    presn_file = 'presn.dat'                        ! output file for pressure perturbation
    currn_file = 'currn.dat'                        ! output file for current perturbation
    eigvec_file = 'eigvec.dat'                      ! output file for eigenvectors
+   max_eig_out = 10                                ! maximal number of eigenvectors to be saved
    rel_err_Bn = 1d-7                               ! error threshold for magnetic field perturbation
    rel_err_currn = 1d-8                            ! error threshold for current perturbation
    kilca_pol_mode = 0                              ! single poloidal mode number used with KiLCA

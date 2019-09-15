@@ -82,7 +82,7 @@ module magdif_config
   !> output data file for current perturbation
   character(len = 1024) :: currn_file
 
-  !> output data file for eigenvectors in magdif::magdif_precon().
+  !> output data file for eigenvectors in magdif::magdif_iterated().
   character(len = 1024) :: eigvec_file
 
   !> output data file for poloidal_modes in magdif::magdif_iterated().
@@ -103,12 +103,15 @@ module magdif_config
   !> topology assumed in KiLCA.
   integer :: kilca_scale_factor
 
+  !> maximum number of eigenvectors to be dumped in #eigvec_file
+  integer :: max_eig_out = 10
+
   !> namelist for input parameters
   namelist / settings / log_level, runmode, nonres, quad_avg, niter, nritz, tol, n, &
        nkpol, nflux, ti0, di0, damp, R0, sheet_current_factor, point_file, tri_file, &
        Bn_vacout_file, Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, &
        presn_file, currn_file, eigvec_file, rel_err_Bn, rel_err_currn, kilca_pol_mode, &
-       kilca_scale_factor, kilca_pol_mode_file
+       kilca_scale_factor, kilca_pol_mode_file, max_eig_out
 
 contains
 

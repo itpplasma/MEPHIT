@@ -287,7 +287,7 @@ contains
           end do
        end if
        if (ngrow > 0) then
-          do i = 1, ngrow
+          do i = 1, min(ngrow, max_eig_out)
              write (postfix, postfix_fmt) i
              call unpack2(Bnflux, Bnphi, eigvecs(:, i))
              call write_vector_dof(Bnflux, Bnphi, &
@@ -328,8 +328,8 @@ contains
        Bn_prev = Bn_prev - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
             matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn_prev)))
     end if
-    do kiter = 1, niter
-       if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter
+    do kiter = 0, niter-1
+       if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter-1
        write (postfix, postfix_fmt) kiter
 
        call next_iteration(ndim, Bn_prev, Bn)
@@ -346,7 +346,7 @@ contains
             decorate_filename(Bn_diff_file, '', postfix))
        call write_vector_dof(Bnflux, Bnphi, &
             decorate_filename(Bn_file, '', postfix))
-       if (kiter <= 2) then
+       if (kiter <= 1) then
           call write_vector_plot(Bnflux_diff, Bnphi_diff, &
                decorate_filename(Bn_diff_file, 'plot_', postfix))
           call write_vector_plot(Bnflux, Bnphi, &
