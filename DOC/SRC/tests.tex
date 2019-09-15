@@ -29,7 +29,7 @@ and dividing by $B_{0}^{\theta}$, we obtain
 \begin{gather}
   \left ( \pd{\theta} + q \pd{\phi} \right ) \delta \psi = \frac{\delta B^{\rho}}{B_{0}^{\theta}} = -\sqrt{g} \delta B^{\rho} = \sqrt{g} \delta B^{\psi}.
 \end{gather}
-Written in terms of toroidal Fourier harmonics $m, n$ in $\theta, \phi$ the equation becomes
+Written in terms of toroidal \textsc{Fourier} harmonics $m, n$ in $\theta, \phi$ the equation becomes
 \begin{gather*}
   \psi_{m n} = \frac{\left [ \sqrt{g} \delta B^{\psi} \right ]_{m n}}{\im (m + n q)} = \frac{\left [ \sqrt{g} B_{n}^{\psi} \right ]_{m}}{\im (m + n q)}.
 \end{gather*}
@@ -130,25 +130,88 @@ Now, to assign sensible values to the arbitrary constants, consider the solution
 \subsection{Analytical solution for very large aspect ratios}
 \label{sec:analytical}
 
-Using flux coordinates $(r, \theta, \phi)$, a term in \cref{eq:pn} can be simplified:
+To derive an analytical approximation, a very large major radius $R_{0}$ -- and thus aspect ratio -- is considered for a ring torus, i.e. with circular cross-section. The torus is \enquote{unbent} and the toroidal geometry is effectively transformed to cylindrical geometry with a very thin and elongated cylinder and periodic boundary conditions. To distinguish this cylinder from the cylindrical coordinates $(R, \phi, Z)$ established in \cref{sec:cocos}, we use coordinates $(r, \vartheta, z)$ for the former:
+\begin{align}
+  R &= R_{0} + r \cos \vartheta, & Z &= r \sin \vartheta, & \phi &= \frac{z}{R_0}. \label{eq:kilca-coord}
+\end{align}
+Thus $r$ corresponds to the minor radius and the pseudoradial component $\rho$, $z$ points in the $\phi$ direction in the infinitesimal limit and $\vartheta$ corresponds to the poloidal angle $\theta$, albeit defined as a geometrical angle and not field-aligned. As for toroidal geometry, a \textsc{Fourier} series expansion is possible for cyclic coordinates:
 \begin{gather}
-  \vec{B}_{0}^{\pol} \cdot \grad p_{n} = B_{0}^{\theta} \vec{e}_{\theta} \cdot \grad p_{n} = B_{0}^{\theta} \pd[p_{n}]{\theta}.
+  \Bpert (r, \vartheta, z) = \sum_{n = -\infty}^{\infty} \sum_{m = -\infty}^{\infty} \vec{B}_{m n} (r) \e^{\im m \theta} \e^{\im k_{z} z}.
 \end{gather}
-Now when we expand the perturbed quantities as series in $\theta$ as well as $\phi$ so that
+Here, $k_{z}$ is a wavenumber given by
 \begin{gather}
-  \delta p = \sum_{n} p_n(r, \theta) \e^{\im n \phi} = \sum_{m, n} p_{mn}(r) \e^{\im m \theta + \im n \phi},
+  k_{z} = \frac{n}{R_{0}},
 \end{gather}
-\cref{eq:pn} reduces to
+ensuring the same same periodicity $2 \pi R_{0}$ as for the toroidal geometry. In the same sense, the wavenumber $k_{\vartheta}$ is defined as
 \begin{gather}
-  \im m p_{mn} B_{0}^{\theta} + \im n p_{mn} B_{0}^{\phi} = -B_{mn}^{r} p_{0}'(r) =: -s_{mn}
+  k_{\vartheta} = \frac{m}{r}
 \end{gather}
-with a source term $s_{mn}$. This allows a simple algebraic solution where all quantities depend only on $r$:
-\begin{gather}
-  p_{mn} =  \frac{\im s_{mn}}{m B_{0}^{\theta} + n B_{0}^{\phi}}.
-\end{gather}
-Now an approximation can be made by switching from contravariant components to covariant components which are (for some reason) assumed to be constant. The factor $R$ appearing in the metric components can also be considered constant over the domain in question -- the toroidal geometry is effectively transformed to cylindrical geometry with a very thin and elongated cylinder and periodic boundary conditions.
+and both are combined in the wavevector $\vec{k}$ as
+\begin{align}
+  \vec{k} = k_{z} \vec{e}_{z} + k_{\vartheta} \vec{e}_{(\vartheta)}.
+\end{align}
+Note that, due to the cylindrical geometry, there is no mode coupling among poloidal modes. As before, we only consider a single toroidal mode number $n$.
 
-[See \cite{Heyn08} \ldots]
+The general solution for the radial component in this geometry, on which KiLCA code is based, is given by eq.~(5) from \cite{Heyn08}. For the vacuum perturbation $\Bvac$ it reduces to
+\begin{gather}
+  \pd{r} \frac{r}{k^{2}} \pd[B_{m n r}]{r} - r B_{m n r} \left ( 1 - \pd{r} \frac{1}{r k^{2}}\right ) = 0 \label{eq:kilca-ode}
+\end{gather}
+Before attempting to solve \cref{eq:kilca-ode}, we consider the constraints on the remaining components. Applying \textsc{Ampère}'s law and taking into account the lack of associated current in the plasma volume, we get
+\begin{gather}
+  0 = \frac{4 \pi}{c} \sqrt{g} J^{\vartheta} = \sqrt{g} \left ( \curl \Bvac \right )^{\vartheta} = \pd{z} \delta B_{\text{v} r} - \pd{r} \delta B_{\text{v} z}.
+\end{gather}
+Taking the \textsc{Fourier} transform as $\pd{z} \to \im k_{z}$ yields
+\begin{gather}
+  0 = \im k_{z} B_{m n r} - \pd{r} B_{m n z}. \label{eq:kilca-curlB}
+\end{gather}
+The condition of zero divergence then gives a relation for the third component $\delta B_{\text{v}}^{\vartheta}$:
+\begin{gather}
+  0 = \sqrt{g} \divg \Bvac = \pd{r} (r \delta B_{\text{v}}^{r}) + r \pd{\vartheta} \delta B_{\text{v}}^{\vartheta} + r \pd{z} \delta B_{\text{v}}^{z}.
+\end{gather}
+Applying the \textsc{Fourier} again with $\pd{\vartheta} \to \im m$ yields
+\begin{gather}
+  0 = \pd{r} (r B_{m n r}) + \im m B_{m n}^{\vartheta} + \im k_{z} r B_{m n z}. \label{eq:kilca-divB}
+\end{gather}
+For problems in cylindrical geometry, the radial solution typically involves \textsc{Bessel} functions. We start with
+\begin{gather}
+  B_{m n z} = \im C I_m(k_{z} r), \label{eq:kilca-Bz}
+\end{gather}
+where $I_m$ is the modified \textsc{Bessel} function of the first kind of order $m$ and $C$ is an arbitrary integration constant that scales the magnitude of the solution. Inserting this into \cref{eq:kilca-curlB}, we get at
+\begin{gather}
+  B_{m n r} = -\frac{\im}{k_{z}} \pd{r} B_{m n z} = \frac{C}{k_{z}} \pd{r} I_m(k_{z} r) = C I_m'(k_{z} r), \label{eq:kilca-Br}
+\end{gather}
+where the derivative of $I_{m}$ is taken with respect to the entire argument, not only $r$. By insertion\footnote{into Mathematica}, one can check that \cref{eq:kilca-Br} solves \cref{eq:kilca-ode}, so we proceed to calculate $\delta B_{\text{v}}^{\vartheta}$ from \cref{eq:kilca-divB}. Using functional identities of the \textsc{Bessel} functions\footnote{again, Mathematica}, one arrives at
+\begin{gather}
+  B_{m n \vartheta} = \im \frac{m}{k_{z}} C I_m(k_{z} r). \label{eq:kilca-Btheta}
+\end{gather}
+Since $I_{-m}(k_{z} r) = I_{m} (k_{z} r)$, this is the only vector component that changes with a negative mode number $m$. Even though there is no mode coupling in this geometry, our calculations are done in toroidal geometry, hence mode coupling is expected; thus we restrict ourselves to a single poloidal mode number $m$ and take the \textsc{Fourier} transform, i.e.
+\begin{gather}
+  \vec{B}_{n} (r, \theta) = \vec{B}_{m n} (r) \e^{\im m \theta}.
+\end{gather}
+To convert back to $(R, \phi, Z)$ vector components, we use \cref{eq:kilca-coord} and arrive at
+\begin{align}
+  B_{n}^{R} &= B_{n}^{r} \pd[R]{r} + B_{n}^{\vartheta} \pd[R]{\vartheta} = B_{n}^{r} \cos \vartheta - r B_{n}^{\vartheta} \sin \vartheta, \label{eq:kilca-BR} \\
+  B_{n}^{Z} &= B_{n}^{r} \pd[Z]{r} + B_{n}^{\vartheta} \pd[Z]{\vartheta} = B_{n}^{r} \sin \vartheta + r B_{n}^{\vartheta} \cos \vartheta, \label{eq:kilca-BZ} \\
+  B_{n}^{\phi} &= B_{n}^{z} \pd[\phi]{z} = \frac{1}{R_{0}} B_{n}^{z}. \label{eq:kilca-Bphi}
+\end{align}
+Note that the same conversions apply in the secondary cylindrical coordinate system analogously, e.g. $r B_{n}^{\vartheta} = B_{n (\vartheta)}$.
+
+Up to this point, calculations have been performed in the cylindrical geometry used by KiLCA code where the torus is explicitly bent into a cylinder. To approximate this geometry in NEO-EQ code, we multiply $R_0$ by a scaling factor \gls{scaling} and implement the change by shifting the computational domain in the EFIT file (see \cref{sec:inputs}) to that value. This way, $R \approx R_{0}$ over the computational domain and the influence of the toroidal geometry is comparatively small. Furthermore, since the toroidal wavenumber $k_{z}$ -- inversely proportional to the wavelength of the standing wave imagined to go around in toroidal direction -- should stay constant, the toroidal mode number $n$ must also be scaled by $\gamma$, which should therefore be an integer. In summary we have
+\begin{align}
+  R_{0} \rvert_{\text{KiLCA}} &\to R_{0} \rvert_{\text{NEO-EQ}} = \gamma R_{0} \rvert_{\text{KiLCA}}, \\
+  n \rvert_{\text{KiLCA}} &\to n \rvert_{\text{NEO-EQ}} = \gamma n \rvert_{\text{KiLCA}}.
+\end{align}
+The solution computed by NEO-EQ code then has to be transformed to the cylindrical geometry of KiLCA code to allow for a comparison. Using trigonometric identities, we can invert \cref{eq:kilca-BR,eq:kilca-BZ,eq:kilca-Bphi} to yield
+\begin{align}
+  B_{n}^{r} &= B_{n}^{R} \cos \vartheta + B_{n}^{Z} \sin \vartheta, \\
+  r B_{n}^{\vartheta} &= B_{n}^{Z} \cos \vartheta - B_{n}^{R} \sin \vartheta, \\
+  B_{n}^{z} &= R_{0} B_{n}^{\phi}.
+\end{align}
+The poloidal spectrum of this result is then approximated by a discrete \textsc{Fourier} transform:
+\begin{gather}
+  \vec{B}_{m n} (r) = \frac{1}{N} \sum_{k = 1}^{N} \vec{B}_{n} (r, \vartheta_{k}) \e^{-\im m \vartheta_{k}}, \quad \vartheta_{k} = \frac{2 \pi k}{N}.
+\end{gather}
+Here, $N$ is the number of sample points, which is taken to be one per triangle in the triangle strip at given $r$.
 
 %%% Local Variables: 
 %%% mode: latex
