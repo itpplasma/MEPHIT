@@ -15,7 +15,6 @@
    di0 = 5.d11                                     ! density on magnetic axis
    damp = 0d0                                      ! damping factor for resonances
    R0 = 172.74467899999999d0                       ! distance of magnetic axis from center in cm
-   sheet_current_factor = (0d0, 0d0)               ! coefficient for sheet currents
    point_file = '../PRELOAD/points.dat'            ! mesh points from PRELOAD
    tri_file = '../PRELOAD/triangles.dat'           ! triangles and edges from PRELOAD
    Bn_vac_file = '../PRELOAD/VACFIELD/Bn_flux.dat' ! vacuum perturbation field from PRELOAD
@@ -33,4 +32,7 @@
    rel_err_currn = 1d-8                            ! error threshold for current perturbation
    kilca_pol_mode = 0                              ! single poloidal mode number used with KiLCA
    kilca_scale_factor = 0                          ! scaling factor used in EFIT rmaxis from KiLCA
+/
+&delayed
+   sheet_current_factor = 7*(0d0, 0d0)  ! coefficients for sheet currents
 /

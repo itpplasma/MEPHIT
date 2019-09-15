@@ -15,7 +15,6 @@ program minimal_example
      procedure interleave_vv, interleave_vs, interleave_sv, interleave_ss
   end interface interleave
 
-  character(len = 1024) :: config_file
   real(dp) :: rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr
 
   integer :: fid, kf, kp, k, ke
@@ -38,7 +37,7 @@ program minimal_example
   else
      stop 'Error: expected path to magdif config file as first parameter'
   endif
-  call read_config(config_file)
+  call read_config
 
   call initialize_globals
   call read_geqdsk_header(gfile, rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr)
