@@ -30,6 +30,7 @@
    max_eig_out = 10                                      ! maximal number of eigenvectors to be saved
    rel_err_Bn = 1d-5                                     ! error threshold for magnetic field perturbation
    rel_err_currn = 1d-8                                  ! error threshold for current perturbation
+   kilca_vac_coeff = (1d-6, 0d0)                         ! integration constant in resonant vacuum perturbation
    kilca_pol_mode = 3                                    ! single poloidal mode number used with KiLCA
    kilca_scale_factor = 579                              ! scaling factor used in EFIT rmaxis from KiLCA
    kilca_pol_mode_file = 'Bmn.dat'                       ! output file for Fourier coefficients

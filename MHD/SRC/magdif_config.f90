@@ -96,6 +96,9 @@ module magdif_config
   !> error threshold for divergence-freeness of #jnflux and #jnphi
   real(dp) :: rel_err_currn = 1d-8
 
+  !> Integration constant for resonant vacuum perturbation in KiLCA comparison.
+  complex(dp) :: kilca_vac_coeff
+
   !> single poloidal mode used in comparison with KiLCA code
   integer :: kilca_pol_mode
 
@@ -113,7 +116,7 @@ module magdif_config
        nkpol, nflux, ti0, di0, damp, R0, point_file, tri_file, &
        Bn_vacout_file, Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, &
        presn_file, currn_file, eigvec_file, rel_err_Bn, rel_err_currn, kilca_pol_mode, &
-       kilca_scale_factor, kilca_pol_mode_file, max_eig_out
+       kilca_vac_coeff, kilca_scale_factor, kilca_pol_mode_file, max_eig_out
   namelist /delayed/ sheet_current_factor
 
 contains

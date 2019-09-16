@@ -345,9 +345,11 @@ contains
     if (status /= fgsl_success .and. log_err) then
        write (logfile, *) 'fgsl_sf_bessel_icn_array returned error ', status
     end if
-    B_r = (0.5d0, 0d0) * (I_m(-1) + I_m(1)) * exp(imun * pol_mode * theta)
-    B_theta = imun * pol_mode / k_z_r * I_m(0) * exp(imun * pol_mode * theta)
-    B_z = imun * I_m(0) * exp(imun * pol_mode * theta)
+    B_r = (0.5d0, 0d0) * (I_m(-1) + I_m(1)) * exp(imun * pol_mode * theta) &
+         * kilca_vac_coeff
+    B_theta = imun * pol_mode / k_z_r * I_m(0) * exp(imun * pol_mode * theta) &
+         * kilca_vac_coeff
+    B_z = imun * I_m(0) * exp(imun * pol_mode * theta) * kilca_vac_coeff
     Br = B_r * cos(theta) - B_theta * sin(theta)
     Bp = B_z / R_0
     Bz = B_r * sin(theta) + B_theta * cos(theta)
