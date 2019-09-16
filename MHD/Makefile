@@ -20,10 +20,10 @@ plots:  convergence.dat \
 	$(magdifplot) $(config) $(mesh)
 	python $(magdifplot) . $(config) $(mesh)
 
-spectra: Bmn_psi.dat Bmn_vac_psi.dat currmn_001_theta.dat
+spectra: Bmn_psi.dat Bmn_vac_psi.dat currmn_000_theta.dat
 
 clean:
-	rm -f *.pdf *.out Bn*.dat presn*.dat currn*.dat eigvec*.dat plot*.dat j0phi.dat fluxvar.dat Bmn_psi.dat Bmn_vac_psi.dat currmn_001_theta.dat convergence.dat fort.333
+	rm -f *.pdf *.out Bn*.dat presn*.dat currn*.dat eigvec*.dat plot*.dat j0phi.dat fluxvar.dat Bmn_psi.dat Bmn_vac_psi.dat currmn_000_theta.dat convergence.dat fort.333
 
 Bmn_psi.dat: plot_Bn.dat
 	$(call extract_psi, $<, Bn_psi.dat)
@@ -35,10 +35,10 @@ Bmn_vac_psi.dat: plot_Bn_vac.dat
 	$(call poloidal_modes, ../MHD/Bn_vac_psi.dat, ../MHD/$@)
 	rm Bn_vac_psi.dat
 
-currmn_001_theta.dat: plot_currn_001.dat
-	$(call extract_theta, $<, currn_001_theta.dat)
-	$(call poloidal_modes, ../MHD/currn_001_theta.dat, ../MHD/$@)
-	rm currn_001_theta.dat
+currmn_000_theta.dat: plot_currn_000.dat
+	$(call extract_theta, $<, currn_000_theta.dat)
+	$(call poloidal_modes, ../MHD/currn_000_theta.dat, ../MHD/$@)
+	rm currn_000_theta.dat
 
 convergence.dat: $(Bn_diffs)
 	rm -f $@
