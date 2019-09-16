@@ -203,6 +203,7 @@ contains
     call init_flux_variables
     call cache_equilibrium_field
     call compute_safety_factor
+    call read_delayed_config
     call write_fluxvar
     call compute_j0phi
 
@@ -223,6 +224,7 @@ contains
   subroutine magdif_cleanup
     if (allocated(q)) deallocate(q)
     if (allocated(m_res)) deallocate(m_res)
+    if (allocated(sheet_current_factor)) deallocate(sheet_current_factor)
     if (allocated(pres0)) deallocate(pres0)
     if (allocated(dpres0_dpsi)) deallocate(dpres0_dpsi)
     if (allocated(dens)) deallocate(dens)
@@ -609,13 +611,16 @@ contains
     call check_redundant_edges(Bnflux, -1d0, 'B_n')
   end subroutine read_Bn
 
-  !> Allocates and computes the safety factor #q and #m_res. Deallocation is done in
+  !> Allocates and computes the safety factor #q and #m_res.
+  !>
+  !> Also allocates #magdif_config::sheet_current_factor, to be read in via
+  !> magdif_config::read_delayed_config() in magdif_init(). All deallocation is done in
   !> magdif_cleanup().
   subroutine compute_safety_factor
     integer :: kf, kt
     type(triangle) :: elem
     integer :: m_res_min, m_res_max, m
-    real(dp), allocatable :: abs_err(:)
+    real(dp), dimension(nflux) :: abs_err
 
     allocate(q(nflux))
     q = 0d0
@@ -632,12 +637,12 @@ contains
     m_res = 0
     m_res_min = max(ceiling(minval(q) * n), n + 1)
     m_res_max = floor(maxval(q) * n)
-    allocate(abs_err(nflux))
     do m = m_res_max, m_res_min, -1
        abs_err = [(abs(q(kf) - dble(m) / dble(n)), kf = 1, nflux)]
        m_res(minloc(abs_err, 1)) = m
     end do
-    if (allocated(abs_err)) deallocate(abs_err)
+    allocate(sheet_current_factor(m_res_min:m_res_max))
+    sheet_current_factor = (0d0, 0d0)
   end subroutine compute_safety_factor
 
   !> Computes the "weighted" centroid for a triangle so that it is approximately
@@ -1123,21 +1128,23 @@ inner: do kt = 1, kt_max(kf)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           jnflux(ktri, ei) = -x(kt)
           jnflux(ktri, eo) = x(mod(kt, kt_max(kf)) + 1)
-          if (sheet_current_factor /= 0d0 .and. m_res(kf) > 0) then
-             ! add sheet current on edge i
-             r = sum(mesh_point(li(:))%rcoord) * 0.5d0
-             n_r = mesh_point(li(2))%zcoord - mesh_point(li(1))%zcoord
-             n_z = mesh_point(li(1))%rcoord - mesh_point(li(2))%rcoord
-             B0flux = r * (B0r(ktri, ei) * n_r + B0z(ktri, ei) * n_z)
-             jnflux(ktri, ei) = jnflux(ktri, ei) + sheet_current_factor * B0flux * &
-                  sum(presn(li(:))) * 0.5d0
-             ! add sheet current on edge o
-             r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
-             n_r = mesh_point(lo(2))%zcoord - mesh_point(lo(1))%zcoord
-             n_z = mesh_point(lo(1))%rcoord - mesh_point(lo(2))%rcoord
-             B0flux = r * (B0r(ktri, eo) * n_r + B0z(ktri, eo) * n_z)
-             jnflux(ktri, eo) = jnflux(ktri, eo) + sheet_current_factor * B0flux * &
-                  sum(presn(lo(:))) * 0.5d0
+          if (m_res(kf) > 0) then
+             if (sheet_current_factor(m_res(kf)) /= (0d0, 0d0)) then
+                ! add sheet current on edge i
+                r = sum(mesh_point(li(:))%rcoord) * 0.5d0
+                n_r = mesh_point(li(2))%zcoord - mesh_point(li(1))%zcoord
+                n_z = mesh_point(li(1))%rcoord - mesh_point(li(2))%rcoord
+                B0flux = r * (B0r(ktri, ei) * n_r + B0z(ktri, ei) * n_z)
+                jnflux(ktri, ei) = jnflux(ktri, ei) + sheet_current_factor(m_res(kf)) * &
+                     B0flux * sum(presn(li(:))) * 0.5d0
+                ! add sheet current on edge o
+                r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
+                n_r = mesh_point(lo(2))%zcoord - mesh_point(lo(1))%zcoord
+                n_z = mesh_point(lo(1))%rcoord - mesh_point(lo(2))%rcoord
+                B0flux = r * (B0r(ktri, eo) * n_r + B0z(ktri, eo) * n_z)
+                jnflux(ktri, eo) = jnflux(ktri, eo) + sheet_current_factor(m_res(kf)) * &
+                     B0flux * sum(presn(lo(:))) * 0.5d0
+             end if
           end if
           jnphi(ktri) = sum(jnflux(ktri, :)) * imun / n / area
        end do

@@ -4,6 +4,8 @@ module magdif_config
 
   implicit none
 
+  character(len = 1024) :: config_file
+
   integer, parameter :: longlines = 1024
 
   integer, parameter :: runmode_single = 0 !< single iteration mode
@@ -30,8 +32,8 @@ module magdif_config
   !> Distance of magnetic axis from center \f$ R_{0} \f$ in cm.
   real(dp) :: R0 = 172.74467899999999d0
 
-  !> Free parameter setting the magnitude of sheet currents.
-  complex(dp) :: sheet_current_factor
+  !> Free parameters setting the magnitudes of sheet currents.
+  complex(dp), dimension(:), allocatable :: sheet_current_factor
 
   !> Unformatted input data file containing mesh points.
   !>
@@ -106,22 +108,19 @@ module magdif_config
   !> maximum number of eigenvectors to be dumped in #eigvec_file
   integer :: max_eig_out = 10
 
-  !> namelist for input parameters
-  namelist / settings / log_level, runmode, nonres, quad_avg, niter, nritz, tol, n, &
-       nkpol, nflux, ti0, di0, damp, R0, sheet_current_factor, point_file, tri_file, &
+  !> namelists for input parameters
+  namelist /settings/ log_level, runmode, nonres, quad_avg, niter, nritz, tol, n, &
+       nkpol, nflux, ti0, di0, damp, R0, point_file, tri_file, &
        Bn_vacout_file, Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, &
        presn_file, currn_file, eigvec_file, rel_err_Bn, rel_err_currn, kilca_pol_mode, &
        kilca_scale_factor, kilca_pol_mode_file, max_eig_out
+  namelist /delayed/ sheet_current_factor
 
 contains
 
-  !> Read configuration file for magdif.
-  !>
-  !> @param config_file file name of config file
-  subroutine read_config(config_file)
-    character(len = *) :: config_file
-
-    open(1, file = config_file, recl = longlines)
+  !> Read #settings configuration file #config_file for magdif.
+  subroutine read_config
+    open(1, file = config_file)
     read(1, nml = settings)
     close(1)
 
@@ -134,6 +133,13 @@ contains
     if (log_level > 2) log_info = .true.
     if (log_level > 3) log_debug = .true.
   end subroutine read_config
+
+  !> Read #delayed from configuration file #config_file for magdif.
+  subroutine read_delayed_config
+    open(1, file = config_file)
+    read(1, nml = delayed)
+    close(1)
+  end subroutine read_delayed_config
 
   !> Generates a new filename from a given template.
   !>
