@@ -190,6 +190,7 @@ class magdif_poloidal_modes:
         m_max = (data_range - 1) // 2
         offset = m_max
 
+        # plot non-symmetric modes
         horz_plot = 2
         vert_plot = 1
         for m in range(1, m_max + 1):
@@ -234,6 +235,7 @@ class magdif_poloidal_modes:
             plt.savefig(os.path.splitext(self.datafile)[0]
                         + '_{}.pdf'.format(m))
             plt.close()
+        # plot symmetric mode and safety factor
         plt.figure(figsize=(9.6, 4.8))
         ax = plt.subplot(vert_plot, horz_plot, 1)
         if self.reffile is not None:
@@ -251,6 +253,33 @@ class magdif_poloidal_modes:
         plt.ylabel(r'$q$')
         plt.tight_layout()
         plt.savefig(os.path.splitext(self.datafile)[0] + '_0.pdf')
+        plt.close()
+        # plot poloidal maxima progression
+        max_data = np.amax(abs_data, axis=0)
+        max_ind = np.argmax(abs_data, axis=0)
+        max_s = s[max_ind]
+        plt.figure(figsize=(9.6, 4.8))
+        ax = plt.subplot(vert_plot, horz_plot, 1)
+        plt.plot(np.arange(0, m_max + 1), max_data[offset::-1],
+                 'ro', label=r'$m \leq 0$')
+        plt.plot(np.arange(0, m_max + 1), max_data[offset:],
+                 'kx', label=r'$m \geq 0$')
+        ax.legend()
+        ax.ticklabel_format(style='sci', scilimits=(-3, 4))
+        plt.title('Maximal values of poloidal modes')
+        plt.xlabel(r'$\pm m$')
+        plt.ylabel(self.label)
+        ax = plt.subplot(vert_plot, horz_plot, 2)
+        plt.plot(np.arange(0, m_max + 1), max_s[offset::-1],
+                 'ro', label=r'$m \leq 0$')
+        plt.plot(np.arange(0, m_max + 1), max_s[offset:],
+                 'kx', label=r'$m \geq 0$')
+        ax.legend()
+        plt.title('Positions of maximal values')
+        plt.xlabel(r'$\pm m$')
+        plt.ylabel(r'$s$')
+        plt.tight_layout()
+        plt.savefig(os.path.splitext(self.datafile)[0] + '_max.pdf')
         plt.close()
 
 
