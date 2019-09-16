@@ -361,9 +361,7 @@ contains
        call pack2(Bnflux, Bnphi, Bn_prev)
     end do
     if (kilca_scale_factor /= 0) then
-       call write_kilca_modes(Bnflux, Bnphi, kilca_pol_mode_file)
-       call write_kilca_modes(Bnflux_vac, Bnphi_vac, &
-            decorate_filename(kilca_pol_mode_file, '', '_vac'))
+       call write_kilca_modes(Bnflux - Bnflux_vac, Bnphi - Bnphi_vac, kilca_pol_mode_file)
     end if
 
     if (allocated(Lr)) deallocate(Lr)

@@ -415,17 +415,16 @@ class magdif:
         if os.path.isfile(os.path.join(self.datadir, 'currmn_000_theta.dat')):
             self.plots.append(magdif_poloidal_modes(
                     self.config['n'], self.s, self.q,
-                    self.datadir, 'currmn_001_theta.dat',
-                    r'$\left\vert J_{mn \theta}^{(1)} \right\vert$'
+                    self.datadir, 'currmn_000_theta.dat',
+                    r'$\left\vert J_{mn \theta}^{(0)} \right\vert$'
                     + ' / statA cm\textsuperscript{-1}'
             ))
-        if (os.path.isfile(os.path.join(self.datadir, 'Bmn_r.dat')) and
-                os.path.isfile(os.path.join(self.datadir, 'Bmn_vac_r.dat'))):
+        if (os.path.isfile(os.path.join(self.datadir, 'Bpmn_r.dat')) and
+                os.path.isfile(os.path.join(self.datadir, 'Bpmn_vac_r.dat'))):
             self.plots.append(magdif_poloidal_modes(
                     self.config['n'], self.s, self.q,
-                    self.datadir, 'Bmn_r.dat',
-                    r'$\left\vert B_{mnr} \right\vert$ / G',
-                    'Bmn_vac_r.dat'
+                    self.datadir, 'Bpmn_r.dat',
+                    r'$\left\vert B_{\mathrm{p}mnr} \right\vert$ / G'
             ))
 
     def dump_plots(self):

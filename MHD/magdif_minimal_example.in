@@ -33,7 +33,7 @@
    kilca_vac_coeff = (1d-6, 0d0)                         ! integration constant in resonant vacuum perturbation
    kilca_pol_mode = 3                                    ! single poloidal mode number used with KiLCA
    kilca_scale_factor = 579                              ! scaling factor used in EFIT rmaxis from KiLCA
-   kilca_pol_mode_file = 'Bmn.dat'                       ! output file for Fourier coefficients
+   kilca_pol_mode_file = 'Bpmn.dat'                      ! output file for Fourier coefficients
 /
 &delayed
    sheet_current_factor = 7*(0d0, 0d0)  ! coefficients for sheet currents
