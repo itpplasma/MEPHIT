@@ -1,4 +1,4 @@
-\section{Pre-processing of input data}
+\section{Preprocessing of Input Data}
 \label{sec:inputs}
 
 Prior to starting iterations, some input data has to supplied, namely the following:
@@ -10,7 +10,7 @@ Prior to starting iterations, some input data has to supplied, namely the follow
 \end{itemize}
 Additonally, a configuration file exists to specify behaviour of the implemented algorithms and data input/output.
 
-The equilibrium field $\vec{B}_{0}$ is assumed to be available in GEQDSK format, shortly summarized in \cite{Lao97}. It consists of data points given on a rectangular grid which are fitted from measurements to the \textsc{Grad}--\textsc{Shafranov} equation. Parts of already existing code import such a file and generate a field-aligned grid as described in \cref{sec:grid} and specified in \cref{sec:grid-impl}. It also supplies values of $\vec{B}_{0}$ and its partial derivatives on arbitrary $R, Z$ coordinates by interpolation with splines of fifth order in $R$ and $Z$ based on \cref{eq:B0R,eq:B0Z}. In the implementation of NEO-EQ, the necessary values on edge midpoints and shifted centroids are cached once before calculations starts as to avoid repeated function calls to spline interpolation and possibly allow for other data sources. From $\vec{B}_{0}$, the safety factor $q$ is computed as described in \cref{sec:safety_factor}.
+The equilibrium field $\vec{B}_{0}$ is assumed to be available in GEQDSK format, shortly summarized by \textcite{Lao97}. It consists of data points given on a rectangular grid which are fitted from measurements to the \textsc{Grad}--\textsc{Shafranov} equation. Parts of already existing code import such a file and generate a field-aligned grid as described in \cref{sec:grid} and specified in \cref{sec:grid-impl}. It also supplies values of $\vec{B}_{0}$ and its partial derivatives on arbitrary $R, Z$ coordinates by interpolation with splines of fifth order in $R$ and $Z$ based on \cref{eq:B0R,eq:B0Z}. In the implementation of NEO-EQ, the necessary values on edge midpoints and shifted centroids are cached once before calculations starts as to avoid repeated function calls to spline interpolation and possibly allow for other data sources. From $\vec{B}_{0}$, the safety factor $q$ is computed as described in \cref{sec:safety_factor}.
 
 While the equilibrium pressure $p_{0}$ should be available from the GEQDSK file and and the equilibrium current $\vec{J}_{0}$ can be computed from the equilibrium field via Ampère's law as in \cref{eq:ampere-gen}, another approach is possible. Since Ampère's law is never used for equilibrium quantities, it is possible to choose a pressure profile and calculate $J_0^{\phi}$ to be consistent with the MHD equilibrium in \cref{eq:mhd-gen}. The latter is the \textsc{Pfirsch}--\textsc{Schlüter} current and its calculation is outlined in \cref{sec:j0phi}. The simplest approach to the pressure profile assumes a linear profile for the particle density $n$ and temperature $T$,
 \begin{align}
@@ -29,7 +29,7 @@ Thus all necessary equilibrium quantities are established.
 
 The vacuum perturbation field $\Bvac$ is calculated beforehand from the external coil currents $I_{\text{c}}$ by the \textsc{Biot}--\textsc{Savart} law (\cref{eq:biot-savart}) on a regular grid in $(R, \phi, Z)$ coordinates, from which the fluxes through triangle edges are computed for representation as \textsc{Raviart}--\textsc{Thomas} elements.
 
-\subsection{Grid implementation}
+\subsection{Grid Implementation}
 \label{sec:grid-impl}
 
 Since the grid is field-aligned, there are a few conventions to be considered compared to more arbitrary grids. The code has to \enquote{find its way}, so we make assumptions on numbering.
@@ -64,7 +64,7 @@ Associated with each triangle are local indices, i.e. 1 to 3, for nodes and edge
 
 Scalar quantities like $p_{n}$ are indexed by global node number and vector quantities like $\vec{B}_{n}$ and $\vec{J}_{n}$ are indexed by global triangle number and local edge number. The latter convention involves some redundancy as it takes twice the storage that would be necessary, but it also allows for consistency checks and a simpler implementation.
 
-\subsection{Toroidal unperturbed current}
+\subsection{Toroidal Unperturbed Current}
 \label{sec:j0phi}
 
 Since $\vec{B}_{0}$ and $p_{0}$ are directly available as input data, but $\vec{J}_{0}$ is not, the latter will be derived below from \cref{eq:mhd-gen}, the condition of divergence-freeness and symmetry considerations.
@@ -141,10 +141,10 @@ It follows that
   J_{0}^{\phi} = c p_{0}'(\psi) \left( \frac{\left( B_{0}^{\pol} \right)^{2} + \left( B_{0}^{\tor} \right)^{2}}{B_{0}^{2}} - \frac{\left( B_{0}^{\tor} \right)^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi)\right) = c p_{0}'(\psi) \left( 1 - \frac{\left( B_{0}^{\tor} \right)^{2}}{\left\langle B_{0}^{2} \right\rangle} D(\psi)\right).
 \end{gather}
 
-\subsection{Safety factor}
+\subsection{Safety Factor}
 \label{sec:safety_factor}
 
-Computing the safety factor from \cref{eq:q_field_line_pitch} would require the calculation of $\theta$ coordinate lines from $\vec{B}_{0}$. An equivalent definition from \cite{dHaeseleer91} involves the toroidal flux $\psi_{\tor}$, which in our choice of coordinates is given by
+Computing the safety factor from \cref{eq:q_field_line_pitch} would require the calculation of $\theta$ coordinate lines from $\vec{B}_{0}$. An equivalent definition from \textcite{dHaeseleer91} involves the toroidal flux $\psi_{\tor}$, which in our choice of coordinates is given by
 \begin{gather}
   \psi_{\tor} = \frac{1}{(2 \pi)^{2}} \int \diff V \, \vec{B}_{0} \cdot \grad \phi = \frac{1}{2 \pi} \int \diff R \, \diff Z \, R B_{0}^{\phi} = \frac{1}{2 \pi} \int \diff R \, \diff Z \, B_{0 (\phi)}.
 \end{gather}

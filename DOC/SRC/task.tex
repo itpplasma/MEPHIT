@@ -1,4 +1,4 @@
-\section{Stationary linear perturbation of ideal MHD equilibrium}
+\section{Stationary Linear Perturbation of Ideal MHD Equilibrium}
 
 For the intended application on stationary (compared to MHD mode eigenfrequencies) non-axisymmetric magnetic perturbations by external coils, we consider a perturbed ideal MHD equilibrium for pressure $p$, currents $\vec{J}$ and magnetic field $\vec{B}$ fulfilling
 \begin{align}
@@ -19,9 +19,9 @@ Here the perturbation field in vacuum, $\Bvac$, is pre-evaluated by a \textsc{Bi
 
 The solution of \cref{eq:mhd} can further be split into two steps: First the pressure perturbation $\delta p$ is found, and then the plasma current density $\delta \vec{J}$ is computed using the condition $\divg \delta \vec{J} = 0$. For an unperturbed equilibrium with nested flux surfaces, both steps can be performed in a radially local manner if a field-aligned computational grid is used, which will become clear in the following sections. Radial coupling happens by the combination of the two individual steps since their effective radial locations of computation are shifted by a half-step in radial grid distance.
 
-\Cref{eq:mhd} and \cref{eq:ampere} are solved in an alternating way until convergence is reached, as described in \cref{sec:iteration}. In addition a preconditioner is used to enhance convergence, which is discussed in \cref{sec:Arnoldi}. This approach is also used by \cite{Albert16}.
+\Cref{eq:mhd} and \cref{eq:ampere} are solved in an alternating way until convergence is reached, as described in \cref{sec:iteration}. In addition a preconditioner is used to enhance convergence, which is discussed in \cref{sec:Arnoldi}. This approach is also used by \textcite{Albert16}.
 
-\subsection{Iteration scheme}
+\subsection{Iteration Scheme}
 \label{sec:iteration}
 
 From \cref{eq:mhd}, we calculate the current perturbation\footnote{and in an intermediate step, the pressure perturbation} from a given magnetic field perturbation. This can be done with kinetic code (e.g. NEO-2) or with MHD, as is discussed in \cref{sec:linmhd}. In either case, the computation can be written in compact form,
@@ -99,7 +99,7 @@ For the implementation of preconditioned iterations (see \cref{sec:Arnoldi}), th
   \Bpert^{(k)} = \Bpert^{[k]} - \Bpert^{[k-1]}.
 \end{gather}
 
-\subsection{Enhanced convergence with preconditioned iterations}
+\subsection{Enhanced Convergence with Preconditioned Iterations}
 \label{sec:Arnoldi}
 
 Both approaches outlined in \cref{sec:iteration} hinge on the convergence of the \textsc{Neumann} series in \cref{eq:Neumann_series}. The convergence criterion for the similar geometric series of scalars is not directly applicable to operators, but to their corresponding spectrum of eigenvalues. Thus we shall now consider a discretized equation of finite dimension $N$.

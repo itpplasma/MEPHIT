@@ -1,8 +1,8 @@
-\section{Construction of test cases}
+\section{Construction of Test Cases}
 
 Along with comparison to results from kinetic computations, special test cases altering different components of the calculation are considered. In \cref{sec:nonres}, $\Bvac$ is not taken from \textsc{Biot}--\textsc{Savart} calculations of currents in external coils as per \cref{eq:biot-savart,sec:inputs}, but constructed directly to avoid resonances, at least in the first iteration step. \Cref{sec:analytical} instead looks at the analytical solution in the cylindrical limit on a circular cross-section obtained from KiLCA, effectively changing the grid geometry.
 
-\subsection{Generating a non-resonant vacuum perturbation}
+\subsection{Generating a Non-Resonant Vacuum Perturbation}
 \label{sec:nonres}
 
 The axisymmetric equilibrium field $\vec{B}_{0}$ lies on nested flux surfaces $\psi = \text{const.}$, meaning
@@ -127,16 +127,16 @@ Now, to assign sensible values to the arbitrary constants, consider the solution
   C_{2k} &= \frac{\im}{2 n} \left( \Psi_{\fs}^{(2k)} - \Psi_{\fs}^{(2k+1)} \right) \quad \forall k = 0, 1, \dotsc, \frac{N}{2} - 1.
 \end{align}
 
-\subsection{Analytical solution for very large aspect ratios}
+\subsection{Analytical Solution for Very Large Aspect Ratios}
 \label{sec:analytical}
 
 To derive an analytical approximation, a very large major radius $R_{0}$ -- and thus aspect ratio -- is considered for a ring torus, i.e. with circular cross-section. The torus is \enquote{unbent} and the toroidal geometry is effectively transformed to cylindrical geometry with a very thin and elongated cylinder and periodic boundary conditions. To distinguish this cylinder from the cylindrical coordinates $(R, \phi, Z)$ established in \cref{sec:cocos}, we use coordinates $(r, \vartheta, z)$ for the former:
 \begin{align}
   R &= R_{0} + r \cos \vartheta, & Z &= r \sin \vartheta, & \phi &= \frac{z}{R_0}. \label{eq:kilca-coord}
 \end{align}
-Thus $r$ corresponds to the minor radius and the pseudoradial component $\rho$, $z$ points in the $\phi$ direction in the infinitesimal limit and $\vartheta$ corresponds to the poloidal angle $\theta$, albeit defined as a geometrical angle and not field-aligned. As for toroidal geometry, a \textsc{Fourier} series expansion is possible for cyclic coordinates:
+Thus $r$ corresponds to the minor radius and the pseudoradial component $\rho$, $z$ points in the $\phi$ direction in the infinitesimal limit and $\vartheta$ corresponds to the poloidal angle $\theta$, albeit defined as a geometrical angle and not field-aligned. As for toroidal geometry, a \textsc{Fourier} series expansion is possible for periodic coordinates:
 \begin{gather}
-  \Bpert (r, \vartheta, z) = \sum_{n = -\infty}^{\infty} \sum_{m = -\infty}^{\infty} \vec{B}_{m n} (r) \e^{\im m \theta} \e^{\im k_{z} z}.
+  \Bpert (r, \vartheta, z) = \sum_{n = -\infty}^{\infty} \sum_{m = -\infty}^{\infty} \vec{B}_{m n} (r) \e^{\im m \vartheta} \e^{\im k_{z} z}.
 \end{gather}
 Here, $k_{z}$ is a wavenumber given by
 \begin{gather}
@@ -148,11 +148,11 @@ ensuring the same same periodicity $2 \pi R_{0}$ as for the toroidal geometry. I
 \end{gather}
 and both are combined in the wavevector $\vec{k}$ as
 \begin{align}
-  \vec{k} = k_{z} \vec{e}_{z} + k_{\vartheta} \vec{e}_{(\vartheta)}.
+  \vec{k} = k_{z} \hat{\vec{e}}_{z} + k_{\vartheta} \hat{\vec{e}}_{\vartheta}.
 \end{align}
 Note that, due to the cylindrical geometry, there is no mode coupling among poloidal modes. As before, we only consider a single toroidal mode number $n$.
 
-The general solution for the radial component in this geometry, on which KiLCA code is based, is given by eq.~(5) from \cite{Heyn08}. For the vacuum perturbation $\Bvac$ it reduces to
+The general solution for the radial component in this geometry, on which KiLCA code is based, is given by eq.~(5) in the paper by \textcite{Heyn08}. For the vacuum perturbation $\Bvac$ it reduces to
 \begin{gather}
   \pd{r} \frac{r}{k^{2}} \pd[B_{m n r}]{r} - r B_{m n r} \left ( 1 - \pd{r} \frac{1}{r k^{2}}\right ) = 0 \label{eq:kilca-ode}
 \end{gather}
@@ -186,7 +186,7 @@ where the derivative of $I_{m}$ is taken with respect to the entire argument, no
 \end{gather}
 Since $I_{-m}(k_{z} r) = I_{m} (k_{z} r)$, this is the only vector component that changes with a negative mode number $m$. Even though there is no mode coupling in this geometry, our calculations are done in toroidal geometry, hence mode coupling is expected; thus we restrict ourselves to a single poloidal mode number $m$ and take the \textsc{Fourier} transform, i.e.
 \begin{gather}
-  \vec{B}_{n} (r, \theta) = \vec{B}_{m n} (r) \e^{\im m \theta}.
+  \vec{B}_{n} (r, \theta) = \vec{B}_{m n} (r) \e^{\im m \vartheta}.
 \end{gather}
 To convert back to $(R, \phi, Z)$ vector components, we use \cref{eq:kilca-coord} and arrive at
 \begin{align}

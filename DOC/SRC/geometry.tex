@@ -1,4 +1,4 @@
-\section{Geometrical considerations}
+\section{Geometrical Considerations}
 
 Even when the magnetic field is not axisymmetric, the axisymmetry of the tokamak device carries over to the computational domain. It stands to reason to take the periodicity in the symmetry direction, i.e. the cylindrical angle $\phi$, into account. The non-axisymmetric magnetic perturbation field in cylindrical coordinates $(R, \phi, Z)$ can then be expanded as a \textsc{Fourier} series:
 \begin{gather}
@@ -23,7 +23,7 @@ In axisymmetric coordinate systems, such as the aforementioned cylindrical syste
 \end{align}
 now with a two-dimensional $\nabla$ operator acting in the poloidal ($RZ$) plane. The explicit definition depends on the coordinate system used and is outlined in \cref{sec:cocos}.
 
-\subsection{Coordinate conventions}
+\subsection{Coordinate Conventions}
 \label{sec:cocos}
 
 We generally follow the notational convention of \textcite{dHaeseleer91}, which will be succinctly summarized in this section. When using curvilinear coordinates in three-dimensional Euclidean space, two complementary vector bases can be defined. Using coordinates $u^{1}, u^{2}, u^{3}$, the basis vectors $\vec{e}_{1}, \vec{e}_{2}, \vec{e}_{3}$ are defined as tangent-basis vectors, which means they follow the coordinate curves at a given point $\vec{R}$:
@@ -116,7 +116,7 @@ Here, $\psi$ is the normalized \emph{disc} poloidal flux, i.e.
 \begin{gather}
   \psi = \frac{1}{2 \pi} \Psi_{\pol} = \frac{1}{2 \pi} \int \vec{B}_{0} \cdot \diff \vec{S},
 \end{gather}
-where $\vec{S}$ is the disc that at a point of evaluation $(R_{S}, Z_{S})$ is given by $R \leq R_{S}, Z = Z_{S}$. The orientation of $\vec{S}$ fixes the sign\footnote{Since $\vec{B}_{0}$ is not defined outside the plasma volume and only $\grad \psi$ enters calculations, $\psi$ is defined up to a constant and thus could be shifted to change sign. However, the sign of $\grad \psi$ is fixed.} of $\psi$. Here, $\psi$ is expected to increase towards the magnetic axis -- $\psi_{\text{min}}$ is located at the outermost flux surface and $\psi_{\text{max}}$ is located at the magnetic axis. This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in cylindrical coordinates:
+where $\vec{S}$ is the disc that at a point of evaluation $(R_{S}, Z_{S})$ is given by $R \leq R_{S}, Z = Z_{S}$. The orientation of $\vec{S}$ fixes the sign\footnote{Since $\vec{B}_{0}$ is not defined outside the plasma volume and only $\grad \psi$ enters calculations, $\psi$ is defined up to a constant and thus could be shifted to change sign. However, the sign of $\grad \psi$ is fixed.} of $\psi$. Here, $\psi$ is expected to increase towards the magnetic axis -- $\psi_{\text{min}}$ is located at the outermost flux surface and $\psi_{\text{max}}$ is located at the magnetic axis. This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in cylindrical coordinates (see also \cite{Sauter13}):
 \begin{align}
   B_{0}^{R} &= (\grad \psi \times \grad \phi)^{R} = -\frac{1}{R} \pd[\psi]{Z}, \label{eq:B0R} \\
   B_{0}^{Z} &= (\grad \psi \times \grad \phi)^{Z} = \frac{1}{R} \pd[\psi]{R}. \label{eq:B0Z}
@@ -155,7 +155,7 @@ In some derivations, we also use a \textsc{Fourier} series expansion for the pol
 \end{gather}
 In contrast to expansion in toroidal modes, poloidal modes are not fully linearly independent and \emph{mode coupling} will occur due to to the toroidal geometry. Also, since the expansion is applied to generally complex \textsc{Fourier} coefficients $\vec{B}_{n}$, \cref{eq:fourier-cc} cannot be applied and negative $m$ have to be considered as well. Using $\theta$ directly incurs solving the magnetic differential equation, whereas little is gained due to linear dependence. Nevertheless, it is useful in analytic derivations.
 
-\subsection{Discretization and local coordinate system}
+\subsection{Discretization and Local Coordinate System}
 \label{sec:grid}
 
 So far, we have given a fairly general description of the problem without explicit reference to numerical methods, apart maybe from the iteration scheme in \cref{sec:iteration}. One necessary modification is the discretization of the problem. The finite element method outlined in \cref{sec:compute_Bn} uses a discretization of the computational domain, i.e. it introduces a triangular grid. While other tilings are possible, triangulation is the simplest and for triangles, the \textsc{Delaunay} algorithm is unique. The latter maximizes the triangles' minimal interior angle, which is desirable because a more elongated triangle shape reduces the quality of approximations on it. However, we choose to align the grid on flux surfaces in order to use the associated special properties.
@@ -206,7 +206,7 @@ as well as
 \end{gather}
 Likewise, it should be noted that $\grad \phi$ is perpendicular to all purely poloidal quantities which includes, apart from those designated with superscript \enquote{\pol}, all local coordinate vectors $\vec{l}$ and $\vec{n}$, \textsc{Fourier} coefficients with subscript $n$, as well as $\grad \psi$ and $\grad p_{0}$.
 
-\subsection{Representation of fields on the grid}
+\subsection{Representation of Fields on the Grid}
 \label{sec:dofs}
 
 Another approximation made in the finite element method is the choice of a \emph{basis} to represent a scalar or vector field locally on one element of the grid. Scalar fields like the pressure perturbation can be approximated with \textsc{Lagrange} elements of the lowest order where the \emph{degrees of freedom} are the values on the nodes and any value within the triangle is interpolated from the values of its nodes. Many other choices are available, but this is the simplest option to implement and it is sufficient for our needs. For vector fields some more considerations are necessary; see \cref{sec:compute_Bn} for more details. We are mostly interested in representation of the magnetic flux density and the current density, both of which characteristically show zero divergence. Thus it is necessary to choose a basis that yields a well-defined divergence. This is guaranteed by \textsc{Raviart}--\textsc{Thomas} elements, where in the lowest-order case, the degrees of freedom are the fluxes of the vector field across the triangle edges:

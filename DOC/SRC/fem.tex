@@ -1,7 +1,7 @@
-\section{Magnetic field perturbation}
+\section{Magnetic Field Perturbation}
 \label{sec:compute_Bn}
 
-In this section, the calculation of the magnetic field from the current density is described, i.e. the explicit form of $\hat{M}$ in \cref{eq:M_operator}. The implementation uses \texttt{FreeFem++} by \textcite{Hecht12}, while the mathematical background is outlined in \cref{sec:ritz-galerkin}, which is based on the book by \textcite{Jin02}. For a more specific discussion of the problem at hand, see \cite{Seeber18}. Finally, the application of the \textsc{Fourier} transform is elaborated in \cref{sec:fourier-fem}, based on \cite{Albert19}.
+In this section, the calculation of the magnetic field from the current density is described, i.e. the explicit form of $\hat{M}$ in \cref{eq:M_operator}. The implementation uses \texttt{FreeFem++} by \textcite{Hecht12}, while the mathematical background is outlined in \cref{sec:ritz-galerkin}, which is based on the book by \textcite{Jin02}. For a more specific discussion and thorough derivations for the problem at hand, see \textcite{Seeber18}. Finally, the application of the \textsc{Fourier} transform is elaborated in \cref{sec:fourier-fem}, based on the paper by \textcite{Albert16}.
 
 The finite element method can be used to numerically solve partial differential equations, specifically boundary value problems. Before delving into the details of the method, we shall look at how this applies to \cref{eq:ampere}. Using an identity from vector analysis, we get
 \begin{gather}
@@ -48,7 +48,7 @@ This is an elliptical partial differential equation of second order, so the solu
   \end{gather*}
   holds to avoid the aforementioned problem with \textsc{Cauchy} boundary conditions.
 \end{itemize}
-Even though this categorization was applied to Cartesian components it holds in any coordinate system since a simple geometrical coordinate transform does not change the type of the PDE and thus the finite element method is applicable. It should be noted, however, that not all vector components can be prescribed at the same time; according to \cite{Biro15}, the normal and tangential components have to be separated. For the normal components, the magnetic surface charge density $b$ can be prescribed,
+Even though this categorization was applied to Cartesian components it holds in any coordinate system since a simple geometrical coordinate transform does not change the type of the PDE and thus the finite element method is applicable. It should be noted, however, that not all vector components can be prescribed at the same time; according to \textcite{Biro15}, the normal and tangential components have to be separated. For the normal components, the magnetic surface charge density $b$ can be prescribed,
 \begin{gather*}
   \vec{B} \cdot \vec{n} = -b,
 \end{gather*}
@@ -66,7 +66,7 @@ which has to fulfill the additional condition that
 \end{gather*}
 When deriving the weak formulation in the following section, these two options will be assigned to their corresponding boundary conditions.
 
-\subsection{Outline of the Ritz and Galerkin methods}
+\subsection{Outline of the Ritz and Galerkin Methods}
 \label{sec:ritz-galerkin}
 
 The finite element method is used to solve problems of the general form

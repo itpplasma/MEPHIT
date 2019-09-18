@@ -1,9 +1,9 @@
-\section{Linearized MHD force balance}
+\section{Linearized MHD Force Balance}
 \label{sec:linmhd}
 
 [\ldots]
 
-\subsection{Pressure perturbation}
+\subsection{Pressure Perturbation}
 \label{sec:compute_presn}
 
 Multiplying \cref{eq:mhd-phi} by $\vec{B}_{0}$ yields
@@ -44,7 +44,7 @@ Note that for $N$ nodes with periodic boundary conditions $p_{n}^{(0)} = p_{n}^{
   \end{pmatrix}.
 \end{gather*}
 
-\subsection{Current perturbation}
+\subsection{Current Perturbation}
 \label{sec:compute_currn}
 
 To derive an expression for the degrees of freedom of $\vec{J}_{n}$, we start from the linear force balance in \cref{eq:mhd-phi} and put the unknown current perturbation on one side:
@@ -169,7 +169,7 @@ where the elements of the stiffness matrix $\hat{K}$ are
   K_{jk} = -\left ( 1 + \frac{\im n S_{\Omega^{(j)}}}{2} \frac{B_{0}^{\phi} (\Gamma_{\inw}^{(j)})}{\vec{B}_{0}^{\pol} (\Gamma_{\inw}^{(j)}) \cdot \vec{n}_{\inw}^{(j)}} \right) \delta_{jk} + \left( 1 + \frac{\im n S_{\Omega^{(j)}}}{2} \frac{B_{0}^{\phi} (\Gamma_{\out}^{(j)})}{\vec{B}_{0}^{\pol} (\Gamma_{\out}^{(j)}) \cdot \vec{n}_{\out}^{(j)}} \right) \delta_{j+1, k}.
 \end{gather}
 
-\subsection{Current sheets}
+\subsection{Current Sheets}
 \label{sec:sheets}
 
 One aspect of resonances has not been considered yet. Starting from the static MHD equilibrium in \cref{eq:mhd-gen}, we see that only the normal component of the current density is relevant, i.e.
@@ -194,13 +194,13 @@ and \textsc{Fourier} transformed to
 \end{gather}
 where the left-hand side has been grouped together in the \textsc{Fourier} coefficient \ensuremath{s_{m n}}. Rearranging yields
 \begin{gather}
-  \frac{s_{m n}}{\im (m + n q)} = \left [ \frac{J^{\parallel}}{B} \right ]_{m n}.
+  \frac{s_{m n}}{\im (m + n q)} = \left [ \frac{J^{\parallel}}{B} \right ]_{m n}. \label{eq:jpar_mn}
 \end{gather}
-For comparison, eq.~(1) in \cite{Waelbroeck09} gives -- after translation to the conventions of this thesis --
+For comparison, translation to the conventions of this thesis of eq.~(1) in the paper by \textcite{Waelbroeck09} gives
 \begin{gather}
   \left [ \frac{J^{\parallel}}{B} \right ]_{m n} = \frac{4 \pi p'(\rho)}{\langle B^{2} \rangle} \sum_{m, n} \frac{\symcal{G}_{m n} (\rho)}{q(\rho) - \frac{m}{n}} + C_{m n} \delta \left ( q(\rho) - \frac{m}{n} \right ), \label{eq:resonances}
 \end{gather}
-where the $\symcal{G}_{m n}$ are geometric factors and the $C_{m n}$ are integration constants. To approximate the delta distribution, we consider the distortion $\delta \psi$ of flux surfaces, specifically \cref{eq:psi_mn}. A similar expression can be derived by expanding \cref{eq:pn} in flux symmetry coordinates, giving
+where the $\symcal{G}_{m n}$ are geometric factors and the $C_{m n}$ are integration constants. The additional delta distribution term in \cref{eq:resonances} is apparently missing from \cref{eq:jpar_mn} and we [\ldots] to add it in order to better capture the physical behaviour of the sheet currents. To approximate the delta distribution, we consider the distortion $\delta \psi$ of flux surfaces, specifically \cref{eq:psi_mn}. A similar expression can be derived by expanding \cref{eq:pn} in flux symmetry coordinates, giving
 \begin{gather}
   B_{0}^{\theta} \pd{\theta} p_{n} + \im n p_{n} B_{0}^{\phi} = -B_{n}^{\psi} p_{0}'(\psi),
 \end{gather}
