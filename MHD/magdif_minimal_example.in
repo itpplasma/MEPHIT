@@ -1,6 +1,6 @@
 &settings
    log_level = 4                                         ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
-   runmode = 1                                           ! 0: single iteration, 1: direct iterations,
+   runmode = 2                                           ! 0: single iteration, 1: direct iterations,
                                                          ! 2: preconditioned iterations
    nonres = .false.                                      ! use non-resonant test case
    quad_avg = .true.                                     ! average over quadrilaterals for non-resonant test case
@@ -32,9 +32,9 @@
    rel_err_currn = 1d-8                                  ! error threshold for current perturbation
    kilca_vac_coeff = (1d-6, 0d0)                         ! integration constant in resonant vacuum perturbation
    kilca_pol_mode = 3                                    ! single poloidal mode number used with KiLCA
-   kilca_scale_factor = 579                              ! scaling factor used in EFIT rmaxis from KiLCA
+   kilca_scale_factor = 1000                             ! scaling factor used in EFIT rmaxis from KiLCA
    kilca_pol_mode_file = 'Bpmn.dat'                      ! output file for Fourier coefficients
 /
 &delayed
-   sheet_current_factor = 7*(0d0, 0d0)  ! coefficients for sheet currents
+   sheet_current_factor = (0d0, 0d0)  ! coefficients for sheet currents
 /

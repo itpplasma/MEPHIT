@@ -225,7 +225,6 @@ program minimal_example
   end do
   call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
   call check_div_free(Bnflux, Bnphi, 1d-9, 'non-resonant B_n')
-  Bnphi = Bnphi / kilca_scale_factor
   call write_vector_dof(Bnflux, Bnphi, Bn_vac_file)
 
   if (allocated(Bnflux)) deallocate(Bnflux)
@@ -351,7 +350,7 @@ contains
          * kilca_vac_coeff
     B_z = imun * I_m(0) * exp(imun * pol_mode * theta) * kilca_vac_coeff
     Br = B_r * cos(theta) - B_theta * sin(theta)
-    Bp = B_z / R_0
+    Bp = B_z
     Bz = B_r * sin(theta) + B_theta * cos(theta)
   end subroutine kilca_vacuum
 end program minimal_example

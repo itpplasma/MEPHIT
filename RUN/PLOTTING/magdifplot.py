@@ -419,8 +419,7 @@ class magdif:
                     r'$\left\vert J_{mn \theta}^{(0)} \right\vert$'
                     + ' / statA cm\textsuperscript{-1}'
             ))
-        if (os.path.isfile(os.path.join(self.datadir, 'Bpmn_r.dat')) and
-                os.path.isfile(os.path.join(self.datadir, 'Bpmn_vac_r.dat'))):
+        if os.path.isfile(os.path.join(self.datadir, 'Bpmn_r.dat')):
             self.plots.append(magdif_poloidal_modes(
                     self.config['n'], self.s, self.q,
                     self.datadir, 'Bpmn_r.dat',

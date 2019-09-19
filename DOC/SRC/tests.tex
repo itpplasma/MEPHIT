@@ -194,18 +194,23 @@ To convert back to $(R, \phi, Z)$ vector components, we use \cref{eq:kilca-coord
   B_{n}^{Z} &= B_{n}^{r} \pd[Z]{r} + B_{n}^{\vartheta} \pd[Z]{\vartheta} = B_{n}^{r} \sin \vartheta + r B_{n}^{\vartheta} \cos \vartheta, \label{eq:kilca-BZ} \\
   B_{n}^{\phi} &= B_{n}^{z} \pd[\phi]{z} = \frac{1}{R_{0}} B_{n}^{z}. \label{eq:kilca-Bphi}
 \end{align}
-Note that the same conversions apply in the secondary cylindrical coordinate system analogously, e.g. $r B_{n}^{\vartheta} = B_{n (\vartheta)}$.
-
-Up to this point, calculations have been performed in the cylindrical geometry used by KiLCA code where the torus is explicitly bent into a cylinder. To approximate this geometry in NEO-EQ code, we multiply $R_0$ by a scaling factor \gls{scaling} and implement the change by shifting the computational domain in the EFIT file (see \cref{sec:inputs}) to that value. This way, $R \approx R_{0}$ over the computational domain and the influence of the toroidal geometry is comparatively small. Furthermore, since the toroidal wavenumber $k_{z}$ -- inversely proportional to the wavelength of the standing wave imagined to go around in toroidal direction -- should stay constant, the toroidal mode number $n$ must also be scaled by $\gamma$, which should therefore be an integer. In summary we have
+Note that the same conversions apply in the secondary cylindrical coordinate system analogously, e.g. $r B_{n}^{\vartheta} = B_{n (\vartheta)}$. Furthermore, since $R_{0}$ is large and $R \approx R_{0}$, the physical components in \cref{eq:kilca-Bphi} are approximately equal:
+\begin{gather}
+  B_{n (\phi)} = R B_{n}^{\phi} = \frac{R}{R_{0}} B_{n}^{z} \approx B_{n}^{z}.
+\end{gather}
+Up to this point, calculations have been performed in the cylindrical geometry used by KiLCA code where the torus is explicitly bent into a cylinder. To approximate this geometry in NEO-EQ code, we multiply $R_0$ by a scaling factor $\gamma$ and implement the change by shifting the computational domain in the EFIT file (see \cref{sec:inputs}) to that value. \Cref{eq:kilca-coord} then reads
 \begin{align}
-  R_{0} \rvert_{\text{KiLCA}} &\to R_{0} \rvert_{\text{NEO-EQ}} = \gamma R_{0} \rvert_{\text{KiLCA}}, \\
-  n \rvert_{\text{KiLCA}} &\to n \rvert_{\text{NEO-EQ}} = \gamma n \rvert_{\text{KiLCA}}.
+  \bar{R} &= \gamma R_{0} + r \cos \vartheta, & \bar{Z} &= r \sin \vartheta, & \bar{\phi} &= \frac{z}{\gamma R_0}. \label{eq:kilca-coord-scaled}
 \end{align}
+Effectively, the torus is stretched by \enquote{stitching together} $\gamma$ cylinders with periodic boundary conditions. Consequently, we use wavenumbers
+\begin{gather}
+  k_{z} = \frac{\bar{n}}{\gamma R_{0}}.
+\end{gather}
 The solution computed by NEO-EQ code then has to be transformed to the cylindrical geometry of KiLCA code to allow for a comparison. Using trigonometric identities, we can invert \cref{eq:kilca-BR,eq:kilca-BZ,eq:kilca-Bphi} to yield
 \begin{align}
   B_{n}^{r} &= B_{n}^{R} \cos \vartheta + B_{n}^{Z} \sin \vartheta, \\
   r B_{n}^{\vartheta} &= B_{n}^{Z} \cos \vartheta - B_{n}^{R} \sin \vartheta, \\
-  B_{n}^{z} &= R_{0} B_{n}^{\phi}.
+  B_{n}^{z} &= R_{0} B_{n}^{\phi} \approx R B_{n}^{\phi} = B_{n (\phi)}.
 \end{align}
 The poloidal spectrum of this result is then approximated by a discrete \textsc{Fourier} transform:
 \begin{gather}

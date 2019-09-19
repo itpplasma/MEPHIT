@@ -197,7 +197,6 @@ contains
     call init_indices
     call read_mesh
     if (kilca_scale_factor /= 0) then
-       n = n * kilca_scale_factor
        R0 = R0 * kilca_scale_factor
     end if
     call init_flux_variables
