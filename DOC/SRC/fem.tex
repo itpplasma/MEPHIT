@@ -1,7 +1,7 @@
 \section{Magnetic Field Perturbation}
 \label{sec:compute_Bn}
 
-In this section, the calculation of the magnetic field from the current density is described, i.e. the explicit form of $\hat{M}$ in \cref{eq:M_operator}. The implementation uses \texttt{FreeFem++} by \textcite{Hecht12}, while the mathematical background is outlined in \cref{sec:ritz-galerkin}, which is based on the book by \textcite{Jin02}. For a more specific discussion and thorough derivations for the problem at hand, see \textcite{Seeber18}. Finally, the application of the \textsc{Fourier} transform is elaborated in \cref{sec:fourier-fem}, based on the paper by \textcite{Albert16}.
+In this chapter, the calculation of the magnetic field from the current density is described, i.e. the explicit form of $\hat{M}$ in \cref{eq:M_operator}. The implementation uses \texttt{FreeFem++} by \textcite{Hecht12}, while the mathematical background is outlined in \cref{sec:ritz-galerkin}, which is based on the book by \textcite{Jin02}. For a more specific discussion and thorough derivations for the problem at hand, see \textcite{Seeber18}. Finally, the application of the \textsc{Fourier} transform is elaborated in \cref{sec:fourier-fem}, based on the papers by \textcite{Heyn08,Albert16}.
 
 The finite element method can be used to numerically solve partial differential equations, specifically boundary value problems. Before delving into the details of the method, we shall look at how this applies to \cref{eq:ampere}. Using an identity from vector analysis, we get
 \begin{gather}
@@ -48,18 +48,18 @@ This is an elliptical partial differential equation of second order, so the solu
   \end{gather*}
   holds to avoid the aforementioned problem with \textsc{Cauchy} boundary conditions.
 \end{itemize}
-Even though this categorization was applied to Cartesian components it holds in any coordinate system since a simple geometrical coordinate transform does not change the type of the PDE and thus the finite element method is applicable. It should be noted, however, that not all vector components can be prescribed at the same time; according to \textcite{Biro15}, the normal and tangential components have to be separated. For the normal components, the magnetic surface charge density $b$ can be prescribed,
-\begin{gather*}
-  \vec{B} \cdot \vec{n} = -b,
-\end{gather*}
+Even though we applied this categorization to Cartesian components, it holds in any coordinate system since a simple geometrical coordinate transform does not change the type of the PDE and thus the finite element method is applicable. It should be noted, however, that we can not prescribe all vector components at the same time; according to \textcite{Biro15}, the normal and tangential components have to be separated. For the normal components, we can prescribe the magnetic surface charge density $b$,
+\begin{gather}
+  \vec{B} \cdot \vec{n} = -b, \label{eq:perp_bc}
+\end{gather}
 which has to fulfill the additional condition that
 \begin{gather*}
   \oint_{\Gamma} b \, \symup{d} \Gamma = -\oint_{\Gamma} \symbf{B} \cdot \symbf{n} \, \symup{d} \Gamma = -\int_{\Omega} \nabla \cdot \symbf{B} \, \symup{d} \Omega = 0.
 \end{gather*}
 For the tangential component, the magnetic surface current density $\vec{K}$ can be prescribed,
-\begin{gather*}
-  \vec{B} \times \vec{n} = \frac{4 \pi}{c} \vec{K},
-\end{gather*}
+\begin{gather}
+  \vec{B} \times \vec{n} = \frac{4 \pi}{c} \vec{K}, \label{eq:par_bc}
+\end{gather}
 which has to fulfill the additional condition that
 \begin{gather*}
   \frac{4 \pi}{c} \oint_{\Gamma} \vec{K} \, \symup{d} \Gamma = \oint_{\Gamma} \vec{B} \times \vec{n} \, \symup{d} \Gamma = -\int_{\Omega} \curl \vec{B} \, \symup{d} \Omega = -\frac{4 \pi}{c} \int_{\Omega} \vec{J} \, \symup{d} \Omega.
@@ -93,13 +93,13 @@ i.e. $\delta F = 0$ and $\delta (\delta F) > 0$, where $\delta F$ is the variati
 \begin{gather}
   \tilde{\Phi} = \sum_{k = 1}^{N} C_{k} v_{k} = \vec{C} \cdot \vec{v},
 \end{gather}
-where $C_{k}$ are constant expansion coefficients and $v_{k}$ are basis functions which will be defined later. Now, the variational form in \cref{eq:variational} can be cast into an algebraic form,
+where $C_{k}$ are constant expansion coefficients or \emph{degrees of freedom} and $v_{k}$ are \emph{basis functions} which will be defined later. Now, the variational form in \cref{eq:variational} can be cast into an algebraic form,
 \begin{gather}
   \pd{C_{k}} F(\tilde{\Phi}) = 0 \quad \forall k = 1, 2, \dotsc, N.
 \end{gather}
 This results in a system of $N$ linear equations of $N$ unknowns,
 \begin{gather}
-  \hat{K} \vec{c} = \vec{s}. \label{eq:ritz}
+  \hat{K} \vec{C} = \vec{s}. \label{eq:ritz}
 \end{gather}
 Here, $\hat{K}$ is the \emph{stiffness matrix}\footnote{\label{fn:zienkiewicz}These quantities derive their names from the application of the method to problems of solid mechanics in civil engineering.} given by
 \begin{gather}
@@ -109,9 +109,9 @@ where we used \cref{eq:self-adjoint} in the last equality. The \emph{load vector
 \begin{gather}
   s_{k} = \int_{\Omega} v_{k} f \, \symup{d} \Omega \quad \forall k = 1, 2, \dotsc, N.
 \end{gather}
-When $\symcal{L}$ is not self-adjoint or positve definite, the \textsc{Ritz} method has to be modified. For example, complex $\symcal{L}$ are not self-adjoint with the scalar product defined in \cref{eq:scalar_prod}. Furthermore, if inhomogeneous boundary conditions are applied, the functional $F$ has to be extended by a function that fulfills this boundary condition. For all these generalized cases, the \textsc{Galerkin} method may be used instead, which also does not require the construction of a variational form.
+Now, describing the whole domain $\Omega$ by a limited set of basis functions $\vec{v}$ would entail the construction of complicated basis function to cover the whole domain. Instead, we discretize the computational domain into the eponymous \emph{finite elements}, which we already discussed in \cref{sec:grid}. The basis functions are then defined to extend only over one element and to be zero on all others. This allows a reasonable approximation of almost arbitrary functions by simple polynomial basis functions over arbitrary domains. \Cref{eq:ritz} is then defined for each of the $M$ finite elements, yielding a set of $M N$ linear equations in $M N$ unknowns. Since only a few neighboring finite elements are connected, $\hat{K}$ then takes the shape of a band matrix, for which efficient numerical solutions are available.
 
-Since $\tilde{\Phi}$ is only an approximation to $\Phi$, inserting the former into the original differential \cref{eq:fem} will leave a residue, i.e.
+The conventional \textsc{Ritz} method also has its shortcomings. When $\symcal{L}$ is not self-adjoint or positive definite, the \textsc{Ritz} method has to be modified. For example, complex $\symcal{L}$ are not self-adjoint with the scalar product defined in \cref{eq:scalar_prod}. Furthermore, if inhomogeneous boundary conditions are applied, the functional $F$ has to be extended by a function that fulfills this boundary condition. For all these generalized cases, the \textsc{Galerkin} method may be used instead, which also does not require the construction of a variational form. Observing that $\tilde{\Phi}$ is only an approximation to $\Phi$, inserting the former into the original differential \cref{eq:fem} will leave a residue, i.e.
 \begin{gather}
   \symcal{L} \tilde{\Phi} - f \neq 0.
 \end{gather}
@@ -121,17 +121,88 @@ Now, another approach to approximate the minimum of the functional $F$ is to min
 \end{gather}
 For the \textsc{Galerkin} method, the weighting functions $w_{k}$ are the same as the basis functions $v_{k}$. This approach also results in a system of $N$ linear equations of $N$ unknowns, as in \cref{eq:ritz}. Here, $\hat{K}$ is only symmetric if $\symcal{L}$ is self-adjoint, in which case the equations are the same as with the \textsc{Ritz} method.
 
-[weak formulation -- boundary conditions, basis functions, \textsc{Sobolev} spaces?, \textsc{de Rham} complex?, \ldots]
+The weighting functions $w_{k}$ are also called \emph{test functions} in the context of the \emph{weak formulation} of the differential equation, where they are used to apply integration by parts or analogs thereof, such as \textsc{Green}'s identities or the divergence theorem. This allows the enforcement of the boundary conditions since integrals on the boundary will appear. As an illustration, we shall derive the weak formulation of \cref{eq:ampere} based on the treatment by \textcite{Biro15}. To this end, we take a dot product of \cref{eq:ampere} with a vectorial test function $\vec{w}$, integrate over $\Omega$, and apply the divergence theorem:
+\begin{align}
+  \int_{\Omega} \vec{w} \cdot (\curl (\curl \vec{A})) \, \symup{d} \Omega &= \frac{4 \pi}{c} \int_{\Omega} \vec{w} \cdot \vec{J} \, \symup{d} \Omega, \notag \\
+  \int_{\Omega} (\curl \vec{w}) \cdot (\curl \vec{A}) \, \symup{d} \Omega - \int_{\Omega} \nabla \cdot (\vec{w} \times (\curl \vec{A})) \, \symup{d} \Omega &= \frac{4 \pi}{c} \int_{\Omega} \vec{w} \cdot \vec{J} \, \symup{d} \Omega, \notag \\
+  \int_{\Omega} (\curl \vec{w}) \cdot (\curl \vec{A}) \, \symup{d} \Omega - \oint_{\Gamma} (\vec{w} \times (\curl \vec{A})) \cdot \vec{n} \, \symup{d} \Gamma &= \frac{4 \pi}{c} \int_{\Omega} \vec{w} \cdot \vec{J} \, \symup{d} \Omega, \notag \\
+  \int_{\Omega} (\curl \vec{w}) \cdot (\curl \vec{A}) \, \symup{d} \Omega - \oint_{\Gamma} \vec{w} \cdot ((\curl \vec{A}) \times \vec{n}) \, \symup{d} \Gamma &= \frac{4 \pi}{c} \int_{\Omega} \vec{w} \cdot \vec{J} \, \symup{d} \Omega. \label{eq:weak-form}
+\end{align}
+The second integral on the left-hand side shows that a \textsc{Neumann} boundary condition of the form
+\begin{gather}
+  (\curl \vec{A}) \times \vec{n} = \frac{4 \pi}{c} \vec{K}, \label{eq:natural_bc}
+\end{gather}
+corresponding to the tangential component in \cref{eq:par_bc}, appears as a \emph{natural boundary condition} of the weak form. \Cref{eq:natural_bc} can be used to replace the expression in the weak formulation to impose the boundary condition. For the \textsc{Dirichlet} boundary condition, we make the connection to \cref{eq:perp_bc} via
+\begin{align}
+  \vec{A} \times \vec{n} &= \vec{\alpha}, \label{eq:essential_bc} \\
+  \nabla \cdot (\vec{A} \times \vec{n}) &= \nabla \cdot \vec{\alpha} = -b, \notag \\
+  \vec{n} \cdot (\curl \vec{A}) - \vec{A} \cdot \underbrace{(\curl \vec{n})}_{\vec{0}} &= -b, \notag \\
+  \vec{n} \cdot (\curl \vec{A}) = \vec{B} \cdot \vec{n} &= -b, \notag
+\end{align}
+where $\vec{\alpha}$ is an auxiliary function also depending on the gauge of $\vec{A}$. Since it cannot be connected to the weak formulation in \cref{eq:weak-form}, \cref{eq:essential_bc} is an \emph{essential boundary condition}; it poses direct restrictions on the degrees of freedom at the boundary elements in the form $C_{j} = \alpha_{j}$ (see \cref{eq:ritz}) for all affected $j$. By setting
+\begin{align}
+  K_{jk} &= \delta_{jk} \quad \forall k = 1, 2, \dotsc, M N, \\
+  s_{j} &= \alpha_{j}, \\
+  s_{k} &\to s_{k} - K_{kj} \quad \forall k \neq j,
+\end{align}
+we ensure $K_{kj} = \delta_{kj}$ and thus $\hat{K}$ stays symmetric. Now, the $j$th row and column can be omitted without changing the solution, reducing the dimension of the system of equations. A less sophisticated alternative is the \emph{penalty method}, where we employ a sufficiently large value $h$ and set
+\begin{align}
+  K_{jj} &= h, \\
+  s_{j} &= h \alpha_{j}.
+\end{align}
+This approximates the boundary condition \cref{eq:essential_bc} and also leaves $\hat{K}$ symmetric.
+
+Finally, we have to choose appropriate basis functions which approximate the underlying solution space. While we initially demanded that the solution be twice continuously differentiable, i.e., $A_{k} \in C^{2} (\Omega)$, the weak formulation suggests this is not strictly necessary. The integration by parts -- or equivalently the divergence theorem used in \cref{eq:weak-form} -- gives rise to the notion of the \emph{weak derivative}. Applied to \cref{eq:weak-form}, this means that there can be a valid solution with $\curl \vec{A}$ even when $\curl (\curl \vec{A})$ only exists in the weak sense that the application of the divergence theorem is valid and the integral exists. Thus also \emph{weak solutions} are allowed, and the underlying solution space is a \textsc{Sobolev} space. For our problem, the relevant \textsc{Sobolev} spaces are defined in relation to the $L^{2}$ norm
+\begin{gather}
+  \norm{w}_{2} = \sqrt{\int_{\Omega} \lvert w \rvert^{2} \, \diff \Omega}, \label{eq:L2-norm}
+\end{gather}
+so that they are at least square-integrable:
+\begin{gather}
+  L^{2} (\Omega) = \{ w : \Omega \to \mathbb{C} \; \vert \; \norm{w}_{2} < \infty \}.
+\end{gather}
+Now the \textsc{Sobolev} space $H^{1} (\Omega)$ consists of functions whose first derivatives along all coordinates $u_{k}$ are also square-integrable:
+\begin{gather}
+  H^{1} (\Omega) = \{ w \in L^{2} (\Omega) \; \vert \; \pd{u^{k}} w \in L^{2} (\Omega) \}.
+\end{gather}
+This is the appropriate function space for scalar functions whose gradient appears in the weak formulation. They are approximated by \textsc{Lagrange} elements whose degrees of freedom of lowest order are the values on nodes of the finite elements. An example would be the pressure $p$, if it were to appear in the weak formulation. Another important \textsc{Sobolev} space $H (\Divg, \Omega)$ which is defined for vector-valued functions $\vec{w}$ as
+\begin{gather}
+  H (\Divg, \Omega) = \{ w_{i} \in L^{2} (\Omega) \; \vert \; \divg \vec{w} \in L^2 (\Omega) \}.
+\end{gather}
+Whenever we need the divergence of a vector field, e.g., for $\vec{J}$ and $\vec{B}$, this is the appropriate function space to consider. It is approximated by \textsc{Raviart}--\textsc{Thomas} elements with vector-valued basis functions and the perpendicular component of edges as degrees of freedom for lowest-order elements. This means that the perpendicular component is continuous across edges, which is important for the application of the divergence theorem. On the other hand, the parallel component on edges might be discontinuous across elements. While we have introduced these two function spaces and basis functions already in \cref{sec:grid}, we still need a function space for $\vec{A}$ with a well-defined curl. $H (\Curl, \Omega)$ is defined accordingly:
+\begin{gather}
+  H (\Curl, \Omega) = \{ w_{i} \in L^{2} (\Omega) \; \vert \; (\curl w)^{u_{k}} \in L^2 (\Omega) \}.
+\end{gather}
+The associated basis functions are the \textsc{Nédélec} elements. Like the \textsc{Raviart}--\textsc{Thomas} elements, they use vectorial basis function, but the degrees of freedom are the parallel components along edges, which is necessary for the application of \textsc{Stokes}' theorem. The continuity conditions are also reversed compared to \textsc{Raviart}--\textsc{Thomas} elements, i.e., parallel components are continuous across edges, but the perpendicular components might be discontinuous. Finally, another useful property of these function spaces is the \textsc{de Rham} complex, which shows the relation between these function spaces and the differential operators mediating between them. We can write it concisely as
+\begin{gather}
+  H^{1} (\Omega) \xrightarrow{\Grad} H (\Curl, \Omega) \xrightarrow{\Curl} H (\Divg, \Omega) \xrightarrow{\Divg} L^{2} (\Omega).
+\end{gather}
+The interpretation is as follows: Applying the curl to a function from $H (\Curl, \Omega)$ yields a result in $H (\Divg, \Omega)$. Thus when we take the curl of $\vec{A} \in H (\Curl, \Omega)$, the result $\vec{B} \in H (\Divg, \Omega)$ meets our demand of a well-defined divergence.
 
 \subsection{Reduction to two dimensions}
 \label{sec:fourier-fem}
 
-[\ldots]
-
-The weak formulation used in \texttt{FreeFEM++} is given by  % rework!
+As a further simplification, we want to apply the poloidal-toroidal decomposition discussed in \cref{sec:geom}. In the appendix of their paper, \textcite{Heyn08} describe the basics of the procedure. $\vec{A} (R, \phi, Z)$ is split into an axisymmetric part $\bar{\vec{A}} (R, Z)$ and an non-axisymmetric part $\tilde{\vec{A}} (R, \phi, Z)$. When we apply the \textsc{Fourier} transform to the latter, there is no contribution from the mode $n = 0$ by definition. Next, we gauge $\tilde{\vec{A}}$ so that $\tilde{A}_{\phi} = 0$, which is accomplished by the transformation
 \begin{gather}
-  \int_{\Omega} \left ( \polCurl \vec{w} R \polCurl \vec{a} + \frac{1}{R} n^{2} w_{k} a_{k} \right ) \, \diff \Omega + \frac{4 \pi}{c} \int_{\Omega} w_{k} j_{k} = 0.
+  \tilde{\vec{A}} \to \tilde{\vec{A}} - \grad \int_{\phi_{\min}}^{\phi} \tilde{A}_{\phi} \, \diff \phi',
 \end{gather}
+which reduces to
+\begin{gather}
+  \tilde{\vec{A}} \to \tilde{\vec{A}} - \frac{\grad \tilde{A}_{n \phi}}{\im n}
+\end{gather}
+since we only consider a single harmonic $n \neq 0$. \Textcite{Albert16} then give the magnetic field perturbation $\vec{B}_{n}$ as
+\begin{align}
+  B_{n}^{R} &= \frac{\im n}{R} A_{n Z}, & B_{n}^{\phi} &= \frac{1}{R} \left ( \pd[A_{n R}]{Z} - \pd[A_{n Z}]{R} \right ), & B_{n}^{Z} &= -\frac{\im n}{R} A_{n R}.
+\end{align}
+This reduces the problem to the poloidal plan and we only need to solve
+\begin{align}
+  -\pd{Z} \left ( \pd[A_{n R}]{Z} - \pd[A_{n Z}]{R} \right ) + \frac{n^{2}}{R} A_{n R} &= \frac{4 \pi}{c} R J_{n}^{R}, \\
+  \pd{R} \left ( \pd[A_{n R}]{Z} - \pd[A_{n Z}]{R} \right ) + \frac{n^{2}}{R} A_{n Z} &= \frac{4 \pi}{c} R J_{n}^{Z}.
+\end{align}
+\Textcite{Albert16} then also give the weak formulation as
+\begin{multline}
+  \int_{\Omega} R \left ( \pd[A_{n R}]{Z} - \pd[A_{n Z}]{R} \right ) \left ( \pd[w_{R}]{Z} - \pd[w_{Z}]{R} \right ) + \frac{n^{2}}{R} (A_{n R} w_{R} + A_{n Z} w_{Z}) \, \diff R \, \diff Z = \\ = \frac{4 \pi}{c} \int_{\Omega} R (J_{n}^{R} w_{R} + J_{n}^{Z} w_{Z}) \, \diff R \, \diff Z,
+\end{multline}
+where $\vec{w}$ is a test function with the restriction $w_{\phi} = 0$. Note that the integral on the boundary is already omitted, as we impose a homogeneous \textsc{Neumann} boundary condition. As \textcite{Albert16} note: \enquote{If $\Omega$ is [extended] with a large enough current-free region around the actual domain of interest, this description is suited to approximately describe the decay of the magnetic field at infinite distance.}
 
 %%% Local Variables: 
 %%% mode: latex
