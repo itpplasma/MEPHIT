@@ -198,6 +198,7 @@ contains
     call read_mesh
     if (kilca_scale_factor /= 0) then
        R0 = R0 * kilca_scale_factor
+       n = n * kilca_scale_factor
     end if
     call init_flux_variables
     call cache_equilibrium_field
@@ -708,6 +709,7 @@ contains
     type(triangle) :: elem
     type(knot) :: base, tip
 
+    open(1, file = 'plot_B0.dat', recl = longlines)
     p = 0d0
     do kf = 1, nflux
        do kt = 1, kt_max(kf)
@@ -729,8 +731,13 @@ contains
           B0r_Omega(kt_low(kf) + kt) = Br
           B0phi_Omega(kt_low(kf) + kt) = Bp
           B0z_Omega(kt_low(kf) + kt) = Bz
+          write (1, *) r, z, Br, Bz, Bp
        end do
     end do
+    do kt = kt_low(nflux+1) + 1, ntri
+       write (1, *) R0, 0d0, 0d0, 0d0, 0d0
+    end do
+    close(1)
   end subroutine cache_equilibrium_field
 
   !> Computes equilibrium current density #j0phi from given equilibrium magnetic field and
@@ -1387,11 +1394,11 @@ inner: do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
           tri = mesh_point(elem%i_knot(:))
           ! edge 1 lies opposite to knot 3, etc.
-          pol_comp_r = 1d0 / elem%det_3 * ( &
+          pol_comp_r = 1d0 / elem%det_3 / kilca_scale_factor * ( &
                pol_flux(kt_low(kf) + kt, 1) * (r - tri(3)%rcoord) + &
                pol_flux(kt_low(kf) + kt, 2) * (r - tri(1)%rcoord) + &
                pol_flux(kt_low(kf) + kt, 3) * (r - tri(2)%rcoord))
-          pol_comp_z = 1d0 / elem%det_3 * ( &
+          pol_comp_z = 1d0 / elem%det_3 / kilca_scale_factor * ( &
                pol_flux(kt_low(kf) + kt, 1) * (z - tri(3)%zcoord) + &
                pol_flux(kt_low(kf) + kt, 2) * (z - tri(1)%zcoord) + &
                pol_flux(kt_low(kf) + kt, 3) * (z - tri(2)%zcoord))
@@ -1399,7 +1406,7 @@ inner: do kt = 1, kt_max(kf)
           pol_comp_theta = pol_comp_z * cos(theta) - pol_comp_r * sin(theta)
           coeff_rho = coeff_rho + pol_comp_rho * fourier_basis
           coeff_theta = coeff_theta + pol_comp_theta * fourier_basis
-          coeff_zeta = coeff_zeta + R0 * tor_comp(kt_low(kf) + kt) * fourier_basis
+          coeff_zeta = coeff_zeta + tor_comp(kt_low(kf) + kt) * fourier_basis
        end do
        coeff_rho = coeff_rho / kt_max(kf)
        coeff_theta = coeff_theta / kt_max(kf)

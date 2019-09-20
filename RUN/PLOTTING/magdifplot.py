@@ -159,7 +159,7 @@ class magdif_poloidal_modes:
         q_interp = interpolate.interp1d(self.s_mhd, self.q_mhd, kind='cubic')
 
         m_resonant = -np.arange(
-                np.amax([np.ceil(q_min * self.n), self.n + 1]),
+                np.ceil(q_min * self.n),
                 np.floor(q_max * self.n) + 1,  # +1 to include end point
                 dtype=int
         )
@@ -421,8 +421,8 @@ class magdif:
             ))
         if os.path.isfile(os.path.join(self.datadir, 'Bpmn_r.dat')):
             self.plots.append(magdif_poloidal_modes(
-                    self.config['n'], self.s, self.q,
-                    self.datadir, 'Bpmn_r.dat',
+                    self.config['n'] * self.config['kilca_scale_factor'],
+                    self.s, self.q, self.datadir, 'Bpmn_r.dat',
                     r'$\left\vert B_{\mathrm{p}mnr} \right\vert$ / G'
             ))
 
