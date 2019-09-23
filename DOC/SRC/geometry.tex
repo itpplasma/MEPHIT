@@ -27,13 +27,13 @@ now with a two-dimensional $\nabla$ operator acting in the poloidal ($RZ$) plane
 \subsection{Coordinate Conventions}
 \label{sec:cocos}
 
-We generally follow the notational convention of \textcite{dHaeseleer91}, which we will succinctly summarize in this section. When using curvilinear coordinates in three-dimensional Euclidean space, two complementary vector bases can be defined. Using coordinates $u^{1}, u^{2}, u^{3}$, the basis vectors $\vec{e}_{1}, \vec{e}_{2}, \vec{e}_{3}$ are defined as tangent-basis vectors, which means they follow the coordinate curves at a given point $\vec{R}$:
+We generally follow the notational convention of \textcite{dHaeseleer91}, which we will succinctly summarize in this section. When using curvilinear coordinates in three-dimensional Euclidean space, two complementary vector bases can be defined. Using coordinates $u^{1}, u^{2}, u^{3}$, the basis vectors $\vec{e}_{1}, \vec{e}_{2}, \vec{e}_{3}$ are defined as tangent-basis vectors, which means they follow the coordinate curves at a given point $\vec{r}$:
 \begin{gather}
-  \vec{e}_{k} (\vec{R}) = \pd[\vec{R}]{u^{k}}, \quad k = 1, 2, 3.
+  \vec{e}_{k} (\vec{r}) = \pd[\vec{r}]{u^{k}}, \quad k = 1, 2, 3.
 \end{gather}
 This means that the corresponding coordinate $u^{k}$ is varied while the other two are held constant. Alternatively, the direction of a basis vector may be defined as a normal vector on the associated coordinate surface, i.e., where $u^{k}$ is held constant, and the other two coordinates are varied. These reciprocal basis vectors are then related to the gradient:
 \begin{gather}
-  \vec{e}^{k} (\vec{R}) = \grad u^{k} (\vec{R}), \quad k = 1, 2, 3.
+  \vec{e}^{k} (\vec{r}) = \grad u^{k} (\vec{r}), \quad k = 1, 2, 3.
 \end{gather}
 Note that with this definition, neither basis set is necessarily normalized or even orthogonal. They are however pairwise orthonormal by definition, so that
 \begin{gather}
@@ -115,7 +115,7 @@ where
 \end{align}
 Here, $\psi$ is the normalized \emph{disc} poloidal flux, i.e.
 \begin{gather}
-  \psi = \frac{1}{2 \pi} \Psi_{\pol} = \frac{1}{2 \pi} \int \vec{B}_{0} \cdot \diff \vec{S},
+  \psi = \frac{1}{2 \pi} \Psi_{\pol} = \frac{1}{2 \pi} \int \vec{B}_{0} \cdot \diff \vec{S}, \label{eq:psi}
 \end{gather}
 where $\vec{S}$ is the disc that at a point of evaluation $(R_{S}, Z_{S})$ is given by $R \leq R_{S}, Z = Z_{S}$. The orientation of $\vec{S}$ fixes the sign\footnote{Since $\vec{B}_{0}$ is not defined outside the plasma volume and only $\grad \psi$ enters calculations, $\psi$ is defined up to a constant and thus could be shifted to change sign. However, the sign of $\grad \psi$ is fixed.} of $\psi$. Here, $\psi$ is expected to increase towards the magnetic axis -- $\psi_{\text{min}}$ is located at the outermost flux surface and $\psi_{\text{max}}$ is located at the magnetic axis. This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in cylindrical coordinates (see also \cite{Sauter13}):
 \begin{align}
@@ -152,7 +152,7 @@ It should be clear from context wheter $\nabla$ is supposed to be two- or three-
 
 In some derivations, we also use a \textsc{Fourier} series expansion for the poloidal angle $\theta$ with poloidal mode number $m$, i.e.
 \begin{gather}
-  \vec{B}_{n} (\rho, \theta) = \sum_{m = -\infty}^{\infty} \vec{B}_{m n} (\rho) \e^{\im m \theta}.
+  \vec{B}_{n} (\rho, \theta) = \sum_{m = -\infty}^{\infty} \vec{B}_{m n} (\rho) \e^{\im m \theta}. \label{eq:poloidal-modes}
 \end{gather}
 In contrast to expansion in toroidal modes, poloidal modes are not fully linearly independent and \emph{mode coupling} will occur due to to the toroidal geometry. Also, since the expansion is applied to generally complex \textsc{Fourier} coefficients $\vec{B}_{n}$, \cref{eq:fourier-cc} cannot be applied and negative $m$ have to be considered as well. Using $\theta$ directly incurs solving the magnetic differential equation, whereas little is gained due to linear dependence. Nevertheless, it is useful in analytic derivations.
 
@@ -167,17 +167,17 @@ We choose a set of nested flux surfaces, e.g., a number $n_{\text{flux}}$ of cur
   \begin{subfigure}[b]{0.33\textwidth}
     \centering
     \input{grid0.tpx}
-    \caption{The innermost loop of the grid with the magnetic axis at its center. Edge \fs\ lies on the flux surface in the infinitesimal limit.}
+    \caption{The innermost triangle strip of the grid with the magnetic axis at its center. Edge \fs\ lies on the flux surface in the infinitesimal limit.}
     \label{fig:grid0}
   \end{subfigure}
   \quad
   \begin{subfigure}[b]{0.5\textwidth}
     \centering
     \input{grid1.tpx}
-    \caption{One of the outer loops of the grid with two alternating kinds of triangles with edge \fs\ lying on the inner and outer flux surface respectively.}
+    \caption{One of the outer triangle strips of the grid with two alternating kinds of triangles with edge \fs\ lying on the inner and outer flux surface respectively.}
     \label{fig:grid1}
   \end{subfigure}
-  \caption{The 2D mesh is given by a triangulation of poloidal cross-sections of the nested flux surfaces, resulting in \enquote{loops}. The cross-sections are assumed to be circular for illustration purposes.}
+  \caption{The 2D mesh is given by a triangulation of poloidal cross-sections of the nested flux surfaces, resulting in rings. The cross-sections are assumed to be circular for illustration purposes.}
   \label{fig:grid}
 \end{figure}
 

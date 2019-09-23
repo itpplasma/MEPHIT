@@ -181,7 +181,7 @@ The interpretation is as follows: Applying the curl to a function from $H (\Curl
 \subsection{Reduction to two dimensions}
 \label{sec:fourier-fem}
 
-As a further simplification, we want to apply the poloidal-toroidal decomposition discussed in \cref{sec:geom}. In the appendix of their paper, \textcite{Heyn08} describe the basics of the procedure. $\vec{A} (R, \phi, Z)$ is split into an axisymmetric part $\bar{\vec{A}} (R, Z)$ and an non-axisymmetric part $\tilde{\vec{A}} (R, \phi, Z)$. When we apply the \textsc{Fourier} transform to the latter, there is no contribution from the mode $n = 0$ by definition. Next, we gauge $\tilde{\vec{A}}$ so that $\tilde{A}_{\phi} = 0$, which is accomplished by the transformation
+As a further simplification, we want to apply the poloidal-toroidal decomposition discussed in \cref{sec:geom}. In the appendix of their paper, \textcite{Heyn08} describe the basics of the procedure. $\vec{A} (R, \phi, Z)$ is split into an axisymmetric part $\bar{\vec{A}} (R, Z)$ and an non-axisymmetric part $\tilde{\vec{A}} (R, \phi, Z)$. When we apply the \textsc{Fourier} transform to the latter, there is no contribution from the mode $n = 0$ by definition. Following that, we gauge $\tilde{\vec{A}}$ so that $\tilde{A}_{\phi} = 0$, which is accomplished by the transformation
 \begin{gather}
   \tilde{\vec{A}} \to \tilde{\vec{A}} - \grad \int_{\phi_{\min}}^{\phi} \tilde{A}_{\phi} \, \diff \phi',
 \end{gather}
@@ -189,16 +189,16 @@ which reduces to
 \begin{gather}
   \tilde{\vec{A}} \to \tilde{\vec{A}} - \frac{\grad \tilde{A}_{n \phi}}{\im n}
 \end{gather}
-since we only consider a single harmonic $n \neq 0$. \Textcite{Albert16} then give the magnetic field perturbation $\vec{B}_{n}$ as
+since we only consider a single harmonic $n \neq 0$. The magnetic field perturbation $\vec{B}_{n}$ is then given as
 \begin{align}
   B_{n}^{R} &= \frac{\im n}{R} A_{n Z}, & B_{n}^{\phi} &= \frac{1}{R} \left ( \pd[A_{n R}]{Z} - \pd[A_{n Z}]{R} \right ), & B_{n}^{Z} &= -\frac{\im n}{R} A_{n R}.
 \end{align}
-This reduces the problem to the poloidal plan and we only need to solve
+This reduces the problem to the poloidal plane and we only need to solve
 \begin{align}
-  -\pd{Z} \left ( \pd[A_{n R}]{Z} - \pd[A_{n Z}]{R} \right ) + \frac{n^{2}}{R} A_{n R} &= \frac{4 \pi}{c} R J_{n}^{R}, \\
-  \pd{R} \left ( \pd[A_{n R}]{Z} - \pd[A_{n Z}]{R} \right ) + \frac{n^{2}}{R} A_{n Z} &= \frac{4 \pi}{c} R J_{n}^{Z}.
+  -R \pd{Z} \left ( \pd[A_{n R}]{Z} - \pd[A_{n Z}]{R} \right ) + \frac{n^{2}}{R} A_{n R} &= \frac{4 \pi}{c} R J_{n}^{R}, \\
+  R \pd{R} \left ( \pd[A_{n R}]{Z} - \pd[A_{n Z}]{R} \right ) + \frac{n^{2}}{R} A_{n Z} &= \frac{4 \pi}{c} R J_{n}^{Z}.
 \end{align}
-\Textcite{Albert16} then also give the weak formulation as
+Integration by parts in coordinate space yields the weak formulation as
 \begin{multline}
   \int_{\Omega} R \left ( \pd[A_{n R}]{Z} - \pd[A_{n Z}]{R} \right ) \left ( \pd[w_{R}]{Z} - \pd[w_{Z}]{R} \right ) + \frac{n^{2}}{R} (A_{n R} w_{R} + A_{n Z} w_{Z}) \, \diff R \, \diff Z = \\ = \frac{4 \pi}{c} \int_{\Omega} R (J_{n}^{R} w_{R} + J_{n}^{Z} w_{Z}) \, \diff R \, \diff Z,
 \end{multline}

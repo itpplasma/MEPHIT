@@ -1,7 +1,7 @@
 \section{Linearized MHD Force Balance}
 \label{sec:linmhd}
 
-[\ldots]
+In this chapter, we derive a solution of the linearized MHD force balance from \cref{eq:mhd-phi} in the field-aligned geometry described in \cref{sec:geom}. This corresponds to the application of the $\hat{P}$ operator in \cref{eq:P_operator} occurring in the iterations outlined in \cref{sec:iteration}. \Cref{sec:compute_presn} concerns the intermediate step of computing the pressure perturbation from the magnetic field perturbation, which is necessary for the computation of the current perturbation derived in \cref{sec:compute_currn}. Finally, in \cref{sec:sheets}, we discuss the extension of the ideal MHD model by the inclusion of sheet currents.
 
 \subsection{Pressure Perturbation}
 \label{sec:compute_presn}
@@ -129,7 +129,7 @@ where edge \fs\ is tangential to an adjacent flux surface and edges \inw\ and \o
 \begin{gather}
   I_{\inw} + I_{\out} + \im n \int_{\Omega} R J_{n}^{\phi} \diff S = -I_{\fs}.
 \end{gather}
- $I_{\fs}$ is already known from \cref{eq:If} and therefore acts as a source on the right-hand side. The remaining currents $I_{\inw}$ and $I_{\out}$ are taken as unknowns. Since the current $I_{\out}$ flowing out of one triangle is equal to the current $-I_{\inw}$ flowing into the next triangle, these unknowns are connected on one strip of triangles and we expect a system of equations similar to the one in \cref{sec:compute_presn}. The degrees of freedom and the unknowns are illustrated in \cref{fig:current_perturbation} with the unknowns marked in red, along with the indexing described further below.
+$I_{\fs}$ is already known from \cref{eq:If} and therefore acts as a source on the right-hand side. We take the remaining currents $I_{\inw}$ and $I_{\out}$ as unknowns. Since the current $I_{\out}$ flowing out of one triangle is equal to the current $-I_{\inw}$ flowing into the next triangle, these unknowns are connected on one strip of triangles, and we expect a system of equations similar to the one in \cref{sec:compute_presn}. The degrees of freedom and the unknowns are illustrated in \cref{fig:current_perturbation} with the unknowns marked in red, along with the indexing described further below.
 \begin{figure}[bth]
   \centering
   \input{./current_perturbation.tikz}
@@ -172,7 +172,7 @@ where the elements of the stiffness matrix $\hat{K}$ are
 \subsection{Current Sheets}
 \label{sec:sheets}
 
-One aspect of resonances has not been considered yet. Starting from the static MHD equilibrium in \cref{eq:mhd-gen}, we see that only the normal component of the current density is relevant, i.e.
+We have not considered one aspect of resonances yet. Starting from the static MHD equilibrium in \cref{eq:mhd-gen}, we see that only the normal component of the current density is relevant, i.e.
 \begin{gather}
   \grad p = \frac{1}{c} \vec{J}^{\perp} \times \vec{B},
 \end{gather}
@@ -232,6 +232,7 @@ or, after an inverse \textsc{Fourier} transform,
 \begin{gather}
   J_{n}^{\parallel} = C_{m_{0} n} B_{0} p_{n}.
 \end{gather}
+For a given set of $C_{m n}$ values, we project $J_{n}^{\parallel}$ onto currents $I_{\inw}$ and $I_{\out}$, which we add to the values computed in \cref{sec:compute_currn} in between the flux surfaces where $q$ is closest to the respective $m/n$ resonance. $I_{\fs}$ has no contribution from this parallel current, so $I_{\phi}$ is modified to uphold divergence-freeness.
 
 %%% Local Variables: 
 %%% mode: latex

@@ -19,7 +19,7 @@ While the equilibrium pressure $p_{0}$ should be available from the GEQDSK file 
 \end{align}
 where $k$ refers to the index of the flux surface. The subscripts LCFS and axis indicate the value at the separatrix and the magnetic axis, respectively. The configurable values are then the step sizes $n_{\text{step}}$ and $T_{\text{step}}$ as well as $n_{\text{LCFS}}$ and $T_{\text{LCFS}}$. From these, the pressure is calculated by the ideal gas law:
 \begin{gather}
-  p_{0} = n k_{\text{B}} T.
+  p_{0} = n k_{\text{B}} T. \label{eq:pres0}
 \end{gather}
 Additionally, with the formulae given above, one can also derive an expression for the equilibrium pressure gradient:
 \begin{gather}
@@ -154,7 +154,7 @@ Note that $\psi_{\tor} < 0$ and $\psi_{\tor}' (\rho) < 0$. The safety factor is 
 \end{gather}
 This flux quantity can be evaluated numerically at half-grid steps by adding up $B_{0 (\phi)}$ inside the volume between two flux surfaces and dividing by the the difference in $\psi$:
 \begin{gather}
-  q \approx \frac{1}{2 \pi \symup{\Delta} \psi} \sum_{k} B_{0 (\phi)} (\Omega^{(k)}) S_{\Omega^{(k)}},
+  q \approx \frac{1}{2 \pi \symup{\Delta} \psi} \sum_{k} B_{0 (\phi)} (\Omega^{(k)}) S_{\Omega^{(k)}}, \label{eq:q-impl}
 \end{gather}
 where the sum is taken over all triangles $\Omega$ inside a triangle strip, and $S_{\Omega}$ is the respective triangle surface area. Note that both $B_{0 (\phi)}$ and $\symup{\Delta} \psi$ are negative, so $q$ is positive overall.
 

@@ -19,7 +19,7 @@ Here the perturbation field in vacuum, $\Bvac$, is pre-evaluated by a \textsc{Bi
 
 The solution of \cref{eq:mhd} can further be split into two steps: First the pressure perturbation $\delta p$ is found, and then the plasma current density $\delta \vec{J}$ is computed using the condition $\divg \delta \vec{J} = 0$. For an unperturbed equilibrium with nested flux surfaces, both steps can be performed in a radially local manner if a field-aligned computational grid is used, which will become clear in the following sections. Radial coupling happens by the combination of the two individual steps since their effective radial locations of computation are shifted by a half-step in radial grid distance.
 
-\Cref{eq:mhd} and \cref{eq:ampere} are solved in an alternating way until convergence is reached, as described in \cref{sec:iteration}. In addition a preconditioner is used to enhance convergence, which is discussed in \cref{sec:Arnoldi}. This approach is also used by \textcite{Albert16}.
+\Cref{eq:mhd} and \cref{eq:ampere} are solved in an alternating way until convergence is reached, as described in \cref{sec:iteration}. In addition a preconditioner is used to enhance convergence, which is discussed in \cref{sec:precon}. This approach is also used by \textcite{Albert16}.
 
 \subsection{Iteration Scheme}
 \label{sec:iteration}
@@ -95,13 +95,13 @@ For illustration, both approaches are compared side-by-side in \cref{tab:comp_it
   \end{align*}
 \end{table}
 
-For the implementation of preconditioned iterations (see \cref{sec:Arnoldi}), the cumulative approach is more convenient. To reproduce the intermediate summands, we use \cref{eq:K_partial_sum} and arrive at
+For the implementation of preconditioned iterations (see \cref{sec:precon}), the cumulative approach is more convenient. To reproduce the intermediate summands, we use \cref{eq:K_partial_sum} and arrive at
 \begin{gather}
   \Bpert^{(k)} = \Bpert^{[k]} - \Bpert^{[k-1]}.
 \end{gather}
 
 \subsection{Enhanced Convergence with Preconditioned Iterations}
-\label{sec:Arnoldi}
+\label{sec:precon}
 
 Both approaches outlined in \cref{sec:iteration} hinge on the convergence of the \textsc{Neumann} series in \cref{eq:Neumann_series}. The convergence criterion for the similar geometric series of scalars is not directly applicable to operators, but to their corresponding spectrum of eigenvalues. Thus we shall now consider a discretized equation of finite dimension $N$.
 
