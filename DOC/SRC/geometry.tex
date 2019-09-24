@@ -39,7 +39,7 @@ Note that with this definition, neither basis set is necessarily normalized or e
 \begin{gather}
   \vec{e}_{i} \cdot \vec{e}^{j} = \delta_{i}^{j},
 \end{gather}
-where the indices are kept in the same position with the \textsc{Kronecker} delta. As a consequence, the following relations between basis vectors are also given, where $\varepsilon_{ijk} = 1$:
+where the indices are kept in the same position with the \textsc{Kronecker} delta. As a consequence, the following relations between basis vectors are also given, where $i, j, k$ is an even permutation:
 \begin{gather}
   \vec{e}_{i} = \frac{\vec{e}^{j} \times \vec{e}^{k}}{\vec{e}^{i} \cdot (\vec{e}^{j} \times \vec{e}^{k})}, \quad \vec{e}^{i} = \frac{\vec{e}_{j} \times \vec{e}_{k}}{\vec{e}_{i} \cdot (\vec{e}_{j} \times \vec{e}_{k})}.
 \end{gather}
@@ -55,7 +55,7 @@ where the summation convention is implicit and the metric tensor components are 
 \begin{gather}
   g_{ij} = \vec{e}_{i} \cdot \vec{e}_{j}, \quad g^{ij} = \vec{e}^{i} \cdot \vec{e}^{j}.
 \end{gather}
-The determinant $g = \det \symsf{g}$ of the metric tensor appears further in the following vector calculations and is related to the Jacobian $J$ of the coordinate system defined by the $u^{k}$, again with $\varepsilon_{ijk} = 1$:
+The determinant $g = \det \symsf{g}$ of the metric tensor appears further in the following vector calculations and is related to the Jacobian $J$ of the coordinate system defined by the $u^{k}$, again with $i, j, k$ an even permutation:
 \begin{gather}
   J = \sqrt{g} = \sqrt{\det \symsf{g}} = \vec{e}_{i} \cdot (\vec{e}_{j} \times \vec{e}_{k}).
 \end{gather}
@@ -75,7 +75,7 @@ while the curl in its simplest form uses covariant components and returns contra
 \begin{gather}
   \curl \vec{v} = \frac{\varepsilon_{ijk}}{\sqrt{g}} \pd[v_{j}]{u^{i}} \vec{e}_{k}.
 \end{gather}
-On occasion, parallel or perpendicular components with respect to the magnetic field $\vec{B}$ are needed:
+Here, $\varepsilon_{ijk}$ is the \textsc{Levi}--\textsc{Cività} symbol. On occasion, parallel or perpendicular components with respect to the magnetic field $\vec{B}$ are needed:
 \begin{gather}
   \vec{v}^{\parallel} = (\vec{v} \cdot \hat{\vec{B}}) \hat{\vec{B}} = (\vec{v} \cdot \vec{h}) \vec{h}, \\
   \vec{v}^{\perp} = -\hat{\vec{B}} \times (\hat{\vec{B}} \times \vec{v}) = -\vec{h} \times (\vec{h} \times \vec{v}).

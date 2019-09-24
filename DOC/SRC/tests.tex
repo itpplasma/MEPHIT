@@ -1,6 +1,7 @@
 \section{Construction of Test Cases}
+\label{sec:tests}
 
-Along with comparison to results from kinetic computations, special test cases altering different components of the calculation are considered. In \cref{sec:nonres}, $\Bvac$ is not taken from \textsc{Biot}--\textsc{Savart} calculations of currents in external coils as per \cref{eq:biot-savart,sec:inputs}, but constructed directly to avoid resonances, at least in the first iteration step. \Cref{sec:analytical} instead looks at the analytical solution in the cylindrical limit on a circular cross-section obtained from KiLCA, effectively changing the grid geometry.
+Along with comparison to results from kinetic computations, we consider special test cases altering different components of the calculation. In \cref{sec:nonres}, $\Bvac$ is not taken from \textsc{Biot}--\textsc{Savart} calculations of currents in external coils as per \cref{eq:biot-savart,sec:inputs}, but constructed directly to avoid resonances, at least in the first iteration step. \Cref{sec:analytical} instead looks at the analytical solution in the cylindrical limit on a circular cross-section obtained from KiLCA, effectively changing the grid geometry.
 
 \subsection{Generating a Non-Resonant Vacuum Perturbation}
 \label{sec:nonres}
@@ -118,7 +119,7 @@ The degrees of freedom differing from the solution to the zero solution (\cref{e
 \end{align}
 This means that, compared to the zero solution, a change $C_{k}$ in the flux across the associated edge of adjacent triangles in one triangle strip is accomodated by a change in the toroidal flux of these triangles.
 
-The approach outlined above can be repeated for different values of $k$. Linear superposition of the solutions to the homogeneous and inhomogeneous cases then yields the most general solution,
+We can repeat the approach outlined above for different values of $k$. Linear superposition of the solutions to the homogeneous and inhomogeneous cases then yields the most general solution,
 \begin{align}
   \Psi_{\inw}^{(k)} &= -C_{0} - C_{k-1}, & \Psi_{\out}^{(k)} &= C_{0} + C_{k}, & \Psi_{\phi}^{(k)} &= \frac{\im}{n} \Psi_{\fs}^{(k)} + \frac{\im}{n} C_{k-1} - \frac{\im}{n} C_{k} \quad \forall k = 1, 2, \dotsc, N.
 \end{align}
@@ -130,7 +131,7 @@ Now, to assign sensible values to the arbitrary constants, consider the solution
 \subsection{Analytical Solution for Very Large Aspect Ratios}
 \label{sec:analytical}
 
-To derive an analytical approximation, a very large major radius $R_{0}$ -- and thus aspect ratio -- is considered for a ring torus, i.e. with circular cross-section. The torus is \enquote{unbent} and the toroidal geometry is effectively transformed to cylindrical geometry with a very thin and elongated cylinder and periodic boundary conditions. To distinguish this cylinder from the cylindrical coordinates $(R, \phi, Z)$ established in \cref{sec:cocos}, we use coordinates $(r, \vartheta, z)$ for the former:
+To derive an analytical approximation, a very large major radius $R_{0}$ -- and thus aspect ratio -- is considered for a ring torus, i.e., with a circular cross-section. The torus is \enquote{unbent} and the toroidal geometry is effectively transformed to cylindrical geometry with a very thin and elongated cylinder and periodic boundary conditions. To distinguish this cylinder from the cylindrical coordinates $(R, \phi, Z)$ established in \cref{sec:cocos}, we use coordinates $(r, \vartheta, z)$ for the former:
 \begin{align}
   R &= R_{0} + r \cos \vartheta, & Z &= r \sin \vartheta, & \phi &= \frac{z}{R_0}. \label{eq:kilca-coord}
 \end{align}

@@ -1,4 +1,5 @@
 \section{Stationary Linear Perturbation of Ideal MHD Equilibrium}
+\label{sec:setup}
 
 For the intended application on stationary (compared to MHD mode eigenfrequencies) non-axisymmetric magnetic perturbations by external coils, we consider a perturbed ideal MHD equilibrium for pressure $p$, currents $\vec{J}$ and magnetic field $\vec{B}$ fulfilling
 \begin{align}
@@ -19,12 +20,12 @@ Here the perturbation field in vacuum, $\Bvac$, is pre-evaluated by a \textsc{Bi
 
 The solution of \cref{eq:mhd} can further be split into two steps: First the pressure perturbation $\delta p$ is found, and then the plasma current density $\delta \vec{J}$ is computed using the condition $\divg \delta \vec{J} = 0$. For an unperturbed equilibrium with nested flux surfaces, both steps can be performed in a radially local manner if a field-aligned computational grid is used, which will become clear in the following sections. Radial coupling happens by the combination of the two individual steps since their effective radial locations of computation are shifted by a half-step in radial grid distance.
 
-\Cref{eq:mhd} and \cref{eq:ampere} are solved in an alternating way until convergence is reached, as described in \cref{sec:iteration}. In addition a preconditioner is used to enhance convergence, which is discussed in \cref{sec:precon}. This approach is also used by \textcite{Albert16}.
+\Cref{eq:mhd} and \cref{eq:ampere} are solved in an alternating way until convergence is reached, as described in \cref{sec:iteration}. In addition, a preconditioner is used to enhance convergence, which we discuss in \cref{sec:precon}. This approach is also used by \textcite{Albert16}.
 
 \subsection{Iteration Scheme}
 \label{sec:iteration}
 
-From \cref{eq:mhd}, we calculate the current perturbation\footnote{and in an intermediate step, the pressure perturbation} from a given magnetic field perturbation. This can be done with kinetic code (e.g. NEO-2) or with MHD, as is discussed in \cref{sec:linmhd}. In either case, the computation can be written in compact form,
+From \cref{eq:mhd}, we calculate the current perturbation\footnote{and in an intermediate step, the pressure perturbation} from a given magnetic field perturbation. This can be done with kinetic code (e.g., NEO-2) or with MHD, as is discussed in \cref{sec:linmhd}. In either case, we can write the computation in compact form,
 \begin{gather}
   \delta \vec{J} = \hat{P} \Bpert = \hat{P} \left ( \Bvac + \Bplas \right ), \label{eq:P_operator}
 \end{gather}
@@ -34,7 +35,7 @@ From a given current perturbation, \cref{eq:ampere} is used to compute the plasm
 \begin{gather}
   \Bplas = \hat{M} \delta \vec{J}. \label{eq:M_operator}
 \end{gather}
-Since only the current enclosed in the plasma volume is taken into account, only the plasma response field $\Bplas$ is affected. The external coils whose current produces the vacuum perturbation $\Bvac$ are assumed to have infinite impedance so that feedback from the plasma response can be neglected. $\Bvac$ is essentially fixed by \cref{eq:biot-savart}.
+Since we only take the current enclosed in the plasma volume into account, only the plasma response field $\Bplas$ is affected. The external coils whose current produces the vacuum perturbation $\Bvac$ are assumed to have infinite impedance so that we can neglect feedback from the plasma response. $\Bvac$ is essentially fixed by \cref{eq:biot-savart}.
 
 Substituting $\delta \vec{J}$ from \cref{eq:P_operator} in \cref{eq:M_operator} and using a shorthand $\hat{K} = \hat{M} \hat{P}$ gives
 \begin{align}
@@ -70,7 +71,7 @@ yielding a fixed-point iteration for $\Bpert$:
 \begin{gather}
   \Bpert^{[k+1]} = \hat{K} \Bpert^{[k]} + \Bvac.
 \end{gather}
-Compared to the previous approach, this one is cumulative, i.e. it immediately produces the next approximation of the full perturbation. In other words, it corresponds to the sequence of partial sums of the previous infinite series:
+Compared to the previous approach, this one is cumulative, i.e., it immediately produces the next approximation of the full perturbation. In other words, it corresponds to the sequence of partial sums of the previous infinite series:
 \begin{gather}
   \Bpert^{[\kappa]} = \sum_{k = 0}^{\kappa} \Bpert^{(k)}. \label{eq:K_partial_sum}
 \end{gather}
@@ -78,7 +79,7 @@ For this to be consistent, the initial value is also given by the vacuum field,
 \begin{gather}
   \Bpert^{[0]} = \Bvac.
 \end{gather}
-For illustration, both approaches are compared side-by-side in \cref{tab:comp_iter}.
+For illustration, both approaches are compared side-by-side in \cref{tab:comp_iter}. \Cref{fig:iter} additionally illustrates the substeps of each iteration step modelled by $\hat{K}$.
 \begin{table}[bth]
   \caption{Comparison of iteration with series (non-cumulative) and sequence (cumulative)}
   \label{tab:comp_iter}
@@ -94,6 +95,12 @@ For illustration, both approaches are compared side-by-side in \cref{tab:comp_it
     \bottomrule
   \end{align*}
 \end{table}
+\begin{figure}[bth]
+  \centering
+  \input{./iter.tikz}
+  \caption{Individual iteration steps [\ldots]}
+  \label{fig:iter}
+\end{figure}
 
 For the implementation of preconditioned iterations (see \cref{sec:precon}), the cumulative approach is more convenient. To reproduce the intermediate summands, we use \cref{eq:K_partial_sum} and arrive at
 \begin{gather}
@@ -103,13 +110,13 @@ For the implementation of preconditioned iterations (see \cref{sec:precon}), the
 \subsection{Enhanced Convergence with Preconditioned Iterations}
 \label{sec:precon}
 
-Both approaches outlined in \cref{sec:iteration} hinge on the convergence of the \textsc{Neumann} series in \cref{eq:Neumann_series}. The convergence criterion for the similar geometric series of scalars is not directly applicable to operators, but to their corresponding spectrum of eigenvalues. Thus we shall now consider a discretized equation of finite dimension $N$.
+Both approaches outlined in \cref{sec:iteration} hinge on the convergence of the \textsc{Neumann} series in \cref{eq:Neumann_series}. The convergence criterion for the similar geometric series of scalars is not directly applicable to operators but to their corresponding spectrum of eigenvalues. Thus we shall now consider a discretized equation of finite dimension $N$.
 
 We start from the fixed-point relation of the previous section which has the general form
 \begin{gather}
   \vec{x} = \hat{K} \vec{x} + \vec{x}_{0}. \label{eq:Arnoldi_fixed_point}
 \end{gather}
-$\vec{x}$ serves as a shorthand for $\Bpert$ and a reminder that the derivations in this section are not just valid for the specific problem of calculating magnetic fields. Similarly, $\vec{x}_{0}$ stands in for $\Bvac$.  Assuming the linear operator $\hat{K}$ is non-singular, we can formally write down an eigendecomposition
+$\vec{x}$ serves as a shorthand for $\Bpert$ and a reminder that the derivations in this section are not just valid for the specific problem of calculating magnetic fields. Similarly, $\vec{x}_{0}$ stands in for $\Bvac$. Assuming the linear operator $\hat{K}$ is non-singular, we can formally write down an eigendecomposition
 \begin{gather}
   \hat{K} = \hat{V} \hat{\Lambda} \hat{V}^{-1},
 \end{gather}
@@ -173,7 +180,7 @@ we can write down the reduced eigenvalue equation in the \textsc{Krylov} subspac
 \end{gather}
 Note that, compared to the eigenvalue equation in full space, the $r \times r$ matrix $\hat{\Lambda}_{r}$ has to be to the right of the $N \times r$ matrix $\hat{V}_{r}$.
 
-With the largest $r$ eigenvalues now known, we want to find a preconditioner that modifies the direct iteration step in \cref{eq:Arnoldi_fixed_point} so that the largest eigenvalues don't contribute. Usually this is written by left-multiplying \cref{eq:Arnoldi_direct} by the inverse of a full-rank linear operator:
+With the largest $r$ eigenvalues now known, we want to find a preconditioner that modifies the direct iteration step in \cref{eq:Arnoldi_fixed_point} so that the largest eigenvalues do not contribute. Usually, this is written by left-multiplying \cref{eq:Arnoldi_direct} by the inverse of a full-rank linear operator:
 \begin{gather}
   \hat{\Pi}^{-1} \left ( \hat{I} - \hat{K} \right ) \vec{x} = \hat{\Pi}^{-1} \vec{x}_{0}. \label{eq:precon}
 \end{gather}
@@ -215,7 +222,7 @@ which can again be rearranged for a final result,
 \end{gather}
 Compared to the direct iterations, only one additional matrix-vector multiplication is necessary, but see below for details.
 
-Now all we need is to compute $\hat{A}$. We required that the largest $r$ eigenvalues don't contribute to iterations, so we demand
+Now, all we need is to compute $\hat{A}$. We required that the largest $r$ eigenvalues do not contribute to iterations, so we demand
 \begin{gather}
   \hat{\bar{K}} \vec{v}_{k} \overset{!}{=} \vec{0} \quad \forall k \le r.
 \end{gather}
