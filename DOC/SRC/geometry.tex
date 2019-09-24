@@ -156,6 +156,11 @@ In some derivations, we also use a \textsc{Fourier} series expansion for the pol
 \end{gather}
 In contrast to expansion in toroidal modes, poloidal modes are not fully linearly independent and \emph{mode coupling} will occur due to to the toroidal geometry. Also, since the expansion is applied to generally complex \textsc{Fourier} coefficients $\vec{B}_{n}$, \cref{eq:fourier-cc} cannot be applied and negative $m$ have to be considered as well. Using $\theta$ directly incurs solving the magnetic differential equation, whereas little is gained due to linear dependence. Nevertheless, it is useful in analytic derivations.
 
+Lastly, we shall introduce the \emph{flux surface average} for an arbitrary quantity $\Phi$ in a toroidal system, which \textcite{dHaeseleer91} define as
+\begin{gather}
+  \langle \Phi \rangle = \frac{\int_{0}^{2 \pi} \int_{0}^{2 \pi} \sqrt{g} \Phi \, \diff \phi \, \diff \theta}{\int_{0}^{2 \pi} \int_{0}^{2 \pi} \sqrt{g} \, \diff \phi \, \diff \theta}. \label{eq:flux_surface_avg}
+\end{gather}
+
 \subsection{Discretization and Local Coordinate System}
 \label{sec:grid}
 
