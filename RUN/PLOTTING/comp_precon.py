@@ -36,32 +36,28 @@ vacuum = vacuum[:, 4] + 1j * vacuum[:, 5]
 precon = precon[:, 4] + 1j * precon[:, 5]
 direct = direct[:, 4] + 1j * direct[:, 5]
 highdens = highdens[:, 4] + 1j * highdens[:, 5]
-# =============================================================================
-# testcase.plots.append(magdifplot.magdif_2d_triplot(
-#     node=testcase.node, tri=testcase.tri,
-#     data=np.real(vacuum),
-#     title=r'$\mathrm{Re} \: B_{\mathrm{v} n}^{Z}$ / G',
-#     filename='/temp/lainer_p/NEO-EQ/Bn_vac_Z_Re.png'
-# ))
-# testcase.plots.append(magdifplot.magdif_2d_triplot(
-#     node=testcase.node, tri=testcase.tri,
-#     data=np.real(precon),
-#     title=r'$\mathrm{Re} \:  B_{n}^{Z}$ / G',
-#     filename='/temp/lainer_p/NEO-EQ/Bn_Z_Re.png'
-# ))
-# =============================================================================
+testcase.plots.append(magdifplot.magdif_2d_triplot(
+    node=testcase.node, tri=testcase.tri,
+    data=np.real(vacuum),
+    title=r'$\mathrm{Re} \: B_{\mathrm{v} n}^{Z}$ / G',
+    filename='/temp/lainer_p/NEO-EQ/Bn_vac_Z_Re.png'
+))
+testcase.plots.append(magdifplot.magdif_2d_triplot(
+    node=testcase.node, tri=testcase.tri,
+    data=np.real(precon),
+    title=r'$\mathrm{Re} \:  B_{n}^{Z}$ / G',
+    filename='/temp/lainer_p/NEO-EQ/Bn_Z_Re.png'
+))
 testcase.plots.append(magdifplot.magdif_2d_triplot(
     node=testcase.node, tri=testcase.tri,
     data=np.real(precon - direct),
     title=r'$\mathrm{Re} \: \Delta B_{n}^{Z}$ / G',
     filename='/temp/lainer_p/NEO-EQ/Bn_diff_Z_Re.png'
 ))
-# =============================================================================
-# testcase.plots.append(magdifplot.magdif_2d_triplot(
-#     node=testcase.node, tri=testcase.tri,
-#     data=np.real(highdens),
-#     title=r'$\mathrm{Re} \: B_{n}^{Z}$ / G',
-#     filename='/temp/lainer_p/NEO-EQ/Bn_highdens_Z_Re.png'
-# ))
-# =============================================================================
+testcase.plots.append(magdifplot.magdif_2d_triplot(
+    node=testcase.node, tri=testcase.tri,
+    data=np.real(highdens),
+    title=r'$\mathrm{Re} \: B_{n}^{Z}$ / G',
+    filename='/temp/lainer_p/NEO-EQ/Bn_highdens_Z_Re.png'
+))
 testcase.dump_plots_parallel()

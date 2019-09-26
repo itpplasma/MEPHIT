@@ -61,7 +61,7 @@ class magdif_2d_triplot:
         )
         plt.gca().set_aspect('equal')
         plt.colorbar(format=self.__class__.scifmt)
-        plt.clim([-max(abs(self.data)) * 0.2, max(abs(self.data)) * 0.2])
+        plt.clim([-max(abs(self.data)), max(abs(self.data))])
         plt.xlabel(r'$R$ / cm')
         plt.ylabel(r'$Z$ / cm')
         if self.title is not None:
