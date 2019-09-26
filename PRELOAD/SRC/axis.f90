@@ -53,12 +53,21 @@ program axis
   
   external fff, rkqs, f_min, f_root
 
-  d_rational(1) = 0.38912966d0  ! q = 1.5
-  d_rational(2) = 0.59028943d0  ! q = 2
-  d_rational(3) = 0.68455040d0  ! q = 2.5
-  d_rational(4) = 0.74824931d0  ! q = 3
-  d_rational(5) = 0.79952156d0  ! q = 3.5
-  d_rational(6) = 0.84805867d0  ! q = 4
+!! default EFIT
+  d_rational(1) = 0.38893480d0  ! q = 1.5
+  d_rational(2) = 0.59027875d0  ! q = 2
+  d_rational(3) = 0.68454177d0  ! q = 2.5
+  d_rational(4) = 0.74762830d0  ! q = 3
+  d_rational(5) = 0.79818593d0  ! q = 3.5
+  d_rational(6) = 0.84997839d0  ! q = 4
+
+!! _ed6 EFIT
+  ! d_rational(1) = 0.43346751d0  ! q = 1.5
+  ! d_rational(2) = 0.64616599d0  ! q = 2
+  ! d_rational(3) = 0.77137616d0  ! q = 2.5
+  ! d_rational(4) = 0.86630880d0  ! q = 3
+  ! d_rational(5) = 0.93844347d0  ! q = 3.5
+
   ! for case "finer"
 !!  d_rational(1) = .5675d0  ! q=1.5
 !!  d_rational(2) = .694d0  ! q=2 

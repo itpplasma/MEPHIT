@@ -194,6 +194,7 @@ contains
 
   !> Initialize magdif module
   subroutine magdif_init
+    integer :: m
     call init_indices
     call read_mesh
     if (kilca_scale_factor /= 0) then
@@ -204,6 +205,12 @@ contains
     call cache_equilibrium_field
     call compute_safety_factor
     call read_delayed_config
+    if (log_info) then
+       write (logfile, *) 'poloidal mode number, sheet current factor'
+       do m = lbound(sheet_current_factor, 1), ubound(sheet_current_factor, 1)
+          write (logfile, *) m, sheet_current_factor(m)
+       end do
+    end if
     call write_fluxvar
     call compute_j0phi
 
