@@ -7,7 +7,7 @@
 
    n = 2                                                 ! harmonic index of perturbation
    niter = 9                                             ! number of iteration steps
-   nritz = 30                                            ! number of Ritz eigenvalues
+   nritz = 100                                           ! number of Ritz eigenvalues
    tol = 0.5d0                                           ! threshold for eigenvalues in preconditioner
    nkpol = 300                                           ! number of knots per poloidal loop
    nflux = 64                                            ! number of flux surfaces up to and counting LCFS
@@ -36,5 +36,5 @@
    kilca_pol_mode_file = 'Bpmn.dat'                      ! output file for Fourier coefficients
 /
 &delayed
-   sheet_current_factor = (1d3, 0d0)  ! coefficients for sheet currents
+   sheet_current_factor = (0d0, 0d0)  ! coefficients for sheet currents
 /

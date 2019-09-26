@@ -643,7 +643,11 @@ contains
 
     allocate(m_res(nflux))
     m_res = 0
-    m_res_min = max(ceiling(minval(q) * n), n + 1)
+    if (kilca_scale_factor /= 0) then
+       m_res_min = max(ceiling(minval(q) * n), n / kilca_scale_factor + 1)
+    else
+       m_res_min = max(ceiling(minval(q) * n), n + 1)
+    end if
     m_res_max = floor(maxval(q) * n)
     do m = m_res_max, m_res_min, -1
        abs_err = [(abs(q(kf) - dble(m) / dble(n)), kf = 1, nflux)]
