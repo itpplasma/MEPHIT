@@ -1,6 +1,6 @@
 load "medit"
 
-real rmaxis = 1000.0 * 1e2;
+real rmaxis = 172.74467899999999 * 1000;  // classic TODO: don't hardcode this
 real zmaxis = 0.0 * 1e2;
 real rdim = 1.34 * 1e2;
 real zdim = 1.34 * 1e2;
