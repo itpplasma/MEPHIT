@@ -12,6 +12,7 @@ import re
 import f90nml.parser
 import matplotlib
 import matplotlib.pyplot as plt
+import colorcet
 import numpy as np
 from scipy import interpolate
 from scipy import optimize
@@ -44,27 +45,28 @@ class magdif_2d_triplot:
     scifmt = matplotlib.ticker.ScalarFormatter()
     scifmt.set_powerlimits((-3, 4))
 
-    def __init__(self, node, tri, data, filename):
+    def __init__(self, node, tri, data, filename, title=None):
         self.node = node
         self.tri = tri
         self.data = data
-        # self.title = title
+        self.title = title
         self.filename = filename
 
     def dump_plot(self):
         print('plotting ', self.filename)
-        plt.figure(figsize=(3.6, 4.8))
+        plt.figure(figsize=(3.3, 4.4))
         plt.tripcolor(
-                self.node[:, 0] * 0.01, self.node[:, 1] * 0.01,
-                self.tri - 1, self.data, cmap='RdBu_r'
+                self.node[:, 0], self.node[:, 1],
+                self.tri - 1, self.data, cmap=colorcet.cm.coolwarm
         )
         plt.gca().set_aspect('equal')
         plt.colorbar(format=self.__class__.scifmt)
-        plt.clim([-max(abs(self.data)), max(abs(self.data))])
-        plt.xlabel(r'$R$ / m')
-        plt.ylabel(r'$Z$ / m')
-        # plt.title(self.title)
-        plt.savefig(self.filename)
+        plt.clim([-max(abs(self.data)) * 0.2, max(abs(self.data)) * 0.2])
+        plt.xlabel(r'$R$ / cm')
+        plt.ylabel(r'$Z$ / cm')
+        if self.title is not None:
+            plt.title(self.title)
+        plt.savefig(self.filename, dpi=300)
         plt.close()
 
 
@@ -79,7 +81,7 @@ class magdif_1d_cutplot:
 
     def dump_plot(self):
         print('plotting ', self.filename)
-        plt.figure()
+        plt.figure(figsize=(6.6, 3.3))
         plt.plot(self.x, self.y, '-k')
         plt.ticklabel_format(style='sci', scilimits=(-3, 4))
         plt.xlabel(self.xlabel)
@@ -103,23 +105,21 @@ class magdif_conv_plot:
             return
         niter = len(conv) - 1
         kiter = np.arange(1, niter + 1)
-        plt.figure(figsize=(8, 4.5))
+        plt.figure(figsize=(3.3, 3.3))
         plt.semilogy(
-                kiter, conv[0] * 1e-6 * self.max_eigval ** kiter, 'r-',
-                label=r'$\lambda_{\mathrm{max}}^{k} \Vert'
+                kiter, conv[0] * self.max_eigval ** kiter, 'r-',
+                label=r'$\vert \lambda_{\mathrm{max}} \vert^{k} \Vert'
                 + r' \delta \mathbf{B}_{\mathrm{v}} \Vert_{2}$'
         )
         plt.semilogy(
-                kiter, conv[1:] * 1e-6, 'xk',
+                kiter, conv[1:], 'xk',
                 label=r'$\Vert \delta \mathbf{B}^{(k)} \Vert_{2}$'
         )
         plt.gca().legend(loc='lower left', fontsize='large')
         plt.xticks(kiter)
         plt.xlabel('iteration step $k$')
-        plt.ylabel(r'$\Vert \delta \mathbf{B} \Vert_{2}$ / T m')
-        plt.title(
-                'magnitude of terms in series expansion of perturbation field'
-        )
+        plt.ylabel(r'$\Vert \delta \mathbf{B} \Vert_{2}$ / G cm')
+        plt.title('estimation of convergence')
 
         plt.tight_layout()
         plt.savefig(os.path.join(self.datadir, 'convergence.pdf'))
@@ -191,6 +191,8 @@ class magdif_poloidal_modes:
         offset = m_max
 
         # plot non-symmetric modes
+        fmt = os.path.join(self.datadir,
+                           os.path.splitext(self.datafile)[0] + '_{}.pdf')
         horz_plot = 2
         vert_plot = 1
         for m in range(1, m_max + 1):
@@ -206,11 +208,13 @@ class magdif_poloidal_modes:
                         np.amax(abs_data[:, offset - m]),
                         np.amax(abs_data[:, offset + m])
                 )]
-            plt.figure(figsize=(9.6, 4.8))
+            plt.figure(figsize=(6.6, 3.3))
             ax = plt.subplot(vert_plot, horz_plot, 1)
             if self.reffile is not None:
-                plt.plot(s, abs_ref[:, offset - m], 'r--')
-            plt.plot(s, abs_data[:, offset - m])
+                plt.plot(s, abs_ref[:, offset + m], 'r--',
+                         label='vacuum perturbation')
+            plt.plot(s, abs_data[:, offset + m], label='full perturbation')
+            ax.legend()
             ax.ticklabel_format(style='sci', scilimits=(-3, 4))
             plt.ylim(yrang)
             plt.title('$m = {}$'.format(-m))
@@ -221,8 +225,10 @@ class magdif_poloidal_modes:
                 ax.axvline(s_resonant[index], color='b', alpha=0.5)
             ax = plt.subplot(vert_plot, horz_plot, 2)
             if self.reffile is not None:
-                plt.plot(s, abs_ref[:, offset + m], 'r--')
-            plt.plot(s, abs_data[:, offset + m])
+                plt.plot(s, abs_ref[:, offset - m], 'r--',
+                         label='vacuum perturbation')
+            plt.plot(s, abs_data[:, offset - m], label='full perturbation')
+            ax.legend()
             ax.ticklabel_format(style='sci', scilimits=(-3, 4))
             plt.ylim(yrang)
             plt.title('$m = {}$'.format(m))
@@ -232,15 +238,16 @@ class magdif_poloidal_modes:
             if len(index) == 1:
                 ax.axvline(s_resonant[index], color='b', alpha=0.5)
             plt.tight_layout()
-            plt.savefig(os.path.splitext(self.datafile)[0]
-                        + '_{}.pdf'.format(m))
+            plt.savefig(fmt.format(m))
             plt.close()
         # plot symmetric mode and safety factor
-        plt.figure(figsize=(9.6, 4.8))
+        plt.figure(figsize=(6.6, 3.3))
         ax = plt.subplot(vert_plot, horz_plot, 1)
         if self.reffile is not None:
-            plt.plot(s, abs_ref[:, offset], 'r--')
-        plt.plot(s, abs_data[:, offset])
+            plt.plot(s, abs_ref[:, offset], 'r--',
+                     label='vacuum perturbation')
+        plt.plot(s, abs_data[:, offset], label='full perturbation')
+        ax.legend()
         ax.ticklabel_format(style='sci', scilimits=(-3, 4))
         plt.title('$m = 0$')
         plt.xlabel(r'$s$')
@@ -252,13 +259,13 @@ class magdif_poloidal_modes:
         plt.xlabel(r'$s$')
         plt.ylabel(r'$q$')
         plt.tight_layout()
-        plt.savefig(os.path.splitext(self.datafile)[0] + '_0.pdf')
+        plt.savefig(fmt.format(0))
         plt.close()
         # plot poloidal maxima progression
         max_data = np.amax(abs_data, axis=0)
         max_ind = np.argmax(abs_data, axis=0)
         max_s = s[max_ind]
-        plt.figure(figsize=(9.6, 4.8))
+        plt.figure(figsize=(6.6, 3.3))
         ax = plt.subplot(vert_plot, horz_plot, 1)
         plt.plot(np.arange(0, m_max + 1), max_data[offset::-1],
                  'ro', label=r'$m \leq 0$')
@@ -278,8 +285,9 @@ class magdif_poloidal_modes:
         plt.title('Positions of maximal values')
         plt.xlabel(r'$\pm m$')
         plt.ylabel(r'$s$')
+        plt.ylim([0.0, 1.05])
         plt.tight_layout()
-        plt.savefig(os.path.splitext(self.datafile)[0] + '_max.pdf')
+        plt.savefig(fmt.format('max'))
         plt.close()
 
 
@@ -417,7 +425,7 @@ class magdif:
                     self.config['n'], self.s, self.q,
                     self.datadir, 'currmn_000_theta.dat',
                     r'$\left\vert J_{mn \theta}^{(0)} \right\vert$'
-                    + ' / statA cm\textsuperscript{-1}'
+                    + r' / statA cm\textsuperscript{-1}'
             ))
         if os.path.isfile(os.path.join(self.datadir, 'Bpmn_r.dat')):
             self.plots.append(magdif_poloidal_modes(
@@ -445,49 +453,3 @@ if __name__ == '__main__':
     testcase.load_mesh()
     testcase.generate_default_plots()
     testcase.dump_plots_parallel()
-
-# =============================================================================
-#     testcase = magdif(
-#         '/temp/lainer_p/NEO-EQ/coarse_grid/test_res_precon_lowdens',
-#         'test_res_precon_lowdens.in',
-#         '../PRELOAD/inputformaxwell.msh'
-#     )
-#     testcase.load_mesh()
-#     vacuum = np.loadtxt('/temp/lainer_p/NEO-EQ/coarse_grid/'
-#                         + 'test_res_precon_highdens/plot_Bn_vac.dat')
-#     precon = np.loadtxt('/temp/lainer_p/NEO-EQ/coarse_grid/'
-#                         + 'test_res_precon_lowdens/plot_Bn.dat')
-#     direct = np.loadtxt('/temp/lainer_p/NEO-EQ/coarse_grid/'
-#                         + 'test_res_direct_lowdens/plot_Bn.dat')
-#     highdens = np.loadtxt('/temp/lainer_p/NEO-EQ/coarse_grid/'
-#                           + 'test_res_precon_highdens/plot_Bn.dat')
-#     vacuum = vacuum[:, 4] + 1j * vacuum[:, 5]
-#     precon = precon[:, 4] + 1j * precon[:, 5]
-#     direct = direct[:, 4] + 1j * direct[:, 5]
-#     highdens = highdens[:, 4] + 1j * highdens[:, 5]
-#     testcase.plots.append(magdif_2d_triplot(
-#         node=testcase.node, tri=testcase.tri,
-#         data=1e-4 * np.real(vacuum),
-#         title=r'$\mathrm{Re} \: \delta B_{\mathrm{v}}^{Z}$ / T',
-#         filename='/temp/lainer_p/NEO-EQ/coarse_grid/Bn_vac_Z_Re.pdf'
-#     ))
-#     testcase.plots.append(magdif_2d_triplot(
-#         node=testcase.node, tri=testcase.tri,
-#         data=1e-4 * np.real(precon),
-#         title=r'$\mathrm{Re} \: \delta B^{Z}$ / T',
-#         filename='/temp/lainer_p/NEO-EQ/coarse_grid/Bn_Z_Re.pdf'
-#     ))
-#     testcase.plots.append(magdif_2d_triplot(
-#         node=testcase.node, tri=testcase.tri,
-#         data=1e-4 * np.real(precon - direct),
-#         title=r'$\mathrm{Re} \: \Delta \delta B^{Z}$ / T',
-#         filename='/temp/lainer_p/NEO-EQ/coarse_grid/Bn_diff_Z_Re.pdf'
-#     ))
-#     testcase.plots.append(magdif_2d_triplot(
-#         node=testcase.node, tri=testcase.tri,
-#         data=1e-4 * np.real(highdens),
-#         title=r'$\mathrm{Re} \: \delta B^{Z}$ / T',
-#         filename='/temp/lainer_p/NEO-EQ/coarse_grid/Bn_highdens_Z_Re.pdf'
-#     ))
-#     testcase.dump_plots()
-# =============================================================================

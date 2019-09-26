@@ -134,9 +134,10 @@ tri = np.concatenate((tri,mesh_tris))
 edge = np.array(facets[len(epoints):]) - len(epoints) + NN + 1
 
 # plot full mesh
-plt.triplot(node[:, 0], node[:, 1], tri-1)
+plt.triplot(node[:, 0], node[:, 1], tri-1, linewidth=0.05)
 plt.axis('equal')
 plt.show()
+plt.savefig('mesh.png', dpi=300)
 
 
 for kt in range(NTE):
