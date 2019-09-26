@@ -1256,7 +1256,7 @@ inner: do kt = 1, kt_max(kf)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
 
-    integer :: kf, kt
+    integer :: kf, kt, n_cutoff
     type(triangle) :: elem
     type(knot) :: tri(3)
     complex(dp) :: pol_comp_r, pol_comp_z, dens_psi_contravar, proj_theta_covar
@@ -1269,7 +1269,12 @@ inner: do kt = 1, kt_max(kf)
     real(dp) :: n_r, n_z
 
     open(1, file = outfile, recl = longlines)
-    do kf = 1, nflux
+    if (nonres) then
+       n_cutoff = nflux - 1
+    else
+       n_cutoff = nflux
+    end if
+    do kf = 1, n_cutoff
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
           tri = mesh_point(elem%i_knot(:))
@@ -1306,7 +1311,7 @@ inner: do kt = 1, kt_max(kf)
     end do
     r = mesh_point(1)%rcoord
     z = mesh_point(1)%zcoord
-    do kt = kt_low(nflux+1) + 1, ntri
+    do kt = kt_low(n_cutoff+1) + 1, ntri
        write (1, *) r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
     end do
     close(1)
