@@ -7,6 +7,6 @@ do
     ./magdif_test.sh $testcase
     make spectra
     make plots config="$testcase"
-    mv -t $target/${testcase%.*} *.pdf *.dat
+    mv -t $target/${testcase%.*} *.pdf *.dat *.log
     cp -t $target/${testcase%.*} $testcase
 done

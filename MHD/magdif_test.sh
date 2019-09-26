@@ -6,4 +6,4 @@ else
     config="$1"
 fi
 ./fem_config.py $config
-../BUILD/bin/magdif_test.x $config
+../BUILD/bin/magdif_test.x $config | tee ${config%.*}.log
