@@ -141,7 +141,7 @@ Thus $r$ corresponds to the minor radius and the pseudoradial component $\rho$, 
 \end{gather}
 Here, $k_{z}$ is a wavenumber given by
 \begin{gather}
-  k_{z} = \frac{n}{R_{0}},
+  k_{z} = \frac{n}{R_{0}}, \label{eq:kilca-kz}
 \end{gather}
 ensuring the same same periodicity $2 \pi R_{0}$ as for the toroidal geometry. In the same sense, the wavenumber $k_{\vartheta}$ is defined as
 \begin{gather}
@@ -205,9 +205,21 @@ Up to this point, calculations have been performed in the cylindrical geometry u
 \end{align}
 Effectively, the torus is stretched by \enquote{stitching together} $\gamma$ cylinders with periodic boundary conditions. Consequently, we use wavenumbers
 \begin{gather}
-  k_{z} = \frac{\bar{n}}{\gamma R_{0}}.
+  k_{z} = \frac{\bar{n}}{\gamma R_{0}},
 \end{gather}
-The solution computed by NEO-EQ code then has to be transformed to the cylindrical geometry of KiLCA code to allow for a comparison. Using trigonometric identities, we can invert \cref{eq:kilca-BR,eq:kilca-BZ,eq:kilca-Bphi} to yield
+which must be identical to the value from \cref{eq:kilca-kz}, so we have
+\begin{gather}
+  \bar{n} = \gamma n.
+\end{gather}
+Furthermore, the fluxes in the EFIT file have to be scaled,
+\begin{gather}
+  \bar{\psi} = \gamma \psi,
+\end{gather}
+which results in an unchanged magnetic field and an inversely scaled safety factor,
+\begin{gather}
+  \bar{q} = \frac{q}{\gamma},
+\end{gather}
+which is in turn consistent with a scaled toroidal mode number $n$ and an unscaled poloidal mode number $m$. The solution computed by NEO-EQ code then has to be transformed to the cylindrical geometry of KiLCA code to allow for a comparison. Using trigonometric identities, we can invert \cref{eq:kilca-BR,eq:kilca-BZ,eq:kilca-Bphi} to yield
 \begin{align}
   B_{n}^{r} &= B_{n}^{R} \cos \vartheta + B_{n}^{Z} \sin \vartheta, \\
   r B_{n}^{\vartheta} &= B_{n}^{Z} \cos \vartheta - B_{n}^{R} \sin \vartheta, \\

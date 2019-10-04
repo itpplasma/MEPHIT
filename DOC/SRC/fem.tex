@@ -1,4 +1,4 @@
-\section{Magnetic Field Perturbation}
+\section{Numerical Treatment of the Magnetic Field Perturbation}
 \label{sec:compute_Bn}
 
 In this chapter, the calculation of the magnetic field from the current density is described, i.e. the explicit form of $\hat{M}$ in \cref{eq:M_operator}. The implementation uses \texttt{FreeFem++} by \textcite{Hecht12}, while the mathematical background is outlined in \cref{sec:ritz-galerkin}, which is based on the book by \textcite{Jin02}. For a more specific discussion and thorough derivations for the problem at hand, see \textcite{Seeber18}. Finally, the application of the \textsc{Fourier} transform is elaborated in \cref{sec:fourier-fem}, based on the papers by \textcite{Heyn08,Albert16}.
@@ -41,7 +41,7 @@ This is an elliptical partial differential equation of second order, so the solu
   \begin{gather*}
     C_{\text{D}} \Phi (\vec{r}) + C_{N} \grad \Phi (\vec{r}) \cdot \vec{n} (\vec{r}) = \gamma_{\text{R}} (\vec{r}) \quad \forall \vec{r} \in \Gamma.
   \end{gather*}
-  This has to be differentiated from a \textsc{Cauchy} boundary condition where \textsc{Dirichlet} and \textsc{Neumann} boundary conditions are imposed on the same point independently of each other. For elliptical PDEs, this usually is not a well-posed problem and may lead to an overdetermined set of equations.
+  This has to be distinguished from a \textsc{Cauchy} boundary condition where \textsc{Dirichlet} and \textsc{Neumann} boundary conditions are imposed on the same point independently of each other. For elliptical PDEs, this usually is not a well-posed problem and may lead to an overdetermined set of equations.
 \item Mixed boundary conditions are enforced when any of the above is imposed on each piece of the boundary, e.g. \textsc{Dirichlet} boundary conditions on $\Gamma_{\text{D}}$ and \textsc{Neumann} boundary conditions on $\Gamma_{\text{N}}$. In the latter example, it is necessary that
   \begin{gather*}
     \Gamma_{\text{N}} \cup \Gamma_{\text{D}} = \Gamma, \quad \Gamma_{\text{N}} \cap \Gamma_{\text{D}} = \emptyset

@@ -1,6 +1,8 @@
 \section{Stationary Linear Perturbation of Ideal MHD Equilibrium}
 \label{sec:setup}
 
+In this chapter, we develop the equations that model the effect of a non-axisymmetric perturbation on an axisymmetric ideal MHD equilibrium, setting up the tasks for the next chapters. \Cref{sec:iteration} introduces an iterative scheme to solve the equations in a self-consistent manner, while \cref{sec:precon} discusses its solution employing a preconditioner.
+
 For the intended application on stationary (compared to MHD mode eigenfrequencies) non-axisymmetric magnetic perturbations by external coils, we consider a perturbed ideal MHD equilibrium for pressure $p$, currents $\vec{J}$ and magnetic field $\vec{B}$ fulfilling
 \begin{align}
   \grad p &= \frac{1}{c} \vec{J} \times \vec{B}, \label{eq:mhd-gen} \\
@@ -10,7 +12,7 @@ For the intended application on stationary (compared to MHD mode eigenfrequencie
 Starting with a given MHD equilibrium fulfilling \cref{eq:mhd-gen,eq:divfree-gen} denoted by subscripts \enquote{$0$}, linear order equations for an external magnetic perturbation (denoted by $\delta$) split into a vacuum and a plasma part (subscript $\text{v}$ and $\text{p}$, respectively) are
 \begin{align}
   \grad \delta p &= \frac{1}{c} \left( \vec{J}_{0} \times \Bpert + \delta \vec{J} \times \vec{B}_{0} \right), \label{eq:mhd} \\
-  \Bpert &= \Bvac + \Bplas, \\
+  \Bpert &= \Bvac + \Bplas \, , \\
   \Bvac &= \frac{1}{c} \oint \frac{I_{\text{c}}(\vec{r}') \, \diff \vec{l}' \times \vec{r}}{\lvert \vec{r} - \vec{r}' \rvert^{3}}, \label{eq:biot-savart} \\
   \Bplas &= \curl \delta \vec{A}, \\
   \curl (\curl \delta \vec{A}) &= \frac{4 \pi}{c} \delta \vec{J}, \label{eq:ampere} \\
@@ -98,7 +100,7 @@ For illustration, both approaches are compared side-by-side in \cref{tab:comp_it
 \begin{figure}[bth]
   \centering
   \input{./iter.tikz}
-  \caption{Individual iteration steps [\ldots]}
+  \caption{Individual steps within an iteration of $\hat{K}$. Grey symbols designate quantities from the previous iteration. Step 1 uses a finite difference method, outlined in \cref{sec:compute_presn}, to compute the next iteration of the pressure perturbation as an intermediary. Step 2 uses a finite volume method, discussed in \cref{sec:compute_currn}, to compute the next iteration of the current perturbation. Both are grouped together in $\hat{P}$ and solve the linearized MHD force balance. Step 3 then computes the magnetic field perturbation using the finite element method from \cref{sec:compute_Bn} to solve \textsc{Ampère}'s equation represented by $\hat{M}$, completing the cycle.}
   \label{fig:iter}
 \end{figure}
 

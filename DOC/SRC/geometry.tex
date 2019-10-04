@@ -1,7 +1,7 @@
 \section{Geometrical Considerations}
 \label{sec:geom}
 
-Even when the magnetic field is not axisymmetric, the axisymmetry of the tokamak device carries over to the computational domain. It stands to reason to take the periodicity in the symmetry direction, i.e., the cylindrical angle $\phi$, into account. The non-axisymmetric magnetic perturbation field in cylindrical coordinates $(R, \phi, Z)$ can then be expanded as a \textsc{Fourier} series:
+Even when the magnetic field is not axisymmetric, the cross-section retains its shape in tokamak devices, which stands in contrast to stellarator-type devices. It stands to reason to take the periodicity in the symmetry direction, i.e., the cylindrical angle $\phi$, into account. The non-axisymmetric magnetic perturbation field in cylindrical coordinates $(R, \phi, Z)$ can then be expanded as a \textsc{Fourier} series:
 \begin{gather}
   \Bpert (R, \phi, Z) = \sum_{n = -\infty}^{\infty} \vec{B}_{n} (R, Z) \e^{\im n \phi}
 \end{gather}
@@ -11,7 +11,7 @@ As all equations are linear, a superposition of multiple harmonics is easily pos
 \begin{gather}
   \Bpert = \Real (\vec{B}_{n} \e^{\im n \phi})
 \end{gather}
-with fixed $n$ and a similar notation for other perturbed quantities. Note that $n \neq 0$; such a perturbation is necessarily small and considered part of the axisymmetric equilibrium. Thus an index $0$ unambiguously refers to equilibrium quantities\footnote{This choice and further conventions are also listed in \cref{tab:decorations}.}. Also, since $\Bpert$ is real-valued, it follows that
+with fixed $n$ and we use the same notation for other perturbed quantities. Note that $n \neq 0$; such a perturbation is necessarily small and considered part of the axisymmetric equilibrium. Thus an index $0$ unambiguously refers to equilibrium quantities\footnote{This choice and further conventions are also listed in \cref{tab:decorations}.}. Also, since $\Bpert$ is real-valued, it follows that
 \begin{gather}
   \vec{B}_{n} = \vec{B}_{-n}^{*}, \label{eq:fourier-cc}
 \end{gather}
@@ -61,11 +61,11 @@ The determinant $g = \det \symsf{g}$ of the metric tensor appears further in the
 \end{gather}
 With the nabla operator represented as
 \begin{gather}
-  \nabla = \vec{e}^{k} \pd{u^{k}},
+  \nabla = \vec{e}^{k} \pd{u^{k}} \, ,
 \end{gather}
 the gradient follows:
 \begin{gather}
-  \grad f = \pd[f]{u^{k}} \vec{e}^{k}.
+  \grad \Phi = \pd[\Phi]{u^{k}} \vec{e}^{k}.
 \end{gather}
 The divergence is most simply defined in terms of contravariant components,
 \begin{gather}
@@ -136,19 +136,19 @@ The change of sign in comparison to \textcite{dHaeseleer91} is due to the revers
 
 For the sake of completeness and since it will be used extensively in \cref{sec:linmhd}, the $\nabla$ operator shall be given explicitly for the gradient and divergence in cylindrical coordinates:
 \begin{gather}
-  \grad f = \pd[f]{R} \vec{e}^{R} + \pd[f]{\phi} \vec{e}^{\phi} + \pd[f]{Z} \vec{e}^{Z}, \\
+  \grad \Phi = \pd[\Phi]{R} \vec{e}^{R} + \pd[\Phi]{\phi} \vec{e}^{\phi} + \pd[\Phi]{Z} \vec{e}^{Z}, \\
   \divg \vec{v} = \frac{1}{R} \pd{R} (R v^{k}) + \pd{\phi} v^{\phi} + \frac{1}{R} \pd{Z} (R v^{Z}).
 \end{gather}
 In the last term, a factor of $R$ is kept for the sake of symmetry. Now, when we apply the \textsc{Fourier} transform $\pd{\phi} \to \im n$, we get
 \begin{gather}
-  \grad f = \pd[f_{n}]{R} \vec{e}^{R} + \im n f_{n} \vec{e}^{\phi} + \pd[f_{n}]{Z} \vec{e}^{Z}, \\
+  \grad \Phi = \pd[\Phi_{n}]{R} \vec{e}^{R} + \im n \Phi_{n} \vec{e}^{\phi} + \pd[\Phi_{n}]{Z} \vec{e}^{Z}, \\
   \divg \vec{v} = \frac{1}{R} \pd{R} (R v_{n}^{k}) + \im n v_{n}^{\phi} + \frac{1}{R} \pd{Z} (R v_{n}^{Z}).
 \end{gather}
 For convenience, we will sometimes use the $\nabla$ operator in two-dimensional form as a notational shorthand with the gradient:
 \begin{gather}
-  \grad f = \grad f_{n} + \im n f_{n} \vec{e}^{\phi}.
+  \grad \Phi = \grad \Phi_{n} + \im n \Phi_{n} \vec{e}^{\phi}.
 \end{gather}
-It should be clear from context wheter $\nabla$ is supposed to be two- or three-dimensional, so for example, in $\grad \phi$ it is three-dimensional since $\grad \phi$ only has a toroidal component, while for purely poloidal $\grad \psi$ it makes no difference.
+It should be clear from context wheter $\nabla$ is supposed to be two- or three-dimensional. For example, in $\grad \phi$ it is three-dimensional since $\grad \phi$ only has a toroidal component, while for purely poloidal quantities like $\grad \psi$ or $\grad p_{n}$, two-dimensional and three-dimensional $\nabla$ yield the same result.
 
 In some derivations, we also use a \textsc{Fourier} series expansion for the poloidal angle $\theta$ with poloidal mode number $m$, i.e.
 \begin{gather}
@@ -166,7 +166,7 @@ Lastly, we shall introduce the \emph{flux surface average} for an arbitrary quan
 
 So far, we have given a fairly general description of the problem without explicit reference to numerical methods, apart maybe from the iteration scheme in \cref{sec:iteration}. One necessary modification is the discretization of the problem. The finite element method outlined in \cref{sec:compute_Bn} uses a discretization of the computational domain, i.e., it introduces a triangular grid. While other tilings are possible, triangulation is the simplest, and for triangles, the \textsc{Delaunay} algorithm is unique. The latter maximizes the triangles' minimal interior angle, which is desirable because a more elongated triangle shape reduces the quality of approximations on it. However, we choose to align the grid on flux surfaces in order to use the associated special properties.
 
-We choose a set of nested flux surfaces, e.g., a number $n_{\text{flux}}$ of curves of constant $\psi$, which are equidistant between the magnetic axis and the X-point. These are then intersected by rays originating from the magnetic axis. Note that these rays are not curves of constant $\theta$, as these are generally not straight in $(R, Z)$ coordinates. As a result, between any two flux surfaces there is a \emph{ring} or \emph{strip} of quadrangles going around in poloidal direction. These quadrangles are then diagonally split into triangles, yielding two types of triangles. An exception is the innermost ring containing the magnetic axis, where there is only one type of triangle and no quadrangles to split. This kind of grid is depicted in \cref{fig:grid} where concentric circles are used to illustrate the nested flux surfaces.
+We choose a set of nested flux surfaces, e.g., a number $n_{\text{flux}}$ of curves of constant $\psi$, which are equidistant between the magnetic axis and the X point. These are then intersected by rays originating from the magnetic axis. Note that these rays are not curves of constant $\theta$, as these are generally not straight in $(R, Z)$ coordinates. As a result, between any two flux surfaces there is a \emph{ring} or \emph{strip} of quadrangles going around in poloidal direction. These quadrangles are then diagonally split into triangles, yielding two different types of triangles: One has two points on the outer and one point on the inner flux surface, the other has one point on the inner and two points on the outer flux surface. An exception is the innermost ring containing the magnetic axis, where there is only one type of triangles and no quadrangles to split. This kind of grid is depicted in \cref{fig:grid} where concentric circles are used to illustrate the nested flux surfaces.
 \begin{figure}[bth]
   \centering
   \begin{subfigure}[b]{0.33\textwidth}
@@ -263,7 +263,7 @@ Now, remembering that $\vec{n}_{\fs} = l_{\fs} \hat{\vec{n}}_{\fs}$ and that the
 \begin{gather}
   B_{n}^{\psi} (\Gamma_{\fs}) \approx \frac{\vec{B}_{n} (\Gamma_{\fs}) \cdot l_{\fs} \hat{\vec{n}}_{\fs}}{2} \frac{\psi^{(+1)} - \psi^{(-1)}}{S_{\Omega^{(+1)}} + S_{\Omega^{(-1)}}} = \frac{\Psi_{\fs}}{2 R} \frac{\psi^{(+1)} - \psi^{(-1)}}{S_{\Omega^{(+1)}} + S_{\Omega^{(-1)}}}. \label{eq:Bnpsi}
 \end{gather}
-When $\vec{n}_{\fs}$ and $\Psi_{\fs}$ are defined in regard to $\Omega^{(+1)}$ instead, both quantities switch sign. Since $B_{n}^{\psi}$ does not depend on the choice of triangle, \cref{eq:Bnpsi} would gain a minus sign in this case.
+When $\vec{n}_{\fs}$ and $\Psi_{\fs}$ are defined in regard to $\Omega^{(+1)}$ instead, both quantities switch sign. Since $B_{n}^{\psi}$ does not depend on the choice of triangle, the sign on the right-hand side of \cref{eq:Bnpsi} would also change in this case.
 
 Another useful quantity is the covariant $\theta$ component of a vector field, here derived for the example of the current perturbation,
 \begin{gather}
