@@ -796,29 +796,48 @@ contains
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
 
           r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
-          Btor2 = B0phi(kt_low(kf) + kt, ef) ** 2
-          if (.not. orient) then
-             j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf-1) * (1d0 - Btor2 / &
-                  B2avg(kf-1)) * r
+          if (full_j0phi) then
+             z = sum(mesh_point(lf(:))%zcoord) * 0.5d0
+             j0phi(kt_low(kf) + kt, ef) = j0phi_ampere(r, z)
           else
-             j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf) * (1d0 - Btor2 / &
-                  B2avg(kf)) * r
+             Btor2 = B0phi(kt_low(kf) + kt, ef) ** 2
+             if (.not. orient) then
+                j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf-1) * (1d0 - Btor2 / &
+                     B2avg(kf-1)) * r
+             else
+                j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf) * (1d0 - Btor2 / &
+                     B2avg(kf)) * r
+             end if
           end if
 
           r = sum(mesh_point(li(:))%rcoord) * 0.5d0
-          Btor2 = B0phi(kt_low(kf) + kt, ei) ** 2
-          j0phi(kt_low(kf) + kt, ei) = clight * (pres0(kf) - pres0(kf-1)) / &
-               (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+          if (full_j0phi) then
+             z = sum(mesh_point(li(:))%zcoord) * 0.5d0
+             j0phi(kt_low(kf) + kt, ei) = j0phi_ampere(r, z)
+          else
+             Btor2 = B0phi(kt_low(kf) + kt, ei) ** 2
+             j0phi(kt_low(kf) + kt, ei) = clight * (pres0(kf) - pres0(kf-1)) / &
+                  (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+          end if
 
           r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
-          Btor2 = B0phi(kt_low(kf) + kt, eo) ** 2
-          j0phi(kt_low(kf) + kt, eo) = clight * (pres0(kf) - pres0(kf-1)) / &
-               (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+          if (full_j0phi) then
+             z = sum(mesh_point(lo(:))%zcoord) * 0.5d0
+             j0phi(kt_low(kf) + kt, eo) = j0phi_ampere(r, z)
+          else
+             Btor2 = B0phi(kt_low(kf) + kt, eo) ** 2
+             j0phi(kt_low(kf) + kt, eo) = clight * (pres0(kf) - pres0(kf-1)) / &
+                  (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+          end if
 
           call ring_centered_avg_coord(elem, r, z)
-          Btor2 = B0phi_Omega(kt_low(kf) + kt) ** 2
-          plot_j0phi = clight * (pres0(kf) - pres0(kf-1)) / &
-               (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+          if (full_j0phi) then
+             plot_j0phi = j0phi_ampere(r, z)
+          else
+             Btor2 = B0phi_Omega(kt_low(kf) + kt) ** 2
+             plot_j0phi = clight * (pres0(kf) - pres0(kf-1)) / &
+                  (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+          end if
 
           write (1, *) j0phi(kt_low(kf) + kt, 1), j0phi(kt_low(kf) + kt, 2), &
                j0phi(kt_low(kf) + kt, 3), plot_j0phi
@@ -830,6 +849,17 @@ contains
     close(1)
 
     call check_redundant_edges(cmplx(j0phi, 0d0, dp), 1d0, 'j0phi')
+
+  contains
+    function j0phi_ampere(r, z) result (rotB_phi)
+      real(dp), intent(in) :: r, z
+      real(dp) :: rotB_phi
+      real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+      call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+      rotB_phi = 0.25 / pi * clight * (dBrdZ - dBzdR)
+    end function j0phi_ampere
   end subroutine compute_j0phi
 
   !> Assembles a sparse matrix in coordinate list (COO) representation for use with
