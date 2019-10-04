@@ -45,12 +45,16 @@ class magdif_2d_triplot:
     scifmt = matplotlib.ticker.ScalarFormatter()
     scifmt.set_powerlimits((-3, 4))
 
-    def __init__(self, node, tri, data, filename, title=None):
+    def __init__(self, node, tri, data, filename, title=None, clim_scale=None):
         self.node = node
         self.tri = tri
         self.data = data
         self.title = title
         self.filename = filename
+        if clim_scale is not None:
+            self.clim_scale = clim_scale
+        else:
+            self.clim_scale = 1.0
 
     def dump_plot(self):
         print('plotting ', self.filename)
@@ -61,7 +65,8 @@ class magdif_2d_triplot:
         )
         plt.gca().set_aspect('equal')
         plt.colorbar(format=self.__class__.scifmt)
-        plt.clim([-max(abs(self.data)), max(abs(self.data))])
+        plt.clim([-max(abs(self.data)) * self.clim_scale,
+                  max(abs(self.data)) * self.clim_scale])
         plt.xlabel(r'$R$ / cm')
         plt.ylabel(r'$Z$ / cm')
         if self.title is not None:
@@ -92,10 +97,14 @@ class magdif_1d_cutplot:
 
 
 class magdif_conv_plot:
-    def __init__(self, datadir, conv_file, max_eigval):
+    def __init__(self, datadir, conv_file, max_eigval, xlim=None, ylim=None,
+                 title=None):
         self.datadir = datadir
         self.conv_file = conv_file
         self.max_eigval = max_eigval
+        self.xlim = xlim
+        self.ylim = ylim
+        self.title = title
 
     def dump_plot(self):
         try:
@@ -104,7 +113,7 @@ class magdif_conv_plot:
             print('Error: {}'.format(err))
             return
         niter = len(conv) - 1
-        kiter = np.arange(1, niter + 1)
+        kiter = np.arange(0, niter + 1)
         plt.figure(figsize=(3.2, 3.2))
         plt.semilogy(
                 kiter, conv[0] * self.max_eigval ** kiter, 'r-',
@@ -112,14 +121,21 @@ class magdif_conv_plot:
                 + r' \delta \mathbf{B}_{\mathrm{v}} \Vert_{2}$'
         )
         plt.semilogy(
-                kiter, conv[1:], 'xk',
+                kiter, conv, 'xk',
                 label=r'$\Vert \delta \mathbf{B}^{(k)} \Vert_{2}$'
         )
-        plt.gca().legend(loc='lower left')
+        if self.xlim is not None:
+            plt.xlim(self.xlim)
+        if self.ylim is not None:
+            plt.ylim(self.ylim)
+        plt.gca().legend(loc='upper right')
         plt.xticks(kiter)
         plt.xlabel('iteration step $k$')
         plt.ylabel(r'$\Vert \delta \mathbf{B} \Vert_{2}$ / G cm')
-        plt.title('estimation of convergence')
+        if self.title is not None:
+            plt.title(self.title)
+        else:
+            plt.title('estimation of convergence')
 
         plt.tight_layout()
         plt.savefig(os.path.join(self.datadir, 'convergence.pdf'))
@@ -153,10 +169,16 @@ class magdif_poloidal_modes:
                 return
 
         # normalize psi
-        s = (data[:, 0] - data[0, 0]) / (data[-1, 0] - data[0, 0])
-        q = data[:, 1]
         xlabel = r'$\hat{\psi}$'
+        s = (data[:, 0] - data[0, 0]) / (data[-1, 0] - data[0, 0])
+        # sort data
+        sorting = np.argsort(s)
+        s = s[sorting]
+        data = data[sorting, :]
+        if self.reffile is not None:
+            ref = ref[sorting, :]
 
+        q = data[:, 1]
         q_min = np.amin(self.q_mhd)
         q_max = np.amax(self.q_mhd)
         q_interp = interpolate.interp1d(self.s_mhd, self.q_mhd, kind='cubic')
@@ -219,9 +241,9 @@ class magdif_poloidal_modes:
             plt.figure(figsize=(6.6, 3.3))
             ax = plt.subplot(vert_plot, horz_plot, 1)
             if self.reffile is not None:
-                plt.plot(s, abs_ref[:, offset - m], 'r--',
+                plt.plot(s, abs_ref[:, offset + m], 'r--',
                          label='vacuum perturbation')
-            plt.plot(s, abs_data[:, offset - m], label='full perturbation')
+            plt.plot(s, abs_data[:, offset + m], label='full perturbation')
             ax.legend()
             ax.ticklabel_format(style='sci', scilimits=(-3, 4))
             plt.ylim(yrang)
@@ -234,9 +256,9 @@ class magdif_poloidal_modes:
                 ax.axvline(s_resonant[index], color='b', alpha=0.5)
             ax = plt.subplot(vert_plot, horz_plot, 2)
             if self.reffile is not None:
-                plt.plot(s, abs_ref[:, offset + m], 'r--',
+                plt.plot(s, abs_ref[:, offset - m], 'r--',
                          label='vacuum perturbation')
-            plt.plot(s, abs_data[:, offset + m], label='full perturbation')
+            plt.plot(s, abs_data[:, offset - m], label='full perturbation')
             ax.legend()
             ax.ticklabel_format(style='sci', scilimits=(-3, 4))
             plt.ylim(yrang)
@@ -260,7 +282,7 @@ class magdif_poloidal_modes:
         ax.legend()
         ax.ticklabel_format(style='sci', scilimits=(-3, 4))
         plt.title('$m = 0$')
-        plt.xlabel(r'$s$')
+        plt.xlabel(r'$\hat{\psi}$')
         plt.ylabel(self.label)
         ax = plt.subplot(vert_plot, horz_plot, 2)
         # q is negative in result_spectrum.f90
