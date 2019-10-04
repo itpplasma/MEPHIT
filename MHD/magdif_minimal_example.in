@@ -6,11 +6,11 @@
    quad_avg = .true.                                     ! average over quadrilaterals for non-resonant test case
 
    n = 2                                                 ! harmonic index of perturbation
-   niter = 9                                             ! number of iteration steps
+   niter = 20                                            ! number of iteration steps
    nritz = 10                                            ! number of Ritz eigenvalues
-   tol = 0.1d0                                           ! threshold for eigenvalues in preconditioner
+   tol = 0.5d0                                           ! threshold for eigenvalues in preconditioner
    nkpol = 300                                           ! number of knots per poloidal loop
-   nflux = 64                                            ! number of flux surfaces up to and counting LCFS
+   nflux = 128                                           ! number of flux surfaces up to and counting LCFS
    ti0 = 3.d3                                            ! temperature on magnetic axis
    di0 = 5.d13                                           ! density on magnetic axis
    damp = 0d0                                            ! damping factor for resonances
@@ -36,5 +36,5 @@
    kilca_pol_mode_file = 'Bpmn.dat'                      ! output file for Fourier coefficients
 /
 &delayed
-   sheet_current_factor = (1d3, 0d0)  ! coefficients for sheet currents
+   sheet_current_factor = 1*(0d0, 0d0), 1*(-1d3, -1d3)  ! coefficients for sheet currents
 /

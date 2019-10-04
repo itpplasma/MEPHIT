@@ -655,6 +655,7 @@ contains
        abs_err = [(abs(q(kf) - dble(m) / dble(n)), kf = 1, nflux)]
        m_res(minloc(abs_err, 1)) = m
     end do
+    if (log_debug) write (logfile, *) 'resonant m: ', m_res_min, '..', m_res_max
     allocate(sheet_current_factor(m_res_min:m_res_max))
     sheet_current_factor = (0d0, 0d0)
   end subroutine compute_safety_factor
@@ -1439,7 +1440,9 @@ inner: do kt = 1, kt_max(kf)
        rho = rho_max * (dble(kf) - 0.5) / dble(nflux)
        do kt = 1, kt_max(kf)
           theta = (dble(kt) - 0.5d0) / dble(kt_max(kf)) * 2d0 * pi
-          fourier_basis = [(exp(-imun * m * theta), m = -mmax, mmax)]
+          ! result_spectrum.f90 uses negative q, so poloidal modes are switched
+          ! we invert the sign here to keep post-processing consistent
+          fourier_basis = [(exp(imun * m * theta), m = -mmax, mmax)]
           r = rmaxis + rho * cos(theta)
           z = zmaxis + rho * sin(theta)
           elem = mesh_element(kt_low(kf) + kt)

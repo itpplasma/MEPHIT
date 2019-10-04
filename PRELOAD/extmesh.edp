@@ -5,7 +5,7 @@ real zmaxis = 0.0 * 1e2;
 real rdim = 1.34 * 1e2;
 real zdim = 1.34 * 1e2;
 int nkpol = 300;
-int nflux = 64;
+int nflux = 128;
 
 border inner(t = 0, 2 * pi) {
   x = rmaxis + 0.5 * real(nflux) / real(nflux+1) * rdim * cos(t);
@@ -18,12 +18,11 @@ border outer(t = 0, 2 * pi) {
   label = 1;
 }
 mesh Thouter = buildmesh(inner(nkpol) + outer(nkpol * 3 / 2));
+medit("out", Thouter);
 int[int] regionmap = [0, 1];
 Thouter = change(Thouter, region = regionmap);
 mesh Thinner = readmesh("inputformaxwell_kilca.msh");
-mesh Th = Thinner + Thouter;
-savemesh(Th, "inputformaxwell_ext.msh");
-
 medit("in", Thinner);
-medit("out", Thouter);
+mesh Th = Thinner + Thouter;
 medit("total", Th);
+savemesh(Th, "inputformaxwell_ext.msh");
