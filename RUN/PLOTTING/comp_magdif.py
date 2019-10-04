@@ -18,17 +18,17 @@ testcase.read_configfile()
 testcase.read_fluxvar()
 testcase.load_mesh()
 testcase.plots.append(magdifplot.magdif_1d_cutplot(
-        testcase.rho, r'$\rho$ / cm', testcase.psi, r'$\psi$ / Mx',
-        'disc poloidal flux', 'plot_psi.pdf'
+        testcase.rho, r'$r$ / cm', testcase.psi, r'$\psi$ / Mx',
+        'disc poloidal flux', os.path.join(testcase.datadir, 'plot_psi.pdf')
 ))
 testcase.plots.append(magdifplot.magdif_1d_cutplot(
-        testcase.rho, r'$\rho$ / cm', testcase.q, r'$q$',
-        'safety factor', 'plot_q.pdf'
+        testcase.rho, r'$r$ / cm', testcase.q, r'$q$',
+        'safety factor', os.path.join(testcase.datadir, 'plot_q.pdf')
 ))
 testcase.plots.append(magdifplot.magdif_1d_cutplot(
-        testcase.rho, r'$\rho$ / cm', testcase.pres0,
+        testcase.rho, r'$r$ / cm', testcase.pres0,
         r'$p_{0}$ / dyn cm\textsuperscript{-2}',
-        'pressure', 'plot_pres0.pdf'
+        'pressure', os.path.join(testcase.datadir, 'plot_pres0.pdf')
 ))
 if (os.path.isfile(os.path.join(testcase.datadir, 'Bmn_psi.dat')) and
         os.path.isfile(os.path.join(testcase.datadir, 'Bmn_vac_psi.dat'))):

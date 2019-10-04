@@ -44,8 +44,8 @@ testcase.plots.append(magdifplot.magdif_2d_triplot(
 ))
 testcase.plots.append(magdifplot.magdif_2d_triplot(
     node=testcase.node, tri=testcase.tri,
-    data=np.real(precon),
-    title=r'$\mathrm{Re} \:  B_{n}^{Z}$ / G',
+    data=np.real(precon - vacuum),
+    title=r'$\mathrm{Re} \:  B_{\mathrm{p} n}^{Z}$ / G',
     filename='/temp/lainer_p/NEO-EQ/Bn_Z_Re.png'
 ))
 testcase.plots.append(magdifplot.magdif_2d_triplot(
@@ -56,8 +56,8 @@ testcase.plots.append(magdifplot.magdif_2d_triplot(
 ))
 testcase.plots.append(magdifplot.magdif_2d_triplot(
     node=testcase.node, tri=testcase.tri,
-    data=np.real(highdens),
-    title=r'$\mathrm{Re} \: B_{n}^{Z}$ / G',
+    data=np.real(highdens - vacuum),
+    title=r'$\mathrm{Re} \: B_{\mathrm{p} n}^{Z}$ / G',
     filename='/temp/lainer_p/NEO-EQ/Bn_highdens_Z_Re.png'
 ))
 testcase.dump_plots_parallel()

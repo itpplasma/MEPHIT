@@ -371,6 +371,8 @@ contains
     call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_', ''))
     if (kilca_scale_factor /= 0) then
        call write_kilca_modes(Bnflux, Bnphi, kilca_pol_mode_file)
+       call write_kilca_modes(Bnflux_vac, Bnphi_vac, &
+            decorate_filename(kilca_pol_mode_file, '', '_vac'))
     end if
 
     if (allocated(Lr)) deallocate(Lr)

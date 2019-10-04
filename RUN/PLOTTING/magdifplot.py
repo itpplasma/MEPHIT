@@ -81,7 +81,7 @@ class magdif_1d_cutplot:
 
     def dump_plot(self):
         print('plotting ', self.filename)
-        plt.figure(figsize=(6.6, 3.3))
+        plt.figure(figsize=(6.6, 3.6))
         plt.plot(self.x, self.y, '-k')
         plt.ticklabel_format(style='sci', scilimits=(-3, 4))
         plt.xlabel(self.xlabel)
@@ -105,7 +105,7 @@ class magdif_conv_plot:
             return
         niter = len(conv) - 1
         kiter = np.arange(1, niter + 1)
-        plt.figure(figsize=(3.3, 3.3))
+        plt.figure(figsize=(3.2, 3.2))
         plt.semilogy(
                 kiter, conv[0] * self.max_eigval ** kiter, 'r-',
                 label=r'$\vert \lambda_{\mathrm{max}} \vert^{k} \Vert'
@@ -115,7 +115,7 @@ class magdif_conv_plot:
                 kiter, conv[1:], 'xk',
                 label=r'$\Vert \delta \mathbf{B}^{(k)} \Vert_{2}$'
         )
-        plt.gca().legend(loc='lower left', fontsize='large')
+        plt.gca().legend(loc='lower left')
         plt.xticks(kiter)
         plt.xlabel('iteration step $k$')
         plt.ylabel(r'$\Vert \delta \mathbf{B} \Vert_{2}$ / G cm')
@@ -127,7 +127,8 @@ class magdif_conv_plot:
 
 
 class magdif_poloidal_modes:
-    def __init__(self, n, s, q, datadir, datafile, label, reffile=None):
+    def __init__(self, n, s, q, datadir, datafile, label, reffile=None,
+                 r_s_interp=None):
         self.n = n
         self.s_mhd = s
         self.q_mhd = q
@@ -135,6 +136,7 @@ class magdif_poloidal_modes:
         self.datafile = datafile
         self.label = label
         self.reffile = reffile
+        self.r_s_interp = r_s_interp
 
     def dump_plot(self):
         print('plotting poloidal modes from', self.datafile)
@@ -153,6 +155,7 @@ class magdif_poloidal_modes:
         # normalize psi
         s = (data[:, 0] - data[0, 0]) / (data[-1, 0] - data[0, 0])
         q = data[:, 1]
+        xlabel = r'$\hat{\psi}$'
 
         q_min = np.amin(self.q_mhd)
         q_max = np.amax(self.q_mhd)
@@ -190,6 +193,11 @@ class magdif_poloidal_modes:
         m_max = (data_range - 1) // 2
         offset = m_max
 
+        if self.r_s_interp is not None:
+            s = self.r_s_interp(s)
+            xlabel = r'$r$'
+            s_resonant = self.r_s_interp(s_resonant)
+
         # plot non-symmetric modes
         fmt = os.path.join(self.datadir,
                            os.path.splitext(self.datafile)[0] + '_{}.pdf')
@@ -211,28 +219,30 @@ class magdif_poloidal_modes:
             plt.figure(figsize=(6.6, 3.3))
             ax = plt.subplot(vert_plot, horz_plot, 1)
             if self.reffile is not None:
-                plt.plot(s, abs_ref[:, offset + m], 'r--',
-                         label='vacuum perturbation')
-            plt.plot(s, abs_data[:, offset + m], label='full perturbation')
-            ax.legend()
-            ax.ticklabel_format(style='sci', scilimits=(-3, 4))
-            plt.ylim(yrang)
-            plt.title('$m = {}$'.format(-m))
-            plt.ylabel(self.label)
-            plt.xlabel(r'$s$')
-            index = [i for (i, val) in enumerate(m_resonant) if abs(val) == m]
-            if len(index) == 1:
-                ax.axvline(s_resonant[index], color='b', alpha=0.5)
-            ax = plt.subplot(vert_plot, horz_plot, 2)
-            if self.reffile is not None:
                 plt.plot(s, abs_ref[:, offset - m], 'r--',
                          label='vacuum perturbation')
             plt.plot(s, abs_data[:, offset - m], label='full perturbation')
             ax.legend()
             ax.ticklabel_format(style='sci', scilimits=(-3, 4))
             plt.ylim(yrang)
+            # q is negative in result_spectrum.f90
+            plt.title('$m = {}$'.format(-m))
+            plt.ylabel(self.label)
+            plt.xlabel(xlabel)
+            index = [i for (i, val) in enumerate(m_resonant) if abs(val) == m]
+            if len(index) == 1:
+                ax.axvline(s_resonant[index], color='b', alpha=0.5)
+            ax = plt.subplot(vert_plot, horz_plot, 2)
+            if self.reffile is not None:
+                plt.plot(s, abs_ref[:, offset + m], 'r--',
+                         label='vacuum perturbation')
+            plt.plot(s, abs_data[:, offset + m], label='full perturbation')
+            ax.legend()
+            ax.ticklabel_format(style='sci', scilimits=(-3, 4))
+            plt.ylim(yrang)
+            # q is negative in result_spectrum.f90
             plt.title('$m = {}$'.format(m))
-            plt.xlabel(r'$s$')
+            plt.xlabel(xlabel)
             plt.ylabel(self.label)
             index = [i for (i, val) in enumerate(m_resonant) if abs(val) == m]
             if len(index) == 1:
@@ -253,41 +263,18 @@ class magdif_poloidal_modes:
         plt.xlabel(r'$s$')
         plt.ylabel(self.label)
         ax = plt.subplot(vert_plot, horz_plot, 2)
+        # q is negative in result_spectrum.f90
         plt.plot(s, np.abs(q), label='kinetic')
-        plt.plot(self.s_mhd, self.q_mhd, 'r--', label='MHD')
+        if self.r_s_interp is not None:
+            plt.plot(self.r_s_interp(self.s_mhd), self.q_mhd, 'r--',
+                     label='MHD')
+        else:
+            plt.plot(self.s_mhd, self.q_mhd, 'r--', label='MHD')
         ax.legend()
-        plt.xlabel(r'$s$')
+        plt.xlabel(xlabel)
         plt.ylabel(r'$q$')
         plt.tight_layout()
         plt.savefig(fmt.format(0))
-        plt.close()
-        # plot poloidal maxima progression
-        max_data = np.amax(abs_data, axis=0)
-        max_ind = np.argmax(abs_data, axis=0)
-        max_s = s[max_ind]
-        plt.figure(figsize=(6.6, 3.3))
-        ax = plt.subplot(vert_plot, horz_plot, 1)
-        plt.plot(np.arange(0, m_max + 1), max_data[offset::-1],
-                 'ro', label=r'$m \leq 0$')
-        plt.plot(np.arange(0, m_max + 1), max_data[offset:],
-                 'kx', label=r'$m \geq 0$')
-        ax.legend()
-        ax.ticklabel_format(style='sci', scilimits=(-3, 4))
-        plt.title('Maximal values of poloidal modes')
-        plt.xlabel(r'$\pm m$')
-        plt.ylabel(self.label)
-        ax = plt.subplot(vert_plot, horz_plot, 2)
-        plt.plot(np.arange(0, m_max + 1), max_s[offset::-1],
-                 'ro', label=r'$m \leq 0$')
-        plt.plot(np.arange(0, m_max + 1), max_s[offset:],
-                 'kx', label=r'$m \geq 0$')
-        ax.legend()
-        plt.title('Positions of maximal values')
-        plt.xlabel(r'$\pm m$')
-        plt.ylabel(r'$s$')
-        plt.ylim([0.0, 1.05])
-        plt.tight_layout()
-        plt.savefig(fmt.format('max'))
         plt.close()
 
 
@@ -427,11 +414,13 @@ class magdif:
                     r'$\left\vert J_{mn \theta}^{(0)} \right\vert$'
                     + r' / statA cm\textsuperscript{-1}'
             ))
+        r_s_interp = interpolate.interp1d(self.s, self.rho, kind='cubic')
         if os.path.isfile(os.path.join(self.datadir, 'Bpmn_r.dat')):
             self.plots.append(magdif_poloidal_modes(
                     self.config['n'] * self.config['kilca_scale_factor'],
                     self.s, self.q, self.datadir, 'Bpmn_r.dat',
-                    r'$\left\vert B_{\mathrm{p}mnr} \right\vert$ / G'
+                    r'$\left\vert B_{\mathrm{p}mnr} \right\vert$ / G',
+                    'Bpmn_vac_r.dat', r_s_interp
             ))
 
     def dump_plots(self):
