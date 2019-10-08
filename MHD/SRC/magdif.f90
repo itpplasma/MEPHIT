@@ -692,7 +692,7 @@ contains
   !> #magdif_conf::t_min.
   subroutine init_flux_variables
     integer :: kf
-    real(dp) :: ddens_dpsi, dtemp_dpsi
+    real(dp) :: ddens_dpsi, dtemp_dpsi, psimin, psimax
 
     allocate(pres0(0:nflux+1))
     allocate(dpres0_dpsi(0:nflux+1))
@@ -711,10 +711,23 @@ contains
     ! linear extrapolation for value just outside LCFS
     psi(nflux+1) = psi(nflux) + (psi(nflux) - psi(nflux-1))
 
-    ddens_dpsi = di0 / (psi(0) - psi(nflux))
-    dtemp_dpsi = ti0 / (psi(0) - psi(nflux))
-    dens = (psi - psi(nflux)) / (psi(0) - psi(nflux)) * di0 + d_min
-    temp = (psi - psi(nflux)) / (psi(0) - psi(nflux)) * ti0 + t_min
+    psimin = minval(mesh_point%psi_pol)
+    psimax = maxval(mesh_point%psi_pol)
+    select case (pres_prof)
+    case (pres_prof_eps)
+       ddens_dpsi = di0 / psimax
+       dtemp_dpsi = ti0 / psimax
+       dens = (psi - psimin) / psimax * di0 + d_min
+       temp = (psi - psimin) / psimax * ti0 + t_min
+       if (log_info)  write (logfile, *) 'temp@axis: ', temp(0), ' dens@axis: ', dens(0)
+    case (pres_prof_par)
+       ddens_dpsi = di0 / (psimax - psimin)
+       dtemp_dpsi = ti0 / (psimax - psimin)
+       dens = (psi - psimin) / (psimax - psimin) * (di0 - d_min) + d_min
+       temp = (psi - psimin) / (psimax - psimin) * (ti0 - t_min) + t_min
+    case default
+       stop 'Error: unknown pressure profile selection'
+    end select
     pres0 = dens * temp * ev2erg
     dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
   end subroutine init_flux_variables

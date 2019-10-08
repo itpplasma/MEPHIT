@@ -1,6 +1,7 @@
 module magdif_config
   use from_nrtype, only: dp  ! PRELOAD/SRC/from_nrtype.f90
   use arnoldi_mod, only: tol ! RUN/SRC/arnoldi.f90
+  use for_macrostep, only: t_min, d_min
 
   implicit none
 
@@ -12,10 +13,15 @@ module magdif_config
   integer, parameter :: runmode_direct = 1 !< direct iteration mode
   integer, parameter :: runmode_precon = 2 !< preconditioned iteration mode
 
+  integer, parameter :: pres_prof_eps = 0  !< pressure profile from EPS paper
+  integer, parameter :: pres_prof_par = 1  !< parabolic pressure profile
+  integer, parameter :: pres_prof_efit = 2 !< pressure profile from EFIT file
+
   integer, parameter :: logfile = 6             !< log to stdout, TODO: make this configurable
 
   integer :: log_level
   integer :: runmode
+  integer :: pres_prof = 1  !< pressure profile
   logical :: log_err, log_warn, log_info, log_debug ! specify log levels
   logical :: nonres = .false.  !< use non-resonant test case
   logical :: quad_avg = .true. !< average over quadrilaterals for non-resonant test case
@@ -115,8 +121,8 @@ module magdif_config
   integer :: max_eig_out = 10
 
   !> namelists for input parameters
-  namelist /settings/ log_level, runmode, nonres, quad_avg, niter, nritz, tol, n, &
-       nkpol, nflux, ti0, di0, damp, R0, point_file, tri_file, &
+  namelist /settings/ log_level, runmode, pres_prof, nonres, quad_avg, niter, nritz, tol, &
+       n, nkpol, nflux, ti0, di0, t_min, d_min, damp, R0, point_file, tri_file, &
        Bn_vacout_file, Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, &
        presn_file, currn_file, eigvec_file, rel_err_Bn, rel_err_currn, kilca_pol_mode, &
        kilca_vac_coeff, kilca_scale_factor, kilca_pol_mode_file, max_eig_out, full_j0phi

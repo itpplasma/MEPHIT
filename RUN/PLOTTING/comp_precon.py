@@ -24,7 +24,7 @@ testcase.plots.append(magdifplot.magdif_conv_plot(
 magdifplot.magdif_conv_plot(
         '/temp/lainer_p/NEO-EQ/test_res_direct_lowdens',
         'convergence.dat',
-        np.hypot(-6.5150263298574818E-002, -1.4910530480484588E-002),
+        np.hypot(-9.38376651102606346E-002, -2.10860494926872477E-002),
         xlim=[-0.25, 7.25], ylim=[2e-4, 1e7], title='without preconditioner'
 ).dump_plot()
 vacuum = np.loadtxt('/temp/lainer_p/NEO-EQ/'
@@ -56,7 +56,7 @@ testcase.plots.append(magdifplot.magdif_2d_triplot(
     data=np.real(precon - direct),
     title=r'$\mathrm{Re} \: \Delta B_{n}^{Z}$ / G',
     filename='/temp/lainer_p/NEO-EQ/Bn_diff_Z_Re.png',
-    clim_scale=0.2
+    clim_scale=0.333
 ))
 testcase.plots.append(magdifplot.magdif_2d_triplot(
     node=testcase.node, tri=testcase.tri,

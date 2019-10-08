@@ -12,7 +12,9 @@
    nkpol = 200                                     ! number of knots per poloidal loop
    nflux = 104                                     ! number of flux surfaces up to and counting LCFS
    ti0 = 3.d3                                      ! temperature on magnetic axis 
+   t_min = 2d1                                     ! minimum temperature
    di0 = 5.d11                                     ! density on magnetic axis
+   d_min = 2d11                                    ! minimum density
    damp = 0d0                                      ! damping factor for resonances
    R0 = 172.74467899999999d0                       ! distance of magnetic axis from center in cm
    point_file = '../PRELOAD/points.dat'            ! mesh points from PRELOAD
