@@ -9,7 +9,7 @@ The collective behavior arising from the interactions of the moving charged part
 \begin{gather}
   \int_{\Omega} \diff^{3} r \int_{\symbb{R}^{3}} \diff^{3} v \, f_{s} (\vec{r}, \vec{v}, t) = 1
 \end{gather}
-for any given time $t$. The time evolution of $f_{s}$ is given by the \textsc{Vlasov}--\textsc{Boltzmann} equation
+for any given time $t$. The time evolution of $f_{s}$ is given by the kinetic equation
 \begin{gather}
   \pd[f_{s} (\vec{r}, \vec{v}, t)]{t} + \vec{v} \cdot \grad_{\vec{r}} f_{s} (\vec{r}, \vec{v}, t) + \frac{q_{s}}{m_{s}} \left ( \vec{E} + \frac{1}{c} \vec{v} \times \vec{B} \right ) \cdot \grad_{\vec{v}} f_{s} (\vec{r}, \vec{v}, t) = \left ( \pd[f_{s} (\vec{r}, \vec{v}, t)]{t} \right )_{\text{coll}},
 \end{gather}
@@ -38,7 +38,7 @@ follow. Taking the second moment gives the pressure tensor as
 \begin{gather}
   \symsf{p}_{s} (\vec{r}, t) = n_{0 s} m_{s} \int_{\symbb{R}^{3}} f_{s} (\vec{r}, \vec{v}, t) (\vec{v} - \vec{V}_{s}) (\vec{v} - \vec{V}_{s}) \, \diff^{3} v = n_{0 s} m_{s} \int_{\symbb{R}^{3}} f_{s} (\vec{r}, \vec{v}, t) \vec{v} \vec{v} \, \diff^{3} v - m_{s} n_{s} \vec{V}_{s} \vec{V}_{s},
 \end{gather}
-which reduces to $\symsf{p}_{s} = p_{s} \symsf{I}$ in an isotropic medium, where $\symsf{I}$ is the unit tensor. The latter is assumed when the plasma is dominated by collisions so that the distribution function takes the form of the \textsc{Maxwell} distribution in velocity space. While most plasmas of interest are not in thermodynamic equilibrium, the approximation is good enough for our needs and ideal MHD also gives reasonable results when the assumption does not apply. Now, taking moments of the \textsc{Vlasov}--\textsc{Boltzmann} equation yields the time evolution of the fluid quantities derived above. Taking the zeroth moment gives
+which reduces to $\symsf{p}_{s} = p_{s} \symsf{I}$ in an isotropic medium, where $\symsf{I}$ is the unit tensor. The latter is assumed when the plasma is dominated by collisions so that the distribution function takes the form of the \textsc{Maxwell} distribution in velocity space. While most plasmas of interest are not in thermodynamic equilibrium, the approximation is good enough for our needs and ideal MHD also gives reasonable results when the assumption does not apply. Now, taking moments of the kinetic equation yields the time evolution of the fluid quantities derived above. Taking the zeroth moment gives
 \begin{gather}
   \pd{t} \int_{\symbb{R}^{3}} f_{s} \, \diff^{3} v + \nabla_{\vec{r}} \cdot \int_{\symbb{R}^{3}} \vec{v} f_{s} \, \diff^{3} v + \frac{q_{s}}{m_{s}} \int_{\symbb{R}^{3}} \nabla_{\vec{v}} \cdot \left ( \vec{E} + \frac{1}{c} \vec{v} \times \vec{B} \right ) f_{s} \, \diff^{3} v = \int_{\symbb{R}^{3}} \left ( \pd[f_{s}]{t} \right )_{\text{coll}} \, \diff^{3} v.
 \end{gather}
@@ -54,22 +54,30 @@ Here, $\vec{R}_{s}$ is constrained by $\sum_{s} \vec{R}_{s} = \vec{0}$. Using in
 \begin{gather}
   m_{s} n_{s} \left ( \pd[\vec{V}_{s}]{t} + \vec{V}_{s} \cdot \grad \vec{V}_{s} \right ) + \divg \symsf{p}_{s} - q_{s} n_{s} \left ( \vec{E} + \frac{1}{c} \vec{V}_{s} \times \vec{B} \right ) = \vec{R}_{s}. \label{eq:momentum}
 \end{gather}
-Now, the continuity equation connects a zeroth moment ($n_{s}$) to a first moment ($\vec{V}_{s}$), the momentum equation connects both to a second moment ($\symsf{p}_{s}$), and so on. This hierarchy of equations has to be truncated at some point to give a closed set of equations, which will be discussed later. To complete the picture of two-fluid MHD, we have to consider \textsc{Ohm}'s law with resistivity $\eta$,
-\begin{gather}
-  \vec{E} + \frac{1}{c} \vec{v} \times \vec{B} = \eta \vec{J},
-\end{gather}
-and \textsc{Maxwell}'s equations:
+Now, the continuity equation connects a zeroth moment ($n_{s}$) to a first moment ($\vec{V}_{s}$), the momentum equation connects both to a second moment ($\symsf{p}_{s}$), and so on. This hierarchy of equations has to be truncated at some point to give a closed set of equations, which will be discussed later. To complete the picture of two-fluid MHD, we have to consider \textsc{Maxwell}'s equations:
 \begin{align}
   \divg \vec{E} &= 4 \pi \varrho_{q} = 4 \pi e (n_{i} - n_{e}), \label{eq:gauss_field} \\
   \divg \vec{B} &= 0, \label{eq:no_monopoles_field} \\
   \curl \vec{E} &= -\frac{1}{c} \pd[\vec{B}]{t}, \label{eq:faraday_field} \\
   \curl \vec{B} &= \frac{4 \pi}{c} \vec{J} + \frac{1}{c} \pd[\vec{E}]{t} = \frac{4 \pi}{c} e (n_{i} \vec{V}_{i} - n_{e} \vec{V}_{e}) + \frac{1}{c} \pd[\vec{E}]{t}. \label{eq:ampere_field}
 \end{align}
-Here, we already used fluid quantities with indices $i$ and $e$ for ions and electrons, respectively. Now, we can make some simplifications. First, quasineutrality implies $n_{e} = n_{i} = n$, so the right-hand side of \cref{eq:gauss_field} vanishes. Second, on the time scale considered in MHD, the fields are assumed to be static -- such simulations typically recalculate fields from kinetic theory after a given time increment --, so we can neglect the time derivatives in \textsc{Maxwell}'s equations. As a consequence, the current density is also divergence-free: $\divg \vec{J} = 0$. Third, we reduce the two-fluid picture to a single-fluid picture: Most of the mass is carried by the ions, so we have $\varrho_{m} = m_{i} n$, and the same goes for momentum, so we take $\vec{v} = \vec{V}_{i}$. Temperature is taken as the average of ion and electron temperatures, $T = \frac{1}{2} (T_{i} + T_{e})$, and the pressure is the sum of ion and electron pressures, $p = p_{i} + p_{e} = 2 n T$. Fourth, we close the moment equations by the adiabatic condition
+Here, we already used fluid quantities with indices $i$ and $e$ for ions (with an implicit atomic number of $Z = 1$) and electrons, respectively. Now, we can make some simplifications. First, quasineutrality implies $n_{e} = n_{i} = n$, so the right-hand side of \cref{eq:gauss_field} vanishes. Second, on the time scale considered in MHD, the fields are assumed to be static -- such simulations typically recalculate fields from kinetic theory after a given time increment --, so we can neglect the time derivatives in \textsc{Maxwell}'s equations. As a consequence, the current density is also divergence-free: $\divg \vec{J} = 0$. Third, we reduce the two-fluid picture to a single-fluid picture:
+\begin{align}
+  \varrho_{m} &= m_{e} n_{e} + m_{i} n_{i}, \\
+  \vec{v} &= \frac{m_{e} \vec{V}_{e} + m_{i} \vec{V}_{i}}{m_{e} + m_{i}}, \\
+  \vec{J} &= \vec{J}_{e} + \vec{J}_{i} \\
+  T &= \frac{T_{e} + T_{i}}{2}, \\
+  p &= p_{e} + p_{i} = 2 n T.
+\end{align}
+This also leads to a version of \textsc{Ohm}'s law,
+\begin{gather}
+  \vec{E} + \frac{1}{c} \vec{v} \times \vec{B} = \vec{0}.
+\end{gather}
+Fourth, we close the moment equations by the adiabatic condition
 \begin{gather}
   \frac{\diff}{\diff t} \frac{p}{\varrho_{m}^{\gamma}} = 0,
 \end{gather}
-where $\gamma$ is the adiabatic index. For a monoatomic gas, as is considered in fusion experiments, we have $\gamma = \frac{5}{3}$. Fifth, assuming electrons redistribute much faster than the timescale considered, no essential electric fields can build up in the plasma, and resistivity is effectively zero\footnote{This is where the designation \emph{ideal} comes from -- non-ideal MHD considers effects caused by finite resistivity.}. When we furthermore neglect particle flow, i.e., we assume a static solution, we arrive at the ideal MHD \emph{force balance} equation:
+where $\gamma$ is the adiabatic index. For a monoatomic gas, as is considered in fusion experiments, we have $\gamma = \frac{5}{3}$. Fifth, assuming electrons redistribute much faster than the timescale considered, no essential electric fields can build up in the plasma, and resistivity is effectively zero\footnote{This is where the designation \emph{ideal} comes from -- non-ideal MHD considers effects caused by finite resistivity.}. When we furthermore neglect the inertial term (the first term in \cref{eq:momentum}), i.e., we assume a static solution, we finally arrive at the ideal MHD \emph{force balance} equation:
 \begin{gather}
   c \grad p = \vec{J} \times \vec{B}. \label{eq:ideal-mhd}
 \end{gather}

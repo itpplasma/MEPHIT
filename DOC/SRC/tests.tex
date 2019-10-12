@@ -1,7 +1,7 @@
 \section{Construction of Test Cases}
 \label{sec:tests}
 
-Along with comparison to results from kinetic computations, we consider special test cases altering different components of the calculation. In \cref{sec:nonres}, $\Bvac$ is not taken from \textsc{Biot}--\textsc{Savart} calculations of currents in external coils as per \cref{eq:biot-savart,sec:inputs}, but constructed directly to avoid resonances, at least in the first iteration step. \Cref{sec:analytical} instead looks at the analytical solution in the cylindrical limit on a circular cross-section obtained from KiLCA, effectively changing the grid geometry.
+Along with comparison to results from kinetic computations, we consider special test cases altering different components of the calculation. In \cref{sec:nonres}, $\Bvac$ is not taken from \textsc{Biot}--\textsc{Savart} calculations of currents in external coils as per \cref{eq:biot-savart,sec:inputs}, but constructed directly to avoid resonances, at least in the first iteration step. \Cref{sec:analytical} instead looks at the analytical solution in the cylindrical limit on a circular cross-section obtained from KiLCA \cite{Heyn06}, effectively changing the grid geometry.
 
 \subsection{Generating a Non-Resonant Vacuum Perturbation}
 \label{sec:nonres}
@@ -227,7 +227,7 @@ which is in turn consistent with a scaled toroidal mode number $n$ and an unscal
 \end{align}
 The poloidal spectrum of this result is then approximated by a discrete \textsc{Fourier} transform:
 \begin{gather}
-  \vec{B}_{m n} (r) = \frac{1}{N} \sum_{k = 1}^{N} \vec{B}_{n} (r, \vartheta_{k}) \e^{-\im m \vartheta_{k}}, \quad \vartheta_{k} = \frac{2 \pi k}{N}.
+  \vec{B}_{m n} (r) = \frac{1}{N} \sum_{k = 1}^{N} \vec{B}_{n} (r, \vartheta_{k}) \e^{-\im m \vartheta_{k}}, \quad \vartheta_{k} = \frac{2 \pi k}{N}. \label{eq:DTFT}
 \end{gather}
 Here, $N$ is the number of sample points, which is taken to be one per triangle in the triangle strip at given $r$.
 

@@ -217,7 +217,7 @@ class magdif_poloidal_modes:
 
         if self.r_s_interp is not None:
             s = self.r_s_interp(s)
-            xlabel = r'$r$'
+            xlabel = r'$r$ / cm'
             s_resonant = self.r_s_interp(s_resonant)
 
         # plot non-symmetric modes
@@ -441,7 +441,7 @@ class magdif:
             self.plots.append(magdif_poloidal_modes(
                     self.config['n'] * self.config['kilca_scale_factor'],
                     self.s, self.q, self.datadir, 'Bpmn_r.dat',
-                    r'$\left\vert B_{\mathrm{p}mnr} \right\vert$ / G',
+                    r'$\left\vert B_{mn}^{r} \right\vert$ / G',
                     'Bpmn_vac_r.dat', r_s_interp
             ))
 

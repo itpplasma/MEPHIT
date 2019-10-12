@@ -14,16 +14,16 @@ The equilibrium field $\vec{B}_{0}$ is assumed to be available in GEQDSK format,
 
 While the equilibrium pressure $p_{0}$ should be available from the GEQDSK file and the equilibrium current $\vec{J}_{0}$ can be computed from the equilibrium field via Ampère's law as in \cref{eq:ampere-gen}, another approach is possible. Since we have never used Ampère's law for equilibrium quantities, it is possible to choose a pressure profile and calculate $J_0^{\phi}$ to be consistent with the MHD equilibrium in \cref{eq:mhd-gen}. The latter is the \textsc{Pfirsch}--\textsc{Schlüter} current and its calculation is outlined in \cref{sec:j0phi}. The simplest approach to the pressure profile assumes a linear profile for the particle density $n$ and temperature $T$,
 \begin{align}
-  n^{(k)} &= n_{\text{LCFS}} + \frac{\psi^{(k)} - \psi_{\text{LCFS}}}{\psi_{\text{axis}} - \psi_{\text{LCFS}}} n_{\text{step}}, \label{eq:dens} \\
-  T^{(k)} &= T_{\text{LCFS}} + \frac{\psi^{(k)} - \psi_{\text{LCFS}}}{\psi_{\text{axis}} - \psi_{\text{LCFS}}} T_{\text{step}}, \label{eq:temp}
+  n^{(k)} &= n_{\text{min}} + \frac{\psi^{(k)} - \psi_{\text{min}}}{\psi_{\text{axis}} - \psi_{\text{min}}} (n_{\text{axis}} - n_{\text{min}}), \label{eq:dens} \\
+  T^{(k)} &= T_{\text{min}} + \frac{\psi^{(k)} - \psi_{\text{min}}}{\psi_{\text{axis}} - \psi_{\text{min}}} (T_{\text{axis}} - T_{\text{min}}), \label{eq:temp}
 \end{align}
-where $k$ refers to the index of the flux surface. The subscripts LCFS and axis indicate the value at the separatrix and the magnetic axis, respectively. The configurable values are then the step sizes $n_{\text{step}}$ and $T_{\text{step}}$ as well as $n_{\text{LCFS}}$ and $T_{\text{LCFS}}$. From these, the pressure is calculated by the ideal gas law:
+where $k$ refers to the index of the flux surface. The subscripts \enquote{min} and \enquote{axis} indicate the value at the plasma edge and the magnetic axis, respectively. The configurable values are then $n_{\text{axis}}$ and $T_{\text{axis}}$ as well as $n_{\text{min}}$ and $T_{\text{min}}$. From these, the pressure is calculated by the ideal gas law:
 \begin{gather}
   p_{0} = n k_{\text{B}} T. \label{eq:pres0}
 \end{gather}
 Additionally, with the formulae given above, one can also derive an expression for the equilibrium pressure gradient:
 \begin{gather}
-  p_{0}' (\psi) = n' (\psi) k_{\text{B}} T + n k_{\text{B}} T' (\psi) = \frac{n_{\text{step}} k_{\text{B}} T + n k_{\text{B}} T_{\text{step}}}{\psi_{\text{axis}} - \psi_{\text{LCFS}}}.
+  p_{0}' (\psi) = n' (\psi) k_{\text{B}} T + n k_{\text{B}} T' (\psi) = \frac{(n_{\text{axis}} - n_{\text{min}}) k_{\text{B}} T + n k_{\text{B}} (T_{\text{axis}} - T_{\text{min}})}{\psi_{\text{axis}} - \psi_{\text{min}}}.
 \end{gather}
 Thus all necessary equilibrium quantities are established.
 
