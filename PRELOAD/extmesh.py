@@ -34,6 +34,19 @@ edge = np.genfromtxt(StringIO(''.join(data[NN+NT+1:])),dtype=int)
 elab = edge[:,2]
 edge = edge[:,0:2]
 
+import matplotlib
+import matplotlib.pyplot as plt
+matplotlib.rcParams['text.usetex'] = True
+matplotlib.rcParams['font.family'] = 'serif'
+matplotlib.rcParams['mathtext.fontset'] = 'cm'
+matplotlib.use('Agg')
+plt.figure(figsize=(4.95, 6.6))
+plt.triplot(node[:, 0], node[:, 1], tri-1, linewidth=0.2, color='black')
+plt.axis('equal')
+plt.xlabel(r'$R$ / cm')
+plt.ylabel(r'$Z$ / cm')
+plt.savefig('mesh.png', dpi=300)
+
 # swap node order in reversely indexed triangles
 for kt in range(NT):
     v = node[tri[kt,:]-1,:]
@@ -114,15 +127,13 @@ mesh_points = np.array(mesh.points)
 mesh_tris = np.array(mesh.elements)
 
 # plot outer mesh
-import matplotlib
-import matplotlib.pyplot as plt
-matplotlib.rcParams['text.usetex'] = True
-matplotlib.rcParams['font.family'] = 'serif'
-matplotlib.rcParams['mathtext.fontset'] = 'cm'
-matplotlib.use('Agg')
 plt.figure(figsize=(4.95, 6.6))
 plt.triplot(mesh_points[:, 0], mesh_points[:, 1], mesh_tris, linewidth=0.1,
             color='black')
+plt.axis('equal')
+plt.xlabel(r'$R$ / cm')
+plt.ylabel(r'$Z$ / cm')
+plt.show()
 
 # add new mesh parts
 NNE = NN + len(mesh_points) - len(epoints)
@@ -141,12 +152,12 @@ tri = np.concatenate((tri,mesh_tris))
 edge = np.array(facets[len(epoints):]) - len(epoints) + NN + 1
 
 # plot full mesh
+plt.figure(figsize=(4.95, 6.6))
 plt.triplot(node[:, 0], node[:, 1], tri-1, linewidth=0.05)
 plt.axis('equal')
 plt.xlabel(r'$R$ / cm')
 plt.ylabel(r'$Z$ / cm')
 plt.show()
-plt.savefig('mesh.png', dpi=300)
 
 
 for kt in range(NTE):
