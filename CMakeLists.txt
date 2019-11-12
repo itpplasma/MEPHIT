@@ -32,6 +32,8 @@ add_library(magdif SHARED
   PRELOAD/SRC/bdivfree.f90
   PRELOAD/SRC/orbit_mod.f90
   PRELOAD/SRC/mesh_mod.f90
+  PRELOAD/SRC/binsrc.f90
+  PRELOAD/SRC/plag_coeff.f90
   RUN/SRC/arnoldi.f90
   MHD/SRC/sparse_mod.f90
   MHD/SRC/magdif.f90

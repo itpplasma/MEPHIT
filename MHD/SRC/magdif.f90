@@ -201,8 +201,8 @@ contains
        R0 = R0 * kilca_scale_factor
        n = n * kilca_scale_factor
     end if
-    call init_flux_variables
     call cache_equilibrium_field
+    call init_flux_variables
     call compute_safety_factor
     call read_delayed_config
     if (log_info) then
@@ -720,17 +720,78 @@ contains
        dens = (psi - psimin) / psimax * di0 + d_min
        temp = (psi - psimin) / psimax * ti0 + t_min
        if (log_info)  write (logfile, *) 'temp@axis: ', temp(0), ' dens@axis: ', dens(0)
+       pres0 = dens * temp * ev2erg
+       dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
     case (pres_prof_par)
-       ddens_dpsi = di0 / (psimax - psimin)
-       dtemp_dpsi = ti0 / (psimax - psimin)
+       ddens_dpsi = (di0 - d_min) / (psimax - psimin)
+       dtemp_dpsi = (ti0 - t_min) / (psimax - psimin)
        dens = (psi - psimin) / (psimax - psimin) * (di0 - d_min) + d_min
        temp = (psi - psimin) / (psimax - psimin) * (ti0 - t_min) + t_min
+       pres0 = dens * temp * ev2erg
+       dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
+    case (pres_prof_efit)
+       call interpolate_pres0
+       dens = 0d0
+       temp = 0d0
     case default
        stop 'Error: unknown pressure profile selection'
     end select
-    pres0 = dens * temp * ev2erg
-    dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
   end subroutine init_flux_variables
+
+  subroutine interpolate_pres0
+    use input_files, only: gfile
+
+    character(len = *), parameter :: geqdsk_2000 = '(6a8,3i4)'
+    character(len = *), parameter :: geqdsk_2020 = '(5e16.9)'
+    integer, parameter :: n_lag = 4
+
+    character(len = 10) :: text(6)
+    integer :: fid, k, kf, idum, nw
+    real(dp) :: xdum, lag_coeff(n_lag)
+    real(dp), dimension(:), allocatable :: pres0_eqd, dpres0_dpsi_eqd, psi_eqd
+
+    open(newunit = fid, file = gfile)
+    read(fid, geqdsk_2000) (text(k), k = 1, 6), idum, nw, idum
+    allocate(pres0_eqd(nw))
+    allocate(dpres0_dpsi_eqd(nw))
+    read(fid, geqdsk_2020) (xdum, k = 1, 20 + nw)
+    read(fid, geqdsk_2020) (pres0_eqd(k), k = 1, nw)
+    read(fid, geqdsk_2020) (xdum, k = 1, nw)
+    read(fid, geqdsk_2020) (dpres0_dpsi_eqd(k), k = 1, nw)
+    close(fid)
+    ! convert pascal to barye
+    pres0_eqd = pres0_eqd * 1e1
+    ! convert pascal per weber to barye per maxwell
+    dpres0_dpsi_eqd = dpres0_dpsi_eqd * 1e-7
+
+    allocate(psi_eqd(nw))
+    psi_eqd = psi(0) + [(dble(k-1) / dble(nw-1) * (psi(nflux) - psi(0)), k = 1, nw)]
+    pres0(0) = pres0_eqd(1)
+    dpres0_dpsi(0) = dpres0_dpsi_eqd(1)
+    do kf = 1, nflux-1
+       ! binsrc expects strictly monotonically increasing arrays, so we reverse psi_eqd
+       call binsrc(psi_eqd(ubound(psi_eqd, 1):lbound(psi_eqd, 1):-1), 1, nw, psi(kf), k)
+       k = ubound(psi_eqd, 1) - (k - lbound(psi_eqd, 1)) + 1
+       if (k < n_lag / 2 + 1) then
+          k = n_lag / 2 + 1
+       elseif (k > nw - n_lag / 2 + 1) then
+          k = nw - n_lag / 2 + 1
+       end if
+       call plag_coeff(n_lag, 0, psi(kf), psi_eqd(k-n_lag/2:k+n_lag/2-1), lag_coeff)
+       pres0(kf) = sum(pres0_eqd(k-n_lag/2:k+n_lag/2-1) * lag_coeff)
+       dpres0_dpsi(kf) = sum(dpres0_dpsi_eqd(k-n_lag/2:k+n_lag/2-1) * lag_coeff)
+    end do
+    pres0(nflux) = pres0_eqd(nw)
+    dpres0_dpsi(nflux) = dpres0_dpsi_eqd(nw)
+    ! linear extrapolation for value just outside LCFS
+    pres0(nflux+1) = pres0(nflux) + (pres0(nflux) - pres0(nflux-1))
+    dpres0_dpsi(nflux+1) = dpres0_dpsi(nflux) + &
+         (dpres0_dpsi(nflux) - dpres0_dpsi(nflux-1))
+
+    if (allocated(psi_eqd)) deallocate(psi_eqd)
+    if (allocated(dpres0_dpsi_eqd)) deallocate(dpres0_dpsi_eqd)
+    if (allocated(pres0_eqd)) deallocate(pres0_eqd)
+  end subroutine interpolate_pres0
 
   subroutine cache_equilibrium_field
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
@@ -1412,11 +1473,12 @@ inner: do kt = 1, kt_max(kf)
     real(dp) :: rho_r, rho_z
 
     open(1, file = fluxvar_file, recl = longlines)
-    write (1, *) 0d0, psi(0), q(1), dens(0), temp(0), pres0(0)
+    write (1, *) 0d0, psi(0), q(1), dens(0), temp(0), pres0(0), dpres0_dpsi(0)
     do kf = 1, nflux
        rho_r = mesh_point(kp_low(kf) + 1)%rcoord - mesh_point(1)%rcoord
        rho_z = mesh_point(kp_low(kf) + 1)%zcoord - mesh_point(1)%zcoord
-       write (1, *) hypot(rho_r, rho_z), psi(kf), q(kf), dens(kf), temp(kf), pres0(kf)
+       write (1, *) hypot(rho_r, rho_z), psi(kf), q(kf), dens(kf), temp(kf), &
+            pres0(kf), dpres0_dpsi(kf)
     end do
     close(1)
   end subroutine write_fluxvar
