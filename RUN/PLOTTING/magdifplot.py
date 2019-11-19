@@ -6,9 +6,10 @@ Created on Wed Jun  5 15:39:22 2019
 @author: lainer_p
 """
 
-import sys
-import os
+from sys import argv
+from os import path, cpu_count
 import re
+from enum import Enum
 import f90nml.parser
 import matplotlib
 import matplotlib.pyplot as plt
@@ -108,7 +109,7 @@ class magdif_conv_plot:
 
     def dump_plot(self):
         try:
-            conv = np.loadtxt(os.path.join(self.datadir, self.conv_file))
+            conv = np.loadtxt(path.join(self.datadir, self.conv_file))
         except Exception as err:
             print('Error: {}'.format(err))
             return
@@ -118,11 +119,11 @@ class magdif_conv_plot:
         plt.semilogy(
                 kiter, conv[0] * self.max_eigval ** kiter, 'r-',
                 label=r'$\vert \lambda_{\mathrm{max}} \vert^{k} \Vert'
-                + r' \delta \mathbf{B}_{\mathrm{v}} \Vert_{2}$'
+                + r' \mathbf{B}_{n}^{(0)} \Vert_{2}$'
         )
         plt.semilogy(
                 kiter, conv, 'xk',
-                label=r'$\Vert \delta \mathbf{B}^{(k)} \Vert_{2}$'
+                label=r'$\Vert \mathbf{B}_{n}^{(k)} \Vert_{2}$'
         )
         if self.xlim is not None:
             plt.xlim(self.xlim)
@@ -138,163 +139,131 @@ class magdif_conv_plot:
             plt.title('estimation of convergence')
 
         plt.tight_layout()
-        plt.savefig(os.path.join(self.datadir, 'convergence.pdf'))
+        plt.savefig(path.join(self.datadir, 'convergence.pdf'))
         plt.close()
 
 
-class magdif_poloidal_modes:
-    def __init__(self, n, s, q, datadir, datafile, label, reffile=None,
-                 r_s_interp=None):
-        self.n = n
-        self.s_mhd = s
-        self.q_mhd = q
+class fslabel(Enum):
+    psi_norm = r'$\hat{\psi}$'
+    r = r'$r$ / cm'
+
+
+class magdif_mnDat:
+    def __init__(self, datadir, datafile, q_scaling, rad_coord, label):
         self.datadir = datadir
         self.datafile = datafile
+        self.q_scaling = q_scaling
+        self.rad_coord = rad_coord
         self.label = label
-        self.reffile = reffile
-        self.r_s_interp = r_s_interp
 
-    def dump_plot(self):
-        print('plotting poloidal modes from', self.datafile)
+    def process(self):
+        print('reading poloidal modes from', self.datafile)
         try:
-            data = np.loadtxt(os.path.join(self.datadir, self.datafile))
+            data = np.loadtxt(path.join(self.datadir, self.datafile))
         except Exception as err:
             print('Error: {}'.format(err))
             return
-        if self.reffile is not None:
-            try:
-                ref = np.loadtxt(os.path.join(self.datadir, self.reffile))
-            except Exception as err:
-                print('Error: {}'.format(err))
-                return
-
-        # normalize psi
-        xlabel = r'$\hat{\psi}$'
-        s = (data[:, 0] - data[0, 0]) / (data[-1, 0] - data[0, 0])
+        if self.rad_coord is fslabel.psi_norm:
+            # normalize psi
+            self.rho = (data[:, 0] - data[0, 0]) / (data[-1, 0] - data[0, 0])
+        else:
+            self.rho = data[:, 0]
         # sort data
-        sorting = np.argsort(s)
-        s = s[sorting]
+        sorting = np.argsort(self.rho)
+        self.rho = self.rho[sorting]
         data = data[sorting, :]
-        if self.reffile is not None:
-            ref = ref[sorting, :]
-
-        q = data[:, 1]
-        q_min = np.amin(self.q_mhd)
-        q_max = np.amax(self.q_mhd)
-        q_interp = interpolate.interp1d(self.s_mhd, self.q_mhd, kind='cubic')
-
-        m_resonant = -np.arange(
-                np.ceil(q_min * self.n),
-                np.floor(q_max * self.n) + 1,  # +1 to include end point
-                dtype=int
+        # process remaining data
+        if self.q_scaling == 0:
+            self.q = data[:, 1]
+        else:
+            self.q = data[:, 1] * self.q_scaling
+        self.range = (np.shape(data)[1] - 2) // 2
+        self.m_max = (self.range - 1) // 2
+        self.offset = self.m_max
+        self.abs = np.hypot(
+                data[:, 2:(2 + self.range)], data[:, (2 + self.range):]
         )
-        q_resonant = -m_resonant / self.n
-        s_resonant = np.zeros_like(m_resonant, dtype=float)
-        for k, m in enumerate(m_resonant):
-            def q_resonant_interp(x):
-                return q_interp(x) - q_resonant[k]
-            s_resonant[k] = optimize.brentq(
-                    q_resonant_interp, np.amin(self.s_mhd), np.amax(self.s_mhd)
-            )
-        print(s_resonant)
-        print(np.array([0.608, 0.760, 0.823, 0.861, 0.891, 0.918])**2)
+        self.ymax = np.amax(self.abs, axis=0)
+        self.ymax = np.fmax(self.ymax[self.offset:-1],
+                            self.ymax[self.offset:0:-1])
 
-        data_range = (np.shape(data)[1] - 2) // 2
-        abs_data = np.hypot(
-                data[:, 2:(2 + data_range)], data[:, (2 + data_range):]
-        )
-        if self.reffile is not None:
-            ref_range = (np.shape(ref)[1] - 2) // 2
-            abs_ref = np.hypot(
-                    ref[:, 2:(2 + ref_range)], ref[:, (2 + ref_range):]
-            )
 
-            if data_range != ref_range:
-                print('Different m_max for vacuum and full perturbation field')
-                return
-        m_max = (data_range - 1) // 2
-        offset = m_max
+class magdif_poloidal_plots:
+    def __init__(self, n, psi, q, resonance, ylabel, data, ref=None,
+                 r_interp=None):
+        self.n = n
+        self.psi = psi
+        self.q = q
+        self.resonance = resonance
+        self.ylabel = ylabel
+        self.data = data
+        self.ref = ref
+        self.r_interp = r_interp
 
-        if self.r_s_interp is not None:
-            s = self.r_s_interp(s)
-            xlabel = r'$r$ / cm'
-            s_resonant = self.r_s_interp(s_resonant)
+    def dump_plot(self):
+        if self.r_interp is None:
+            rho = self.psi
+            resonance = self.resonance
+            xlabel = fslabel.psi_norm.value
+        else:
+            rho = self.r_interp(self.psi)
+            resonance = {}
+            for k, v in self.resonance.items():
+                resonance[k] = self.r_interp(v)
+            xlabel = fslabel.r.value
 
         # plot non-symmetric modes
-        fmt = os.path.join(self.datadir,
-                           os.path.splitext(self.datafile)[0] + '_{}.pdf')
+        fmt = path.join(self.data.datadir,
+                        path.splitext(self.data.datafile)[0] + '_{}.pdf')
         horz_plot = 2
         vert_plot = 1
-        for m in range(1, m_max + 1):
-            if self.reffile is not None:
-                yrang = [0, max(
-                        np.amax(abs_data[:, offset - m]),
-                        np.amax(abs_data[:, offset + m]),
-                        np.amax(abs_ref[:, offset - m]),
-                        np.amax(abs_ref[:, offset + m])
-                )]
+        two_squares = (6.6, 3.3)
+        for m_abs in range(1, self.data.m_max):
+            if self.ref is not None and m_abs <= self.ref.m_max:
+                ymax = max(self.data.ymax[m_abs], self.ref.ymax[m_abs])
             else:
-                yrang = [0, max(
-                        np.amax(abs_data[:, offset - m]),
-                        np.amax(abs_data[:, offset + m])
-                )]
-            plt.figure(figsize=(6.6, 3.3))
-            ax = plt.subplot(vert_plot, horz_plot, 1)
-            if self.reffile is not None:
-                plt.plot(s, abs_ref[:, offset + m], 'r--',
-                         label='vacuum perturbation')
-            plt.plot(s, abs_data[:, offset + m], label='full perturbation')
-            ax.legend()
-            ax.ticklabel_format(style='sci', scilimits=(-3, 4))
-            plt.ylim(yrang)
-            # q is negative in result_spectrum.f90
-            plt.title('$m = {}$'.format(-m))
-            plt.ylabel(self.label)
-            plt.xlabel(xlabel)
-            index = [i for (i, val) in enumerate(m_resonant) if abs(val) == m]
-            if len(index) == 1:
-                ax.axvline(s_resonant[index], color='b', alpha=0.5)
-            ax = plt.subplot(vert_plot, horz_plot, 2)
-            if self.reffile is not None:
-                plt.plot(s, abs_ref[:, offset - m], 'r--',
-                         label='vacuum perturbation')
-            plt.plot(s, abs_data[:, offset - m], label='full perturbation')
-            ax.legend()
-            ax.ticklabel_format(style='sci', scilimits=(-3, 4))
-            plt.ylim(yrang)
-            # q is negative in result_spectrum.f90
-            plt.title('$m = {}$'.format(m))
-            plt.xlabel(xlabel)
-            plt.ylabel(self.label)
-            index = [i for (i, val) in enumerate(m_resonant) if abs(val) == m]
-            if len(index) == 1:
-                ax.axvline(s_resonant[index], color='b', alpha=0.5)
+                ymax = self.data.ymax[m_abs]
+            plt.figure(figsize=two_squares)
+            for k in range(horz_plot):
+                ax = plt.subplot(vert_plot, horz_plot, k+1)
+                m = (2 * k - 1) * m_abs
+                if m in resonance:
+                    ax.axvline(resonance[m], color='b', alpha=0.5)
+                # q is negative in result_spectrum.f90, so index is reversed
+                if self.ref is not None and m_abs <= self.ref.m_max:
+                    ax.plot(self.ref.rho, self.ref.abs[:, self.ref.offset - m],
+                            'r--', label=self.ref.label)
+                ax.plot(self.data.rho, self.data.abs[:, self.data.offset - m],
+                        label=self.data.label)
+                ax.legend()
+                ax.ticklabel_format(style='sci', scilimits=(-3, 4))
+                ax.set_ylim(0.0, ymax)
+                ax.set_title('$m = {}$'.format(m))
+                ax.set_ylabel(self.ylabel)
+                ax.set_xlabel(xlabel)
             plt.tight_layout()
             plt.savefig(fmt.format(m))
             plt.close()
         # plot symmetric mode and safety factor
-        plt.figure(figsize=(6.6, 3.3))
+        plt.figure(figsize=two_squares)
         ax = plt.subplot(vert_plot, horz_plot, 1)
-        if self.reffile is not None:
-            plt.plot(s, abs_ref[:, offset], 'r--',
-                     label='vacuum perturbation')
-        plt.plot(s, abs_data[:, offset], label='full perturbation')
+        if self.ref is not None:
+            ax.plot(self.ref.rho, self.ref.abs[:, self.ref.offset],
+                    'r--', label=self.ref.label)
+        ax.plot(self.data.rho, self.data.abs[:, self.data.offset],
+                label=self.data.label)
         ax.legend()
         ax.ticklabel_format(style='sci', scilimits=(-3, 4))
-        plt.title('$m = 0$')
-        plt.xlabel(r'$\hat{\psi}$')
-        plt.ylabel(self.label)
+        ax.set_title('$m = 0$')
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(self.ylabel)
         ax = plt.subplot(vert_plot, horz_plot, 2)
         # q is negative in result_spectrum.f90
-        plt.plot(s, np.abs(q), label='kinetic')
-        if self.r_s_interp is not None:
-            plt.plot(self.r_s_interp(self.s_mhd), self.q_mhd, 'r--',
-                     label='MHD')
-        else:
-            plt.plot(self.s_mhd, self.q_mhd, 'r--', label='MHD')
+        ax.plot(self.data.rho, np.abs(self.data.q), label='kinetic')
+        ax.plot(rho, self.q, 'r--', label='MHD')
         ax.legend()
-        plt.xlabel(xlabel)
-        plt.ylabel(r'$q$')
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel(r'$q$')
         plt.tight_layout()
         plt.savefig(fmt.format(0))
         plt.close()
@@ -320,15 +289,17 @@ class magdif:
 
     def read_fluxvar(self):
         print('reading contents of ', self.config['fluxvar_file'])
-        fluxvar = np.loadtxt(os.path.join(self.datadir,
-                                          self.config['fluxvar_file']))
-        self.rho = fluxvar[:, 0]
+        fluxvar = np.loadtxt(path.join(self.datadir,
+                                       self.config['fluxvar_file']))
+        self.r = fluxvar[:, 0]
         self.psi = fluxvar[:, 1]
         self.q = fluxvar[:, 2]
         self.dens = fluxvar[:, 3]
         self.temp = fluxvar[:, 4]
         self.pres0 = fluxvar[:, 5]
-        self.s = (self.psi - self.psi[0]) / (self.psi[-1] - self.psi[0])
+        self.psi_norm = (self.psi - self.psi[0]) / (self.psi[-1] - self.psi[0])
+        self.r_interp = interpolate.interp1d(self.psi_norm, self.r,
+                                             kind='cubic')
 
     def load_mesh(self):
         with open(self.meshfile, 'r') as f:
@@ -341,6 +312,32 @@ class magdif:
         self.tri = tri[:, 0:3]
         edge = np.loadtxt(StringIO(''.join(data[NN+NT+1:])), dtype=int)
         self.edge = edge[:, 0:2]
+
+    def calc_resonances(self):
+        n = self.config['n']
+        if self.config['kilca_scale_factor'] == 0:
+            q = self.q
+        else:
+            q = self.q * self.config['kilca_scale_factor']
+        q_min = np.amin(q)
+        q_max = np.amax(q)
+        psi_min = np.amin(self.psi_norm)
+        psi_max = np.amax(self.psi_norm)
+        q_interp = interpolate.interp1d(self.psi_norm, q, kind='cubic')
+        m_resonant = -np.arange(
+                np.ceil(q_min * n),
+                np.floor(q_max * n) + 1,  # +1 to include end point
+                dtype=int
+        )
+        q_resonant = -m_resonant / n
+        self.resonance = {}
+        for k, m in enumerate(m_resonant):
+            def q_resonant_interp(x):
+                return q_interp(x) - q_resonant[k]
+            self.resonance[m] = optimize.brentq(
+                    q_resonant_interp, psi_min, psi_max)
+        print(self.resonance.values())
+        print(np.array([0.608, 0.760, 0.823, 0.861, 0.891, 0.918])**2)
 
     @classmethod
     def decorate_filename_vectorplot(cls, datafile, infix):
@@ -358,7 +355,7 @@ class magdif:
             self, datafile, start_column, infix_list, filename_decorator):
         print('reading contents of ', datafile)
         try:
-            contents = np.loadtxt(os.path.join(self.datadir, datafile))
+            contents = np.loadtxt(path.join(self.datadir, datafile))
         except Exception as err:
             print('Error: {}'.format(err))
             return
@@ -371,24 +368,24 @@ class magdif:
 
     def generate_default_plots(self):
         self.plots.append(magdif_1d_cutplot(
-                self.rho, r'$\rho$ / cm', self.psi, r'$\psi$ / Mx',
+                self.r, r'$r$ / cm', self.psi, r'$\psi$ / Mx',
                 'disc poloidal flux', 'plot_psi.pdf'
         ))
         self.plots.append(magdif_1d_cutplot(
-                self.rho, r'$\rho$ / cm', self.q, r'$q$',
+                self.r, r'$r$ / cm', self.q, r'$q$',
                 'safety factor', 'plot_q.pdf'
         ))
         self.plots.append(magdif_1d_cutplot(
-                self.rho, r'$\rho$ / cm', self.dens,
+                self.r, r'$r$ / cm', self.dens,
                 r'$n$ / cm\textsuperscript{-3}',
                 'particle density', 'plot_dens.pdf'
         ))
         self.plots.append(magdif_1d_cutplot(
-                self.rho, r'$\rho$ / cm', self.temp, r'$T$ / eV',
+                self.r, r'$r$ / cm', self.temp, r'$T$ / eV',
                 'temperature', 'plot_temp.pdf'
         ))
         self.plots.append(magdif_1d_cutplot(
-                self.rho, r'$\rho$ / cm', self.pres0,
+                self.r, r'$r$ / cm', self.pres0,
                 r'$p_{0}$ / dyn cm\textsuperscript{-2}',
                 'pressure', 'plot_pres0.pdf'
         ))
@@ -421,28 +418,41 @@ class magdif:
                 self.datadir, 'convergence.dat', self.config['tol'])
         )
 
-        if (os.path.isfile(os.path.join(self.datadir, 'Bmn_psi.dat')) and
-                os.path.isfile(os.path.join(self.datadir, 'Bmn_vac_psi.dat'))):
-            self.plots.append(magdif_poloidal_modes(
-                    self.config['n'], self.s, self.q,
-                    self.datadir, 'Bmn_psi.dat',
+        if self.config['kilca_scale_factor'] == 0:
+            pert = magdif_mnDat(self.datadir, 'Bmn_psi.dat', 0,
+                                fslabel.psi_norm, 'full perturbation')
+            pert.process()
+            vac = magdif_mnDat(self.datadir, 'Bmn_vac_psi.dat', 0,
+                               fslabel.psi_norm, 'vacuum perturbation')
+            vac.process()
+            self.plots.append(magdif_poloidal_plots(
+                    self.config['n'], self.psi_norm, self.q, self.resonance,
                     r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx',
-                    'Bmn_vac_psi.dat'
+                    pert, vac
             ))
-        if os.path.isfile(os.path.join(self.datadir, 'currmn_000_theta.dat')):
-            self.plots.append(magdif_poloidal_modes(
-                    self.config['n'], self.s, self.q,
-                    self.datadir, 'currmn_000_theta.dat',
+            pert = magdif_mnDat(self.datadir, 'currmn_000_theta.dat', 0,
+                                fslabel.psi_norm, 'initial perturbation')
+            pert.process()
+            self.plots.append(magdif_poloidal_plots(
+                    self.config['n'], self.psi_norm, self.q, self.resonance,
                     r'$\left\vert J_{mn \theta}^{(0)} \right\vert$'
-                    + r' / statA cm\textsuperscript{-1}'
+                    + r' / statA cm\textsuperscript{-1}', pert
             ))
-        r_s_interp = interpolate.interp1d(self.s, self.rho, kind='cubic')
-        if os.path.isfile(os.path.join(self.datadir, 'Bpmn_r.dat')):
-            self.plots.append(magdif_poloidal_modes(
-                    self.config['n'] * self.config['kilca_scale_factor'],
-                    self.s, self.q, self.datadir, 'Bpmn_r.dat',
+
+        else:
+            pert = magdif_mnDat(self.datadir, 'Bmn_r.dat',
+                                self.config['kilca_scale_factor'],
+                                fslabel.r, 'full perturbation')
+            pert.process()
+            vac = magdif_mnDat(self.datadir, 'Bmn_vac_r.dat',
+                               self.config['kilca_scale_factor'],
+                               fslabel.r, 'vacuum perturbation')
+            vac.process()
+            self.plots.append(magdif_poloidal_plots(
+                    self.config['n'], self.psi_norm, self.q
+                    * self.config['kilca_scale_factor'], self.resonance,
                     r'$\left\vert B_{mn}^{r} \right\vert$ / G',
-                    'Bpmn_vac_r.dat', r_s_interp
+                    pert, vac, self.r_interp
             ))
 
     def dump_plots(self):
@@ -453,14 +463,15 @@ class magdif:
         self.plots[index].dump_plot()
 
     def dump_plots_parallel(self):
-        with Pool(max(1, os.cpu_count() - 1)) as p:
+        with Pool(max(1, cpu_count() - 1)) as p:
             p.map(self.wrapper, range(len(self.plots)))
 
 
 if __name__ == '__main__':
-    testcase = magdif(sys.argv[1], sys.argv[2], sys.argv[3])
+    testcase = magdif(argv[1], argv[2], argv[3])
     testcase.read_configfile()
     testcase.read_fluxvar()
+    testcase.calc_resonances()
     testcase.load_mesh()
     testcase.generate_default_plots()
     testcase.dump_plots_parallel()

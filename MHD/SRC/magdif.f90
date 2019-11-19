@@ -1489,24 +1489,24 @@ inner: do kt = 1, kt_max(kf)
     character(len = *), intent(in) :: outfile
 
     integer, parameter :: mmax = 24
-    character(len = 17) :: fmt
+    character(len = 19) :: fmt
     complex(dp), dimension(-mmax:mmax) :: coeff_rho, coeff_theta, coeff_zeta, fourier_basis
     integer :: kf, kt, m, fid_rho, fid_theta, fid_zeta
     type(triangle) :: elem
     type(knot) :: tri(3)
     complex(dp) :: pol_comp_r, pol_comp_z, pol_comp_rho, pol_comp_theta
-    real(dp) :: r, z, rmaxis, zmaxis, rho_max, rho, theta, psi_avg
+    real(dp) :: r, z, rmaxis, zmaxis, rho_max, rho, theta
 
-    write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(1e16.9, 1x))'
+    write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(1es22.15, 1x))'
     rmaxis = mesh_point(1)%rcoord
     zmaxis = mesh_point(1)%zcoord
     rho_max = hypot(mesh_point(kp_low(nflux)+1)%rcoord - rmaxis, &
          mesh_point(kp_low(nflux)+1)%zcoord - zmaxis)
-    open(newunit = fid_rho, recl = 2 * longlines, &
+    open(newunit = fid_rho, recl = 3 * longlines, &
          file = decorate_filename(outfile, '', '_r'))
-    open(newunit = fid_theta, recl = 2 * longlines, &
+    open(newunit = fid_theta, recl = 3 * longlines, &
          file = decorate_filename(outfile, '', '_theta'))
-    open(newunit = fid_zeta, recl = 2 * longlines, &
+    open(newunit = fid_zeta, recl = 3 * longlines, &
          file = decorate_filename(outfile, '', '_z'))
     do kf = 1, nflux
        coeff_rho = 0d0
@@ -1540,15 +1540,14 @@ inner: do kt = 1, kt_max(kf)
        coeff_rho = coeff_rho / kt_max(kf)
        coeff_theta = coeff_theta / kt_max(kf)
        coeff_zeta = coeff_zeta / kt_max(kf)
-       psi_avg = 0.5d0 * (psi(kf) + psi(kf-1))
-       write (fid_rho, fmt) psi_avg, q(kf), real(coeff_rho), aimag(coeff_rho)
-       write (fid_theta, fmt) psi_avg, q(kf), real(coeff_theta), aimag(coeff_theta)
-       write (fid_zeta, fmt) psi_avg, q(kf), real(coeff_zeta), aimag(coeff_zeta)
+       write (fid_rho, fmt) rho, q(kf), real(coeff_rho), aimag(coeff_rho)
+       write (fid_theta, fmt) rho, q(kf), real(coeff_theta), aimag(coeff_theta)
+       write (fid_zeta, fmt) rho, q(kf), real(coeff_zeta), aimag(coeff_zeta)
     end do
     do kt = kt_low(nflux+1) + 1, ntri
-       write (fid_rho, fmt) psi(nflux), q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
-       write (fid_theta, fmt) psi(nflux), q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
-       write (fid_zeta, fmt) psi(nflux), q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
+       write (fid_rho, fmt) rho_max, q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
+       write (fid_theta, fmt) rho_max, q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
+       write (fid_zeta, fmt) rho_max, q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
     end do
     close(fid_rho)
     close(fid_theta)

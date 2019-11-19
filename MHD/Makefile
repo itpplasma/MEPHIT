@@ -23,7 +23,7 @@ plots:  convergence.dat \
 spectra: Bmn_psi.dat Bmn_vac_psi.dat currmn_000_theta.dat
 
 clean:
-	rm -f *.pdf *.out Bn*.dat presn*.dat currn*.dat eigvec*.dat plot*.dat j0phi.dat fluxvar.dat Bmn_psi.dat Bmn_vac_psi.dat currmn_000_theta.dat convergence.dat Bpmn*.dat fort.333
+	rm -f *.pdf *.out Bn*.dat presn*.dat currn*.dat eigvec*.dat plot*.dat j0phi.dat fluxvar.dat Bmn*.dat currmn_000_theta.dat convergence.dat fort.333
 
 Bmn_psi.dat: plot_Bn.dat
 	$(call extract_psi, $<, Bn_psi.dat)
