@@ -6,6 +6,7 @@ module magdif
   use for_macrostep, only: t_min, d_min                         ! PRELOAD/SRC/orbit_mod.f90
   use sparse_mod, only: sparse_solve, sparse_matmul             ! MHD/SRC/sparse_mod.f90
   use magdif_config                                             ! MHD/SRC/magdif_config.f90
+  use magdif_util
 
   implicit none
 
@@ -40,6 +41,9 @@ module magdif
   !> are running from 0 for the magnetic axis to #magdif_config::nflux +1 for the first
   !> non-closed flux surface.
   real(dp), allocatable :: psi(:)
+
+  type(g_eqdsk) :: efit
+  type(flux_func) :: fluxvar
 
   !> Safety factor \f$ q \f$ (dimensionless).
   !>
@@ -691,6 +695,8 @@ contains
   !> #psimax, #psi, #magdif_conf::di0, #magdif_conf::d_min, #magdif_conf::ti0 and
   !> #magdif_conf::t_min.
   subroutine init_flux_variables
+    use input_files, only: gfile
+
     integer :: kf
     real(dp) :: ddens_dpsi, dtemp_dpsi, psimin, psimax
 
@@ -730,68 +736,22 @@ contains
        pres0 = dens * temp * ev2erg
        dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
     case (pres_prof_efit)
-       call interpolate_pres0
        dens = 0d0
        temp = 0d0
+       call efit%read(gfile)
+       call fluxvar%init(4, efit%nw, nflux, psi)
+       do kf = 0, nflux
+          pres0(kf) = fluxvar%interp(efit%pres, kf)
+          dpres0_dpsi(kf) = fluxvar%interp(efit%pprime, kf)
+       end do
+       ! linear extrapolation for value just outside LCFS
+       pres0(nflux+1) = pres0(nflux) + (pres0(nflux) - pres0(nflux-1))
+       dpres0_dpsi(nflux+1) = dpres0_dpsi(nflux) + &
+            (dpres0_dpsi(nflux) - dpres0_dpsi(nflux-1))
     case default
        stop 'Error: unknown pressure profile selection'
     end select
   end subroutine init_flux_variables
-
-  subroutine interpolate_pres0
-    use input_files, only: gfile
-
-    character(len = *), parameter :: geqdsk_2000 = '(6a8,3i4)'
-    character(len = *), parameter :: geqdsk_2020 = '(5e16.9)'
-    integer, parameter :: n_lag = 4
-
-    character(len = 10) :: text(6)
-    integer :: fid, k, kf, idum, nw
-    real(dp) :: xdum, lag_coeff(n_lag)
-    real(dp), dimension(:), allocatable :: pres0_eqd, dpres0_dpsi_eqd, psi_eqd
-
-    open(newunit = fid, file = gfile)
-    read(fid, geqdsk_2000) (text(k), k = 1, 6), idum, nw, idum
-    allocate(pres0_eqd(nw))
-    allocate(dpres0_dpsi_eqd(nw))
-    read(fid, geqdsk_2020) (xdum, k = 1, 20 + nw)
-    read(fid, geqdsk_2020) (pres0_eqd(k), k = 1, nw)
-    read(fid, geqdsk_2020) (xdum, k = 1, nw)
-    read(fid, geqdsk_2020) (dpres0_dpsi_eqd(k), k = 1, nw)
-    close(fid)
-    ! convert pascal to barye
-    pres0_eqd = pres0_eqd * 1e1
-    ! convert pascal per weber to barye per maxwell
-    dpres0_dpsi_eqd = dpres0_dpsi_eqd * 1e-7
-
-    allocate(psi_eqd(nw))
-    psi_eqd = psi(0) + [(dble(k-1) / dble(nw-1) * (psi(nflux) - psi(0)), k = 1, nw)]
-    pres0(0) = pres0_eqd(1)
-    dpres0_dpsi(0) = dpres0_dpsi_eqd(1)
-    do kf = 1, nflux-1
-       ! binsrc expects strictly monotonically increasing arrays, so we reverse psi_eqd
-       call binsrc(psi_eqd(ubound(psi_eqd, 1):lbound(psi_eqd, 1):-1), 1, nw, psi(kf), k)
-       k = ubound(psi_eqd, 1) - (k - lbound(psi_eqd, 1)) + 1
-       if (k < n_lag / 2 + 1) then
-          k = n_lag / 2 + 1
-       elseif (k > nw - n_lag / 2 + 1) then
-          k = nw - n_lag / 2 + 1
-       end if
-       call plag_coeff(n_lag, 0, psi(kf), psi_eqd(k-n_lag/2:k+n_lag/2-1), lag_coeff)
-       pres0(kf) = sum(pres0_eqd(k-n_lag/2:k+n_lag/2-1) * lag_coeff)
-       dpres0_dpsi(kf) = sum(dpres0_dpsi_eqd(k-n_lag/2:k+n_lag/2-1) * lag_coeff)
-    end do
-    pres0(nflux) = pres0_eqd(nw)
-    dpres0_dpsi(nflux) = dpres0_dpsi_eqd(nw)
-    ! linear extrapolation for value just outside LCFS
-    pres0(nflux+1) = pres0(nflux) + (pres0(nflux) - pres0(nflux-1))
-    dpres0_dpsi(nflux+1) = dpres0_dpsi(nflux) + &
-         (dpres0_dpsi(nflux) - dpres0_dpsi(nflux-1))
-
-    if (allocated(psi_eqd)) deallocate(psi_eqd)
-    if (allocated(dpres0_dpsi_eqd)) deallocate(dpres0_dpsi_eqd)
-    if (allocated(pres0_eqd)) deallocate(pres0_eqd)
-  end subroutine interpolate_pres0
 
   subroutine cache_equilibrium_field
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &

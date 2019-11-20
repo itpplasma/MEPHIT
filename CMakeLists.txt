@@ -38,6 +38,7 @@ add_library(magdif SHARED
   MHD/SRC/sparse_mod.f90
   MHD/SRC/magdif.f90
   MHD/SRC/magdif_config.f90
+  MHD/SRC/magdif_util.f90
   ${SUITESPARSE_SRC_FILES}
   ${SUPERLU_SRC_FILES}
 )
