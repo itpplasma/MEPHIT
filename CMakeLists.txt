@@ -42,6 +42,16 @@ add_library(magdif SHARED
   ${SUITESPARSE_SRC_FILES}
   ${SUPERLU_SRC_FILES}
 )
+add_library(geomint_mesh SHARED
+  PRELOAD/SRC/binsrc.f90
+  PRELOAD/SRC/field_line_integration_for_SYNCH.f90
+  PRELOAD/SRC/magdata_in_symfluxcoord.f90
+  PRELOAD/SRC/odeint_allroutines.f
+  PRELOAD/SRC/plag_coeff.f90
+  PRELOAD/SRC/points_2d.f90
+  PRELOAD/SRC/preload_for_SYNCH.f90
+  PRELOAD/SRC/spl_three_to_five_mod.f90
+)
 
 # GSL
 find_library(gsl_lib gsl ${GSL_LIB})
@@ -58,6 +68,9 @@ add_executable(magdif_test.x
 )
 add_executable(minimal_example.x
   PRELOAD/SRC/minimal_example.f90
+)
+add_executable(geomint_mesh.x
+  PRELOAD/SRC/geomint_mesh.f90
 )
 
 set_target_properties(minimal_example.x PROPERTIES COMPILE_FLAGS ${FGSL_FLAGS})
@@ -77,4 +90,12 @@ target_link_libraries(minimal_example.x
   blas
   lapack
   ${gsl_lib} ${fgsl_lib}
+)
+target_link_libraries(geomint_mesh.x
+  magdif
+  geomint_mesh
+  ${SUPERLU_LIBRARIES}
+  ${SUITESPARSE_LIBRARIES}
+  blas
+  lapack
 )
