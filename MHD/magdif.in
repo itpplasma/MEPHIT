@@ -10,7 +10,7 @@
    nritz = 30                                      ! number of Ritz eigenvalues
    tol = 5d-1                                      ! threshold for eigenvalues in preconditioner
    nkpol = 200                                     ! number of knots per poloidal loop
-   nflux = 104                                     ! number of flux surfaces up to and counting LCFS
+   nflux = 99                                      ! number of flux surfaces up to and counting LCFS
    ti0 = 3.d3                                      ! temperature on magnetic axis 
    t_min = 2d1                                     ! minimum temperature
    di0 = 5.d13                                     ! density on magnetic axis
@@ -36,5 +36,5 @@
    kilca_scale_factor = 0                          ! scaling factor used in EFIT rmaxis from KiLCA
 /
 &delayed
-   sheet_current_factor = 1*(-1d3, 0d0), 1*(3d2, -3d2), 3*(-1d2, 1d2), 9*(0d0, 0d0)  ! coefficient for sheet currents
+   sheet_current_factor = 1*(-1d3, 0d0), 1*(3d2, -3d2), 3*(-1d2, 1d2), 1*(0d0, 0d0)  ! coefficient for sheet currents
 /

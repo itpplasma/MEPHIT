@@ -7,7 +7,7 @@
 
    n = 2                                                 ! harmonic index of perturbation
    niter = 20                                            ! number of iteration steps
-   nritz = 10                                            ! number of Ritz eigenvalues
+   nritz = 60                                            ! number of Ritz eigenvalues
    tol = 0.5d0                                           ! threshold for eigenvalues in preconditioner
    nkpol = 300                                           ! number of knots per poloidal loop
    nflux = 128                                           ! number of flux surfaces up to and counting LCFS
@@ -35,7 +35,7 @@
    kilca_vac_coeff = (1d-3, 0d0)                         ! integration constant in resonant vacuum perturbation
    kilca_pol_mode = 4                                    ! single poloidal mode number used with KiLCA
    kilca_scale_factor = 1000                             ! scaling factor used in EFIT rmaxis from KiLCA
-   kilca_pol_mode_file = 'Bpmn.dat'                      ! output file for Fourier coefficients
+   kilca_pol_mode_file = 'Bmn.dat'                       ! output file for Fourier coefficients
 /
 &delayed
    sheet_current_factor = 1*(0d0, 0d0), 1*(-1d3, -1d3)  ! coefficients for sheet currents
