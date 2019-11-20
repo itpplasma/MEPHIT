@@ -42,8 +42,8 @@ module magdif
   !> non-closed flux surface.
   real(dp), allocatable :: psi(:)
 
-  type(g_eqdsk) :: efit
-  type(flux_func) :: fluxvar
+  type(g_eqdsk), allocatable :: efit
+  type(flux_func), allocatable :: fluxvar
 
   !> Safety factor \f$ q \f$ (dimensionless).
   !>
@@ -233,6 +233,8 @@ contains
 
   !> Deallocates all previously allocated variables.
   subroutine magdif_cleanup
+    if (allocated(efit)) deallocate(efit)
+    if (allocated(fluxvar)) deallocate(fluxvar)
     if (allocated(q)) deallocate(q)
     if (allocated(m_res)) deallocate(m_res)
     if (allocated(sheet_current_factor)) deallocate(sheet_current_factor)
@@ -738,11 +740,17 @@ contains
     case (pres_prof_efit)
        dens = 0d0
        temp = 0d0
-       call efit%read(gfile)
-       call fluxvar%init(4, efit%nw, nflux, psi)
+       if (.not. allocated(efit)) then
+          allocate(efit)
+          call efit%read(gfile)
+       end if
+       if (.not. allocated(fluxvar)) then
+          allocate(fluxvar)
+          call fluxvar%init(4, efit%nw, nflux, psi)
+       end if
        do kf = 0, nflux
-          pres0(kf) = fluxvar%interp(efit%pres, kf)
-          dpres0_dpsi(kf) = fluxvar%interp(efit%pprime, kf)
+          pres0(kf) = fluxvar%interp(efit%pres, kf, .false.)
+          dpres0_dpsi(kf) = fluxvar%interp(efit%pprime, kf, .false.)
        end do
        ! linear extrapolation for value just outside LCFS
        pres0(nflux+1) = pres0(nflux) + (pres0(nflux) - pres0(nflux-1))
@@ -798,11 +806,12 @@ contains
   !> \f$ \vec{B}_{0} \f$; arbitrary values are assumed. Consistency of MHD equilibrium is
   !> necessary in the derivation, while Ampere's equation is not used.
   subroutine compute_j0phi
+    use input_files, only: gfile
+
     integer :: kf, kt
     real(dp) :: r, z
     real(dp) :: Btor2
-    real(dp) :: B2avg(nflux)
-    real(dp) :: B2avg_half(nflux)
+    real(dp), dimension(nflux) :: B2avg, B2avg_half, ffprime, ffprime_half, pprime_half
     real(dp) :: plot_j0phi
     type(triangle) :: elem
     integer, dimension(2) :: li, lo, lf
@@ -812,6 +821,17 @@ contains
     open(1, file = j0phi_file, recl = longlines)
     B2avg = 0d0
     B2avg_half = 0d0
+    ffprime = 0d0
+    ffprime_half = 0d0
+    pprime_half = 0d0
+    if (.not. allocated(efit)) then
+       allocate(efit)
+       call efit%read(gfile)
+    end if
+    if (.not. allocated(fluxvar)) then
+       allocate(fluxvar)
+       call fluxvar%init(4, efit%nw, nflux, psi)
+    end if
     do kf = 1, nflux
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
@@ -825,16 +845,26 @@ contains
        end do
        B2avg(kf) = B2avg(kf) / kt_max(kf)
        B2avg_half(kf) = B2avg_half(kf) / kt_max(kf)
+       ffprime(kf) = fluxvar%interp(efit%ffprim, kf, .false.)
+       ffprime_half(kf) = fluxvar%interp(efit%ffprim, kf, .true.)
+       pprime_half(kf) = fluxvar%interp(efit%pprime, kf, .true.)
 
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
 
           r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
-          if (full_j0phi) then
+          select case (curr_prof)
+          case (curr_prof_efit)
+             if (orient) then
+                j0phi(kt_low(kf) + kt, ef) = dpres0_dpsi(kf) * r + ffprime(kf) / r
+             else
+                j0phi(kt_low(kf) + kt, ef) = dpres0_dpsi(kf-1) * r + ffprime(kf-1) / r
+             end if
+          case (curr_prof_rot)
              z = sum(mesh_point(lf(:))%zcoord) * 0.5d0
              j0phi(kt_low(kf) + kt, ef) = j0phi_ampere(r, z)
-          else
+          case (curr_prof_ps)
              Btor2 = B0phi(kt_low(kf) + kt, ef) ** 2
              if (.not. orient) then
                 j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf-1) * (1d0 - Btor2 / &
@@ -843,36 +873,45 @@ contains
                 j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf) * (1d0 - Btor2 / &
                      B2avg(kf)) * r
              end if
-          end if
+          end select
 
           r = sum(mesh_point(li(:))%rcoord) * 0.5d0
-          if (full_j0phi) then
+          select case (curr_prof)
+          case (curr_prof_efit)
+             j0phi(kt_low(kf) + kt, ei) = pprime_half(kf) * r + ffprime_half(kf) / r
+          case (curr_prof_rot)
              z = sum(mesh_point(li(:))%zcoord) * 0.5d0
              j0phi(kt_low(kf) + kt, ei) = j0phi_ampere(r, z)
-          else
+          case (curr_prof_ps)
              Btor2 = B0phi(kt_low(kf) + kt, ei) ** 2
              j0phi(kt_low(kf) + kt, ei) = clight * (pres0(kf) - pres0(kf-1)) / &
                   (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
-          end if
+          end select
 
           r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
-          if (full_j0phi) then
+          select case (curr_prof)
+          case (curr_prof_efit)
+             j0phi(kt_low(kf) + kt, eo) = pprime_half(kf) * r + ffprime_half(kf) / r
+          case (curr_prof_rot)
              z = sum(mesh_point(lo(:))%zcoord) * 0.5d0
              j0phi(kt_low(kf) + kt, eo) = j0phi_ampere(r, z)
-          else
+          case (curr_prof_ps)
              Btor2 = B0phi(kt_low(kf) + kt, eo) ** 2
              j0phi(kt_low(kf) + kt, eo) = clight * (pres0(kf) - pres0(kf-1)) / &
                   (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
-          end if
+          end select
 
           call ring_centered_avg_coord(elem, r, z)
-          if (full_j0phi) then
+          select case (curr_prof)
+          case (curr_prof_efit)
+             plot_j0phi = pprime_half(kf) * r + ffprime_half(kf) / r
+          case (curr_prof_rot)
              plot_j0phi = j0phi_ampere(r, z)
-          else
+          case (curr_prof_ps)
              Btor2 = B0phi_Omega(kt_low(kf) + kt) ** 2
              plot_j0phi = clight * (pres0(kf) - pres0(kf-1)) / &
                   (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
-          end if
+          end select
 
           write (1, *) j0phi(kt_low(kf) + kt, 1), j0phi(kt_low(kf) + kt, 2), &
                j0phi(kt_low(kf) + kt, 3), plot_j0phi
