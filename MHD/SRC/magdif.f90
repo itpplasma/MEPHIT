@@ -857,9 +857,11 @@ contains
           select case (curr_prof)
           case (curr_prof_efit)
              if (orient) then
-                j0phi(kt_low(kf) + kt, ef) = dpres0_dpsi(kf) * r + ffprime(kf) / r
+                j0phi(kt_low(kf) + kt, ef) = (dpres0_dpsi(kf) * r + ffprime(kf) / r) &
+                     * clight
              else
-                j0phi(kt_low(kf) + kt, ef) = dpres0_dpsi(kf-1) * r + ffprime(kf-1) / r
+                j0phi(kt_low(kf) + kt, ef) = (dpres0_dpsi(kf-1) * r + ffprime(kf-1) / r) &
+                     * clight
              end if
           case (curr_prof_rot)
              z = sum(mesh_point(lf(:))%zcoord) * 0.5d0
@@ -878,7 +880,8 @@ contains
           r = sum(mesh_point(li(:))%rcoord) * 0.5d0
           select case (curr_prof)
           case (curr_prof_efit)
-             j0phi(kt_low(kf) + kt, ei) = pprime_half(kf) * r + ffprime_half(kf) / r
+             j0phi(kt_low(kf) + kt, ei) = (pprime_half(kf) * r + ffprime_half(kf) / r) &
+                  * clight
           case (curr_prof_rot)
              z = sum(mesh_point(li(:))%zcoord) * 0.5d0
              j0phi(kt_low(kf) + kt, ei) = j0phi_ampere(r, z)
@@ -891,7 +894,8 @@ contains
           r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
           select case (curr_prof)
           case (curr_prof_efit)
-             j0phi(kt_low(kf) + kt, eo) = pprime_half(kf) * r + ffprime_half(kf) / r
+             j0phi(kt_low(kf) + kt, eo) = (pprime_half(kf) * r + ffprime_half(kf) / r) &
+                  * clight
           case (curr_prof_rot)
              z = sum(mesh_point(lo(:))%zcoord) * 0.5d0
              j0phi(kt_low(kf) + kt, eo) = j0phi_ampere(r, z)
@@ -904,7 +908,7 @@ contains
           call ring_centered_avg_coord(elem, r, z)
           select case (curr_prof)
           case (curr_prof_efit)
-             plot_j0phi = pprime_half(kf) * r + ffprime_half(kf) / r
+             plot_j0phi = clight * (pprime_half(kf) * r + ffprime_half(kf) / r)
           case (curr_prof_rot)
              plot_j0phi = j0phi_ampere(r, z)
           case (curr_prof_ps)
@@ -918,7 +922,7 @@ contains
        end do
     end do
     do kt = kt_low(nflux+1) + 1, ntri
-       write (1, *) j0phi(kt, 1), j0phi(kt, 2), j0phi(kt, 3), 0d0
+       write (1, *) j0phi(kt, 1), j0phi(kt, 2), j0phi(kt, 3), 0d0, 0d0
     end do
     close(1)
 
@@ -932,8 +936,9 @@ contains
            dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
       call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
            dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-      rotB_phi = 0.25 / pi * clight * (dBrdZ - dBzdR)
+      rotB_phi = 0.25d0 / pi * clight * (dBrdZ - dBzdR)
     end function j0phi_ampere
+
   end subroutine compute_j0phi
 
   !> Assembles a sparse matrix in coordinate list (COO) representation for use with
