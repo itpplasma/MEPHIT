@@ -217,6 +217,7 @@ contains
     end if
     call write_fluxvar
     call compute_j0phi
+    call check_curr0
 
     if (nonres) then
        call compute_Bn_nonres
@@ -857,11 +858,11 @@ contains
           select case (curr_prof)
           case (curr_prof_efit)
              if (orient) then
-                j0phi(kt_low(kf) + kt, ef) = (dpres0_dpsi(kf) * r + ffprime(kf) / r) &
-                     * clight
+                j0phi(kt_low(kf) + kt, ef) = clight * (dpres0_dpsi(kf) * r + &
+                     0.25d0 / pi * ffprime(kf) / r)
              else
-                j0phi(kt_low(kf) + kt, ef) = (dpres0_dpsi(kf-1) * r + ffprime(kf-1) / r) &
-                     * clight
+                j0phi(kt_low(kf) + kt, ef) = clight * (dpres0_dpsi(kf-1) * r + &
+                     0.25d0 / pi * ffprime(kf-1) / r)
              end if
           case (curr_prof_rot)
              z = sum(mesh_point(lf(:))%zcoord) * 0.5d0
@@ -880,8 +881,8 @@ contains
           r = sum(mesh_point(li(:))%rcoord) * 0.5d0
           select case (curr_prof)
           case (curr_prof_efit)
-             j0phi(kt_low(kf) + kt, ei) = (pprime_half(kf) * r + ffprime_half(kf) / r) &
-                  * clight
+             j0phi(kt_low(kf) + kt, ei) = clight * (pprime_half(kf) * r + &
+                  0.25d0 / pi * ffprime_half(kf) / r)
           case (curr_prof_rot)
              z = sum(mesh_point(li(:))%zcoord) * 0.5d0
              j0phi(kt_low(kf) + kt, ei) = j0phi_ampere(r, z)
@@ -894,8 +895,8 @@ contains
           r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
           select case (curr_prof)
           case (curr_prof_efit)
-             j0phi(kt_low(kf) + kt, eo) = (pprime_half(kf) * r + ffprime_half(kf) / r) &
-                  * clight
+             j0phi(kt_low(kf) + kt, eo) = clight * (pprime_half(kf) * r + &
+                  0.25d0 / pi * ffprime_half(kf) / r)
           case (curr_prof_rot)
              z = sum(mesh_point(lo(:))%zcoord) * 0.5d0
              j0phi(kt_low(kf) + kt, eo) = j0phi_ampere(r, z)
@@ -908,7 +909,8 @@ contains
           call ring_centered_avg_coord(elem, r, z)
           select case (curr_prof)
           case (curr_prof_efit)
-             plot_j0phi = clight * (pprime_half(kf) * r + ffprime_half(kf) / r)
+             plot_j0phi = clight * (pprime_half(kf) * r + &
+                  0.25d0 / pi * ffprime_half(kf) / r)
           case (curr_prof_rot)
              plot_j0phi = j0phi_ampere(r, z)
           case (curr_prof_ps)
@@ -922,7 +924,7 @@ contains
        end do
     end do
     do kt = kt_low(nflux+1) + 1, ntri
-       write (1, *) j0phi(kt, 1), j0phi(kt, 2), j0phi(kt, 3), 0d0, 0d0
+       write (1, *) j0phi(kt, 1), j0phi(kt, 2), j0phi(kt, 3), 0d0
     end do
     close(1)
 
@@ -940,6 +942,63 @@ contains
     end function j0phi_ampere
 
   end subroutine compute_j0phi
+
+
+  subroutine check_curr0
+    integer :: kf, kt, fid_amp, fid_gs
+    real(dp) :: r, z, n_r, n_z, cmp_amp, cmp_gs, Jr, Jp, Jz
+    real(dp), dimension(nflux) :: fpol_half, ffprime_half, pprime_half, fprime_half
+    type(triangle) :: elem
+    integer, dimension(2) :: li, lo, lf
+    integer :: ei, eo, ef
+    logical :: orient
+    real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+
+    open(1, file = 'cmp_prof.dat', recl = longlines)
+    open(newunit = fid_amp, file = 'j0_amp.dat', recl = longlines)
+    open(newunit = fid_gs, file = 'j0_gs.dat', recl = longlines)
+    fpol_half = 0d0
+    ffprime_half = 0d0
+    pprime_half = 0d0
+    do kf = 1, nflux
+       fpol_half(kf) = fluxvar%interp(efit%fpol, kf, .true.)
+       ffprime_half(kf) = fluxvar%interp(efit%ffprim, kf, .true.)
+       fprime_half(kf) = ffprime_half(kf) / fpol_half(kf)
+       pprime_half(kf) = fluxvar%interp(efit%pprime, kf, .true.)
+       cmp_amp = 0d0
+       cmp_gs = 0d0
+       do kt = 1, kt_max(kf)
+          elem = mesh_element(kt_low(kf) + kt)
+          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient, n_r, n_z)
+          call ring_centered_avg_coord(elem, r, z)
+          call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+          dBpdR = dBpdR + fprime_half(kf) * Bz
+          dBpdZ = -fprime_half(kf) * Br
+          Jr = 0.25d0 / pi * clight * ffprime_half(kf) / fpol_half(kf) * &
+               B0r_Omega(kt_low(kf) + kt)
+          Jz = 0.25d0 / pi * clight * ffprime_half(kf) / fpol_half(kf) * &
+               B0z_Omega(kt_low(kf) + kt)
+          Jp = clight * (pprime_half(kf) * r + 0.25d0 / pi * ffprime_half(kf) / r)
+          write (fid_gs, *) Jr, Jp, Jz
+          cmp_gs = cmp_gs + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
+               (n_r * n_r + n_z * n_z) / (psi(kf) - psi(kf-1)) * elem%det_3 / clight
+          Jr = 0.25d0 / pi * clight * (-dBpdZ)
+          Jp = 0.25d0 / pi * clight * (dBrdZ - dBzdR)
+          Jz = 0.25d0 / pi * clight * (dBpdR + Bp / r)
+          write (fid_amp, *) Jr, Jp, Jz
+          cmp_amp = cmp_amp + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
+               (n_r * n_r + n_z * n_z) / (psi(kf) - psi(kf-1)) * elem%det_3 / clight
+       end do
+       cmp_amp = cmp_amp / kt_max(kf)
+       cmp_gs = cmp_gs / kt_max(kf)
+       write (1, *) cmp_amp, cmp_gs
+    end do
+    close(1)
+    close(fid_amp)
+    close(fid_gs)
+  end subroutine check_curr0
 
   !> Assembles a sparse matrix in coordinate list (COO) representation for use with
   !> sparse_mod::sparse_solve().
@@ -1096,11 +1155,12 @@ inner: do kt = 1, kt_max(kf)
   !> and edge 3 from knot 3 to knot 1. It is not assumed that knots are orderd
   !> counter-clockwise locally.
 
-  subroutine get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+  subroutine get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient, nfr, nfz)
     type(triangle), intent(in) :: elem
     integer, dimension(2), intent(out) :: li, lo, lf
     integer, intent(out) :: ei, eo, ef
     logical, intent(out) :: orient
+    real(dp), intent(out), optional :: nfr, nfz
     integer, dimension(3) :: i_knot_diff
     integer :: knot_i, knot_o, knot_f
     integer :: i1, i2
@@ -1169,7 +1229,22 @@ inner: do kt = 1, kt_max(kf)
        if (log_debug) write(logfile, *) errmsg
        stop errmsg
     end if
+    if (present(nfr)) then
+       if (orient) then
+          nfr = mesh_point(lf(2))%zcoord - mesh_point(lf(1))%zcoord
+       else
+          nfr = mesh_point(lf(1))%zcoord - mesh_point(lf(2))%zcoord
+       end if
+    end if
+    if (present(nfz)) then
+       if (orient) then
+          nfz = mesh_point(lf(1))%rcoord - mesh_point(lf(2))%rcoord
+       else
+          nfz = mesh_point(lf(2))%rcoord - mesh_point(lf(1))%rcoord
+       end if
+    end if
   end subroutine get_labeled_edges
+
 
   !> Computes current perturbation #jnflux and #jnphi from equilibrium quantities,
   !> #presn, #bnflux and #bnphi.
@@ -1323,12 +1398,11 @@ inner: do kt = 1, kt_max(kf)
   subroutine compute_Bn_nonres
     integer :: kf, kt
     type(triangle) :: elem
-    type(knot) :: base, tip
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     logical :: orient
     integer :: common_tri(2)
-    real(dp) :: lr, lz, Deltapsi
+    real(dp) :: Deltapsi
     complex(dp) :: Bnpsi
     real(dp) :: r
 
@@ -1341,12 +1415,6 @@ inner: do kt = 1, kt_max(kf)
           else
              Deltapsi = psi(kf-2) - psi(kf)
           end if
-          ! use midpoint of edge f
-          base = mesh_point(lf(1))
-          tip = mesh_point(lf(2))
-          r = (base%rcoord + tip%rcoord) * 0.5d0
-          lr = tip%rcoord - base%rcoord
-          lz = tip%zcoord - base%zcoord
           if (kf == nflux .and. orient) then
              ! triangles outside LCFS are comparatively distorted
              ! use linear extrapolation instead, i.e. a triangle of the same size
@@ -1354,6 +1422,8 @@ inner: do kt = 1, kt_max(kf)
           else
              common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
           end if
+          ! use midpoint of edge f
+          r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
           Bnpsi = -R0 * B0phi(kt_low(kf) + kt, ef) / r
           Bnflux(kt_low(kf) + kt, ef) = Bnpsi * r / Deltapsi * &
                sum(mesh_element(common_tri(:))%det_3)
@@ -1368,6 +1438,34 @@ inner: do kt = 1, kt_max(kf)
     call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
+  subroutine interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)
+    integer, intent(in) :: ktri
+    complex(dp), intent(in) :: pol_flux(:,:)
+    real(dp), intent(in) :: r, z
+    complex(dp), intent(out) :: pol_comp_r, pol_comp_z
+    type(triangle) :: elem
+    type(knot) :: tri(3)
+
+    elem = mesh_element(ktri)
+    tri = mesh_point(elem%i_knot(:))
+    ! edge 1 lies opposite to knot 3, etc.
+    pol_comp_r = 1d0 / elem%det_3 * ( &
+         pol_flux(ktri, 1) * (r - tri(3)%rcoord) + &
+         pol_flux(ktri, 2) * (r - tri(1)%rcoord) + &
+         pol_flux(ktri, 3) * (r - tri(2)%rcoord))
+    pol_comp_z = 1d0 / elem%det_3 * ( &
+         pol_flux(ktri, 1) * (z - tri(3)%zcoord) + &
+         pol_flux(ktri, 2) * (z - tri(1)%zcoord) + &
+         pol_flux(ktri, 3) * (z - tri(2)%zcoord))
+  end subroutine interp_RT0
+
+  pure function sqrt_g(kf, kt, r) result(metric_det)
+    integer, intent(in) :: kf, kt
+    real(dp), intent(in) :: r
+    real(dp) :: metric_det
+    metric_det = -q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
+  end function sqrt_g
+
   subroutine write_vector_plot(pol_flux, tor_comp, outfile)
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
@@ -1375,10 +1473,8 @@ inner: do kt = 1, kt_max(kf)
 
     integer :: kf, kt, n_cutoff
     type(triangle) :: elem
-    type(knot) :: tri(3)
     complex(dp) :: pol_comp_r, pol_comp_z, dens_psi_contravar, proj_theta_covar
     real(dp) :: r, z
-    real(dp) :: sqrt_g
 
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
@@ -1394,32 +1490,15 @@ inner: do kt = 1, kt_max(kf)
     do kf = 1, n_cutoff
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
-          tri = mesh_point(elem%i_knot(:))
           call ring_centered_avg_coord(elem, r, z)
-          ! edge 1 lies opposite to knot 3, etc.
-          pol_comp_r = 1d0 / elem%det_3 * ( &
-               pol_flux(kt_low(kf) + kt, 1) * (r - tri(3)%rcoord) + &
-               pol_flux(kt_low(kf) + kt, 2) * (r - tri(1)%rcoord) + &
-               pol_flux(kt_low(kf) + kt, 3) * (r - tri(2)%rcoord))
-          pol_comp_z = 1d0 / elem%det_3 * ( &
-               pol_flux(kt_low(kf) + kt, 1) * (z - tri(3)%zcoord) + &
-               pol_flux(kt_low(kf) + kt, 2) * (z - tri(1)%zcoord) + &
-               pol_flux(kt_low(kf) + kt, 3) * (z - tri(2)%zcoord))
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          sqrt_g = -q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
+          call interp_RT0(kt_low(kf) + kt, pol_flux, r, z, pol_comp_r, pol_comp_z)
+          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient, n_r, n_z)
           ! projection to contravariant psi component
-          if (orient) then
-             n_r = mesh_point(lf(2))%zcoord - mesh_point(lf(1))%zcoord
-             n_z = mesh_point(lf(1))%rcoord - mesh_point(lf(2))%rcoord
-          else
-             n_r = mesh_point(lf(1))%zcoord - mesh_point(lf(2))%zcoord
-             n_z = mesh_point(lf(2))%rcoord - mesh_point(lf(1))%rcoord
-          end if
           dens_psi_contravar = (pol_comp_r * n_r + pol_comp_z * n_z) * &
-               (psi(kf) - psi(kf-1)) / elem%det_3 * sqrt_g
+               (psi(kf) - psi(kf-1)) / elem%det_3 * sqrt_g(kf, kt, r)
           ! projection to covariant theta component
           proj_theta_covar = -(pol_comp_r * B0r_Omega(kt_low(kf) + kt) + &
-               pol_comp_z * B0z_Omega(kt_low(kf) + kt)) * sqrt_g
+               pol_comp_z * B0z_Omega(kt_low(kf) + kt)) * sqrt_g(kf, kt, r)
           write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), real(pol_comp_z), &
                aimag(pol_comp_z), real(tor_comp(kt_low(kf) + kt)), &
                aimag(tor_comp(kt_low(kf) + kt)), real(dens_psi_contravar), &
@@ -1477,7 +1556,8 @@ inner: do kt = 1, kt_max(kf)
     real(dp) :: rho_r, rho_z
 
     open(1, file = fluxvar_file, recl = longlines)
-    write (1, *) 0d0, psi(0), q(1), dens(0), temp(0), pres0(0), dpres0_dpsi(0)
+    write (1, *) 0d0, psi(0), q(1), dens(0), temp(0), pres0(0), dpres0_dpsi(0), &
+         fluxvar%interp(efit%fpol, 0, .false.), fluxvar%interp(efit%ffprim, 0, .false.)
     do kf = 1, nflux
        rho_r = mesh_point(kp_low(kf) + 1)%rcoord - mesh_point(1)%rcoord
        rho_z = mesh_point(kp_low(kf) + 1)%zcoord - mesh_point(1)%zcoord
@@ -1497,7 +1577,6 @@ inner: do kt = 1, kt_max(kf)
     complex(dp), dimension(-mmax:mmax) :: coeff_rho, coeff_theta, coeff_zeta, fourier_basis
     integer :: kf, kt, m, fid_rho, fid_theta, fid_zeta
     type(triangle) :: elem
-    type(knot) :: tri(3)
     complex(dp) :: pol_comp_r, pol_comp_z, pol_comp_rho, pol_comp_theta
     real(dp) :: r, z, rmaxis, zmaxis, rho_max, rho, theta
 
@@ -1525,16 +1604,7 @@ inner: do kt = 1, kt_max(kf)
           r = rmaxis + rho * cos(theta)
           z = zmaxis + rho * sin(theta)
           elem = mesh_element(kt_low(kf) + kt)
-          tri = mesh_point(elem%i_knot(:))
-          ! edge 1 lies opposite to knot 3, etc.
-          pol_comp_r = 1d0 / elem%det_3 / kilca_scale_factor * ( &
-               pol_flux(kt_low(kf) + kt, 1) * (r - tri(3)%rcoord) + &
-               pol_flux(kt_low(kf) + kt, 2) * (r - tri(1)%rcoord) + &
-               pol_flux(kt_low(kf) + kt, 3) * (r - tri(2)%rcoord))
-          pol_comp_z = 1d0 / elem%det_3 / kilca_scale_factor * ( &
-               pol_flux(kt_low(kf) + kt, 1) * (z - tri(3)%zcoord) + &
-               pol_flux(kt_low(kf) + kt, 2) * (z - tri(1)%zcoord) + &
-               pol_flux(kt_low(kf) + kt, 3) * (z - tri(2)%zcoord))
+          call interp_RT0(kt_low(kf) + kt, pol_flux, r, z, pol_comp_r, pol_comp_z)
           pol_comp_rho = pol_comp_r * cos(theta) + pol_comp_z * sin(theta)
           pol_comp_theta = pol_comp_z * cos(theta) - pol_comp_r * sin(theta)
           coeff_rho = coeff_rho + pol_comp_rho * fourier_basis
