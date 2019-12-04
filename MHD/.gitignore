@@ -1,13 +1,2 @@
-*.dat
-fort.1000
-fort.1001
-fort.1002
-fort.1003
-fort.1004
-fort.1005
-fort.1006
-fort.1007
-fort.333
-*~
-*.mod
-*.o
+*.pdf
+*.log
