@@ -1,0 +1,23 @@
+gamma = 1e3;
+workdir = fileparts(mfilename('fullpath'));
+in_name = fullfile(workdir, 'FIELD/g000001.0001_TCFP_unscaled');
+out_name = fullfile(workdir, 'FIELD/g000001.0001_TCFP');
+
+e = efit(in_name, [], []);
+e.read();
+unscaled_rcentr = e.rcentr;
+e.rcentr = e.rcentr * gamma;
+e.rleft = e.rcentr - 0.5 * e.rdim;
+r_shift = e.rcentr - unscaled_rcentr;
+e.rmaxis = e.rmaxis + r_shift;
+e.rbbbs = e.rbbbs + r_shift;
+e.rlim = e.rlim + r_shift;
+e.simag = e.simag * gamma;
+e.sibry = e.sibry * gamma;
+e.psirz = e.psirz * gamma;
+e.fpol = e.fpol * gamma;
+e.ffprim = e.ffprim * gamma;
+e.pprime = e.pprime / gamma;
+e.qpsi = e.qpsi / gamma;
+e.fname = out_name;
+e.write();

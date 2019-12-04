@@ -50,6 +50,16 @@ program minimal_example
   zmaxis = zmaxis * 1d2
   bphicovar = bcentr * 1d5
 
+  ! write configuration to FreeFem++ (for Delaunay triangulation)
+  open(newunit = fid, file = 'extmesh.idp')
+  write (fid, "('real rmaxis = ', 1es16.9, ';')") rmaxis
+  write (fid, "('real zmaxis = ', 1es16.9, ';')") zmaxis
+  write (fid, "('real rdim = ', 1es16.9, ';')") rdim
+  write (fid, "('real zdim = ', 1es16.9, ';')") zdim
+  write (fid, "('int nkpol = ', 1i3, ';')") nkpol
+  write (fid, "('int nflux = ', 1i3, ';')") nflux
+  close(fid)
+
   ! calculate maximal extent from magnetic axis
   rho_max = min(rmaxis - rleft, rleft + rdim - rmaxis, &
        zdim * 0.5d0 + zmid - zmaxis, zdim * 0.5d0 - zmid + zmaxis)
