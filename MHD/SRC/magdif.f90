@@ -10,47 +10,9 @@ module magdif
 
   implicit none
 
-  !> Unperturbed pressure \f$ p_{0} \f$ in dyn cm^-1.
-  !>
-  !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
-  !> +1, i.e. from the magnetic axis to just outside the last closed flux surface.
-  real(dp), allocatable :: pres0(:)
-
-  !> Derivative of unperturbed pressure w.r.t. flux surface label, \f$ p_{0}'(\psi) \f$.
-  !>
-  !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
-  !> +1, i.e. from the magnetic axis to just outside the last closed flux surface.
-  real(dp), allocatable :: dpres0_dpsi(:)
-
-  !> Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
-  !>
-  !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
-  !> +1, i.e. from the magnetic axis to just outside the last closed flux surface.
-  real(dp), allocatable :: dens(:)
-
-  !> Temperature \f$ T \f$ on flux surface with \f$ k_{\mathrm{B}} T \f$ in eV.
-  !>
-  !> Values are taken on flux surfaces with indices running from 0 to #magdif_config::nflux
-  !> +1, i.e. from the magnetic axis to just outside the last closed flux surface.
-  real(dp), allocatable :: temp(:)
-
-  !> Magnetic flux surface label \f$ \psi \f$ in G cm^2.
-  !>
-  !> \f$ \psi \f$ is the ribbon poloidal flux divided by \f$ 2 \pi \f$. Its sign is
-  !> positive and its magnitude is growing in the radially inward direction. The indices
-  !> are running from 0 for the magnetic axis to #magdif_config::nflux +1 for the first
-  !> non-closed flux surface.
-  real(dp), allocatable :: psi(:)
-
   type(g_eqdsk), allocatable :: efit
   type(flux_func), allocatable :: fluxvar
-
-  !> Safety factor \f$ q \f$ (dimensionless).
-  !>
-  !> Values are taken between two flux surfaces with indices running from 1 to
-  !> #magdif_config::nflux, i.e. from the triangle strip surrounding the magnetic axis
-  !> to the triangle strip just inside the last closed flux surface.
-  real(dp), allocatable :: q(:)
+  type(flux_func_cache), allocatable :: fs
 
   !> Poloidal mode number \f$ m \f$ (dimensionless) in resonance at given flux surface.
   !>
@@ -199,6 +161,7 @@ contains
   !> Initialize magdif module
   subroutine magdif_init
     integer :: m
+
     call init_indices
     call read_mesh
     if (kilca_scale_factor /= 0) then
@@ -236,14 +199,9 @@ contains
   subroutine magdif_cleanup
     if (allocated(efit)) deallocate(efit)
     if (allocated(fluxvar)) deallocate(fluxvar)
-    if (allocated(q)) deallocate(q)
+    if (allocated(fs)) deallocate(fs)
     if (allocated(m_res)) deallocate(m_res)
     if (allocated(sheet_current_factor)) deallocate(sheet_current_factor)
-    if (allocated(pres0)) deallocate(pres0)
-    if (allocated(dpres0_dpsi)) deallocate(dpres0_dpsi)
-    if (allocated(dens)) deallocate(dens)
-    if (allocated(temp)) deallocate(temp)
-    if (allocated(psi)) deallocate(psi)
     if (allocated(B0r)) deallocate(B0r)
     if (allocated(B0phi)) deallocate(B0phi)
     if (allocated(B0z)) deallocate(B0z)
@@ -639,27 +597,26 @@ contains
     integer :: m_res_min, m_res_max, m
     real(dp), dimension(nflux) :: abs_err
 
-    allocate(q(nflux))
-    q = 0d0
-
     do kf = 1, nflux
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
-          q(kf) = q(kf) + B0phi_Omega(kt_low(kf) + kt) * elem%det_3 * 0.5d0
+          fs%q(kf) = fs%q(kf) + B0phi_Omega(kt_low(kf) + kt) * elem%det_3 * 0.5d0
        end do
-       q(kf) = q(kf) * 0.5d0 / pi / (psi(kf) - psi(kf-1))
+       fs%q(kf) = fs%q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
     end do
+    ! linear extrapolation for value at magnetic axis
+    fs%q(0) = fs%q(1) - (fs%q(2) - fs%q(1))
 
     allocate(m_res(nflux))
     m_res = 0
     if (kilca_scale_factor /= 0) then
-       m_res_min = max(ceiling(minval(q) * n), n / kilca_scale_factor + 1)
+       m_res_min = max(ceiling(minval(fs%q) * n), n / kilca_scale_factor + 1)
     else
-       m_res_min = max(ceiling(minval(q) * n), n + 1)
+       m_res_min = max(ceiling(minval(fs%q) * n), n + 1)
     end if
-    m_res_max = floor(maxval(q) * n)
+    m_res_max = floor(maxval(fs%q) * n)
     do m = m_res_max, m_res_min, -1
-       abs_err = [(abs(q(kf) - dble(m) / dble(n)), kf = 1, nflux)]
+       abs_err = [(abs(fs%q(kf) - dble(m) / dble(n)), kf = 1, nflux)]
        m_res(minloc(abs_err, 1)) = m
     end do
     if (log_debug) write (logfile, *) 'resonant m: ', m_res_min, '..', m_res_max
@@ -703,22 +660,33 @@ contains
     integer :: kf
     real(dp) :: ddens_dpsi, dtemp_dpsi, psimin, psimax
 
-    allocate(pres0(0:nflux+1))
-    allocate(dpres0_dpsi(0:nflux+1))
-    allocate(dens(0:nflux+1))
-    allocate(temp(0:nflux+1))
-    allocate(psi(0:nflux+1))
+    !> Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
+    real(dp) :: dens(0:nflux)
+
+    !> Temperature \f$ T \f$ on flux surface with \f$ k_{\mathrm{B}} T \f$ in eV.
+    real(dp) :: temp(0:nflux)
+
+    dens = 0d0
+    temp = 0d0
+
+    allocate(fs)
+    call fs%init(nflux, .false.)
 
     ! magnetic axis at k == 0 is not counted as flux surface
-    psi(0) = mesh_point(1)%psi_pol
+    fs%psi(0) = mesh_point(1)%psi_pol
 
     do kf = 1, nflux
        ! average over the loop to smooth out numerical errors
-       psi(kf) = sum(mesh_point((kp_low(kf) + 1):kp_low(kf+1))%psi_pol) / kp_max(kf)
+       fs%psi(kf) = sum(mesh_point((kp_low(kf) + 1):kp_low(kf+1))%psi_pol) / kp_max(kf)
     end do
 
     ! linear extrapolation for value just outside LCFS
-    psi(nflux+1) = psi(nflux) + (psi(nflux) - psi(nflux-1))
+    fs%psi(nflux+1) = fs%psi(nflux) + (fs%psi(nflux) - fs%psi(nflux-1))
+
+    allocate(efit)
+    call efit%read(gfile)
+    allocate(fluxvar)
+    call fluxvar%init(4, efit%nw, nflux, fs%psi)
 
     psimin = minval(mesh_point%psi_pol)
     psimax = maxval(mesh_point%psi_pol)
@@ -726,37 +694,23 @@ contains
     case (pres_prof_eps)
        ddens_dpsi = di0 / psimax
        dtemp_dpsi = ti0 / psimax
-       dens = (psi - psimin) / psimax * di0 + d_min
-       temp = (psi - psimin) / psimax * ti0 + t_min
+       dens = (fs%psi(:nflux) - psimin) / psimax * di0 + d_min
+       temp = (fs%psi(:nflux) - psimin) / psimax * ti0 + t_min
        if (log_info)  write (logfile, *) 'temp@axis: ', temp(0), ' dens@axis: ', dens(0)
-       pres0 = dens * temp * ev2erg
-       dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
+       fs%p = dens * temp * ev2erg
+       fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
     case (pres_prof_par)
        ddens_dpsi = (di0 - d_min) / (psimax - psimin)
        dtemp_dpsi = (ti0 - t_min) / (psimax - psimin)
-       dens = (psi - psimin) / (psimax - psimin) * (di0 - d_min) + d_min
-       temp = (psi - psimin) / (psimax - psimin) * (ti0 - t_min) + t_min
-       pres0 = dens * temp * ev2erg
-       dpres0_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
+       dens = (fs%psi(:nflux) - psimin) / (psimax - psimin) * (di0 - d_min) + d_min
+       temp = (fs%psi(:nflux) - psimin) / (psimax - psimin) * (ti0 - t_min) + t_min
+       fs%p = dens * temp * ev2erg
+       fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
     case (pres_prof_efit)
-       dens = 0d0
-       temp = 0d0
-       if (.not. allocated(efit)) then
-          allocate(efit)
-          call efit%read(gfile)
-       end if
-       if (.not. allocated(fluxvar)) then
-          allocate(fluxvar)
-          call fluxvar%init(4, efit%nw, nflux, psi)
-       end if
        do kf = 0, nflux
-          pres0(kf) = fluxvar%interp(efit%pres, kf, .false.)
-          dpres0_dpsi(kf) = fluxvar%interp(efit%pprime, kf, .false.)
+          fs%p(kf) = fluxvar%interp(efit%pres, kf, .false.)
+          fs%dp_dpsi(kf) = fluxvar%interp(efit%pprime, kf, .false.)
        end do
-       ! linear extrapolation for value just outside LCFS
-       pres0(nflux+1) = pres0(nflux) + (pres0(nflux) - pres0(nflux-1))
-       dpres0_dpsi(nflux+1) = dpres0_dpsi(nflux) + &
-            (dpres0_dpsi(nflux) - dpres0_dpsi(nflux-1))
     case default
        stop 'Error: unknown pressure profile selection'
     end select
@@ -825,14 +779,6 @@ contains
     ffprime = 0d0
     ffprime_half = 0d0
     pprime_half = 0d0
-    if (.not. allocated(efit)) then
-       allocate(efit)
-       call efit%read(gfile)
-    end if
-    if (.not. allocated(fluxvar)) then
-       allocate(fluxvar)
-       call fluxvar%init(4, efit%nw, nflux, psi)
-    end if
     do kf = 1, nflux
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
@@ -858,10 +804,10 @@ contains
           select case (curr_prof)
           case (curr_prof_efit)
              if (orient) then
-                j0phi(kt_low(kf) + kt, ef) = clight * (dpres0_dpsi(kf) * r + &
+                j0phi(kt_low(kf) + kt, ef) = clight * (fs%dp_dpsi(kf) * r + &
                      0.25d0 / pi * ffprime(kf) / r)
              else
-                j0phi(kt_low(kf) + kt, ef) = clight * (dpres0_dpsi(kf-1) * r + &
+                j0phi(kt_low(kf) + kt, ef) = clight * (fs%dp_dpsi(kf-1) * r + &
                      0.25d0 / pi * ffprime(kf-1) / r)
              end if
           case (curr_prof_rot)
@@ -870,10 +816,10 @@ contains
           case (curr_prof_ps)
              Btor2 = B0phi(kt_low(kf) + kt, ef) ** 2
              if (.not. orient) then
-                j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf-1) * (1d0 - Btor2 / &
+                j0phi(kt_low(kf) + kt, ef) = clight * fs%dp_dpsi(kf-1) * (1d0 - Btor2 / &
                      B2avg(kf-1)) * r
              else
-                j0phi(kt_low(kf) + kt, ef) = clight * dpres0_dpsi(kf) * (1d0 - Btor2 / &
+                j0phi(kt_low(kf) + kt, ef) = clight * fs%dp_dpsi(kf) * (1d0 - Btor2 / &
                      B2avg(kf)) * r
              end if
           end select
@@ -888,8 +834,8 @@ contains
              j0phi(kt_low(kf) + kt, ei) = j0phi_ampere(r, z)
           case (curr_prof_ps)
              Btor2 = B0phi(kt_low(kf) + kt, ei) ** 2
-             j0phi(kt_low(kf) + kt, ei) = clight * (pres0(kf) - pres0(kf-1)) / &
-                  (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+             j0phi(kt_low(kf) + kt, ei) = clight * (fs%p(kf) - fs%p(kf-1)) / &
+                  (fs%psi(kf) - fs%psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
           end select
 
           r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
@@ -902,8 +848,8 @@ contains
              j0phi(kt_low(kf) + kt, eo) = j0phi_ampere(r, z)
           case (curr_prof_ps)
              Btor2 = B0phi(kt_low(kf) + kt, eo) ** 2
-             j0phi(kt_low(kf) + kt, eo) = clight * (pres0(kf) - pres0(kf-1)) / &
-                  (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+             j0phi(kt_low(kf) + kt, eo) = clight * (fs%p(kf) - fs%p(kf-1)) / &
+                  (fs%psi(kf) - fs%psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
           end select
 
           call ring_centered_avg_coord(elem, r, z)
@@ -915,8 +861,8 @@ contains
              plot_j0phi = j0phi_ampere(r, z)
           case (curr_prof_ps)
              Btor2 = B0phi_Omega(kt_low(kf) + kt) ** 2
-             plot_j0phi = clight * (pres0(kf) - pres0(kf-1)) / &
-                  (psi(kf) - psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+             plot_j0phi = clight * (fs%p(kf) - fs%p(kf-1)) / &
+                  (fs%psi(kf) - fs%psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
           end select
 
           write (1, *) j0phi(kt_low(kf) + kt, 1), j0phi(kt_low(kf) + kt, 2), &
@@ -983,13 +929,13 @@ contains
           Jp = clight * (pprime_half(kf) * r + 0.25d0 / pi * ffprime_half(kf) / r)
           write (fid_gs, *) Jr, Jp, Jz
           cmp_gs = cmp_gs + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
-               (n_r * n_r + n_z * n_z) / (psi(kf) - psi(kf-1)) * elem%det_3 / clight
+               (n_r * n_r + n_z * n_z) / (fs%psi(kf) - fs%psi(kf-1)) * elem%det_3 / clight
           Jr = 0.25d0 / pi * clight * (-dBpdZ)
           Jp = 0.25d0 / pi * clight * (dBrdZ - dBzdR)
           Jz = 0.25d0 / pi * clight * (dBpdR + Bp / r)
           write (fid_amp, *) Jr, Jp, Jz
           cmp_amp = cmp_amp + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
-               (n_r * n_r + n_z * n_z) / (psi(kf) - psi(kf-1)) * elem%det_3 / clight
+               (n_r * n_r + n_z * n_z) / (fs%psi(kf) - fs%psi(kf-1)) * elem%det_3 / clight
        end do
        cmp_amp = cmp_amp / kt_max(kf)
        cmp_gs = cmp_gs / kt_max(kf)
@@ -1049,10 +995,6 @@ contains
   end subroutine assemble_sparse
 
   !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
-  !>
-  !> #psi, #dens, #temp, #pres0 and real and imaginary part of #presn are written, in that
-  !> order, to #magdif_conf::presn_file, where line number corresponds to the knot index
-  !> in #mesh_mod::mesh_point.
   subroutine compute_presn
     real(dp) :: r
     real(dp) :: lr, lz  ! edge vector components
@@ -1093,12 +1035,12 @@ inner: do kt = 1, kt_max(kf)
           lr = tip%rcoord - base%rcoord
           lz = tip%zcoord - base%zcoord
 
-          Bnpsi = Bnflux(kt_low(kf) + kt, ef) / r * (psi(kf+1) - psi(kf-1)) / &
+          Bnpsi = Bnflux(kt_low(kf) + kt, ef) / r * (fs%psi(kf+1) - fs%psi(kf-1)) / &
                sum(mesh_element(common_tri(:))%det_3)
 
           kp = lf(1) - kp_low(kf)
 
-          x(kp) = -dpres0_dpsi(kf) * Bnpsi
+          x(kp) = -fs%dp_dpsi(kf) * Bnpsi
 
           a(kp) = (B0r(kt_low(kf) + kt, ef) * lr + B0z(kt_low(kf) + kt, ef) * lz) / &
                (lr ** 2 + lz ** 2)
@@ -1293,7 +1235,7 @@ inner: do kt = 1, kt_max(kf)
           r = sum(mesh_point(li(:))%rcoord) * 0.5d0
           Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(ei)))
           x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / B0flux * &
-               (Bnphi_Gamma / B0phi(ktri, ei) * (pres0(kf) - pres0(kf-1)) - &
+               (Bnphi_Gamma / B0phi(ktri, ei) * (fs%p(kf) - fs%p(kf-1)) - &
                (presn(li(2)) - presn(li(1)))) + j0phi(ktri, ei) * &
                (Bnphi_Gamma / B0phi(ktri, ei) - Bnflux(ktri, ei) / B0flux))
           ! superdiagonal matrix element - edge o
@@ -1306,7 +1248,7 @@ inner: do kt = 1, kt_max(kf)
           r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
           Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(eo)))
           x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / B0flux * &
-               (Bnphi_Gamma / B0phi(ktri, eo) * (pres0(kf-1) - pres0(kf)) - &
+               (Bnphi_Gamma / B0phi(ktri, eo) * (fs%p(kf-1) - fs%p(kf)) - &
                (presn(lo(2)) - presn(lo(1)))) + j0phi(ktri, eo) * &
                (Bnphi_Gamma / B0phi(ktri, eo) - Bnflux(ktri, eo) / B0flux))
        end do
@@ -1411,9 +1353,9 @@ inner: do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           if (orient) then
-             Deltapsi = psi(kf+1) - psi(kf-1)
+             Deltapsi = fs%psi(kf+1) - fs%psi(kf-1)
           else
-             Deltapsi = psi(kf-2) - psi(kf)
+             Deltapsi = fs%psi(kf-2) - fs%psi(kf)
           end if
           if (kf == nflux .and. orient) then
              ! triangles outside LCFS are comparatively distorted
@@ -1463,7 +1405,7 @@ inner: do kt = 1, kt_max(kf)
     integer, intent(in) :: kf, kt
     real(dp), intent(in) :: r
     real(dp) :: metric_det
-    metric_det = -q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
+    metric_det = -fs%q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
   end function sqrt_g
 
   subroutine write_vector_plot(pol_flux, tor_comp, outfile)
@@ -1495,7 +1437,7 @@ inner: do kt = 1, kt_max(kf)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient, n_r, n_z)
           ! projection to contravariant psi component
           dens_psi_contravar = (pol_comp_r * n_r + pol_comp_z * n_z) * &
-               (psi(kf) - psi(kf-1)) / elem%det_3 * sqrt_g(kf, kt, r)
+               (fs%psi(kf) - fs%psi(kf-1)) / elem%det_3 * sqrt_g(kf, kt, r)
           ! projection to covariant theta component
           proj_theta_covar = -(pol_comp_r * B0r_Omega(kt_low(kf) + kt) + &
                pol_comp_z * B0z_Omega(kt_low(kf) + kt)) * sqrt_g(kf, kt, r)
@@ -1535,6 +1477,9 @@ inner: do kt = 1, kt_max(kf)
     close(1)
   end subroutine write_vector_dof
 
+  !> Real and imaginary part of \p scalar_dof (e.g. #presn) are written, in that order,
+  !> to \p outfile (e.g. #magdif_conf::presn_file), where line number corresponds to the
+  !> knot index in #mesh_mod::mesh_point.
   subroutine write_scalar_dof(scalar_dof, outfile)
     complex(dp), intent(in) :: scalar_dof(:)
     character(len = *), intent(in) :: outfile
@@ -1556,13 +1501,11 @@ inner: do kt = 1, kt_max(kf)
     real(dp) :: rho_r, rho_z
 
     open(1, file = fluxvar_file, recl = longlines)
-    write (1, *) 0d0, psi(0), q(1), dens(0), temp(0), pres0(0), dpres0_dpsi(0), &
-         fluxvar%interp(efit%fpol, 0, .false.), fluxvar%interp(efit%ffprim, 0, .false.)
+    write (1, *) 0d0, fs%psi(0), fs%q(0), fs%p(0), fs%dp_dpsi(0)
     do kf = 1, nflux
        rho_r = mesh_point(kp_low(kf) + 1)%rcoord - mesh_point(1)%rcoord
        rho_z = mesh_point(kp_low(kf) + 1)%zcoord - mesh_point(1)%zcoord
-       write (1, *) hypot(rho_r, rho_z), psi(kf), q(kf), dens(kf), temp(kf), &
-            pres0(kf), dpres0_dpsi(kf)
+       write (1, *) hypot(rho_r, rho_z), fs%psi(kf), fs%q(kf), fs%p(kf), fs%dp_dpsi(kf)
     end do
     close(1)
   end subroutine write_fluxvar
@@ -1614,14 +1557,14 @@ inner: do kt = 1, kt_max(kf)
        coeff_rho = coeff_rho / kt_max(kf)
        coeff_theta = coeff_theta / kt_max(kf)
        coeff_zeta = coeff_zeta / kt_max(kf)
-       write (fid_rho, fmt) rho, q(kf), real(coeff_rho), aimag(coeff_rho)
-       write (fid_theta, fmt) rho, q(kf), real(coeff_theta), aimag(coeff_theta)
-       write (fid_zeta, fmt) rho, q(kf), real(coeff_zeta), aimag(coeff_zeta)
+       write (fid_rho, fmt) rho, fs%q(kf), real(coeff_rho), aimag(coeff_rho)
+       write (fid_theta, fmt) rho, fs%q(kf), real(coeff_theta), aimag(coeff_theta)
+       write (fid_zeta, fmt) rho, fs%q(kf), real(coeff_zeta), aimag(coeff_zeta)
     end do
     do kt = kt_low(nflux+1) + 1, ntri
-       write (fid_rho, fmt) rho_max, q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
-       write (fid_theta, fmt) rho_max, q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
-       write (fid_zeta, fmt) rho_max, q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
+       write (fid_rho, fmt) rho_max, fs%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
+       write (fid_theta, fmt) rho_max, fs%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
+       write (fid_zeta, fmt) rho_max, fs%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
     end do
     close(fid_rho)
     close(fid_theta)

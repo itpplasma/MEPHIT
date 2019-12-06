@@ -29,6 +29,36 @@ module magdif_util
     final :: flux_func_destructor
   end type flux_func
 
+  !> Structure containing flux functions evaluated at a specific flux surface, indicated
+  !> by a common array index. For details see flux_func_cache_init().
+  type, public :: flux_func_cache
+     private
+     integer :: nflux
+
+     !> Magnetic flux surface label \f$ \psi \f$ in maxwell.
+     !>
+     !> \f$ \psi \f$ is the disc poloidal flux divided by \f$ 2 \pi \f$. Its sign is
+     !> positive and its magnitude is growing in the radially inward direction.
+     real(dp), dimension(:), allocatable, public :: psi
+
+     real(dp), dimension(:), allocatable, public :: F
+
+     !> Unperturbed pressure \f$ p_{0} \f$ in barye.
+     real(dp), dimension(:), allocatable, public :: p
+
+     real(dp), dimension(:), allocatable, public :: FdF_dpsi
+
+     !> Derivative of unperturbed pressure w.r.t. flux surface label,
+     !> \f$ p_{0}'(\psi) \f$, in barye per maxwell.
+     real(dp), dimension(:), allocatable, public :: dp_dpsi
+
+     !> Safety factor \f$ q \f$ (dimensionless).
+     real(dp), dimension(:), allocatable, public :: q
+   contains
+     procedure :: init => flux_func_cache_init
+     final :: flux_func_cache_destructor
+  end type flux_func_cache
+
 contains
 
   subroutine g_eqdsk_read(this, fname)
@@ -168,5 +198,57 @@ contains
     if (allocated(this%interval)) deallocate(this%interval)
     if (allocated(this%interval_half)) deallocate(this%interval_half)
   end subroutine flux_func_destructor
+
+  !> Set up arrays of cached values of flux functions.
+  !>
+  !> @nflux number of flux surfaces
+  !> @half_step values are taken at flux surfaces (false) or between flux surfaces (true)
+  !>
+  !> For full-grid quantities, values are taken on flux surfaces with indices running
+  !> from 0 to \p nflux, i.e. from the magnetic axis to the separatrix. An exception is
+  !> made for \psi, where the index runs up to \p nflux +1. This value is extrapolated for
+  !> finite differences in magdif::compute_presn() and magdif::compute_bn_nonres().
+  !> For half-grid quantities, values are taken between two flux surfaces with indices
+  !> running from 1 to \p nflux, i.e. from the triangle strip surrounding the magnetic
+  !> axis to the triangle strip just inside the separatrix.
+  subroutine flux_func_cache_init(this, nflux, half_step)
+    class(flux_func_cache), intent(inout) :: this
+    integer, intent(in) :: nflux
+    logical, intent(in) :: half_step
+
+    call flux_func_cache_destructor(this)
+    if (half_step) then
+       allocate(this%psi(nflux))
+       allocate(this%F(nflux))
+       allocate(this%p(nflux))
+       allocate(this%FdF_dpsi(nflux))
+       allocate(this%dp_dpsi(nflux))
+       allocate(this%q(nflux))
+    else
+       allocate(this%psi(0:nflux+1))
+       allocate(this%F(0:nflux))
+       allocate(this%p(0:nflux))
+       allocate(this%FdF_dpsi(0:nflux))
+       allocate(this%dp_dpsi(0:nflux))
+       allocate(this%q(0:nflux))
+    end if
+    this%psi = 0d0
+    this%F = 0d0
+    this%p = 0d0
+    this%FdF_dpsi = 0d0
+    this%dp_dpsi = 0d0
+    this%q = 0d0
+  end subroutine flux_func_cache_init
+
+  subroutine flux_func_cache_destructor(this)
+    type(flux_func_cache), intent(inout) :: this
+
+    if (allocated(this%psi)) deallocate(this%psi)
+    if (allocated(this%F)) deallocate(this%F)
+    if (allocated(this%p)) deallocate(this%p)
+    if (allocated(this%FdF_dpsi)) deallocate(this%FdF_dpsi)
+    if (allocated(this%dp_dpsi)) deallocate(this%dp_dpsi)
+    if (allocated(this%q)) deallocate(this%q)
+  end subroutine flux_func_cache_destructor
 
 end module magdif_util

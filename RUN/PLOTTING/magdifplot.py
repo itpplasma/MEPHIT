@@ -294,9 +294,8 @@ class magdif:
         self.r = fluxvar[:, 0]
         self.psi = fluxvar[:, 1]
         self.q = fluxvar[:, 2]
-        self.dens = fluxvar[:, 3]
-        self.temp = fluxvar[:, 4]
-        self.pres0 = fluxvar[:, 5]
+        self.pres0 = fluxvar[:, 3]
+        self.dpres0_dpsi = fluxvar[:, 4]
         self.psi_norm = (self.psi - self.psi[0]) / (self.psi[-1] - self.psi[0])
         self.r_interp = interpolate.interp1d(self.psi_norm, self.r,
                                              kind='cubic')
@@ -375,15 +374,17 @@ class magdif:
                 self.r, r'$r$ / cm', self.q, r'$q$',
                 'safety factor', 'plot_q.pdf'
         ))
-        self.plots.append(magdif_1d_cutplot(
-                self.r, r'$r$ / cm', self.dens,
-                r'$n$ / cm\textsuperscript{-3}',
-                'particle density', 'plot_dens.pdf'
-        ))
-        self.plots.append(magdif_1d_cutplot(
-                self.r, r'$r$ / cm', self.temp, r'$T$ / eV',
-                'temperature', 'plot_temp.pdf'
-        ))
+# =============================================================================
+#         self.plots.append(magdif_1d_cutplot(
+#                 self.r, r'$r$ / cm', self.dens,
+#                 r'$n$ / cm\textsuperscript{-3}',
+#                 'particle density', 'plot_dens.pdf'
+#         ))
+#         self.plots.append(magdif_1d_cutplot(
+#                 self.r, r'$r$ / cm', self.temp, r'$T$ / eV',
+#                 'temperature', 'plot_temp.pdf'
+#         ))
+# =============================================================================
         self.plots.append(magdif_1d_cutplot(
                 self.r, r'$r$ / cm', self.pres0,
                 r'$p_{0}$ / dyn cm\textsuperscript{-2}',
