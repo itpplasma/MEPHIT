@@ -12,6 +12,7 @@ module magdif
   type(g_eqdsk), allocatable :: efit
   type(flux_func), allocatable :: fluxvar
   type(flux_func_cache), allocatable :: fs
+  type(flux_func_cache), allocatable :: fs_half
 
   !> Poloidal mode number \f$ m \f$ (dimensionless) in resonance at given flux surface.
   !>
@@ -212,6 +213,7 @@ contains
     if (allocated(efit)) deallocate(efit)
     if (allocated(fluxvar)) deallocate(fluxvar)
     if (allocated(fs)) deallocate(fs)
+    if (allocated(fs_half)) deallocate(fs_half)
     if (allocated(m_res)) deallocate(m_res)
     if (allocated(sheet_current_factor)) deallocate(sheet_current_factor)
     if (allocated(B0r)) deallocate(B0r)
@@ -610,26 +612,30 @@ contains
     integer :: m_res_min, m_res_max, m
     real(dp), dimension(nflux) :: abs_err
 
+    fs_half%q = 0d0
     do kf = 1, nflux
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
-          fs%q(kf) = fs%q(kf) + B0phi_Omega(kt_low(kf) + kt) * elem%det_3 * 0.5d0
+          fs_half%q(kf) = fs_half%q(kf) + B0phi_Omega(kt_low(kf) + kt) * elem%det_3
        end do
-       fs%q(kf) = fs%q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
+       fs_half%q(kf) = fs_half%q(kf) * 0.25d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
     end do
-    ! linear extrapolation for value at magnetic axis
+    ! use linear interpolation for full-grid steps for now
+    fs%q(1:nflux-1) = 0.5d0 * (fs_half%q(1:nflux-1) + fs_half%q(2:nflux))
+    ! linear extrapolation for values at separatrix and magnetic axis
+    fs%q(nflux) = fs%q(nflux-1) + (fs%q(nflux-1) - fs%q(nflux-2))
     fs%q(0) = fs%q(1) - (fs%q(2) - fs%q(1))
 
     allocate(m_res(nflux))
     m_res = 0
     if (kilca_scale_factor /= 0) then
-       m_res_min = max(ceiling(minval(fs%q) * n), n / kilca_scale_factor + 1)
+       m_res_min = max(ceiling(minval(fs_half%q) * n), n / kilca_scale_factor + 1)
     else
-       m_res_min = max(ceiling(minval(fs%q) * n), n + 1)
+       m_res_min = max(ceiling(minval(fs_half%q) * n), n + 1)
     end if
-    m_res_max = floor(maxval(fs%q) * n)
+    m_res_max = floor(maxval(fs_half%q) * n)
     do m = m_res_max, m_res_min, -1
-       abs_err = [(abs(fs%q(kf) - dble(m) / dble(n)), kf = 1, nflux)]
+       abs_err = [(abs(fs_half%q(kf) - dble(m) / dble(n)), kf = 1, nflux)]
        m_res(minloc(abs_err, 1)) = m
     end do
     if (log_debug) write (logfile, *) 'resonant m: ', m_res_min, '..', m_res_max
@@ -659,11 +665,25 @@ contains
     ! linear extrapolation for value just outside LCFS
     fs%psi(nflux+1) = fs%psi(nflux) + (fs%psi(nflux) - fs%psi(nflux-1))
 
+    allocate(fs_half)
+    call fs_half%init(nflux, .true.)
+
+    ! use linear interpolation for half-grid steps for now
+    fs_half%psi = 0.5d0 * (fs%psi(0:nflux-1) + fs%psi(1:nflux))
+
     allocate(fluxvar)
-    call fluxvar%init(4, efit%nw, nflux, fs%psi)
+    call fluxvar%init(4, efit%nw, nflux, fs%psi(:nflux), fs_half%psi)
 
     call compute_pres_prof
     call compute_safety_factor
+    do kf = 0, nflux
+       fs%F(kf) = fluxvar%interp(efit%fpol, kf, .false.)
+       fs%FdF_dpsi(kf) = fluxvar%interp(efit%ffprim, kf, .false.)
+    end do
+    do kf = 1, nflux
+       fs_half%F(kf) = fluxvar%interp(efit%fpol, kf, .true.)
+       fs_half%FdF_dpsi(kf) = fluxvar%interp(efit%ffprim, kf, .true.)
+    end do
     call write_fluxvar
   end subroutine init_flux_variables
 
@@ -692,6 +712,10 @@ contains
        if (log_info)  write (logfile, *) 'temp@axis: ', temp(0), ' dens@axis: ', dens(0)
        fs%p = dens * temp * ev2erg
        fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
+       dens(1:) = (fs_half%psi - psimin) / psimax * di0 + d_min
+       temp(1:) = (fs_half%psi - psimin) / psimax * ti0 + t_min
+       fs_half%p = dens(1:) * temp(1:) * ev2erg
+       fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
     case (pres_prof_par)
        ddens_dpsi = (di0 - d_min) / (psimax - psimin)
        dtemp_dpsi = (ti0 - t_min) / (psimax - psimin)
@@ -699,10 +723,18 @@ contains
        temp = (fs%psi(:nflux) - psimin) / (psimax - psimin) * (ti0 - t_min) + t_min
        fs%p = dens * temp * ev2erg
        fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
+       dens(1:) = (fs_half%psi - psimin) / (psimax - psimin) * (di0 - d_min) + d_min
+       temp(1:) = (fs_half%psi - psimin) / (psimax - psimin) * (ti0 - t_min) + t_min
+       fs_half%p = dens(1:) * temp(1:) * ev2erg
+       fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
     case (pres_prof_efit)
        do kf = 0, nflux
           fs%p(kf) = fluxvar%interp(efit%pres, kf, .false.)
           fs%dp_dpsi(kf) = fluxvar%interp(efit%pprime, kf, .false.)
+       end do
+       do kf = 1, nflux
+          fs_half%p(kf) = fluxvar%interp(efit%pres, kf, .false.)
+          fs_half%dp_dpsi(kf) = fluxvar%interp(efit%pprime, kf, .true.)
        end do
     case default
        stop 'Error: unknown pressure profile selection'
@@ -760,7 +792,7 @@ contains
     integer :: kf, kt
     real(dp) :: r, z
     real(dp) :: Btor2
-    real(dp), dimension(nflux) :: B2avg, B2avg_half, ffprime, ffprime_half, pprime_half
+    real(dp), dimension(nflux) :: B2avg, B2avg_half
     real(dp) :: plot_j0phi
     type(triangle) :: elem
     integer, dimension(2) :: li, lo, lf
@@ -770,9 +802,6 @@ contains
     open(1, file = j0phi_file, recl = longlines)
     B2avg = 0d0
     B2avg_half = 0d0
-    ffprime = 0d0
-    ffprime_half = 0d0
-    pprime_half = 0d0
     do kf = 1, nflux
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
@@ -786,9 +815,6 @@ contains
        end do
        B2avg(kf) = B2avg(kf) / kt_max(kf)
        B2avg_half(kf) = B2avg_half(kf) / kt_max(kf)
-       ffprime(kf) = fluxvar%interp(efit%ffprim, kf, .false.)
-       ffprime_half(kf) = fluxvar%interp(efit%ffprim, kf, .true.)
-       pprime_half(kf) = fluxvar%interp(efit%pprime, kf, .true.)
 
        do kt = 1, kt_max(kf)
           elem = mesh_element(kt_low(kf) + kt)
@@ -799,10 +825,10 @@ contains
           case (curr_prof_efit)
              if (orient) then
                 j0phi(kt_low(kf) + kt, ef) = clight * (fs%dp_dpsi(kf) * r + &
-                     0.25d0 / pi * ffprime(kf) / r)
+                     0.25d0 / pi * fs%FdF_dpsi(kf) / r)
              else
                 j0phi(kt_low(kf) + kt, ef) = clight * (fs%dp_dpsi(kf-1) * r + &
-                     0.25d0 / pi * ffprime(kf-1) / r)
+                     0.25d0 / pi * fs%FdF_dpsi(kf-1) / r)
              end if
           case (curr_prof_rot)
              z = sum(mesh_point(lf(:))%zcoord) * 0.5d0
@@ -821,8 +847,8 @@ contains
           r = sum(mesh_point(li(:))%rcoord) * 0.5d0
           select case (curr_prof)
           case (curr_prof_efit)
-             j0phi(kt_low(kf) + kt, ei) = clight * (pprime_half(kf) * r + &
-                  0.25d0 / pi * ffprime_half(kf) / r)
+             j0phi(kt_low(kf) + kt, ei) = clight * (fs_half%dp_dpsi(kf) * r + &
+                  0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
           case (curr_prof_rot)
              z = sum(mesh_point(li(:))%zcoord) * 0.5d0
              j0phi(kt_low(kf) + kt, ei) = j0phi_ampere(r, z)
@@ -835,8 +861,8 @@ contains
           r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
           select case (curr_prof)
           case (curr_prof_efit)
-             j0phi(kt_low(kf) + kt, eo) = clight * (pprime_half(kf) * r + &
-                  0.25d0 / pi * ffprime_half(kf) / r)
+             j0phi(kt_low(kf) + kt, eo) = clight * (fs_half%dp_dpsi(kf) * r + &
+                  0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
           case (curr_prof_rot)
              z = sum(mesh_point(lo(:))%zcoord) * 0.5d0
              j0phi(kt_low(kf) + kt, eo) = j0phi_ampere(r, z)
@@ -849,8 +875,8 @@ contains
           call ring_centered_avg_coord(elem, r, z)
           select case (curr_prof)
           case (curr_prof_efit)
-             plot_j0phi = clight * (pprime_half(kf) * r + &
-                  0.25d0 / pi * ffprime_half(kf) / r)
+             plot_j0phi = clight * (fs_half%dp_dpsi(kf) * r + &
+                  0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
           case (curr_prof_rot)
              plot_j0phi = j0phi_ampere(r, z)
           case (curr_prof_ps)
@@ -887,7 +913,6 @@ contains
   subroutine check_curr0
     integer :: kf, kt, fid_amp, fid_gs
     real(dp) :: r, z, n_r, n_z, cmp_amp, cmp_gs, Jr, Jp, Jz
-    real(dp), dimension(nflux) :: fpol_half, ffprime_half, pprime_half, fprime_half
     type(triangle) :: elem
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
@@ -898,14 +923,7 @@ contains
     open(1, file = 'cmp_prof.dat', recl = longlines)
     open(newunit = fid_amp, file = 'j0_amp.dat', recl = longlines)
     open(newunit = fid_gs, file = 'j0_gs.dat', recl = longlines)
-    fpol_half = 0d0
-    ffprime_half = 0d0
-    pprime_half = 0d0
     do kf = 1, nflux
-       fpol_half(kf) = fluxvar%interp(efit%fpol, kf, .true.)
-       ffprime_half(kf) = fluxvar%interp(efit%ffprim, kf, .true.)
-       fprime_half(kf) = ffprime_half(kf) / fpol_half(kf)
-       pprime_half(kf) = fluxvar%interp(efit%pprime, kf, .true.)
        cmp_amp = 0d0
        cmp_gs = 0d0
        do kt = 1, kt_max(kf)
@@ -914,13 +932,13 @@ contains
           call ring_centered_avg_coord(elem, r, z)
           call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          dBpdR = dBpdR + fprime_half(kf) * Bz
-          dBpdZ = -fprime_half(kf) * Br
-          Jr = 0.25d0 / pi * clight * ffprime_half(kf) / fpol_half(kf) * &
+          dBpdR = dBpdR + fs_half%FdF_dpsi(kf) / fs_half%F(kf) * Bz
+          dBpdZ = -fs_half%FdF_dpsi(kf) / fs_half%F(kf) * Br
+          Jr = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * &
                B0r_Omega(kt_low(kf) + kt)
-          Jz = 0.25d0 / pi * clight * ffprime_half(kf) / fpol_half(kf) * &
+          Jz = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * &
                B0z_Omega(kt_low(kf) + kt)
-          Jp = clight * (pprime_half(kf) * r + 0.25d0 / pi * ffprime_half(kf) / r)
+          Jp = clight * (fs_half%dp_dpsi(kf) * r + 0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
           write (fid_gs, *) Jr, Jp, Jz
           cmp_gs = cmp_gs + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
                (n_r * n_r + n_z * n_z) / (fs%psi(kf) - fs%psi(kf-1)) * elem%det_3 / clight
@@ -1351,7 +1369,7 @@ inner: do kt = 1, kt_max(kf)
     integer, intent(in) :: kf, kt
     real(dp), intent(in) :: r
     real(dp) :: metric_det
-    metric_det = -fs%q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
+    metric_det = -fs_half%q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
   end function sqrt_g
 
   subroutine write_vector_plot(pol_flux, tor_comp, outfile)
@@ -1447,11 +1465,12 @@ inner: do kt = 1, kt_max(kf)
     real(dp) :: rho_r, rho_z
 
     open(1, file = fluxvar_file, recl = longlines)
-    write (1, *) 0d0, fs%psi(0), fs%q(0), fs%p(0), fs%dp_dpsi(0)
+    write (1, *) 0d0, fs%psi(0), fs_half%q(1), fs%p(0), fs%dp_dpsi(0)
     do kf = 1, nflux
        rho_r = mesh_point(kp_low(kf) + 1)%rcoord - mesh_point(1)%rcoord
        rho_z = mesh_point(kp_low(kf) + 1)%zcoord - mesh_point(1)%zcoord
-       write (1, *) hypot(rho_r, rho_z), fs%psi(kf), fs%q(kf), fs%p(kf), fs%dp_dpsi(kf)
+       write (1, *) hypot(rho_r, rho_z), fs%psi(kf), fs_half%q(kf), fs%p(kf), &
+            fs%dp_dpsi(kf)
     end do
     close(1)
   end subroutine write_fluxvar
@@ -1503,14 +1522,14 @@ inner: do kt = 1, kt_max(kf)
        coeff_rho = coeff_rho / kt_max(kf)
        coeff_theta = coeff_theta / kt_max(kf)
        coeff_zeta = coeff_zeta / kt_max(kf)
-       write (fid_rho, fmt) rho, fs%q(kf), real(coeff_rho), aimag(coeff_rho)
-       write (fid_theta, fmt) rho, fs%q(kf), real(coeff_theta), aimag(coeff_theta)
-       write (fid_zeta, fmt) rho, fs%q(kf), real(coeff_zeta), aimag(coeff_zeta)
+       write (fid_rho, fmt) rho, fs_half%q(kf), real(coeff_rho), aimag(coeff_rho)
+       write (fid_theta, fmt) rho, fs_half%q(kf), real(coeff_theta), aimag(coeff_theta)
+       write (fid_zeta, fmt) rho, fs_half%q(kf), real(coeff_zeta), aimag(coeff_zeta)
     end do
     do kt = kt_low(nflux+1) + 1, ntri
-       write (fid_rho, fmt) rho_max, fs%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
-       write (fid_theta, fmt) rho_max, fs%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
-       write (fid_zeta, fmt) rho_max, fs%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
+       write (fid_rho, fmt) rho_max, fs_half%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
+       write (fid_theta, fmt) rho_max, fs_half%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
+       write (fid_zeta, fmt) rho_max, fs_half%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
     end do
     close(fid_rho)
     close(fid_theta)

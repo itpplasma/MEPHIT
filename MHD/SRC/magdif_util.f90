@@ -175,14 +175,15 @@ contains
     if (allocated(this%pprime)) deallocate(this%pprime)
   end subroutine g_eqdsk_destructor
 
-  subroutine flux_func_init(this, n_lag, nw, nflux, psi)
+  subroutine flux_func_init(this, n_lag, nw, nflux, psi, psi_half)
     use magdif_config, only: logfile, log_err
     class(flux_func), intent(inout) :: this
     integer, intent(in) :: n_lag
     integer, intent(in) :: nw
     integer, intent(in) :: nflux
     real(dp), intent(in), dimension(0:nflux) :: psi
-    real(dp) :: coeff(n_lag), psi_eqd(nw), psi_half(nflux)
+    real(dp), intent(in), dimension(1:nflux) :: psi_half
+    real(dp) :: coeff(n_lag), psi_eqd(nw)
     integer :: k, kf
 
     if (n_lag >= nw) then
@@ -195,8 +196,6 @@ contains
     this%nw = nw
     this%nflux = nflux
     psi_eqd = psi(0) + [(dble(k-1) / dble(nw-1) * (psi(nflux) - psi(0)), k = 1, nw)]
-    ! use linear interpolation for half-grid steps for now
-    psi_half = 0.5d0 * (psi(0:nflux-1) + psi(1:nflux))
     allocate(this%lag_coeff(n_lag, nflux-1))
     allocate(this%lag_coeff_half(n_lag, nflux))
     allocate(this%interval(nflux-1))
