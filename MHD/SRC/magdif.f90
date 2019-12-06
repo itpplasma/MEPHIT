@@ -1,12 +1,11 @@
 module magdif
-  use from_nrtype, only: dp                                     ! PRELOAD/SRC/from_nrtype.f90
-  use constants, only: pi, ev2erg                               ! PRELOAD/SRC/orbit_mod.f90
-  use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, & ! PRELOAD/SRC/mesh_mod.f90
-       knot, triangle
-  use for_macrostep, only: t_min, d_min                         ! PRELOAD/SRC/orbit_mod.f90
-  use sparse_mod, only: sparse_solve, sparse_matmul             ! MHD/SRC/sparse_mod.f90
-  use magdif_config                                             ! MHD/SRC/magdif_config.f90
-  use magdif_util
+  use from_nrtype, only: dp                            ! PRELOAD/SRC/from_nrtype.f90
+  use constants, only: pi                              ! PRELOAD/SRC/orbit_mod.f90
+  use mesh_mod, only: npoint, ntri, knot, triangle, &  ! PRELOAD/SRC/mesh_mod.f90
+       mesh_point, mesh_element
+  use sparse_mod, only: sparse_solve, sparse_matmul    ! MHD/SRC/sparse_mod.f90
+  use magdif_config                                    ! MHD/SRC/magdif_config.f90
+  use magdif_util                                      ! MHD/SRC/magdif_util.f90
 
   implicit none
 
@@ -160,17 +159,29 @@ contains
 
   !> Initialize magdif module
   subroutine magdif_init
+    use input_files, only: gfile
     integer :: m
 
+    ! only depends on config variables
     call init_indices
-    call read_mesh
     if (kilca_scale_factor /= 0) then
        R0 = R0 * kilca_scale_factor
        n = n * kilca_scale_factor
     end if
+
+    call read_mesh
+
+    ! depends on mesh data
     call cache_equilibrium_field
+
+    ! needs initialized field_eq
+    allocate(efit)
+    call efit%read(gfile)
+
+    ! depends on mesh data, equilibrium field and EFIT profiles
     call init_flux_variables
-    call compute_safety_factor
+
+    ! depends on safety factor
     call read_delayed_config
     if (log_info) then
        write (logfile, *) 'poloidal mode number, sheet current factor'
@@ -178,7 +189,8 @@ contains
           write (logfile, *) m, sheet_current_factor(m)
        end do
     end if
-    call write_fluxvar
+
+    ! depends on flux variables
     call compute_j0phi
     call check_curr0
 
@@ -312,7 +324,7 @@ contains
                matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn - Bn_prev)))
           call unpack2(Bnflux, Bnphi, Bn)
           call check_redundant_edges(Bnflux, -1d0, 'B_n')
-          call check_div_free(Bnflux, Bnphi, rel_err_Bn, 'B_n')
+          call check_div_free(Bnflux, Bnphi, n, rel_err_Bn, 'B_n')
        end if
 
        call unpack2(Bnflux_diff, Bnphi_diff, Bn - Bn_prev)
@@ -498,9 +510,10 @@ contains
   !> This subroutine calculates the divergence via the divergence theorem, i.e. by adding
   !> up the fluxes of the vector field through triangle edges. If this sum, divided by the
   !> absolute flux, is higher than \p rel_err on any triangle, it halts the program.
-  subroutine check_div_free(pol_flux, tor_comp, rel_err, field_name)
+  subroutine check_div_free(pol_flux, tor_comp, n, rel_err, field_name)
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
+    integer, intent(in) :: n
     real(dp), intent(in) :: rel_err
     character(len = *), intent(in) :: field_name
 
@@ -582,7 +595,7 @@ contains
     end do
     close(1)
 
-    call check_div_free(Bnflux, Bnphi, rel_err_Bn, 'B_n')
+    call check_div_free(Bnflux, Bnphi, n, rel_err_Bn, 'B_n')
     call check_redundant_edges(Bnflux, -1d0, 'B_n')
   end subroutine read_Bn
 
@@ -624,29 +637,6 @@ contains
     sheet_current_factor = (0d0, 0d0)
   end subroutine compute_safety_factor
 
-  !> Computes the "weighted" centroid for a triangle so that it is approximately
-  !> equidistant between the enclosing flux surfaces, independent of triangle orientation.
-  !>
-  !> @param elem the triangle for which the centroid is to be computed
-  !> @param r radial cylindrical coordinate of the centroid
-  !> @param z axial cylindrical coordinate of the centroid
-  !>
-  !> Depending on the orientation of the triangle (see also \p orient of
-  !> get_labeled_edges()), two knots lie on the inner flux surface and one on the outer
-  !> one, or vice versa. A simple arithmetic mean of the three knots' coordinates would
-  !> place the centroid closer to the inner flux surface for one orientation and closer
-  !> to the outer one for the other. To counteract this, the "lonely" knot is counted
-  !> twice in the averaging procedure, i.e. with double weighting.
-  pure subroutine ring_centered_avg_coord(elem, r, z)
-    type(triangle), intent(in) :: elem
-    real(dp), intent(out) :: r, z
-    type(knot), dimension(3) :: knots
-
-    knots = mesh_point(elem%i_knot)
-    r = (sum(knots%rcoord) + knots(elem%knot_h)%rcoord) * 0.25d0
-    z = (sum(knots%zcoord) + knots(elem%knot_h)%zcoord) * 0.25d0
-  end subroutine ring_centered_avg_coord
-
   !> Initializes quantities that are constant on each flux surface. The safety factor #q
   !> is initialized separately in compute_safety_factor().
   !>
@@ -655,8 +645,31 @@ contains
   !> #psimax, #psi, #magdif_conf::di0, #magdif_conf::d_min, #magdif_conf::ti0 and
   !> #magdif_conf::t_min.
   subroutine init_flux_variables
-    use input_files, only: gfile
+    integer :: kf
 
+    allocate(fs)
+    call fs%init(nflux, .false.)
+
+    ! magnetic axis at k == 0 is not counted as flux surface
+    fs%psi(0) = mesh_point(1)%psi_pol
+    do kf = 1, nflux
+       ! average over the loop to smooth out numerical errors
+       fs%psi(kf) = sum(mesh_point((kp_low(kf) + 1):kp_low(kf+1))%psi_pol) / kp_max(kf)
+    end do
+    ! linear extrapolation for value just outside LCFS
+    fs%psi(nflux+1) = fs%psi(nflux) + (fs%psi(nflux) - fs%psi(nflux-1))
+
+    allocate(fluxvar)
+    call fluxvar%init(4, efit%nw, nflux, fs%psi)
+
+    call compute_pres_prof
+    call compute_safety_factor
+    call write_fluxvar
+  end subroutine init_flux_variables
+
+  subroutine compute_pres_prof
+    use for_macrostep, only: t_min, d_min  ! PRELOAD/SRC/orbit_mod.f90
+    use constants, only: ev2erg            ! PRELOAD/SRC/orbit_mod.f90
     integer :: kf
     real(dp) :: ddens_dpsi, dtemp_dpsi, psimin, psimax
 
@@ -668,26 +681,6 @@ contains
 
     dens = 0d0
     temp = 0d0
-
-    allocate(fs)
-    call fs%init(nflux, .false.)
-
-    ! magnetic axis at k == 0 is not counted as flux surface
-    fs%psi(0) = mesh_point(1)%psi_pol
-
-    do kf = 1, nflux
-       ! average over the loop to smooth out numerical errors
-       fs%psi(kf) = sum(mesh_point((kp_low(kf) + 1):kp_low(kf+1))%psi_pol) / kp_max(kf)
-    end do
-
-    ! linear extrapolation for value just outside LCFS
-    fs%psi(nflux+1) = fs%psi(nflux) + (fs%psi(nflux) - fs%psi(nflux-1))
-
-    allocate(efit)
-    call efit%read(gfile)
-    allocate(fluxvar)
-    call fluxvar%init(4, efit%nw, nflux, fs%psi)
-
     psimin = minval(mesh_point%psi_pol)
     psimax = maxval(mesh_point%psi_pol)
     select case (pres_prof)
@@ -714,7 +707,8 @@ contains
     case default
        stop 'Error: unknown pressure profile selection'
     end select
-  end subroutine init_flux_variables
+  end subroutine compute_pres_prof
+
 
   subroutine cache_equilibrium_field
     real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
@@ -945,54 +939,6 @@ contains
     close(fid_amp)
     close(fid_gs)
   end subroutine check_curr0
-
-  !> Assembles a sparse matrix in coordinate list (COO) representation for use with
-  !> sparse_mod::sparse_solve().
-  !>
-  !> @param nrow number \f$ n \f$ of rows in the matrix
-  !> @param d \f$ n \f$ diagnonal elements of stiffness matrix \f$ A \f$
-  !> @param du \f$ n-1 \f$ superdiagonal elements of stiffness matrix \f$ A \f$ and
-  !> \f$ A_{n, 1} \f$ (lower left corner)
-  !> @param nz number of non-zero entries (2*nrow)
-  !> @param irow nz row indices of non-zero entries
-  !> @param icol nz column indices of non-zero entries
-  !> @param aval nz values of non-zero entries
-  !>
-  !> The input is a stiffness matrix \f$ K \f$ with non-zero entries on the main diagonal,
-  !> the upper diagonal and, due to periodicity, in the lower left corner. This shape
-  !> results from the problems in compute_presn() and compute_currn().
-  subroutine assemble_sparse(nrow, d, du, nz, irow, icol, aval)
-    integer, intent(in)  :: nrow
-    complex(dp), intent(in)  :: d(nrow)
-    complex(dp), intent(in)  :: du(nrow)
-    integer, intent(out) :: nz
-    integer, intent(out) :: irow(2*nrow), icol(2*nrow)
-    complex(dp), intent(out) :: aval(2*nrow)
-
-    integer :: k
-
-    irow(1) = 1
-    icol(1) = 1
-    aval(1) = d(1)
-
-    irow(2) = nrow
-    icol(2) = 1
-    aval(2) = du(nrow)
-
-    do k = 2,nrow
-       ! off-diagonal
-       irow(2*k-1) = k-1
-       icol(2*k-1) = k
-       aval(2*k-1) = du(k-1)
-
-       ! diagonal
-       irow(2*k) = k
-       icol(2*k) = k
-       aval(2*k) = d(k)
-    end do
-
-    nz = 2*nrow
-  end subroutine assemble_sparse
 
   !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
   subroutine compute_presn
@@ -1301,7 +1247,7 @@ inner: do kt = 1, kt_max(kf)
     if (allocated(resid)) deallocate(resid)
 
     call check_redundant_edges(jnflux, -1d0, 'jnflux')
-    call check_div_free(jnflux, jnphi, rel_err_currn, 'jnflux')
+    call check_div_free(jnflux, jnphi, n, rel_err_currn, 'jnflux')
     call write_vector_dof(jnflux, jnphi, currn_file)
     call write_vector_plot(jnflux, jnphi, decorate_filename(currn_file, 'plot_', ''))
   end subroutine compute_currn
@@ -1376,7 +1322,7 @@ inner: do kt = 1, kt_max(kf)
        end do
     end do
     if (quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
-    call check_div_free(Bnflux, Bnphi, rel_err_Bn, 'non-resonant B_n')
+    call check_div_free(Bnflux, Bnphi, n, rel_err_Bn, 'non-resonant B_n')
     call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 

@@ -6,6 +6,8 @@ module magdif_util
 
   private
 
+  public :: ring_centered_avg_coord, assemble_sparse
+
   type, public :: g_eqdsk
     character(len = 1024) :: fname
     integer :: nw 
@@ -60,6 +62,78 @@ module magdif_util
   end type flux_func_cache
 
 contains
+
+  !> Computes the "weighted" centroid for a triangle so that it is approximately
+  !> equidistant between the enclosing flux surfaces, independent of triangle orientation.
+  !>
+  !> @param elem the triangle for which the centroid is to be computed
+  !> @param r radial cylindrical coordinate of the centroid
+  !> @param z axial cylindrical coordinate of the centroid
+  !>
+  !> Depending on the orientation of the triangle (see also \p orient of
+  !> get_labeled_edges()), two knots lie on the inner flux surface and one on the outer
+  !> one, or vice versa. A simple arithmetic mean of the three knots' coordinates would
+  !> place the centroid closer to the inner flux surface for one orientation and closer
+  !> to the outer one for the other. To counteract this, the "lonely" knot is counted
+  !> twice in the averaging procedure, i.e. with double weighting.
+  pure subroutine ring_centered_avg_coord(elem, r, z)
+    use mesh_mod, only: triangle, knot, mesh_point
+    type(triangle), intent(in) :: elem
+    real(dp), intent(out) :: r, z
+    type(knot), dimension(3) :: knots
+
+    knots = mesh_point(elem%i_knot)
+    r = (sum(knots%rcoord) + knots(elem%knot_h)%rcoord) * 0.25d0
+    z = (sum(knots%zcoord) + knots(elem%knot_h)%zcoord) * 0.25d0
+  end subroutine ring_centered_avg_coord
+
+  !> Assembles a sparse matrix in coordinate list (COO) representation for use with
+  !> sparse_mod::sparse_solve().
+  !>
+  !> @param nrow number \f$ n \f$ of rows in the matrix
+  !> @param d \f$ n \f$ diagnonal elements of stiffness matrix \f$ A \f$
+  !> @param du \f$ n-1 \f$ superdiagonal elements of stiffness matrix \f$ A \f$ and
+  !> \f$ A_{n, 1} \f$ (lower left corner)
+  !> @param nz number of non-zero entries (2*nrow)
+  !> @param irow nz row indices of non-zero entries
+  !> @param icol nz column indices of non-zero entries
+  !> @param aval nz values of non-zero entries
+  !>
+  !> The input is a stiffness matrix \f$ K \f$ with non-zero entries on the main diagonal,
+  !> the upper diagonal and, due to periodicity, in the lower left corner. This shape
+  !> results from the problems in compute_presn() and compute_currn().
+  subroutine assemble_sparse(nrow, d, du, nz, irow, icol, aval)
+    integer, intent(in)  :: nrow
+    complex(dp), intent(in)  :: d(nrow)
+    complex(dp), intent(in)  :: du(nrow)
+    integer, intent(out) :: nz
+    integer, intent(out) :: irow(2*nrow), icol(2*nrow)
+    complex(dp), intent(out) :: aval(2*nrow)
+
+    integer :: k
+
+    irow(1) = 1
+    icol(1) = 1
+    aval(1) = d(1)
+
+    irow(2) = nrow
+    icol(2) = 1
+    aval(2) = du(nrow)
+
+    do k = 2,nrow
+       ! off-diagonal
+       irow(2*k-1) = k-1
+       icol(2*k-1) = k
+       aval(2*k-1) = du(k-1)
+
+       ! diagonal
+       irow(2*k) = k
+       icol(2*k) = k
+       aval(2*k) = d(k)
+    end do
+
+    nz = 2*nrow
+  end subroutine assemble_sparse
 
   subroutine g_eqdsk_read(this, fname)
     class(g_eqdsk), intent(inout) :: this

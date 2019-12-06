@@ -1,7 +1,7 @@
 module magdif_config
   use from_nrtype, only: dp  ! PRELOAD/SRC/from_nrtype.f90
   use arnoldi_mod, only: tol ! RUN/SRC/arnoldi.f90
-  use for_macrostep, only: t_min, d_min
+  use for_macrostep, only: t_min, d_min  ! PRELOAD/SRC/orbit_mod.f90
 
   implicit none
 
