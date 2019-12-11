@@ -325,7 +325,7 @@ contains
           Bn = Bn - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
                matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn - Bn_prev)))
           call unpack2(Bnflux, Bnphi, Bn)
-          call check_redundant_edges(Bnflux, -1d0, 'B_n')
+          call check_redundant_edges(Bnflux, .false., 'B_n')
           call check_div_free(Bnflux, Bnphi, n, rel_err_Bn, 'B_n')
        end if
 
@@ -540,16 +540,17 @@ contains
     end do
   end subroutine check_div_free
 
-  subroutine check_redundant_edges(pol_quant, comp_factor, name)
+  subroutine check_redundant_edges(pol_quant, same_sign, name)
     complex(dp), intent(in) :: pol_quant(:,:)
-    real(dp), intent(in) :: comp_factor
+    logical, intent(in) :: same_sign
     character(len = *), intent(in) :: name
     integer :: ktri, ktri_adj, ke, ke_adj
-    logical :: checked(ntri, 3)
+    logical :: checked(ntri, 3), inconsistent
     type(triangle) :: elem
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     logical :: orient
+    real(dp), parameter :: eps = epsilon(1d0)
     character(len = len_trim(name) + 30) :: err_msg
     err_msg = trim(name) // ': inconsistent redundant edges'
 
@@ -564,13 +565,35 @@ contains
              ktri_adj = mesh_element(ktri)%neighbour(ke)
              ke_adj = mesh_element(ktri)%neighbour_edge(ke)
              checked(ktri_adj, ke_adj) = .true.
-             ! TODO: this doesn't work, change to check down to machine FP accuracy
-             !if (pol_quant(ktri, ke) /= comp_factor * pol_quant(ktri_adj, ke_adj)) then
-             !   if (log_err) write (logfile, *) err_msg, ' - ', &
-             !        name, '(', ktri, ',', ke, ') = ', pol_quant(ktri, ke), &
-             !        name, '(', ktri_adj, ',', ke_adj, ') = ', pol_quant(ktri_adj, ke_adj)
-             !   stop err_msg
-             !end if
+             inconsistent = .false.
+             if (real(pol_quant(ktri, ke)) == 0d0) then
+                inconsistent = inconsistent .or. real(pol_quant(ktri_adj, ke_adj)) /= 0d0
+             else
+                if (same_sign) then
+                   inconsistent = inconsistent .or. real(pol_quant(ktri_adj, ke_adj)) / &
+                        real(pol_quant(ktri, ke)) - 1d0 > eps
+                else
+                   inconsistent = inconsistent .or. real(pol_quant(ktri_adj, ke_adj)) / &
+                        (-real(pol_quant(ktri, ke))) - 1d0 > eps
+                end if
+             end if
+             if (aimag(pol_quant(ktri, ke)) == 0d0) then
+                inconsistent = inconsistent .or. aimag(pol_quant(ktri_adj, ke_adj)) /= 0d0
+             else
+                if (same_sign) then
+                   inconsistent = inconsistent .or. aimag(pol_quant(ktri_adj, ke_adj)) / &
+                        aimag(pol_quant(ktri, ke)) - 1d0 > eps
+                else
+                   inconsistent = inconsistent .or. aimag(pol_quant(ktri_adj, ke_adj)) / &
+                        (-aimag(pol_quant(ktri, ke))) - 1d0 > eps
+                end if
+             end if
+             if (inconsistent) then
+                if (log_err) write (logfile, *) err_msg, ' - ', &
+                     name, '(', ktri, ',', ke, ') = ', pol_quant(ktri, ke), &
+                     name, '(', ktri_adj, ',', ke_adj, ') = ', pol_quant(ktri_adj, ke_adj)
+                stop err_msg
+             end if
           end if
        end do
     end do
@@ -600,7 +623,7 @@ contains
     close(1)
 
     call check_div_free(Bnflux, Bnphi, n, rel_err_Bn, 'B_n')
-    call check_redundant_edges(Bnflux, -1d0, 'B_n')
+    call check_redundant_edges(Bnflux, .false., 'B_n')
   end subroutine read_Bn
 
   !> Allocates and computes the safety factor #q and #m_res.
@@ -896,7 +919,7 @@ contains
     end do
     close(1)
 
-    call check_redundant_edges(cmplx(j0phi, 0d0, dp), 1d0, 'j0phi')
+    call check_redundant_edges(cmplx(j0phi, 0d0, dp), .true., 'j0phi')
 
   contains
     function j0phi_ampere(r, z) result (rotB_phi)
@@ -1266,7 +1289,7 @@ inner: do kt = 1, kt_max(kf)
          ' max_rel_err = ', max_rel_err, ' avg_rel_err = ', avg_rel_err
     if (allocated(resid)) deallocate(resid)
 
-    call check_redundant_edges(jnflux, -1d0, 'jnflux')
+    call check_redundant_edges(jnflux, .false., 'jnflux')
     call check_div_free(jnflux, jnphi, n, rel_err_currn, 'jnflux')
     call write_vector_dof(jnflux, jnphi, currn_file)
     call write_vector_plot(jnflux, jnphi, decorate_filename(currn_file, 'plot_', ''))
@@ -1343,7 +1366,7 @@ inner: do kt = 1, kt_max(kf)
     end do
     if (quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
     call check_div_free(Bnflux, Bnphi, n, rel_err_Bn, 'non-resonant B_n')
-    call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
+    call check_redundant_edges(Bnflux, .false., 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
   subroutine interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)

@@ -233,7 +233,7 @@ program minimal_example
         ! toroidal flux
         Bnphi(k) = imun / n * sum(Bnflux(k, :)) / elem%det_3 * 2d0
   end do
-  call check_redundant_edges(Bnflux, -1d0, 'non-resonant B_n')
+  call check_redundant_edges(Bnflux, .false., 'non-resonant B_n')
   call check_div_free(Bnflux, Bnphi, n, 1d-9, 'non-resonant B_n')
   Bnflux = Bnflux * kilca_scale_factor
   call write_vector_dof(Bnflux, Bnphi, Bn_vac_file)
