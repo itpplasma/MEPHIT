@@ -21,12 +21,16 @@ module magdif_config
   integer, parameter :: curr_prof_rot = 1  !< current via Ampere's law
   integer, parameter :: curr_prof_efit = 2 !< current profile from EFIT file
 
+  integer, parameter :: q_prof_flux = 0 !< q profile from flux between flux surfaces
+  integer, parameter :: q_prof_efit = 2 !< q profile from EFIT file
+
   integer, parameter :: logfile = 6             !< log to stdout, TODO: make this configurable
 
   integer :: log_level
   integer :: runmode
   integer :: pres_prof = pres_prof_par  !< pressure profile
   integer :: curr_prof = curr_prof_ps   !< current profile
+  integer :: q_prof = q_prof_flux       !< q profile
   logical :: log_err, log_warn, log_info, log_debug ! specify log levels
   logical :: nonres = .false.  !< use non-resonant test case
   logical :: quad_avg = .true. !< average over quadrilaterals for non-resonant test case
@@ -123,11 +127,12 @@ module magdif_config
   integer :: max_eig_out = 10
 
   !> namelists for input parameters
-  namelist /settings/ log_level, runmode, pres_prof, nonres, quad_avg, niter, nritz, tol, &
-       n, nkpol, nflux, ti0, di0, t_min, d_min, damp, R0, point_file, tri_file, &
+  namelist /settings/ log_level, runmode, pres_prof, nonres, quad_avg, niter, nritz, &
+       tol, n, nkpol, nflux, ti0, di0, t_min, d_min, damp, R0, point_file, tri_file, &
        Bn_vacout_file, Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, &
        presn_file, currn_file, eigvec_file, rel_err_Bn, rel_err_currn, kilca_pol_mode, &
-       kilca_vac_coeff, kilca_scale_factor, kilca_pol_mode_file, max_eig_out, curr_prof
+       kilca_vac_coeff, kilca_scale_factor, kilca_pol_mode_file, max_eig_out, curr_prof, &
+       q_prof
   namelist /delayed/ sheet_current_factor
 
 contains

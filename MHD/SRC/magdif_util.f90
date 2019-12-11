@@ -11,7 +11,7 @@ module magdif_util
   type, public :: g_eqdsk
     character(len = 1024) :: fname
     integer :: nw 
-    real(dp), dimension(:), allocatable :: fpol, pres, ffprim, pprime
+    real(dp), dimension(:), allocatable :: fpol, pres, ffprim, pprime, qpsi
   contains
     procedure :: read => g_eqdsk_read
     final :: g_eqdsk_destructor
@@ -139,22 +139,25 @@ contains
     class(g_eqdsk), intent(inout) :: this
     character(len = 1024), intent(in) :: fname
     character(len = 10) :: text(6)
-    integer :: fid, k, idum
+    integer :: fid, k, nh, idum
     real(dp) :: xdum
 
     call g_eqdsk_destructor(this)
     this%fname = fname
     open(newunit = fid, file = this%fname)
-    read(fid, geqdsk_2000) (text(k), k = 1, 6), idum, this%nw, idum
+    read(fid, geqdsk_2000) (text(k), k = 1, 6), idum, this%nw, nh
     allocate(this%fpol(this%nw))
     allocate(this%pres(this%nw))
     allocate(this%ffprim(this%nw))
     allocate(this%pprime(this%nw))
+    allocate(this%qpsi(this%nw))
     read(fid, geqdsk_2020) (xdum, k = 1, 20)
     read(fid, geqdsk_2020) (this%fpol(k), k = 1, this%nw)
     read(fid, geqdsk_2020) (this%pres(k), k = 1, this%nw)
     read(fid, geqdsk_2020) (this%ffprim(k), k = 1, this%nw)
     read(fid, geqdsk_2020) (this%pprime(k), k = 1, this%nw)
+    read(fid, geqdsk_2020) (xdum, k = 1, this%nw * nh)
+    read(fid, geqdsk_2020) (this%qpsi(k), k = 1, this%nw)
     close(fid)
     ! convert tesla meter to gauss centimeter
     this%fpol = this%fpol * 1e6
@@ -173,6 +176,7 @@ contains
     if (allocated(this%pres)) deallocate(this%pres)
     if (allocated(this%ffprim)) deallocate(this%ffprim)
     if (allocated(this%pprime)) deallocate(this%pprime)
+    if (allocated(this%qpsi)) deallocate(this%qpsi)
   end subroutine g_eqdsk_destructor
 
   subroutine flux_func_init(this, n_lag, nw, nflux, psi, psi_half)

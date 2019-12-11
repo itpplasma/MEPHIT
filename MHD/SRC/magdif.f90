@@ -637,19 +637,33 @@ contains
     integer :: m_res_min, m_res_max, m
     real(dp), dimension(nflux) :: abs_err
 
-    fs_half%q = 0d0
-    do kf = 1, nflux
-       do kt = 1, kt_max(kf)
-          elem = mesh_element(kt_low(kf) + kt)
-          fs_half%q(kf) = fs_half%q(kf) + B0phi_Omega(kt_low(kf) + kt) * elem%det_3
+    select case (q_prof)
+    case (q_prof_flux)
+       fs_half%q = 0d0
+       do kf = 1, nflux
+          do kt = 1, kt_max(kf)
+             elem = mesh_element(kt_low(kf) + kt)
+             fs_half%q(kf) = fs_half%q(kf) + B0phi_Omega(kt_low(kf) + kt) * elem%det_3
+          end do
+          fs_half%q(kf) = fs_half%q(kf) * 0.25d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
        end do
-       fs_half%q(kf) = fs_half%q(kf) * 0.25d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
-    end do
-    ! use linear interpolation for full-grid steps for now
-    fs%q(1:nflux-1) = 0.5d0 * (fs_half%q(1:nflux-1) + fs_half%q(2:nflux))
-    ! linear extrapolation for values at separatrix and magnetic axis
-    fs%q(nflux) = fs%q(nflux-1) + (fs%q(nflux-1) - fs%q(nflux-2))
-    fs%q(0) = fs%q(1) - (fs%q(2) - fs%q(1))
+       ! use linear interpolation for full-grid steps for now
+       fs%q(1:nflux-1) = 0.5d0 * (fs_half%q(1:nflux-1) + fs_half%q(2:nflux))
+       ! linear extrapolation for values at separatrix and magnetic axis
+       fs%q(nflux) = fs%q(nflux-1) + (fs%q(nflux-1) - fs%q(nflux-2))
+       fs%q(0) = fs%q(1) - (fs%q(2) - fs%q(1))
+    case (q_prof_efit)
+       do kf = 0, nflux
+          ! use positive q
+          fs%q(kf) = abs(fluxvar%interp(efit%qpsi, kf, .false.))
+       end do
+       do kf = 1, nflux
+          ! use positive q
+          fs_half%q(kf) = abs(fluxvar%interp(efit%qpsi, kf, .true.))
+       end do
+    case default
+       stop 'Error: unknown pressure profile selection'
+    end select
 
     allocate(m_res(nflux))
     m_res = 0
@@ -758,7 +772,7 @@ contains
           fs%dp_dpsi(kf) = fluxvar%interp(efit%pprime, kf, .false.)
        end do
        do kf = 1, nflux
-          fs_half%p(kf) = fluxvar%interp(efit%pres, kf, .false.)
+          fs_half%p(kf) = fluxvar%interp(efit%pres, kf, .true.)
           fs_half%dp_dpsi(kf) = fluxvar%interp(efit%pprime, kf, .true.)
        end do
     case default
@@ -812,8 +826,6 @@ contains
   !> \f$ \vec{B}_{0} \f$; arbitrary values are assumed. Consistency of MHD equilibrium is
   !> necessary in the derivation, while Ampere's equation is not used.
   subroutine compute_j0phi
-    use input_files, only: gfile
-
     integer :: kf, kt
     real(dp) :: r, z
     real(dp) :: Btor2
