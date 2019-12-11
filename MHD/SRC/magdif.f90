@@ -352,6 +352,8 @@ contains
        call write_kilca_modes(Bnflux, Bnphi, kilca_pol_mode_file)
        call write_kilca_modes(Bnflux_vac, Bnphi_vac, &
             decorate_filename(kilca_pol_mode_file, '', '_vac'))
+       call write_kilca_modes(Bnflux_vac - Bnflux, Bnphi_vac - Bnphi, &
+            decorate_filename(kilca_pol_mode_file, '', '_plas'))
     end if
 
     if (allocated(Lr)) deallocate(Lr)
@@ -1483,27 +1485,31 @@ inner: do kt = 1, kt_max(kf)
     integer, parameter :: mmax = 24
     character(len = 19) :: fmt
     complex(dp), dimension(-mmax:mmax) :: coeff_rho, coeff_theta, coeff_zeta, fourier_basis
-    integer :: kf, kt, m, fid_rho, fid_theta, fid_zeta
+    integer :: kf, kt, m, fid_rho, fid_theta, fid_zeta, fid_furth
     type(triangle) :: elem
-    complex(dp) :: pol_comp_r, pol_comp_z, pol_comp_rho, pol_comp_theta
-    real(dp) :: r, z, rmaxis, zmaxis, rho_max, rho, theta
+    complex(dp) :: pol_comp_r, pol_comp_z, pol_comp_rho, pol_comp_theta, sheet_current
+    real(dp) :: r, z, rmaxis, zmaxis, rho_max, rho, theta, k_zeta, k_theta
 
     write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(1es22.15, 1x))'
     rmaxis = mesh_point(1)%rcoord
     zmaxis = mesh_point(1)%zcoord
     rho_max = hypot(mesh_point(kp_low(nflux)+1)%rcoord - rmaxis, &
          mesh_point(kp_low(nflux)+1)%zcoord - zmaxis)
+    k_zeta = n / R0
     open(newunit = fid_rho, recl = 3 * longlines, &
          file = decorate_filename(outfile, '', '_r'))
     open(newunit = fid_theta, recl = 3 * longlines, &
          file = decorate_filename(outfile, '', '_theta'))
     open(newunit = fid_zeta, recl = 3 * longlines, &
          file = decorate_filename(outfile, '', '_z'))
+    open(newunit = fid_furth, recl = longlines, &
+         file = decorate_filename(outfile, 'furth_', ''))
     do kf = 1, nflux
        coeff_rho = 0d0
        coeff_theta = 0d0
        coeff_zeta = 0d0
-       rho = rho_max * (dble(kf) - 0.5) / dble(nflux)
+       sheet_current = 0d0
+       rho = rho_max * (dble(kf) - 0.5d0) / dble(nflux)
        do kt = 1, kt_max(kf)
           theta = (dble(kt) - 0.5d0) / dble(kt_max(kf)) * 2d0 * pi
           ! result_spectrum.f90 uses negative q, so poloidal modes are switched
@@ -1518,6 +1524,7 @@ inner: do kt = 1, kt_max(kf)
           coeff_rho = coeff_rho + pol_comp_rho * fourier_basis
           coeff_theta = coeff_theta + pol_comp_theta * fourier_basis
           coeff_zeta = coeff_zeta + tor_comp(kt_low(kf) + kt) * fourier_basis
+          sheet_current = sheet_current + jnphi(kt_low(kf) + kt) * elem%det_3 * 0.5d0
        end do
        coeff_rho = coeff_rho / kt_max(kf)
        coeff_theta = coeff_theta / kt_max(kf)
@@ -1525,7 +1532,12 @@ inner: do kt = 1, kt_max(kf)
        write (fid_rho, fmt) rho, fs_half%q(kf), real(coeff_rho), aimag(coeff_rho)
        write (fid_theta, fmt) rho, fs_half%q(kf), real(coeff_theta), aimag(coeff_theta)
        write (fid_zeta, fmt) rho, fs_half%q(kf), real(coeff_zeta), aimag(coeff_zeta)
+       k_theta = kilca_pol_mode / rho
+       sheet_current = -2d0 * imun / clight / k_theta * sheet_current
+       write (fid_furth, *) rho, k_zeta, k_theta, real(coeff_rho(-kilca_pol_mode)), &
+            aimag(coeff_rho(-kilca_pol_mode)), real(sheet_current), aimag(sheet_current)
     end do
+    close(fid_furth)
     do kt = kt_low(nflux+1) + 1, ntri
        write (fid_rho, fmt) rho_max, fs_half%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
        write (fid_theta, fmt) rho_max, fs_half%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
