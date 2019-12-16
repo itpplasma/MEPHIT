@@ -62,6 +62,8 @@ module magdif
   !> for #mesh_mod::mesh_element.
   real(dp), allocatable :: B0z_Omega(:)
 
+  real(dp), allocatable :: B0flux(:,:)
+
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   !>
   !> Values are taken at each mesh point and the indexing scheme is the same as for
@@ -222,6 +224,7 @@ contains
     if (allocated(B0r_Omega)) deallocate(B0r_Omega)
     if (allocated(B0phi_Omega)) deallocate(B0phi_Omega)
     if (allocated(B0z_Omega)) deallocate(B0z_Omega)
+    if (allocated(B0flux)) deallocate(B0flux)
     if (allocated(presn)) deallocate(presn)
     if (allocated(jnflux)) deallocate(jnflux)
     if (allocated(Bnflux)) deallocate(Bnflux)
@@ -460,6 +463,7 @@ contains
     allocate(B0r_Omega(ntri))
     allocate(B0phi_Omega(ntri))
     allocate(B0z_Omega(ntri))
+    allocate(B0flux(ntri, 3))
     allocate(presn(npoint))
     allocate(Bnflux(ntri, 3))
     allocate(Bnphi(ntri))
@@ -475,6 +479,7 @@ contains
     B0r_Omega = 0d0
     B0phi_Omega = 0d0
     B0z_Omega = 0d0
+    B0flux = 0d0
     presn = 0d0
     Bnflux = 0d0
     Bnphi = 0d0
@@ -787,6 +792,7 @@ contains
     integer :: kf, kt, ke
     type(triangle) :: elem
     type(knot) :: base, tip
+    real(dp) :: n_r, n_z
 
     open(1, file = 'plot_B0.dat', recl = longlines)
     p = 0d0
@@ -803,6 +809,9 @@ contains
              B0r(kt_low(kf) + kt, ke) = Br
              B0phi(kt_low(kf) + kt, ke) = Bp
              B0z(kt_low(kf) + kt, ke) = Bz
+             n_r = tip%zcoord - base%zcoord
+             n_z = base%rcoord - tip%rcoord
+             B0flux(kt_low(kf) + kt, ke) = r * (Br * n_r + Bz * n_z)
           end do
           call ring_centered_avg_coord(elem, r, z)
           call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
@@ -1208,10 +1217,8 @@ inner: do kt = 1, kt_max(kf)
     integer, dimension(2) :: li, lo, lf
     integer :: ei, eo, ef
     logical :: orient
-    real(dp) :: B0flux
     complex(dp) :: Bnphi_Gamma
     real(dp) :: r
-    real(dp) :: n_r, n_z
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
@@ -1227,31 +1234,25 @@ inner: do kt = 1, kt_max(kf)
                clight * r / B0phi(ktri, ef) * (presn(lf(2)) - presn(lf(1)))
           x(kt) = -jnflux(ktri, ef)
           ! diagonal matrix element - edge i
-          n_r = mesh_point(li(2))%zcoord - mesh_point(li(1))%zcoord
-          n_z = mesh_point(li(1))%rcoord - mesh_point(li(2))%rcoord
-          B0flux = r * (B0r(ktri, ei) * n_r + B0z(ktri, ei) * n_z)
           d(kt) = -1d0 - imun * (n + imun * damp) * area * 0.5d0 * &
-               B0phi(ktri, ei) / B0flux
+               B0phi(ktri, ei) / B0flux(ktri, ei)
           ! additional term from edge i on source side
           r = sum(mesh_point(li(:))%rcoord) * 0.5d0
           Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(ei)))
-          x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / B0flux * &
+          x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / B0flux(ktri, ei) * &
                (Bnphi_Gamma / B0phi(ktri, ei) * (fs%p(kf) - fs%p(kf-1)) - &
                (presn(li(2)) - presn(li(1)))) + j0phi(ktri, ei) * &
-               (Bnphi_Gamma / B0phi(ktri, ei) - Bnflux(ktri, ei) / B0flux))
+               (Bnphi_Gamma / B0phi(ktri, ei) - Bnflux(ktri, ei) / B0flux(ktri, ei)))
           ! superdiagonal matrix element - edge o
-          n_r = mesh_point(lo(2))%zcoord - mesh_point(lo(1))%zcoord
-          n_z = mesh_point(lo(1))%rcoord - mesh_point(lo(2))%rcoord
-          B0flux = r * (B0r(ktri, eo) * n_r + B0z(ktri, eo) * n_z)
           du(kt) = 1d0 + imun * (n + imun * damp) * area * 0.5d0 * &
-               B0phi(ktri, eo) / B0flux
+               B0phi(ktri, eo) / B0flux(ktri, eo)
           ! additional term from edge o on source side
           r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
           Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(eo)))
-          x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / B0flux * &
+          x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / B0flux(ktri, eo) * &
                (Bnphi_Gamma / B0phi(ktri, eo) * (fs%p(kf-1) - fs%p(kf)) - &
                (presn(lo(2)) - presn(lo(1)))) + j0phi(ktri, eo) * &
-               (Bnphi_Gamma / B0phi(ktri, eo) - Bnflux(ktri, eo) / B0flux))
+               (Bnphi_Gamma / B0phi(ktri, eo) - Bnflux(ktri, eo) / B0flux(ktri, eo)))
        end do
        call assemble_sparse(kt_max(kf), d(:kt_max(kf)), du(:kt_max(kf)), nz, &
             irow(:(2*kt_max(kf))), icol(:(2*kt_max(kf))), aval(:(2*kt_max(kf))))
@@ -1275,24 +1276,6 @@ inner: do kt = 1, kt_max(kf)
           call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
           jnflux(ktri, ei) = -x(kt)
           jnflux(ktri, eo) = x(mod(kt, kt_max(kf)) + 1)
-          if (m_res(kf) > 0) then
-             if (sheet_current_factor(m_res(kf)) /= (0d0, 0d0)) then
-                ! add sheet current on edge i
-                r = sum(mesh_point(li(:))%rcoord) * 0.5d0
-                n_r = mesh_point(li(2))%zcoord - mesh_point(li(1))%zcoord
-                n_z = mesh_point(li(1))%rcoord - mesh_point(li(2))%rcoord
-                B0flux = r * (B0r(ktri, ei) * n_r + B0z(ktri, ei) * n_z)
-                jnflux(ktri, ei) = jnflux(ktri, ei) + sheet_current_factor(m_res(kf)) * &
-                     B0flux * sum(presn(li(:))) * 0.5d0
-                ! add sheet current on edge o
-                r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
-                n_r = mesh_point(lo(2))%zcoord - mesh_point(lo(1))%zcoord
-                n_z = mesh_point(lo(1))%rcoord - mesh_point(lo(2))%rcoord
-                B0flux = r * (B0r(ktri, eo) * n_r + B0z(ktri, eo) * n_z)
-                jnflux(ktri, eo) = jnflux(ktri, eo) + sheet_current_factor(m_res(kf)) * &
-                     B0flux * sum(presn(lo(:))) * 0.5d0
-             end if
-          end if
           jnphi(ktri) = sum(jnflux(ktri, :)) * imun / n / area
        end do
     end do
@@ -1301,11 +1284,66 @@ inner: do kt = 1, kt_max(kf)
          ' max_rel_err = ', max_rel_err, ' avg_rel_err = ', avg_rel_err
     if (allocated(resid)) deallocate(resid)
 
+    call add_sheet_current
     call check_redundant_edges(jnflux, .false., 'jnflux')
     call check_div_free(jnflux, jnphi, n, rel_err_currn, 'jnflux')
     call write_vector_dof(jnflux, jnphi, currn_file)
     call write_vector_plot(jnflux, jnphi, decorate_filename(currn_file, 'plot_', ''))
   end subroutine compute_currn
+
+  subroutine add_sheet_current
+    integer :: kf, kt, ktri
+    type(triangle) :: elem, elem_adj
+    integer, dimension(2) :: li, lo, lf, li_adj, lo_adj, lf_adj
+    integer :: ei, eo, ef, ei_adj, eo_adj, ef_adj
+    logical :: orient, orient_adj
+    complex(dp) :: presn_half
+    do kf = 1, nflux
+       if (m_res(kf) > 0) then
+          if (sheet_current_factor(m_res(kf)) /= (0d0, 0d0)) then
+             do kt = 1, kt_max(kf)
+                ktri = kt_low(kf) + kt
+                elem = mesh_element(ktri)
+                call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+                ! add sheet current on edge i
+                if (mod(kt, 2) == 0) then
+                   ! edge i is diagonal
+                   if (orient) then
+                      presn_half = 0.5d0 * sum(presn(lf(:)))
+                   else
+                      elem_adj = mesh_element(elem%neighbour(ei))
+                      call get_labeled_edges(elem_adj, li_adj, lo_adj, lf_adj, &
+                           ei_adj, eo_adj, ef_adj, orient_adj)
+                      presn_half = 0.5d0 * sum(presn(lf_adj(:)))
+                   end if
+                else
+                   presn_half = presn(li(2))
+                end if
+                jnflux(ktri, ei) = jnflux(ktri, ei) + sheet_current_factor(m_res(kf)) * &
+                     B0flux(ktri, ei) * presn_half
+                ! add sheet current on edge o
+                if (mod(kt, 2) == 1) then
+                   ! edge o is diagonal
+                   if (orient) then
+                      presn_half = 0.5d0 * sum(presn(lf(:)))
+                   else
+                      elem_adj = mesh_element(elem%neighbour(eo))
+                      call get_labeled_edges(elem_adj, li_adj, lo_adj, lf_adj, &
+                           ei_adj, eo_adj, ef_adj, orient_adj)
+                      presn_half = 0.5d0 * sum(presn(lf_adj(:)))
+                   end if
+                else
+                   presn_half = presn(lo(1))
+                end if
+                jnflux(ktri, eo) = jnflux(ktri, eo) + sheet_current_factor(m_res(kf)) * &
+                     B0flux(ktri, eo) * presn_half
+                ! adjust toroidal current density
+                jnphi(ktri) = sum(jnflux(ktri, :)) * imun / n / elem%det_3 * 2d0
+             end do
+          end if
+       end if
+    end do
+  end subroutine add_sheet_current
 
   subroutine avg_flux_on_quad(pol_flux, tor_comp)
     complex(dp), intent(inout) :: pol_flux(:,:)
@@ -1559,7 +1597,8 @@ inner: do kt = 1, kt_max(kf)
           coeff_rho = coeff_rho + pol_comp_rho * fourier_basis
           coeff_theta = coeff_theta + pol_comp_theta * fourier_basis
           coeff_zeta = coeff_zeta + tor_comp(kt_low(kf) + kt) * fourier_basis
-          sheet_current = sheet_current + jnphi(kt_low(kf) + kt) * elem%det_3 * 0.5d0
+          sheet_current = sheet_current + 0.5d0 * elem%det_3 * jnphi(kt_low(kf) + kt) * &
+               fourier_basis(kilca_pol_mode)
        end do
        coeff_rho = coeff_rho / kt_max(kf)
        coeff_theta = coeff_theta / kt_max(kf)
