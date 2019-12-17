@@ -2,7 +2,7 @@ module magdif
   use from_nrtype, only: dp                            ! PRELOAD/SRC/from_nrtype.f90
   use constants, only: pi                              ! PRELOAD/SRC/orbit_mod.f90
   use mesh_mod, only: npoint, ntri, knot, triangle, &  ! PRELOAD/SRC/mesh_mod.f90
-       mesh_point, mesh_element
+       mesh_point, mesh_element, triangle_rmp, mesh_element_rmp
   use sparse_mod, only: sparse_solve, sparse_matmul    ! MHD/SRC/sparse_mod.f90
   use magdif_config                                    ! MHD/SRC/magdif_config.f90
   use magdif_util                                      ! MHD/SRC/magdif_util.f90
@@ -235,6 +235,7 @@ contains
     if (allocated(j0phi)) deallocate(j0phi)
     if (allocated(mesh_point)) deallocate(mesh_point)
     if (allocated(mesh_element)) deallocate(mesh_element)
+    if (allocated(mesh_element_rmp)) deallocate(mesh_element_rmp)
     if (allocated(kp_max)) deallocate(kp_max)
     if (allocated(kt_max)) deallocate(kt_max)
     if (allocated(kp_low)) deallocate(kp_low)
@@ -441,6 +442,9 @@ contains
   !> zero. Deallocation is done in magdif_cleanup().
   subroutine read_mesh
     use mesh_mod, only: bphicovar
+    integer :: kf, kt, ktri
+    type(triangle) :: elem
+    type(triangle_rmp) :: tri
 
     open(1, file = point_file, form = 'unformatted')
     read(1) npoint
@@ -456,6 +460,19 @@ contains
     read(1) mesh_element
     read(1) bphicovar
     close(1)
+
+    allocate(mesh_element_rmp(ntri))
+    do kf = 1, nflux
+       do kt = 1, kt_max(kf)
+          ktri = kt_low(kf) + kt
+          elem = mesh_element(ktri)
+          tri%area = 0.5d0 * elem%det_3
+          call get_labeled_edges(elem, tri%li, tri%lo, tri%lf, tri%ei, tri%eo, tri%ef, &
+               tri%orient)
+          call ring_centered_avg_coord(elem, tri%R_Omega, tri%Z_Omega)
+          mesh_element_rmp(ktri) = tri
+       end do
+    end do
 
     allocate(B0r(ntri, 3))
     allocate(B0phi(ntri, 3))
@@ -551,20 +568,14 @@ contains
     character(len = *), intent(in) :: name
     integer :: ktri, ktri_adj, ke, ke_adj
     logical :: checked(ntri, 3), inconsistent
-    type(triangle) :: elem
-    integer, dimension(2) :: li, lo, lf
-    integer :: ei, eo, ef
-    logical :: orient
     real(dp), parameter :: eps = epsilon(1d0)
     character(len = len_trim(name) + 30) :: err_msg
     err_msg = trim(name) // ': inconsistent redundant edges'
 
     checked = .false.
     do ktri = 1, kt_low(nflux+1)
-       elem = mesh_element(ktri)
-       call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
        do ke = 1, 3
-          if (ktri > kt_low(nflux) .and. ke == ef) cycle
+          if (ktri > kt_low(nflux) .and. ke == mesh_element_rmp(ktri)%ef) cycle
           if (.not. checked(ktri, ke)) then
              checked(ktri, ke) = .true.
              ktri_adj = mesh_element(ktri)%neighbour(ke)
@@ -637,8 +648,8 @@ contains
   !> magdif_config::read_delayed_config() in magdif_init(). All deallocation is done in
   !> magdif_cleanup().
   subroutine compute_safety_factor
-    integer :: kf, kt
-    type(triangle) :: elem
+    integer :: kf, kt, ktri
+    type(triangle_rmp) :: tri
     integer :: m_res_min, m_res_max, m
     real(dp), dimension(nflux) :: abs_err
 
@@ -647,10 +658,11 @@ contains
        fs_half%q = 0d0
        do kf = 1, nflux
           do kt = 1, kt_max(kf)
-             elem = mesh_element(kt_low(kf) + kt)
-             fs_half%q(kf) = fs_half%q(kf) + B0phi_Omega(kt_low(kf) + kt) * elem%det_3
+             ktri = kt_low(kf) + kt
+             tri = mesh_element_rmp(ktri)
+             fs_half%q(kf) = fs_half%q(kf) + B0phi_Omega(ktri) * tri%area
           end do
-          fs_half%q(kf) = fs_half%q(kf) * 0.25d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
+          fs_half%q(kf) = fs_half%q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
        end do
        ! use linear interpolation for full-grid steps for now
        fs%q(1:nflux-1) = 0.5d0 * (fs_half%q(1:nflux-1) + fs_half%q(2:nflux))
@@ -787,38 +799,38 @@ contains
 
 
   subroutine cache_equilibrium_field
-    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+    real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-    integer :: kf, kt, ke
+    integer :: kf, kt, ktri, ke
     type(triangle) :: elem
     type(knot) :: base, tip
     real(dp) :: n_r, n_z
 
     open(1, file = 'plot_B0.dat', recl = longlines)
-    p = 0d0
     do kf = 1, nflux
        do kt = 1, kt_max(kf)
-          elem = mesh_element(kt_low(kf) + kt)
+          ktri = kt_low(kf) + kt
+          elem = mesh_element(ktri)
           do ke = 1, 3
              base = mesh_point(elem%i_knot(ke))
              tip = mesh_point(elem%i_knot(mod(ke, 3) + 1))
              r = (base%rcoord + tip%rcoord) * 0.5d0
              z = (base%zcoord + tip%zcoord) * 0.5d0
-             call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+             call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
                   dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-             B0r(kt_low(kf) + kt, ke) = Br
-             B0phi(kt_low(kf) + kt, ke) = Bp
-             B0z(kt_low(kf) + kt, ke) = Bz
+             B0r(ktri, ke) = Br
+             B0phi(ktri, ke) = Bp
+             B0z(ktri, ke) = Bz
              n_r = tip%zcoord - base%zcoord
              n_z = base%rcoord - tip%rcoord
-             B0flux(kt_low(kf) + kt, ke) = r * (Br * n_r + Bz * n_z)
+             B0flux(ktri, ke) = r * (Br * n_r + Bz * n_z)
           end do
           call ring_centered_avg_coord(elem, r, z)
-          call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+          call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          B0r_Omega(kt_low(kf) + kt) = Br
-          B0phi_Omega(kt_low(kf) + kt) = Bp
-          B0z_Omega(kt_low(kf) + kt) = Bz
+          B0r_Omega(ktri) = Br
+          B0phi_Omega(ktri) = Bp
+          B0z_Omega(ktri) = Bz
           write (1, *) r, z, Br, Bz, Bp
        end do
     end do
@@ -835,104 +847,98 @@ contains
   !> \f$ \vec{B}_{0} \f$; arbitrary values are assumed. Consistency of MHD equilibrium is
   !> necessary in the derivation, while Ampere's equation is not used.
   subroutine compute_j0phi
-    integer :: kf, kt
+    integer :: kf, kt, ktri
     real(dp) :: r, z
     real(dp) :: Btor2
     real(dp), dimension(nflux) :: B2avg, B2avg_half
     real(dp) :: plot_j0phi
-    type(triangle) :: elem
-    integer, dimension(2) :: li, lo, lf
-    integer :: ei, eo, ef
-    logical :: orient
+    type(triangle_rmp) :: tri
 
     open(1, file = j0phi_file, recl = longlines)
     B2avg = 0d0
     B2avg_half = 0d0
     do kf = 1, nflux
        do kt = 1, kt_max(kf)
-          elem = mesh_element(kt_low(kf) + kt)
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
-          B2avg(kf) = B2avg(kf) + B0r(kt_low(kf) + kt, ef) ** 2 + &
-               B0phi(kt_low(kf) + kt, ef) ** 2 + B0z(kt_low(kf) + kt, ef) ** 2
-          r = sum(mesh_point(li(:))%rcoord) * 0.5d0
-          B2avg_half(kf) = B2avg_half(kf) + B0r(kt_low(kf) + kt, ei) ** 2 + &
-               B0phi(kt_low(kf) + kt, ei) ** 2 + B0z(kt_low(kf) + kt, ei) ** 2
+          ktri = kt_low(kf) + kt
+          tri = mesh_element_rmp(ktri)
+          r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
+          B2avg(kf) = B2avg(kf) + B0r(ktri, tri%ef) ** 2 + &
+               B0phi(ktri, tri%ef) ** 2 + B0z(ktri, tri%ef) ** 2
+          r = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
+          B2avg_half(kf) = B2avg_half(kf) + B0r(ktri, tri%ei) ** 2 + &
+               B0phi(ktri, tri%ei) ** 2 + B0z(ktri, tri%ei) ** 2
        end do
        B2avg(kf) = B2avg(kf) / kt_max(kf)
        B2avg_half(kf) = B2avg_half(kf) / kt_max(kf)
 
        do kt = 1, kt_max(kf)
-          elem = mesh_element(kt_low(kf) + kt)
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+          tri = mesh_element_rmp(ktri)
 
-          r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
+          r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
           select case (curr_prof)
           case (curr_prof_efit)
-             if (orient) then
-                j0phi(kt_low(kf) + kt, ef) = clight * (fs%dp_dpsi(kf) * r + &
+             if (tri%orient) then
+                j0phi(ktri, tri%ef) = clight * (fs%dp_dpsi(kf) * r + &
                      0.25d0 / pi * fs%FdF_dpsi(kf) / r)
              else
-                j0phi(kt_low(kf) + kt, ef) = clight * (fs%dp_dpsi(kf-1) * r + &
+                j0phi(ktri, tri%ef) = clight * (fs%dp_dpsi(kf-1) * r + &
                      0.25d0 / pi * fs%FdF_dpsi(kf-1) / r)
              end if
           case (curr_prof_rot)
-             z = sum(mesh_point(lf(:))%zcoord) * 0.5d0
-             j0phi(kt_low(kf) + kt, ef) = j0phi_ampere(r, z)
+             z = sum(mesh_point(tri%lf(:))%zcoord) * 0.5d0
+             j0phi(ktri, tri%ef) = j0phi_ampere(r, z)
           case (curr_prof_ps)
-             Btor2 = B0phi(kt_low(kf) + kt, ef) ** 2
-             if (.not. orient) then
-                j0phi(kt_low(kf) + kt, ef) = clight * fs%dp_dpsi(kf-1) * (1d0 - Btor2 / &
-                     B2avg(kf-1)) * r
+             Btor2 = B0phi(ktri, tri%ef) ** 2
+             if (.not. tri%orient) then
+                j0phi(ktri, tri%ef) = clight * r * fs%dp_dpsi(kf-1) * (1d0 - &
+                     Btor2 / B2avg(kf-1))
              else
-                j0phi(kt_low(kf) + kt, ef) = clight * fs%dp_dpsi(kf) * (1d0 - Btor2 / &
-                     B2avg(kf)) * r
+                j0phi(ktri, tri%ef) = clight * r * fs%dp_dpsi(kf) * (1d0 - &
+                     Btor2 / B2avg(kf))
              end if
           end select
 
-          r = sum(mesh_point(li(:))%rcoord) * 0.5d0
+          r = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
           select case (curr_prof)
           case (curr_prof_efit)
-             j0phi(kt_low(kf) + kt, ei) = clight * (fs_half%dp_dpsi(kf) * r + &
+             j0phi(ktri, tri%ei) = clight * (fs_half%dp_dpsi(kf) * r + &
                   0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
           case (curr_prof_rot)
-             z = sum(mesh_point(li(:))%zcoord) * 0.5d0
-             j0phi(kt_low(kf) + kt, ei) = j0phi_ampere(r, z)
+             z = sum(mesh_point(tri%li(:))%zcoord) * 0.5d0
+             j0phi(ktri, tri%ei) = j0phi_ampere(r, z)
           case (curr_prof_ps)
-             Btor2 = B0phi(kt_low(kf) + kt, ei) ** 2
-             j0phi(kt_low(kf) + kt, ei) = clight * (fs%p(kf) - fs%p(kf-1)) / &
+             Btor2 = B0phi(ktri, tri%ei) ** 2
+             j0phi(ktri, tri%ei) = clight * (fs%p(kf) - fs%p(kf-1)) / &
                   (fs%psi(kf) - fs%psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
           end select
 
-          r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
+          r = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
           select case (curr_prof)
           case (curr_prof_efit)
-             j0phi(kt_low(kf) + kt, eo) = clight * (fs_half%dp_dpsi(kf) * r + &
+             j0phi(ktri, tri%eo) = clight * (fs_half%dp_dpsi(kf) * r + &
                   0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
           case (curr_prof_rot)
-             z = sum(mesh_point(lo(:))%zcoord) * 0.5d0
-             j0phi(kt_low(kf) + kt, eo) = j0phi_ampere(r, z)
+             z = sum(mesh_point(tri%lo(:))%zcoord) * 0.5d0
+             j0phi(ktri, tri%eo) = j0phi_ampere(r, z)
           case (curr_prof_ps)
-             Btor2 = B0phi(kt_low(kf) + kt, eo) ** 2
-             j0phi(kt_low(kf) + kt, eo) = clight * (fs%p(kf) - fs%p(kf-1)) / &
+             Btor2 = B0phi(ktri, tri%eo) ** 2
+             j0phi(ktri, tri%eo) = clight * (fs%p(kf) - fs%p(kf-1)) / &
                   (fs%psi(kf) - fs%psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
           end select
 
-          call ring_centered_avg_coord(elem, r, z)
           select case (curr_prof)
           case (curr_prof_efit)
-             plot_j0phi = clight * (fs_half%dp_dpsi(kf) * r + &
-                  0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
+             plot_j0phi = clight * (fs_half%dp_dpsi(kf) * tri%r_Omega + &
+                  0.25d0 / pi * fs_half%FdF_dpsi(kf) / tri%r_Omega)
           case (curr_prof_rot)
-             plot_j0phi = j0phi_ampere(r, z)
+             plot_j0phi = j0phi_ampere(tri%r_Omega, tri%z_Omega)
           case (curr_prof_ps)
-             Btor2 = B0phi_Omega(kt_low(kf) + kt) ** 2
-             plot_j0phi = clight * (fs%p(kf) - fs%p(kf-1)) / &
-                  (fs%psi(kf) - fs%psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+             Btor2 = B0phi_Omega(ktri) ** 2
+             plot_j0phi = clight * tri%r_Omega * (fs%p(kf) - fs%p(kf-1)) / &
+                  (fs%psi(kf) - fs%psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf))
           end select
 
-          write (1, *) j0phi(kt_low(kf) + kt, 1), j0phi(kt_low(kf) + kt, 2), &
-               j0phi(kt_low(kf) + kt, 3), plot_j0phi
+          write (1, *) j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), plot_j0phi
        end do
     end do
     do kt = kt_low(nflux+1) + 1, ntri
@@ -957,14 +963,11 @@ contains
 
 
   subroutine check_curr0
-    integer :: kf, kt, fid_amp, fid_gs
+    integer :: kf, kt, ktri, fid_amp, fid_gs
     real(dp) :: r, z, n_r, n_z, cmp_amp, cmp_gs, Jr, Jp, Jz
-    type(triangle) :: elem
-    integer, dimension(2) :: li, lo, lf
-    integer :: ei, eo, ef
-    logical :: orient
     real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+    type(triangle_rmp) :: tri
 
     open(1, file = 'cmp_prof.dat', recl = longlines)
     open(newunit = fid_amp, file = 'j0_amp.dat', recl = longlines)
@@ -973,27 +976,29 @@ contains
        cmp_amp = 0d0
        cmp_gs = 0d0
        do kt = 1, kt_max(kf)
-          elem = mesh_element(kt_low(kf) + kt)
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient, n_r, n_z)
-          call ring_centered_avg_coord(elem, r, z)
+          ktri = kt_low(kf) + kt
+          tri = mesh_element_rmp(ktri)
+          call radially_outward_normal(ktri, n_r, n_z)
+          r = tri%r_Omega
+          z = tri%z_Omega
           call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
                dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
           dBpdR = dBpdR + fs_half%FdF_dpsi(kf) / fs_half%F(kf) * Bz
           dBpdZ = -fs_half%FdF_dpsi(kf) / fs_half%F(kf) * Br
           Jr = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * &
-               B0r_Omega(kt_low(kf) + kt)
+               B0r_Omega(ktri)
           Jz = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * &
-               B0z_Omega(kt_low(kf) + kt)
+               B0z_Omega(ktri)
           Jp = clight * (fs_half%dp_dpsi(kf) * r + 0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
           write (fid_gs, *) Jr, Jp, Jz
           cmp_gs = cmp_gs + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
-               (n_r * n_r + n_z * n_z) / (fs%psi(kf) - fs%psi(kf-1)) * elem%det_3 / clight
+               (n_r**2 + n_z**2) / (fs%psi(kf) - fs%psi(kf-1)) * 2d0 * tri%area / clight
           Jr = 0.25d0 / pi * clight * (-dBpdZ)
           Jp = 0.25d0 / pi * clight * (dBrdZ - dBzdR)
           Jz = 0.25d0 / pi * clight * (dBpdR + Bp / r)
           write (fid_amp, *) Jr, Jp, Jz
           cmp_amp = cmp_amp + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
-               (n_r * n_r + n_z * n_z) / (fs%psi(kf) - fs%psi(kf-1)) * elem%det_3 / clight
+               (n_r**2 + n_z**2) / (fs%psi(kf) - fs%psi(kf-1)) * 2d0 * tri%area / clight
        end do
        cmp_amp = cmp_amp / kt_max(kf)
        cmp_gs = cmp_gs / kt_max(kf)
@@ -1013,49 +1018,45 @@ contains
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(nkpol) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kt, kp
+    integer :: kf, kt, ktri, kp
     integer :: nz
     integer, dimension(2*nkpol) :: irow, icol
     complex(dp), dimension(2*nkpol) :: aval
-    type(triangle) :: elem
-    integer, dimension(2) :: li, lo, lf
-    integer :: ei, eo, ef
-    logical :: orient
+    type(triangle_rmp) :: tri
     type(knot) :: base, tip
     integer :: common_tri(2)
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
     do kf = 1, nflux
-inner: do kt = 1, kt_max(kf)
-          elem = mesh_element(kt_low(kf) + kt)
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          if (.not. orient) cycle inner
+       inner: do kt = 1, kt_max(kf)
+          ktri = kt_low(kf) + kt
+          tri = mesh_element_rmp(ktri)
+          if (.not. tri%orient) cycle inner
           if (kf < nflux) then
-             common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
+             common_tri = [ktri, mesh_element(ktri)%neighbour(tri%ef)]
           else
              ! triangles outside LCFS are comparatively distorted
              ! use linear extrapolation instead, i.e. a triangle of the same size
-             common_tri = (/ kt_low(kf) + kt, kt_low(kf) + kt /)
+             common_tri = [ktri, ktri]
           end if
           ! use midpoint of edge f
-          base = mesh_point(lf(1))
-          tip = mesh_point(lf(2))
+          base = mesh_point(tri%lf(1))
+          tip = mesh_point(tri%lf(2))
           r = (base%rcoord + tip%rcoord) * 0.5d0
           lr = tip%rcoord - base%rcoord
           lz = tip%zcoord - base%zcoord
 
-          Bnpsi = Bnflux(kt_low(kf) + kt, ef) / r * (fs%psi(kf+1) - fs%psi(kf-1)) / &
-               sum(mesh_element(common_tri(:))%det_3)
+          Bnpsi = Bnflux(ktri, tri%ef) / r * (fs%psi(kf+1) - fs%psi(kf-1)) / &
+               sum(mesh_element_rmp(common_tri(:))%area) * 0.5d0
 
-          kp = lf(1) - kp_low(kf)
+          kp = tri%lf(1) - kp_low(kf)
 
           x(kp) = -fs%dp_dpsi(kf) * Bnpsi
 
-          a(kp) = (B0r(kt_low(kf) + kt, ef) * lr + B0z(kt_low(kf) + kt, ef) * lz) / &
-               (lr ** 2 + lz ** 2)
+          a(kp) = (B0r(ktri, tri%ef) * lr + B0z(ktri, tri%ef) * lz) / (lr ** 2 + lz ** 2)
 
-          b(kp) = imun * (n + imun * damp) * B0phi(kt_low(kf) + kt, ef) / r
+          b(kp) = imun * (n + imun * damp) * B0phi(ktri, tri%ef) / r
        end do inner
 
        ! solve linear system
@@ -1107,12 +1108,11 @@ inner: do kt = 1, kt_max(kf)
   !> and edge 3 from knot 3 to knot 1. It is not assumed that knots are orderd
   !> counter-clockwise locally.
 
-  subroutine get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient, nfr, nfz)
+  subroutine get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
     type(triangle), intent(in) :: elem
     integer, dimension(2), intent(out) :: li, lo, lf
     integer, intent(out) :: ei, eo, ef
     logical, intent(out) :: orient
-    real(dp), intent(out), optional :: nfr, nfz
     integer, dimension(3) :: i_knot_diff
     integer :: knot_i, knot_o, knot_f
     integer :: i1, i2
@@ -1181,20 +1181,6 @@ inner: do kt = 1, kt_max(kf)
        if (log_debug) write(logfile, *) errmsg
        stop errmsg
     end if
-    if (present(nfr)) then
-       if (orient) then
-          nfr = mesh_point(lf(2))%zcoord - mesh_point(lf(1))%zcoord
-       else
-          nfr = mesh_point(lf(1))%zcoord - mesh_point(lf(2))%zcoord
-       end if
-    end if
-    if (present(nfz)) then
-       if (orient) then
-          nfz = mesh_point(lf(1))%rcoord - mesh_point(lf(2))%rcoord
-       else
-          nfz = mesh_point(lf(2))%rcoord - mesh_point(lf(1))%rcoord
-       end if
-    end if
   end subroutine get_labeled_edges
 
 
@@ -1213,10 +1199,7 @@ inner: do kt = 1, kt_max(kf)
     integer, dimension(4 * nkpol) :: irow, icol
     complex(dp), dimension(4 * nkpol) :: aval
     type(triangle) :: elem
-    real(dp) :: area
-    integer, dimension(2) :: li, lo, lf
-    integer :: ei, eo, ef
-    logical :: orient
+    type(triangle_rmp) :: tri
     complex(dp) :: Bnphi_Gamma
     real(dp) :: r
 
@@ -1226,33 +1209,33 @@ inner: do kt = 1, kt_max(kf)
        do kt = 1, kt_max(kf)
           ktri = kt_low(kf) + kt
           elem = mesh_element(ktri)
-          area = elem%det_3 * 0.5d0
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+          tri = mesh_element_rmp(ktri)
           ! first term on source side: flux through edge f
-          r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
-          jnflux(ktri, ef) = j0phi(ktri, ef) / B0phi(ktri, ef) * Bnflux(ktri, ef) + &
-               clight * r / B0phi(ktri, ef) * (presn(lf(2)) - presn(lf(1)))
-          x(kt) = -jnflux(ktri, ef)
+          r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
+          jnflux(ktri, tri%ef) = j0phi(ktri, tri%ef) / B0phi(ktri, tri%ef) * &
+               Bnflux(ktri, tri%ef) + &
+               clight * r / B0phi(ktri, tri%ef) * (presn(tri%lf(2)) - presn(tri%lf(1)))
+          x(kt) = -jnflux(ktri, tri%ef)
           ! diagonal matrix element - edge i
-          d(kt) = -1d0 - imun * (n + imun * damp) * area * 0.5d0 * &
-               B0phi(ktri, ei) / B0flux(ktri, ei)
+          d(kt) = -1d0 - imun * (n + imun * damp) * tri%area * 0.5d0 * &
+               B0phi(ktri, tri%ei) / B0flux(ktri, tri%ei)
           ! additional term from edge i on source side
-          r = sum(mesh_point(li(:))%rcoord) * 0.5d0
-          Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(ei)))
-          x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / B0flux(ktri, ei) * &
-               (Bnphi_Gamma / B0phi(ktri, ei) * (fs%p(kf) - fs%p(kf-1)) - &
-               (presn(li(2)) - presn(li(1)))) + j0phi(ktri, ei) * &
-               (Bnphi_Gamma / B0phi(ktri, ei) - Bnflux(ktri, ei) / B0flux(ktri, ei)))
+          r = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
+          Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(tri%ei)))
+          x(kt) = x(kt) - imun * n * tri%area * 0.5d0 * (clight * r / B0flux(ktri, tri%ei) * &
+               (Bnphi_Gamma / B0phi(ktri, tri%ei) * (fs%p(kf) - fs%p(kf-1)) - &
+               (presn(tri%li(2)) - presn(tri%li(1)))) + j0phi(ktri, tri%ei) * &
+               (Bnphi_Gamma / B0phi(ktri, tri%ei) - Bnflux(ktri, tri%ei) / B0flux(ktri, tri%ei)))
           ! superdiagonal matrix element - edge o
-          du(kt) = 1d0 + imun * (n + imun * damp) * area * 0.5d0 * &
-               B0phi(ktri, eo) / B0flux(ktri, eo)
+          du(kt) = 1d0 + imun * (n + imun * damp) * tri%area * 0.5d0 * &
+               B0phi(ktri, tri%eo) / B0flux(ktri, tri%eo)
           ! additional term from edge o on source side
-          r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
-          Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(eo)))
-          x(kt) = x(kt) - imun * n * area * 0.5d0 * (clight * r / B0flux(ktri, eo) * &
-               (Bnphi_Gamma / B0phi(ktri, eo) * (fs%p(kf-1) - fs%p(kf)) - &
-               (presn(lo(2)) - presn(lo(1)))) + j0phi(ktri, eo) * &
-               (Bnphi_Gamma / B0phi(ktri, eo) - Bnflux(ktri, eo) / B0flux(ktri, eo)))
+          r = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
+          Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(tri%eo)))
+          x(kt) = x(kt) - imun * n * tri%area * 0.5d0 * (clight * r / B0flux(ktri, tri%eo) * &
+               (Bnphi_Gamma / B0phi(ktri, tri%eo) * (fs%p(kf-1) - fs%p(kf)) - &
+               (presn(tri%lo(2)) - presn(tri%lo(1)))) + j0phi(ktri, tri%eo) * &
+               (Bnphi_Gamma / B0phi(ktri, tri%eo) - Bnflux(ktri, tri%eo) / B0flux(ktri, tri%eo)))
        end do
        call assemble_sparse(kt_max(kf), d(:kt_max(kf)), du(:kt_max(kf)), nz, &
             irow(:(2*kt_max(kf))), icol(:(2*kt_max(kf))), aval(:(2*kt_max(kf))))
@@ -1271,12 +1254,10 @@ inner: do kt = 1, kt_max(kf)
        avg_rel_err = avg_rel_err + sum(rel_err(:kt_max(kf)))
        do kt = 1, kt_max(kf)
           ktri = kt_low(kf) + kt
-          elem = mesh_element(ktri)
-          area = elem%det_3 * 0.5d0
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          jnflux(ktri, ei) = -x(kt)
-          jnflux(ktri, eo) = x(mod(kt, kt_max(kf)) + 1)
-          jnphi(ktri) = sum(jnflux(ktri, :)) * imun / n / area
+          tri = mesh_element_rmp(ktri)
+          jnflux(ktri, tri%ei) = -x(kt)
+          jnflux(ktri, tri%eo) = x(mod(kt, kt_max(kf)) + 1)
+          jnphi(ktri) = sum(jnflux(ktri, :)) * imun / n / tri%area
        end do
     end do
     avg_rel_err = avg_rel_err / sum(kt_max(1:nflux))
@@ -1293,52 +1274,44 @@ inner: do kt = 1, kt_max(kf)
 
   subroutine add_sheet_current
     integer :: kf, kt, ktri
-    type(triangle) :: elem, elem_adj
-    integer, dimension(2) :: li, lo, lf, li_adj, lo_adj, lf_adj
-    integer :: ei, eo, ef, ei_adj, eo_adj, ef_adj
-    logical :: orient, orient_adj
+    type(triangle_rmp) :: tri, tri_adj
     complex(dp) :: presn_half
     do kf = 1, nflux
        if (m_res(kf) > 0) then
           if (sheet_current_factor(m_res(kf)) /= (0d0, 0d0)) then
              do kt = 1, kt_max(kf)
                 ktri = kt_low(kf) + kt
-                elem = mesh_element(ktri)
-                call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+                tri = mesh_element_rmp(ktri)
                 ! add sheet current on edge i
                 if (mod(kt, 2) == 0) then
                    ! edge i is diagonal
-                   if (orient) then
-                      presn_half = 0.5d0 * sum(presn(lf(:)))
+                   if (tri%orient) then
+                      presn_half = 0.5d0 * sum(presn(tri%lf(:)))
                    else
-                      elem_adj = mesh_element(elem%neighbour(ei))
-                      call get_labeled_edges(elem_adj, li_adj, lo_adj, lf_adj, &
-                           ei_adj, eo_adj, ef_adj, orient_adj)
-                      presn_half = 0.5d0 * sum(presn(lf_adj(:)))
+                      tri_adj = mesh_element_rmp(mesh_element(ktri)%neighbour(tri%ei))
+                      presn_half = 0.5d0 * sum(presn(tri_adj%lf(:)))
                    end if
                 else
-                   presn_half = presn(li(2))
+                   presn_half = presn(tri%li(2))
                 end if
-                jnflux(ktri, ei) = jnflux(ktri, ei) + sheet_current_factor(m_res(kf)) * &
-                     B0flux(ktri, ei) * presn_half
+                jnflux(ktri, tri%ei) = jnflux(ktri, tri%ei) + &
+                     sheet_current_factor(m_res(kf)) * B0flux(ktri, tri%ei) * presn_half
                 ! add sheet current on edge o
                 if (mod(kt, 2) == 1) then
                    ! edge o is diagonal
-                   if (orient) then
-                      presn_half = 0.5d0 * sum(presn(lf(:)))
+                   if (tri%orient) then
+                      presn_half = 0.5d0 * sum(presn(tri%lf(:)))
                    else
-                      elem_adj = mesh_element(elem%neighbour(eo))
-                      call get_labeled_edges(elem_adj, li_adj, lo_adj, lf_adj, &
-                           ei_adj, eo_adj, ef_adj, orient_adj)
-                      presn_half = 0.5d0 * sum(presn(lf_adj(:)))
+                      tri_adj = mesh_element_rmp(mesh_element(ktri)%neighbour(tri%eo))
+                      presn_half = 0.5d0 * sum(presn(tri_adj%lf(:)))
                    end if
                 else
-                   presn_half = presn(lo(1))
+                   presn_half = presn(tri%lo(1))
                 end if
-                jnflux(ktri, eo) = jnflux(ktri, eo) + sheet_current_factor(m_res(kf)) * &
-                     B0flux(ktri, eo) * presn_half
+                jnflux(ktri, tri%eo) = jnflux(ktri, tri%eo) + &
+                     sheet_current_factor(m_res(kf)) * B0flux(ktri, tri%eo) * presn_half
                 ! adjust toroidal current density
-                jnphi(ktri) = sum(jnflux(ktri, :)) * imun / n / elem%det_3 * 2d0
+                jnphi(ktri) = sum(jnflux(ktri, :)) * imun / n / tri%area
              end do
           end if
        end if
@@ -1349,39 +1322,31 @@ inner: do kt = 1, kt_max(kf)
     complex(dp), intent(inout) :: pol_flux(:,:)
     complex(dp), intent(inout) :: tor_comp(:)
 
-    integer :: kf, kt
+    integer :: kf, kt, ktri1, ktri2
     complex(dp) :: tor_flux_avg, tor_flux_diff
-    type(triangle) :: elem1, elem2
-    integer, dimension(2) :: li, lo, lf
-    integer :: ei1, eo1, ef1, ei2, eo2, ef2
-    logical :: orient
+    type(triangle_rmp) :: tri1, tri2
 
     do kf = 2, nflux
        do kt = 1, kt_max(kf), 2
-          elem1 = mesh_element(kt_low(kf) + kt)
-          elem2 = mesh_element(kt_low(kf) + kt + 1)
-          call get_labeled_edges(elem1, li, lo, lf, ei1, eo1, ef1, orient)
-          call get_labeled_edges(elem2, li, lo, lf, ei2, eo2, ef2, orient)
-          tor_flux_avg = 0.25d0 * (tor_comp(kt_low(kf) + kt) * elem1%det_3 + &
-               tor_comp(kt_low(kf) + kt + 1) * elem2%det_3)
-          tor_flux_diff = 0.25d0 * (-tor_comp(kt_low(kf) + kt) * elem1%det_3 + &
-               tor_comp(kt_low(kf) + kt + 1) * elem2%det_3)
-          tor_comp(kt_low(kf) + kt) = tor_flux_avg / elem1%det_3 * 2d0
-          pol_flux(kt_low(kf) + kt, eo1) = pol_flux(kt_low(kf) + kt, eo1) - imun * n * &
-                  tor_flux_diff
-          tor_comp(kt_low(kf) + kt + 1) = tor_flux_avg / elem2%det_3 * 2d0
-          pol_flux(kt_low(kf) + kt + 1, ei2) = pol_flux(kt_low(kf) + kt + 1, ei2) + &
-               imun * n * tor_flux_diff
+          ktri1 = kt_low(kf) + kt
+          ktri2 = kt_low(kf) + kt + 1
+          tri1 = mesh_element_rmp(ktri1)
+          tri2 = mesh_element_rmp(ktri2)
+          tor_flux_avg = 0.5d0 * (tor_comp(ktri2) * tri2%area + &
+               tor_comp(ktri1) * tri1%area)
+          tor_flux_diff = 0.5d0 * (tor_comp(ktri2) * tri2%area - &
+               tor_comp(ktri1) * tri1%area)
+          tor_comp(ktri1) = tor_flux_avg / tri1%area
+          pol_flux(ktri1, tri1%eo) = pol_flux(ktri1, tri1%eo) - imun * n * tor_flux_diff
+          tor_comp(ktri2) = tor_flux_avg / tri2%area
+          pol_flux(ktri2, tri2%ei) = pol_flux(ktri2, tri2%ei) + imun * n * tor_flux_diff
        end do
     end do
   end subroutine avg_flux_on_quad
 
   subroutine compute_Bn_nonres
-    integer :: kf, kt
-    type(triangle) :: elem
-    integer, dimension(2) :: li, lo, lf
-    integer :: ei, eo, ef
-    logical :: orient
+    integer :: kf, kt, ktri
+    type(triangle_rmp) :: tri
     integer :: common_tri(2)
     real(dp) :: Deltapsi
     complex(dp) :: Bnpsi
@@ -1389,29 +1354,28 @@ inner: do kt = 1, kt_max(kf)
 
     do kf = 1, nflux ! loop through flux surfaces
        do kt = 1, kt_max(kf)
-          elem = mesh_element(kt_low(kf) + kt)
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-          if (orient) then
+          ktri = kt_low(kf) + kt
+          tri = mesh_element_rmp(ktri)
+          if (tri%orient) then
              Deltapsi = fs%psi(kf+1) - fs%psi(kf-1)
           else
              Deltapsi = fs%psi(kf-2) - fs%psi(kf)
           end if
-          if (kf == nflux .and. orient) then
+          if (kf == nflux .and. tri%orient) then
              ! triangles outside LCFS are comparatively distorted
              ! use linear extrapolation instead, i.e. a triangle of the same size
-             common_tri = (/ kt_low(kf) + kt, kt_low(kf) + kt /)
+             common_tri = [ktri, ktri]
           else
-             common_tri = (/ kt_low(kf) + kt, elem%neighbour(ef) /)
+             common_tri = [ktri, mesh_element(ktri)%neighbour(tri%ef)]
           end if
           ! use midpoint of edge f
-          r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
-          Bnpsi = -R0 * B0phi(kt_low(kf) + kt, ef) / r
-          Bnflux(kt_low(kf) + kt, ef) = Bnpsi * r / Deltapsi * &
-               sum(mesh_element(common_tri(:))%det_3)
-          Bnphi(kt_low(kf) + kt) = imun / n * Bnflux(kt_low(kf) + kt, ef) &
-               / elem%det_3 * 2d0
-          Bnflux(kt_low(kf) + kt, ei) = (0d0, 0d0)
-          Bnflux(kt_low(kf) + kt, eo) = (0d0, 0d0)
+          r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
+          Bnpsi = -R0 * B0phi(ktri, tri%ef) / r
+          Bnflux(ktri, tri%ef) = Bnpsi * r / Deltapsi * 2d0 * &
+               sum(mesh_element_rmp(common_tri(:))%area)
+          Bnphi(ktri) = imun / n * Bnflux(ktri, tri%ef) / tri%area
+          Bnflux(ktri, tri%ei) = (0d0, 0d0)
+          Bnflux(ktri, tri%eo) = (0d0, 0d0)
        end do
     end do
     if (quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
@@ -1425,19 +1389,19 @@ inner: do kt = 1, kt_max(kf)
     real(dp), intent(in) :: r, z
     complex(dp), intent(out) :: pol_comp_r, pol_comp_z
     type(triangle) :: elem
-    type(knot) :: tri(3)
+    type(knot) :: node(3)
 
     elem = mesh_element(ktri)
-    tri = mesh_point(elem%i_knot(:))
+    node = mesh_point(elem%i_knot(:))
     ! edge 1 lies opposite to knot 3, etc.
     pol_comp_r = 1d0 / elem%det_3 * ( &
-         pol_flux(ktri, 1) * (r - tri(3)%rcoord) + &
-         pol_flux(ktri, 2) * (r - tri(1)%rcoord) + &
-         pol_flux(ktri, 3) * (r - tri(2)%rcoord))
+         pol_flux(ktri, 1) * (r - node(3)%rcoord) + &
+         pol_flux(ktri, 2) * (r - node(1)%rcoord) + &
+         pol_flux(ktri, 3) * (r - node(2)%rcoord))
     pol_comp_z = 1d0 / elem%det_3 * ( &
-         pol_flux(ktri, 1) * (z - tri(3)%zcoord) + &
-         pol_flux(ktri, 2) * (z - tri(1)%zcoord) + &
-         pol_flux(ktri, 3) * (z - tri(2)%zcoord))
+         pol_flux(ktri, 1) * (z - node(3)%zcoord) + &
+         pol_flux(ktri, 2) * (z - node(1)%zcoord) + &
+         pol_flux(ktri, 3) * (z - node(2)%zcoord))
   end subroutine interp_RT0
 
   pure function sqrt_g(kf, kt, r) result(metric_det)
@@ -1447,20 +1411,31 @@ inner: do kt = 1, kt_max(kf)
     metric_det = -fs_half%q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
   end function sqrt_g
 
+  subroutine radially_outward_normal(ktri, n_r, n_z)
+    integer, intent(in) :: ktri
+    real(dp), intent(out) :: n_r
+    real(dp), intent(out) :: n_z
+    type(triangle_rmp) :: tri
+
+    tri = mesh_element_rmp(ktri)
+    if (tri%orient) then
+       n_r = mesh_point(tri%lf(2))%zcoord - mesh_point(tri%lf(1))%zcoord
+       n_z = mesh_point(tri%lf(1))%rcoord - mesh_point(tri%lf(2))%rcoord
+    else
+       n_r = mesh_point(tri%lf(1))%zcoord - mesh_point(tri%lf(2))%zcoord
+       n_z = mesh_point(tri%lf(2))%rcoord - mesh_point(tri%lf(1))%rcoord
+    end if
+  end subroutine radially_outward_normal
+
   subroutine write_vector_plot(pol_flux, tor_comp, outfile)
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
 
-    integer :: kf, kt, n_cutoff
-    type(triangle) :: elem
+    integer :: kf, kt, ktri, n_cutoff
+    type(triangle_rmp) :: tri
     complex(dp) :: pol_comp_r, pol_comp_z, dens_psi_contravar, proj_theta_covar
-    real(dp) :: r, z
-
-    integer, dimension(2) :: li, lo, lf
-    integer :: ei, eo, ef
-    logical :: orient
-    real(dp) :: n_r, n_z
+    real(dp) :: r, z, n_r, n_z
 
     open(1, file = outfile, recl = longlines)
     if (nonres) then
@@ -1470,20 +1445,23 @@ inner: do kt = 1, kt_max(kf)
     end if
     do kf = 1, n_cutoff
        do kt = 1, kt_max(kf)
-          elem = mesh_element(kt_low(kf) + kt)
-          call ring_centered_avg_coord(elem, r, z)
-          call interp_RT0(kt_low(kf) + kt, pol_flux, r, z, pol_comp_r, pol_comp_z)
-          call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient, n_r, n_z)
+          ktri = kt_low(kf) + kt
+          tri = mesh_element_rmp(ktri)
+          r = tri%R_Omega
+          z = tri%Z_Omega
+          call interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)
           ! projection to contravariant psi component
+          call radially_outward_normal(ktri, n_r, n_z)
           dens_psi_contravar = (pol_comp_r * n_r + pol_comp_z * n_z) * &
-               (fs%psi(kf) - fs%psi(kf-1)) / elem%det_3 * sqrt_g(kf, kt, r)
+               (fs%psi(kf) - fs%psi(kf-1)) / tri%area * 0.5d0 * sqrt_g(kf, kt, r)
           ! projection to covariant theta component
-          proj_theta_covar = -(pol_comp_r * B0r_Omega(kt_low(kf) + kt) + &
-               pol_comp_z * B0z_Omega(kt_low(kf) + kt)) * sqrt_g(kf, kt, r)
-          write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), real(pol_comp_z), &
-               aimag(pol_comp_z), real(tor_comp(kt_low(kf) + kt)), &
-               aimag(tor_comp(kt_low(kf) + kt)), real(dens_psi_contravar), &
-               aimag(dens_psi_contravar), real(proj_theta_covar), aimag(proj_theta_covar)
+          proj_theta_covar = -(pol_comp_r * B0r_Omega(ktri) + &
+               pol_comp_z * B0z_Omega(ktri)) * sqrt_g(kf, kt, r)
+          write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), &
+               real(pol_comp_z), aimag(pol_comp_z), &
+               real(tor_comp(ktri)), aimag(tor_comp(ktri)), &
+               real(dens_psi_contravar), aimag(dens_psi_contravar), &
+               real(proj_theta_covar), aimag(proj_theta_covar)
        end do
     end do
     r = mesh_point(1)%rcoord
@@ -1558,8 +1536,8 @@ inner: do kt = 1, kt_max(kf)
     integer, parameter :: mmax = 24
     character(len = 19) :: fmt
     complex(dp), dimension(-mmax:mmax) :: coeff_rho, coeff_theta, coeff_zeta, fourier_basis
-    integer :: kf, kt, m, fid_rho, fid_theta, fid_zeta, fid_furth
-    type(triangle) :: elem
+    integer :: kf, kt, ktri, m, fid_rho, fid_theta, fid_zeta, fid_furth
+    type(triangle_rmp) :: tri
     complex(dp) :: pol_comp_r, pol_comp_z, pol_comp_rho, pol_comp_theta, sheet_current
     real(dp) :: r, z, rmaxis, zmaxis, rho_max, rho, theta, k_zeta, k_theta
 
@@ -1584,20 +1562,21 @@ inner: do kt = 1, kt_max(kf)
        sheet_current = 0d0
        rho = rho_max * (dble(kf) - 0.5d0) / dble(nflux)
        do kt = 1, kt_max(kf)
+          ktri = kt_low(kf) + kt
           theta = (dble(kt) - 0.5d0) / dble(kt_max(kf)) * 2d0 * pi
           ! result_spectrum.f90 uses negative q, so poloidal modes are switched
           ! we invert the sign here to keep post-processing consistent
           fourier_basis = [(exp(imun * m * theta), m = -mmax, mmax)]
           r = rmaxis + rho * cos(theta)
           z = zmaxis + rho * sin(theta)
-          elem = mesh_element(kt_low(kf) + kt)
-          call interp_RT0(kt_low(kf) + kt, pol_flux, r, z, pol_comp_r, pol_comp_z)
+          tri = mesh_element_rmp(ktri)
+          call interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)
           pol_comp_rho = pol_comp_r * cos(theta) + pol_comp_z * sin(theta)
           pol_comp_theta = pol_comp_z * cos(theta) - pol_comp_r * sin(theta)
           coeff_rho = coeff_rho + pol_comp_rho * fourier_basis
           coeff_theta = coeff_theta + pol_comp_theta * fourier_basis
-          coeff_zeta = coeff_zeta + tor_comp(kt_low(kf) + kt) * fourier_basis
-          sheet_current = sheet_current + 0.5d0 * elem%det_3 * jnphi(kt_low(kf) + kt) * &
+          coeff_zeta = coeff_zeta + tor_comp(ktri) * fourier_basis
+          sheet_current = sheet_current + tri%area * jnphi(ktri) * &
                fourier_basis(kilca_pol_mode)
        end do
        coeff_rho = coeff_rho / kt_max(kf)

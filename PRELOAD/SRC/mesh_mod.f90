@@ -73,14 +73,34 @@ module mesh_mod
      real(dp)                                 :: wsrr_rec_fix            !<= SRR
 ! bnorm - scalar product of perturbed unit vector along the manetic field with gradient
 ! of unperturbed poloidal flux (bnorm_vac - for vacuum field perturbation):
-     double complex                           :: bnorm_vac
+     complex(dp)                              :: bnorm_vac
 ! products of bnorm with thermodynamic forces comuted using poloidal flux as radial variable:
-     double complex,   dimension(2,nsorts)    :: bnorm_times_thermforces
+     complex(dp),      dimension(2,nsorts)    :: bnorm_times_thermforces
 ! perturbed currents through prism faces ("triangle edges"):
-     double complex,   dimension(legs,nsorts) :: currents
+     complex(dp),      dimension(legs,nsorts) :: currents
 ! perturbations of density, perpendicular and parallel stress tensor components
 ! (for slow rotations these are pressure tensor components) and parallel current density:
-     double complex,   dimension(nsorts)      :: denspert,prespert_perp,prespert_par,parcurrpert
+     complex(dp),      dimension(nsorts)      :: denspert,prespert_perp,prespert_par,parcurrpert
+     !> area of the triangle
+     real(dp) :: area
+     !> indices of nodes in #mesh_point for edge i, going counter-clockwise
+     integer :: li(2)
+     !> indices of nodes in #mesh_point for edge o, going counter-clockwise
+     integer :: lo(2)
+     !> indices of nodes in #mesh_point for edge f, going counter-clockwise
+     integer :: lf(2)
+     !> index of edge i in #mesh_element
+     integer :: ei
+     !> index of edge o in #mesh_element
+     integer :: eo
+     !> index of edge f in #mesh_element
+     integer :: ef
+     !> orientation of the triangle: if true, edge f lies on the outer flux surface
+     logical :: orient
+     !> \f$ R \f$ coordinate of triangle 'center'
+     real(dp) :: R_Omega
+     !> \f$ Z \f$ coordinate of triangle 'center'
+     real(dp) :: Z_Omega
   end type triangle_rmp
   type(triangle_rmp), dimension(:), allocatable :: mesh_element_rmp
 !------------------------------------------------------------------------------------
