@@ -302,7 +302,7 @@ contains
        allocate(this%dp_dpsi(nflux))
        allocate(this%q(nflux))
     else
-       allocate(this%psi(0:nflux+1))
+       allocate(this%psi(0:nflux))
        allocate(this%F(0:nflux))
        allocate(this%p(0:nflux))
        allocate(this%FdF_dpsi(0:nflux))

@@ -718,8 +718,6 @@ contains
        ! average over the loop to smooth out numerical errors
        fs%psi(kf) = sum(mesh_point((kp_low(kf) + 1):kp_low(kf+1))%psi_pol) / kp_max(kf)
     end do
-    ! linear extrapolation for value just outside LCFS
-    fs%psi(nflux+1) = fs%psi(nflux) + (fs%psi(nflux) - fs%psi(nflux-1))
 
     allocate(fs_half)
     call fs_half%init(nflux, .true.)
@@ -728,7 +726,7 @@ contains
     fs_half%psi = 0.5d0 * (fs%psi(0:nflux-1) + fs%psi(1:nflux))
 
     allocate(fluxvar)
-    call fluxvar%init(4, efit%nw, nflux, fs%psi(:nflux), fs_half%psi)
+    call fluxvar%init(4, efit%nw, nflux, fs%psi, fs_half%psi)
 
     call compute_pres_prof
     call compute_safety_factor
@@ -763,8 +761,8 @@ contains
     case (pres_prof_eps)
        ddens_dpsi = di0 / psimax
        dtemp_dpsi = ti0 / psimax
-       dens = (fs%psi(:nflux) - psimin) / psimax * di0 + d_min
-       temp = (fs%psi(:nflux) - psimin) / psimax * ti0 + t_min
+       dens = (fs%psi - psimin) / psimax * di0 + d_min
+       temp = (fs%psi - psimin) / psimax * ti0 + t_min
        if (log_info)  write (logfile, *) 'temp@axis: ', temp(0), ' dens@axis: ', dens(0)
        fs%p = dens * temp * ev2erg
        fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
@@ -775,8 +773,8 @@ contains
     case (pres_prof_par)
        ddens_dpsi = (di0 - d_min) / (psimax - psimin)
        dtemp_dpsi = (ti0 - t_min) / (psimax - psimin)
-       dens = (fs%psi(:nflux) - psimin) / (psimax - psimin) * (di0 - d_min) + d_min
-       temp = (fs%psi(:nflux) - psimin) / (psimax - psimin) * (ti0 - t_min) + t_min
+       dens = (fs%psi - psimin) / (psimax - psimin) * (di0 - d_min) + d_min
+       temp = (fs%psi - psimin) / (psimax - psimin) * (ti0 - t_min) + t_min
        fs%p = dens * temp * ev2erg
        fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
        dens(1:) = (fs_half%psi - psimin) / (psimax - psimin) * (di0 - d_min) + d_min
@@ -872,6 +870,7 @@ contains
        B2avg_half(kf) = B2avg_half(kf) / kt_max(kf)
 
        do kt = 1, kt_max(kf)
+          ktri = kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
 
           r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
@@ -908,8 +907,8 @@ contains
              j0phi(ktri, tri%ei) = j0phi_ampere(r, z)
           case (curr_prof_ps)
              Btor2 = B0phi(ktri, tri%ei) ** 2
-             j0phi(ktri, tri%ei) = clight * (fs%p(kf) - fs%p(kf-1)) / &
-                  (fs%psi(kf) - fs%psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+             j0phi(ktri, tri%ei) = clight * r * fs_half%dp_dpsi(kf) * (1d0 - &
+                  Btor2 / B2avg_half(kf))
           end select
 
           r = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
@@ -922,8 +921,8 @@ contains
              j0phi(ktri, tri%eo) = j0phi_ampere(r, z)
           case (curr_prof_ps)
              Btor2 = B0phi(ktri, tri%eo) ** 2
-             j0phi(ktri, tri%eo) = clight * (fs%p(kf) - fs%p(kf-1)) / &
-                  (fs%psi(kf) - fs%psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf)) * r
+             j0phi(ktri, tri%eo) = clight * r * fs_half%dp_dpsi(kf) * (1d0 - &
+                  Btor2 / B2avg_half(kf))
           end select
 
           select case (curr_prof)
@@ -934,8 +933,8 @@ contains
              plot_j0phi = j0phi_ampere(tri%r_Omega, tri%z_Omega)
           case (curr_prof_ps)
              Btor2 = B0phi_Omega(ktri) ** 2
-             plot_j0phi = clight * tri%r_Omega * (fs%p(kf) - fs%p(kf-1)) / &
-                  (fs%psi(kf) - fs%psi(kf-1)) * (1d0 - Btor2 / B2avg_half(kf))
+             plot_j0phi = clight * tri%r_Omega * fs_half%dp_dpsi(kf) * (1d0 - &
+                  Btor2 / B2avg_half(kf))
           end select
 
           write (1, *) j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), plot_j0phi
@@ -1011,7 +1010,7 @@ contains
 
   !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
   subroutine compute_presn
-    real(dp) :: r
+    real(dp) :: r, Deltapsi
     real(dp) :: lr, lz  ! edge vector components
     complex(dp) :: Bnpsi
     complex(dp), dimension(nkpol) :: a, b, x, d, du, inhom
@@ -1029,6 +1028,12 @@ contains
     max_rel_err = 0d0
     avg_rel_err = 0d0
     do kf = 1, nflux
+       if (kf < nflux) then
+          Deltapsi = fs%psi(kf+1) - fs%psi(kf-1)
+       else
+          ! use linear interpolation for values outside LCFS
+          Deltapsi = 2d0 * (fs%psi(kf) - fs%psi(kf-1))
+       end if
        inner: do kt = 1, kt_max(kf)
           ktri = kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
@@ -1047,7 +1052,7 @@ contains
           lr = tip%rcoord - base%rcoord
           lz = tip%zcoord - base%zcoord
 
-          Bnpsi = Bnflux(ktri, tri%ef) / r * (fs%psi(kf+1) - fs%psi(kf-1)) / &
+          Bnpsi = Bnflux(ktri, tri%ef) / r * Deltapsi / &
                sum(mesh_element_rmp(common_tri(:))%area) * 0.5d0
 
           kp = tri%lf(1) - kp_low(kf)
@@ -1357,7 +1362,12 @@ contains
           ktri = kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
           if (tri%orient) then
-             Deltapsi = fs%psi(kf+1) - fs%psi(kf-1)
+             if (kf < nflux) then
+                Deltapsi = fs%psi(kf+1) - fs%psi(kf-1)
+             else
+                ! use linear interpolation for values outside LCFS
+                Deltapsi = 2d0 * (fs%psi(kf) - fs%psi(kf-1))
+             end if
           else
              Deltapsi = fs%psi(kf-2) - fs%psi(kf)
           end if
@@ -1518,12 +1528,11 @@ contains
     real(dp) :: rho_r, rho_z
 
     open(1, file = fluxvar_file, recl = longlines)
-    write (1, *) 0d0, fs%psi(0), fs_half%q(1), fs%p(0), fs%dp_dpsi(0)
+    write (1, *) 0d0, fs%psi(0), fs%q(0), fs%p(0), fs%dp_dpsi(0)
     do kf = 1, nflux
        rho_r = mesh_point(kp_low(kf) + 1)%rcoord - mesh_point(1)%rcoord
        rho_z = mesh_point(kp_low(kf) + 1)%zcoord - mesh_point(1)%zcoord
-       write (1, *) hypot(rho_r, rho_z), fs%psi(kf), fs_half%q(kf), fs%p(kf), &
-            fs%dp_dpsi(kf)
+       write (1, *) hypot(rho_r, rho_z), fs%psi(kf), fs%q(kf), fs%p(kf), fs%dp_dpsi(kf)
     end do
     close(1)
   end subroutine write_fluxvar
