@@ -297,7 +297,7 @@ contains
        mesh_point(kpoint)%i_owner_tri(mesh_point(kpoint)%n_owners + 1) = ktri
        mesh_point(kpoint)%n_owners = mesh_point(kpoint)%n_owners + 1
     else
-       write (logfile, *) 'Maximal number of owning triangles exceeded at point ', kpoint
+       write (log, *) 'Maximal number of owning triangles exceeded at point ', kpoint
     end if
   end subroutine add_node_owner
 
@@ -353,7 +353,7 @@ contains
     k_z_r = tor_mode / R_0 * r
     status = fgsl_sf_bessel_icn_array(pol_mode-1, pol_mode+1, k_z_r, I_m)
     if (status /= fgsl_success .and. log_err) then
-       write (logfile, *) 'fgsl_sf_bessel_icn_array returned error ', status
+       write (log, *) 'fgsl_sf_bessel_icn_array returned error ', status
     end if
     B_r = (0.5d0, 0d0) * (I_m(-1) + I_m(1)) * cos(pol_mode * theta) &
          * kilca_vac_coeff

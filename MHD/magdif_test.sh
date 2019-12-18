@@ -6,4 +6,5 @@ else
     config="$1"
 fi
 ./fem_config.py $config
-../BUILD/bin/magdif_test.x $config | tee ${config%.*}.log
+rm $config.log
+../BUILD/bin/magdif_test.x $config & { pid=$! ; sleep 1 ; tail --pid=$pid -f $config.log ; }

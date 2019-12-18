@@ -6,6 +6,8 @@ module magdif_config
   implicit none
 
   character(len = 1024) :: config_file
+  character(len = 1024) :: log_file = ''
+  character(len = 1024) :: log_msg = ''
 
   integer, parameter :: longlines = 1024
 
@@ -24,7 +26,7 @@ module magdif_config
   integer, parameter :: q_prof_flux = 0 !< q profile from flux between flux surfaces
   integer, parameter :: q_prof_efit = 2 !< q profile from EFIT file
 
-  integer, parameter :: logfile = 6             !< log to stdout, TODO: make this configurable
+  integer :: log = 6  !< log to stdout
 
   integer :: log_level
   integer :: runmode

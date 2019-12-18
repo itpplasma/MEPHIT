@@ -162,8 +162,17 @@ contains
 
   !> Initialize magdif module
   subroutine magdif_init
+    use iso_fortran_env, only: output_unit
     use input_files, only: gfile
     integer :: m
+
+    if (trim(log_file) == '-') then
+       log = output_unit
+    elseif (trim(log_file) == '') then
+       open(newunit = log, file = trim(config_file) // '.log', status = 'replace')
+    else
+       open(newunit = log, file = log_file, status = 'replace')
+    end if
 
     ! only depends on config variables
     call init_indices
@@ -187,9 +196,11 @@ contains
     ! depends on safety factor
     call read_delayed_config
     if (log_info) then
-       write (logfile, *) 'poloidal mode number, sheet current factor'
+       log_msg = 'poloidal mode number, sheet current factor'
+       call log_write
        do m = lbound(sheet_current_factor, 1), ubound(sheet_current_factor, 1)
-          write (logfile, *) m, sheet_current_factor(m)
+          write (log_msg, *) m, sheet_current_factor(m)
+          call log_write
        end do
     end if
 
@@ -207,11 +218,13 @@ contains
     call write_vector_dof(Bnflux_vac, Bnphi_vac, Bn_vacout_file)
     call write_vector_plot(Bnflux_vac, Bnphi_vac, &
          decorate_filename(Bn_vacout_file, 'plot_', ''))
-    if (log_info) write(logfile, *) 'magdif initialized'
+    log_msg = 'magdif initialized'
+    if (log_info) call log_write
   end subroutine magdif_init
 
   !> Deallocates all previously allocated variables.
   subroutine magdif_cleanup
+    use iso_fortran_env, only: output_unit
     if (allocated(efit)) deallocate(efit)
     if (allocated(fluxvar)) deallocate(fluxvar)
     if (allocated(fs)) deallocate(fs)
@@ -240,8 +253,16 @@ contains
     if (allocated(kt_max)) deallocate(kt_max)
     if (allocated(kp_low)) deallocate(kp_low)
     if (allocated(kt_low)) deallocate(kt_low)
-    if (log_info) write(logfile, *) 'magdif cleanup finished'
+    log_msg = 'magdif cleanup finished'
+    if (log_info) call log_write
+    if (log /= output_unit) close(log)
   end subroutine magdif_cleanup
+
+  subroutine log_write
+    use iso_fortran_env, only: output_unit
+    write (log, *) trim(log_msg)
+    if (log /= output_unit) flush(log) ! or: write (output_unit, *) trim(log_msg)
+  end subroutine log_write
 
   subroutine magdif_single
     call compute_presn     ! compute pressure based on previous perturbation field
@@ -273,9 +294,11 @@ contains
        ieigen = 1
        call arnoldi(ndim, nritz, eigvals, next_iteration_arnoldi)
        if (log_info) then
-          write (logfile, *) 'Arnoldi method yields ', ngrow, ' Ritz eigenvalues > ', tol
+          write (log_msg, *) 'Arnoldi method yields ', ngrow, ' Ritz eigenvalues > ', tol
+          call log_write
           do i = 1, ngrow
-             write (logfile, *) 'lambda ', i, ': ', eigvals(i)
+             write (log_msg, *) 'lambda ', i, ': ', eigvals(i)
+             call log_write
           end do
        end if
        if (ngrow > 0) then
@@ -298,13 +321,14 @@ contains
           allocate(ipiv(ngrow))
           call zgesv(ngrow, ngrow, Lr, ngrow, ipiv, Yr, ngrow, info)
           if (allocated(ipiv)) deallocate(ipiv)
-          if (log_info) then
-             if (info == 0) then
-                write (logfile, *) 'Successfully inverted matrix for preconditioner'
-             else
-                write (logfile, *) 'Matrix inversion for preconditioner failed: zgesv returns error', info
-                stop
-             end if
+          if (info == 0) then
+             write (log_msg, *) 'Successfully inverted matrix for preconditioner'
+             if (log_info) call log_write
+          else
+             write (log_msg, *) 'Matrix inversion for preconditioner failed: ' // &
+                  'zgesv returns error', info
+             if (log_err) call log_write
+             stop
           end if
           do i = 1, ngrow
              Lr(i, :) = eigvals(i) * Yr(i, :)
@@ -321,7 +345,8 @@ contains
             matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn_prev)))
     end if
     do kiter = 0, niter-1
-       if (log_info) write(logfile, *) 'Iteration ', kiter, ' of ', niter-1
+       write (log_msg, *) 'Iteration ', kiter, ' of ', niter-1
+       if (log_info) call log_write
        write (postfix, postfix_fmt) kiter
 
        call next_iteration(ndim, Bn_prev, Bn)
@@ -427,10 +452,9 @@ contains
        kt_low(kf) = kt_low(kf-1) + kt_max(kf-1)
     end do
 
-    if (log_info) then
-       write (logfile, *) "Number of points up to LCFS: ", kp_low(nflux+1), &
-            "Number of triangles up to LCFS: ", kt_low(nflux+1)
-    end if
+    write (log_msg, *) "Number of points up to LCFS: ", kp_low(nflux+1), &
+         "Number of triangles up to LCFS: ", kt_low(nflux+1)
+    if (log_info) call log_write
   end subroutine init_indices
 
   !> Reads mesh points and triangles.
@@ -442,24 +466,26 @@ contains
   !> zero. Deallocation is done in magdif_cleanup().
   subroutine read_mesh
     use mesh_mod, only: bphicovar
-    integer :: kf, kt, ktri
+    integer :: kf, kt, ktri, fid
     type(triangle) :: elem
     type(triangle_rmp) :: tri
 
-    open(1, file = point_file, form = 'unformatted')
-    read(1) npoint
-    if (log_info) write(logfile, *) 'npoint = ', npoint
+    open(newunit = fid, file = point_file, form = 'unformatted', status = 'old')
+    read (fid) npoint
+    write (log_msg, *) 'npoint = ', npoint
+    if (log_info) call log_write
     allocate(mesh_point(npoint))
-    read(1) mesh_point
-    close(1)
+    read (fid) mesh_point
+    close(fid)
 
-    open(1, file = tri_file, form = 'unformatted')
-    read(1) ntri
-    if (log_info) write(logfile, *) 'ntri   = ', ntri
+    open(newunit = fid, file = tri_file, form = 'unformatted', status = 'old')
+    read(fid) ntri
+    write (log_msg, *) 'ntri   = ', ntri
+    if (log_info) call log_write
     allocate(mesh_element(ntri))
-    read(1) mesh_element
-    read(1) bphicovar
-    close(1)
+    read (fid) mesh_element
+    read (fid) bphicovar
+    close(fid)
 
     allocate(mesh_element_rmp(ntri))
     do kf = 1, nflux
@@ -517,7 +543,8 @@ contains
     integer :: stat = 0, dummy = 0
     call execute_command_line("./maxwell.sh", exitstat = stat, cmdstat = dummy)
     if (stat /= 0) then
-       if (log_err) write(logfile, *) 'FreeFem++ failed with exit code ', stat
+       write (log_msg, *) 'FreeFem++ failed with exit code ', stat
+       if (log_err) call log_write
        stop 'FreeFem++ failed'
     end if
   end subroutine compute_Bn
@@ -545,8 +572,6 @@ contains
 
     integer :: kt
     real(dp) :: div, abs_flux
-    character(len = len_trim(field_name) + 20) :: err_msg
-    err_msg = trim(field_name) // ' not divergence-free'
 
     do kt = 1, ntri
        abs_flux = sum(abs(pol_flux(kt,:))) + abs(imun * n * tor_comp(kt) * &
@@ -555,8 +580,10 @@ contains
           div = abs((sum(pol_flux(kt,:)) + imun * n * tor_comp(kt) * &
                mesh_element(kt)%det_3 * 0.5d0)) / abs_flux
           if (div > rel_err) then
-             if (log_err) write(logfile, *) err_msg, ' in triangle ', kt, ': ', div
-             stop err_msg
+              write (log_msg, *) trim(field_name) // ' not divergence-free in triangle ', &
+                   kt, ': ', div
+              if (log_err) call log_write
+              stop
           end if
        end if
     end do
@@ -569,8 +596,6 @@ contains
     integer :: ktri, ktri_adj, ke, ke_adj
     logical :: checked(ntri, 3), inconsistent
     real(dp), parameter :: eps = epsilon(1d0)
-    character(len = len_trim(name) + 30) :: err_msg
-    err_msg = trim(name) // ': inconsistent redundant edges'
 
     checked = .false.
     do ktri = 1, kt_low(nflux+1)
@@ -605,10 +630,11 @@ contains
                 end if
              end if
              if (inconsistent) then
-                if (log_err) write (logfile, *) err_msg, ' - ', &
+                write (log_msg, *) trim(name) // ': inconsistent redundant edges - ', &
                      name, '(', ktri, ',', ke, ') = ', pol_quant(ktri, ke), &
                      name, '(', ktri_adj, ',', ke_adj, ') = ', pol_quant(ktri_adj, ke_adj)
-                stop err_msg
+                if (log_err) call log_write
+                stop
              end if
           end if
        end do
@@ -625,18 +651,18 @@ contains
   !> part of each value immediately following the real part.
   subroutine read_Bn(filename)
     character(len = 1024) :: filename
-    integer :: kt
+    integer :: kt, fid
     real(dp) :: dummy8(8)
 
-    open(1, file = filename, recl = longlines)
+    open(newunit = fid, file = filename, recl = longlines, status = 'old')
     do kt = 1, ntri
-       read(1, *) dummy8
+       read (fid, *) dummy8
        Bnflux(kt,1) = cmplx(dummy8(1), dummy8(2), dp)
        Bnflux(kt,2) = cmplx(dummy8(3), dummy8(4), dp)
        Bnflux(kt,3) = cmplx(dummy8(5), dummy8(6), dp)
        Bnphi(kt) = cmplx(dummy8(7), dummy8(8), dp) / mesh_element(kt)%det_3 * 2d0
     end do
-    close(1)
+    close(fid)
 
     call check_div_free(Bnflux, Bnphi, n, rel_err_Bn, 'B_n')
     call check_redundant_edges(Bnflux, .false., 'B_n')
@@ -694,7 +720,8 @@ contains
        abs_err = [(abs(fs_half%q(kf) - dble(m) / dble(n)), kf = 1, nflux)]
        m_res(minloc(abs_err, 1)) = m
     end do
-    if (log_debug) write (logfile, *) 'resonant m: ', m_res_min, '..', m_res_max
+    write (log_msg, *) 'resonant m: ', m_res_min, '..', m_res_max
+    if (log_debug) call log_write
     allocate(sheet_current_factor(m_res_min:m_res_max))
     sheet_current_factor = (0d0, 0d0)
   end subroutine compute_safety_factor
@@ -763,7 +790,8 @@ contains
        dtemp_dpsi = ti0 / psimax
        dens = (fs%psi - psimin) / psimax * di0 + d_min
        temp = (fs%psi - psimin) / psimax * ti0 + t_min
-       if (log_info)  write (logfile, *) 'temp@axis: ', temp(0), ' dens@axis: ', dens(0)
+       write (log_msg, *) 'temp@axis: ', temp(0), ' dens@axis: ', dens(0)
+       if (log_info) call log_write
        fs%p = dens * temp * ev2erg
        fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
        dens(1:) = (fs_half%psi - psimin) / psimax * di0 + d_min
@@ -799,12 +827,12 @@ contains
   subroutine cache_equilibrium_field
     real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-    integer :: kf, kt, ktri, ke
+    integer :: kf, kt, ktri, ke, fid
     type(triangle) :: elem
     type(knot) :: base, tip
     real(dp) :: n_r, n_z
 
-    open(1, file = 'plot_B0.dat', recl = longlines)
+    open(newunit = fid, file = 'plot_B0.dat', recl = longlines, status = 'replace')
     do kf = 1, nflux
        do kt = 1, kt_max(kf)
           ktri = kt_low(kf) + kt
@@ -829,13 +857,13 @@ contains
           B0r_Omega(ktri) = Br
           B0phi_Omega(ktri) = Bp
           B0z_Omega(ktri) = Bz
-          write (1, *) r, z, Br, Bz, Bp
+          write (fid, *) r, z, Br, Bz, Bp
        end do
     end do
     do kt = kt_low(nflux+1) + 1, ntri
-       write (1, *) R0, 0d0, 0d0, 0d0, 0d0
+       write (fid, *) R0, 0d0, 0d0, 0d0, 0d0
     end do
-    close(1)
+    close(fid)
   end subroutine cache_equilibrium_field
 
   !> Computes equilibrium current density #j0phi from given equilibrium magnetic field and
@@ -845,14 +873,14 @@ contains
   !> \f$ \vec{B}_{0} \f$; arbitrary values are assumed. Consistency of MHD equilibrium is
   !> necessary in the derivation, while Ampere's equation is not used.
   subroutine compute_j0phi
-    integer :: kf, kt, ktri
+    integer :: kf, kt, ktri, fid
     real(dp) :: r, z
     real(dp) :: Btor2
     real(dp), dimension(nflux) :: B2avg, B2avg_half
     real(dp) :: plot_j0phi
     type(triangle_rmp) :: tri
 
-    open(1, file = j0phi_file, recl = longlines)
+    open(newunit = fid, file = j0phi_file, recl = longlines, status = 'replace')
     B2avg = 0d0
     B2avg_half = 0d0
     do kf = 1, nflux
@@ -937,13 +965,13 @@ contains
                   Btor2 / B2avg_half(kf))
           end select
 
-          write (1, *) j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), plot_j0phi
+          write (fid, *) j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), plot_j0phi
        end do
     end do
     do kt = kt_low(nflux+1) + 1, ntri
-       write (1, *) j0phi(kt, 1), j0phi(kt, 2), j0phi(kt, 3), 0d0
+       write (fid, *) j0phi(kt, 1), j0phi(kt, 2), j0phi(kt, 3), 0d0
     end do
-    close(1)
+    close(fid)
 
     call check_redundant_edges(cmplx(j0phi, 0d0, dp), .true., 'j0phi')
 
@@ -962,15 +990,15 @@ contains
 
 
   subroutine check_curr0
-    integer :: kf, kt, ktri, fid_amp, fid_gs
+    integer :: kf, kt, ktri, fid_amp, fid_gs, fid_prof
     real(dp) :: r, z, n_r, n_z, cmp_amp, cmp_gs, Jr, Jp, Jz
     real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
     type(triangle_rmp) :: tri
 
-    open(1, file = 'cmp_prof.dat', recl = longlines)
-    open(newunit = fid_amp, file = 'j0_amp.dat', recl = longlines)
-    open(newunit = fid_gs, file = 'j0_gs.dat', recl = longlines)
+    open(newunit = fid_prof, file = 'cmp_prof.dat', recl = longlines, status = 'replace')
+    open(newunit = fid_amp, file = 'j0_amp.dat', recl = longlines, status = 'replace')
+    open(newunit = fid_gs, file = 'j0_gs.dat', recl = longlines, status = 'replace')
     do kf = 1, nflux
        cmp_amp = 0d0
        cmp_gs = 0d0
@@ -1001,9 +1029,9 @@ contains
        end do
        cmp_amp = cmp_amp / kt_max(kf)
        cmp_gs = cmp_gs / kt_max(kf)
-       write (1, *) cmp_amp, cmp_gs
+       write (fid_prof, *) cmp_amp, cmp_gs
     end do
-    close(1)
+    close(fid_prof)
     close(fid_amp)
     close(fid_gs)
   end subroutine check_curr0
@@ -1089,8 +1117,9 @@ contains
     end do
 
     avg_rel_err = avg_rel_err / sum(kp_max(1:nflux))
-    if (log_debug) write (logfile, *) 'compute_presn: diagonalization' // &
+    write (log_msg, *) 'compute_presn: diagonalization' // &
          ' max_rel_err = ', max_rel_err, ' avg_rel_err = ', avg_rel_err
+    if (log_debug) call log_write
     if (allocated(resid)) deallocate(resid)
 
     call write_scalar_dof(presn, presn_file)
@@ -1122,7 +1151,8 @@ contains
     integer :: knot_i, knot_o, knot_f
     integer :: i1, i2
     logical :: closing_loop
-    character(len = *), parameter :: errmsg = 'cannot find correct label for triangle edges'
+
+    log_msg = 'cannot find correct label for triangle edges'
 
     ! initialize to suppress compiler warnings
     i1 = 0
@@ -1140,8 +1170,8 @@ contains
        i2 = 2
     end select
     if (elem%i_knot(i1) == elem%i_knot(i2)) then
-       if (log_debug) write(logfile, *) errmsg
-       stop errmsg
+       if (log_debug) call log_write
+       stop
     end if
     ! last triangle in strip if indices not next to each other
     closing_loop = abs(elem%i_knot(i1) - elem%i_knot(i2)) /= 1
@@ -1183,8 +1213,8 @@ contains
        lo = (/ elem%i_knot(knot_f), elem%i_knot(knot_i) /)
        lf = (/ elem%i_knot(knot_i), elem%i_knot(knot_o) /)
     else
-       if (log_debug) write(logfile, *) errmsg
-       stop errmsg
+       if (log_debug) call log_write
+       stop
     end if
   end subroutine get_labeled_edges
 
@@ -1266,8 +1296,9 @@ contains
        end do
     end do
     avg_rel_err = avg_rel_err / sum(kt_max(1:nflux))
-    if (log_debug) write (logfile, *) 'compute_currn: diagonalization' // &
+    write (log_msg, *) 'compute_currn: diagonalization' // &
          ' max_rel_err = ', max_rel_err, ' avg_rel_err = ', avg_rel_err
+    if (log_debug) call log_write
     if (allocated(resid)) deallocate(resid)
 
     call add_sheet_current
@@ -1442,12 +1473,12 @@ contains
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
 
-    integer :: kf, kt, ktri, n_cutoff
+    integer :: kf, kt, ktri, n_cutoff, fid
     type(triangle_rmp) :: tri
     complex(dp) :: pol_comp_r, pol_comp_z, dens_psi_contravar, proj_theta_covar
     real(dp) :: r, z, n_r, n_z
 
-    open(1, file = outfile, recl = longlines)
+    open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
     if (nonres) then
        n_cutoff = nflux - 1
     else
@@ -1467,7 +1498,7 @@ contains
           ! projection to covariant theta component
           proj_theta_covar = -(pol_comp_r * B0r_Omega(ktri) + &
                pol_comp_z * B0z_Omega(ktri)) * sqrt_g(kf, kt, r)
-          write (1, *) r, z, real(pol_comp_r), aimag(pol_comp_r), &
+          write (fid, *) r, z, real(pol_comp_r), aimag(pol_comp_r), &
                real(pol_comp_z), aimag(pol_comp_z), &
                real(tor_comp(ktri)), aimag(tor_comp(ktri)), &
                real(dens_psi_contravar), aimag(dens_psi_contravar), &
@@ -1477,9 +1508,9 @@ contains
     r = mesh_point(1)%rcoord
     z = mesh_point(1)%zcoord
     do kt = kt_low(n_cutoff+1) + 1, ntri
-       write (1, *) r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+       write (fid, *) r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
     end do
-    close(1)
+    close(fid)
   end subroutine write_vector_plot
 
   subroutine write_vector_dof(pol_flux, tor_comp, outfile)
@@ -1487,11 +1518,11 @@ contains
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
 
-    integer :: ktri
+    integer :: ktri, fid
 
-    open(1, file = outfile, recl = longlines)
+    open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
     do ktri = 1, kt_low(nflux+1)
-       write(1, *) &
+       write (fid, *) &
             real(pol_flux(ktri, 1)), aimag(pol_flux(ktri, 1)), &
             real(pol_flux(ktri, 2)), aimag(pol_flux(ktri, 2)), &
             real(pol_flux(ktri, 3)), aimag(pol_flux(ktri, 3)), &
@@ -1499,9 +1530,9 @@ contains
             aimag(tor_comp(ktri) * mesh_element(ktri)%det_3 * 0.5d0)
     end do
     do ktri = kt_low(nflux+1) + 1, ntri
-       write (1, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+       write (fid, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
     end do
-    close(1)
+    close(fid)
   end subroutine write_vector_dof
 
   !> Real and imaginary part of \p scalar_dof (e.g. #presn) are written, in that order,
@@ -1511,30 +1542,30 @@ contains
     complex(dp), intent(in) :: scalar_dof(:)
     character(len = *), intent(in) :: outfile
 
-    integer :: kpoint
+    integer :: kpoint, fid
 
-    open(1, file = outfile, recl = longlines)
+    open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
     do kpoint = 1, kp_low(nflux+1)
-       write (1, *) real(scalar_dof(kpoint)), aimag(scalar_dof(kpoint))
+       write (fid, *) real(scalar_dof(kpoint)), aimag(scalar_dof(kpoint))
     end do
     do kpoint = kp_low(nflux+1) + 1, npoint ! write zeroes in remaining points until end
-       write (1, *) 0d0, 0d0
+       write (fid, *) 0d0, 0d0
     end do
-    close(1)
+    close(fid)
   end subroutine write_scalar_dof
 
   subroutine write_fluxvar
-    integer :: kf
+    integer :: kf, fid
     real(dp) :: rho_r, rho_z
 
-    open(1, file = fluxvar_file, recl = longlines)
-    write (1, *) 0d0, fs%psi(0), fs%q(0), fs%p(0), fs%dp_dpsi(0)
+    open(newunit = fid, file = fluxvar_file, recl = longlines, status = 'replace')
+    write (fid, *) 0d0, fs%psi(0), fs%q(0), fs%p(0), fs%dp_dpsi(0)
     do kf = 1, nflux
        rho_r = mesh_point(kp_low(kf) + 1)%rcoord - mesh_point(1)%rcoord
        rho_z = mesh_point(kp_low(kf) + 1)%zcoord - mesh_point(1)%zcoord
-       write (1, *) hypot(rho_r, rho_z), fs%psi(kf), fs%q(kf), fs%p(kf), fs%dp_dpsi(kf)
+       write (fid, *) hypot(rho_r, rho_z), fs%psi(kf), fs%q(kf), fs%p(kf), fs%dp_dpsi(kf)
     end do
-    close(1)
+    close(fid)
   end subroutine write_fluxvar
 
   subroutine write_kilca_modes(pol_flux, tor_comp, outfile)
@@ -1556,13 +1587,13 @@ contains
     rho_max = hypot(mesh_point(kp_low(nflux)+1)%rcoord - rmaxis, &
          mesh_point(kp_low(nflux)+1)%zcoord - zmaxis)
     k_zeta = n / R0
-    open(newunit = fid_rho, recl = 3 * longlines, &
+    open(newunit = fid_rho, recl = 3 * longlines, status = 'replace', &
          file = decorate_filename(outfile, '', '_r'))
-    open(newunit = fid_theta, recl = 3 * longlines, &
+    open(newunit = fid_theta, recl = 3 * longlines, status = 'replace', &
          file = decorate_filename(outfile, '', '_theta'))
-    open(newunit = fid_zeta, recl = 3 * longlines, &
+    open(newunit = fid_zeta, recl = 3 * longlines, status = 'replace', &
          file = decorate_filename(outfile, '', '_z'))
-    open(newunit = fid_furth, recl = longlines, &
+    open(newunit = fid_furth, recl = longlines, status = 'replace', &
          file = decorate_filename(outfile, 'furth_', ''))
     do kf = 1, nflux
        coeff_rho = 0d0

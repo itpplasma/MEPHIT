@@ -180,7 +180,7 @@ contains
   end subroutine g_eqdsk_destructor
 
   subroutine flux_func_init(this, n_lag, nw, nflux, psi, psi_half)
-    use magdif_config, only: logfile, log_err
+    use magdif_config, only: log, log_err
     class(flux_func), intent(inout) :: this
     integer, intent(in) :: n_lag
     integer, intent(in) :: nw
@@ -191,7 +191,7 @@ contains
     integer :: k, kf
 
     if (n_lag >= nw) then
-       if (log_err) write (logfile, *) 'Lagrange polynomial order', n_lag, &
+       if (log_err) write (log, *) 'Lagrange polynomial order', n_lag, &
             'must be lower than number of sample points', nw
        return
     end if

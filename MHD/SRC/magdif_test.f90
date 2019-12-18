@@ -1,12 +1,15 @@
 program magdif_test
-  use magdif_config, only: config_file, read_config, runmode, runmode_single, &
+  use magdif_config, only: config_file, log_file, read_config, runmode, runmode_single, &
        runmode_direct, runmode_precon
   use magdif, only: magdif_init, magdif_cleanup, magdif_single, magdif_iterated
 
   implicit none
 
-  if (command_argument_count() == 1) then
+  if (command_argument_count() >= 1) then
      call get_command_argument(1, config_file)
+     if (command_argument_count() >= 2) then
+        call get_command_argument(2, log_file)
+     end if
   else
      stop 'Error: expected path to config file as first parameter'
   endif
