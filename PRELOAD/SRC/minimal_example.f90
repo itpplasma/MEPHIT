@@ -5,9 +5,10 @@ program minimal_example
   use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
   use input_files, only: gfile, convexfile
   use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, & ! PRELOAD/SRC/mesh_mod.f90
-       bphicovar, knot, triangle
-  use magdif, only: init_indices, kt_max, kt_low, kp_max, kp_low, Bnflux, Bnphi, &
-       get_labeled_edges, check_redundant_edges, check_div_free, write_vector_dof
+       bphicovar, knot, triangle, triangle_rmp, mesh_element_rmp
+  use magdif, only: imun, init_indices, kt_max, kt_low, kp_max, kp_low, Bnflux, Bnphi, &
+       get_labeled_edges, check_redundant_edges, check_div_free, write_vector_dof, &
+       cache_mesh_data, log_write
 
   implicit none
 
@@ -17,20 +18,18 @@ program minimal_example
 
   real(dp) :: rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr
 
-  integer :: fid, kf, kp, k, ke
+  integer :: fid, kf, kp, k, ke, ktri, kpoi
   integer, dimension(:), allocatable :: kq, kt, tri_f, tri_i, tri_o
   integer, dimension(:,:), allocatable :: quad
   real(dp) :: rho, rho_max, theta
   integer, parameter :: nrz = 64  ! at most 100 values are read in by field_divB0.f90
 
+  type(knot) :: node
   type(triangle) :: elem
-  integer, dimension(2) :: li, lo, lf
-  integer :: ei, eo, ef
-  logical :: orient
+  type(triangle_rmp) :: tri
+
   real(dp) :: r, z, n_r, n_z
   complex(dp) :: Br, Bp, Bz
-
-  complex(dp), parameter :: imun = (0d0, 1d0)
 
   if (command_argument_count() >= 1) then
      call get_command_argument(1, config_file)
@@ -51,7 +50,7 @@ program minimal_example
   bphicovar = bcentr * 1d5
 
   ! write configuration to FreeFem++ (for Delaunay triangulation)
-  open(newunit = fid, file = 'extmesh.idp')
+  open(newunit = fid, file = 'extmesh.idp', status = 'replace')
   write (fid, "('real rmaxis = ', 1es16.9, ';')") rmaxis
   write (fid, "('real zmaxis = ', 1es16.9, ';')") zmaxis
   write (fid, "('real rdim = ', 1es16.9, ';')") rdim
@@ -77,17 +76,18 @@ program minimal_example
      rho = dble(kf) / dble(nflux+1) * rho_max
      do kp = 1, kp_max(kf)
         theta = dble(kp-1) / dble(kp_max(kf)) * 2d0 * pi  ! [0, 2\pi)
-        mesh_point(kp_low(kf) + kp)%rcoord = rmaxis + rho * cos(theta)
-        mesh_point(kp_low(kf) + kp)%zcoord = zmaxis + rho * sin(theta)
-        mesh_point(kp_low(kf) + kp)%psi_pol = &
+        node%rcoord = rmaxis + rho * cos(theta)
+        node%zcoord = zmaxis + rho * sin(theta)
+        node%psi_pol = &
              interp_psi_pol(rmaxis + rho * cos(theta), zmaxis + rho * sin(theta))
-        mesh_point(kp_low(kf) + kp)%n_owners = 0
+        node%n_owners = 0
+        mesh_point(kp_low(kf) + kp) = node
      end do
   end do
 
   ! convexfile is read in from field_divB0.inp by first call to subroutine field
   ! this is done in initialize_globals
-  open(newunit = fid, file = convexfile)
+  open(newunit = fid, file = convexfile, status = 'replace')
   rho = rho_max
   do kp = 1, nrz
      theta = dble(kp) / dble(nrz) * 2d0 * pi
@@ -161,77 +161,79 @@ program minimal_example
   if (allocated(kq)) deallocate(kq)
   if (allocated(quad)) deallocate(quad)
 
-  open(newunit = fid, file = 'mesh_new.asc', recl = longlines)
-  do k = 1, ntri
-     elem = mesh_element(k)
+  open(newunit = fid, file = 'mesh_new.asc', recl = longlines, status = 'replace')
+  do ktri = 1, ntri
+     elem = mesh_element(ktri)
      write (fid, '(i5,1x,i5,1x,i5,1x,i1,1x,i5,1x,i5,1x,i5,1x,i3,1x,i3,1x,i3)') &
           (elem%i_knot(ke), ke = 1, 3), elem%knot_h, &
           (elem%neighbour(ke), ke = 1, 3), (elem%neighbour_edge(ke), ke = 1, 3)
   end do
   close(fid)
 
-  open(newunit = fid, file = point_file, form = 'unformatted')
+  open(newunit = fid, file = point_file, form = 'unformatted', status = 'replace')
   write (fid) npoint
   write (fid) mesh_point
   close(fid)
 
-  open(newunit = fid, file = tri_file, form = 'unformatted')
+  open(newunit = fid, file = tri_file, form = 'unformatted', status = 'replace')
   write (fid) ntri
   write (fid) mesh_element
   write (fid) bphicovar
   close(fid)
 
-  open(newunit = fid, file = 'inputformaxwell_kilca.msh')
+  open(newunit = fid, file = 'inputformaxwell_kilca.msh', status = 'replace')
   write (fid, *) npoint, ntri, kp_max(nflux+1) - 1
-  do k = 1, kp_low(nflux+1)
-     write (fid, *) mesh_point(k)%rcoord, mesh_point(k)%zcoord, 0
+  do kpoi = 1, kp_low(nflux+1)
+     write (fid, *) mesh_point(kpoi)%rcoord, mesh_point(kpoi)%zcoord, 0
   end do
-  do k = kp_low(nflux+1) + 1, npoint
-     write (fid, *) mesh_point(k)%rcoord, mesh_point(k)%zcoord, 1
+  do kpoi = kp_low(nflux+1) + 1, npoint
+     write (fid, *) mesh_point(kpoi)%rcoord, mesh_point(kpoi)%zcoord, 1
   end do
-  do k = 1, ntri
-     write (fid, *) mesh_element(k)%i_knot(:), 0
+  do ktri = 1, ntri
+     write (fid, *) mesh_element(ktri)%i_knot(:), 0
   end do
   do kp = 1, kp_max(nflux+1) - 1
      write (fid, *) kp_low(nflux+1) + kp, kp_low(nflux+1) + kp + 1, 1
   end do
   close(fid)
 
+  allocate(mesh_element_rmp(ntri))
+  call cache_mesh_data
+
   ! calculate resonant vacuum perturbation
   allocate(Bnflux(ntri, 3))
   allocate(Bnphi(ntri))
-  do k = 1, ntri
-        elem = mesh_element(k)
-        call get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+  do ktri = 1, ntri
+        tri = mesh_element_rmp(ktri)
         ! flux through edge f
-        n_r = mesh_point(lf(2))%zcoord - mesh_point(lf(1))%zcoord
-        n_z = mesh_point(lf(1))%rcoord - mesh_point(lf(2))%rcoord
-        r = sum(mesh_point(lf(:))%rcoord) * 0.5d0
-        z = sum(mesh_point(lf(:))%zcoord) * 0.5d0
+        n_r = mesh_point(tri%lf(2))%zcoord - mesh_point(tri%lf(1))%zcoord
+        n_z = mesh_point(tri%lf(1))%rcoord - mesh_point(tri%lf(2))%rcoord
+        r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
+        z = sum(mesh_point(tri%lf(:))%zcoord) * 0.5d0
         rho = hypot(r - rmaxis, z - zmaxis)
         theta = atan2(z - zmaxis, r - rmaxis)
         call kilca_vacuum(n, kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
-        Bnflux(k, ef) = (Br * n_r + Bz * n_z) * r
+        Bnflux(ktri, tri%ef) = (Br * n_r + Bz * n_z) * r
         ! flux through edge i
-        n_r = mesh_point(li(2))%zcoord - mesh_point(li(1))%zcoord
-        n_z = mesh_point(li(1))%rcoord - mesh_point(li(2))%rcoord
-        r = sum(mesh_point(li(:))%rcoord) * 0.5d0
-        z = sum(mesh_point(li(:))%zcoord) * 0.5d0
+        n_r = mesh_point(tri%li(2))%zcoord - mesh_point(tri%li(1))%zcoord
+        n_z = mesh_point(tri%li(1))%rcoord - mesh_point(tri%li(2))%rcoord
+        r = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
+        z = sum(mesh_point(tri%li(:))%zcoord) * 0.5d0
         rho = hypot(r - rmaxis, z - zmaxis)
         theta = atan2(z - zmaxis, r - rmaxis)
         call kilca_vacuum(n, kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
-        Bnflux(k, ei) = (Br * n_r + Bz * n_z) * r
+        Bnflux(ktri, tri%ei) = (Br * n_r + Bz * n_z) * r
         ! flux through edge o
-        n_r = mesh_point(lo(2))%zcoord - mesh_point(lo(1))%zcoord
-        n_z = mesh_point(lo(1))%rcoord - mesh_point(lo(2))%rcoord
-        r = sum(mesh_point(lo(:))%rcoord) * 0.5d0
-        z = sum(mesh_point(lo(:))%zcoord) * 0.5d0
+        n_r = mesh_point(tri%lo(2))%zcoord - mesh_point(tri%lo(1))%zcoord
+        n_z = mesh_point(tri%lo(1))%rcoord - mesh_point(tri%lo(2))%rcoord
+        r = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
+        z = sum(mesh_point(tri%lo(:))%zcoord) * 0.5d0
         rho = hypot(r - rmaxis, z - zmaxis)
         theta = atan2(z - zmaxis, r - rmaxis)
         call kilca_vacuum(n, kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
-        Bnflux(k, eo) = (Br * n_r + Bz * n_z) * r
+        Bnflux(ktri, tri%eo) = (Br * n_r + Bz * n_z) * r
         ! toroidal flux
-        Bnphi(k) = imun / n * sum(Bnflux(k, :)) / elem%det_3 * 2d0
+        Bnphi(ktri) = imun / n * sum(Bnflux(ktri, :)) / tri%area
   end do
   call check_redundant_edges(Bnflux, .false., 'non-resonant B_n')
   call check_div_free(Bnflux, Bnphi, n, 1d-9, 'non-resonant B_n')
@@ -240,6 +242,7 @@ program minimal_example
 
   if (allocated(Bnflux)) deallocate(Bnflux)
   if (allocated(Bnphi)) deallocate(Bnphi)
+  if (allocated(mesh_element_rmp)) deallocate(mesh_element)
   if (allocated(mesh_element)) deallocate(mesh_element)
   if (allocated(mesh_point)) deallocate(mesh_point)
 
@@ -267,7 +270,7 @@ contains
     integer :: fid, k, idum, nw, nh
     real(dp) :: rcentr, simag, sibry
 
-    open(newunit = fid, file = filename)
+    open(newunit = fid, file = filename, status = 'old')
     read(fid, geqdsk_2000) (text(k), k = 1, 6), idum, nw, nh
     write(*, *) 'Header from G EQDSK file: ', (text(k), k = 1, 6)
     read(fid, geqdsk_2020) rdim, zdim, rcentr, rleft, zmid
@@ -281,11 +284,10 @@ contains
     real(dp), intent(in) :: r, z
     real(dp) :: psi_pol
 
-    real(dp) :: p, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+    real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
 
-    p = 0d0
-    call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+    call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
     psi_pol = psif
   end function interp_psi_pol
@@ -297,7 +299,8 @@ contains
        mesh_point(kpoint)%i_owner_tri(mesh_point(kpoint)%n_owners + 1) = ktri
        mesh_point(kpoint)%n_owners = mesh_point(kpoint)%n_owners + 1
     else
-       write (log, *) 'Maximal number of owning triangles exceeded at point ', kpoint
+       write (log_msg, *) 'Maximal number of owning triangles exceeded at point ', kpoint
+       if (log_warn) call log_write
     end if
   end subroutine add_node_owner
 
@@ -353,7 +356,8 @@ contains
     k_z_r = tor_mode / R_0 * r
     status = fgsl_sf_bessel_icn_array(pol_mode-1, pol_mode+1, k_z_r, I_m)
     if (status /= fgsl_success .and. log_err) then
-       write (log, *) 'fgsl_sf_bessel_icn_array returned error ', status
+       write (log_msg, *) 'fgsl_sf_bessel_icn_array returned error ', status
+       call log_write
     end if
     B_r = (0.5d0, 0d0) * (I_m(-1) + I_m(1)) * cos(pol_mode * theta) &
          * kilca_vac_coeff

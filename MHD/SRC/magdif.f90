@@ -184,6 +184,7 @@ contains
     call read_mesh
 
     ! depends on mesh data
+    call cache_mesh_data
     call cache_equilibrium_field
 
     ! needs initialized field_eq
@@ -466,9 +467,7 @@ contains
   !> zero. Deallocation is done in magdif_cleanup().
   subroutine read_mesh
     use mesh_mod, only: bphicovar
-    integer :: kf, kt, ktri, fid
-    type(triangle) :: elem
-    type(triangle_rmp) :: tri
+    integer :: fid
 
     open(newunit = fid, file = point_file, form = 'unformatted', status = 'old')
     read (fid) npoint
@@ -488,17 +487,6 @@ contains
     close(fid)
 
     allocate(mesh_element_rmp(ntri))
-    do kf = 1, nflux
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
-          elem = mesh_element(ktri)
-          tri%area = 0.5d0 * elem%det_3
-          call get_labeled_edges(elem, tri%li, tri%lo, tri%lf, tri%ei, tri%eo, tri%ef, &
-               tri%orient)
-          call ring_centered_avg_coord(elem, tri%R_Omega, tri%Z_Omega)
-          mesh_element_rmp(ktri) = tri
-       end do
-    end do
 
     allocate(B0r(ntri, 3))
     allocate(B0phi(ntri, 3))
@@ -532,6 +520,24 @@ contains
     j0phi = 0d0
     jnflux = 0d0
   end subroutine read_mesh
+
+  subroutine cache_mesh_data
+    integer :: kf, kt, ktri
+    type(triangle) :: elem
+    type(triangle_rmp) :: tri
+
+    do kf = 1, nflux
+       do kt = 1, kt_max(kf)
+          ktri = kt_low(kf) + kt
+          elem = mesh_element(ktri)
+          tri%area = 0.5d0 * elem%det_3
+          call get_labeled_edges(elem, tri%li, tri%lo, tri%lf, tri%ei, tri%eo, tri%ef, &
+               tri%orient)
+          call ring_centered_avg_coord(elem, tri%R_Omega, tri%Z_Omega)
+          mesh_element_rmp(ktri) = tri
+       end do
+    end do
+  end subroutine cache_mesh_data
 
   !> Computes #bnflux and #bnphi from #jnflux and #jnphi via an external program. No data
   !> is read yet; this is done by read_bn().
