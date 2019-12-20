@@ -16,6 +16,7 @@ program minimal_example
      procedure interleave_vv, interleave_vs, interleave_sv, interleave_ss
   end interface interleave
 
+  character(len = 1024) :: unscaled_geqdsk
   real(dp) :: rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr
 
   integer :: fid, kf, kp, k, ke, ktri, kpoi
@@ -33,13 +34,19 @@ program minimal_example
 
   if (command_argument_count() >= 1) then
      call get_command_argument(1, config_file)
+     if (command_argument_count() >= 2) then
+        call get_command_argument(2, unscaled_geqdsk)
+     else
+        stop 'Error: expected path to unscaled G EQDSK file as second parameter'
+     end if
   else
      stop 'Error: expected path to magdif config file as first parameter'
-  endif
+  end if
   call read_config
 
   call initialize_globals
-  call read_geqdsk_header(gfile, rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr)
+  call scale_geqdsk(kilca_scale_factor, trim(unscaled_geqdsk), trim(gfile), &
+       rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr)
   ! convert from SI to Gaussian units
   rdim = rdim * 1d2
   zdim = zdim * 1d2
@@ -248,35 +255,112 @@ program minimal_example
 
 contains
 
+  ! better future solution: put this in a separate subroutine in field_divB0.f90
   subroutine initialize_globals
-    real(dp) :: r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-
-    r = R0 * kilca_scale_factor
-    z = 0d0
-    p = 0d0
-    call field(r, p, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+    integer :: fid
+    open(newunit = fid, file = 'field_divB0.inp', status = 'old')
+    read (fid, *)
+    read (fid, *)
+    read (fid, *)
+    read (fid, *)
+    read (fid, *)
+    read (fid, *)
+    read (fid, *) gfile        ! equilibrium file
+    read (fid, *)
+    read (fid, *) convexfile   ! convex file for stretchcoords
+    close(fid)
   end subroutine initialize_globals
 
-  subroutine read_geqdsk_header(filename, rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr)
-    character(len = *), intent(in) :: filename
+  subroutine scale_geqdsk(gamma, file_in, file_out, &
+       rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr)
+    integer, intent(in) :: gamma
+    character(len = *), intent(in) :: file_in, file_out
     real(dp), intent(out) :: rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr
 
     character(len = *), parameter :: geqdsk_2000 = '(6a8,3i4)'
     character(len = *), parameter :: geqdsk_2020 = '(5e16.9)'
+    character(len = *), parameter :: geqdsk_2022 = '(2i5)'
 
     character(len = 10) :: text(6)
-    integer :: fid, k, idum, nw, nh
-    real(dp) :: rcentr, simag, sibry
+    integer :: fid_in, fid_out, i, j, idum, nw, nh, nbbbs, limitr
+    real(dp) :: xdum, rcentr, simag, sibry, current, unscaled_rcentr, r_shift
+    real(dp), allocatable :: fpol(:), pres(:), ffprim(:), pprime(:), psirz(:, :), &
+         qpsi(:), rbbbs(:), zbbbs(:), rlim(:), zlim(:)
 
-    open(newunit = fid, file = filename, status = 'old')
-    read(fid, geqdsk_2000) (text(k), k = 1, 6), idum, nw, nh
-    write(*, *) 'Header from G EQDSK file: ', (text(k), k = 1, 6)
-    read(fid, geqdsk_2020) rdim, zdim, rcentr, rleft, zmid
-    read(fid, geqdsk_2020) rmaxis, zmaxis, simag, sibry, bcentr
-    close(fid)
-  end subroutine read_geqdsk_header
+    write (log_msg, *) 'attempting to read unscaled G EQDSK file ', file_in
+    call log_write
+    open(newunit = fid_in, file = file_in, status = 'old')
+    read (fid_in, geqdsk_2000) (text(i), i = 1, 6), idum, nw, nh
+    allocate(fpol(nw))
+    allocate(pres(nw))
+    allocate(ffprim(nw))
+    allocate(pprime(nw))
+    allocate(psirz(nw, nh))
+    allocate(qpsi(nw))
+    read (fid_in, geqdsk_2020) rdim, zdim, rcentr, rleft, zmid
+    read (fid_in, geqdsk_2020) rmaxis, zmaxis, simag, sibry, bcentr
+    read (fid_in, geqdsk_2020) current, simag, xdum, rmaxis, xdum
+    read (fid_in, geqdsk_2020) zmaxis, xdum, sibry, xdum, xdum
+    read (fid_in, geqdsk_2020) (fpol(i), i = 1, nw)
+    read (fid_in, geqdsk_2020) (pres(i), i = 1, nw)
+    read (fid_in, geqdsk_2020) (ffprim(i), i = 1, nw)
+    read (fid_in, geqdsk_2020) (pprime(i), i = 1, nw)
+    read (fid_in, geqdsk_2020) ((psirz(i, j), i = 1, nw), j = 1, nh)
+    read (fid_in, geqdsk_2020) (qpsi(i), i = 1, nw)
+    read (fid_in, geqdsk_2022) nbbbs, limitr
+    allocate(rbbbs(nbbbs))
+    allocate(zbbbs(nbbbs))
+    allocate(rlim(limitr))
+    allocate(zlim(limitr))
+    read (fid_in, geqdsk_2020) (rbbbs(i), zbbbs(i), i = 1, nbbbs)
+    read (fid_in, geqdsk_2020) (rlim(i), zlim(i), i = 1, limitr)
+    close(fid_in)
+
+    unscaled_rcentr = rcentr
+    r_shift = rcentr * (gamma - 1)
+    rcentr = rcentr * gamma
+    rleft = rcentr - 0.5d0 * rdim
+    rmaxis = rmaxis + r_shift
+    simag = simag * gamma
+    sibry = sibry * gamma
+    fpol = fpol * gamma
+    ffprim = ffprim * gamma
+    pprime = pprime / gamma
+    psirz = psirz * gamma
+    qpsi = qpsi / gamma
+    rbbbs = rbbbs + r_shift
+    rlim = rlim + r_shift
+
+    write (log_msg, *) 'attempting to write scaled G EQDSK file ', file_out
+    call log_write
+    open(newunit = fid_out, file = file_out, status = 'replace')
+    write (fid_out, geqdsk_2000) (text(i), i = 1, 6), idum, nw, nh
+    write (fid_out, geqdsk_2020) rdim, zdim, rcentr, rleft, zmid
+    write (fid_out, geqdsk_2020) rmaxis, zmaxis, simag, sibry, bcentr
+    write (fid_out, geqdsk_2020) current, simag, xdum, rmaxis, xdum
+    write (fid_out, geqdsk_2020) zmaxis, xdum, sibry, xdum, xdum
+    write (fid_out, geqdsk_2020) (fpol(i), i = 1, nw)
+    write (fid_out, geqdsk_2020) (pres(i), i = 1, nw)
+    write (fid_out, geqdsk_2020) (ffprim(i), i = 1, nw)
+    write (fid_out, geqdsk_2020) (pprime(i), i = 1, nw)
+    write (fid_out, geqdsk_2020) ((psirz(i, j), i = 1, nw), j = 1, nh)
+    write (fid_out, geqdsk_2020) (qpsi(i), i = 1, nw)
+    write (fid_out, geqdsk_2022) nbbbs, limitr
+    write (fid_out, geqdsk_2020) (rbbbs(i), zbbbs(i), i = 1, nbbbs)
+    write (fid_out, geqdsk_2020) (rlim(i), zlim(i), i = 1, limitr)
+    close(fid_out)
+
+    if (allocated(fpol)) deallocate(fpol)
+    if (allocated(pres)) deallocate(pres)
+    if (allocated(ffprim)) deallocate(ffprim)
+    if (allocated(pprime)) deallocate(pprime)
+    if (allocated(psirz)) deallocate(psirz)
+    if (allocated(qpsi)) deallocate(qpsi)
+    if (allocated(rbbbs)) deallocate(rbbbs)
+    if (allocated(zbbbs)) deallocate(zbbbs)
+    if (allocated(rlim)) deallocate(rlim)
+    if (allocated(zlim)) deallocate(zlim)
+  end subroutine scale_geqdsk
 
   function interp_psi_pol(r, z) result(psi_pol)
     use field_eq_mod, only: psif
