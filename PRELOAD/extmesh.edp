@@ -1,4 +1,3 @@
-load "medit"
 include "extmesh.idp"
 
 border inner(t = 0, 2 * pi) {
@@ -17,6 +16,3 @@ Thouter = change(Thouter, region = regionmap);
 mesh Thinner = readmesh("inputformaxwell_kilca.msh");
 mesh Th = Thinner + Thouter;
 savemesh(Th, "inputformaxwell_ext.msh");
-medit("in", Thinner);
-medit("out", Thouter);
-medit("total", Th);
