@@ -62,12 +62,12 @@ program minimal_example
 
   ! write configuration to FreeFem++ (for Delaunay triangulation)
   open(newunit = fid, file = 'extmesh.idp', status = 'replace')
-  write (fid, '("real rmaxis = ", 1es16.9, ";")') rmaxis
-  write (fid, '("real zmaxis = ", 1es16.9, ";")') zmaxis
-  write (fid, '("real rdim = ", 1es16.9, ";")') rdim
-  write (fid, '("real zdim = ", 1es16.9, ";")') zdim
-  write (fid, '("int nkpol = ", 1i3, ";")') nkpol
-  write (fid, '("int nflux = ", 1i3, ";")') nflux
+  write (fid, '("real rmaxis = ", es23.16, ";")') rmaxis
+  write (fid, '("real zmaxis = ", es23.16, ";")') zmaxis
+  write (fid, '("real rdim = ", es23.16, ";")') rdim
+  write (fid, '("real zdim = ", es23.16, ";")') zdim
+  write (fid, '("int nkpol = ", i0, ";")') nkpol
+  write (fid, '("int nflux = ", i0, ";")') nflux
   close(fid)
 
   ! calculate maximal extent from magnetic axis
