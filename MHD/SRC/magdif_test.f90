@@ -11,7 +11,7 @@ program magdif_test
         call get_command_argument(2, log_file)
      end if
   else
-     stop 'Error: expected path to config file as first parameter'
+     error stop 'expected path to config file as first parameter'
   endif
 
   call read_config
@@ -24,7 +24,7 @@ program magdif_test
   case (runmode_precon)
      call magdif_iterated
   case default
-     stop 'Error: unknown runmode'
+     error stop 'unknown runmode'
   end select
   call magdif_cleanup
 

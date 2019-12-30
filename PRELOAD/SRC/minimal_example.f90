@@ -38,10 +38,10 @@ program minimal_example
      if (command_argument_count() >= 2) then
         call get_command_argument(2, unscaled_geqdsk)
      else
-        stop 'Error: expected path to unscaled G EQDSK file as second parameter'
+        error stop 'expected path to unscaled G EQDSK file as second parameter'
      end if
   else
-     stop 'Error: expected path to magdif config file as first parameter'
+     error stop 'expected path to magdif config file as first parameter'
   end if
   call read_config
 
