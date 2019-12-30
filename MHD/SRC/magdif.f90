@@ -155,26 +155,14 @@ module magdif
   !> last closed flux surface. The latter is needed for some interpolations.
   integer, allocatable :: kt_low(:)
 
-  real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
-  complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
-  character(len = *), parameter :: cmplx_fmt = 'es23.16, 1x, sp, es23.16, " i"'
-  character(len = *), parameter :: nl_fmt = '"' // new_line('A') // '"'
-
 contains
 
   !> Initialize magdif module
   subroutine magdif_init
-    use iso_fortran_env, only: output_unit
     use input_files, only: gfile
     integer :: m
 
-    if (trim(log_file) == '-') then
-       log = output_unit
-    elseif (trim(log_file) == '') then
-       open(newunit = log, file = trim(config_file) // '.log', status = 'replace')
-    else
-       open(newunit = log, file = log_file, status = 'replace')
-    end if
+    call log_open
 
     ! only depends on config variables
     call init_indices
@@ -227,7 +215,6 @@ contains
 
   !> Deallocates all previously allocated variables.
   subroutine magdif_cleanup
-    use iso_fortran_env, only: output_unit
     if (allocated(efit)) deallocate(efit)
     if (allocated(fluxvar)) deallocate(fluxvar)
     if (allocated(fs)) deallocate(fs)
@@ -258,14 +245,8 @@ contains
     if (allocated(kt_low)) deallocate(kt_low)
     log_msg = 'magdif cleanup finished'
     if (log_info) call log_write
-    if (log /= output_unit) close(log)
+    call log_close
   end subroutine magdif_cleanup
-
-  subroutine log_write
-    use iso_fortran_env, only: output_unit
-    write (log, '(a)') trim(log_msg)
-    if (log /= output_unit) flush(log) ! or: write (output_unit, '(a)') trim(log_msg)
-  end subroutine log_write
 
   subroutine magdif_single
     call compute_presn     ! compute pressure based on previous perturbation field

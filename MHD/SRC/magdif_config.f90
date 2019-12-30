@@ -9,6 +9,9 @@ module magdif_config
   character(len = 1024) :: log_file = ''
   character(len = 1024) :: log_msg = ''
 
+  character(len = *), parameter :: cmplx_fmt = 'es23.16, 1x, sp, es23.16, " i"'
+  character(len = *), parameter :: nl_fmt = '"' // new_line('A') // '"'
+
   integer, parameter :: longlines = 1024
 
   integer, parameter :: runmode_single = 0 !< single iteration mode
@@ -161,6 +164,31 @@ contains
     read(1, nml = delayed)
     close(1)
   end subroutine read_delayed_config
+
+  !> Associate logfile and open if necessary.
+  subroutine log_open
+    use iso_fortran_env, only: output_unit
+    if (trim(log_file) == '-') then
+       log = output_unit
+    elseif (trim(log_file) == '') then
+       open(newunit = log, file = trim(config_file) // '.log', status = 'replace')
+    else
+       open(newunit = log, file = log_file, status = 'replace')
+    end if
+  end subroutine log_open
+
+  !> Close logfile if necessary.
+  subroutine log_close
+    use iso_fortran_env, only: output_unit
+    if (log /= output_unit) close(log)
+  end subroutine log_close
+
+  !> Write to logfile and flush if necessary.
+  subroutine log_write
+    use iso_fortran_env, only: output_unit
+    write (log, '(a)') trim(log_msg)
+    if (log /= output_unit) flush(log) ! or: write (output_unit, '(a)') trim(log_msg)
+  end subroutine log_write
 
   !> Generates a new filename from a given template.
   !>

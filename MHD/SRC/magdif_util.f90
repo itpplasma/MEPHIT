@@ -6,7 +6,10 @@ module magdif_util
 
   private
 
-  public :: ring_centered_avg_coord, assemble_sparse
+  public :: clight, imun, ring_centered_avg_coord, assemble_sparse
+
+  real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
+  complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
 
   type, public :: g_eqdsk
     character(len = 1024) :: fname
@@ -180,7 +183,7 @@ contains
   end subroutine g_eqdsk_destructor
 
   subroutine flux_func_init(this, n_lag, nw, nflux, psi, psi_half)
-    use magdif_config, only: log, log_err
+    use magdif_config, only: log_msg, log_write, log_err
     class(flux_func), intent(inout) :: this
     integer, intent(in) :: n_lag
     integer, intent(in) :: nw
@@ -191,8 +194,9 @@ contains
     integer :: k, kf
 
     if (n_lag >= nw) then
-       if (log_err) write (log, '("Lagrange polynomial order ", i0, ' // &
+       write (log_msg, '("Lagrange polynomial order ", i0, ' // &
             '" must be lower than number of sample points", i0)') n_lag, nw
+       if (log_err) call log_write
        return
     end if
     call flux_func_destructor(this)

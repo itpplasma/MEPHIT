@@ -6,9 +6,10 @@ program minimal_example
   use input_files, only: gfile, convexfile
   use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, & ! PRELOAD/SRC/mesh_mod.f90
        bphicovar, knot, triangle, triangle_rmp, mesh_element_rmp
-  use magdif, only: imun, init_indices, kt_max, kt_low, kp_max, kp_low, Bnflux, Bnphi, &
+  use magdif_util, only: imun
+  use magdif, only: init_indices, kt_max, kt_low, kp_max, kp_low, Bnflux, Bnphi, &
        get_labeled_edges, check_redundant_edges, check_div_free, write_vector_dof, &
-       cache_mesh_data, log_write
+       cache_mesh_data
 
   implicit none
 
@@ -43,6 +44,9 @@ program minimal_example
      stop 'Error: expected path to magdif config file as first parameter'
   end if
   call read_config
+
+  log_file = '-'
+  call log_open
 
   call initialize_globals
   call scale_geqdsk(kilca_scale_factor, trim(unscaled_geqdsk), trim(gfile), &
@@ -254,6 +258,8 @@ program minimal_example
   if (allocated(mesh_element_rmp)) deallocate(mesh_element)
   if (allocated(mesh_element)) deallocate(mesh_element)
   if (allocated(mesh_point)) deallocate(mesh_point)
+
+  call log_close
 
 contains
 
