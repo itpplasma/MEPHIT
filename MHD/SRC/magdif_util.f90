@@ -191,8 +191,8 @@ contains
     integer :: k, kf
 
     if (n_lag >= nw) then
-       if (log_err) write (log, *) 'Lagrange polynomial order', n_lag, &
-            'must be lower than number of sample points', nw
+       if (log_err) write (log, '("Lagrange polynomial order ", i0, ' // &
+            '" must be lower than number of sample points", i0)') n_lag, nw
        return
     end if
     call flux_func_destructor(this)

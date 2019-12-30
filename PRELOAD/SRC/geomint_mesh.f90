@@ -51,7 +51,7 @@ program geomint_mesh
   points(:, 1) = [rmaxis, 0d0, zmaxis]
   open(newunit = fid, file = 'points.fmt')
   do k = 1, npoint
-     write (fid, *) points(1, k), points(3, k)
+     write (fid, '(2(1x, i0))') points(1, k), points(3, k)
   end do
   close(fid)
 
@@ -88,7 +88,7 @@ contains
 
     open(newunit = fid, file = filename)
     read(fid, geqdsk_2000) (text(k), k = 1, 6), idum, nw, nh
-    write(*, *) 'Header from G EQDSK file: ', (text(k), k = 1, 6)
+    write (*, '("Header from G EQDSK file: ", 6a)') (text(k), k = 1, 6)
     read(fid, geqdsk_2020) rdim, zdim, rcentr, rleft, zmid
     read(fid, geqdsk_2020) rmaxis, zmaxis, simag, sibry, bcentr
     close(fid)

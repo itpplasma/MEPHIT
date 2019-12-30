@@ -157,6 +157,8 @@ module magdif
 
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
+  character(len = *), parameter :: cmplx_fmt = 'es23.16, 1x, sp, es23.16, " i"'
+  character(len = *), parameter :: nl_fmt = '"' // new_line('A') // '"'
 
 contains
 
@@ -200,7 +202,7 @@ contains
        log_msg = 'poloidal mode number, sheet current factor'
        call log_write
        do m = lbound(sheet_current_factor, 1), ubound(sheet_current_factor, 1)
-          write (log_msg, *) m, sheet_current_factor(m)
+          write (log_msg, '(i2, 1x, ' // cmplx_fmt // ')') m, sheet_current_factor(m)
           call log_write
        end do
     end if
@@ -261,8 +263,8 @@ contains
 
   subroutine log_write
     use iso_fortran_env, only: output_unit
-    write (log, *) trim(log_msg)
-    if (log /= output_unit) flush(log) ! or: write (output_unit, *) trim(log_msg)
+    write (log, '(a)') trim(log_msg)
+    if (log /= output_unit) flush(log) ! or: write (output_unit, '(a)') trim(log_msg)
   end subroutine log_write
 
   subroutine magdif_single
@@ -295,10 +297,11 @@ contains
        ieigen = 1
        call arnoldi(ndim, nritz, eigvals, next_iteration_arnoldi)
        if (log_info) then
-          write (log_msg, *) 'Arnoldi method yields ', ngrow, ' Ritz eigenvalues > ', tol
+          write (log_msg, '("Arnoldi method yields ", i0, " Ritz eigenvalues > ", f0.2)') &
+               ngrow, tol
           call log_write
           do i = 1, ngrow
-             write (log_msg, *) 'lambda ', i, ': ', eigvals(i)
+             write (log_msg, '("lambda ", i2, ": ", ' // cmplx_fmt // ')') i, eigvals(i)
              call log_write
           end do
        end if
@@ -323,11 +326,11 @@ contains
           call zgesv(ngrow, ngrow, Lr, ngrow, ipiv, Yr, ngrow, info)
           if (allocated(ipiv)) deallocate(ipiv)
           if (info == 0) then
-             write (log_msg, *) 'Successfully inverted matrix for preconditioner'
+             log_msg = 'Successfully inverted matrix for preconditioner'
              if (log_info) call log_write
           else
-             write (log_msg, *) 'Matrix inversion for preconditioner failed: ' // &
-                  'zgesv returns error', info
+             write (log_msg, '("Matrix inversion for preconditioner failed: ' // &
+                  'zgesv returns error ", i0)') info
              if (log_err) call log_write
              stop
           end if
@@ -346,7 +349,7 @@ contains
             matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn_prev)))
     end if
     do kiter = 0, niter-1
-       write (log_msg, *) 'Iteration ', kiter, ' of ', niter-1
+       write (log_msg, '("Iteration ", i2, " of ", i2)') kiter, niter - 1
        if (log_info) call log_write
        write (postfix, postfix_fmt) kiter
 
@@ -453,8 +456,8 @@ contains
        kt_low(kf) = kt_low(kf-1) + kt_max(kf-1)
     end do
 
-    write (log_msg, *) "Number of points up to LCFS: ", kp_low(nflux+1), &
-         "Number of triangles up to LCFS: ", kt_low(nflux+1)
+    write (log_msg, '("Number of points up to LCFS: ", i0, ' // nl_fmt // &
+         ', "Number of triangles up to LCFS: ", i0)') kp_low(nflux+1), kt_low(nflux+1)
     if (log_info) call log_write
   end subroutine init_indices
 
@@ -471,7 +474,7 @@ contains
 
     open(newunit = fid, file = point_file, form = 'unformatted', status = 'old')
     read (fid) npoint
-    write (log_msg, *) 'npoint = ', npoint
+    write (log_msg, '("npoint = ", i0)') npoint
     if (log_info) call log_write
     allocate(mesh_point(npoint))
     read (fid) mesh_point
@@ -479,7 +482,7 @@ contains
 
     open(newunit = fid, file = tri_file, form = 'unformatted', status = 'old')
     read(fid) ntri
-    write (log_msg, *) 'ntri   = ', ntri
+    write (log_msg, '("ntri   = ", i0)') ntri
     if (log_info) call log_write
     allocate(mesh_element(ntri))
     read (fid) mesh_element
@@ -549,7 +552,7 @@ contains
     integer :: stat = 0, dummy = 0
     call execute_command_line("./maxwell.sh", exitstat = stat, cmdstat = dummy)
     if (stat /= 0) then
-       write (log_msg, *) 'FreeFem++ failed with exit code ', stat
+       write (log_msg, '("FreeFem++ failed with exit code ", i0)') stat
        if (log_err) call log_write
        stop 'FreeFem++ failed'
     end if
@@ -586,8 +589,9 @@ contains
           div = abs((sum(pol_flux(kt,:)) + imun * n * tor_comp(kt) * &
                mesh_element(kt)%det_3 * 0.5d0)) / abs_flux
           if (div > rel_err) then
-              write (log_msg, *) trim(field_name) // ' not divergence-free in triangle ', &
-                   kt, ': ', div
+             write (log_msg, '("divergence of ", a, ' // &
+                  '" above threshold in triangle ", i0, ": ", es23.16)') &
+                  trim(field_name), kt, div
               if (log_err) call log_write
               stop
           end if
@@ -636,9 +640,11 @@ contains
                 end if
              end if
              if (inconsistent) then
-                write (log_msg, *) trim(name) // ': inconsistent redundant edges - ', &
-                     name, '(', ktri, ',', ke, ') = ', pol_quant(ktri, ke), &
-                     name, '(', ktri_adj, ',', ke_adj, ') = ', pol_quant(ktri_adj, ke_adj)
+                write (log_msg, '("inconsistent redundant edges: ", ' // &
+                     'a, "(", i0, ", ", i0, ") = ", ' // cmplx_fmt // ', ", ", ' // &
+                     'a, "(", i0, ", ", i0, ") = ", ' // cmplx_fmt // ')') &
+                     trim(name), ktri, ke, pol_quant(ktri, ke), &
+                     trim(name), ktri_adj, ke_adj, pol_quant(ktri_adj, ke_adj)
                 if (log_err) call log_write
                 stop
              end if
@@ -711,7 +717,9 @@ contains
           fs_half%q(kf) = abs(fluxvar%interp(efit%qpsi, kf, .true.))
        end do
     case default
-       stop 'Error: unknown pressure profile selection'
+       write (log_msg, '("unknown q profile selection: ", i0)') q_prof
+       if (log_err) call log_write
+       stop
     end select
 
     allocate(m_res(nflux))
@@ -726,7 +734,7 @@ contains
        abs_err = [(abs(fs_half%q(kf) - dble(m) / dble(n)), kf = 1, nflux)]
        m_res(minloc(abs_err, 1)) = m
     end do
-    write (log_msg, *) 'resonant m: ', m_res_min, '..', m_res_max
+    write (log_msg, '("resonant m: ", i0, " .. ", i0)') m_res_min, m_res_max
     if (log_debug) call log_write
     allocate(sheet_current_factor(m_res_min:m_res_max))
     sheet_current_factor = (0d0, 0d0)
@@ -796,7 +804,7 @@ contains
        dtemp_dpsi = ti0 / psimax
        dens = (fs%psi - psimin) / psimax * di0 + d_min
        temp = (fs%psi - psimin) / psimax * ti0 + t_min
-       write (log_msg, *) 'temp@axis: ', temp(0), ' dens@axis: ', dens(0)
+       write (log_msg, '("temp@axis: ", es23.16, ", dens@axis: ", es23.16)') temp(0), dens(0)
        if (log_info) call log_write
        fs%p = dens * temp * ev2erg
        fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
@@ -825,7 +833,9 @@ contains
           fs_half%dp_dpsi(kf) = fluxvar%interp(efit%pprime, kf, .true.)
        end do
     case default
-       stop 'Error: unknown pressure profile selection'
+       write (log_msg, '("unknown pressure profile selection", i0)') pres_prof
+       if (log_err) call log_write
+       stop
     end select
   end subroutine compute_pres_prof
 
@@ -863,11 +873,11 @@ contains
           B0r_Omega(ktri) = Br
           B0phi_Omega(ktri) = Bp
           B0z_Omega(ktri) = Bz
-          write (fid, *) r, z, Br, Bz, Bp
+          write (fid, '(5(1x, es23.16))') r, z, Br, Bz, Bp
        end do
     end do
     do kt = kt_low(nflux+1) + 1, ntri
-       write (fid, *) R0, 0d0, 0d0, 0d0, 0d0
+       write (fid, '(5(1x, es23.16))') R0, 0d0, 0d0, 0d0, 0d0
     end do
     close(fid)
   end subroutine cache_equilibrium_field
@@ -971,11 +981,12 @@ contains
                   Btor2 / B2avg_half(kf))
           end select
 
-          write (fid, *) j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), plot_j0phi
+          write (fid, '(4(1x, es23.16))') &
+               j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), plot_j0phi
        end do
     end do
     do kt = kt_low(nflux+1) + 1, ntri
-       write (fid, *) j0phi(kt, 1), j0phi(kt, 2), j0phi(kt, 3), 0d0
+       write (fid, '(4(1x, es23.16))') j0phi(kt, 1), j0phi(kt, 2), j0phi(kt, 3), 0d0
     end do
     close(fid)
 
@@ -1023,19 +1034,19 @@ contains
           Jz = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * &
                B0z_Omega(ktri)
           Jp = clight * (fs_half%dp_dpsi(kf) * r + 0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
-          write (fid_gs, *) Jr, Jp, Jz
+          write (fid_gs, '(3(1x, es23.16))') Jr, Jp, Jz
           cmp_gs = cmp_gs + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
                (n_r**2 + n_z**2) / (fs%psi(kf) - fs%psi(kf-1)) * 2d0 * tri%area / clight
           Jr = 0.25d0 / pi * clight * (-dBpdZ)
           Jp = 0.25d0 / pi * clight * (dBrdZ - dBzdR)
           Jz = 0.25d0 / pi * clight * (dBpdR + Bp / r)
-          write (fid_amp, *) Jr, Jp, Jz
+          write (fid_amp, '(3(1x, es23.16))') Jr, Jp, Jz
           cmp_amp = cmp_amp + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
                (n_r**2 + n_z**2) / (fs%psi(kf) - fs%psi(kf-1)) * 2d0 * tri%area / clight
        end do
        cmp_amp = cmp_amp / kt_max(kf)
        cmp_gs = cmp_gs / kt_max(kf)
-       write (fid_prof, *) cmp_amp, cmp_gs
+       write (fid_prof, '(2(1x, es23.16))') cmp_amp, cmp_gs
     end do
     close(fid_prof)
     close(fid_amp)
@@ -1123,8 +1134,8 @@ contains
     end do
 
     avg_rel_err = avg_rel_err / sum(kp_max(1:nflux))
-    write (log_msg, *) 'compute_presn: diagonalization' // &
-         ' max_rel_err = ', max_rel_err, ' avg_rel_err = ', avg_rel_err
+    write (log_msg, '("compute_presn: diagonalization max_rel_err = ", ' // &
+         'es23.16, ", avg_rel_err = ", es23.16)') max_rel_err, avg_rel_err
     if (log_debug) call log_write
     if (allocated(resid)) deallocate(resid)
 
@@ -1302,8 +1313,8 @@ contains
        end do
     end do
     avg_rel_err = avg_rel_err / sum(kt_max(1:nflux))
-    write (log_msg, *) 'compute_currn: diagonalization' // &
-         ' max_rel_err = ', max_rel_err, ' avg_rel_err = ', avg_rel_err
+    write (log_msg, '("compute_currn: diagonalization max_rel_err = ", ' // &
+         'es23.16, ", avg_rel_err = ", es23.16)') max_rel_err, avg_rel_err
     if (log_debug) call log_write
     if (allocated(resid)) deallocate(resid)
 
@@ -1504,7 +1515,7 @@ contains
           ! projection to covariant theta component
           proj_theta_covar = -(pol_comp_r * B0r_Omega(ktri) + &
                pol_comp_z * B0z_Omega(ktri)) * sqrt_g(kf, kt, r)
-          write (fid, *) r, z, real(pol_comp_r), aimag(pol_comp_r), &
+          write (fid, '(12(1x, es23.16))') r, z, real(pol_comp_r), aimag(pol_comp_r), &
                real(pol_comp_z), aimag(pol_comp_z), &
                real(tor_comp(ktri)), aimag(tor_comp(ktri)), &
                real(dens_psi_contravar), aimag(dens_psi_contravar), &
@@ -1514,7 +1525,7 @@ contains
     r = mesh_point(1)%rcoord
     z = mesh_point(1)%zcoord
     do kt = kt_low(n_cutoff+1) + 1, ntri
-       write (fid, *) r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+       write (fid, '(12(1x, es23.16))') r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
     end do
     close(fid)
   end subroutine write_vector_plot
@@ -1528,7 +1539,7 @@ contains
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
     do ktri = 1, kt_low(nflux+1)
-       write (fid, *) &
+       write (fid, '(8(1x, es23.16))') &
             real(pol_flux(ktri, 1)), aimag(pol_flux(ktri, 1)), &
             real(pol_flux(ktri, 2)), aimag(pol_flux(ktri, 2)), &
             real(pol_flux(ktri, 3)), aimag(pol_flux(ktri, 3)), &
@@ -1536,7 +1547,7 @@ contains
             aimag(tor_comp(ktri) * mesh_element(ktri)%det_3 * 0.5d0)
     end do
     do ktri = kt_low(nflux+1) + 1, ntri
-       write (fid, *) 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+       write (fid, '(8(1x, es23.16))') 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
     end do
     close(fid)
   end subroutine write_vector_dof
@@ -1552,10 +1563,10 @@ contains
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
     do kpoint = 1, kp_low(nflux+1)
-       write (fid, *) real(scalar_dof(kpoint)), aimag(scalar_dof(kpoint))
+       write (fid, '(2(1x, es23.16))') real(scalar_dof(kpoint)), aimag(scalar_dof(kpoint))
     end do
     do kpoint = kp_low(nflux+1) + 1, npoint ! write zeroes in remaining points until end
-       write (fid, *) 0d0, 0d0
+       write (fid, '(2(1x, es23.16))') 0d0, 0d0
     end do
     close(fid)
   end subroutine write_scalar_dof
@@ -1565,11 +1576,12 @@ contains
     real(dp) :: rho_r, rho_z
 
     open(newunit = fid, file = fluxvar_file, recl = longlines, status = 'replace')
-    write (fid, *) 0d0, fs%psi(0), fs%q(0), fs%p(0), fs%dp_dpsi(0)
+    write (fid, '(5(1x, es23.16))') 0d0, fs%psi(0), fs%q(0), fs%p(0), fs%dp_dpsi(0)
     do kf = 1, nflux
        rho_r = mesh_point(kp_low(kf) + 1)%rcoord - mesh_point(1)%rcoord
        rho_z = mesh_point(kp_low(kf) + 1)%zcoord - mesh_point(1)%zcoord
-       write (fid, *) hypot(rho_r, rho_z), fs%psi(kf), fs%q(kf), fs%p(kf), fs%dp_dpsi(kf)
+       write (fid, '(5(1x, es23.16))') &
+            hypot(rho_r, rho_z), fs%psi(kf), fs%q(kf), fs%p(kf), fs%dp_dpsi(kf)
     end do
     close(fid)
   end subroutine write_fluxvar

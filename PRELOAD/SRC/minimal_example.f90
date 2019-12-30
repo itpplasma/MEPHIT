@@ -58,12 +58,12 @@ program minimal_example
 
   ! write configuration to FreeFem++ (for Delaunay triangulation)
   open(newunit = fid, file = 'extmesh.idp', status = 'replace')
-  write (fid, "('real rmaxis = ', 1es16.9, ';')") rmaxis
-  write (fid, "('real zmaxis = ', 1es16.9, ';')") zmaxis
-  write (fid, "('real rdim = ', 1es16.9, ';')") rdim
-  write (fid, "('real zdim = ', 1es16.9, ';')") zdim
-  write (fid, "('int nkpol = ', 1i3, ';')") nkpol
-  write (fid, "('int nflux = ', 1i3, ';')") nflux
+  write (fid, '("real rmaxis = ", 1es16.9, ";")') rmaxis
+  write (fid, '("real zmaxis = ", 1es16.9, ";")') zmaxis
+  write (fid, '("real rdim = ", 1es16.9, ";")') rdim
+  write (fid, '("real zdim = ", 1es16.9, ";")') zdim
+  write (fid, '("int nkpol = ", 1i3, ";")') nkpol
+  write (fid, '("int nflux = ", 1i3, ";")') nflux
   close(fid)
 
   ! calculate maximal extent from magnetic axis
@@ -98,7 +98,7 @@ program minimal_example
   rho = rho_max
   do kp = 1, nrz
      theta = dble(kp) / dble(nrz) * 2d0 * pi
-     write (fid, *) rmaxis + rho * cos(theta), zmaxis + rho * sin(theta)
+     write (fid, '(2(1x, es23.16))') rmaxis + rho * cos(theta), zmaxis + rho * sin(theta)
   end do
   close(fid)
 
@@ -171,7 +171,7 @@ program minimal_example
   open(newunit = fid, file = 'mesh_new.asc', recl = longlines, status = 'replace')
   do ktri = 1, ntri
      elem = mesh_element(ktri)
-     write (fid, '(i5,1x,i5,1x,i5,1x,i1,1x,i5,1x,i5,1x,i5,1x,i3,1x,i3,1x,i3)') &
+     write (fid, '(3(1x, i5), 1x, i1, 3(1x, i5), 3(1x, i3))') &
           (elem%i_knot(ke), ke = 1, 3), elem%knot_h, &
           (elem%neighbour(ke), ke = 1, 3), (elem%neighbour_edge(ke), ke = 1, 3)
   end do
@@ -189,18 +189,20 @@ program minimal_example
   close(fid)
 
   open(newunit = fid, file = 'inputformaxwell_kilca.msh', status = 'replace')
-  write (fid, *) npoint, ntri, kp_max(nflux+1) - 1
+  write (fid, '(3(1x, i0))') npoint, ntri, kp_max(nflux+1) - 1
   do kpoi = 1, kp_low(nflux+1)
-     write (fid, *) mesh_point(kpoi)%rcoord, mesh_point(kpoi)%zcoord, 0
+     write (fid, '(2(1x, es23.16), 1x, i0)') &
+          mesh_point(kpoi)%rcoord, mesh_point(kpoi)%zcoord, 0
   end do
   do kpoi = kp_low(nflux+1) + 1, npoint
-     write (fid, *) mesh_point(kpoi)%rcoord, mesh_point(kpoi)%zcoord, 1
+     write (fid, '(2(1x, es23.16), 1x, i0)') &
+          mesh_point(kpoi)%rcoord, mesh_point(kpoi)%zcoord, 1
   end do
   do ktri = 1, ntri
-     write (fid, *) mesh_element(ktri)%i_knot(:), 0
+     write (fid, '(4(1x, i0))') mesh_element(ktri)%i_knot(:), 0
   end do
   do kp = 1, kp_max(nflux+1) - 1
-     write (fid, *) kp_low(nflux+1) + kp, kp_low(nflux+1) + kp + 1, 1
+     write (fid, '(4(1x, i0))') kp_low(nflux+1) + kp, kp_low(nflux+1) + kp + 1, 1
   end do
   close(fid)
 
@@ -287,7 +289,7 @@ contains
     real(dp), allocatable :: fpol(:), pres(:), ffprim(:), pprime(:), psirz(:, :), &
          qpsi(:), rbbbs(:), zbbbs(:), rlim(:), zlim(:)
 
-    write (log_msg, *) 'attempting to read unscaled G EQDSK file ', file_in
+    write (log_msg, '("attempting to read unscaled G EQDSK file ", a)') file_in
     call log_write
     open(newunit = fid_in, file = file_in, status = 'old')
     read (fid_in, geqdsk_2000) (text(i), i = 1, 6), idum, nw, nh
@@ -331,7 +333,7 @@ contains
     rbbbs = rbbbs + r_shift
     rlim = rlim + r_shift
 
-    write (log_msg, *) 'attempting to write scaled G EQDSK file ', file_out
+    write (log_msg, '("attempting to write scaled G EQDSK file ", a)') file_out
     call log_write
     open(newunit = fid_out, file = file_out, status = 'replace')
     write (fid_out, geqdsk_2000) (text(i), i = 1, 6), idum, nw, nh
@@ -383,7 +385,8 @@ contains
        mesh_point(kpoint)%i_owner_tri(mesh_point(kpoint)%n_owners + 1) = ktri
        mesh_point(kpoint)%n_owners = mesh_point(kpoint)%n_owners + 1
     else
-       write (log_msg, *) 'Maximal number of owning triangles exceeded at point ', kpoint
+       write (log_msg, '("Maximal number of owning triangles exceeded at point ", i0)') &
+            kpoint
        if (log_warn) call log_write
     end if
   end subroutine add_node_owner
@@ -440,7 +443,7 @@ contains
     k_z_r = tor_mode / R_0 * r
     status = fgsl_sf_bessel_icn_array(pol_mode-1, pol_mode+1, k_z_r, I_m)
     if (status /= fgsl_success .and. log_err) then
-       write (log_msg, *) 'fgsl_sf_bessel_icn_array returned error ', status
+       write (log_msg, '("fgsl_sf_bessel_icn_array returned error ", i0)') status
        call log_write
     end if
     B_r = (0.5d0, 0d0) * (I_m(-1) + I_m(1)) * cos(pol_mode * theta) &
