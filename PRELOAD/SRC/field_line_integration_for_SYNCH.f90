@@ -39,7 +39,7 @@
   double precision, dimension(nlabel)        :: rbeg,rsmall,qsaf,psisurf,phitor
   double precision, dimension(nlabel,ntheta) :: R_st,Z_st,bmod_st,sqgnorm_st
 !
-  external :: rhs_axis, rhs_surf, rhs_surf_theta
+  external :: rhs_axis, rhs_surf  !, rhs_surf_theta
   double precision, external :: cross_2d_sign
 !
 !

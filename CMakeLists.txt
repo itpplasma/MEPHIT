@@ -23,6 +23,7 @@ include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
 
 ### Set compiler flags
 set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fbounds-check -Wall")  # -ffpe-trap=invalid,zero,overflow
+# set(CMAKE_Fortran_FLAGS "-O2 -fpp -g -check all -warn all")  # ifort configuration
 
 ### Define libraries
 add_library(magdif SHARED
@@ -43,6 +44,7 @@ add_library(magdif SHARED
   ${SUPERLU_SRC_FILES}
 )
 add_library(geomint_mesh SHARED
+  PRELOAD/SRC/field_divB0.f90
   PRELOAD/SRC/binsrc.f90
   PRELOAD/SRC/field_line_integration_for_SYNCH.f90
   PRELOAD/SRC/magdata_in_symfluxcoord.f90

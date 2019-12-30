@@ -332,7 +332,7 @@ contains
              write (log_msg, '("Matrix inversion for preconditioner failed: ' // &
                   'zgesv returns error ", i0)') info
              if (log_err) call log_write
-             stop
+             error stop
           end if
           do i = 1, ngrow
              Lr(i, :) = eigvals(i) * Yr(i, :)
@@ -554,7 +554,7 @@ contains
     if (stat /= 0) then
        write (log_msg, '("FreeFem++ failed with exit code ", i0)') stat
        if (log_err) call log_write
-       stop 'FreeFem++ failed'
+       error stop
     end if
   end subroutine compute_Bn
 
@@ -593,7 +593,7 @@ contains
                   '" above threshold in triangle ", i0, ": ", es23.16)') &
                   trim(field_name), kt, div
               if (log_err) call log_write
-              stop
+              error stop
           end if
        end if
     end do
@@ -646,7 +646,7 @@ contains
                      trim(name), ktri, ke, pol_quant(ktri, ke), &
                      trim(name), ktri_adj, ke_adj, pol_quant(ktri_adj, ke_adj)
                 if (log_err) call log_write
-                stop
+                error stop
              end if
           end if
        end do
@@ -719,7 +719,7 @@ contains
     case default
        write (log_msg, '("unknown q profile selection: ", i0)') q_prof
        if (log_err) call log_write
-       stop
+       error stop
     end select
 
     allocate(m_res(nflux))
@@ -835,7 +835,7 @@ contains
     case default
        write (log_msg, '("unknown pressure profile selection", i0)') pres_prof
        if (log_err) call log_write
-       stop
+       error stop
     end select
   end subroutine compute_pres_prof
 
@@ -1187,8 +1187,8 @@ contains
        i2 = 2
     end select
     if (elem%i_knot(i1) == elem%i_knot(i2)) then
-       if (log_debug) call log_write
-       stop
+       if (log_err) call log_write
+       error stop
     end if
     ! last triangle in strip if indices not next to each other
     closing_loop = abs(elem%i_knot(i1) - elem%i_knot(i2)) /= 1
@@ -1230,8 +1230,8 @@ contains
        lo = (/ elem%i_knot(knot_f), elem%i_knot(knot_i) /)
        lf = (/ elem%i_knot(knot_i), elem%i_knot(knot_o) /)
     else
-       if (log_debug) call log_write
-       stop
+       if (log_err) call log_write
+       error stop
     end if
   end subroutine get_labeled_edges
 
