@@ -324,6 +324,8 @@ contains
        end if
     end if
 
+    call write_vector_dof(Bnflux_vac, Bnphi_vac, Bn_diff_file)
+    call compute_L2int
     call pack2(Bnflux_vac, Bnphi_vac, Bn_prev)
     if (preconditioned) then
        Bn_prev = Bn_prev - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
@@ -344,8 +346,8 @@ contains
        end if
 
        call unpack2(Bnflux_diff, Bnphi_diff, Bn - Bn_prev)
-       call write_vector_dof(Bnflux_diff, Bnphi_diff, &
-            decorate_filename(Bn_diff_file, '', postfix))
+       call write_vector_dof(Bnflux_diff, Bnphi_diff, Bn_diff_file)
+       call compute_L2int
        call write_vector_dof(Bnflux, Bnphi, &
             decorate_filename(Bn_file, '', postfix))
        if (kiter <= 1) then
@@ -538,6 +540,16 @@ contains
        error stop
     end if
   end subroutine compute_Bn
+
+  subroutine compute_L2int
+    integer :: stat = 0, dummy = 0
+    call execute_command_line('./L2int.sh', exitstat = stat, cmdstat = dummy)
+    if (stat /= 0) then
+       write (log_msg, '("FreeFem++ failed with exit code ", i0)') stat
+       if (log_err) call log_write
+       error stop
+    end if
+  end subroutine compute_L2int
 
   !> Checks if divergence-freeness of the given vector field is fulfilled on each
   !> triangle, otherwise halts the program.

@@ -28,6 +28,11 @@ if (os.path.isabs(config['Bn_file'])):
     Bnfluxfile = config['Bn_file']
 else:
     Bnfluxfile = os.path.relpath(config['Bn_file'], '../FEM')
+if (os.path.isabs(config['Bn_diff_file'])):
+    Bndifffile = config['Bn_diff_file']
+else:
+    Bndifffile = os.path.relpath(config['Bn_diff_file'], '../FEM')
+convfile = os.path.relpath('convergence.dat', '../FEM')
 
 with open('../FEM/magdif.idp', 'w') as f:
     f.write('real nmode = {};\n'.format(nmode))
@@ -35,4 +40,6 @@ with open('../FEM/magdif.idp', 'w') as f:
     f.write('string meshfile = "../PRELOAD/inputformaxwell_ext.msh";\n')
     f.write('string currnfile = "{}";\n'.format(currnfile))
     f.write('string Bnfluxfile = "{}";\n'.format(Bnfluxfile))
+    f.write('string Bndifffile = "{}";\n'.format(Bndifffile))
+    f.write('string convfile = "{}";\n'.format(convfile))
     f.write('bool doplot = false;\n')

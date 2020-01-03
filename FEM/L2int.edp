@@ -18,8 +18,8 @@ for (int k = 0; k < Th.nt; k++) {
 }
 cout << "Number of triangles in internal region: " << ntri << endl;
 
-ifstream ifile(ARGV[2]);
-for (int k = 0; k < Th.nt; k++) {
+ifstream ifile(Bndifffile);
+for (int k = 0; k < ktlownfluxp1; k++) {
   for (int j = 0; j < 3; j++) {
     redundancy = Br[][Hdiv(k, (j+2) % 3)];
     ifile >> BfluxRe >> BfluxIm;
@@ -42,7 +42,7 @@ for (int k = 0; k < Th.nt; k++) {
 }
 
 {
-  ofstream cfile(ARGV[3], append);
+  ofstream cfile(convfile, append);
   cfile.scientific.precision(16);
   cfile << sqrt(real(int2d(Th)(Br * conj(Br) * x + Bz * conj(Bz) * x +
     Bphi * conj(Bphi) / x))) << endl;
