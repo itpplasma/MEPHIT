@@ -533,7 +533,10 @@ contains
   !> script called therein.
   subroutine compute_Bn
     integer :: stat = 0, dummy = 0
-    call execute_command_line("./maxwell.sh", exitstat = stat, cmdstat = dummy)
+    character(len = 1024) :: fem_cmd
+    write (fem_cmd, '("./maxwell.sh -n ", i0, " -N ", i0, " -J ", a, " -B ", a)') &
+         n, kt_low(nflux + 1), trim(currn_file), trim(Bn_file)
+    call execute_command_line(fem_cmd, exitstat = stat, cmdstat = dummy)
     if (stat /= 0) then
        write (log_msg, '("FreeFem++ failed with exit code ", i0)') stat
        if (log_err) call log_write
@@ -543,7 +546,10 @@ contains
 
   subroutine compute_L2int
     integer :: stat = 0, dummy = 0
-    call execute_command_line('./L2int.sh', exitstat = stat, cmdstat = dummy)
+    character(len = 1024) :: L2int_cmd
+    write (L2int_cmd, '("./L2int.sh -B ", a, " -C ", a)') &
+         trim(Bn_diff_file), trim(conv_file)
+    call execute_command_line(L2int_cmd, exitstat = stat, cmdstat = dummy)
     if (stat /= 0) then
        write (log_msg, '("FreeFem++ failed with exit code ", i0)') stat
        if (log_err) call log_write

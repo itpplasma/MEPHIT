@@ -9,7 +9,13 @@ load "MUMPS"
 
 real c = 29979245800.0; // speed of light
 
-include "magdif.idp"  // config (incl. filenames)
+include "getARGV.idp"
+int nmode = getARGV("-n", 2);
+int ktlownfluxp1 = getARGV("-N", 0);
+string meshfile = getARGV("-M", "../PRELOAD/inputformaxwell_ext.msh");
+string currnfile = getARGV("-J", "../MHD/currn.dat");
+string Bnfluxfile = getARGV("-B", "../MHD/Bn.dat");
+bool doplot = false;
 
 mesh Th = readmesh(meshfile);
 
@@ -35,6 +41,9 @@ for (int k = 0; k < Th.nt; k++) {
   if (Th[k].label == 0)
     ntri++;
 }
+if (ktlownfluxp1 <= 0) {
+  ktlownfluxp1 = ntri;
+}
 
 cout << "Number of triangles in internal region: " << ntri << endl;
 
@@ -54,6 +63,7 @@ for (int k = 0; k < ktlownfluxp1; k++) {
       cerr << "Flux inconsistent in file " << currnfile
         << " at triangle " << k << " edge " << (j+2) % 3 << ": "
         << redundancy << " != " << Jr[][Hdiv(k, (j+2) % 3)] << endl;
+      exit(1);
     }
   }
   ifile >> JfluxRe >> JfluxIm;

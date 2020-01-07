@@ -1,4 +1,9 @@
-include "magdif.idp"  // config (incl. filenames)
+include "getARGV.idp"
+int ktlownfluxp1 = getARGV("-N", 0);
+string meshfile = getARGV("-M", "../PRELOAD/inputformaxwell_ext.msh");
+string Bndifffile = getARGV("-B", "../MHD/Bn_diff.dat");
+string convfile = getARGV("-C", "../MHD/convergence.dat");
+bool doplot = false;
 
 mesh Th = readmesh(meshfile);
 fespace Vh0(Th, P0);
@@ -16,6 +21,10 @@ for (int k = 0; k < Th.nt; k++) {
   if (Th[k].label == 0)
     ntri++;
 }
+if (ktlownfluxp1 <= 0) {
+  ktlownfluxp1 = ntri;
+}
+
 cout << "Number of triangles in internal region: " << ntri << endl;
 
 ifstream ifile(Bndifffile);
@@ -25,16 +34,16 @@ for (int k = 0; k < ktlownfluxp1; k++) {
     ifile >> BfluxRe >> BfluxIm;
     // check orientation of edges and assign
     // normal flux coordinate accordingly
+    if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
+      Br[][Hdiv(k, (j+2) % 3)] = BfluxRe + 1.0i * BfluxIm;
+    } else {
+      Br[][Hdiv(k, (j+2) % 3)] = -BfluxRe - 1.0i * BfluxIm;
+    }
     if (redundancy != 0.0 && redundancy != Br[][Hdiv(k, (j+2) % 3)]) {
-      cerr << "Flux inconsistent in file " << currnfile
+      cerr << "Flux inconsistent in file " << Bndifffile
         << " at triangle " << k << " edge " << (j+2) % 3 << ": "
         << redundancy << " != " << Br[][Hdiv(k, (j+2) % 3)] << endl;
-    } else {
-      if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
-        Br[][Hdiv(k, (j+2) % 3)] = BfluxRe + 1.0i * BfluxIm;
-      } else {
-        Br[][Hdiv(k, (j+2) % 3)] = -BfluxRe - 1.0i * BfluxIm;
-      }
+      exit(1);
     }
   }
   ifile >> BfluxRe >> BfluxIm;
