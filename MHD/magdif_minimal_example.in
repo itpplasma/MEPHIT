@@ -1,18 +1,19 @@
 &settings
    log_level = 4                                         ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
-   runmode = 0                                           ! 0: single iteration, 1: direct iterations,
+   runmode = 1                                           ! 0: single iteration, 1: direct iterations,
                                                          ! 2: preconditioned iterations
    nonres = .false.                                      ! use non-resonant test case
    quad_avg = .true.                                     ! average over quadrilaterals for non-resonant test case
    pres_prof = 2
-   curr_prof = 1
+   curr_prof = 2
+   q_prof = 2
 
    n = 2                                                 ! harmonic index of perturbation
-   niter = 20                                            ! number of iteration steps
-   nritz = 150                                           ! number of Ritz eigenvalues
+   niter = 1                                             ! number of iteration steps
+   nritz = 80                                            ! number of Ritz eigenvalues
    tol = 0.5d0                                           ! threshold for eigenvalues in preconditioner
    nkpol = 300                                           ! number of knots per poloidal loop
-   nflux = 128                                           ! number of flux surfaces up to and counting LCFS
+   nflux = 256                                           ! number of flux surfaces up to and counting LCFS
    ti0 = 3.d3                                            ! temperature on magnetic axis
    t_min = 2d1                                           ! minimum temperature
    di0 = 5.d13                                           ! density on magnetic axis
@@ -40,5 +41,5 @@
    kilca_pol_mode_file = 'Bmn.dat'                       ! output file for Fourier coefficients
 /
 &delayed
-   sheet_current_factor = 1*(0d0, 0d0), 1*(-1d3, -1d3)  ! coefficients for sheet currents
+   sheet_current_factor(4) = (1d4, 1d4)  ! coefficients for sheet currents
 /
