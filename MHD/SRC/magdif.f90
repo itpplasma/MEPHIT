@@ -604,7 +604,7 @@ contains
     character(len = *), intent(in) :: name
     integer :: ktri, ktri_adj, ke, ke_adj
     logical :: checked(ntri, 3), inconsistent
-    real(dp), parameter :: eps = epsilon(1d0)
+    real(dp), parameter :: eps = 1d-5
 
     checked = .false.
     do ktri = 1, kt_low(nflux+1)
@@ -620,22 +620,22 @@ contains
                 inconsistent = inconsistent .or. real(pol_quant(ktri_adj, ke_adj)) /= 0d0
              else
                 if (same_sign) then
-                   inconsistent = inconsistent .or. real(pol_quant(ktri_adj, ke_adj)) / &
-                        real(pol_quant(ktri, ke)) - 1d0 > eps
+                   inconsistent = inconsistent .or. eps < abs(1d0 - &
+                        real(pol_quant(ktri_adj, ke_adj)) / real(pol_quant(ktri, ke)))
                 else
-                   inconsistent = inconsistent .or. real(pol_quant(ktri_adj, ke_adj)) / &
-                        (-real(pol_quant(ktri, ke))) - 1d0 > eps
+                   inconsistent = inconsistent .or. eps < abs(1d0 + &
+                        real(pol_quant(ktri_adj, ke_adj)) / real(pol_quant(ktri, ke)))
                 end if
              end if
              if (aimag(pol_quant(ktri, ke)) == 0d0) then
                 inconsistent = inconsistent .or. aimag(pol_quant(ktri_adj, ke_adj)) /= 0d0
              else
                 if (same_sign) then
-                   inconsistent = inconsistent .or. aimag(pol_quant(ktri_adj, ke_adj)) / &
-                        aimag(pol_quant(ktri, ke)) - 1d0 > eps
+                   inconsistent = inconsistent .or. eps < abs(1d0 - &
+                        aimag(pol_quant(ktri_adj, ke_adj)) / aimag(pol_quant(ktri, ke)))
                 else
-                   inconsistent = inconsistent .or. aimag(pol_quant(ktri_adj, ke_adj)) / &
-                        (-aimag(pol_quant(ktri, ke))) - 1d0 > eps
+                   inconsistent = inconsistent .or. eps < abs(1d0 + &
+                        aimag(pol_quant(ktri_adj, ke_adj)) / aimag(pol_quant(ktri, ke)))
                 end if
              end if
              if (inconsistent) then
