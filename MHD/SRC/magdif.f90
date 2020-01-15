@@ -1452,11 +1452,11 @@ contains
     elem = mesh_element(ktri)
     node = mesh_point(elem%i_knot(:))
     ! edge 1 lies opposite to knot 3, etc.
-    pol_comp_r = 1d0 / elem%det_3 * ( &
+    pol_comp_r = 1d0 / elem%det_3 / r * ( &
          pol_flux(ktri, 1) * (r - node(3)%rcoord) + &
          pol_flux(ktri, 2) * (r - node(1)%rcoord) + &
          pol_flux(ktri, 3) * (r - node(2)%rcoord))
-    pol_comp_z = 1d0 / elem%det_3 * ( &
+    pol_comp_z = 1d0 / elem%det_3 / r * ( &
          pol_flux(ktri, 1) * (z - node(3)%zcoord) + &
          pol_flux(ktri, 2) * (z - node(1)%zcoord) + &
          pol_flux(ktri, 3) * (z - node(2)%zcoord))
