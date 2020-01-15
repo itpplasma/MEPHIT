@@ -282,7 +282,7 @@ contains
                ngrow, tol
           call log_write
           do i = 1, ngrow
-             write (log_msg, '("lambda ", i2, ": ", ' // cmplx_fmt // ')') i, eigvals(i)
+             write (log_msg, '("lambda ", i0, ": ", ' // cmplx_fmt // ')') i, eigvals(i)
              call log_write
           end do
        end if
@@ -1328,6 +1328,7 @@ contains
     integer :: kf, kt, ktri
     type(triangle_rmp) :: tri, tri_adj
     complex(dp) :: presn_half
+
     do kf = 1, nflux
        if (m_res(kf) > 0) then
           if (sheet_current_factor(m_res(kf)) /= (0d0, 0d0)) then

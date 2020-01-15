@@ -52,7 +52,7 @@ for (int k = 0; k < ktlownfluxp1; k++) {
 
 {
   ofstream cfile(convfile, append);
-  cfile.scientific.precision(16);
+  cfile.scientific.precision(15);
   cfile << sqrt(real(int2d(Th)(Br * conj(Br) * x + Bz * conj(Bz) * x +
     Bphi * conj(Bphi) / x))) << endl;
 }

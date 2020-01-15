@@ -9,7 +9,7 @@ module magdif_config
   character(len = 1024) :: log_file = ''
   character(len = 1024) :: log_msg = ''
 
-  character(len = *), parameter :: cmplx_fmt = 'es23.16, 1x, sp, es23.16, " i"'
+  character(len = *), parameter :: cmplx_fmt = 'es23.16, 1x, sp, es23.16, s, " i"'
   character(len = *), parameter :: nl_fmt = '"' // new_line('A') // '"'
 
   integer, parameter :: longlines = 1024

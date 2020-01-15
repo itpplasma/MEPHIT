@@ -81,7 +81,7 @@ solve Ampere([ax, ay], [wx, wy], solver = sparsesolver) = // defines the PDE
 Bphi = -(dx(ay) - dy(ax));
 
 ofstream ofile(Bnfluxfile);
-ofile.scientific.precision(16);
+ofile.scientific.precision(15);
 for (int k = 0; k < ntri; k++) {
   for (int j = 0; j < 3; j++) {
     if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
