@@ -6,14 +6,16 @@ module magdif_util
 
   private
 
-  public :: clight, imun, ring_centered_avg_coord, assemble_sparse
+  public :: clight, imun, interp_psi_pol, ring_centered_avg_coord, assemble_sparse
 
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
 
   type, public :: g_eqdsk
     character(len = 1024) :: fname
-    integer :: nw 
+    integer :: nw, nh
+    real(dp) :: rdim, zdim, rcentr, rleft, zmid, rmaxis, zmaxis, simag, sibry, bcentr, &
+         current
     real(dp), dimension(:), allocatable :: fpol, pres, ffprim, pprime, qpsi
   contains
     procedure :: read => g_eqdsk_read
@@ -65,6 +67,20 @@ module magdif_util
   end type flux_func_cache
 
 contains
+
+  function interp_psi_pol(r, z) result(psi_pol)
+    use field_eq_mod, only: psif
+
+    real(dp), intent(in) :: r, z
+    real(dp) :: psi_pol
+
+    real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+
+    call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
+         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
+    psi_pol = psif
+  end function interp_psi_pol
 
   !> Computes the "weighted" centroid for a triangle so that it is approximately
   !> equidistant between the enclosing flux surfaces, independent of triangle orientation.
@@ -142,34 +158,52 @@ contains
     class(g_eqdsk), intent(inout) :: this
     character(len = 1024), intent(in) :: fname
     character(len = 10) :: text(6)
-    integer :: fid, k, nh, idum
+    integer :: fid, k, idum
     real(dp) :: xdum
 
     call g_eqdsk_destructor(this)
     this%fname = fname
     open(newunit = fid, file = this%fname)
-    read(fid, geqdsk_2000) (text(k), k = 1, 6), idum, this%nw, nh
+    read(fid, geqdsk_2000) (text(k), k = 1, 6), idum, this%nw, this%nh
     allocate(this%fpol(this%nw))
     allocate(this%pres(this%nw))
     allocate(this%ffprim(this%nw))
     allocate(this%pprime(this%nw))
     allocate(this%qpsi(this%nw))
-    read(fid, geqdsk_2020) (xdum, k = 1, 20)
+    read(fid, geqdsk_2020) this%rdim, this%zdim, this%rcentr, this%rleft, this%zmid
+    read(fid, geqdsk_2020) this%rmaxis, this%zmaxis, this%simag, this%sibry, this%bcentr
+    read(fid, geqdsk_2020) this%current, (xdum, k = 1, 4)
+    read(fid, geqdsk_2020) (xdum, k = 1, 5)
     read(fid, geqdsk_2020) (this%fpol(k), k = 1, this%nw)
     read(fid, geqdsk_2020) (this%pres(k), k = 1, this%nw)
     read(fid, geqdsk_2020) (this%ffprim(k), k = 1, this%nw)
     read(fid, geqdsk_2020) (this%pprime(k), k = 1, this%nw)
-    read(fid, geqdsk_2020) (xdum, k = 1, this%nw * nh)
+    read(fid, geqdsk_2020) (xdum, k = 1, this%nw * this%nh)
     read(fid, geqdsk_2020) (this%qpsi(k), k = 1, this%nw)
     close(fid)
-    ! convert tesla meter to gauss centimeter
-    this%fpol = this%fpol * 1e6
-    ! convert pascal to barye
-    this%pres = this%pres * 1e1
+    ! convert meter to centimeter
+    this%rdim = this%rdim * 1d2
+    this%zdim = this%zdim * 1d2
+    this%rcentr = this%rcentr * 1d2
+    this%rleft = this%rleft * 1d2
+    this%zmid = this%zmid * 1d2
+    this%rmaxis = this%rmaxis * 1d2
+    this%zmaxis = this%zmaxis * 1d2
+    ! convert weber to maxwell
+    this%simag = this%simag * 1d8
+    this%sibry = this%sibry * 1d8
     ! convert tesla to gauss
-    this%ffprim = this%ffprim * 1e4
+    this%bcentr = this%bcentr * 1d4
+    ! convert ampere to statampere
+    this%current = this%current * 1d-1 * clight
+    ! convert tesla meter to gauss centimeter
+    this%fpol = this%fpol * 1d6
+    ! convert pascal to barye
+    this%pres = this%pres * 1d1
+    ! convert tesla to gauss
+    this%ffprim = this%ffprim * 1d4
     ! convert pascal per weber to barye per maxwell
-    this%pprime = this%pprime * 1e-7
+    this%pprime = this%pprime * 1d-7
   end subroutine g_eqdsk_read
 
   subroutine g_eqdsk_destructor(this)

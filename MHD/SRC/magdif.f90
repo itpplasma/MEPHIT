@@ -14,6 +14,8 @@ module magdif
   type(flux_func_cache), allocatable :: fs
   type(flux_func_cache), allocatable :: fs_half
 
+  real(dp) :: r_o, z_o, r_min, r_max, z_min, z_max  ! TODO: mesh_global_props type
+
   !> Poloidal mode number \f$ m \f$ (dimensionless) in resonance at given flux surface.
   !>
   !> Indexing is the same as for #q, on which the values depend. If no resonances are
@@ -364,6 +366,7 @@ contains
     end do
     call write_vector_dof(Bnflux, Bnphi, Bn_file)
     call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_', ''))
+    call write_vector_plot_rect(Bnflux, Bnphi, decorate_filename(Bn_file, 'rect_', ''))
     if (kilca_scale_factor /= 0) then
        call write_kilca_modes(Bnflux, Bnphi, kilca_pol_mode_file)
        call write_kilca_modes(Bnflux_vac, Bnphi_vac, &
@@ -511,6 +514,13 @@ contains
     integer :: kf, kt, ktri
     type(triangle) :: elem
     type(triangle_rmp) :: tri
+
+    r_o = mesh_point(1)%rcoord
+    z_o = mesh_point(1)%zcoord
+    r_min = minval(mesh_point(:kp_low(nflux+1))%rcoord)
+    r_max = maxval(mesh_point(:kp_low(nflux+1))%rcoord)
+    z_min = minval(mesh_point(:kp_low(nflux+1))%zcoord)
+    z_max = maxval(mesh_point(:kp_low(nflux+1))%zcoord)
 
     do kf = 1, nflux
        do kt = 1, kt_max(kf)
@@ -1529,6 +1539,122 @@ contains
     end do
     close(fid)
   end subroutine write_vector_plot
+
+  function point_in_triangle(ktri, r, z) result(probably)
+    integer, intent(in) :: ktri
+    real(dp), intent(in) :: r, z
+    logical :: probably
+    integer :: le(3, 2)
+    real(dp) :: perp_r(3), perp_z(3), dist_r(3), dist_z(3), dotprod(3)
+    type(triangle_rmp) :: tri
+    tri = mesh_element_rmp(ktri)
+    le(1, :) = tri%li
+    le(2, :) = tri%lo
+    le(3, :) = tri%lf
+    perp_r = mesh_point(le(:, 2))%zcoord - mesh_point(le(:, 1))%zcoord
+    perp_z = mesh_point(le(:, 1))%rcoord - mesh_point(le(:, 2))%rcoord
+    dist_r = r - mesh_point(le(:, 1))%rcoord
+    dist_z = z - mesh_point(le(:, 1))%zcoord
+    dotprod = perp_r * dist_r + perp_z * dist_z
+    probably = all(dotprod <= 0d0)
+  end function point_in_triangle
+
+  function point_location(r, z) result(location)
+    real(dp), intent(in) :: r, z
+    integer :: location
+
+    integer :: ub, lb, kf, kq, k, k_max, ktri, candidates(6)
+    real(dp) :: psi, pol_frac, pol_offset, &
+         pol_interval(nkpol + 1)
+
+    location = -1
+    if (r < r_min .or. r > r_max .or. z < z_min .or. z > z_max) return
+    psi = interp_psi_pol(r, z)
+    if (psi < fs%psi(nflux)) return
+    ! binsrc expects strictly monotonically increasing arrays, so we reverse fs%psi
+    lb = lbound(fs%psi, 1)
+    ub = ubound(fs%psi, 1)
+    call binsrc(fs%psi(ub:lb:-1), 0, ub - lb, psi, kf)
+    kf = ub - (kf - 1)
+
+    pol_interval = 0d0
+    pol_interval(1:kp_max(kf)) = 0.5d0 / pi * atan2( &
+         mesh_point((kp_low(kf) + 1):(kp_low(kf) + kp_max(kf)))%zcoord - z_o, &
+         mesh_point((kp_low(kf) + 1):(kp_low(kf) + kp_max(kf)))%rcoord - r_o)
+    pol_offset = pol_interval(1)
+    pol_interval = pol_interval - pol_offset
+    pol_interval(kp_max(kf) + 1) = 1d0
+    where (pol_interval < 0d0) pol_interval = pol_interval + 1d0
+    where (pol_interval > 1d0) pol_interval = pol_interval - 1d0
+    pol_frac = 0.5d0 / pi * atan2(z - z_o, r - r_o) - pol_offset
+    if (pol_frac < 0d0) pol_frac = pol_frac + 1d0
+    if (pol_frac > 1d0) pol_frac = pol_frac - 1d0
+    call binsrc(pol_interval, 0, kp_max(kf), pol_frac, kq)
+
+    ! fs%psi is averaged from interpolated values and triangle edges do not lie exactly
+    ! on flux surfaces, so we include the two adjacent triangle strips in the search
+    if (kf == 1) then
+       k_max = 3
+       candidates = [kt_low(kf) + kq, &                               ! best guess
+            kt_low(kf + 1) + 2 * kq - 1, kt_low(kf + 1) + 2 * kq, &   ! outer loop
+            -1, -1, -1]                                               ! filler
+    elseif (kf == 2) then
+       k_max = 5
+       candidates = [kt_low(kf) + 2 * kq - 1, kt_low(kf) + 2 * kq, &  ! best guesses
+            kt_low(kf + 1) + 2 * kq - 1, kt_low(kf + 1) + 2 * kq, &   ! outer loop
+            kt_low(kf - 1) + kq, -1]                                  ! inner loop, filler
+    elseif (kf == nflux) then
+       k_max = 4
+       candidates = [kt_low(kf) + 2 * kq - 1, kt_low(kf) + 2 * kq, &  ! best guesses
+            kt_low(kf - 1) + 2 * kq - 1, kt_low(kf - 1) + 2 * kq, &   ! inner loop
+            -1, -1]                                                   ! filler
+    else
+       k_max = 6
+       candidates = [kt_low(kf) + 2 * kq - 1, kt_low(kf) + 2 * kq, &  ! best guesses
+            kt_low(kf + 1) + 2 * kq - 1, kt_low(kf + 1) + 2 * kq, &   ! outer loop
+            kt_low(kf - 1) + 2 * kq - 1, kt_low(kf - 1) + 2 * kq]     ! inner loop
+    end if
+
+    do k = 1, k_max
+       ktri = candidates(k)
+       if (point_in_triangle(ktri, r, z)) then
+          location = ktri
+          exit
+       end if
+    end do
+  end function point_location
+
+  subroutine write_vector_plot_rect(pol_flux, tor_comp, outfile)
+    complex(dp), intent(in) :: pol_flux(:,:)
+    complex(dp), intent(in) :: tor_comp(:)
+    character(len = *), intent(in) :: outfile
+
+    integer :: kw, kh, ktri, fid
+    type(triangle_rmp) :: tri
+    complex(dp) :: comp_r, comp_z, comp_phi
+    real(dp) :: r, z
+
+    open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
+    do kw = 1, efit%nw
+       do kh = 1, efit%nh
+          r = efit%rleft + dble(kw - 1) / dble(efit%nw - 1) * efit%rdim
+          z = efit%zmid + (kh - 0.5d0 * (efit%nw + 1)) / dble(efit%nh - 1) * efit%zdim
+          ktri = point_location(r, z)
+          if (ktri > kt_low(1) .and. ktri <= kt_low(nflux + 1)) then
+             tri = mesh_element_rmp(ktri)
+             call interp_RT0(ktri, pol_flux, r, z, comp_r, comp_z)
+             comp_phi = tor_comp(ktri)
+          else
+             comp_r = 0d0
+             comp_z = 0d0
+             comp_phi = 0d0
+          end if
+          write (fid, '(i6, 12(1x, es23.16))') ktri, r, z, real(comp_r), aimag(comp_r), &
+               real(comp_z), aimag(comp_z), real(comp_phi), aimag(comp_phi)
+       end do
+    end do
+    close(fid)
+  end subroutine write_vector_plot_rect
 
   subroutine write_vector_dof(pol_flux, tor_comp, outfile)
     complex(dp), intent(in) :: pol_flux(:,:)
