@@ -270,15 +270,15 @@ contains
     integer :: kiter, ndim, i, j, info
     complex(dp) :: Bnflux_diff(ntri, 3)
     complex(dp) :: Bnphi_diff(ntri)
-    complex(dp) :: Bn(ntri * 4), Bn_prev(ntri * 4)
+    complex(dp) :: Bn(nedge), Bn_prev(nedge)
     complex(dp) :: eigvals(nritz)
     complex(dp), allocatable :: Lr(:,:), Yr(:,:)
     integer, allocatable :: ipiv(:)
     character(len = 4) :: postfix
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
 
-    ! system dimension N ! - no need to include extended mesh
-    ndim = ntri * 4 ! kt_low(nflux+1) * 4
+    ! system dimension: number of non-redundant edges in core plasma
+    ndim = nedge
     preconditioned = runmode_precon == runmode
     if (preconditioned) then
        ! calculate eigenvectors
@@ -296,7 +296,7 @@ contains
        if (ngrow > 0) then
           do i = 1, min(ngrow, max_eig_out)
              write (postfix, postfix_fmt) i
-             call unpack2(Bnflux, Bnphi, eigvecs(:, i))
+             call unpack_dof(Bnflux, Bnphi, eigvecs(:, i))
              call write_vector_dof(Bnflux, Bnphi, &
                   decorate_filename(eigvec_file, '', postfix))
              call write_vector_plot(Bnflux, Bnphi, &
@@ -333,7 +333,7 @@ contains
 
     call write_vector_dof(Bnflux_vac, Bnphi_vac, Bn_diff_file)
     call compute_L2int
-    call pack2(Bnflux_vac, Bnphi_vac, Bn_prev)
+    call pack_dof(Bnflux_vac, Bn_prev)
     if (preconditioned) then
        Bn_prev = Bn_prev - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
             matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn_prev)))
@@ -347,12 +347,12 @@ contains
        if (preconditioned) then
           Bn = Bn - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
                matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn - Bn_prev)))
-          call unpack2(Bnflux, Bnphi, Bn)
+          call unpack_dof(Bnflux, Bnphi, Bn)
           call check_redundant_edges(Bnflux, .false., 'B_n')
           call check_div_free(Bnflux, Bnphi, n, rel_err_Bn, 'B_n')
        end if
 
-       call unpack2(Bnflux_diff, Bnphi_diff, Bn - Bn_prev)
+       call unpack_dof(Bnflux_diff, Bnphi_diff, Bn - Bn_prev)
        call write_vector_dof(Bnflux_diff, Bnphi_diff, Bn_diff_file)
        call compute_L2int
        call write_vector_dof(Bnflux, Bnphi, &
@@ -367,7 +367,7 @@ contains
           call write_scalar_dof(presn, decorate_filename(presn_file, '', postfix))
        end if
 
-       call pack2(Bnflux, Bnphi, Bn_prev)
+       call pack_dof(Bnflux, Bn_prev)
     end do
     call write_vector_dof(Bnflux, Bnphi, Bn_file)
     call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_', ''))
@@ -384,30 +384,40 @@ contains
 
   contains
 
-    pure subroutine pack2(pol_flux, tor_comp, packed)
-      complex(dp), intent(in) :: pol_flux(ntri, 3), tor_comp(ntri)
-      complex(dp), intent(out) :: packed(ndim)
-      packed(1:ntri*3) = reshape(pol_flux, (/ ntri * 3 /))
-      packed(ntri*3+1:ndim) = tor_comp
-    end subroutine pack2
+    pure subroutine pack_dof(pol_flux, packed)
+      complex(dp), intent(in) :: pol_flux(ntri, 3)
+      complex(dp), intent(out) :: packed(nedge)
+      integer :: kedge
+      do kedge = 1, nedge
+         packed(kedge) = pol_flux(edge_map2ktri(kedge, 1), edge_map2ke(kedge, 1))
+      end do
+    end subroutine pack_dof
 
-    pure subroutine unpack2(pol_flux, tor_comp, packed)
+    pure subroutine unpack_dof(pol_flux, tor_comp, packed)
       complex(dp), intent(out) :: pol_flux(ntri, 3), tor_comp(ntri)
-      complex(dp), intent(in) :: packed(ndim)
-      pol_flux = reshape(packed(1:ntri*3), (/ ntri, 3 /))
-      tor_comp = packed(ntri*3+1:ndim)
-    end subroutine unpack2
+      complex(dp), intent(in) :: packed(nedge)
+      integer :: kedge, ktri
+      do kedge = 1, nedge
+         pol_flux(edge_map2ktri(kedge, 1), edge_map2ke(kedge, 1)) = packed(kedge)
+         if (edge_map2ktri(kedge, 2) > 0) then
+            pol_flux(edge_map2ktri(kedge, 2), edge_map2ke(kedge, 2)) = -packed(kedge)
+         end if
+      end do
+      do ktri = 1, kt_low(nflux + 1)
+         tor_comp(ktri) = sum(pol_flux(ktri, :)) * imun / n / mesh_element_rmp(ktri)%area
+      end do
+    end subroutine unpack_dof
 
     subroutine next_iteration(n, xold, xnew)
       ! computes B_(n+1) = K*B_n + B_vac ... different from kin2d.f90
       integer, intent(in) :: n
       complex(dp), intent(in) :: xold(n)
       complex(dp), intent(out) :: xnew(n)
-      call unpack2(Bnflux, Bnphi, xold)
+      call unpack_dof(Bnflux, Bnphi, xold)
       call magdif_single
       Bnflux = Bnflux + Bnflux_vac
       Bnphi = Bnphi + Bnphi_vac
-      call pack2(Bnflux, Bnphi, xnew)
+      call pack_dof(Bnflux, xnew)
     end subroutine next_iteration
 
     subroutine next_iteration_arnoldi(n, xold, xnew)
@@ -415,11 +425,11 @@ contains
       integer, intent(in) :: n
       complex(dp), intent(in) :: xold(n)
       complex(dp), intent(out) :: xnew(n)
-      call unpack2(Bnflux, Bnphi, xold)
+      call unpack_dof(Bnflux, Bnphi, xold)
       Bnflux = Bnflux + Bnflux_vac
       Bnphi = Bnphi + Bnphi_vac
       call magdif_single
-      call pack2(Bnflux, Bnphi, xnew)
+      call pack_dof(Bnflux, xnew)
     end subroutine next_iteration_arnoldi
   end subroutine magdif_iterated
 
@@ -656,7 +666,7 @@ contains
     character(len = *), intent(in) :: name
     integer :: kedge, ktri, ktri_adj, ke, ke_adj
     logical :: inconsistent
-    real(dp), parameter :: eps = 1d-5
+    real(dp), parameter :: eps = epsilon(1d0)
 
     do kedge = 1, nedge
        ktri = edge_map2ktri(kedge, 1)
