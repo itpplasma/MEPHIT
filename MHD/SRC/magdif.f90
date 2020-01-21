@@ -157,6 +157,11 @@ module magdif
   !> last closed flux surface. The latter is needed for some interpolations.
   integer, allocatable :: kt_low(:)
 
+  integer :: nedge
+  integer, allocatable :: edge_map2global(:, :)
+  integer, allocatable :: edge_map2ktri(:, :)
+  integer, allocatable :: edge_map2ke(:, :)
+
 contains
 
   !> Initialize magdif module
@@ -511,7 +516,7 @@ contains
   end subroutine read_mesh
 
   subroutine cache_mesh_data
-    integer :: kf, kt, ktri
+    integer :: ktri, kedge, ke, ke_adj, ktri_adj
     type(triangle) :: elem
     type(triangle_rmp) :: tri
 
@@ -522,15 +527,52 @@ contains
     z_min = minval(mesh_point(:kp_low(nflux+1))%zcoord)
     z_max = maxval(mesh_point(:kp_low(nflux+1))%zcoord)
 
-    do kf = 1, nflux
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
-          elem = mesh_element(ktri)
-          tri%area = 0.5d0 * elem%det_3
-          call get_labeled_edges(elem, tri%li, tri%lo, tri%lf, tri%ei, tri%eo, tri%ef, &
-               tri%orient)
-          call ring_centered_avg_coord(elem, tri%R_Omega, tri%Z_Omega)
-          mesh_element_rmp(ktri) = tri
+    nedge = (3 * kt_low(nflux + 1) + kp_max(nflux)) / 2
+    allocate(edge_map2global(kt_low(nflux + 1), 3))
+    allocate(edge_map2ktri(nedge, 2))
+    allocate(edge_map2ke(nedge, 2))
+    edge_map2global = 0
+    edge_map2ktri = 0
+    edge_map2ke = 0
+    kedge = 1
+
+    do ktri = 1, kt_low(nflux + 1)
+       elem = mesh_element(ktri)
+       tri%area = 0.5d0 * elem%det_3
+       call get_labeled_edges(elem, tri%li, tri%lo, tri%lf, tri%ei, tri%eo, tri%ef, &
+            tri%orient)
+       call ring_centered_avg_coord(elem, tri%R_Omega, tri%Z_Omega)
+       mesh_element_rmp(ktri) = tri
+
+       do ke = 1, 3
+          if (edge_map2global(ktri, ke) == 0) then
+             ktri_adj = elem%neighbour(ke)
+             ke_adj = elem%neighbour_edge(ke)
+             if (ktri_adj > kt_low(nflux + 1)) then
+                edge_map2global(ktri, ke) = kedge
+                edge_map2ktri(kedge, :) = [ktri, -1]
+                edge_map2ke(kedge, :) = [ke, -1]
+                kedge = kedge + 1
+             else
+                if (edge_map2global(ktri_adj, ke_adj) == 0) then
+                   edge_map2global(ktri, ke) = kedge
+                   edge_map2global(ktri_adj, ke_adj) = kedge
+                   edge_map2ktri(kedge, :) = [ktri, ktri_adj]
+                   edge_map2ke(kedge, :) = [ke, ke_adj]
+                   kedge = kedge + 1
+                else
+                   write (log_msg, '("unexpected situation in cache_mesh_data: "' // &
+                        '"ktri = ", i0, ", ke = ", i0, ", ktri_adj = ", i0, ' // &
+                        '", ke_adj = ", i0, ", mapped values: ", i0, ", ", i0)') &
+                        ktri, ke, ktri_adj, ke_adj, edge_map2global(ktri, ke), &
+                        edge_map2global(ktri_adj, ke_adj)
+                   if (log_warn) call log_write
+                   edge_map2global(ktri, ke) = edge_map2global(ktri_adj, ke_adj)
+                   edge_map2ktri(edge_map2global(ktri, ke), 2) = ktri
+                   edge_map2ke(edge_map2global(ktri, ke), 2) = ke
+                end if
+             end if
+          end if
        end do
     end do
   end subroutine cache_mesh_data
@@ -612,53 +654,48 @@ contains
     complex(dp), intent(in) :: pol_quant(:,:)
     logical, intent(in) :: same_sign
     character(len = *), intent(in) :: name
-    integer :: ktri, ktri_adj, ke, ke_adj
-    logical :: checked(ntri, 3), inconsistent
+    integer :: kedge, ktri, ktri_adj, ke, ke_adj
+    logical :: inconsistent
     real(dp), parameter :: eps = 1d-5
 
-    checked = .false.
-    do ktri = 1, kt_low(nflux+1)
-       do ke = 1, 3
-          if (ktri > kt_low(nflux) .and. ke == mesh_element_rmp(ktri)%ef) cycle
-          if (.not. checked(ktri, ke)) then
-             checked(ktri, ke) = .true.
-             ktri_adj = mesh_element(ktri)%neighbour(ke)
-             ke_adj = mesh_element(ktri)%neighbour_edge(ke)
-             checked(ktri_adj, ke_adj) = .true.
-             inconsistent = .false.
-             if (real(pol_quant(ktri, ke)) == 0d0) then
-                inconsistent = inconsistent .or. real(pol_quant(ktri_adj, ke_adj)) /= 0d0
-             else
-                if (same_sign) then
-                   inconsistent = inconsistent .or. eps < abs(1d0 - &
-                        real(pol_quant(ktri_adj, ke_adj)) / real(pol_quant(ktri, ke)))
-                else
-                   inconsistent = inconsistent .or. eps < abs(1d0 + &
-                        real(pol_quant(ktri_adj, ke_adj)) / real(pol_quant(ktri, ke)))
-                end if
-             end if
-             if (aimag(pol_quant(ktri, ke)) == 0d0) then
-                inconsistent = inconsistent .or. aimag(pol_quant(ktri_adj, ke_adj)) /= 0d0
-             else
-                if (same_sign) then
-                   inconsistent = inconsistent .or. eps < abs(1d0 - &
-                        aimag(pol_quant(ktri_adj, ke_adj)) / aimag(pol_quant(ktri, ke)))
-                else
-                   inconsistent = inconsistent .or. eps < abs(1d0 + &
-                        aimag(pol_quant(ktri_adj, ke_adj)) / aimag(pol_quant(ktri, ke)))
-                end if
-             end if
-             if (inconsistent) then
-                write (log_msg, '("inconsistent redundant edges: ", ' // &
-                     'a, "(", i0, ", ", i0, ") = ", ' // cmplx_fmt // ', ", ", ' // &
-                     'a, "(", i0, ", ", i0, ") = ", ' // cmplx_fmt // ')') &
-                     trim(name), ktri, ke, pol_quant(ktri, ke), &
-                     trim(name), ktri_adj, ke_adj, pol_quant(ktri_adj, ke_adj)
-                if (log_err) call log_write
-                error stop
-             end if
+    do kedge = 1, nedge
+       ktri = edge_map2ktri(kedge, 1)
+       ktri_adj = edge_map2ktri(kedge, 2)
+       ke = edge_map2ke(kedge, 1)
+       ke_adj = edge_map2ke(kedge, 2)
+       if (ktri_adj <= 0) cycle
+       inconsistent = .false.
+       if (real(pol_quant(ktri, ke)) == 0d0) then
+          inconsistent = inconsistent .or. real(pol_quant(ktri_adj, ke_adj)) /= 0d0
+       else
+          if (same_sign) then
+             inconsistent = inconsistent .or. eps < abs(1d0 - &
+                  real(pol_quant(ktri_adj, ke_adj)) / real(pol_quant(ktri, ke)))
+          else
+             inconsistent = inconsistent .or. eps < abs(1d0 + &
+                  real(pol_quant(ktri_adj, ke_adj)) / real(pol_quant(ktri, ke)))
           end if
-       end do
+       end if
+       if (aimag(pol_quant(ktri, ke)) == 0d0) then
+          inconsistent = inconsistent .or. aimag(pol_quant(ktri_adj, ke_adj)) /= 0d0
+       else
+          if (same_sign) then
+             inconsistent = inconsistent .or. eps < abs(1d0 - &
+                  aimag(pol_quant(ktri_adj, ke_adj)) / aimag(pol_quant(ktri, ke)))
+          else
+             inconsistent = inconsistent .or. eps < abs(1d0 + &
+                  aimag(pol_quant(ktri_adj, ke_adj)) / aimag(pol_quant(ktri, ke)))
+          end if
+       end if
+       if (inconsistent) then
+          write (log_msg, '("inconsistent redundant edges: ", ' // &
+               'a, "(", i0, ", ", i0, ") = ", ' // cmplx_fmt // ', ", ", ' // &
+               'a, "(", i0, ", ", i0, ") = ", ' // cmplx_fmt // ')') &
+               trim(name), ktri, ke, pol_quant(ktri, ke), &
+               trim(name), ktri_adj, ke_adj, pol_quant(ktri_adj, ke_adj)
+          if (log_err) call log_write
+          error stop
+       end if
     end do
   end subroutine check_redundant_edges
 
@@ -685,8 +722,8 @@ contains
     end do
     close(fid)
 
-    call check_div_free(Bnflux, Bnphi, n, rel_err_Bn, 'B_n')
     call check_redundant_edges(Bnflux, .false., 'B_n')
+    call check_div_free(Bnflux, Bnphi, n, rel_err_Bn, 'B_n')
   end subroutine read_Bn
 
   !> Allocates and computes the safety factor #q and #m_res.
