@@ -2,6 +2,7 @@ module magdif_config
   use from_nrtype, only: dp  ! PRELOAD/SRC/from_nrtype.f90
   use arnoldi_mod, only: tol ! RUN/SRC/arnoldi.f90
   use for_macrostep, only: t_min, d_min  ! PRELOAD/SRC/orbit_mod.f90
+  use iso_fortran_env, only: output_unit
 
   implicit none
 
@@ -29,7 +30,8 @@ module magdif_config
   integer, parameter :: q_prof_flux = 0 !< q profile from flux between flux surfaces
   integer, parameter :: q_prof_efit = 2 !< q profile from EFIT file
 
-  integer :: log = 6  !< log to stdout
+  integer, private :: log = output_unit  !< log file id
+  logical :: quiet = .false.  !< suppress log messages to stdout
 
   integer :: log_level
   integer :: runmode
@@ -140,7 +142,7 @@ module magdif_config
        Bn_vacout_file, Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, &
        presn_file, currn_file, eigvec_file, rel_err_Bn, rel_err_currn, kilca_pol_mode, &
        kilca_vac_coeff, kilca_scale_factor, kilca_pol_mode_file, max_eig_out, curr_prof, &
-       q_prof, conv_file
+       q_prof, conv_file, quiet
   namelist /delayed/ sheet_current_factor
 
 contains
@@ -173,7 +175,6 @@ contains
 
   !> Associate logfile and open if necessary.
   subroutine log_open
-    use iso_fortran_env, only: output_unit
     if (trim(log_file) == '-') then
        log = output_unit
     elseif (trim(log_file) == '') then
@@ -185,15 +186,13 @@ contains
 
   !> Close logfile if necessary.
   subroutine log_close
-    use iso_fortran_env, only: output_unit
     if (log /= output_unit) close(log)
   end subroutine log_close
 
   !> Write to logfile and flush if necessary.
   subroutine log_write
-    use iso_fortran_env, only: output_unit
     write (log, '(a)') trim(log_msg)
-    if (log /= output_unit) flush(log) ! or: write (output_unit, '(a)') trim(log_msg)
+    if (log /= output_unit .and. .not. quiet) write (output_unit, '(a)') trim(log_msg)
   end subroutine log_write
 
   !> Generates a new filename from a given template.
