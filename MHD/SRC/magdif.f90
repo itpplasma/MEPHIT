@@ -564,23 +564,11 @@ contains
                 edge_map2ke(kedge, :) = [ke, -1]
                 kedge = kedge + 1
              else
-                if (edge_map2global(ktri_adj, ke_adj) == 0) then
-                   edge_map2global(ktri, ke) = kedge
-                   edge_map2global(ktri_adj, ke_adj) = kedge
-                   edge_map2ktri(kedge, :) = [ktri, ktri_adj]
-                   edge_map2ke(kedge, :) = [ke, ke_adj]
-                   kedge = kedge + 1
-                else
-                   write (log_msg, '("unexpected situation in cache_mesh_data: "' // &
-                        '"ktri = ", i0, ", ke = ", i0, ", ktri_adj = ", i0, ' // &
-                        '", ke_adj = ", i0, ", mapped values: ", i0, ", ", i0)') &
-                        ktri, ke, ktri_adj, ke_adj, edge_map2global(ktri, ke), &
-                        edge_map2global(ktri_adj, ke_adj)
-                   if (log_warn) call log_write
-                   edge_map2global(ktri, ke) = edge_map2global(ktri_adj, ke_adj)
-                   edge_map2ktri(edge_map2global(ktri, ke), 2) = ktri
-                   edge_map2ke(edge_map2global(ktri, ke), 2) = ke
-                end if
+                edge_map2global(ktri, ke) = kedge
+                edge_map2global(ktri_adj, ke_adj) = kedge
+                edge_map2ktri(kedge, :) = [ktri, ktri_adj]
+                edge_map2ke(kedge, :) = [ke, ke_adj]
+                kedge = kedge + 1
              end if
           end if
        end do
@@ -640,19 +628,19 @@ contains
     real(dp), intent(in) :: rel_err
     character(len = *), intent(in) :: field_name
 
-    integer :: kt
+    integer :: ktri
     real(dp) :: div, abs_flux
 
-    do kt = 1, ntri
-       abs_flux = sum(abs(pol_flux(kt,:))) + abs(imun * n * tor_comp(kt) * &
-            mesh_element(kt)%det_3 * 0.5d0)
+    do ktri = 1, ntri
+       abs_flux = sum(abs(pol_flux(ktri,:))) + abs(imun * n * tor_comp(ktri) * &
+            mesh_element_rmp(ktri)%area)
        if (abs_flux > 0d0) then
-          div = abs((sum(pol_flux(kt,:)) + imun * n * tor_comp(kt) * &
-               mesh_element(kt)%det_3 * 0.5d0)) / abs_flux
+          div = abs((sum(pol_flux(ktri,:)) + imun * n * tor_comp(ktri) * &
+               mesh_element_rmp(ktri)%area)) / abs_flux
           if (div > rel_err) then
              write (log_msg, '("divergence of ", a, ' // &
                   '" above threshold in triangle ", i0, ": ", es23.16)') &
-                  trim(field_name), kt, div
+                  trim(field_name), ktri, div
               if (log_err) call log_write
               error stop
           end if
@@ -719,16 +707,16 @@ contains
   !> part of each value immediately following the real part.
   subroutine read_Bn(filename)
     character(len = 1024) :: filename
-    integer :: kt, fid
+    integer :: ktri, fid
     real(dp) :: dummy8(8)
 
     open(newunit = fid, file = filename, recl = longlines, status = 'old')
-    do kt = 1, ntri
+    do ktri = 1, ntri
        read (fid, *) dummy8
-       Bnflux(kt,1) = cmplx(dummy8(1), dummy8(2), dp)
-       Bnflux(kt,2) = cmplx(dummy8(3), dummy8(4), dp)
-       Bnflux(kt,3) = cmplx(dummy8(5), dummy8(6), dp)
-       Bnphi(kt) = cmplx(dummy8(7), dummy8(8), dp) / mesh_element(kt)%det_3 * 2d0
+       Bnflux(ktri,1) = cmplx(dummy8(1), dummy8(2), dp)
+       Bnflux(ktri,2) = cmplx(dummy8(3), dummy8(4), dp)
+       Bnflux(ktri,3) = cmplx(dummy8(5), dummy8(6), dp)
+       Bnphi(ktri) = cmplx(dummy8(7), dummy8(8), dp) / mesh_element_rmp(ktri)%area
     end do
     close(fid)
 
@@ -932,7 +920,7 @@ contains
           write (fid, '(5(1x, es23.16))') r, z, Br, Bz, Bp
        end do
     end do
-    do kt = kt_low(nflux+1) + 1, ntri
+    do ktri = kt_low(nflux+1) + 1, ntri
        write (fid, '(5(1x, es23.16))') R0, 0d0, 0d0, 0d0, 0d0
     end do
     close(fid)
@@ -1041,8 +1029,8 @@ contains
                j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), plot_j0phi
        end do
     end do
-    do kt = kt_low(nflux+1) + 1, ntri
-       write (fid, '(4(1x, es23.16))') j0phi(kt, 1), j0phi(kt, 2), j0phi(kt, 3), 0d0
+    do ktri = kt_low(nflux+1) + 1, ntri
+       write (fid, '(4(1x, es23.16))') j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), 0d0
     end do
     close(fid)
 
@@ -1264,9 +1252,9 @@ contains
        ei = knot_f
        eo = knot_i
        ef = knot_o
-       li = (/ elem%i_knot(knot_f), elem%i_knot(knot_o) /)
-       lo = (/ elem%i_knot(knot_i), elem%i_knot(knot_f) /)
-       lf = (/ elem%i_knot(knot_o), elem%i_knot(knot_i) /)
+       li = [elem%i_knot(knot_f), elem%i_knot(knot_o)]
+       lo = [elem%i_knot(knot_i), elem%i_knot(knot_f)]
+       lf = [elem%i_knot(knot_o), elem%i_knot(knot_i)]
     else if (all(i_knot_diff <= 0)) then
        ! knot_f lies on outer surface
        orient = .false.
@@ -1282,9 +1270,9 @@ contains
        ei = knot_o
        eo = knot_f
        ef = knot_i
-       li = (/ elem%i_knot(knot_o), elem%i_knot(knot_f) /)
-       lo = (/ elem%i_knot(knot_f), elem%i_knot(knot_i) /)
-       lf = (/ elem%i_knot(knot_i), elem%i_knot(knot_o) /)
+       li = [elem%i_knot(knot_o), elem%i_knot(knot_f)]
+       lo = [elem%i_knot(knot_f), elem%i_knot(knot_i)]
+       lf = [elem%i_knot(knot_i), elem%i_knot(knot_o)]
     else
        if (log_err) call log_write
        error stop
@@ -1581,7 +1569,7 @@ contains
     end do
     r = mesh_point(1)%rcoord
     z = mesh_point(1)%zcoord
-    do kt = kt_low(n_cutoff+1) + 1, ntri
+    do ktri = kt_low(n_cutoff+1) + 1, ntri
        write (fid, '(12(1x, es23.16))') r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
     end do
     close(fid)
@@ -1716,8 +1704,8 @@ contains
             real(pol_flux(ktri, 1)), aimag(pol_flux(ktri, 1)), &
             real(pol_flux(ktri, 2)), aimag(pol_flux(ktri, 2)), &
             real(pol_flux(ktri, 3)), aimag(pol_flux(ktri, 3)), &
-            real(tor_comp(ktri) * mesh_element(ktri)%det_3 * 0.5d0), &
-            aimag(tor_comp(ktri) * mesh_element(ktri)%det_3 * 0.5d0)
+            real(tor_comp(ktri) * mesh_element_rmp(ktri)%area), &
+            aimag(tor_comp(ktri) * mesh_element_rmp(ktri)%area)
     end do
     do ktri = kt_low(nflux+1) + 1, ntri
        write (fid, '(8(1x, es23.16))') 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
@@ -1822,7 +1810,7 @@ contains
             aimag(coeff_rho(-kilca_pol_mode)), real(sheet_current), aimag(sheet_current)
     end do
     close(fid_furth)
-    do kt = kt_low(nflux+1) + 1, ntri
+    do ktri = kt_low(nflux+1) + 1, ntri
        write (fid_rho, fmt) rho_max, fs_half%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
        write (fid_theta, fmt) rho_max, fs_half%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]
        write (fid_zeta, fmt) rho_max, fs_half%q(nflux), [(0d0, m = 1, 4 * mmax + 2)]

@@ -147,9 +147,11 @@ contains
 
   !> Read #settings configuration file #config_file for magdif.
   subroutine read_config
-    open(1, file = config_file)
-    read(1, nml = settings)
-    close(1)
+    integer :: fid
+
+    open(newunit = fid, file = config_file)
+    read(fid, nml = settings)
+    close(fid)
 
     log_err = .false.
     log_warn = .false.
@@ -163,9 +165,10 @@ contains
 
   !> Read #delayed from configuration file #config_file for magdif.
   subroutine read_delayed_config
-    open(1, file = config_file)
-    read(1, nml = delayed)
-    close(1)
+    integer :: fid
+    open(newunit = fid, file = config_file)
+    read(fid, nml = delayed)
+    close(fid)
   end subroutine read_delayed_config
 
   !> Associate logfile and open if necessary.
