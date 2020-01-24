@@ -188,6 +188,34 @@ class magdif_mnDat:
                             self.ymax[self.offset:0:-1])
 
 
+class gpec_bnormal_pest:
+    def __init__(self, datadir, datafile, label):
+        self.datadir = datadir
+        self.datafile = datafile
+        self.label = label
+
+    def process(self):
+        print('reading poloidal modes from', self.datafile)
+        try:
+            data = np.loadtxt(self.datafile, skiprows=7)
+        except Exception as err:
+            print('Error: {}'.format(err))
+            return
+        self.rho = np.unique(data[:, 0])
+        self.q = np.unique(data[:, 1])
+        self.m_max = np.int(np.amax(data[:, 2]))
+        self.range = 2 * self.m_max + 1
+        self.offset = self.m_max
+        lines = np.size(data, axis=0)
+        self.abs = np.hypot(
+                np.reshape(data[:, 3], [lines // self.range, self.range]),
+                np.reshape(data[:, 4], [lines // self.range, self.range])
+        )
+        self.ymax = np.amax(self.abs, axis=0)
+        self.ymax = np.fmax(self.ymax[self.offset:-1],
+                            self.ymax[self.offset:0:-1])
+
+
 class magdif_poloidal_plots:
     def __init__(self, n, psi, q, resonance, ylabel, data, ref=None,
                  r_interp=None):
@@ -213,8 +241,8 @@ class magdif_poloidal_plots:
             xlabel = fslabel.r.value
 
         # plot non-symmetric modes
-        fmt = path.join(self.data.datadir,
-                        path.splitext(self.data.datafile)[0] + '_{}.pdf')
+        fmt = path.join(self.data.datadir, path.basename(
+                        path.splitext(self.data.datafile)[0] + '_{}.pdf'))
         horz_plot = 2
         vert_plot = 1
         two_squares = (6.6, 3.3)
