@@ -1,2 +1,2 @@
 #!/bin/bash
-FreeFem++-nw ../FEM/L2int.edp "$@" 1>>/tmp/freefem.out 2>&1
+FreeFem++-nw $(dirname "$0")/../FEM/L2int.edp "$@" 1>> freefem.out 2>&1

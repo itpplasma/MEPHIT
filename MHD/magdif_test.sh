@@ -6,4 +6,4 @@ else
     config="$1"
 fi
 rm -f $config.log convergence.dat
-../BUILD/bin/magdif_test.x $config
+$(dirname "$0")/../BUILD/bin/magdif_test.x $config $(dirname "$0")
