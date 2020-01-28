@@ -188,32 +188,33 @@ class magdif_mnDat:
                             self.ymax[self.offset:0:-1])
 
 
-class gpec_bnormal_pest:
-    def __init__(self, datadir, datafile, label):
+class magdif_GPEC_bnormal:
+    def __init__(self, datadir, datafile, skiplines, label):
         self.datadir = datadir
         self.datafile = datafile
+        self.skiplines = skiplines
         self.label = label
 
     def process(self):
         print('reading poloidal modes from', self.datafile)
         try:
-            data = np.loadtxt(self.datafile, skiprows=7)
+            data = np.genfromtxt(self.datafile, skip_header=self.skiplines,
+                                 names=True, dtype=None)
         except Exception as err:
             print('Error: {}'.format(err))
             return
-        self.rho = np.unique(data[:, 0])
-        self.q = np.unique(data[:, 1])
-        self.m_max = np.int(np.amax(data[:, 2]))
-        self.range = 2 * self.m_max + 1
-        self.offset = self.m_max
+        self.rho = np.unique(data['psi'])
+        self.q = np.unique(data['q'])
+        m = np.unique(data['m'])
+        self.range = np.size(m)
+        self.offset = -m[0]
+        self.m_max = np.min([-m[0], m[-1]])
         lines = np.size(data, axis=0)
-        self.abs = np.hypot(
-                np.reshape(data[:, 3], [lines // self.range, self.range]),
-                np.reshape(data[:, 4], [lines // self.range, self.range])
-        )
+        self.abs = np.reshape(np.hypot(data['realbwp'], data['imagbwp']),
+                              [lines // self.range, self.range]) * 1e8
         self.ymax = np.amax(self.abs, axis=0)
-        self.ymax = np.fmax(self.ymax[self.offset:-1],
-                            self.ymax[self.offset:0:-1])
+        self.ymax = np.fmax(self.ymax[self.offset:self.offset + self.m_max],
+                            self.ymax[self.offset:self.offset - self.m_max:-1])
 
 
 class magdif_poloidal_plots:
