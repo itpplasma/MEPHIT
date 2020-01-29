@@ -14,7 +14,7 @@ run: $(config) $(mesh)
 	./magdif_test.sh $(config)
 
 plots:  $(magdifplot) $(config) $(mesh)
-	python $(magdifplot) . $(config) $(mesh)
+	python3 $(magdifplot) . $(config) $(mesh)
 
 spectra: Bmn_psi.dat Bmn_vac_psi.dat currmn_000_theta.dat
 

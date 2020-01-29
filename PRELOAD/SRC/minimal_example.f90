@@ -6,7 +6,7 @@ program minimal_example
   use input_files, only: gfile, convexfile
   use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, & ! PRELOAD/SRC/mesh_mod.f90
        bphicovar, knot, triangle, triangle_rmp, mesh_element_rmp
-  use magdif_util, only: imun
+  use magdif_util, only: imun, interp_psi_pol
   use magdif, only: init_indices, kt_max, kt_low, kp_max, kp_low, Bnflux, Bnphi, &
        get_labeled_edges, check_redundant_edges, check_div_free, write_vector_dof, &
        cache_mesh_data
@@ -369,20 +369,6 @@ contains
     if (allocated(rlim)) deallocate(rlim)
     if (allocated(zlim)) deallocate(zlim)
   end subroutine scale_geqdsk
-
-  function interp_psi_pol(r, z) result(psi_pol)
-    use field_eq_mod, only: psif
-
-    real(dp), intent(in) :: r, z
-    real(dp) :: psi_pol
-
-    real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-
-    call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-    psi_pol = psif
-  end function interp_psi_pol
 
   subroutine add_node_owner(kpoint, ktri)
     use mesh_mod, only: n_owners_max

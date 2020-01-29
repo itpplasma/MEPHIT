@@ -67,7 +67,7 @@ VACFIELD_FILE := VACFIELD/Bn_flux.dat
 
 .PHONY: asdex kilca clean
 
-asdex: $(VACFIELD_FILE) $(FORTRAN_MESH_FILE) $(FREEFEM_MESH_FILE)
+asdex: $(FREEFEM_MESH_FILE) $(VACFIELD_FILE) $(FORTRAN_MESH_FILE)
 
 kilca:
 	../BUILD/bin/minimal_example.x ../MHD/magdif_minimal_example.in FIELD/g000001.0001_TCFP_unscaled
