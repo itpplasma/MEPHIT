@@ -53,13 +53,6 @@
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-  module gettormode_mod
-    integer :: n_tor_out
-    double complex :: B_Rn,B_Zn
-  end module gettormode_mod
-!
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
   subroutine vector_potentials(nr_in,np_in,nz_in,ntor_in,      &
              rmin_in,rmax_in,pmin_in,pmax_in,zmin_in,zmax_in,  &
              br,bp,bz)
