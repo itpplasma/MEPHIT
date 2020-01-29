@@ -27,37 +27,37 @@ set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fbounds-check -Wall")  # -ffpe-trap=invali
 
 ### Define libraries
 add_library(magdif SHARED
-  PRELOAD/SRC/bdivfree.f90
-  PRELOAD/SRC/binsrc.f90
-  PRELOAD/SRC/brent.f90
-  PRELOAD/SRC/field_divB0.f90
-  PRELOAD/SRC/field_line_integration_for_SYNCH.f90
-  PRELOAD/SRC/from_nrtype.f90
-  PRELOAD/SRC/in_out_cw.f90
-  PRELOAD/SRC/inside_of_wall.f90
-  PRELOAD/SRC/leastsq.f90
-  PRELOAD/SRC/lubksb.f
-  PRELOAD/SRC/ludcmp.f
-  PRELOAD/SRC/magdata_in_symfluxcoord.f90
-  PRELOAD/SRC/mesh_mod.f90
-  PRELOAD/SRC/mods4ax.f90
-  PRELOAD/SRC/odeint_allroutines.f
-  PRELOAD/SRC/orbit_mod.f90
-  PRELOAD/SRC/plag_coeff.f90
-  PRELOAD/SRC/points_2d.f90
-  PRELOAD/SRC/polylag.f
-  PRELOAD/SRC/preload_for_SYNCH.f90
-  PRELOAD/SRC/rtbis.f90
-  PRELOAD/SRC/spl_three_to_five_mod.f90
-  PRELOAD/SRC/spline5_RZ.f90
-  PRELOAD/SRC/twostreights.f90
-  RUN/SRC/arnoldi.f90
-  RUN/SRC/check_in_tri.f90
-  RUN/SRC/sub_orbit_fast.f90
-  MHD/SRC/sparse_mod.f90
-  MHD/SRC/magdif.f90
-  MHD/SRC/magdif_config.f90
-  MHD/SRC/magdif_util.f90
+  src/bdivfree.f90
+  src/binsrc.f90
+  src/brent.f90
+  src/field_divB0.f90
+  src/field_line_integration_for_SYNCH.f90
+  src/from_nrtype.f90
+  src/in_out_cw.f90
+  src/inside_of_wall.f90
+  src/leastsq.f90
+  src/lubksb.f
+  src/ludcmp.f
+  src/magdata_in_symfluxcoord.f90
+  src/mesh_mod.f90
+  src/mods4ax.f90
+  src/odeint_allroutines.f
+  src/orbit_mod.f90
+  src/plag_coeff.f90
+  src/points_2d.f90
+  src/polylag.f
+  src/preload_for_SYNCH.f90
+  src/rtbis.f90
+  src/spl_three_to_five_mod.f90
+  src/spline5_RZ.f90
+  src/twostreights.f90
+  src/arnoldi.f90
+  src/check_in_tri.f90
+  src/sub_orbit_fast.f90
+  src/sparse_mod.f90
+  src/magdif.f90
+  src/magdif_config.f90
+  src/magdif_util.f90
   ${SUITESPARSE_SRC_FILES}
   ${SUPERLU_SRC_FILES}
 )
@@ -72,15 +72,15 @@ find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
 set(FGSL_FLAGS "${CMAKE_Fortran_FLAGS} -I${FGSL_INC}")
 
 ### Define executables
-add_executable(magdif_test.x MHD/SRC/magdif_test.f90)
-add_executable(minimal_example.x PRELOAD/SRC/minimal_example.f90)
-add_executable(geomint_mesh.x PRELOAD/SRC/geomint_mesh.f90)
-add_executable(axis.x PRELOAD/SRC/axis.f90)
-add_executable(tri_mesh.x PRELOAD/SRC/tri_mesh.f90)
-add_executable(readcarre_m.x PRELOAD/SRC/readcarre_m.f90)
-add_executable(writeout.x PRELOAD/SRC/writeout.f90)
-add_executable(vacfield.x PRELOAD/SRC/vacfield.f90)
-add_executable(result_spectrum.x RUN/SRC/result_spectrum.f90)
+add_executable(magdif_test.x src/magdif_test.f90)
+add_executable(minimal_example.x src/minimal_example.f90)
+add_executable(geomint_mesh.x src/geomint_mesh.f90)
+add_executable(axis.x src/axis.f90)
+add_executable(tri_mesh.x src/tri_mesh.f90)
+add_executable(readcarre_m.x src/readcarre_m.f90)
+add_executable(writeout.x src/writeout.f90)
+add_executable(vacfield.x src/vacfield.f90)
+add_executable(result_spectrum.x src/result_spectrum.f90)
 
 set_target_properties(minimal_example.x PROPERTIES COMPILE_FLAGS ${FGSL_FLAGS})
 
