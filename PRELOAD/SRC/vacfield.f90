@@ -3,8 +3,6 @@
 ! into ascii files
 ! 
 
-  
-  use gettormode_mod
   use from_nrtype
   use mesh_mod
 !
@@ -22,7 +20,9 @@
   complex(dp), dimension(3) :: Bnflux
   complex(dp) :: Bnphiflux
 !
-  n_tor_out=2
+  double complex :: B_Rn, B_Zn
+!
+  integer :: n_tor_out=2
 !
   open(1,file='points.dat',form='unformatted')
   read (1) npoint
@@ -60,8 +60,7 @@
     phi=0.d0
     bmod0=bmod0/3.d0
 !
-    call field(R,phi,Z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ                &
-              ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ)
+    call spline_bpol_n(n_tor_out, R, Z, B_Rn, B_Zn)
 !
     hnorm=(mesh_element(i)%dPsi_dR*B_Rn+mesh_element(i)%dPsi_dZ*B_Zn)/bmod0
 !
