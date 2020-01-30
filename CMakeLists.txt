@@ -71,6 +71,9 @@ set(FGSL_INC ${FGSL_PATH}/include/fgsl/ CACHE STRING "FGSL include")
 find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
 set(FGSL_FLAGS "${CMAKE_Fortran_FLAGS} -I${FGSL_INC}")
 
+### Add helper script to binaries
+configure_file(scripts/magdif.bash bin/magdif COPYONLY)
+
 ### Define executables
 add_executable(magdif_test.x src/magdif_test.f90)
 add_executable(minimal_example.x src/minimal_example.f90)
