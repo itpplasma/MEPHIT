@@ -53,13 +53,6 @@
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-  module gettormode_mod
-    integer :: n_tor_out
-    double complex :: B_Rn,B_Zn
-  end module gettormode_mod
-!
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
-!
   subroutine vector_potentials(nr_in,np_in,nz_in,ntor_in,      &
              rmin_in,rmax_in,pmin_in,pmax_in,zmin_in,zmax_in,  &
              br,bp,bz)
@@ -241,6 +234,64 @@
 !
   return
   end subroutine vector_potentials
+
+subroutine spline_vector_potential_n(n, r, z, anr,anz,anr_r,anr_z,anz_r,anz_z, &
+  anr_rr,anr_rz,anr_zz,anz_rr,anz_rz,anz_zz)
+  
+  use bdivfree_mod
+!
+  implicit none
+!
+  integer, intent(in) :: n
+  double precision, intent(in) :: r, z
+  double complex, intent(out) :: anr,anz,anr_r,anr_z,anz_r,anz_z
+  double complex, intent(out) :: anr_rr,anr_rz,anr_zz,anz_rr,anz_rz,anz_zz
+
+  double precision :: f,fr,fz,frr,frz,fzz
+  double precision :: g,gr,gz,grr,grz,gzz
+  integer :: ierr
+
+  call spline(nr,nz,rpoi,zpoi,hr,hz,icp,arnre(:,:,:,n),ipoint,r,z,   &
+                f,fr,fz,frr,frz,fzz,ierr)
+  call spline(nr,nz,rpoi,zpoi,hr,hz,icp,arnim(:,:,:,n),ipoint,r,z,   &
+              g,gr,gz,grr,grz,gzz,ierr)
+  anr=dcmplx(f,g)
+  anr_r=dcmplx(fr,gr)
+  anr_z=dcmplx(fz,gz)
+  anr_rr=dcmplx(frr,grr)
+  anr_rz=dcmplx(frz,grz)
+  anr_zz=dcmplx(fzz,gzz)
+  call spline(nr,nz,rpoi,zpoi,hr,hz,icp,aznre(:,:,:,n),ipoint,r,z,   &
+              f,fr,fz,frr,frz,fzz,ierr)
+  call spline(nr,nz,rpoi,zpoi,hr,hz,icp,aznim(:,:,:,n),ipoint,r,z,   &
+              g,gr,gz,grr,grz,gzz,ierr)
+  anz=dcmplx(f,g)
+  anz_r=dcmplx(fr,gr)
+  anz_z=dcmplx(fz,gz)
+  anz_rr=dcmplx(frr,grr)
+  anz_rz=dcmplx(frz,grz)
+  anz_zz=dcmplx(fzz,gzz)
+!
+end subroutine spline_vector_potential_n
+
+! call spline_bpol_n(n_tor_out)
+subroutine spline_bpol_n(n, r, z, B_Rn, B_Zn)
+!
+  implicit none
+!
+  integer, intent(in) :: n
+  double precision, intent(in) :: r, z
+  double complex, intent(out) :: B_Rn, B_Zn
+
+  double complex :: anr,anz,anr_r,anr_z,anz_r,anz_z
+  double complex :: anr_rr,anr_rz,anr_zz,anz_rr,anz_rz,anz_zz
+  
+  call spline_vector_potential_n(n, r, z, anr,anz,anr_r,anr_z,anz_r,anz_z, &
+    anr_rr,anr_rz,anr_zz,anz_rr,anz_rz,anz_zz)
+  B_Rn = (0.d0,1.d0)*dble(n)*anz/r
+  B_Zn = -(0.d0,1.d0)*dble(n)*anr/r
+end subroutine spline_bpol_n
+
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
@@ -251,7 +302,6 @@
   use inthecore_mod, only : incore                                            &
                           , vacf,dvacdr,dvacdz,d2vacdr2,d2vacdrdz,d2vacdz2
   use amn_mod, only : ntor_amn
-  use gettormode_mod
 !
   implicit none
 !
@@ -289,27 +339,9 @@
   dBzdp=0.d0
 !
   do n=1,ntor
-    call spline(nr,nz,rpoi,zpoi,hr,hz,icp,arnre(:,:,:,n),ipoint,r,z,   &
-                f,fr,fz,frr,frz,fzz,ierr)
-    call spline(nr,nz,rpoi,zpoi,hr,hz,icp,arnim(:,:,:,n),ipoint,r,z,   &
-                g,gr,gz,grr,grz,gzz,ierr)
-    anr=dcmplx(f,g)
-    anr_r=dcmplx(fr,gr)
-    anr_z=dcmplx(fz,gz)
-    anr_rr=dcmplx(frr,grr)
-    anr_rz=dcmplx(frz,grz)
-    anr_zz=dcmplx(fzz,gzz)
-    call spline(nr,nz,rpoi,zpoi,hr,hz,icp,aznre(:,:,:,n),ipoint,r,z,   &
-                f,fr,fz,frr,frz,fzz,ierr)
-    call spline(nr,nz,rpoi,zpoi,hr,hz,icp,aznim(:,:,:,n),ipoint,r,z,   &
-                g,gr,gz,grr,grz,gzz,ierr)
-    anz=dcmplx(f,g)
-    anz_r=dcmplx(fr,gr)
-    anz_z=dcmplx(fz,gz)
-    anz_rr=dcmplx(frr,grr)
-    anz_rz=dcmplx(frz,grz)
-    anz_zz=dcmplx(fzz,gzz)
-!
+    call spline_vector_potential_n(n, r, z, anr,anz,anr_r,anr_z,anz_r,anz_z, &
+      anr_rr,anr_rz,anr_zz,anz_rr,anz_rz,anz_zz)
+
     expon=exp(dcmplx(0.d0,n*pfac*phi))
     delbr=2.d0*dble(dcmplx(0.d0,pfac)*n*anz*expon/r)
     delbz=-2.d0*dble(dcmplx(0.d0,pfac)*n*anr*expon/r)
@@ -323,11 +355,6 @@
     deldBpdR=2.d0*dble((anr_rz-anz_rr)*expon)
     deldBpdZ=2.d0*dble((anr_zz-anz_rz)*expon)
     deldBpdp=2.d0*dble(dcmplx(0.d0,pfac)*n*(anr_z-anz_r)*expon)
-!
-    if(n.eq.n_tor_out) then
-      B_Rn=(0.d0,1.d0)*dble(n)*anz/r
-      B_Zn=-(0.d0,1.d0)*dble(n)*anr/r
-    endif
 !
 !    if(incore.eq.-1.or.n.gt.ntor_amn) then
       br=br+delbr
