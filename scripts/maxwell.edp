@@ -12,9 +12,9 @@ real c = 29979245800.0; // speed of light
 include "getARGV.idp"
 int nmode = getARGV("-n", 2);
 int ktlownfluxp1 = getARGV("-N", 0);
-string meshfile = getARGV("-M", "../PRELOAD/inputformaxwell_ext.msh");
-string currnfile = getARGV("-J", "../MHD/currn.dat");
-string Bnfluxfile = getARGV("-B", "../MHD/Bn.dat");
+string meshfile = getARGV("-M", "inputformaxwell_ext.msh");
+string currnfile = getARGV("-J", "currn.dat");
+string Bnfluxfile = getARGV("-B", "Bn.dat");
 bool doplot = false;
 
 mesh Th = readmesh(meshfile);

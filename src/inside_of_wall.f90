@@ -41,7 +41,7 @@ contains
        allocate(xpoly_max(npc_max), ypoly_max(npc_max))
        npc = 0
 !       open(1,file='FROMQQ/Dave/wall_true.dat')
-       open(1,file='FIELD/17151.wall_full')
+       open(1,file='17151.wall_full')
        do i=1, npc_max
 !          read(1,*,END=10) xpoly_max(i), ypoly_max(i)
           read(1,*,END=10) xpoly_max(i), dummy_r8, ypoly_max(i)

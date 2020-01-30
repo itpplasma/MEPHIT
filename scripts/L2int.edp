@@ -1,8 +1,8 @@
 include "getARGV.idp"
 int ktlownfluxp1 = getARGV("-N", 0);
-string meshfile = getARGV("-M", "../PRELOAD/inputformaxwell_ext.msh");
-string Bndifffile = getARGV("-B", "../MHD/Bn_diff.dat");
-string convfile = getARGV("-C", "../MHD/convergence.dat");
+string meshfile = getARGV("-M", "inputformaxwell_ext.msh");
+string Bndifffile = getARGV("-B", "Bn_diff.dat");
+string convfile = getARGV("-C", "convergence.dat");
 bool doplot = false;
 
 mesh Th = readmesh(meshfile);
