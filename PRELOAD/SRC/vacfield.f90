@@ -9,8 +9,7 @@
   implicit none
 !
   integer :: i,j,k
-  double precision :: R,phi,Z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ                &
-                     ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
+  double precision :: R, Z, dum
   double precision :: BR_re,BR_im,BZ_re,BZ_im,bmod0
   double precision, dimension(3) :: p0
   complex(dp) :: hnorm
@@ -45,6 +44,10 @@
   open(16,file='p0.dat')
   open(17,file='Bn_flux.dat')
 !
+  R = mesh_point(1)%rcoord
+  Z = mesh_point(1)%zcoord
+  call field(R, 0d0, Z, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+!
   do i=1,ntri
     R=0.d0
     Z=0.d0
@@ -57,7 +60,6 @@
     enddo
     R=R/3.d0
     Z=Z/3.d0
-    phi=0.d0
     bmod0=bmod0/3.d0
 !
     call spline_bpol_n(n_tor_out, R, Z, B_Rn, B_Zn)
@@ -111,9 +113,7 @@
     lz(3) = knots(1)%zcoord - knots(3)%zcoord
     
     do k=1,3
-       call field(rr(k),0d0,zz(k),Br,Bp,Bz,dBrdR,&
-            dBrdp,dBrdZ,dBpdR,dBpdp,dBpdZ,&
-            dBzdR,dBzdp,dBzdZ)
+       call spline_bpol_n(n_tor_out, rr(k), zz(k), B_Rn, B_Zn)
        Bnflux(k) = lz(k)*rr(k)*B_Rn - lr(k)*rr(k)*B_Zn ! project vector onto edge normal
     end do
     Bnphiflux = -1d0/((0d0,1d0)*n_tor_out)*sum(Bnflux) ! make divergence free
