@@ -96,8 +96,7 @@ program minimal_example
      end do
   end do
 
-  ! convexfile is read in from field_divB0.inp by first call to subroutine field
-  ! this is done in initialize_globals
+  ! convexfile is read in from field_divB0.inp in initialize_globals
   open(newunit = fid, file = convexfile, status = 'replace')
   rho = rho_max
   do kp = 1, nrz
@@ -192,7 +191,7 @@ program minimal_example
   write (fid) bphicovar
   close(fid)
 
-  open(newunit = fid, file = 'inputformaxwell_kilca.msh', status = 'replace')
+  open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace')
   write (fid, '(3(1x, i0))') npoint, ntri, kp_max(nflux+1) - 1
   do kpoi = 1, kp_low(nflux+1)
      write (fid, '(2(1x, es23.16), 1x, i0)') &

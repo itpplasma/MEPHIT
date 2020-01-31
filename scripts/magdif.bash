@@ -19,11 +19,15 @@ absolutize() {
 }
 
 replace_first_in_line() {
-    sed -Ee "$2 s/^ *([^ ]+)/$3/" -i $1
+    sed -Ee "$2 s/^ *'?([^' ]*)'?/$3/" -i $1
 }
 
-nml_read_number() {
-    sed -Ene "s/ *$2 *= *([0-9DEde.]+).*/\1/i p" $1
+read_first_in_line() {
+    sed -Ene "$2 s/^ *'?([^' ]*)'? +.*/\1/ p" $1
+}
+
+nml_read_integer() {
+    sed -Ene "s/ *$2 *= *([-0-9]+).*/\1/i p" $1
 }
 
 extract_psi() {
@@ -89,27 +93,25 @@ magdif_init() {
            $(absolutize "$config") \
            $(absolutize "$geqdsk") \
            $(absolutize "$convexwall")
-        ln -s $(absolutize "$vacfield") "$workdir/${vacfield##*/}"
+        if [ -n $vacfield ]; then
+            ln -s $(absolutize "$vacfield") "$workdir/${vacfield##*/}"
+        fi
 
         replace_first_in_line "$workdir/field_divB0.inp" 7 "'${geqdsk##*/}'"     # gfile
         replace_first_in_line "$workdir/field_divB0.inp" 8 "'${vacfield##*/}'"   # pfile
         replace_first_in_line "$workdir/field_divB0.inp" 9 "'${convexwall##*/}'" # convex
+        cp "$workdir/field_divB0.inp" "$workdir/field_divB0_unprocessed.inp"
     done
 }
 
 magdif_prepare() {
-    TEMP=$(getopt -o 'c:p:' --long 'config:,processed:' -n "$scriptname" -- "$@")
+    TEMP=$(getopt -o 'c:' --long 'config:' -n "$scriptname" -- "$@")
     eval set -- "$TEMP"
     unset TEMP
     while true; do
         case "$1" in
             '-c'|'--config')
                 config=$2
-                shift 2
-                continue
-                ;;
-            '-p'|'--processed')
-                processed=$2
                 shift 2
                 continue
                 ;;
@@ -130,9 +132,10 @@ magdif_prepare() {
 
     for workdir; do
         pushd "$workdir"
+        cp field_divB0_unprocessed.inp field_divB0.inp
         replace_first_in_line field_divB0.inp 1 0  # ipert
         replace_first_in_line field_divB0.inp 2 1  # iequil
-        kilca_scale_factor=$(nml_read_number "$config" kilca_scale_factor)
+        kilca_scale_factor=$(nml_read_integer "$config" kilca_scale_factor)
         if [ $kilca_scale_factor -eq 0 ]; then
             "$bindir/axis.x" && \
                 "$bindir/tri_mesh.x" && \
@@ -159,7 +162,9 @@ magdif_prepare() {
                 continue
             fi
         else
-            "$bindir/minimal_example.x" "$config" "$processed" && \
+            unprocessed=$(read_first_in_line field_divB0_unprocessed.inp 7)
+            replace_first_in_line field_divB0.inp 7 "'\1_processed'"  # gfile
+            "$bindir/minimal_example.x" "$config" "$unprocessed" && \
                 FreeFem++ "$scriptdir/extmesh.edp"
             lasterr=$?
             if [ $lasterr -ne 0 ]; then
@@ -168,7 +173,6 @@ magdif_prepare() {
                 anyerr=$lasterr
                 continue
             fi
-            replace_first_in_line field_divB0.inp 7 "'$processed'"  # gfile
         fi
         popd
     done
@@ -208,7 +212,7 @@ magdif_run() {
             anyerr=$lasterr
             continue
         fi
-        kilca_scale_factor=$(nml_read_number "$config" kilca_scale_factor)
+        kilca_scale_factor=$(nml_read_integer "$config" kilca_scale_factor)
         if [ $kilca_scale_factor -eq 0 ]; then
             infile=Bn.dat
             infile=plot_$infile
