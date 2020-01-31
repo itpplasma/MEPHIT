@@ -126,13 +126,13 @@ module magdif_config
   complex(dp) :: kilca_vac_coeff
 
   !> single poloidal mode used in comparison with KiLCA code
-  integer :: kilca_pol_mode
+  integer :: kilca_pol_mode = 0
 
   !> Scaling factor used for comparison with results from KiLCA code.
   !>
   !> If non-zero, #n and #r0 are scaled by this factor to approximate the cylindrical
   !> topology assumed in KiLCA.
-  integer :: kilca_scale_factor
+  integer :: kilca_scale_factor = 0
 
   !> maximum number of eigenvectors to be dumped in #eigvec_file
   integer :: max_eig_out = 10

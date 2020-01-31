@@ -1,42 +1,75 @@
 &settings
-   log_level = 4                                   ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
-   runmode = 0                                     ! 0: single iteration, 1: direct iterations,
-                                                   ! 2: preconditioned iterations
-   pres_prof = 0                                   ! 0: EPS paper profile, 1: parabolic profile
-                                                   ! 2: profile from EFIT file
-   nonres = .true.                                 ! use non-resonant test case
-   quad_avg = .true.                               ! average over quadrilaterals for non-resonant test case
+   ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
+   log_level = 4
+   ! 0: single iteration, 1: direct iterations, 2: preconditioned iterations
+   runmode = 0
+   ! use non-resonant test case
+   nonres = .true.
+   ! average over quadrilaterals for non-resonant test case
+   quad_avg = .true.
+   ! 0: EPS paper profile, 1: parabolic profile, 2: EQDSK profile
+   pres_prof = 0
+   ! 0: only PS current, 1: rot B_0, 2: EQDSK profile
+   curr_prof = 0
+   ! 0: surface integral, 2: EQDSK profile
+   q_prof = 0
 
-   n = 2                                           ! harmonic index of perturbation
-   niter = 30                                      ! number of iteration steps
-   nritz = 60                                      ! number of Ritz eigenvalues
-   tol = 5d-3                                      ! threshold for eigenvalues in preconditioner
-   nkpol = 200                                     ! number of knots per poloidal loop
-   nflux = 104                                     ! number of flux surfaces up to and counting LCFS
-   ti0 = 3.d3                                      ! temperature on magnetic axis
-   t_min = 2d1                                     ! minimum temperature
-   di0 = 5.d13                                     ! density on magnetic axis
-   d_min = 2d11                                    ! minimum density
-   damp = 0d0                                      ! damping factor for resonances
-   R0 = 172.74467899999999d0                       ! distance of magnetic axis from center in cm
-   point_file = '../PRELOAD/points.dat'            ! mesh points from PRELOAD
-   tri_file = '../PRELOAD/triangles.dat'           ! triangles and edges from PRELOAD
-   Bn_vac_file = '../PRELOAD/VACFIELD/Bn_flux.dat' ! vacuum perturbation field from PRELOAD
+   ! harmonic index of perturbation
+   n = 2
+   ! number of iteration steps
+   niter = 30
+   ! number of Ritz eigenvalues
+   nritz = 60
+   ! threshold for eigenvalues in preconditioner
+   tol = 5d-3
+   ! number of knots per poloidal loop
+   nkpol = 200
+   ! number of flux surfaces up to and counting LCFS
+   nflux = 104
+   ! temperature on magnetic axis
+   ti0 = 3.d3
+   ! minimum temperature
+   t_min = 2d1
+   ! density on magnetic axis
+   di0 = 5.d13
+   ! minimum density
+   d_min = 2d11
+   ! damping factor for resonances
+   damp = 0d0
+   ! distance of magnetic axis from center in cm
+   R0 = 172.74467899999999d0
+   ! mesh points
+   point_file = 'points.dat'
+   ! triangles and edges
+   tri_file = 'triangles.dat'
+   ! vacuum perturbation field
+   Bn_vac_file = 'Bn_flux.dat'
 
-   Bn_vacout_file = 'Bn_vac.dat'                   ! output vacuum perturbation field
-   Bn_file = 'Bn.dat'                              ! accumulated perturbation field from FEM
-   Bn_diff_file = 'Bn_diff.dat'                    ! perturbation field from iterations
-   fluxvar_file = 'fluxvar.dat'                    ! output file for flux variables
-   j0phi_file = 'j0phi.dat'                        ! output file for equilibrium current
-   presn_file = 'presn.dat'                        ! output file for pressure perturbation
-   currn_file = 'currn.dat'                        ! output file for current perturbation
-   eigvec_file = 'eigvec.dat'                      ! output file for eigenvectors
-   max_eig_out = 10                                ! maximal number of eigenvectors to be saved
-   rel_err_Bn = 1d-7                               ! error threshold for magnetic field perturbation
-   rel_err_currn = 1d-8                            ! error threshold for current perturbation
-   kilca_pol_mode = 0                              ! single poloidal mode number used with KiLCA
-   kilca_scale_factor = 0                          ! scaling factor used in EFIT rmaxis from KiLCA
+   ! output vacuum perturbation field
+   Bn_vacout_file = 'Bn_vac.dat'
+   ! accumulated perturbation field from FEM
+   Bn_file = 'Bn.dat'
+   ! perturbation field from iterations
+   Bn_diff_file = 'Bn_diff.dat'
+   ! output file for flux variables
+   fluxvar_file = 'fluxvar.dat'
+   ! output file for equilibrium current
+   j0phi_file = 'j0phi.dat'
+   ! output file for pressure perturbation
+   presn_file = 'presn.dat'
+   ! output file for current perturbation
+   currn_file = 'currn.dat'
+   ! output file for eigenvectors
+   eigvec_file = 'eigvec.dat'
+   ! maximal number of eigenvectors to be saved
+   max_eig_out = 10
+
+   ! error threshold for magnetic field perturbation
+   rel_err_Bn = 1d-7
+   ! error threshold for current perturbation
+   rel_err_currn = 1d-8
 /
 &delayed
-   sheet_current_factor = 1*(0d0, 0d0)  ! coefficients for sheet currents
+   ! coefficients for sheet currents
+   sheet_current_factor = 1*(0d0, 0d0)
 /
