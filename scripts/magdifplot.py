@@ -10,6 +10,7 @@ from sys import argv
 from os import path, cpu_count
 import re
 from enum import Enum
+from netCDF4 import Dataset
 import f90nml.parser
 import matplotlib
 import matplotlib.pyplot as plt
@@ -189,32 +190,27 @@ class magdif_mnDat:
 
 
 class magdif_GPEC_bnormal:
-    def __init__(self, datadir, datafile, skiplines, label):
+    def __init__(self, datadir, datafile, variable, label):
         self.datadir = datadir
         self.datafile = datafile
-        self.skiplines = skiplines
+        self.variable = variable
         self.label = label
 
     def process(self):
         print('reading poloidal modes from', self.datafile)
-        try:
-            data = np.genfromtxt(self.datafile, skip_header=self.skiplines,
-                                 names=True, dtype=None)
-        except Exception as err:
-            print('Error: {}'.format(err))
-            return
-        self.rho = np.unique(data['psi'])
-        self.q = np.unique(data['q'])
-        m = np.unique(data['m'])
+        rootgrp = Dataset(self.datafile, 'r')
+        self.rho = np.array(rootgrp.variables['psi_n'])
+        self.q = np.array(rootgrp.variables['q'])
+        m = np.array(rootgrp.variables['m_out'])
         self.range = np.size(m)
         self.offset = -m[0]
         self.m_max = np.min([-m[0], m[-1]])
-        lines = np.size(data, axis=0)
-        self.abs = np.reshape(np.hypot(data['realbwp'], data['imagbwp']),
-                              [lines // self.range, self.range]) * 1e8
+        data = np.array(rootgrp.variables[self.variable])
+        self.abs = 1e8 * np.transpose(np.hypot(data[0, :, :], data[1, :, :]))
         self.ymax = np.amax(self.abs, axis=0)
         self.ymax = np.fmax(self.ymax[self.offset:self.offset + self.m_max],
                             self.ymax[self.offset:self.offset - self.m_max:-1])
+        rootgrp.close()
 
 
 class magdif_poloidal_plots:
