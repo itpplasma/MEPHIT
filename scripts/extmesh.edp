@@ -10,7 +10,7 @@ border outer(t = 0, 2 * pi) {
   y = zmaxis + 0.75 * zdim * sin(t);
   label = 1;
 }
-mesh Thouter = buildmesh(inner(nkpol) + outer(nkpol * 3 / 2));
+mesh Thouter = buildmesh(inner(nkpol) + outer(nkpol / 2));
 int[int] regionmap = [0, 1];
 Thouter = change(Thouter, region = regionmap);
 mesh Thinner = readmesh("inputformaxwell.msh");

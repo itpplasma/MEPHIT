@@ -11,7 +11,7 @@ from io import StringIO
 import sys
 import codecs
 
-from meshpy import triangle 
+from meshpy import triangle
 
 infile = sys.argv[1]
 
