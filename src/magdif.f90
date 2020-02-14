@@ -1796,7 +1796,7 @@ contains
           coeff_theta = coeff_theta + pol_comp_theta * fourier_basis
           coeff_zeta = coeff_zeta + tor_comp(ktri) * fourier_basis
           sheet_current = sheet_current + tri%area * jnphi(ktri) * &
-               fourier_basis(kilca_pol_mode)
+               fourier_basis(-kilca_pol_mode)
        end do
        coeff_rho = coeff_rho / kt_max(kf)
        coeff_theta = coeff_theta / kt_max(kf)
