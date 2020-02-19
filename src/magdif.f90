@@ -187,6 +187,12 @@ contains
     ! needs initialized field_eq
     allocate(efit)
     call efit%read(gfile)
+    call efit%classify
+    if (efit%cocos%index /= 3) then
+       write (log_msg, '("GEQDSK file ", a, " is not conforming to COCOS 3")') trim(gfile)
+       if (log_err) call log_write
+       error stop
+    end if
 
     ! depends on mesh data, equilibrium field and EFIT profiles
     call init_flux_variables
@@ -194,7 +200,7 @@ contains
     ! depends on safety factor
     call read_delayed_config
     if (log_info) then
-       log_msg = 'poloidal mode number, sheet current factor'
+       log_msg = 'absolute poloidal mode number, sheet current factor'
        call log_write
        do m = lbound(sheet_current_factor, 1), ubound(sheet_current_factor, 1)
           write (log_msg, '(i2, 1x, ' // cmplx_fmt // ')') m, sheet_current_factor(m)
@@ -753,12 +759,10 @@ contains
        fs%q(0) = fs%q(1) - (fs%q(2) - fs%q(1))
     case (q_prof_efit)
        do kf = 0, nflux
-          ! use positive q
-          fs%q(kf) = abs(fluxvar%interp(efit%qpsi, kf, .false.))
+          fs%q(kf) = fluxvar%interp(efit%qpsi, kf, .false.)
        end do
        do kf = 1, nflux
-          ! use positive q
-          fs_half%q(kf) = abs(fluxvar%interp(efit%qpsi, kf, .true.))
+          fs_half%q(kf) = fluxvar%interp(efit%qpsi, kf, .true.)
        end do
     case default
        write (log_msg, '("unknown q profile selection: ", i0)') q_prof
@@ -769,13 +773,13 @@ contains
     allocate(m_res(nflux))
     m_res = 0
     if (kilca_scale_factor /= 0) then
-       m_res_min = max(ceiling(minval(fs_half%q) * n), n / kilca_scale_factor + 1)
+       m_res_min = max(ceiling(minval(abs(fs_half%q)) * n), n / kilca_scale_factor + 1)
     else
-       m_res_min = max(ceiling(minval(fs_half%q) * n), n + 1)
+       m_res_min = max(ceiling(minval(abs(fs_half%q)) * n), n + 1)
     end if
-    m_res_max = floor(maxval(fs_half%q) * n)
+    m_res_max = floor(maxval(abs(fs_half%q)) * n)
     do m = m_res_max, m_res_min, -1
-       abs_err = [(abs(fs_half%q(kf) - dble(m) / dble(n)), kf = 1, nflux)]
+       abs_err = [(abs(abs(fs_half%q(kf)) - dble(m) / dble(n)), kf = 1, nflux)]
        m_res(minloc(abs_err, 1)) = m
     end do
     write (log_msg, '("resonant m: ", i0, " .. ", i0)') m_res_min, m_res_max
@@ -830,7 +834,7 @@ contains
     use for_macrostep, only: t_min, d_min  ! PRELOAD/SRC/orbit_mod.f90
     use constants, only: ev2erg            ! PRELOAD/SRC/orbit_mod.f90
     integer :: kf
-    real(dp) :: ddens_dpsi, dtemp_dpsi, psimin, psimax
+    real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
 
     !> Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
     real(dp) :: dens(0:nflux)
@@ -840,31 +844,36 @@ contains
 
     dens = 0d0
     temp = 0d0
-    psimin = minval(mesh_point%psi_pol)
-    psimax = maxval(mesh_point%psi_pol)
+    if (efit%cocos%sgn_dpsi == -1) then
+       psi_ext = minval(mesh_point%psi_pol)
+       psi_int = maxval(mesh_point%psi_pol)
+    else
+       psi_ext = maxval(mesh_point%psi_pol)
+       psi_int = minval(mesh_point%psi_pol)
+    end if
     select case (pres_prof)
     case (pres_prof_eps)
-       ddens_dpsi = di0 / psimax
-       dtemp_dpsi = ti0 / psimax
-       dens = (fs%psi - psimin) / psimax * di0 + d_min
-       temp = (fs%psi - psimin) / psimax * ti0 + t_min
+       ddens_dpsi = di0 / psi_int
+       dtemp_dpsi = ti0 / psi_int
+       dens = (fs%psi - psi_ext) / psi_int * di0 + d_min
+       temp = (fs%psi - psi_ext) / psi_int * ti0 + t_min
        write (log_msg, '("temp@axis: ", es23.16, ", dens@axis: ", es23.16)') temp(0), dens(0)
        if (log_info) call log_write
        fs%p = dens * temp * ev2erg
        fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
-       dens(1:) = (fs_half%psi - psimin) / psimax * di0 + d_min
-       temp(1:) = (fs_half%psi - psimin) / psimax * ti0 + t_min
+       dens(1:) = (fs_half%psi - psi_ext) / psi_int * di0 + d_min
+       temp(1:) = (fs_half%psi - psi_ext) / psi_int * ti0 + t_min
        fs_half%p = dens(1:) * temp(1:) * ev2erg
        fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
     case (pres_prof_par)
-       ddens_dpsi = (di0 - d_min) / (psimax - psimin)
-       dtemp_dpsi = (ti0 - t_min) / (psimax - psimin)
-       dens = (fs%psi - psimin) / (psimax - psimin) * (di0 - d_min) + d_min
-       temp = (fs%psi - psimin) / (psimax - psimin) * (ti0 - t_min) + t_min
+       ddens_dpsi = (di0 - d_min) / (psi_int - psi_ext)
+       dtemp_dpsi = (ti0 - t_min) / (psi_int - psi_ext)
+       dens = (fs%psi - psi_ext) / (psi_int - psi_ext) * (di0 - d_min) + d_min
+       temp = (fs%psi - psi_ext) / (psi_int - psi_ext) * (ti0 - t_min) + t_min
        fs%p = dens * temp * ev2erg
        fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
-       dens(1:) = (fs_half%psi - psimin) / (psimax - psimin) * (di0 - d_min) + d_min
-       temp(1:) = (fs_half%psi - psimin) / (psimax - psimin) * (ti0 - t_min) + t_min
+       dens(1:) = (fs_half%psi - psi_ext) / (psi_int - psi_ext) * (di0 - d_min) + d_min
+       temp(1:) = (fs_half%psi - psi_ext) / (psi_int - psi_ext) * (ti0 - t_min) + t_min
        fs_half%p = dens(1:) * temp(1:) * ev2erg
        fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
     case (pres_prof_efit)
@@ -1464,6 +1473,7 @@ contains
           else
              Deltapsi = fs%psi(kf-2) - fs%psi(kf)
           end if
+          Deltapsi = efit%cocos%sgn_dpsi * Deltapsi
           if (kf == nflux .and. tri%orient) then
              ! triangles outside LCFS are comparatively distorted
              ! use linear extrapolation instead, i.e. a triangle of the same size
@@ -1473,7 +1483,7 @@ contains
           end if
           ! use midpoint of edge f
           r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
-          Bnpsi = -R0 * B0phi(ktri, tri%ef) / r
+          Bnpsi = -efit%cocos%sgn_dpsi * R0 * B0phi(ktri, tri%ef) / r
           Bnflux(ktri, tri%ef) = Bnpsi * r / Deltapsi * 2d0 * &
                sum(mesh_element_rmp(common_tri(:))%area)
           Bnphi(ktri) = imun / n * Bnflux(ktri, tri%ef) / tri%area
@@ -1511,7 +1521,7 @@ contains
     integer, intent(in) :: kf, kt
     real(dp), intent(in) :: r
     real(dp) :: metric_det
-    metric_det = -fs_half%q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
+    metric_det = efit%cocos%sgn_dpsi * fs_half%q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
   end function sqrt_g
 
   subroutine radially_outward_normal(ktri, n_r, n_z)
@@ -1558,7 +1568,7 @@ contains
           dens_psi_contravar = (pol_comp_r * n_r + pol_comp_z * n_z) * &
                (fs%psi(kf) - fs%psi(kf-1)) / tri%area * 0.5d0 * sqrt_g(kf, kt, r)
           ! projection to covariant theta component
-          proj_theta_covar = -(pol_comp_r * B0r_Omega(ktri) + &
+          proj_theta_covar = efit%cocos%sgn_dpsi * (pol_comp_r * B0r_Omega(ktri) + &
                pol_comp_z * B0z_Omega(ktri)) * sqrt_g(kf, kt, r)
           write (fid, '(12(1x, es23.16))') r, z, real(pol_comp_r), aimag(pol_comp_r), &
                real(pol_comp_z), aimag(pol_comp_z), &
@@ -1605,12 +1615,20 @@ contains
     location = -1
     if (r < r_min .or. r > r_max .or. z < z_min .or. z > z_max) return
     psi = interp_psi_pol(r, z)
-    if (psi < fs%psi(nflux)) return
-    ! binsrc expects strictly monotonically increasing arrays, so we reverse fs%psi
-    lb = lbound(fs%psi, 1)
-    ub = ubound(fs%psi, 1)
-    call binsrc(fs%psi(ub:lb:-1), 0, ub - lb, psi, kf)
-    kf = ub - (kf - 1)
+    if (efit%cocos%sgn_dpsi == +1) then
+       if (psi > fs%psi(nflux)) return
+       lb = lbound(fs%psi, 1)
+       ub = ubound(fs%psi, 1)
+       call binsrc(fs%psi, 0, ub - lb, psi, kf)
+       kf = lb + kf
+    else
+       if (psi < fs%psi(nflux)) return
+       ! binsrc expects strictly monotonically increasing arrays, so we reverse fs%psi
+       lb = lbound(fs%psi, 1)
+       ub = ubound(fs%psi, 1)
+       call binsrc(fs%psi(ub:lb:-1), 0, ub - lb, psi, kf)
+       kf = ub - (kf - 1)
+    end if
 
     pol_interval = 0d0
     pol_interval(1:kp_max(kf)) = 0.5d0 / pi * atan2( &
@@ -1755,12 +1773,13 @@ contains
     integer, parameter :: mmax = 24
     character(len = 19) :: fmt
     complex(dp), dimension(-mmax:mmax) :: coeff_rho, coeff_theta, coeff_zeta, fourier_basis
-    integer :: kf, kt, ktri, m, fid_rho, fid_theta, fid_zeta, fid_furth
+    integer :: kf, kt, ktri, m, kilca_m_res, fid_rho, fid_theta, fid_zeta, fid_furth
     type(triangle_rmp) :: tri
     complex(dp) :: pol_comp_r, pol_comp_z, pol_comp_rho, pol_comp_theta, sheet_current
     real(dp) :: r, z, rmaxis, zmaxis, rho_max, rho, theta, k_zeta, k_theta
 
     write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(1es22.15, 1x))'
+    kilca_m_res = -efit%cocos%sgn_q * abs(kilca_pol_mode)
     rmaxis = mesh_point(1)%rcoord
     zmaxis = mesh_point(1)%zcoord
     rho_max = hypot(mesh_point(kp_low(nflux)+1)%rcoord - rmaxis, &
@@ -1796,7 +1815,7 @@ contains
           coeff_theta = coeff_theta + pol_comp_theta * fourier_basis
           coeff_zeta = coeff_zeta + tor_comp(ktri) * fourier_basis
           sheet_current = sheet_current + tri%area * jnphi(ktri) * &
-               fourier_basis(-kilca_pol_mode)
+               fourier_basis(-kilca_m_res)
        end do
        coeff_rho = coeff_rho / kt_max(kf)
        coeff_theta = coeff_theta / kt_max(kf)
@@ -1804,10 +1823,10 @@ contains
        write (fid_rho, fmt) rho, fs_half%q(kf), real(coeff_rho), aimag(coeff_rho)
        write (fid_theta, fmt) rho, fs_half%q(kf), real(coeff_theta), aimag(coeff_theta)
        write (fid_zeta, fmt) rho, fs_half%q(kf), real(coeff_zeta), aimag(coeff_zeta)
-       k_theta = kilca_pol_mode / rho
+       k_theta = kilca_m_res / rho
        sheet_current = -2d0 * imun / clight / k_theta * sheet_current
-       write (fid_furth, *) rho, k_zeta, k_theta, real(coeff_rho(-kilca_pol_mode)), &
-            aimag(coeff_rho(-kilca_pol_mode)), real(sheet_current), aimag(sheet_current)
+       write (fid_furth, *) rho, k_zeta, k_theta, real(coeff_rho(-kilca_m_res)), &
+            aimag(coeff_rho(-kilca_m_res)), real(sheet_current), aimag(sheet_current)
     end do
     close(fid_furth)
     do ktri = kt_low(nflux+1) + 1, ntri

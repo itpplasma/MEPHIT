@@ -11,19 +11,33 @@ module magdif_util
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
 
+  type, public :: sign_convention
+    integer :: exp_Bpol, sgn_cyl, sgn_dpsi, sgn_Btor, sgn_Itor, &
+         sgn_F, sgn_dp_dpsi, sgn_q, sgn_Bpol, sgn_pol, index
+  end type sign_convention
+
   type, public :: g_eqdsk
+    type(sign_convention) :: cocos
     character(len = 1024) :: fname
-    integer :: nw, nh
+    character(len = 10) :: text(6)
+    integer :: nw, nh, nbbbs, limitr
     real(dp) :: rdim, zdim, rcentr, rleft, zmid, rmaxis, zmaxis, simag, sibry, bcentr, &
          current
-    real(dp), dimension(:), allocatable :: fpol, pres, ffprim, pprime, qpsi
+    real(dp), dimension(:), allocatable :: fpol, pres, ffprim, pprime, qpsi, &
+         rbbbs, zbbbs, rlim, zlim
+    real(dp), dimension(:, :), allocatable :: psirz
   contains
     procedure :: read => g_eqdsk_read
+    procedure :: classify => g_eqdsk_classify
+    procedure :: standardise => g_eqdsk_standardise
+    procedure :: scale => g_eqdsk_scale
+    procedure :: write => g_eqdsk_write
     final :: g_eqdsk_destructor
   end type g_eqdsk
 
   character(len = *), parameter :: geqdsk_2000 = '(6a8,3i4)'
   character(len = *), parameter :: geqdsk_2020 = '(5e16.9)'
+  character(len = *), parameter :: geqdsk_2022 = '(2i5)'
 
   type, public :: flux_func
     private
@@ -156,30 +170,37 @@ contains
 
   subroutine g_eqdsk_read(this, fname)
     class(g_eqdsk), intent(inout) :: this
-    character(len = 1024), intent(in) :: fname
-    character(len = 10) :: text(6)
-    integer :: fid, k, idum
+    character(len = *), intent(in) :: fname
+    integer :: fid, kw, kh, idum
     real(dp) :: xdum
 
     call g_eqdsk_destructor(this)
     this%fname = fname
-    open(newunit = fid, file = this%fname)
-    read(fid, geqdsk_2000) (text(k), k = 1, 6), idum, this%nw, this%nh
+    open(newunit = fid, file = this%fname, status = 'old')
+    read (fid, geqdsk_2000) (this%text(kw), kw = 1, 6), idum, this%nw, this%nh
     allocate(this%fpol(this%nw))
     allocate(this%pres(this%nw))
     allocate(this%ffprim(this%nw))
     allocate(this%pprime(this%nw))
     allocate(this%qpsi(this%nw))
-    read(fid, geqdsk_2020) this%rdim, this%zdim, this%rcentr, this%rleft, this%zmid
-    read(fid, geqdsk_2020) this%rmaxis, this%zmaxis, this%simag, this%sibry, this%bcentr
-    read(fid, geqdsk_2020) this%current, (xdum, k = 1, 4)
-    read(fid, geqdsk_2020) (xdum, k = 1, 5)
-    read(fid, geqdsk_2020) (this%fpol(k), k = 1, this%nw)
-    read(fid, geqdsk_2020) (this%pres(k), k = 1, this%nw)
-    read(fid, geqdsk_2020) (this%ffprim(k), k = 1, this%nw)
-    read(fid, geqdsk_2020) (this%pprime(k), k = 1, this%nw)
-    read(fid, geqdsk_2020) (xdum, k = 1, this%nw * this%nh)
-    read(fid, geqdsk_2020) (this%qpsi(k), k = 1, this%nw)
+    allocate(this%psirz(this%nw, this%nh))
+    read (fid, geqdsk_2020) this%rdim, this%zdim, this%rcentr, this%rleft, this%zmid
+    read (fid, geqdsk_2020) this%rmaxis, this%zmaxis, this%simag, this%sibry, this%bcentr
+    read (fid, geqdsk_2020) this%current, (xdum, kw = 1, 4)
+    read (fid, geqdsk_2020) (xdum, kw = 1, 5)
+    read (fid, geqdsk_2020) (this%fpol(kw), kw = 1, this%nw)
+    read (fid, geqdsk_2020) (this%pres(kw), kw = 1, this%nw)
+    read (fid, geqdsk_2020) (this%ffprim(kw), kw = 1, this%nw)
+    read (fid, geqdsk_2020) (this%pprime(kw), kw = 1, this%nw)
+    read (fid, geqdsk_2020) ((this%psirz(kw, kh), kw = 1, this%nw), kh = 1, this%nh)
+    read (fid, geqdsk_2020) (this%qpsi(kw), kw = 1, this%nw)
+    read (fid, geqdsk_2022) this%nbbbs, this%limitr
+    allocate(this%rbbbs(this%nbbbs))
+    allocate(this%zbbbs(this%nbbbs))
+    allocate(this%rlim(this%limitr))
+    allocate(this%zlim(this%limitr))
+    read (fid, geqdsk_2020) (this%rbbbs(kw), this%zbbbs(kw), kw = 1, this%nbbbs)
+    read (fid, geqdsk_2020) (this%rlim(kw), this%zlim(kw), kw = 1, this%limitr)
     close(fid)
     ! convert meter to centimeter
     this%rdim = this%rdim * 1d2
@@ -204,7 +225,162 @@ contains
     this%ffprim = this%ffprim * 1d4
     ! convert pascal per weber to barye per maxwell
     this%pprime = this%pprime * 1d-7
+    ! convert weber to maxwell
+    this%psirz = this%psirz * 1d8
+    ! convert meter to centimeter
+    this%rbbbs = this%rbbbs * 1d2
+    this%zbbbs = this%zbbbs * 1d2
+    this%rlim = this%rlim * 1d2
+    this%zlim = this%zlim * 1d2
   end subroutine g_eqdsk_read
+
+  subroutine g_eqdsk_classify(this)
+    use magdif_config, only: log_msg, log_write, log_warn
+    class(g_eqdsk), intent(inout) :: this
+
+    this%cocos = sign_convention(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+    this%cocos%exp_Bpol = 0  ! specified by G EQDSK format and assumed in field_divB0.f90
+    this%cocos%sgn_cyl = +1  ! specified by G EQDSK format and assumed in field_divB0.f90
+    this%cocos%sgn_dpsi = sign_array([this%sibry - this%simag], 'SIMAG/SIBRY', this%fname)
+    this%cocos%sgn_Btor = sign_array([this%bcentr], 'BCENTR', this%fname)
+    this%cocos%sgn_Itor = sign_array([this%current], 'CURRENT', this%fname)
+    this%cocos%sgn_F = sign_array(this%fpol, 'FPOL', this%fname)
+    this%cocos%sgn_dp_dpsi = sign_array(this%pprime, 'PPRIME', this%fname)
+    this%cocos%sgn_q = sign_array(this%qpsi, 'QPSI', this%fname)
+    this%cocos%sgn_Bpol = this%cocos%sgn_dpsi * this%cocos%sgn_Itor
+    this%cocos%sgn_pol = this%cocos%sgn_q * this%cocos%sgn_Itor * this%cocos%sgn_Btor
+    if (this%cocos%sgn_Bpol == +1) then
+       if (this%cocos%sgn_pol == +1) then
+          this%cocos%index = 1
+       elseif (this%cocos%sgn_pol == -1) then
+          this%cocos%index = 5
+       end if
+    elseif (this%cocos%sgn_Bpol == -1) then
+       if (this%cocos%sgn_pol == +1) then
+          this%cocos%index = 7
+       elseif (this%cocos%sgn_pol == -1) then
+          this%cocos%index = 3
+       end if
+    end if
+    if (this%cocos%index == 0) then
+       log_msg = 'COCOS index could not be determined for ' // trim(this%fname)
+       if (log_warn) call log_write
+    end if
+
+  contains
+    function sign_array(array, name, fname) result(sign)
+      use magdif_config, only: log_msg, log_write, log_warn
+      real(dp), intent(in), dimension(:) :: array
+      character(len = *), intent(in) :: name, fname
+      integer :: sign
+      if (all(array > 0d0)) then
+         sign = +1
+      elseif (all(array < 0d0)) then
+         sign = -1
+      else
+         sign = 0
+         write (log_msg, '("Sign of ", a, " is inconsistent in ", a)') &
+              trim(name), trim(fname)
+         if (log_warn) call log_write
+      end if
+    end function sign_array
+  end subroutine g_eqdsk_classify
+
+  subroutine g_eqdsk_standardise(this)
+    use magdif_config, only: log_msg, log_write, log_info, log_warn
+    class(g_eqdsk), intent(inout) :: this
+    character(len = *), parameter :: invert_fmt = '("Inverting sign of ", a, "...")', &
+         incons_fmt = '("Signs of ", a, " and ", a, " are inconsistent")'
+
+    if (this%cocos%sgn_Btor /= this%cocos%sgn_F) then
+       write (log_msg, incons_fmt) 'FPOL', 'BCENTR'
+       if (log_warn) call log_write
+       write (log_msg, invert_fmt) 'FPOL'
+       if (log_info) call log_write
+       this%fpol = -this%fpol
+       this%cocos%sgn_F = -this%cocos%sgn_F
+    end if
+    if (this%cocos%sgn_dp_dpsi /= -this%cocos%sgn_dpsi) then
+       write (log_msg, incons_fmt) 'PPRIME', 'SIMAG/SIBRY'
+       if (log_warn) call log_write
+       write (log_msg, invert_fmt) 'PPRIME'
+       if (log_info) call log_write
+       this%pprime = -this%pprime
+       this%cocos%sgn_dp_dpsi = -this%cocos%sgn_dp_dpsi
+    end if
+    if (this%cocos%sgn_Bpol /= -1) then
+       write (log_msg, invert_fmt) 'SIMAG/SIBRY, PSIRZ, PPRIME, FFPRIM'
+       this%simag = -this%simag
+       this%sibry = -this%sibry
+       this%psirz = -this%psirz
+       this%cocos%sgn_dpsi = -this%cocos%sgn_dpsi
+       this%pprime = -this%pprime
+       this%cocos%sgn_dp_dpsi = -this%cocos%sgn_dp_dpsi
+       this%ffprim = -this%ffprim
+       this%cocos%sgn_Bpol = -this%cocos%sgn_Bpol
+    end if
+    if (this%cocos%sgn_pol /= -1) then
+       write (log_msg, invert_fmt) 'QPSI'
+       this%qpsi = -this%qpsi
+       this%cocos%sgn_q = -this%cocos%sgn_q
+       this%cocos%sgn_pol = -this%cocos%sgn_pol
+    end if
+    this%cocos%index = 3
+  end subroutine g_eqdsk_standardise
+
+  subroutine g_eqdsk_scale(this, gamma)
+    class(g_eqdsk), intent(inout) :: this
+    integer, intent(in) :: gamma
+    real(dp) :: unscaled_rcentr, r_shift
+
+    unscaled_rcentr = this%rcentr
+    r_shift = this%rcentr * (gamma - 1)
+    this%rcentr = this%rcentr * gamma
+    this%rleft = this%rcentr - 0.5d0 * this%rdim
+    this%rmaxis = this%rmaxis + r_shift
+    this%simag = this%simag * gamma
+    this%sibry = this%sibry * gamma
+    this%fpol = this%fpol * gamma
+    this%ffprim = this%ffprim * gamma
+    this%pprime = this%pprime / gamma
+    this%psirz = this%psirz * gamma
+    this%qpsi = this%qpsi / gamma
+    this%rbbbs = this%rbbbs + r_shift
+    this%rlim = this%rlim + r_shift
+  end subroutine g_eqdsk_scale
+
+  subroutine g_eqdsk_write(this, fname)
+    class(g_eqdsk), intent(inout) :: this
+    character(len = *), intent(in) :: fname
+    integer :: fid, kw, kh, idum
+    real(dp) :: xdum
+
+    idum = 0
+    xdum = 0d0
+    this%fname = fname
+    open(newunit = fid, file = this%fname, status = 'replace')
+    write (fid, geqdsk_2000) (this%text(kw), kw = 1, 6), idum, this%nw, this%nh
+    write (fid, geqdsk_2020) this%rdim * 1d-2, this%zdim * 1d-2, this%rcentr * 1d-2, &
+         this%rleft * 1d-2, this%zmid * 1d-2
+    write (fid, geqdsk_2020) this%rmaxis * 1d-2, this%zmaxis * 1d-2, this%simag * 1d-8, &
+         this%sibry * 1d-8, this%bcentr * 1d-4
+    write (fid, geqdsk_2020) this%current * 1d1 / clight, this%simag * 1d-8, xdum, &
+         this%rmaxis * 1d-2, xdum
+    write (fid, geqdsk_2020) this%zmaxis * 1d-2, xdum, this%sibry * 1d-8, xdum, xdum
+    write (fid, geqdsk_2020) (this%fpol(kw) * 1d-6, kw = 1, this%nw)
+    write (fid, geqdsk_2020) (this%pres(kw) * 1d-1, kw = 1, this%nw)
+    write (fid, geqdsk_2020) (this%ffprim(kw) * 1d-4, kw = 1, this%nw)
+    write (fid, geqdsk_2020) (this%pprime(kw) * 1d7, kw = 1, this%nw)
+    write (fid, geqdsk_2020) ((this%psirz(kw, kh) * 1d-8, kw = 1, this%nw), &
+         kh = 1, this%nh)
+    write (fid, geqdsk_2020) (this%qpsi(kw), kw = 1, this%nw)
+    write (fid, geqdsk_2022) this%nbbbs, this%limitr
+    write (fid, geqdsk_2020) (this%rbbbs(kw) * 1d-2, this%zbbbs(kw) * 1d-2, &
+         kw = 1, this%nbbbs)
+    write (fid, geqdsk_2020) (this%rlim(kw) * 1d-2, this%zlim(kw) * 1d-2, &
+         kw = 1, this%limitr)
+    close(fid)
+  end subroutine g_eqdsk_write
 
   subroutine g_eqdsk_destructor(this)
     type(g_eqdsk) :: this
@@ -214,6 +390,11 @@ contains
     if (allocated(this%ffprim)) deallocate(this%ffprim)
     if (allocated(this%pprime)) deallocate(this%pprime)
     if (allocated(this%qpsi)) deallocate(this%qpsi)
+    if (allocated(this%rbbbs)) deallocate(this%rbbbs)
+    if (allocated(this%zbbbs)) deallocate(this%zbbbs)
+    if (allocated(this%rlim)) deallocate(this%rlim)
+    if (allocated(this%zlim)) deallocate(this%zlim)
+    if (allocated(this%psirz)) deallocate(this%psirz)
   end subroutine g_eqdsk_destructor
 
   subroutine flux_func_init(this, n_lag, nw, nflux, psi, psi_half)
@@ -247,9 +428,13 @@ contains
     this%interval = 0
     this%interval_half = 0
     do kf = 1, nflux-1
-       ! binsrc expects strictly monotonically increasing arrays, so we reverse psi_eqd
-       call binsrc(psi_eqd(nw:1:-1), 1, nw, psi(kf), k)
-       k = nw - (k - 1) + 1
+       if (psi_eqd(1) < psi_eqd(nw)) then
+          call binsrc(psi_eqd, 1, nw, psi(kf), k)
+       else
+          ! binsrc expects strictly monotonically increasing arrays, so we reverse psi_eqd
+          call binsrc(psi_eqd(nw:1:-1), 1, nw, psi(kf), k)
+          k = nw - (k - 1) + 1
+       end if
        if (k < n_lag / 2 + 1) then
           k = n_lag / 2 + 1
        elseif (k > nw - n_lag / 2 + 1) then
@@ -260,9 +445,13 @@ contains
        this%lag_coeff(:, kf) = coeff
     end do
     do kf = 1, nflux
-       ! binsrc expects strictly monotonically increasing arrays, so we reverse psi_eqd
-       call binsrc(psi_eqd(nw:1:-1), 1, nw, psi_half(kf), k)
-       k = nw - (k - 1) + 1
+       if (psi_eqd(1) < psi_eqd(nw)) then
+          call binsrc(psi_eqd, 1, nw, psi_half(kf), k)
+       else
+          ! binsrc expects strictly monotonically increasing arrays, so we reverse psi_eqd
+          call binsrc(psi_eqd(nw:1:-1), 1, nw, psi_half(kf), k)
+          k = nw - (k - 1) + 1
+       end if
        if (k < n_lag / 2 + 1) then
           k = n_lag / 2 + 1
        elseif (k > nw - n_lag / 2 + 1) then

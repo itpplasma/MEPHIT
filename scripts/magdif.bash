@@ -133,10 +133,13 @@ magdif_prepare() {
     for workdir; do
         pushd "$workdir"
         cp field_divB0_unprocessed.inp field_divB0.inp
+        unprocessed=$(read_first_in_line field_divB0_unprocessed.inp 7)
+        replace_first_in_line field_divB0.inp 7 "'\1_processed'"  # gfile
         replace_first_in_line field_divB0.inp 1 0  # ipert
         replace_first_in_line field_divB0.inp 2 1  # iequil
         kilca_scale_factor=$(nml_read_integer "$config" kilca_scale_factor)
         if [ $kilca_scale_factor -eq 0 ]; then
+            "$bindir/standardise_equilibrium.x" "$unprocessed" "${unprocessed}_processed"
             "$bindir/axis.x" && \
                 "$bindir/tri_mesh.x" && \
                 "$bindir/readcarre_m.x" && \
@@ -162,8 +165,6 @@ magdif_prepare() {
                 continue
             fi
         else
-            unprocessed=$(read_first_in_line field_divB0_unprocessed.inp 7)
-            replace_first_in_line field_divB0.inp 7 "'\1_processed'"  # gfile
             "$bindir/minimal_example.x" "$config" "$unprocessed" && \
                 FreeFem++ "$scriptdir/extmesh.edp"
             lasterr=$?

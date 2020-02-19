@@ -76,6 +76,7 @@ configure_file(scripts/magdif.bash bin/magdif COPYONLY)
 
 ### Define executables
 add_executable(magdif_test.x src/magdif_test.f90)
+add_executable(standardise_equilibrium.x src/standardise_equilibrium.f90)
 add_executable(minimal_example.x src/minimal_example.f90)
 add_executable(geomint_mesh.x src/geomint_mesh.f90)
 add_executable(axis.x src/axis.f90)
@@ -90,6 +91,7 @@ set_target_properties(minimal_example.x PROPERTIES COMPILE_FLAGS ${FGSL_FLAGS})
 ### Linking
 set(MAGDIF_LIBS magdif ${SUPERLU_LIBRARIES} ${SUITESPARSE_LIBRARIES} blas lapack)
 target_link_libraries(magdif_test.x ${MAGDIF_LIBS})
+target_link_libraries(standardise_equilibrium.x ${MAGDIF_LIBS})
 target_link_libraries(minimal_example.x ${MAGDIF_LIBS} ${gsl_lib} ${fgsl_lib})
 target_link_libraries(geomint_mesh.x ${MAGDIF_LIBS})
 target_link_libraries(axis.x ${MAGDIF_LIBS})

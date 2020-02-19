@@ -6,7 +6,7 @@ program minimal_example
   use input_files, only: gfile, convexfile
   use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, & ! PRELOAD/SRC/mesh_mod.f90
        bphicovar, knot, triangle, triangle_rmp, mesh_element_rmp
-  use magdif_util, only: imun, interp_psi_pol
+  use magdif_util, only: imun, interp_psi_pol, g_eqdsk
   use magdif, only: init_indices, kt_max, kt_low, kp_max, kp_low, Bnflux, Bnphi, &
        get_labeled_edges, check_redundant_edges, check_div_free, write_vector_dof, &
        cache_mesh_data
@@ -18,7 +18,7 @@ program minimal_example
   end interface interleave
 
   character(len = 1024) :: unscaled_geqdsk
-  real(dp) :: rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr
+  real(dp) :: rdim, zdim, rleft, zmid, rmaxis, zmaxis
 
   integer :: fid, kf, kp, k, ke, ktri, kpoi
   integer, dimension(:), allocatable :: kq, kt, tri_f, tri_i, tri_o
@@ -26,6 +26,7 @@ program minimal_example
   real(dp) :: rho, rho_max, theta
   integer, parameter :: nrz = 64  ! at most 100 values are read in by field_divB0.f90
 
+  type(g_eqdsk) :: equil
   type(knot) :: node
   type(triangle) :: elem
   type(triangle_rmp) :: tri
@@ -49,16 +50,22 @@ program minimal_example
   call log_open
 
   call initialize_globals
-  call scale_geqdsk(kilca_scale_factor, trim(unscaled_geqdsk), trim(gfile), &
-       rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr)
-  ! convert from SI to Gaussian units
-  rdim = rdim * 1d2
-  zdim = zdim * 1d2
-  rleft = rleft * 1d2
-  zmid = zmid * 1d2
-  rmaxis = rmaxis * 1d2
-  zmaxis = zmaxis * 1d2
-  bphicovar = bcentr * 1d5
+  log_msg = 'attempting to read unscaled G EQDSK file ' // trim(unscaled_geqdsk)
+  if (log_info) call log_write
+  call equil%read(trim(unscaled_geqdsk))
+  call equil%classify
+  call equil%standardise
+  call equil%scale(kilca_scale_factor)
+  log_msg = 'attempting to write scaled G EQDSK file ' // trim(gfile)
+  if (log_info) call log_write
+  call equil%write(trim(gfile))
+  rdim = equil%rdim
+  zdim = equil%zdim
+  rleft = equil%rleft
+  zmid = equil%zmid
+  rmaxis = equil%rmaxis
+  zmaxis = equil%zmaxis
+  bphicovar = equil%bcentr
 
   ! write configuration to FreeFem++ (for Delaunay triangulation)
   open(newunit = fid, file = 'extmesh.idp', status = 'replace')
@@ -277,97 +284,6 @@ contains
     read (fid, *) convexfile   ! convex file for stretchcoords
     close(fid)
   end subroutine initialize_globals
-
-  subroutine scale_geqdsk(gamma, file_in, file_out, &
-       rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr)
-    integer, intent(in) :: gamma
-    character(len = *), intent(in) :: file_in, file_out
-    real(dp), intent(out) :: rdim, zdim, rleft, zmid, rmaxis, zmaxis, bcentr
-
-    character(len = *), parameter :: geqdsk_2000 = '(6a8,3i4)'
-    character(len = *), parameter :: geqdsk_2020 = '(5e16.9)'
-    character(len = *), parameter :: geqdsk_2022 = '(2i5)'
-
-    character(len = 10) :: text(6)
-    integer :: fid_in, fid_out, i, j, idum, nw, nh, nbbbs, limitr
-    real(dp) :: xdum, rcentr, simag, sibry, current, unscaled_rcentr, r_shift
-    real(dp), allocatable :: fpol(:), pres(:), ffprim(:), pprime(:), psirz(:, :), &
-         qpsi(:), rbbbs(:), zbbbs(:), rlim(:), zlim(:)
-
-    write (log_msg, '("attempting to read unscaled G EQDSK file ", a)') file_in
-    call log_write
-    open(newunit = fid_in, file = file_in, status = 'old')
-    read (fid_in, geqdsk_2000) (text(i), i = 1, 6), idum, nw, nh
-    allocate(fpol(nw))
-    allocate(pres(nw))
-    allocate(ffprim(nw))
-    allocate(pprime(nw))
-    allocate(psirz(nw, nh))
-    allocate(qpsi(nw))
-    read (fid_in, geqdsk_2020) rdim, zdim, rcentr, rleft, zmid
-    read (fid_in, geqdsk_2020) rmaxis, zmaxis, simag, sibry, bcentr
-    read (fid_in, geqdsk_2020) current, simag, xdum, rmaxis, xdum
-    read (fid_in, geqdsk_2020) zmaxis, xdum, sibry, xdum, xdum
-    read (fid_in, geqdsk_2020) (fpol(i), i = 1, nw)
-    read (fid_in, geqdsk_2020) (pres(i), i = 1, nw)
-    read (fid_in, geqdsk_2020) (ffprim(i), i = 1, nw)
-    read (fid_in, geqdsk_2020) (pprime(i), i = 1, nw)
-    read (fid_in, geqdsk_2020) ((psirz(i, j), i = 1, nw), j = 1, nh)
-    read (fid_in, geqdsk_2020) (qpsi(i), i = 1, nw)
-    read (fid_in, geqdsk_2022) nbbbs, limitr
-    allocate(rbbbs(nbbbs))
-    allocate(zbbbs(nbbbs))
-    allocate(rlim(limitr))
-    allocate(zlim(limitr))
-    read (fid_in, geqdsk_2020) (rbbbs(i), zbbbs(i), i = 1, nbbbs)
-    read (fid_in, geqdsk_2020) (rlim(i), zlim(i), i = 1, limitr)
-    close(fid_in)
-
-    unscaled_rcentr = rcentr
-    r_shift = rcentr * (gamma - 1)
-    rcentr = rcentr * gamma
-    rleft = rcentr - 0.5d0 * rdim
-    rmaxis = rmaxis + r_shift
-    simag = simag * gamma
-    sibry = sibry * gamma
-    fpol = fpol * gamma
-    ffprim = ffprim * gamma
-    pprime = pprime / gamma
-    psirz = psirz * gamma
-    qpsi = qpsi / gamma
-    rbbbs = rbbbs + r_shift
-    rlim = rlim + r_shift
-
-    write (log_msg, '("attempting to write scaled G EQDSK file ", a)') file_out
-    call log_write
-    open(newunit = fid_out, file = file_out, status = 'replace')
-    write (fid_out, geqdsk_2000) (text(i), i = 1, 6), idum, nw, nh
-    write (fid_out, geqdsk_2020) rdim, zdim, rcentr, rleft, zmid
-    write (fid_out, geqdsk_2020) rmaxis, zmaxis, simag, sibry, bcentr
-    write (fid_out, geqdsk_2020) current, simag, xdum, rmaxis, xdum
-    write (fid_out, geqdsk_2020) zmaxis, xdum, sibry, xdum, xdum
-    write (fid_out, geqdsk_2020) (fpol(i), i = 1, nw)
-    write (fid_out, geqdsk_2020) (pres(i), i = 1, nw)
-    write (fid_out, geqdsk_2020) (ffprim(i), i = 1, nw)
-    write (fid_out, geqdsk_2020) (pprime(i), i = 1, nw)
-    write (fid_out, geqdsk_2020) ((psirz(i, j), i = 1, nw), j = 1, nh)
-    write (fid_out, geqdsk_2020) (qpsi(i), i = 1, nw)
-    write (fid_out, geqdsk_2022) nbbbs, limitr
-    write (fid_out, geqdsk_2020) (rbbbs(i), zbbbs(i), i = 1, nbbbs)
-    write (fid_out, geqdsk_2020) (rlim(i), zlim(i), i = 1, limitr)
-    close(fid_out)
-
-    if (allocated(fpol)) deallocate(fpol)
-    if (allocated(pres)) deallocate(pres)
-    if (allocated(ffprim)) deallocate(ffprim)
-    if (allocated(pprime)) deallocate(pprime)
-    if (allocated(psirz)) deallocate(psirz)
-    if (allocated(qpsi)) deallocate(qpsi)
-    if (allocated(rbbbs)) deallocate(rbbbs)
-    if (allocated(zbbbs)) deallocate(zbbbs)
-    if (allocated(rlim)) deallocate(rlim)
-    if (allocated(zlim)) deallocate(zlim)
-  end subroutine scale_geqdsk
 
   subroutine add_node_owner(kpoint, ktri)
     use mesh_mod, only: n_owners_max
