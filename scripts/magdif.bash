@@ -138,6 +138,9 @@ magdif_prepare() {
         replace_first_in_line field_divB0.inp 1 0  # ipert
         replace_first_in_line field_divB0.inp 2 1  # iequil
         kilca_scale_factor=$(nml_read_integer "$config" kilca_scale_factor)
+        if [ -z $kilca_scale_factor ]; then
+            kilca_scale_factor=0
+        fi
         if [ $kilca_scale_factor -eq 0 ]; then
             "$bindir/standardise_equilibrium.x" "$unprocessed" "${unprocessed}_processed"
             "$bindir/axis.x" && \
@@ -214,6 +217,9 @@ magdif_run() {
             continue
         fi
         kilca_scale_factor=$(nml_read_integer "$config" kilca_scale_factor)
+        if [ -z $kilca_scale_factor ]; then
+            kilca_scale_factor=0
+        fi
         if [ $kilca_scale_factor -eq 0 ]; then
             infile=Bn.dat
             infile=plot_$infile

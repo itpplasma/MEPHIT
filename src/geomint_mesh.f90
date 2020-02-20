@@ -51,7 +51,7 @@ program geomint_mesh
   points(:, 1) = [rmaxis, 0d0, zmaxis]
   open(newunit = fid, file = 'points.fmt')
   do k = 1, npoint
-     write (fid, '(2(1x, i0))') points(1, k), points(3, k)
+     write (fid, '(2(1x, es23.16))') points(1, k), points(3, k)
   end do
   close(fid)
 
