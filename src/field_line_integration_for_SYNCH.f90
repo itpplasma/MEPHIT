@@ -2,6 +2,12 @@
     double precision :: dr_dphi, dz_dphi
   end module rhs_surf_mod
 !
+  module field_line_integration_mod
+    ! set this to true to let theta start at the line between O- and X-Point
+    logical :: theta0_at_xpoint = .true.
+    double precision, dimension(2) :: theta_axis
+  end module field_line_integration_mod
+!
   subroutine field_line_integration_for_SYNCH(nstep,nsurfmax,nlabel,ntheta,    &
                                               rmn,rmx,zmn,zmx,raxis,zaxis,     &
                                               rbeg,rsmall,qsaf,psisurf,phitor, &
@@ -11,10 +17,9 @@
                             icall_eq,nrad,nzet,rad,zet,rtf,btf
   !use theta_rz_mod, only : nsqp,hsqpsi,spllabel
   use rhs_surf_mod, only : dr_dphi, dz_dphi
+  use field_line_integration_mod, only: theta0_at_xpoint, theta_axis
 !
   implicit none
-!
-  logical, parameter :: theta0_at_xpoint = .true.  ! set this to true to let theta start at the line between O- and X-Point
 !
   integer, parameter :: neq=4
   integer, parameter :: niter_axis=20  !number of iterations for finding axis
@@ -33,7 +38,7 @@
                      ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
   double precision :: psi_axis,h,sig,sig_start,sig_end,phi_sep,sigma,min_d,new_d,r_sep, alpha, beta
 !
-  double precision, dimension(2) :: x_point, theta_axis, theta_axis_unit, prev_ymet, ymet_axis, dist
+  double precision, dimension(2) :: x_point, theta_axis_unit, prev_ymet, ymet_axis, dist
 
   double precision, dimension(neq)           :: ymet
   double precision, dimension(nlabel)        :: rbeg,rsmall,qsaf,psisurf,phitor
@@ -72,6 +77,7 @@
   enddo
   raxis=ymet(1)
   zaxis=ymet(2)
+  print *, 'O-point found ', raxis, zaxis
 !
   call field_eq(raxis,ppp,zaxis,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ  &
                ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ)

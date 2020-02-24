@@ -5,6 +5,7 @@ program geomint_mesh
   use from_nrtype, only: dp
   use input_files, only: gfile
   use mesh_mod, only: npoint, bphicovar
+  use field_line_integration_mod, only: theta0_at_xpoint
 
   implicit none
 
@@ -47,6 +48,7 @@ program geomint_mesh
 
   n_theta = nkpol
   s_min = 1d-16
+  theta0_at_xpoint = .true.
   call create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func = sqr)
   points(:, 1) = [rmaxis, 0d0, zmaxis]
   open(newunit = fid, file = 'points.fmt')
