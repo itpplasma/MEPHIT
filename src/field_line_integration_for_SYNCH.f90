@@ -6,6 +6,7 @@
     ! set this to true to let theta start at the line between O- and X-Point
     logical :: theta0_at_xpoint = .true.
     double precision, dimension(2) :: theta_axis
+    double precision :: theta0
   end module field_line_integration_mod
 !
   subroutine field_line_integration_for_SYNCH(nstep,nsurfmax,nlabel,ntheta,    &
@@ -17,7 +18,7 @@
                             icall_eq,nrad,nzet,rad,zet,rtf,btf
   !use theta_rz_mod, only : nsqp,hsqpsi,spllabel
   use rhs_surf_mod, only : dr_dphi, dz_dphi
-  use field_line_integration_mod, only: theta0_at_xpoint, theta_axis
+  use field_line_integration_mod, only: theta0_at_xpoint, theta_axis, theta0
 !
   implicit none
 !
@@ -38,7 +39,7 @@
                      ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
   double precision :: psi_axis,h,sig,sig_start,sig_end,phi_sep,sigma,min_d,new_d,r_sep, alpha, beta
 !
-  double precision, dimension(2) :: x_point, theta_axis_unit, prev_ymet, ymet_axis, dist
+  double precision, dimension(2) :: x_point, prev_ymet, ymet_axis
 
   double precision, dimension(neq)           :: ymet
   double precision, dimension(nlabel)        :: rbeg,rsmall,qsaf,psisurf,phitor
@@ -180,7 +181,7 @@
   else
     theta_axis = [1.d0, 0.d0] * (r_sep - raxis)
   end if
-  theta_axis_unit = theta_axis / norm2(theta_axis)
+  theta0 = atan2(theta_axis(2), theta_axis(1))
 !------------------------------------------------------------------------------
 !
 ! Computation of flux functions: effective radius, safety factor, poloidal and toroidal fluxes
@@ -204,12 +205,12 @@
 
 ! Newton method
     do iter=1,niter
-      ymet_axis = [raxis, zaxis] - ymet(1:2)
-      alpha = atan2(theta_axis_unit(1), theta_axis_unit(2)) - atan2(dr_dphi, dz_dphi)
-      beta = atan2(theta_axis_unit(1), theta_axis_unit(2)) - atan2(ymet_axis(1), ymet_axis(2))
-      dist = norm2(ymet_axis) * sin(beta) / sin(alpha)
+      ymet_axis = ymet(1:2) - [raxis, zaxis]
+      alpha = atan2(dz_dphi, dr_dphi) - theta0
+      beta = atan2(ymet_axis(2), ymet_axis(1)) - theta0
 !
-      phiout = norm2(dist) / norm2([dr_dphi, dz_dphi]) * cross_2d_sign(ymet_axis, theta_axis_unit)
+      phiout = norm2(ymet_axis) * abs(sin(beta) / sin(alpha)) / norm2([dr_dphi, dz_dphi]) &
+           * cross_2d_sign(ymet_axis, theta_axis) * sigma
       call odeint_allroutines(ymet,neq,phi,phiout,relerr,rhs_surf)
       phi_sep=phi_sep+phiout
     enddo
