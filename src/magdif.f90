@@ -9,10 +9,10 @@ module magdif
 
   implicit none
 
-  type(g_eqdsk), allocatable :: efit
-  type(flux_func), allocatable :: fluxvar
-  type(flux_func_cache), allocatable :: fs
-  type(flux_func_cache), allocatable :: fs_half
+  type(g_eqdsk) :: equil
+  type(flux_func) :: fluxvar
+  type(flux_func_cache) :: fs
+  type(flux_func_cache) :: fs_half
 
   real(dp) :: r_o, z_o, r_min, r_max, z_min, z_max  ! TODO: mesh_global_props type
 
@@ -185,16 +185,15 @@ contains
     call cache_equilibrium_field
 
     ! needs initialized field_eq
-    allocate(efit)
-    call efit%read(gfile)
-    call efit%classify
-    if (efit%cocos%index /= 3) then
+    call equil%read(gfile)
+    call equil%classify
+    if (equil%cocos%index /= 3) then
        write (log_msg, '("GEQDSK file ", a, " is not conforming to COCOS 3")') trim(gfile)
        if (log_err) call log_write
        error stop
     end if
 
-    ! depends on mesh data, equilibrium field and EFIT profiles
+    ! depends on mesh data, equilibrium field and G EQDSK profiles
     call init_flux_variables
 
     ! depends on safety factor
@@ -228,10 +227,6 @@ contains
 
   !> Deallocates all previously allocated variables.
   subroutine magdif_cleanup
-    if (allocated(efit)) deallocate(efit)
-    if (allocated(fluxvar)) deallocate(fluxvar)
-    if (allocated(fs)) deallocate(fs)
-    if (allocated(fs_half)) deallocate(fs_half)
     if (allocated(m_res)) deallocate(m_res)
     if (allocated(sheet_current_factor)) deallocate(sheet_current_factor)
     if (allocated(B0r)) deallocate(B0r)
@@ -759,10 +754,10 @@ contains
        fs%q(0) = fs%q(1) - (fs%q(2) - fs%q(1))
     case (q_prof_efit)
        do kf = 0, nflux
-          fs%q(kf) = fluxvar%interp(efit%qpsi, kf, .false.)
+          fs%q(kf) = fluxvar%interp(equil%qpsi, kf, .false.)
        end do
        do kf = 1, nflux
-          fs_half%q(kf) = fluxvar%interp(efit%qpsi, kf, .true.)
+          fs_half%q(kf) = fluxvar%interp(equil%qpsi, kf, .true.)
        end do
     case default
        write (log_msg, '("unknown q profile selection: ", i0)') q_prof
@@ -798,7 +793,6 @@ contains
   subroutine init_flux_variables
     integer :: kf
 
-    allocate(fs)
     call fs%init(nflux, .false.)
 
     ! magnetic axis at k == 0 is not counted as flux surface
@@ -808,24 +802,22 @@ contains
        fs%psi(kf) = sum(mesh_point((kp_low(kf) + 1):kp_low(kf+1))%psi_pol) / kp_max(kf)
     end do
 
-    allocate(fs_half)
     call fs_half%init(nflux, .true.)
 
     ! use linear interpolation for half-grid steps for now
     fs_half%psi = 0.5d0 * (fs%psi(0:nflux-1) + fs%psi(1:nflux))
 
-    allocate(fluxvar)
-    call fluxvar%init(4, efit%nw, nflux, fs%psi, fs_half%psi)
+    call fluxvar%init(4, equil%nw, nflux, fs%psi, fs_half%psi)
 
     call compute_pres_prof
     call compute_safety_factor
     do kf = 0, nflux
-       fs%F(kf) = fluxvar%interp(efit%fpol, kf, .false.)
-       fs%FdF_dpsi(kf) = fluxvar%interp(efit%ffprim, kf, .false.)
+       fs%F(kf) = fluxvar%interp(equil%fpol, kf, .false.)
+       fs%FdF_dpsi(kf) = fluxvar%interp(equil%ffprim, kf, .false.)
     end do
     do kf = 1, nflux
-       fs_half%F(kf) = fluxvar%interp(efit%fpol, kf, .true.)
-       fs_half%FdF_dpsi(kf) = fluxvar%interp(efit%ffprim, kf, .true.)
+       fs_half%F(kf) = fluxvar%interp(equil%fpol, kf, .true.)
+       fs_half%FdF_dpsi(kf) = fluxvar%interp(equil%ffprim, kf, .true.)
     end do
     call write_fluxvar
   end subroutine init_flux_variables
@@ -844,7 +836,7 @@ contains
 
     dens = 0d0
     temp = 0d0
-    if (efit%cocos%sgn_dpsi == -1) then
+    if (equil%cocos%sgn_dpsi == -1) then
        psi_ext = minval(mesh_point%psi_pol)
        psi_int = maxval(mesh_point%psi_pol)
     else
@@ -878,12 +870,12 @@ contains
        fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
     case (pres_prof_efit)
        do kf = 0, nflux
-          fs%p(kf) = fluxvar%interp(efit%pres, kf, .false.)
-          fs%dp_dpsi(kf) = fluxvar%interp(efit%pprime, kf, .false.)
+          fs%p(kf) = fluxvar%interp(equil%pres, kf, .false.)
+          fs%dp_dpsi(kf) = fluxvar%interp(equil%pprime, kf, .false.)
        end do
        do kf = 1, nflux
-          fs_half%p(kf) = fluxvar%interp(efit%pres, kf, .true.)
-          fs_half%dp_dpsi(kf) = fluxvar%interp(efit%pprime, kf, .true.)
+          fs_half%p(kf) = fluxvar%interp(equil%pres, kf, .true.)
+          fs_half%dp_dpsi(kf) = fluxvar%interp(equil%pprime, kf, .true.)
        end do
     case default
        write (log_msg, '("unknown pressure profile selection", i0)') pres_prof
@@ -1473,7 +1465,7 @@ contains
           else
              Deltapsi = fs%psi(kf-2) - fs%psi(kf)
           end if
-          Deltapsi = efit%cocos%sgn_dpsi * Deltapsi
+          Deltapsi = equil%cocos%sgn_dpsi * Deltapsi
           if (kf == nflux .and. tri%orient) then
              ! triangles outside LCFS are comparatively distorted
              ! use linear extrapolation instead, i.e. a triangle of the same size
@@ -1483,7 +1475,7 @@ contains
           end if
           ! use midpoint of edge f
           r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
-          Bnpsi = -efit%cocos%sgn_dpsi * R0 * B0phi(ktri, tri%ef) / r
+          Bnpsi = -equil%cocos%sgn_dpsi * R0 * B0phi(ktri, tri%ef) / r
           Bnflux(ktri, tri%ef) = Bnpsi * r / Deltapsi * 2d0 * &
                sum(mesh_element_rmp(common_tri(:))%area)
           Bnphi(ktri) = imun / n * Bnflux(ktri, tri%ef) / tri%area
@@ -1521,7 +1513,7 @@ contains
     integer, intent(in) :: kf, kt
     real(dp), intent(in) :: r
     real(dp) :: metric_det
-    metric_det = efit%cocos%sgn_dpsi * fs_half%q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
+    metric_det = equil%cocos%sgn_dpsi * fs_half%q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
   end function sqrt_g
 
   subroutine radially_outward_normal(ktri, n_r, n_z)
@@ -1568,7 +1560,7 @@ contains
           dens_psi_contravar = (pol_comp_r * n_r + pol_comp_z * n_z) * &
                (fs%psi(kf) - fs%psi(kf-1)) / tri%area * 0.5d0 * sqrt_g(kf, kt, r)
           ! projection to covariant theta component
-          proj_theta_covar = efit%cocos%sgn_dpsi * (pol_comp_r * B0r_Omega(ktri) + &
+          proj_theta_covar = equil%cocos%sgn_dpsi * (pol_comp_r * B0r_Omega(ktri) + &
                pol_comp_z * B0z_Omega(ktri)) * sqrt_g(kf, kt, r)
           write (fid, '(12(1x, es23.16))') r, z, real(pol_comp_r), aimag(pol_comp_r), &
                real(pol_comp_z), aimag(pol_comp_z), &
@@ -1615,7 +1607,7 @@ contains
     location = -1
     if (r < r_min .or. r > r_max .or. z < z_min .or. z > z_max) return
     psi = interp_psi_pol(r, z)
-    if (efit%cocos%sgn_dpsi == +1) then
+    if (equil%cocos%sgn_dpsi == +1) then
        if (psi > fs%psi(nflux)) return
        lb = lbound(fs%psi, 1)
        ub = ubound(fs%psi, 1)
@@ -1688,10 +1680,10 @@ contains
     real(dp) :: r, z
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
-    do kw = 1, efit%nw
-       do kh = 1, efit%nh
-          r = efit%rleft + dble(kw - 1) / dble(efit%nw - 1) * efit%rdim
-          z = efit%zmid + (kh - 0.5d0 * (efit%nw + 1)) / dble(efit%nh - 1) * efit%zdim
+    do kw = 1, equil%nw
+       do kh = 1, equil%nh
+          r = equil%rleft + dble(kw - 1) / dble(equil%nw - 1) * equil%rdim
+          z = equil%zmid + (kh - 0.5d0 * (equil%nw + 1)) / dble(equil%nh - 1) * equil%zdim
           ktri = point_location(r, z)
           if (ktri > kt_low(1) .and. ktri <= kt_low(nflux + 1)) then
              tri = mesh_element_rmp(ktri)
@@ -1779,7 +1771,7 @@ contains
     real(dp) :: r, z, rmaxis, zmaxis, rho_max, rho, theta, k_zeta, k_theta
 
     write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(1es22.15, 1x))'
-    kilca_m_res = -efit%cocos%sgn_q * abs(kilca_pol_mode)
+    kilca_m_res = -equil%cocos%sgn_q * abs(kilca_pol_mode)
     rmaxis = mesh_point(1)%rcoord
     zmaxis = mesh_point(1)%zcoord
     rho_max = hypot(mesh_point(kp_low(nflux)+1)%rcoord - rmaxis, &
