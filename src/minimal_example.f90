@@ -1,68 +1,66 @@
-program minimal_example
+module magdif_mesh
 
   use from_nrtype, only: dp  ! PRELOAD/SRC/from_nrtype.f90
-  use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
-  use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, mesh_element_rmp
-  use magdif_config, only: config_file, log_file, log_msg, log_info, read_config, &
-       log_open, log_write, log_close, nflux, kilca_scale_factor
-  use magdif_util, only: imun, get_equil_filenames
-  use magdif, only: equil, init_indices, kt_low, kp_low, cache_mesh_data
 
   implicit none
 
-  character(len = 1024) :: unscaled_geqdsk, gfile, convexfile
+  private
 
-  if (command_argument_count() >= 1) then
-     call get_command_argument(1, config_file)
-     if (command_argument_count() >= 2) then
-        call get_command_argument(2, unscaled_geqdsk)
-     else
-        error stop 'expected path to unscaled G EQDSK file as second parameter'
-     end if
-  else
-     error stop 'expected path to magdif config file as first parameter'
-  end if
-  call read_config
-
-  log_file = '-'
-  call log_open
-
-  call get_equil_filenames(gfile, convexfile)
-  log_msg = 'attempting to read unscaled G EQDSK file ' // trim(unscaled_geqdsk)
-  if (log_info) call log_write
-  call equil%read(trim(unscaled_geqdsk))
-  call equil%classify
-  call equil%standardise
-  call equil%scale(kilca_scale_factor)
-  log_msg = 'attempting to write scaled G EQDSK file ' // trim(gfile)
-  if (log_info) call log_write
-  call equil%write(trim(gfile))
-
-  call init_indices
-  ntri = kt_low(nflux+1)
-  npoint = kp_low(nflux+1)
-  allocate(mesh_point(npoint))
-  allocate(mesh_element(ntri))
-  allocate(mesh_element_rmp(ntri))
-
-  call create_kilca_mesh_points
-  call connect_mesh_points
-  call write_mesh_data
-  call cache_mesh_data
-  call compute_kilca_vacuum
-
-  if (allocated(mesh_element_rmp)) deallocate(mesh_element)
-  if (allocated(mesh_element)) deallocate(mesh_element)
-  if (allocated(mesh_point)) deallocate(mesh_point)
-
-  call log_close
+  public :: generate_mesh, write_kilca_convexfile, kilca_vacuum
 
 contains
+
+  subroutine generate_mesh(unprocessed_geqdsk)
+    use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, mesh_element_rmp
+    use magdif_config, only: log_msg, log_info, log_write, nflux, kilca_scale_factor
+    use magdif_util, only: get_equil_filenames
+    use magdif, only: equil, init_indices, kt_low, kp_low, cache_mesh_data
+
+    character(len = *), intent(in) :: unprocessed_geqdsk
+    character(len = 1024) :: gfile, convexfile
+
+    call get_equil_filenames(gfile, convexfile)
+    log_msg = 'attempting to read unprocessed G EQDSK file ' // trim(unprocessed_geqdsk)
+    if (log_info) call log_write
+    call equil%read(trim(unprocessed_geqdsk))
+    call equil%classify
+    call equil%standardise
+    if (kilca_scale_factor /= 0) then
+       call equil%scale(kilca_scale_factor)
+    end if
+    log_msg = 'attempting to write processed G EQDSK file ' // trim(gfile)
+    if (log_info) call log_write
+    call equil%write(trim(gfile))
+
+    call init_indices
+    ntri = kt_low(nflux+1)
+    npoint = kp_low(nflux+1)
+    allocate(mesh_point(npoint))
+    allocate(mesh_element(ntri))
+    allocate(mesh_element_rmp(ntri))
+
+    if (kilca_scale_factor /= 0) then
+       call create_kilca_mesh_points(convexfile)
+    else
+       call create_mesh_points
+    end if
+    call connect_mesh_points
+    call write_mesh_data
+    call cache_mesh_data
+    if (kilca_scale_factor /= 0) then
+       call compute_kilca_vacuum
+    end if
+
+    if (allocated(mesh_element_rmp)) deallocate(mesh_element)
+    if (allocated(mesh_element)) deallocate(mesh_element)
+    if (allocated(mesh_point)) deallocate(mesh_point)
+  end subroutine generate_mesh
 
   ! write configuration to FreeFem++ (for Delaunay triangulation)
   subroutine write_extmesh_data
     use magdif_config, only: nflux, nkpol
     use magdif, only: equil
+
     integer :: fid
 
     open(newunit = fid, file = 'extmesh.idp', status = 'replace')
@@ -75,11 +73,14 @@ contains
     close(fid)
   end subroutine write_extmesh_data
 
-  subroutine create_kilca_mesh_points
+  subroutine create_kilca_mesh_points(convexfile)
+    use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
     use mesh_mod, only: knot, mesh_point
     use magdif_config, only: nflux
     use magdif_util, only: interp_psi_pol
     use magdif, only: equil, kp_low, kp_max
+
+    character(len = *), intent(in) :: convexfile
     integer :: kf, kp
     real(dp) :: rho, rho_max, theta
     type(knot) :: node
@@ -110,7 +111,9 @@ contains
   end subroutine create_kilca_mesh_points
 
   subroutine write_kilca_convexfile(rho_max, convexfile)
+    use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
     use magdif, only: equil
+
     integer, parameter :: nrz = 96  ! at most 100 values are read in by field_divB0.f90
     real(dp), intent(in) :: rho_max
     character(len = *), intent(in) :: convexfile
@@ -126,11 +129,55 @@ contains
     close(fid)
   end subroutine write_kilca_convexfile
 
+  subroutine create_mesh_points
+    use mesh_mod, only: npoint, mesh_point
+    use magdif_config, only: nflux, nkpol
+    use magdif_util, only: initialize_globals, interp_psi_pol
+    use magdif, only: equil
+    use field_line_integration_mod, only: theta0_at_xpoint
+    use points_2d, only: s_min, create_points_2d
+
+    integer :: kpoi
+    integer, dimension(:), allocatable :: n_theta
+    real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
+
+    allocate(n_theta(nflux))
+    allocate(points(3, npoint))
+    allocate(points_s_theta_phi(3, npoint))
+
+    n_theta = nkpol
+    s_min = 1d-16
+    theta0_at_xpoint = .true.
+    call initialize_globals(equil%rmaxis, equil%zmaxis)
+    call create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func = sqr)
+    points(:, 1) = [equil%rmaxis, 0d0, equil%zmaxis]
+    mesh_point(1)%rcoord = equil%rmaxis
+    mesh_point(1)%zcoord = equil%zmaxis
+    mesh_point(1)%psi_pol = interp_psi_pol(equil%rmaxis, equil%zmaxis)
+    do kpoi = 2, npoint
+       mesh_point(kpoi)%rcoord = points(1, kpoi)
+       mesh_point(kpoi)%zcoord = points(3, kpoi)
+       mesh_point(kpoi)%psi_pol = interp_psi_pol(points(1, kpoi), points(3, kpoi))
+    end do
+
+    if (allocated(n_theta)) deallocate(n_theta)
+    if (allocated(points)) deallocate(points)
+    if (allocated(points_s_theta_phi)) deallocate(points_s_theta_phi)
+
+  contains
+    pure function sqr(x) result(x_squared)
+      real(dp), dimension(:), intent(in) :: x
+      real(dp), dimension(size(x)) :: x_squared
+      x_squared = x * x
+    end function sqr
+  end subroutine create_mesh_points
+
   subroutine connect_mesh_points
     use mesh_mod, only: mesh_element
     use magdif_config, only: nflux
     use magdif_util, only: interleave, calculate_det_3
-    use magdif, only: kt_max, kt_low
+    use magdif, only: kt_max, kt_low, kp_low
+
     integer :: kf, k
     integer, dimension(:), allocatable :: kq, kt, tri_f, tri_i, tri_o
     integer, dimension(:,:), allocatable :: quad
@@ -206,6 +253,7 @@ contains
     use mesh_mod, only: npoint, ntri, knot, triangle, mesh_point, mesh_element
     use magdif_config, only: nflux, longlines, point_file, tri_file
     use magdif, only: kp_max, kp_low, equil
+
     integer :: fid, kpoi, ktri, kp, ke
     type(triangle) :: elem
 
@@ -252,8 +300,10 @@ contains
   subroutine compute_kilca_vacuum
     use mesh_mod, only: ntri, triangle_rmp, mesh_element_rmp, mesh_point
     use magdif_config, only: n, R0, kilca_scale_factor, kilca_pol_mode, Bn_vac_file
+    use magdif_util, only: imun
     use magdif, only: equil, Bnflux, Bnphi, check_redundant_edges, check_div_free, &
          write_vector_dof
+
     integer :: ktri
     real(dp) :: r, z, n_r, n_z, rho, theta
     complex(dp) :: Br, Bp, Bz
@@ -304,6 +354,8 @@ contains
   subroutine kilca_vacuum(tor_mode, pol_mode, R_0, r, theta, Br, Bp, Bz)
     use fgsl, only: fgsl_double, fgsl_int, fgsl_success, fgsl_sf_bessel_icn_array
     use magdif_config, only: log_msg, log_err, log_write, kilca_vac_coeff
+    use magdif_util, only: imun
+
     integer, intent(in) :: tor_mode, pol_mode
     real(dp), intent(in) :: R_0, r, theta
     complex(dp), intent(out) :: Br, Bp, Bz
@@ -324,4 +376,5 @@ contains
     Bp = B_z
     Bz = B_r * sin(theta) + B_theta * cos(theta)
   end subroutine kilca_vacuum
-end program minimal_example
+
+end module magdif_mesh
