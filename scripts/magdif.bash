@@ -87,6 +87,7 @@ magdif_init() {
         echo "Copying files to $workdir."
         cp -t "$workdir" \
            "$datadir/field_divB0.inp" \
+           "$datadir/preload_for_SYNCH.inp" \
            "$datadir/flt.inp" \
            "$datadir/17151.wall_full" \
            "$datadir/kin2d.inp" \

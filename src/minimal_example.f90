@@ -3,21 +3,17 @@ program minimal_example
   use magdif_config
   use from_nrtype, only: dp  ! PRELOAD/SRC/from_nrtype.f90
   use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
-  use input_files, only: gfile, convexfile
   use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, & ! PRELOAD/SRC/mesh_mod.f90
        bphicovar, knot, triangle, triangle_rmp, mesh_element_rmp
-  use magdif_util, only: imun, interp_psi_pol, g_eqdsk
+  use magdif_util, only: imun, get_equil_filenames, interp_psi_pol, g_eqdsk, interleave, &
+       calculate_det_3
   use magdif, only: init_indices, kt_max, kt_low, kp_max, kp_low, Bnflux, Bnphi, &
        get_labeled_edges, check_redundant_edges, check_div_free, write_vector_dof, &
        cache_mesh_data
 
   implicit none
 
-  interface interleave
-     procedure interleave_vv, interleave_vs, interleave_sv, interleave_ss
-  end interface interleave
-
-  character(len = 1024) :: unscaled_geqdsk
+  character(len = 1024) :: unscaled_geqdsk, gfile, convexfile
   real(dp) :: rdim, zdim, rleft, zmid, rmaxis, zmaxis
 
   integer :: fid, kf, kp, k, ke, ktri, kpoi
@@ -49,7 +45,7 @@ program minimal_example
   log_file = '-'
   call log_open
 
-  call initialize_globals
+  call get_equil_filenames(gfile, convexfile)
   log_msg = 'attempting to read unscaled G EQDSK file ' // trim(unscaled_geqdsk)
   if (log_info) call log_write
   call equil%read(trim(unscaled_geqdsk))
@@ -268,75 +264,6 @@ program minimal_example
   call log_close
 
 contains
-
-  ! better future solution: put this in a separate subroutine in field_divB0.f90
-  subroutine initialize_globals
-    integer :: fid
-    open(newunit = fid, file = 'field_divB0.inp', status = 'old')
-    read (fid, *)
-    read (fid, *)
-    read (fid, *)
-    read (fid, *)
-    read (fid, *)
-    read (fid, *)
-    read (fid, *) gfile        ! equilibrium file
-    read (fid, *)
-    read (fid, *) convexfile   ! convex file for stretchcoords
-    close(fid)
-  end subroutine initialize_globals
-
-  subroutine add_node_owner(kpoint, ktri)
-    use mesh_mod, only: n_owners_max
-    integer, intent(in) :: kpoint, ktri
-    if (mesh_point(kpoint)%n_owners < n_owners_max) then
-       mesh_point(kpoint)%i_owner_tri(mesh_point(kpoint)%n_owners + 1) = ktri
-       mesh_point(kpoint)%n_owners = mesh_point(kpoint)%n_owners + 1
-    else
-       write (log_msg, '("Maximal number of owning triangles exceeded at point ", i0)') &
-            kpoint
-       if (log_warn) call log_write
-    end if
-  end subroutine add_node_owner
-
-  elemental subroutine calculate_det_3(elem)
-    type(triangle), intent(inout) :: elem
-    real(dp) :: e1_r, e1_z, e2_r, e2_z
-    e1_r = mesh_point(elem%i_knot(1))%rcoord - mesh_point(elem%i_knot(3))%rcoord
-    e1_z = mesh_point(elem%i_knot(1))%zcoord - mesh_point(elem%i_knot(3))%zcoord
-    e2_r = mesh_point(elem%i_knot(2))%rcoord - mesh_point(elem%i_knot(3))%rcoord
-    e2_z = mesh_point(elem%i_knot(2))%zcoord - mesh_point(elem%i_knot(3))%zcoord
-    elem%det_3 = abs(e1_r * e2_z - e1_z * e2_r)
-  end subroutine calculate_det_3
-
-  pure function interleave_vv(first_v, second_v, num) result(merged)
-    integer, intent(in) :: first_v(:), second_v(:), num
-    integer :: merged(num)
-    integer :: k
-    merged = merge(first_v, second_v, [([.true., .false.], k = 1, num / 2)])
-  end function interleave_vv
-
-  pure function interleave_vs(first_v, second_s, num) result(merged)
-    integer, intent(in) :: first_v(:), second_s, num
-    integer :: merged(num)
-    integer :: k
-    merged = merge(first_v, [(second_s, k = 1, num)], &
-         [([.true., .false.], k = 1, num / 2)])
-  end function interleave_vs
-
-  pure function interleave_sv(first_s, second_v, num) result(merged)
-    integer, intent(in) :: first_s, second_v(:), num
-    integer :: merged(num)
-    integer :: k
-    merged = merge([(first_s, k = 1, num)], second_v, &
-         [([.true., .false.], k = 1, num / 2)])
-  end function interleave_sv
-
-  pure function interleave_ss(first_s, second_s, num) result(merged)
-    integer, intent(in) :: first_s, second_s, num
-    integer :: merged(num)
-    integer :: k
-    merged = [([first_s, second_s], k = 1, num / 2)]
-  end function interleave_ss
 
   subroutine kilca_vacuum(tor_mode, pol_mode, R_0, r, theta, Br, Bp, Bz)
     use fgsl, only: fgsl_double, fgsl_int, fgsl_success, fgsl_sf_bessel_icn_array

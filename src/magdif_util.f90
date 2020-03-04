@@ -6,7 +6,9 @@ module magdif_util
 
   private
 
-  public :: clight, imun, interp_psi_pol, ring_centered_avg_coord, assemble_sparse
+  public :: clight, imun, initialize_globals, get_equil_filenames, interp_psi_pol, &
+       ring_centered_avg_coord, assemble_sparse, interleave, calculate_det_3, &
+       add_node_owner
 
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
@@ -80,7 +82,35 @@ module magdif_util
      final :: flux_func_cache_destructor
   end type flux_func_cache
 
+  interface interleave
+     procedure interleave_vv, interleave_vs, interleave_sv, interleave_ss
+  end interface interleave
+
 contains
+
+  ! better future solution: put this in a separate subroutine in field_divB0.f90
+  subroutine get_equil_filenames(gfile, convexfile)
+    character(len = *), intent(out) :: gfile, convexfile
+    integer :: fid
+    open(newunit = fid, file = 'field_divB0.inp', status = 'old')
+    read (fid, *)
+    read (fid, *)
+    read (fid, *)
+    read (fid, *)
+    read (fid, *)
+    read (fid, *)
+    read (fid, *) gfile        ! equilibrium file
+    read (fid, *)
+    read (fid, *) convexfile   ! convex file for stretchcoords
+    close(fid)
+  end subroutine get_equil_filenames
+
+  subroutine initialize_globals(r, z)
+    real(dp), intent(in) :: r, z
+    real(dp) :: dum
+
+    call field(r, 0d0, z, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+  end subroutine initialize_globals
 
   function interp_psi_pol(r, z) result(psi_pol)
     use field_eq_mod, only: psif
@@ -554,5 +584,60 @@ contains
     if (allocated(this%dp_dpsi)) deallocate(this%dp_dpsi)
     if (allocated(this%q)) deallocate(this%q)
   end subroutine flux_func_cache_destructor
+
+  pure function interleave_vv(first_v, second_v, num) result(merged)
+    integer, intent(in) :: first_v(:), second_v(:), num
+    integer :: merged(num)
+    integer :: k
+    merged = merge(first_v, second_v, [([.true., .false.], k = 1, num / 2)])
+  end function interleave_vv
+
+  pure function interleave_vs(first_v, second_s, num) result(merged)
+    integer, intent(in) :: first_v(:), second_s, num
+    integer :: merged(num)
+    integer :: k
+    merged = merge(first_v, [(second_s, k = 1, num)], &
+         [([.true., .false.], k = 1, num / 2)])
+  end function interleave_vs
+
+  pure function interleave_sv(first_s, second_v, num) result(merged)
+    integer, intent(in) :: first_s, second_v(:), num
+    integer :: merged(num)
+    integer :: k
+    merged = merge([(first_s, k = 1, num)], second_v, &
+         [([.true., .false.], k = 1, num / 2)])
+  end function interleave_sv
+
+  pure function interleave_ss(first_s, second_s, num) result(merged)
+    integer, intent(in) :: first_s, second_s, num
+    integer :: merged(num)
+    integer :: k
+    merged = [([first_s, second_s], k = 1, num / 2)]
+  end function interleave_ss
+
+  elemental subroutine calculate_det_3(elem)
+    use mesh_mod, only: triangle, knot, mesh_point
+    type(triangle), intent(inout) :: elem
+    real(dp) :: e1_r, e1_z, e2_r, e2_z
+    e1_r = mesh_point(elem%i_knot(1))%rcoord - mesh_point(elem%i_knot(3))%rcoord
+    e1_z = mesh_point(elem%i_knot(1))%zcoord - mesh_point(elem%i_knot(3))%zcoord
+    e2_r = mesh_point(elem%i_knot(2))%rcoord - mesh_point(elem%i_knot(3))%rcoord
+    e2_z = mesh_point(elem%i_knot(2))%zcoord - mesh_point(elem%i_knot(3))%zcoord
+    elem%det_3 = abs(e1_r * e2_z - e1_z * e2_r)
+  end subroutine calculate_det_3
+
+  subroutine add_node_owner(kpoint, ktri)
+    use mesh_mod, only: knot, mesh_point, n_owners_max
+    use magdif_config, only: log_msg, log_write, log_warn
+    integer, intent(in) :: kpoint, ktri
+    if (mesh_point(kpoint)%n_owners < n_owners_max) then
+       mesh_point(kpoint)%i_owner_tri(mesh_point(kpoint)%n_owners + 1) = ktri
+       mesh_point(kpoint)%n_owners = mesh_point(kpoint)%n_owners + 1
+    else
+       write (log_msg, '("Maximal number of owning triangles exceeded at point ", i0)') &
+            kpoint
+       if (log_warn) call log_write
+    end if
+  end subroutine add_node_owner
 
 end module magdif_util
