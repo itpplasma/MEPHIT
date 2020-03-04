@@ -1,7 +1,7 @@
-program magdif_mesh
+program magdif_mesher
 
   use magdif_config, only: config_file, read_config, log_file, log_open, log_close
-  use magdif_mesh, only: generate_mesh
+  use magdif_mesh_mod, only: generate_mesh
 
   implicit none
 
@@ -26,4 +26,4 @@ program magdif_mesh
 
   call log_close
 
-end program magdif_mesh
+end program magdif_mesher

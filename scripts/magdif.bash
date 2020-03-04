@@ -169,7 +169,7 @@ magdif_prepare() {
                 continue
             fi
         else
-            "$bindir/minimal_example.x" "$config" "$unprocessed" && \
+            "$bindir/magdif_mesher.x" "$config" "$unprocessed" && \
                 FreeFem++ "$scriptdir/extmesh.edp"
             lasterr=$?
             if [ $lasterr -ne 0 ]; then

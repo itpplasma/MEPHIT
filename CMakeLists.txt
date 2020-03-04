@@ -58,7 +58,7 @@ add_library(magdif SHARED
   src/magdif.f90
   src/magdif_config.f90
   src/magdif_util.f90
-  src/minimal_example.f90
+  src/magdif_mesh_mod.f90
   ${SUITESPARSE_SRC_FILES}
   ${SUPERLU_SRC_FILES}
 )
@@ -78,7 +78,7 @@ configure_file(scripts/magdif.bash bin/magdif COPYONLY)
 ### Define executables
 add_executable(magdif_test.x src/magdif_test.f90)
 add_executable(standardise_equilibrium.x src/standardise_equilibrium.f90)
-add_executable(minimal_example.x src/geomint_mesh.f90)
+add_executable(magdif_mesher.x src/magdif_mesher.f90)
 add_executable(axis.x src/axis.f90)
 add_executable(tri_mesh.x src/tri_mesh.f90)
 add_executable(readcarre_m.x src/readcarre_m.f90)
@@ -92,7 +92,7 @@ set_target_properties(magdif PROPERTIES COMPILE_FLAGS ${FGSL_FLAGS})
 set(MAGDIF_LIBS magdif ${SUPERLU_LIBRARIES} ${SUITESPARSE_LIBRARIES} ${gsl_lib} ${fgsl_lib} blas lapack)
 target_link_libraries(magdif_test.x ${MAGDIF_LIBS})
 target_link_libraries(standardise_equilibrium.x ${MAGDIF_LIBS})
-target_link_libraries(minimal_example.x ${MAGDIF_LIBS})
+target_link_libraries(magdif_mesher.x ${MAGDIF_LIBS})
 target_link_libraries(axis.x ${MAGDIF_LIBS})
 target_link_libraries(tri_mesh.x ${MAGDIF_LIBS})
 target_link_libraries(readcarre_m.x ${MAGDIF_LIBS})

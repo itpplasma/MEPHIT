@@ -1,4 +1,4 @@
-module magdif_mesh
+module magdif_mesh_mod
 
   use from_nrtype, only: dp  ! PRELOAD/SRC/from_nrtype.f90
 
@@ -377,4 +377,4 @@ contains
     Bz = B_r * sin(theta) + B_theta * cos(theta)
   end subroutine kilca_vacuum
 
-end module magdif_mesh
+end module magdif_mesh_mod
