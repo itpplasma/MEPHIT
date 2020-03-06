@@ -1100,9 +1100,8 @@ contains
 
   !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
   subroutine compute_presn
-    real(dp) :: r, Deltapsi
+    real(dp) :: r
     real(dp) :: lr, lz  ! edge vector components
-    complex(dp) :: Bnpsi
     complex(dp), dimension(nkpol) :: a, b, x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(nkpol) :: rel_err
@@ -1113,28 +1112,14 @@ contains
     complex(dp), dimension(2*nkpol) :: aval
     type(triangle_rmp) :: tri
     type(knot) :: base, tip
-    integer :: common_tri(2)
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
     do kf = 1, nflux
-       if (kf < nflux) then
-          Deltapsi = fs%psi(kf+1) - fs%psi(kf-1)
-       else
-          ! use linear interpolation for values outside LCFS
-          Deltapsi = 2d0 * (fs%psi(kf) - fs%psi(kf-1))
-       end if
        inner: do kt = 1, kt_max(kf)
           ktri = kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
           if (.not. tri%orient) cycle inner
-          if (kf < nflux) then
-             common_tri = [ktri, mesh_element(ktri)%neighbour(tri%ef)]
-          else
-             ! triangles outside LCFS are comparatively distorted
-             ! use linear extrapolation instead, i.e. a triangle of the same size
-             common_tri = [ktri, ktri]
-          end if
           ! use midpoint of edge f
           base = mesh_point(tri%lf(1))
           tip = mesh_point(tri%lf(2))
@@ -1142,14 +1127,11 @@ contains
           lr = tip%rcoord - base%rcoord
           lz = tip%zcoord - base%zcoord
 
-          Bnpsi = Bnflux(ktri, tri%ef) / r * Deltapsi / &
-               sum(mesh_element_rmp(common_tri(:))%area) * 0.5d0
-
           kp = tri%lf(1) - kp_low(kf)
 
-          x(kp) = -fs%dp_dpsi(kf) * Bnpsi
-
           a(kp) = (B0r(ktri, tri%ef) * lr + B0z(ktri, tri%ef) * lz) / (lr ** 2 + lz ** 2)
+
+          x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bnflux(ktri, tri%ef)
 
           b(kp) = imun * (n + imun * damp) * B0phi(ktri, tri%ef) / r
        end do inner
@@ -1446,38 +1428,23 @@ contains
   subroutine compute_Bn_nonres
     integer :: kf, kt, ktri
     type(triangle_rmp) :: tri
-    integer :: common_tri(2)
-    real(dp) :: Deltapsi
+    type(knot) :: base, tip
+    real(dp) :: r, lr, lz
     complex(dp) :: Bnpsi
-    real(dp) :: r
 
     do kf = 1, nflux ! loop through flux surfaces
        do kt = 1, kt_max(kf)
           ktri = kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
-          if (tri%orient) then
-             if (kf < nflux) then
-                Deltapsi = fs%psi(kf+1) - fs%psi(kf-1)
-             else
-                ! use linear interpolation for values outside LCFS
-                Deltapsi = 2d0 * (fs%psi(kf) - fs%psi(kf-1))
-             end if
-          else
-             Deltapsi = fs%psi(kf-2) - fs%psi(kf)
-          end if
-          Deltapsi = equil%cocos%sgn_dpsi * Deltapsi
-          if (kf == nflux .and. tri%orient) then
-             ! triangles outside LCFS are comparatively distorted
-             ! use linear extrapolation instead, i.e. a triangle of the same size
-             common_tri = [ktri, ktri]
-          else
-             common_tri = [ktri, mesh_element(ktri)%neighbour(tri%ef)]
-          end if
           ! use midpoint of edge f
-          r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
-          Bnpsi = -equil%cocos%sgn_dpsi * R0 * B0phi(ktri, tri%ef) / r
-          Bnflux(ktri, tri%ef) = Bnpsi * r / Deltapsi * 2d0 * &
-               sum(mesh_element_rmp(common_tri(:))%area)
+          base = mesh_point(tri%lf(1))
+          tip = mesh_point(tri%lf(2))
+          r = (base%rcoord + tip%rcoord) * 0.5d0
+          lr = tip%rcoord - base%rcoord
+          lz = tip%zcoord - base%zcoord
+          Bnpsi = -R0 * B0phi(ktri, tri%ef) / r
+          Bnflux(ktri, tri%ef) = Bnpsi * (lr ** 2 + lz ** 2) / &
+               (B0r(ktri, tri%ef) * lr + B0z(ktri, tri%ef) * lz)
           Bnphi(ktri) = imun / n * Bnflux(ktri, tri%ef) / tri%area
           Bnflux(ktri, tri%ei) = (0d0, 0d0)
           Bnflux(ktri, tri%eo) = (0d0, 0d0)
