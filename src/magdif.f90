@@ -1507,7 +1507,7 @@ contains
     integer :: kf, kt, ktri, n_cutoff, fid
     type(triangle_rmp) :: tri
     complex(dp) :: pol_comp_r, pol_comp_z, dens_psi_contravar, proj_theta_covar
-    real(dp) :: r, z, n_r, n_z
+    real(dp) :: r, z
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
     if (nonres) then
@@ -1523,9 +1523,8 @@ contains
           z = tri%Z_Omega
           call interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)
           ! projection to contravariant psi component
-          call radially_outward_normal(ktri, n_r, n_z)
-          dens_psi_contravar = (pol_comp_r * n_r + pol_comp_z * n_z) * &
-               (fs%psi(kf) - fs%psi(kf-1)) / tri%area * 0.5d0 * sqrt_g(kf, kt, r)
+          dens_psi_contravar = (pol_comp_r * B0z_Omega(ktri) - &
+               pol_comp_z * B0r_Omega(ktri)) * r * sqrt_g(kf, kt, r)
           ! projection to covariant theta component
           proj_theta_covar = equil%cocos%sgn_dpsi * (pol_comp_r * B0r_Omega(ktri) + &
                pol_comp_z * B0z_Omega(ktri)) * sqrt_g(kf, kt, r)
