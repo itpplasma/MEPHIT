@@ -47,6 +47,7 @@ module magdif_config
   integer  :: nritz = 20      !< number of Ritz eigenvalues
   integer  :: n               !< harmonic index of perturbation
   integer  :: nkpol           !< number of knots per poloidal loop
+  integer  :: nflux_unref     !< number of flux surfaces before refinement
   integer  :: nflux           !< number of flux surfaces
   real(dp) :: ti0             !< interpolation step for temperature
   real(dp) :: di0             !< interpolation step for density

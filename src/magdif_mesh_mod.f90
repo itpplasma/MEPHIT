@@ -56,6 +56,68 @@ contains
     if (allocated(mesh_point)) deallocate(mesh_point)
   end subroutine generate_mesh
 
+  subroutine radial_refinement(nref, deletions, additions, refinement, rho_res, rho)
+    use magdif_config, only: nflux_unref, nflux
+    integer, intent(in) :: nref
+    integer, dimension(nref), intent(in) :: deletions, additions
+    real(dp), dimension(nref), intent(in) :: rho_res, refinement
+    real(dp), dimension(:), allocatable, intent(out) :: rho
+    integer :: kref, k
+    integer, dimension(:), allocatable :: coarse_lo, coarse_hi, fine_lo, fine_hi
+    real(dp) :: coarse_sep
+    real(dp), dimension(:), allocatable :: fine_sep, factor
+    real(dp), dimension(:, :), allocatable :: geom_ser
+
+    allocate(coarse_lo(nref))
+    allocate(coarse_hi(nref))
+    allocate(fine_lo(nref))
+    allocate(fine_hi(nref))
+    allocate(fine_sep(nref))
+    allocate(factor(nref))
+    allocate(geom_ser(maxval(additions) + 1, nref))
+    nflux = nflux_unref + 2 * sum(additions - deletions)
+    allocate(rho(nflux))
+    rho = 0d0
+    coarse_lo = floor(rho_res * nflux_unref) - deletions;
+    coarse_hi = ceiling(rho_res * nflux_unref) + deletions;
+    ! compute upper and lower array indices of refined regions
+    fine_lo = coarse_lo + [(2 * sum(additions(1:kref) - deletions(1:kref)), &
+         kref = 0, nref - 1)]
+    fine_hi = coarse_hi + [(2 * sum(additions(1:kref) - deletions(1:kref)), &
+         kref = 1, nref)]
+    ! compute separations between flux surfaces using geometric series
+    coarse_sep = 1d0 / dble(nflux_unref - 1)
+    fine_sep = coarse_sep * refinement
+    factor = (coarse_sep / fine_sep) ** (1d0 / dble(additions + 1))
+    geom_ser = reshape([(((factor(kref) ** k - factor(kref)) / (factor(kref) - 1d0), &
+         k = 1, maxval(additions) + 1), kref = 1, nref)], [maxval(additions) + 1, nref])
+    ! compute refined regions around resonant flux surfaces
+    do kref = 1, nref
+       rho(fine_lo(kref):fine_lo(kref)+additions(kref)) = rho_res(kref) &
+            - (geom_ser(additions(kref)+1:1:-1, kref) + 0.5d0) * fine_sep(kref)
+       rho(fine_hi(kref)-additions(kref):fine_hi(kref)) = rho_res(kref) &
+            + (geom_ser(1:additions(kref)+1, kref) + 0.5d0) * fine_sep(kref)
+    end do
+    ! compute equidistant positions between refined regions
+    rho(1:fine_lo(1)-1) = [(k - 1, k = 1, fine_lo(1) - 1)] / dble(fine_lo(1) - 1) * &
+         rho(fine_lo(1))
+    do kref = 2, nref
+       rho(fine_hi(kref-1)+1:fine_lo(kref)-1) = rho(fine_hi(kref-1)) + &
+            [(k, k = 1, fine_lo(kref) - fine_hi(kref-1) - 1)] / &
+            dble(fine_lo(kref) - fine_hi(kref-1)) * &
+            (rho(fine_lo(kref)) - rho(fine_hi(kref-1)))
+    end do
+    rho(fine_hi(nref)+1:nflux) = rho(fine_hi(nref)) + [(k, k = 1, nflux - fine_hi(nref))] &
+         / dble(nflux - fine_hi(nref)) * (1d0 - rho(fine_hi(nref)))
+    if (allocated(coarse_lo)) deallocate(coarse_lo)
+    if (allocated(coarse_hi)) deallocate(coarse_hi)
+    if (allocated(fine_lo)) deallocate(fine_lo)
+    if (allocated(fine_hi)) deallocate(fine_hi)
+    if (allocated(fine_sep)) deallocate(fine_sep)
+    if (allocated(factor)) deallocate(factor)
+    if (allocated(geom_ser)) deallocate(geom_ser)
+  end subroutine radial_refinement
+
   ! write configuration to FreeFem++ (for Delaunay triangulation)
   subroutine write_extmesh_data
     use magdif_config, only: nflux, nkpol
