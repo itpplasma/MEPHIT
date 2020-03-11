@@ -43,9 +43,8 @@ module magdif_util
 
   type, public :: flux_func
     private
-    integer :: n_lag, nw, nflux
-    real(dp), dimension(:, :), allocatable :: lag_coeff, lag_coeff_half
-    integer, dimension(:), allocatable :: interval, interval_half
+    integer :: n_lag, lb, ub, n_var
+    real(dp), dimension(:), allocatable :: indep_var
   contains
     procedure :: init => flux_func_init
     procedure :: interp => flux_func_interp
@@ -427,110 +426,56 @@ contains
     if (allocated(this%psirz)) deallocate(this%psirz)
   end subroutine g_eqdsk_destructor
 
-  subroutine flux_func_init(this, n_lag, nw, nflux, psi, psi_half)
+  subroutine flux_func_init(this, n_lag, indep_var)
     use magdif_config, only: log_msg, log_write, log_err
     class(flux_func), intent(inout) :: this
     integer, intent(in) :: n_lag
-    integer, intent(in) :: nw
-    integer, intent(in) :: nflux
-    real(dp), intent(in), dimension(0:nflux) :: psi
-    real(dp), intent(in), dimension(1:nflux) :: psi_half
-    real(dp) :: coeff(n_lag), psi_eqd(nw)
-    integer :: k, kf
+    real(dp), intent(in), dimension(:) :: indep_var
 
-    if (n_lag >= nw) then
+    if (n_lag >= size(indep_var)) then
        write (log_msg, '("Lagrange polynomial order ", i0, ' // &
-            '" must be lower than number of sample points", i0)') n_lag, nw
+            '" must be lower than number of sample points", i0)') n_lag, size(indep_var)
        if (log_err) call log_write
        return
     end if
     call flux_func_destructor(this)
     this%n_lag = n_lag
-    this%nw = nw
-    this%nflux = nflux
-    psi_eqd = psi(0) + [(dble(k-1) / dble(nw-1) * (psi(nflux) - psi(0)), k = 1, nw)]
-    allocate(this%lag_coeff(n_lag, nflux-1))
-    allocate(this%lag_coeff_half(n_lag, nflux))
-    allocate(this%interval(nflux-1))
-    allocate(this%interval_half(nflux))
-    this%lag_coeff = 0d0
-    this%lag_coeff_half = 0d0
-    this%interval = 0
-    this%interval_half = 0
-    do kf = 1, nflux-1
-       if (psi_eqd(1) < psi_eqd(nw)) then
-          call binsrc(psi_eqd, 1, nw, psi(kf), k)
-       else
-          ! binsrc expects strictly monotonically increasing arrays, so we reverse psi_eqd
-          call binsrc(psi_eqd(nw:1:-1), 1, nw, psi(kf), k)
-          k = nw - (k - 1) + 1
-       end if
-       if (k < n_lag / 2 + 1) then
-          k = n_lag / 2 + 1
-       elseif (k > nw - n_lag / 2 + 1) then
-          k = nw - n_lag / 2 + 1
-       end if
-       this%interval(kf) = k
-       call plag_coeff(n_lag, 0, psi(kf), psi_eqd(k-n_lag/2:k+n_lag/2-1), coeff)
-       this%lag_coeff(:, kf) = coeff
-    end do
-    do kf = 1, nflux
-       if (psi_eqd(1) < psi_eqd(nw)) then
-          call binsrc(psi_eqd, 1, nw, psi_half(kf), k)
-       else
-          ! binsrc expects strictly monotonically increasing arrays, so we reverse psi_eqd
-          call binsrc(psi_eqd(nw:1:-1), 1, nw, psi_half(kf), k)
-          k = nw - (k - 1) + 1
-       end if
-       if (k < n_lag / 2 + 1) then
-          k = n_lag / 2 + 1
-       elseif (k > nw - n_lag / 2 + 1) then
-          k = nw - n_lag / 2 + 1
-       end if
-       this%interval_half(kf) = k
-       call plag_coeff(n_lag, 0, psi_half(kf), psi_eqd(k-n_lag/2:k+n_lag/2-1), coeff)
-       this%lag_coeff_half(:, kf) = coeff
-    end do
+    this%lb = lbound(indep_var, 1)
+    this%ub = ubound(indep_var, 1)
+    this%n_var = size(indep_var)
+    this%indep_var = indep_var
   end subroutine flux_func_init
 
-  function flux_func_interp(this, sample_eqd, kf, half_step) result(interp)
+  function flux_func_interp(this, sample, position) result(interp)
     class(flux_func) :: this
-    real(dp), intent(in) :: sample_eqd(this%nw)
-    integer, intent(in) :: kf
-    logical, intent(in) :: half_step
+    real(dp), intent(in) :: sample(this%n_var)
+    real(dp), intent(in) :: position
     real(dp) :: interp
+    real(dp) :: lag_coeff(this%n_lag)
     integer :: k
 
-    if (half_step) then
-       if (0 < kf .and. kf <= this%nflux) then
-          k = this%interval_half(kf)
-          interp = sum(sample_eqd(k - this%n_lag / 2:k + this%n_lag / 2 - 1) * &
-               this%lag_coeff_half(:, kf))
-       else
-          interp = 0d0
-       end if
+    if (this%indep_var(this%lb) < this%indep_var(this%ub)) then
+       call binsrc(this%indep_var, 0, this%ub - this%lb, position, k)
+       k = this%lb + k
     else
-       if (kf == 0) then
-          interp = sample_eqd(1)
-       elseif (kf == this%nflux) then
-          interp = sample_eqd(this%nw)
-       elseif (0 < kf .and. kf < this%nflux) then
-          k = this%interval(kf)
-          interp = sum(sample_eqd(k - this%n_lag / 2:k + this%n_lag / 2 - 1) * &
-               this%lag_coeff(:, kf))
-       else
-          interp = 0d0
-       end if
+       ! binsrc expects strictly monotonically increasing arrays, so we reverse fs%psi
+       call binsrc(this%indep_var(this%ub:this%lb:-1), 0, this%ub - this%lb, position, k)
+       k = this%ub - (k - 1)
     end if
+    if (k < this%lb + this%n_lag / 2) then
+       k = this%lb + this%n_lag / 2
+    elseif (k > this%ub - this%n_lag / 2 + 1) then
+       k = this%ub - this%n_lag / 2 + 1
+    end if
+    call plag_coeff(this%n_lag, 0, position, &
+         this%indep_var(k - this%n_lag / 2:k + this%n_lag / 2 - 1), lag_coeff)
+    interp = sum(sample(k - this%n_lag / 2:k + this%n_lag / 2 - 1) * lag_coeff)
   end function flux_func_interp
 
   subroutine flux_func_destructor(this)
     type(flux_func), intent(inout) :: this
 
-    if (allocated(this%lag_coeff)) deallocate(this%lag_coeff)
-    if (allocated(this%lag_coeff_half)) deallocate(this%lag_coeff_half)
-    if (allocated(this%interval)) deallocate(this%interval)
-    if (allocated(this%interval_half)) deallocate(this%interval_half)
+    if (allocated(this%indep_var)) deallocate(this%indep_var)
   end subroutine flux_func_destructor
 
   !> Set up arrays of cached values of flux functions.

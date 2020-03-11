@@ -753,12 +753,8 @@ contains
        fs%q(nflux) = fs%q(nflux-1) + (fs%q(nflux-1) - fs%q(nflux-2))
        fs%q(0) = fs%q(1) - (fs%q(2) - fs%q(1))
     case (q_prof_efit)
-       do kf = 0, nflux
-          fs%q(kf) = fluxvar%interp(equil%qpsi, kf, .false.)
-       end do
-       do kf = 1, nflux
-          fs_half%q(kf) = fluxvar%interp(equil%qpsi, kf, .true.)
-       end do
+       fs%q = [(fluxvar%interp(equil%qpsi, fs%psi(kf)), kf = 0, nflux)]
+       fs_half%q = [(fluxvar%interp(equil%qpsi, fs_half%psi(kf)), kf = 1, nflux)]
     case default
        write (log_msg, '("unknown q profile selection: ", i0)') q_prof
        if (log_err) call log_write
@@ -791,7 +787,7 @@ contains
   !> #psimax, #psi, #magdif_conf::di0, #magdif_conf::d_min, #magdif_conf::ti0 and
   !> #magdif_conf::t_min.
   subroutine init_flux_variables
-    integer :: kf
+    integer :: kf, kw
 
     call fs%init(nflux, .false.)
 
@@ -807,18 +803,16 @@ contains
     ! use linear interpolation for half-grid steps for now
     fs_half%psi = 0.5d0 * (fs%psi(0:nflux-1) + fs%psi(1:nflux))
 
-    call fluxvar%init(4, equil%nw, nflux, fs%psi, fs_half%psi)
+    ! initialize fluxvar with equidistant psi values
+    call fluxvar%init(4, fs%psi(0) + [(dble(kw - 1) / dble(equil%nw - 1) * &
+         (fs%psi(nflux) - fs%psi(0)), kw = 1, equil%nw)])
 
     call compute_pres_prof
     call compute_safety_factor
-    do kf = 0, nflux
-       fs%F(kf) = fluxvar%interp(equil%fpol, kf, .false.)
-       fs%FdF_dpsi(kf) = fluxvar%interp(equil%ffprim, kf, .false.)
-    end do
-    do kf = 1, nflux
-       fs_half%F(kf) = fluxvar%interp(equil%fpol, kf, .true.)
-       fs_half%FdF_dpsi(kf) = fluxvar%interp(equil%ffprim, kf, .true.)
-    end do
+    fs%F = [(fluxvar%interp(equil%fpol, fs%psi(kf)), kf = 0, nflux)]
+    fs%FdF_dpsi = [(fluxvar%interp(equil%ffprim, fs%psi(kf)), kf = 0, nflux)]
+    fs_half%F = [(fluxvar%interp(equil%fpol, fs_half%psi(kf)), kf = 1, nflux)]
+    fs_half%FdF_dpsi = [(fluxvar%interp(equil%ffprim, fs_half%psi(kf)), kf = 1, nflux)]
     call write_fluxvar
   end subroutine init_flux_variables
 
@@ -869,14 +863,10 @@ contains
        fs_half%p = dens(1:) * temp(1:) * ev2erg
        fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
     case (pres_prof_efit)
-       do kf = 0, nflux
-          fs%p(kf) = fluxvar%interp(equil%pres, kf, .false.)
-          fs%dp_dpsi(kf) = fluxvar%interp(equil%pprime, kf, .false.)
-       end do
-       do kf = 1, nflux
-          fs_half%p(kf) = fluxvar%interp(equil%pres, kf, .true.)
-          fs_half%dp_dpsi(kf) = fluxvar%interp(equil%pprime, kf, .true.)
-       end do
+       fs%p = [(fluxvar%interp(equil%pres, fs%psi(kf)), kf = 0, nflux)]
+       fs%dp_dpsi = [(fluxvar%interp(equil%pprime, fs%psi(kf)), kf = 0, nflux)]
+       fs_half%p = [(fluxvar%interp(equil%pres, fs_half%psi(kf)), kf = 1, nflux)]
+       fs_half%dp_dpsi = [(fluxvar%interp(equil%pprime, fs_half%psi(kf)), kf = 1, nflux)]
     case default
        write (log_msg, '("unknown pressure profile selection", i0)') pres_prof
        if (log_err) call log_write
