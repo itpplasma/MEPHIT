@@ -79,6 +79,12 @@
    kilca_pol_mode_file = 'Bmn.dat'
 /
 &delayed
+   ! relative refinement around resonances
+   refinement(4) = 0.25d0
+   ! deleted flux surfaces around resonances
+   deletions(4) = 1
+   ! added flux surfaces around resonances
+   additions(4) = 3
    ! coefficients for sheet currents
    sheet_current_factor(4) = (1d4, 1d4)
 /

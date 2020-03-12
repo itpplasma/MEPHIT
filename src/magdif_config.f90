@@ -56,6 +56,10 @@ module magdif_config
   !> Distance of magnetic axis from center \f$ R_{0} \f$ in cm.
   real(dp) :: R0 = 172.74467899999999d0
 
+  integer, dimension(:), allocatable :: deletions
+  integer, dimension(:), allocatable :: additions
+  real(dp), dimension(:), allocatable :: refinement
+
   !> Free parameters setting the magnitudes of sheet currents.
   complex(dp), dimension(:), allocatable :: sheet_current_factor
 
@@ -145,7 +149,7 @@ module magdif_config
        presn_file, currn_file, eigvec_file, rel_err_Bn, rel_err_currn, kilca_pol_mode, &
        kilca_vac_coeff, kilca_scale_factor, kilca_pol_mode_file, max_eig_out, curr_prof, &
        q_prof, conv_file, quiet
-  namelist /delayed/ sheet_current_factor
+  namelist /delayed/ refinement, deletions, additions, sheet_current_factor
 
 contains
 
@@ -165,11 +169,29 @@ contains
     if (log_level > 1) log_warn = .true.
     if (log_level > 2) log_info = .true.
     if (log_level > 3) log_debug = .true.
+
+    if (kilca_scale_factor /= 0) then
+       R0 = R0 * kilca_scale_factor
+       n = n * kilca_scale_factor
+    end if
   end subroutine read_config
 
   !> Read #delayed from configuration file #config_file for magdif.
-  subroutine read_delayed_config
+  subroutine read_delayed_config(m_res_min, m_res_max)
+    integer, intent(in) :: m_res_min, m_res_max
     integer :: fid
+    if (allocated(refinement)) deallocate(refinement)
+    allocate(refinement(m_res_min:m_res_max))
+    refinement = 0d0
+    if (allocated(deletions)) deallocate(deletions)
+    allocate(deletions(m_res_min:m_res_max))
+    deletions = 0
+    if (allocated(additions)) deallocate(additions)
+    allocate(additions(m_res_min:m_res_max))
+    additions = 0
+    if (allocated(sheet_current_factor)) deallocate(sheet_current_factor)
+    allocate(sheet_current_factor(m_res_min:m_res_max))
+    sheet_current_factor = (0d0, 0d0)
     open(newunit = fid, file = config_file)
     read(fid, nml = delayed)
     close(fid)

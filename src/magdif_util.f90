@@ -7,7 +7,7 @@ module magdif_util
   private
 
   public :: clight, imun, initialize_globals, get_equil_filenames, interp_psi_pol, &
-       ring_centered_avg_coord, assemble_sparse, interleave, calculate_det_3, &
+       ring_centered_avg_coord, assemble_sparse, linspace, interleave, calculate_det_3, &
        add_node_owner
 
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
@@ -196,6 +196,17 @@ contains
 
     nz = 2*nrow
   end subroutine assemble_sparse
+
+  function linspace(lo, hi, cnt, excl_lo, excl_hi)
+    real(dp), intent(in) :: lo, hi
+    integer, intent(in) :: cnt, excl_lo, excl_hi
+    real(dp) :: linspace(cnt)
+    real(dp) :: step
+    integer :: k
+
+    step = (hi - lo) / dble(cnt - 1 + excl_lo + excl_hi)
+    linspace = lo + [(k * step, k = excl_lo, cnt - 1 + excl_lo)]
+  end function linspace
 
   subroutine g_eqdsk_read(this, fname)
     class(g_eqdsk), intent(inout) :: this

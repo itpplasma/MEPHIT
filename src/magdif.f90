@@ -167,17 +167,11 @@ contains
   !> Initialize magdif module
   subroutine magdif_init
     use input_files, only: gfile
-    integer :: m
 
     call log_open
 
     ! only depends on config variables
     call init_indices
-    if (kilca_scale_factor /= 0) then
-       R0 = R0 * kilca_scale_factor
-       n = n * kilca_scale_factor
-    end if
-
     call read_mesh
 
     ! depends on mesh data
@@ -195,17 +189,6 @@ contains
 
     ! depends on mesh data, equilibrium field and G EQDSK profiles
     call init_flux_variables
-
-    ! depends on safety factor
-    call read_delayed_config
-    if (log_info) then
-       log_msg = 'absolute poloidal mode number, sheet current factor'
-       call log_write
-       do m = lbound(sheet_current_factor, 1), ubound(sheet_current_factor, 1)
-          write (log_msg, '(i2, 1x, ' // cmplx_fmt // ')') m, sheet_current_factor(m)
-          call log_write
-       end do
-    end if
 
     ! depends on flux variables
     call compute_j0phi
@@ -773,10 +756,16 @@ contains
        abs_err = [(abs(abs(fs_half%q(kf)) - dble(m) / dble(n)), kf = 1, nflux)]
        m_res(minloc(abs_err, 1)) = m
     end do
-    write (log_msg, '("resonant m: ", i0, " .. ", i0)') m_res_min, m_res_max
-    if (log_debug) call log_write
-    allocate(sheet_current_factor(m_res_min:m_res_max))
-    sheet_current_factor = (0d0, 0d0)
+
+    call read_delayed_config(m_res_min, m_res_max)
+    if (log_info) then
+       log_msg = 'absolute poloidal mode number, sheet current factor'
+       call log_write
+       do m = lbound(sheet_current_factor, 1), ubound(sheet_current_factor, 1)
+          write (log_msg, '(i2, 1x, ' // cmplx_fmt // ')') m, sheet_current_factor(m)
+          call log_write
+       end do
+    end if
   end subroutine compute_safety_factor
 
   !> Initializes quantities that are constant on each flux surface. The safety factor #q

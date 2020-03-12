@@ -56,12 +56,35 @@ contains
     if (allocated(mesh_point)) deallocate(mesh_point)
   end subroutine generate_mesh
 
-  subroutine radial_refinement(nref, deletions, additions, refinement, rho_res, rho)
+  subroutine compute_resonant_surfaces(m_res_min, m_res_max, psi_res)
+    use magdif_config, only: n
+    use magdif_util, only: linspace, flux_func
+    use magdif, only: equil
+    use netlib_mod, only: zeroin
+    integer, intent(in) :: m_res_min, m_res_max
+    real(dp), intent(out) :: psi_res(m_res_min:m_res_max)
+    integer :: m
+    type(flux_func) :: psi_eqd
+
+    call psi_eqd%init(4, linspace(equil%simag, equil%sibry, equil%nw, 0, 0))
+    do m = m_res_min, m_res_max
+       psi_res(m) = zeroin(equil%simag, equil%sibry, q_interp_resonant, 1d-9)
+    end do
+  contains
+    function q_interp_resonant(psi)
+      real(dp), intent(in) :: psi
+      real(dp) :: q_interp_resonant
+      q_interp_resonant = psi_eqd%interp(abs(equil%qpsi) - dble(m) / dble(n), psi)
+    end function q_interp_resonant
+  end subroutine compute_resonant_surfaces
+
+  subroutine refine_eqd_partition(nref, deletions, additions, refinement, res, refined)
     use magdif_config, only: nflux_unref, nflux
+    use magdif_util, only: linspace
     integer, intent(in) :: nref
     integer, dimension(nref), intent(in) :: deletions, additions
-    real(dp), dimension(nref), intent(in) :: rho_res, refinement
-    real(dp), dimension(:), allocatable, intent(out) :: rho
+    real(dp), dimension(nref), intent(in) :: res, refinement
+    real(dp), dimension(:), allocatable, intent(out) :: refined
     integer :: kref, k
     integer, dimension(:), allocatable :: coarse_lo, coarse_hi, fine_lo, fine_hi
     real(dp) :: coarse_sep
@@ -76,10 +99,10 @@ contains
     allocate(factor(nref))
     allocate(geom_ser(maxval(additions) + 1, nref))
     nflux = nflux_unref + 2 * sum(additions - deletions)
-    allocate(rho(nflux))
-    rho = 0d0
-    coarse_lo = floor(rho_res * nflux_unref) - deletions;
-    coarse_hi = ceiling(rho_res * nflux_unref) + deletions;
+    allocate(refined(nflux))
+    refined = 0d0
+    coarse_lo = floor(res * nflux_unref) - deletions;
+    coarse_hi = ceiling(res * nflux_unref) + deletions;
     ! compute upper and lower array indices of refined regions
     fine_lo = coarse_lo + [(2 * sum(additions(1:kref) - deletions(1:kref)), &
          kref = 0, nref - 1)]
@@ -93,22 +116,19 @@ contains
          k = 1, maxval(additions) + 1), kref = 1, nref)], [maxval(additions) + 1, nref])
     ! compute refined regions around resonant flux surfaces
     do kref = 1, nref
-       rho(fine_lo(kref):fine_lo(kref)+additions(kref)) = rho_res(kref) &
+       refined(fine_lo(kref):fine_lo(kref)+additions(kref)) = res(kref) &
             - (geom_ser(additions(kref)+1:1:-1, kref) + 0.5d0) * fine_sep(kref)
-       rho(fine_hi(kref)-additions(kref):fine_hi(kref)) = rho_res(kref) &
+       refined(fine_hi(kref)-additions(kref):fine_hi(kref)) = res(kref) &
             + (geom_ser(1:additions(kref)+1, kref) + 0.5d0) * fine_sep(kref)
     end do
     ! compute equidistant positions between refined regions
-    rho(1:fine_lo(1)-1) = [(k - 1, k = 1, fine_lo(1) - 1)] / dble(fine_lo(1) - 1) * &
-         rho(fine_lo(1))
+    refined(1:fine_lo(1)-1) = linspace(0d0, refined(fine_lo(1)), fine_lo(1) - 1, 0, 1)
     do kref = 2, nref
-       rho(fine_hi(kref-1)+1:fine_lo(kref)-1) = rho(fine_hi(kref-1)) + &
-            [(k, k = 1, fine_lo(kref) - fine_hi(kref-1) - 1)] / &
-            dble(fine_lo(kref) - fine_hi(kref-1)) * &
-            (rho(fine_lo(kref)) - rho(fine_hi(kref-1)))
+       refined(fine_hi(kref-1)+1:fine_lo(kref)-1) = linspace(refined(fine_hi(kref-1)), &
+            refined(fine_lo(kref)), fine_lo(kref) - fine_hi(kref-1) - 1, 1, 1)
     end do
-    rho(fine_hi(nref)+1:nflux) = rho(fine_hi(nref)) + [(k, k = 1, nflux - fine_hi(nref))] &
-         / dble(nflux - fine_hi(nref)) * (1d0 - rho(fine_hi(nref)))
+    refined(fine_hi(nref)+1:nflux) = linspace(refined(fine_hi(nref)), 1d0, &
+         nflux - fine_hi(nref), 1, 0)
     if (allocated(coarse_lo)) deallocate(coarse_lo)
     if (allocated(coarse_hi)) deallocate(coarse_hi)
     if (allocated(fine_lo)) deallocate(fine_lo)
@@ -116,6 +136,34 @@ contains
     if (allocated(fine_sep)) deallocate(fine_sep)
     if (allocated(factor)) deallocate(factor)
     if (allocated(geom_ser)) deallocate(geom_ser)
+  end subroutine refine_eqd_partition
+
+  subroutine radial_refinement(rho)
+    use magdif_config, only: n, refinement, additions, deletions, sheet_current_factor, &
+         read_delayed_config
+    use magdif, only: equil
+    real(dp), dimension(:), allocatable, intent(out) :: rho
+    integer :: m_res_min, m_res_max
+    real(dp), dimension(:), allocatable :: psi_res, rho_res
+    logical, dimension(:), allocatable :: mask
+
+    m_res_min = ceiling(minval(abs(equil%qpsi)) * dble(n))
+    m_res_max = floor(maxval(abs(equil%qpsi)) * dble(n))
+    allocate(psi_res(m_res_min:m_res_max))
+    call compute_resonant_surfaces(m_res_min, m_res_max, psi_res)
+    allocate(rho_res(size(psi_res)))
+    rho_res = sqrt((psi_res - equil%simag) / (equil%sibry - equil%simag))  ! stub
+    call read_delayed_config(m_res_min, m_res_max)
+    mask = 0d0 < refinement .and. refinement < 1d0
+    call refine_eqd_partition(count(mask), pack(deletions, mask), pack(additions, mask), &
+         pack(refinement, mask), pack(rho_res, mask), rho)
+
+    if (allocated(rho_res)) deallocate(rho_res)
+    if (allocated(psi_res)) deallocate(psi_res)
+    if (allocated(refinement)) deallocate(refinement)
+    if (allocated(deletions)) deallocate(deletions)
+    if (allocated(additions)) deallocate(additions)
+    if (allocated(sheet_current_factor)) deallocate(sheet_current_factor)
   end subroutine radial_refinement
 
   ! write configuration to FreeFem++ (for Delaunay triangulation)

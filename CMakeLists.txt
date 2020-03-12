@@ -51,6 +51,8 @@ add_library(magdif SHARED
   src/spl_three_to_five_mod.f90
   src/spline5_RZ.f90
   src/twostreights.f90
+  src/external/netlib_mod.f90
+  src/external/d1mach.f
   src/arnoldi.f90
   src/check_in_tri.f90
   src/sub_orbit_fast.f90
