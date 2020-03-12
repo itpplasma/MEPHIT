@@ -339,10 +339,14 @@ class magdif:
 
     def calc_resonances(self):
         n = self.config['n']
-        if self.config['kilca_scale_factor'] == 0:
+        if 'kilca_scale_factor' in self.config:
+            kilca_scale_factor = self.config['kilca_scale_factor']
+        else:
+            kilca_scale_factor = 0
+        if kilca_scale_factor == 0:
             q = self.q
         else:
-            q = self.q * self.config['kilca_scale_factor']
+            q = self.q * kilca_scale_factor
         q_min = np.amin(q)
         q_max = np.amax(q)
         psi_min = np.amin(self.psi_norm)
@@ -444,7 +448,11 @@ class magdif:
                 self.datadir, 'convergence.dat', self.config['tol'])
         )
 
-        if self.config['kilca_scale_factor'] == 0:
+        if 'kilca_scale_factor' in self.config:
+            kilca_scale_factor = self.config['kilca_scale_factor']
+        else:
+            kilca_scale_factor = 0
+        if kilca_scale_factor == 0:
             pert = magdif_mnDat(self.datadir, 'Bmn_psi.dat', 0,
                                 fslabel.psi_norm, 'full perturbation')
             pert.process()
@@ -467,16 +475,16 @@ class magdif:
 
         else:
             pert = magdif_mnDat(self.datadir, 'Bmn_r.dat',
-                                self.config['kilca_scale_factor'],
+                                kilca_scale_factor,
                                 fslabel.r, 'full perturbation')
             pert.process()
             vac = magdif_mnDat(self.datadir, 'Bmn_vac_r.dat',
-                               self.config['kilca_scale_factor'],
+                               kilca_scale_factor,
                                fslabel.r, 'vacuum perturbation')
             vac.process()
             self.plots.append(magdif_poloidal_plots(
                     self.config['n'], self.psi_norm, self.q
-                    * self.config['kilca_scale_factor'], self.resonance,
+                    * kilca_scale_factor, self.resonance,
                     r'$\left\vert B_{mn}^{r} \right\vert$ / G',
                     pert, vac, self.r_interp
             ))
