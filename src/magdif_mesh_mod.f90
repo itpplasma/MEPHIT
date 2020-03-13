@@ -166,23 +166,6 @@ contains
     if (allocated(sheet_current_factor)) deallocate(sheet_current_factor)
   end subroutine radial_refinement
 
-  ! write configuration to FreeFem++ (for Delaunay triangulation)
-  subroutine write_extmesh_data
-    use magdif_config, only: nflux, nkpol
-    use magdif, only: equil
-
-    integer :: fid
-
-    open(newunit = fid, file = 'extmesh.idp', status = 'replace')
-    write (fid, '("real rmaxis = ", es23.16, ";")') equil%rmaxis
-    write (fid, '("real zmaxis = ", es23.16, ";")') equil%zmaxis
-    write (fid, '("real rdim = ", es23.16, ";")') equil%rdim
-    write (fid, '("real zdim = ", es23.16, ";")') equil%zdim
-    write (fid, '("int nkpol = ", i0, ";")') nkpol
-    write (fid, '("int nflux = ", i0, ";")') nflux
-    close(fid)
-  end subroutine write_extmesh_data
-
   subroutine create_kilca_mesh_points(convexfile)
     use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
     use mesh_mod, only: knot, mesh_point
@@ -216,7 +199,6 @@ contains
           mesh_point(kp_low(kf) + kp) = node
        end do
     end do
-    call write_extmesh_data
     call write_kilca_convexfile(rho_max, convexfile)
   end subroutine create_kilca_mesh_points
 

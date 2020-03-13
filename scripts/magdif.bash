@@ -147,8 +147,7 @@ magdif_prepare() {
             "$bindir/axis.x" && \
                 "$bindir/tri_mesh.x" && \
                 "$bindir/readcarre_m.x" && \
-                "$bindir/writeout.x" && \
-                python3 "$scriptdir/extmesh.py" ${mesh%.*}
+                "$bindir/writeout.x"
             lasterr=$?
             if [ $lasterr -ne 0 ]; then
                 echo "$scriptname: error $lasterr during mesh generation in $workdir" >&2
@@ -169,8 +168,7 @@ magdif_prepare() {
                 continue
             fi
         else
-            "$bindir/magdif_mesher.x" "$config" "$unprocessed" && \
-                FreeFem++ "$scriptdir/extmesh.edp"
+            "$bindir/magdif_mesher.x" "$config" "$unprocessed"
             lasterr=$?
             if [ $lasterr -ne 0 ]; then
                 echo "$scriptname: error $lasterr during mesh generation in $workdir" >&2
@@ -178,6 +176,14 @@ magdif_prepare() {
                 anyerr=$lasterr
                 continue
             fi
+        fi
+        FreeFem++ "$scriptdir/extmesh.edp"
+        lasterr=$?
+        if [ $lasterr -ne 0 ]; then
+            echo "$scriptname: error $lasterr during mesh generation in $workdir" >&2
+            popd
+            anyerr=$lasterr
+            continue
         fi
         popd
     done
