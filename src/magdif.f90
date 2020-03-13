@@ -173,6 +173,10 @@ contains
     ! only depends on config variables
     call init_indices
     call read_mesh
+    if (kilca_scale_factor /= 0) then
+    else
+       call load_magdata_in_symfluxcoord
+    end if
 
     ! depends on mesh data
     call cache_mesh_data
@@ -361,6 +365,12 @@ contains
        call write_kilca_modes(Bnflux_vac, Bnphi_vac, &
             decorate_filename(kilca_pol_mode_file, '', '_vac'))
        call write_kilca_modes(Bnflux_vac - Bnflux, Bnphi_vac - Bnphi, &
+            decorate_filename(kilca_pol_mode_file, '', '_plas'))
+    else
+       call write_poloidal_modes(Bnflux, Bnphi, kilca_pol_mode_file)
+       call write_poloidal_modes(Bnflux_vac, Bnphi_vac, &
+            decorate_filename(kilca_pol_mode_file, '', '_vac'))
+       call write_poloidal_modes(Bnflux_vac - Bnflux, Bnphi_vac - Bnphi, &
             decorate_filename(kilca_pol_mode_file, '', '_plas'))
     end if
 
@@ -1701,6 +1711,67 @@ contains
     end do
     close(fid)
   end subroutine write_fluxvar
+
+  subroutine write_poloidal_modes(pol_flux, tor_comp, outfile)
+    complex(dp), intent(in) :: pol_flux(:,:)
+    complex(dp), intent(in) :: tor_comp(:)
+    character(len = *), intent(in) :: outfile
+
+    integer, parameter :: mmax = 24
+    character(len = 19) :: fmt
+    complex(dp), dimension(-mmax:mmax) :: coeff_psi, coeff_theta, coeff_phi, fourier_basis
+    integer :: kf, kt, ktri, m, fid_psi, fid_theta, fid_phi
+    type(triangle_rmp) :: tri
+    complex(dp) :: pol_comp_r, pol_comp_z, pol_comp_psi, pol_comp_theta
+    real(dp) :: r, z, theta, sqrt_g, dR_dtheta, dZ_dtheta, q, q_sum, dum
+
+    write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(1es22.15, 1x))'
+    open(newunit = fid_psi, recl = 3 * longlines, status = 'replace', &
+         file = decorate_filename(outfile, '', '_contradenspsi'))
+    open(newunit = fid_theta, recl = 3 * longlines, status = 'replace', &
+         file = decorate_filename(outfile, '', '_cotheta'))
+    open(newunit = fid_phi, recl = 3 * longlines, status = 'replace', &
+         file = decorate_filename(outfile, '', '_phi'))
+    do kf = 1, nflux
+       coeff_psi = 0d0
+       coeff_theta = 0d0
+       coeff_phi = 0d0
+       q_sum = 0d0
+       do kt = 1, kt_max(kf)
+          theta = (dble(kt) - 0.5d0) / dble(kt_max(kf)) * 2d0 * pi
+          ! result_spectrum.f90 uses negative q, so poloidal modes are switched
+          ! we invert the sign here to keep post-processing consistent
+          fourier_basis = [(exp(imun * m * theta), m = -mmax, mmax)]
+          call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf), theta, q, dum, &
+               sqrt_g, dum, dum, r, dum, dR_dtheta, z, dum, dZ_dtheta)
+          ktri = point_location(r, z)
+          tri = mesh_element_rmp(ktri)
+          call interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)
+          pol_comp_psi = (pol_comp_r * B0z_Omega(ktri) + pol_comp_z * B0r_Omega(ktri)) &
+               * r * sqrt_g
+          pol_comp_theta = pol_comp_r * dR_dtheta + pol_comp_z * dZ_dtheta
+          coeff_psi = coeff_psi + pol_comp_psi * fourier_basis
+          coeff_theta = coeff_theta + pol_comp_theta * fourier_basis
+          coeff_phi = coeff_phi + tor_comp(ktri) * fourier_basis
+          q_sum = q_sum + q
+       end do
+       coeff_psi = coeff_psi / kt_max(kf)
+       coeff_theta = coeff_theta / kt_max(kf)
+       coeff_phi = coeff_phi / kt_max(kf)
+       q = q_sum / kt_max(kf)
+       write (fid_psi, fmt) fs_half%psi(kf), q, real(coeff_psi), aimag(coeff_psi)
+       write (fid_theta, fmt) fs_half%psi(kf), q, real(coeff_theta), aimag(coeff_theta)
+       write (fid_phi, fmt) fs_half%psi(kf), q, real(coeff_phi), aimag(coeff_phi)
+    end do
+    do ktri = kt_low(nflux+1) + 1, ntri
+       write (fid_psi, fmt) 0d0, 1d0, [(0d0, m = 1, 4 * mmax + 2)]
+       write (fid_theta, fmt) 0d0, 1d0, [(0d0, m = 1, 4 * mmax + 2)]
+       write (fid_phi, fmt) 0d0, 1d0, [(0d0, m = 1, 4 * mmax + 2)]
+    end do
+    close(fid_psi)
+    close(fid_theta)
+    close(fid_phi)
+  end subroutine write_poloidal_modes
 
   subroutine write_kilca_modes(pol_flux, tor_comp, outfile)
     complex(dp), intent(in) :: pol_flux(:,:)
