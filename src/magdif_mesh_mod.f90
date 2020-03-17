@@ -11,10 +11,10 @@ module magdif_mesh_mod
 contains
 
   subroutine generate_mesh(unprocessed_geqdsk)
-    use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, mesh_element_rmp
-    use magdif_config, only: log_msg, log_info, log_write, nflux, kilca_scale_factor
-    use magdif_util, only: get_equil_filenames
-    use magdif, only: equil, init_indices, kt_low, kp_low, cache_mesh_data
+    use mesh_mod, only: mesh_point, mesh_element, mesh_element_rmp
+    use magdif_config, only: log_msg, log_info, log_write, kilca_scale_factor
+    use magdif_util, only: get_equil_filenames, initialize_globals
+    use magdif, only: equil, cache_mesh_data
 
     character(len = *), intent(in) :: unprocessed_geqdsk
     character(len = 1024) :: gfile, convexfile
@@ -31,13 +31,7 @@ contains
     log_msg = 'attempting to write processed G EQDSK file ' // trim(gfile)
     if (log_info) call log_write
     call equil%write(trim(gfile))
-
-    call init_indices
-    ntri = kt_low(nflux+1)
-    npoint = kp_low(nflux+1)
-    allocate(mesh_point(npoint))
-    allocate(mesh_element(ntri))
-    allocate(mesh_element_rmp(ntri))
+    call initialize_globals(equil%rmaxis, equil%zmaxis)
 
     if (kilca_scale_factor /= 0) then
        call create_kilca_mesh_points(convexfile)
@@ -91,6 +85,12 @@ contains
     real(dp), dimension(:), allocatable :: fine_sep, factor
     real(dp), dimension(:, :), allocatable :: geom_ser
 
+    if (nref < 1) then
+       nflux = nflux_unref
+       allocate(refined(0:nflux))
+       refined = linspace(0d0, 1d0, nflux + 1, 0, 0)
+       return
+    end if
     allocate(coarse_lo(nref))
     allocate(coarse_hi(nref))
     allocate(fine_lo(nref))
@@ -99,17 +99,17 @@ contains
     allocate(factor(nref))
     allocate(geom_ser(maxval(additions) + 1, nref))
     nflux = nflux_unref + 2 * sum(additions - deletions)
-    allocate(refined(nflux))
+    allocate(refined(0:nflux))
     refined = 0d0
-    coarse_lo = floor(res * nflux_unref) - deletions;
-    coarse_hi = ceiling(res * nflux_unref) + deletions;
+    coarse_lo = floor(res * (nflux_unref + 1)) - deletions;
+    coarse_hi = ceiling(res * (nflux_unref + 1)) + deletions;
     ! compute upper and lower array indices of refined regions
     fine_lo = coarse_lo + [(2 * sum(additions(1:kref) - deletions(1:kref)), &
          kref = 0, nref - 1)]
     fine_hi = coarse_hi + [(2 * sum(additions(1:kref) - deletions(1:kref)), &
          kref = 1, nref)]
     ! compute separations between flux surfaces using geometric series
-    coarse_sep = 1d0 / dble(nflux_unref - 1)
+    coarse_sep = 1d0 / dble(nflux_unref)
     fine_sep = coarse_sep * refinement
     factor = (coarse_sep / fine_sep) ** (1d0 / dble(additions + 1))
     geom_ser = reshape([(((factor(kref) ** k - factor(kref)) / (factor(kref) - 1d0), &
@@ -122,7 +122,7 @@ contains
             + (geom_ser(1:additions(kref)+1, kref) + 0.5d0) * fine_sep(kref)
     end do
     ! compute equidistant positions between refined regions
-    refined(1:fine_lo(1)-1) = linspace(0d0, refined(fine_lo(1)), fine_lo(1) - 1, 0, 1)
+    refined(0:fine_lo(1)-1) = linspace(0d0, refined(fine_lo(1)), fine_lo(1), 0, 1)
     do kref = 2, nref
        refined(fine_hi(kref-1)+1:fine_lo(kref)-1) = linspace(refined(fine_hi(kref-1)), &
             refined(fine_lo(kref)), fine_lo(kref) - fine_hi(kref-1) - 1, 1, 1)
@@ -168,14 +168,15 @@ contains
 
   subroutine create_kilca_mesh_points(convexfile)
     use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
-    use mesh_mod, only: knot, mesh_point
+    use mesh_mod, only: knot, npoint, mesh_point, ntri, mesh_element, mesh_element_rmp
     use magdif_config, only: nflux
     use magdif_util, only: interp_psi_pol
-    use magdif, only: equil, kp_low, kp_max
+    use magdif, only: equil, kp_low, kp_max, kt_low, init_indices
 
     character(len = *), intent(in) :: convexfile
     integer :: kf, kp
-    real(dp) :: rho, rho_max, theta
+    real(dp) :: rho_max, theta
+    real(dp), dimension(:), allocatable :: rho_ref
     type(knot) :: node
 
     ! calculate maximal extent from magnetic axis
@@ -184,22 +185,30 @@ contains
          equil%zdim * 0.5d0 + equil%zmid - equil%zmaxis, &
          equil%zdim * 0.5d0 - equil%zmid + equil%zmaxis)
 
+    call radial_refinement(rho_ref)
+    rho_ref = rho_ref * rho_max
+    call init_indices
+    ntri = kt_low(nflux+1)
+    npoint = kp_low(nflux+1)
+    allocate(mesh_point(npoint))
+    allocate(mesh_element(ntri))
+    allocate(mesh_element_rmp(ntri))
+
     mesh_point(1)%rcoord = equil%rmaxis
     mesh_point(1)%zcoord = equil%zmaxis
     mesh_point(1)%psi_pol = interp_psi_pol(equil%rmaxis, equil%zmaxis)
     do kf = 1, nflux
-       rho = dble(kf) / dble(nflux+1) * rho_max
        do kp = 1, kp_max(kf)
           theta = dble(kp-1) / dble(kp_max(kf)) * 2d0 * pi  ! [0, 2\pi)
-          node%rcoord = equil%rmaxis + rho * cos(theta)
-          node%zcoord = equil%zmaxis + rho * sin(theta)
-          node%psi_pol = interp_psi_pol(equil%rmaxis + rho * cos(theta), &
-               equil%zmaxis + rho * sin(theta))
+          node%rcoord = equil%rmaxis + rho_ref(kf) * cos(theta)
+          node%zcoord = equil%zmaxis + rho_ref(kf) * sin(theta)
+          node%psi_pol = interp_psi_pol(node%rcoord, node%zcoord)
           node%n_owners = 0
           mesh_point(kp_low(kf) + kp) = node
        end do
     end do
     call write_kilca_convexfile(rho_max, convexfile)
+    if (allocated(rho_ref)) deallocate(rho_ref)
   end subroutine create_kilca_mesh_points
 
   subroutine write_kilca_convexfile(rho_max, convexfile)
@@ -222,26 +231,32 @@ contains
   end subroutine write_kilca_convexfile
 
   subroutine create_mesh_points
-    use mesh_mod, only: npoint, mesh_point
+    use mesh_mod, only: npoint, mesh_point, ntri, mesh_element, mesh_element_rmp
     use magdif_config, only: nflux, nkpol
-    use magdif_util, only: initialize_globals, interp_psi_pol
-    use magdif, only: equil
+    use magdif_util, only: interp_psi_pol
+    use magdif, only: equil, kp_low, kt_low, init_indices
     use field_line_integration_mod, only: theta0_at_xpoint
     use points_2d, only: s_min, create_points_2d
 
     integer :: kpoi
     integer, dimension(:), allocatable :: n_theta
+    real(dp), dimension(:), allocatable :: rho_ref
     real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
 
+    call radial_refinement(rho_ref)
+    call init_indices
+    ntri = kt_low(nflux+1)
+    npoint = kp_low(nflux+1)
+    allocate(mesh_point(npoint))
+    allocate(mesh_element(ntri))
+    allocate(mesh_element_rmp(ntri))
     allocate(n_theta(nflux))
     allocate(points(3, npoint))
     allocate(points_s_theta_phi(3, npoint))
-
     n_theta = nkpol
     s_min = 1d-16
     theta0_at_xpoint = .true.
-    call initialize_globals(equil%rmaxis, equil%zmaxis)
-    call create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func = sqr)
+    call create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func = psi_ref)
     points(:, 1) = [equil%rmaxis, 0d0, equil%zmaxis]
     mesh_point(1)%rcoord = equil%rmaxis
     mesh_point(1)%zcoord = equil%zmaxis
@@ -255,13 +270,14 @@ contains
     if (allocated(n_theta)) deallocate(n_theta)
     if (allocated(points)) deallocate(points)
     if (allocated(points_s_theta_phi)) deallocate(points_s_theta_phi)
+    if (allocated(rho_ref)) deallocate(rho_ref)
 
   contains
-    pure function sqr(x) result(x_squared)
-      real(dp), dimension(:), intent(in) :: x
-      real(dp), dimension(size(x)) :: x_squared
-      x_squared = x * x
-    end function sqr
+    function psi_ref(psi_eqd)
+      real(dp), dimension(:), intent(in) :: psi_eqd
+      real(dp), dimension(size(psi_eqd)) :: psi_ref
+      psi_ref = rho_ref(1:) ** 2  ! stub
+    end function psi_ref
   end subroutine create_mesh_points
 
   subroutine connect_mesh_points
