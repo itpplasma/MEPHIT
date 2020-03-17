@@ -8,6 +8,14 @@ module magdif_mesh_mod
 
   public :: generate_mesh, write_kilca_convexfile, kilca_vacuum
 
+  interface
+     function mapping(val)
+       import :: dp
+       real(dp), intent(in) :: val
+       real(dp) :: mapping
+     end function mapping
+  end interface
+
 contains
 
   subroutine generate_mesh(unprocessed_geqdsk)
@@ -138,12 +146,13 @@ contains
     if (allocated(geom_ser)) deallocate(geom_ser)
   end subroutine refine_eqd_partition
 
-  subroutine radial_refinement(rho)
+  subroutine radial_refinement(rho_norm_ref, psi2rho_norm)
     use magdif_config, only: n, refinement, additions, deletions, sheet_current_factor, &
          read_delayed_config
     use magdif, only: equil
-    real(dp), dimension(:), allocatable, intent(out) :: rho
-    integer :: m_res_min, m_res_max
+    real(dp), dimension(:), allocatable, intent(out) :: rho_norm_ref
+    procedure(mapping), optional :: psi2rho_norm
+    integer :: m_res_min, m_res_max, m
     real(dp), dimension(:), allocatable :: psi_res, rho_res
     logical, dimension(:), allocatable :: mask
 
@@ -152,11 +161,15 @@ contains
     allocate(psi_res(m_res_min:m_res_max))
     call compute_resonant_surfaces(m_res_min, m_res_max, psi_res)
     allocate(rho_res(size(psi_res)))
-    rho_res = sqrt((psi_res - equil%simag) / (equil%sibry - equil%simag))  ! stub
+    if (present(psi2rho_norm)) then
+       rho_res = [(psi2rho_norm(psi_res(m)), m = m_res_min, m_res_max)]
+    else
+       rho_res = sqrt((psi_res - equil%simag) / (equil%sibry - equil%simag))  ! stub
+    end if
     call read_delayed_config(m_res_min, m_res_max)
     mask = 0d0 < refinement .and. refinement < 1d0
     call refine_eqd_partition(count(mask), pack(deletions, mask), pack(additions, mask), &
-         pack(refinement, mask), pack(rho_res, mask), rho)
+         pack(refinement, mask), pack(rho_res, mask), rho_norm_ref)
 
     if (allocated(rho_res)) deallocate(rho_res)
     if (allocated(psi_res)) deallocate(psi_res)
@@ -170,13 +183,14 @@ contains
     use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
     use mesh_mod, only: knot, npoint, mesh_point, ntri, mesh_element, mesh_element_rmp
     use magdif_config, only: nflux
-    use magdif_util, only: interp_psi_pol
+    use magdif_util, only: interp_psi_pol, linspace, flux_func
     use magdif, only: equil, kp_low, kp_max, kt_low, init_indices
 
     character(len = *), intent(in) :: convexfile
-    integer :: kf, kp
+    integer :: fid, k, nlabel, kf, kp
     real(dp) :: rho_max, theta
-    real(dp), dimension(:), allocatable :: rho_ref
+    real(dp), dimension(:), allocatable :: r_eqd, rho_norm_eqd, sample_psi, rho_ref
+    type(flux_func) :: psi_interpolator
     type(knot) :: node
 
     ! calculate maximal extent from magnetic axis
@@ -185,7 +199,20 @@ contains
          equil%zdim * 0.5d0 + equil%zmid - equil%zmaxis, &
          equil%zdim * 0.5d0 - equil%zmid + equil%zmaxis)
 
-    call radial_refinement(rho_ref)
+    ! interpolate between rho and psi
+    open(newunit = fid, file = 'preload_for_SYNCH.inp', status = 'old')
+    read (fid, *)
+    read (fid, *) nlabel
+    close(fid)
+    allocate(r_eqd(nlabel))
+    allocate(sample_psi(nlabel))
+    allocate(rho_norm_eqd(nlabel))
+    r_eqd = linspace(equil%rmaxis, equil%rmaxis + rho_max, nlabel, 0, 0)
+    sample_psi = [(interp_psi_pol(r_eqd(k), equil%zmaxis), k = 1, nlabel)]
+    rho_norm_eqd = linspace(0d0, 1d0, nlabel, 0, 0)
+    call psi_interpolator%init(4, sample_psi)
+
+    call radial_refinement(rho_ref, psi2rho_norm)
     rho_ref = rho_ref * rho_max
     call init_indices
     ntri = kt_low(nflux+1)
@@ -209,6 +236,16 @@ contains
     end do
     call write_kilca_convexfile(rho_max, convexfile)
     if (allocated(rho_ref)) deallocate(rho_ref)
+    if (allocated(rho_norm_eqd)) deallocate(rho_norm_eqd)
+    if (allocated(sample_psi)) deallocate(sample_psi)
+    if (allocated(r_eqd)) deallocate(r_eqd)
+
+  contains
+    function psi2rho_norm(psi) result(rho_norm)
+      real(dp), intent(in) :: psi
+      real(dp) :: rho_norm
+      rho_norm = psi_interpolator%interp(rho_norm_eqd, psi)
+    end function psi2rho_norm
   end subroutine create_kilca_mesh_points
 
   subroutine write_kilca_convexfile(rho_max, convexfile)

@@ -112,17 +112,16 @@ contains
   end subroutine initialize_globals
 
   function interp_psi_pol(r, z) result(psi_pol)
-    use field_eq_mod, only: psif
+    use field_eq_mod, only: psif, psib
 
     real(dp), intent(in) :: r, z
     real(dp) :: psi_pol
 
-    real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+    real(dp) :: dum
 
-    call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-    psi_pol = psif
+    call field(r, 0d0, z, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+    ! field_divB0.f90 adds psib (SIBRY, i.e., flux at the boundary) to interpolated psi[f]
+    psi_pol = psif - psib
   end function interp_psi_pol
 
   !> Computes the "weighted" centroid for a triangle so that it is approximately
