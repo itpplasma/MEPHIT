@@ -4,7 +4,7 @@ set (CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
 ### Path to the external libraries
 set(PROJLIBS /proj/plasma/Libs)
 
-set(FGSL_PATH ${PROJLIBS}/FGSL_gcc-6.3/fgsl-1.2.0/LIB)
+set(FGSL_PATH ${PROJLIBS}/FGSL_gcc-8.3.0/fgsl-1.2.0/LIB)
 
 set(SUPERLU_DIR ${PROJLIBS}/SuperLU_5.2.1/)
 set(SUPERLU_HDR ${SUPERLU_DIR}/SRC/)

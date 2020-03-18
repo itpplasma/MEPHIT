@@ -12,6 +12,8 @@ doxygen/
 *.bbl
 *.blg
 *.bcf
+*.nlo
+*.nls
 *.glg
 *.glo
 *.gls

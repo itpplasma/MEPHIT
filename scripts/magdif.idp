@@ -1,5 +1,0 @@
-int ktlownfluxp1 = 29800;
-string meshfile = "../PRELOAD/inputformaxwell_ext.msh";
-string currnfile = "../MHD/currn.dat";
-string Bnfluxfile = "../MHD/Bn.dat";
-bool doplot = false;

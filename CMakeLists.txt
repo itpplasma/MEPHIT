@@ -7,7 +7,7 @@ project(NEO-EQ)
 enable_language(Fortran)
 
 ### Define paths to external libraries (load external file)
-include(${CMAKE_SOURCE_DIR}/ProjectConfig.cmake.in.sample)
+include(${CMAKE_SOURCE_DIR}/ProjectConfig.cmake.in)
 
 
 ### Specify paths

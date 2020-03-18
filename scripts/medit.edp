@@ -1,5 +1,5 @@
 load "medit"
 mesh Th = readmesh("inputformaxwell.msh");
 medit("mesh", Th);
-mesh Th = readmesh("inputformaxwell_ext.msh");
-medit("mesh", Th);
+mesh Thext = readmesh("inputformaxwell_ext.msh");
+medit("mesh", Thext);

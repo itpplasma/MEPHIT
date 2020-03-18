@@ -1,7 +1,6 @@
 ProjectConfig.cmake.in
 .vscode
-BUILD/
-OBJS/
+build/
 \#*\#
 *~
 *.mod
