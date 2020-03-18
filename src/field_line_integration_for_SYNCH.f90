@@ -222,6 +222,7 @@
     call  field_eq(rrr,ppp,zzz,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ  &
                   ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ)
 !
+    rbeg(isurf) = hypot(rrr - raxis, zzz - zaxis)
     rsmall(isurf)=sqrt(abs(ymet(3))/pi)
     qsaf(isurf)=1.d0/aiota
     psisurf(isurf)=psif-psi_axis

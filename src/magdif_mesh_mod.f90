@@ -214,6 +214,7 @@ contains
 
     call radial_refinement(rho_ref, psi2rho_norm)
     rho_ref = rho_ref * rho_max
+
     call init_indices
     ntri = kt_low(nflux+1)
     npoint = kp_low(nflux+1)
@@ -270,23 +271,40 @@ contains
   subroutine create_mesh_points
     use mesh_mod, only: npoint, mesh_point, ntri, mesh_element, mesh_element_rmp
     use magdif_config, only: nflux, nkpol
-    use magdif_util, only: interp_psi_pol
-    use magdif, only: equil, kp_low, kt_low, init_indices
-    use field_line_integration_mod, only: theta0_at_xpoint
+    use magdif_util, only: interp_psi_pol, flux_func
+    use magdif, only: kp_low, kt_low, init_indices
+    use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, raxis, zaxis
+    use field_line_integration_mod, only: theta0_at_xpoint, theta_axis
     use points_2d, only: s_min, create_points_2d
 
     integer :: kpoi
     integer, dimension(:), allocatable :: n_theta
-    real(dp), dimension(:), allocatable :: rho_ref
+    real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_ref
     real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
+    type(flux_func) :: psi_interpolator, rho_norm_interpolator
 
-    call radial_refinement(rho_ref)
+    ! calculates points on a fine grid in the core region by integrating along field lines
+    call preload_for_SYNCH
+    ! loads points that are calculated in preload_for_SYNCH into module variables
+    ! and spline interpolates them for use with magdata_in_symfluxcoord_ext
+    call load_magdata_in_symfluxcoord
+    ! interpolate between rho and psi
+    allocate(rho_norm_eqd(nlabel))
+    rho_norm_eqd = rbeg / hypot(theta_axis(1), theta_axis(2))
+    ! field_line_integration_for_SYNCH.f90 subtracts psi_axis from psisurf and
+    ! magdata_in_symfluxcoord.f90 divides by psipol_max
+    call psi_interpolator%init(4, psisurf * psipol_max + interp_psi_pol(raxis, zaxis))
+    call rho_norm_interpolator%init(4, rho_norm_eqd)
+
+    call radial_refinement(rho_ref, psi2rho_norm)
+
     call init_indices
     ntri = kt_low(nflux+1)
     npoint = kp_low(nflux+1)
     allocate(mesh_point(npoint))
     allocate(mesh_element(ntri))
     allocate(mesh_element_rmp(ntri))
+
     allocate(n_theta(nflux))
     allocate(points(3, npoint))
     allocate(points_s_theta_phi(3, npoint))
@@ -294,10 +312,9 @@ contains
     s_min = 1d-16
     theta0_at_xpoint = .true.
     call create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func = psi_ref)
-    points(:, 1) = [equil%rmaxis, 0d0, equil%zmaxis]
-    mesh_point(1)%rcoord = equil%rmaxis
-    mesh_point(1)%zcoord = equil%zmaxis
-    mesh_point(1)%psi_pol = interp_psi_pol(equil%rmaxis, equil%zmaxis)
+    mesh_point(1)%rcoord = raxis
+    mesh_point(1)%zcoord = zaxis
+    mesh_point(1)%psi_pol = interp_psi_pol(raxis, zaxis)
     do kpoi = 2, npoint
        mesh_point(kpoi)%rcoord = points(1, kpoi)
        mesh_point(kpoi)%zcoord = points(3, kpoi)
@@ -308,12 +325,19 @@ contains
     if (allocated(points)) deallocate(points)
     if (allocated(points_s_theta_phi)) deallocate(points_s_theta_phi)
     if (allocated(rho_ref)) deallocate(rho_ref)
+    if (allocated(rho_norm_eqd)) deallocate(rho_norm_eqd)
 
   contains
+    function psi2rho_norm(psi) result(rho_norm)
+      real(dp), intent(in) :: psi
+      real(dp) :: rho_norm
+      rho_norm = psi_interpolator%interp(rho_norm_eqd, psi)
+    end function psi2rho_norm
     function psi_ref(psi_eqd)
       real(dp), dimension(:), intent(in) :: psi_eqd
       real(dp), dimension(size(psi_eqd)) :: psi_ref
-      psi_ref = rho_ref(1:) ** 2  ! stub
+      integer :: kf
+      psi_ref = [(rho_norm_interpolator%interp(psisurf, rho_ref(kf)), kf = 1, nflux)]
     end function psi_ref
   end subroutine create_mesh_points
 

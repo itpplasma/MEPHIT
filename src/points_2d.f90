@@ -15,6 +15,8 @@ end interface
 
 contains
 
+! call preload_for_SYNCH and load_magdata_in_symfluxcoord beforehand
+! so that magdata_in_symfluxcoord_ext can be called within this subroutine
 subroutine create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func, theta_scaling_func, repeat_center_point)
 !
     integer, dimension(:), intent(in) :: n_theta
@@ -48,14 +50,6 @@ subroutine create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func,
     allocate(theta_frac(maxval(n_theta)))
     allocate(theta_flux(maxval(n_theta)))
 
-    ! calculates points of a fine grid of the core region by integrating along field lines and writes the output to some files
-    ! TODO: dont call if files are up to date
-    call preload_for_SYNCH()
-
-    ! loads points that are calculated in preload_for_SYNCH into globals from magdata_in_symfluxcoor_mod and spline interpolats them
-    ! this is done so we can then call magdata_in_symfluxcoord_ext on this interpolated fine grid.
-    call load_magdata_in_symfluxcoord()
-    
     r_frac = s_min + [(dble(i)*(1.d0-s_min), i=1, size(r_frac), 1)] / (dble(nlabel))
 !
     !r_frac = [(i, i = 1, nlabel,1)] / dfloat(nlabel)
