@@ -195,7 +195,6 @@ magdif_run() {
         esac
     done
 
-    tempfile=temp.dat
     for workdir; do
         pushd "$workdir"
         rm -f "$config.log" convergence.dat
@@ -206,30 +205,6 @@ magdif_run() {
             popd
             anyerr=$lasterr
             continue
-        fi
-        kilca_scale_factor=$(nml_read_integer "$config" kilca_scale_factor)
-        if [ -z $kilca_scale_factor ]; then
-            kilca_scale_factor=0
-        fi
-        if [ $kilca_scale_factor -eq 0 ]; then
-            infile=Bn.dat
-            infile=plot_$infile
-            outfile=Bmn_psi.dat
-            extract_psi "$infile" $tempfile
-            "$bindir/result_spectrum.x" $tempfile > $outfile
-            rm $tempfile
-            infile=Bn_vac.dat
-            infile=plot_$infile
-            outfile=Bmn_vac_psi.dat
-            extract_psi "$infile" $tempfile
-            "$bindir/result_spectrum.x" $tempfile > $outfile
-            rm $tempfile
-            infile=currn.dat
-            infile=plot_${infile%.*}_000.${infile##*.}
-            outfile=currmn_000_theta.dat
-            extract_theta "$infile" $tempfile
-            "$bindir/result_spectrum.x" $tempfile > $outfile
-            rm $tempfile
         fi
         popd
     done

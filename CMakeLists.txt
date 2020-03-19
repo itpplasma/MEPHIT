@@ -47,8 +47,6 @@ add_library(magdif SHARED
   src/external/netlib_mod.f90
   src/external/d1mach.f
   src/arnoldi.f90
-  src/check_in_tri.f90
-  src/sub_orbit_fast.f90
   src/sparse_mod.f90
   src/magdif.f90
   src/magdif_config.f90
@@ -75,7 +73,6 @@ add_executable(magdif_test.x src/magdif_test.f90)
 add_executable(standardise_equilibrium.x src/standardise_equilibrium.f90)
 add_executable(magdif_mesher.x src/magdif_mesher.f90)
 add_executable(vacfield.x src/vacfield.f90)
-add_executable(result_spectrum.x src/result_spectrum.f90)
 
 set_target_properties(magdif PROPERTIES COMPILE_FLAGS ${FGSL_FLAGS})
 
@@ -85,4 +82,3 @@ target_link_libraries(magdif_test.x ${MAGDIF_LIBS})
 target_link_libraries(standardise_equilibrium.x ${MAGDIF_LIBS})
 target_link_libraries(magdif_mesher.x ${MAGDIF_LIBS})
 target_link_libraries(vacfield.x ${MAGDIF_LIBS})
-target_link_libraries(result_spectrum.x ${MAGDIF_LIBS})

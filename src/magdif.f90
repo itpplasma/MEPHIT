@@ -352,6 +352,13 @@ contains
                decorate_filename(Bn_file, 'plot_', postfix))
           call write_vector_plot(jnflux, jnphi, &
                decorate_filename(currn_file, 'plot_', postfix))
+          if (kilca_pol_mode /= 0) then
+             call write_kilca_modes(jnflux, jnphi, &
+                  decorate_filename('currmn.dat', '', postfix))
+          else
+             call write_poloidal_modes(jnflux, jnphi, &
+                  decorate_filename('currmn.dat', '', postfix))
+          end if
           call write_scalar_dof(presn, decorate_filename(presn_file, '', postfix))
        end if
 
@@ -367,11 +374,9 @@ contains
        call write_kilca_modes(Bnflux_vac - Bnflux, Bnphi_vac - Bnphi, &
             decorate_filename(kilca_pol_mode_file, '', '_plas'))
     else
-       call write_poloidal_modes(Bnflux, Bnphi, kilca_pol_mode_file)
-       call write_poloidal_modes(Bnflux_vac, Bnphi_vac, &
-            decorate_filename(kilca_pol_mode_file, '', '_vac'))
-       call write_poloidal_modes(Bnflux_vac - Bnflux, Bnphi_vac - Bnphi, &
-            decorate_filename(kilca_pol_mode_file, '', '_plas'))
+       call write_poloidal_modes(Bnflux, Bnphi, 'Bmn.dat')
+       call write_poloidal_modes(Bnflux_vac, Bnphi_vac, 'Bmn_vac.dat')
+       call write_poloidal_modes(Bnflux_vac - Bnflux, Bnphi_vac - Bnphi, 'Bmn_plas.dat')
     end if
 
     if (allocated(Lr)) deallocate(Lr)
@@ -1711,9 +1716,9 @@ contains
 
     write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(1es22.15, 1x))'
     open(newunit = fid_psi, recl = 3 * longlines, status = 'replace', &
-         file = decorate_filename(outfile, '', '_contradenspsi'))
+         file = decorate_filename(outfile, '', '_psi'))
     open(newunit = fid_theta, recl = 3 * longlines, status = 'replace', &
-         file = decorate_filename(outfile, '', '_cotheta'))
+         file = decorate_filename(outfile, '', '_theta'))
     open(newunit = fid_phi, recl = 3 * longlines, status = 'replace', &
          file = decorate_filename(outfile, '', '_phi'))
     do kf = 1, nflux
