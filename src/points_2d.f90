@@ -78,7 +78,7 @@ subroutine create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func,
             s = s_min !0.0
             if (s .gt. r_frac(1)) then
                 print *,"Error in points_2d.f90: inner-most value for s must be smaller than r_frac(1)!"
-                stop
+                error stop
             endif
         else
             n_theta_current = n_theta(isurf)
@@ -171,7 +171,7 @@ end subroutine create_points_2d
 !!$            s = s_min
 !!$            if (s .gt. r_frac(1)) then
 !!$                print *,"Error in points_2d.f90: inner-most value for s must be smaller than r_frac(1)!"
-!!$                stop
+!!$                error stop
 !!$            endif
 !!$        else
 !!$            n_theta_current = n_theta(isurf)
@@ -256,7 +256,7 @@ end subroutine create_points_2d
 
 !         print *,'Normalized theta_geom_interp values =',theta_geom_interp/(2.d0*pi)!(size(theta_geom_interp)-nplag/2)
 !         print *,'Normalized theta_flux_interp values =',theta_flux_interp/(2.d0*pi)!(size(theta_flux_interp)-nplag/2)
-          stop
+          error stop
         endif  
 !          
       endif

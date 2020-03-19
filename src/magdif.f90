@@ -1731,8 +1731,8 @@ contains
           ! result_spectrum.f90 uses negative q, so poloidal modes are switched
           ! we invert the sign here to keep post-processing consistent
           fourier_basis = [(exp(imun * m * theta), m = -mmax, mmax)]
-          call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf), theta, q, dum, &
-               sqrt_g, dum, dum, r, dum, dR_dtheta, z, dum, dZ_dtheta)
+          call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), theta, &
+               q, dum, sqrt_g, dum, dum, r, dum, dR_dtheta, z, dum, dZ_dtheta)
           ktri = point_location(r, z)
           tri = mesh_element_rmp(ktri)
           call interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)

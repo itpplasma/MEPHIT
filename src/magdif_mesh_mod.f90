@@ -287,7 +287,8 @@ contains
     integer, dimension(:), allocatable :: n_theta
     real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_ref, rho_half
     real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
-    type(flux_func) :: psi_interpolator, rho_norm_interpolator
+    type(flux_func) :: psi_interpolator
+    real(dp) :: psi_axis
 
     ! calculates points on a fine grid in the core region by integrating along field lines
     call preload_for_SYNCH
@@ -299,8 +300,8 @@ contains
     rho_norm_eqd = rbeg / hypot(theta_axis(1), theta_axis(2))
     ! field_line_integration_for_SYNCH.f90 subtracts psi_axis from psisurf and
     ! magdata_in_symfluxcoord.f90 divides by psipol_max
-    call psi_interpolator%init(4, psisurf * psipol_max + interp_psi_pol(raxis, zaxis))
-    call rho_norm_interpolator%init(4, rho_norm_eqd)
+    psi_axis = interp_psi_pol(raxis, zaxis)
+    call psi_interpolator%init(4, psisurf * psipol_max + psi_axis)
 
     call radial_refinement(rho_ref, psi2rho_norm)
 
@@ -351,7 +352,8 @@ contains
       real(dp), dimension(:), intent(in) :: psi_eqd
       real(dp), dimension(size(psi_eqd)) :: psi_ref
       integer :: kf
-      psi_ref = [(rho_norm_interpolator%interp(psisurf, rho_ref(kf)), kf = 1, nflux)]
+      psi_ref = [((interp_psi_pol(raxis + rho_ref(kf) * theta_axis(1), &
+           zaxis + rho_ref(kf) * theta_axis(2)) - psi_axis) / psipol_max, kf = 1, nflux)]
     end function psi_ref
   end subroutine create_mesh_points
 
