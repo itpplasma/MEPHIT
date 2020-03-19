@@ -88,9 +88,6 @@ magdif_init() {
         cp -t "$workdir" \
            "$datadir/field_divB0.inp" \
            "$datadir/preload_for_SYNCH.inp" \
-           "$datadir/flt.inp" \
-           "$datadir/17151.wall_full" \
-           "$datadir/kin2d.inp" \
            $(absolutize "$config") \
            $(absolutize "$geqdsk") \
            $(absolutize "$convexwall")
@@ -138,26 +135,30 @@ magdif_prepare() {
         replace_first_in_line field_divB0.inp 7 "'\1_processed'"  # gfile
         replace_first_in_line field_divB0.inp 1 0  # ipert
         replace_first_in_line field_divB0.inp 2 1  # iequil
+        "$bindir/magdif_mesher.x" "$config" "$unprocessed"
+        lasterr=$?
+        if [ $lasterr -ne 0 ]; then
+            echo "$scriptname: error $lasterr during mesh generation in $workdir" >&2
+            popd
+            anyerr=$lasterr
+            continue
+        fi
+        FreeFem++ "$scriptdir/extmesh.edp"
+        lasterr=$?
+        if [ $lasterr -ne 0 ]; then
+            echo "$scriptname: error $lasterr during mesh generation in $workdir" >&2
+            popd
+            anyerr=$lasterr
+            continue
+        fi
         kilca_scale_factor=$(nml_read_integer "$config" kilca_scale_factor)
         if [ -z $kilca_scale_factor ]; then
             kilca_scale_factor=0
         fi
         if [ $kilca_scale_factor -eq 0 ]; then
-            "$bindir/standardise_equilibrium.x" "$unprocessed" "${unprocessed}_processed"
-            "$bindir/axis.x" && \
-                "$bindir/tri_mesh.x" && \
-                "$bindir/readcarre_m.x" && \
-                "$bindir/writeout.x"
-            lasterr=$?
-            if [ $lasterr -ne 0 ]; then
-                echo "$scriptname: error $lasterr during mesh generation in $workdir" >&2
-                popd
-                anyerr=$lasterr
-                continue
-            fi
             replace_first_in_line field_divB0.inp 1 1  # ipert
             # replace_first_in_line field_divB0.inp 2 0  # iequil
-            "$bindir/vacfield.x"
+            "$bindir/vacfield.x" "$config"
             lasterr=$?
             replace_first_in_line field_divB0.inp 1 0  # ipert
             # replace_first_in_line field_divB0.inp 2 1  # iequil
@@ -167,23 +168,6 @@ magdif_prepare() {
                 anyerr=$lasterr
                 continue
             fi
-        else
-            "$bindir/magdif_mesher.x" "$config" "$unprocessed"
-            lasterr=$?
-            if [ $lasterr -ne 0 ]; then
-                echo "$scriptname: error $lasterr during mesh generation in $workdir" >&2
-                popd
-                anyerr=$lasterr
-                continue
-            fi
-        fi
-        FreeFem++ "$scriptdir/extmesh.edp"
-        lasterr=$?
-        if [ $lasterr -ne 0 ]; then
-            echo "$scriptname: error $lasterr during mesh generation in $workdir" >&2
-            popd
-            anyerr=$lasterr
-            continue
         fi
         popd
     done

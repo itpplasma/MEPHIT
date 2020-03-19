@@ -29,28 +29,21 @@ set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fbounds-check -Wall")  # -ffpe-trap=invali
 add_library(magdif SHARED
   src/bdivfree.f90
   src/binsrc.f90
-  src/brent.f90
   src/field_divB0.f90
   src/field_line_integration_for_SYNCH.f90
   src/from_nrtype.f90
-  src/in_out_cw.f90
-  src/inside_of_wall.f90
   src/leastsq.f90
   src/lubksb.f
   src/ludcmp.f
   src/magdata_in_symfluxcoord.f90
   src/mesh_mod.f90
-  src/mods4ax.f90
   src/odeint_allroutines.f
   src/orbit_mod.f90
   src/plag_coeff.f90
   src/points_2d.f90
-  src/polylag.f
   src/preload_for_SYNCH.f90
-  src/rtbis.f90
   src/spl_three_to_five_mod.f90
   src/spline5_RZ.f90
-  src/twostreights.f90
   src/external/netlib_mod.f90
   src/external/d1mach.f
   src/arnoldi.f90
@@ -81,10 +74,6 @@ configure_file(scripts/magdif.bash bin/magdif COPYONLY)
 add_executable(magdif_test.x src/magdif_test.f90)
 add_executable(standardise_equilibrium.x src/standardise_equilibrium.f90)
 add_executable(magdif_mesher.x src/magdif_mesher.f90)
-add_executable(axis.x src/axis.f90)
-add_executable(tri_mesh.x src/tri_mesh.f90)
-add_executable(readcarre_m.x src/readcarre_m.f90)
-add_executable(writeout.x src/writeout.f90)
 add_executable(vacfield.x src/vacfield.f90)
 add_executable(result_spectrum.x src/result_spectrum.f90)
 
@@ -95,9 +84,5 @@ set(MAGDIF_LIBS magdif ${SUPERLU_LIBRARIES} ${SUITESPARSE_LIBRARIES} ${gsl_lib} 
 target_link_libraries(magdif_test.x ${MAGDIF_LIBS})
 target_link_libraries(standardise_equilibrium.x ${MAGDIF_LIBS})
 target_link_libraries(magdif_mesher.x ${MAGDIF_LIBS})
-target_link_libraries(axis.x ${MAGDIF_LIBS})
-target_link_libraries(tri_mesh.x ${MAGDIF_LIBS})
-target_link_libraries(readcarre_m.x ${MAGDIF_LIBS})
-target_link_libraries(writeout.x ${MAGDIF_LIBS})
 target_link_libraries(vacfield.x ${MAGDIF_LIBS})
 target_link_libraries(result_spectrum.x ${MAGDIF_LIBS})

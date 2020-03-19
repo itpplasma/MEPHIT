@@ -7,7 +7,7 @@ Prerequisites for running NEO-EQ are as follows.
 -   current Fortran compiler (tested with `gfortran` and `ifort`)
 -   LAPACK, SuiteSparse and SuperLU
 -   GSL and FGSL
--   Python 3 including matplotlib and meshphy
+-   Python 3 including matplotlib
 -   FreeFem++
 
 ## Initial build
@@ -33,12 +33,10 @@ case, the `<vacuum_field>` can be omitted.
 When the configuration has been adapted as needed, the mesh and vacuum
 field data are generated via
 
-    build/bin/magdif prepare -c <config> [-p <processed_gfile>] <working_directory> ...
+    build/bin/magdif prepare -c <config> <working_directory> ...
 
 in each `<working_directory>`. `<config>` is assumed to be a path
-relative to each respective `<working_directory>`, as is the
-`<processed_gfile>`. The `<processed_gfile>` is currently only used for
-KiLCA test cases.
+relative to each respective `<working_directory>`.
 
 ## Run
 
