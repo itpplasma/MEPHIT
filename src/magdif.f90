@@ -171,7 +171,6 @@ contains
     call log_open
 
     ! only depends on config variables
-    call init_indices
     call read_mesh
     if (kilca_scale_factor /= 0) then
     else
@@ -179,6 +178,7 @@ contains
     end if
 
     ! depends on mesh data
+    call init_indices
     call cache_mesh_data
     call cache_equilibrium_field
 
@@ -464,24 +464,22 @@ contains
   !> #bnflux_vac, #bnphi_vac, #j0phi, #jnphi and #jnflux are allocated and initialized to
   !> zero. Deallocation is done in magdif_cleanup().
   subroutine read_mesh
-    use mesh_mod, only: bphicovar
     integer :: fid
 
-    open(newunit = fid, file = point_file, form = 'unformatted', status = 'old')
-    read (fid) npoint
-    write (log_msg, '("npoint = ", i0)') npoint
+    open(newunit = fid, file = meshdata_file, form = 'unformatted', status = 'old')
+    read (fid) nflux, npoint, ntri
+    write (log_msg, '("nflux = ", i0, ", npoint = ", i0, ", ntri = ", i0)') &
+         nflux, npoint, ntri
     if (log_info) call log_write
+
+    call fs%init(nflux, .false.)
+    call fs_half%init(nflux, .true.)
+    read (fid) fs%psi
+    read (fid) fs_half%psi
     allocate(mesh_point(npoint))
     read (fid) mesh_point
-    close(fid)
-
-    open(newunit = fid, file = tri_file, form = 'unformatted', status = 'old')
-    read(fid) ntri
-    write (log_msg, '("ntri   = ", i0)') ntri
-    if (log_info) call log_write
     allocate(mesh_element(ntri))
     read (fid) mesh_element
-    read (fid) bphicovar
     close(fid)
 
     allocate(mesh_element_rmp(ntri))
@@ -788,20 +786,6 @@ contains
   subroutine init_flux_variables
     integer :: kf, kw
 
-    call fs%init(nflux, .false.)
-
-    ! magnetic axis at k == 0 is not counted as flux surface
-    fs%psi(0) = mesh_point(1)%psi_pol
-    do kf = 1, nflux
-       ! average over the loop to smooth out numerical errors
-       fs%psi(kf) = sum(mesh_point((kp_low(kf) + 1):kp_low(kf+1))%psi_pol) / kp_max(kf)
-    end do
-
-    call fs_half%init(nflux, .true.)
-
-    ! use linear interpolation for half-grid steps for now
-    fs_half%psi = 0.5d0 * (fs%psi(0:nflux-1) + fs%psi(1:nflux))
-
     ! initialize fluxvar with equidistant psi values
     call fluxvar%init(4, fs%psi(0) + [(dble(kw - 1) / dble(equil%nw - 1) * &
          (fs%psi(nflux) - fs%psi(0)), kw = 1, equil%nw)])
@@ -830,11 +814,11 @@ contains
     dens = 0d0
     temp = 0d0
     if (equil%cocos%sgn_dpsi == -1) then
-       psi_ext = minval(mesh_point%psi_pol)
-       psi_int = maxval(mesh_point%psi_pol)
+       psi_ext = minval(equil%psirz)
+       psi_int = maxval(equil%psirz)
     else
-       psi_ext = maxval(mesh_point%psi_pol)
-       psi_int = minval(mesh_point%psi_pol)
+       psi_ext = maxval(equil%psirz)
+       psi_int = minval(equil%psirz)
     end if
     select case (pres_prof)
     case (pres_prof_eps)

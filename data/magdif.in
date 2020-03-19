@@ -24,8 +24,8 @@
    tol = 5d-1
    ! number of knots per poloidal loop
    nkpol = 200
-   ! number of flux surfaces up to and counting LCFS
-   nflux = 99
+   ! number of flux surfaces up to and counting LCFS (before refinement)
+   nflux_unref = 100
    ! temperature on magnetic axis
    ti0 = 3.d3
    ! minimum temperature
@@ -38,10 +38,8 @@
    damp = 0d0
    ! distance of magnetic axis from center in cm
    R0 = 172.74467899999999d0
-   ! mesh points
-   point_file = 'points.dat'
-   ! triangles and edges
-   tri_file = 'triangles.dat'
+   ! meshdata file
+   meshdata_file = 'mesh.dat'
    ! vacuum perturbation field
    Bn_vac_file = 'Bn_flux.dat'
 

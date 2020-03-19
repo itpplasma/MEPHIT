@@ -181,17 +181,17 @@ contains
 
   subroutine create_kilca_mesh_points(convexfile)
     use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
-    use mesh_mod, only: knot, npoint, mesh_point, ntri, mesh_element, mesh_element_rmp
+    use mesh_mod, only: npoint, mesh_point, ntri, mesh_element, mesh_element_rmp
     use magdif_config, only: nflux
     use magdif_util, only: interp_psi_pol, linspace, flux_func
-    use magdif, only: equil, kp_low, kp_max, kt_low, init_indices
+    use magdif, only: equil, kp_low, kp_max, kt_low, init_indices, fs, fs_half
 
     character(len = *), intent(in) :: convexfile
-    integer :: fid, k, nlabel, kf, kp
+    integer :: fid, k, nlabel, kf, kp, kpoi
     real(dp) :: rho_max, theta
-    real(dp), dimension(:), allocatable :: r_eqd, rho_norm_eqd, sample_psi, rho_ref
+    real(dp), dimension(:), allocatable :: r_eqd, rho_norm_eqd, sample_psi, rho_ref, &
+         rho_half
     type(flux_func) :: psi_interpolator
-    type(knot) :: node
 
     ! calculate maximal extent from magnetic axis
     rho_max = min(equil%rmaxis - equil%rleft, &
@@ -215,6 +215,15 @@ contains
     call radial_refinement(rho_ref, psi2rho_norm)
     rho_ref = rho_ref * rho_max
 
+    call fs%init(nflux, .false.)
+    call fs_half%init(nflux, .true.)
+    fs%psi = [(interp_psi_pol(equil%rmaxis + rho_ref(kf), equil%zmaxis), kf = 0, nflux)]
+    allocate(rho_half(nflux))
+    rho_half = 0.5d0 * (rho_ref(0:nflux-1) + rho_ref(1:nflux))
+    fs_half%psi = [(interp_psi_pol(equil%rmaxis + rho_half(kf), equil%zmaxis), &
+         kf = 1, nflux)]
+    if (allocated(rho_half)) deallocate(rho_half)
+
     call init_indices
     ntri = kt_low(nflux+1)
     npoint = kp_low(nflux+1)
@@ -224,15 +233,12 @@ contains
 
     mesh_point(1)%rcoord = equil%rmaxis
     mesh_point(1)%zcoord = equil%zmaxis
-    mesh_point(1)%psi_pol = interp_psi_pol(equil%rmaxis, equil%zmaxis)
     do kf = 1, nflux
        do kp = 1, kp_max(kf)
+          kpoi = kp_low(kf) + kp
           theta = dble(kp-1) / dble(kp_max(kf)) * 2d0 * pi  ! [0, 2\pi)
-          node%rcoord = equil%rmaxis + rho_ref(kf) * cos(theta)
-          node%zcoord = equil%zmaxis + rho_ref(kf) * sin(theta)
-          node%psi_pol = interp_psi_pol(node%rcoord, node%zcoord)
-          node%n_owners = 0
-          mesh_point(kp_low(kf) + kp) = node
+          mesh_point(kpoi)%rcoord = equil%rmaxis + rho_ref(kf) * cos(theta)
+          mesh_point(kpoi)%zcoord = equil%zmaxis + rho_ref(kf) * sin(theta)
        end do
     end do
     call write_kilca_convexfile(rho_max, convexfile)
@@ -272,14 +278,14 @@ contains
     use mesh_mod, only: npoint, mesh_point, ntri, mesh_element, mesh_element_rmp
     use magdif_config, only: nflux, nkpol
     use magdif_util, only: interp_psi_pol, flux_func
-    use magdif, only: kp_low, kt_low, init_indices
+    use magdif, only: kp_low, kt_low, init_indices, fs, fs_half
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, raxis, zaxis
     use field_line_integration_mod, only: theta0_at_xpoint, theta_axis
     use points_2d, only: s_min, create_points_2d
 
-    integer :: kpoi
+    integer :: kf, kpoi
     integer, dimension(:), allocatable :: n_theta
-    real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_ref
+    real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_ref, rho_half
     real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
     type(flux_func) :: psi_interpolator, rho_norm_interpolator
 
@@ -298,6 +304,16 @@ contains
 
     call radial_refinement(rho_ref, psi2rho_norm)
 
+    call fs%init(nflux, .false.)
+    call fs_half%init(nflux, .true.)
+    fs%psi = [(interp_psi_pol(raxis + rho_ref(kf) * theta_axis(1), &
+         zaxis + rho_ref(kf) * theta_axis(2)), kf = 0, nflux)]
+    allocate(rho_half(nflux))
+    rho_half = 0.5d0 * (rho_ref(0:nflux-1) + rho_ref(1:nflux))
+    fs_half%psi = [(interp_psi_pol(raxis + rho_half(kf) * theta_axis(1), &
+         zaxis + rho_half(kf) * theta_axis(2)), kf = 1, nflux)]
+    if (allocated(rho_half)) deallocate(rho_half)
+
     call init_indices
     ntri = kt_low(nflux+1)
     npoint = kp_low(nflux+1)
@@ -314,11 +330,9 @@ contains
     call create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func = psi_ref)
     mesh_point(1)%rcoord = raxis
     mesh_point(1)%zcoord = zaxis
-    mesh_point(1)%psi_pol = interp_psi_pol(raxis, zaxis)
     do kpoi = 2, npoint
        mesh_point(kpoi)%rcoord = points(1, kpoi)
        mesh_point(kpoi)%zcoord = points(3, kpoi)
-       mesh_point(kpoi)%psi_pol = interp_psi_pol(points(1, kpoi), points(3, kpoi))
     end do
 
     if (allocated(n_theta)) deallocate(n_theta)
@@ -420,8 +434,8 @@ contains
 
   subroutine write_mesh_data
     use mesh_mod, only: npoint, ntri, knot, triangle, mesh_point, mesh_element
-    use magdif_config, only: nflux, longlines, point_file, tri_file
-    use magdif, only: kp_max, kp_low, equil
+    use magdif_config, only: nflux, longlines, meshdata_file
+    use magdif, only: kp_max, kp_low, fs, fs_half
 
     integer :: fid, kpoi, ktri, kp, ke
     type(triangle) :: elem
@@ -435,15 +449,12 @@ contains
     end do
     close(fid)
 
-    open(newunit = fid, file = point_file, form = 'unformatted', status = 'replace')
-    write (fid) npoint
+    open(newunit = fid, file = meshdata_file, form = 'unformatted', status = 'replace')
+    write (fid) nflux, npoint, ntri
+    write (fid) fs%psi
+    write (fid) fs_half%psi
     write (fid) mesh_point
-    close(fid)
-
-    open(newunit = fid, file = tri_file, form = 'unformatted', status = 'replace')
-    write (fid) ntri
     write (fid) mesh_element
-    write (fid) equil%bcentr
     close(fid)
 
     open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace')
