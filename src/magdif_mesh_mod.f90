@@ -298,8 +298,8 @@ contains
     ! interpolate between rho and psi
     allocate(rho_norm_eqd(nlabel))
     rho_norm_eqd = rbeg / hypot(theta_axis(1), theta_axis(2))
-    ! field_line_integration_for_SYNCH.f90 subtracts psi_axis from psisurf and
-    ! magdata_in_symfluxcoord.f90 divides by psipol_max
+    ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
+    ! load_magdata_in_symfluxcoord_ext divides by psipol_max
     psi_axis = interp_psi_pol(raxis, zaxis)
     call psi_interpolator%init(4, psisurf * psipol_max + psi_axis)
 
@@ -328,7 +328,9 @@ contains
     n_theta = nkpol
     s_min = 1d-16
     theta0_at_xpoint = .true.
-    call create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func = psi_ref)
+    ! inp_label 2 to use poloidal psi with magdata_in_symfluxcoord_ext
+    ! psi is not normalized by psipol_max, but shifted by -psi_axis
+    call create_points_2d(2, n_theta, points, points_s_theta_phi, r_scaling_func = psi_ref)
     mesh_point(1)%rcoord = raxis
     mesh_point(1)%zcoord = zaxis
     do kpoi = 2, npoint
@@ -352,8 +354,8 @@ contains
       real(dp), dimension(:), intent(in) :: psi_eqd
       real(dp), dimension(size(psi_eqd)) :: psi_ref
       integer :: kf
-      psi_ref = [((interp_psi_pol(raxis + rho_ref(kf) * theta_axis(1), &
-           zaxis + rho_ref(kf) * theta_axis(2)) - psi_axis) / psipol_max, kf = 1, nflux)]
+      psi_ref = [(interp_psi_pol(raxis + rho_ref(kf) * theta_axis(1), &
+           zaxis + rho_ref(kf) * theta_axis(2)) - psi_axis, kf = 1, nflux)]
     end function psi_ref
   end subroutine create_mesh_points
 

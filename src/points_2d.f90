@@ -17,8 +17,10 @@ contains
 
 ! call preload_for_SYNCH and load_magdata_in_symfluxcoord beforehand
 ! so that magdata_in_symfluxcoord_ext can be called within this subroutine
-subroutine create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func, theta_scaling_func, repeat_center_point)
+subroutine create_points_2d(inp_label, n_theta, points, points_s_theta_phi, r_scaling_func, theta_scaling_func, repeat_center_point)
 !
+    use magdata_in_symfluxcoor_mod, only: psipol_max
+    integer, intent(in) :: inp_label
     integer, dimension(:), intent(in) :: n_theta
     double precision, dimension(:,:), intent(out) :: points
     double precision, dimension(:,:), intent(out) :: points_s_theta_phi
@@ -32,12 +34,6 @@ subroutine create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func,
     double precision :: s,psi,theta,q,dq_ds,sqrtg,bmod,dbmod_dtheta,R,dR_ds,dR_dtheta,Z,dZ_ds,dZ_dtheta
 
     integer :: n_center_point, geom_flux
-    
-    
-    !!!LUKAS
-    double precision :: theta_test,R0_test,Z0_test
-    !!!
-    
 
     n_center_point = 1
     if (present(repeat_center_point)) then
@@ -74,15 +70,29 @@ subroutine create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func,
 !     
     do isurf=0, nlabel !for inner stuff
         if (isurf == 0) then
-            n_theta_current = n_center_point
-            s = s_min !0.0
-            if (s .gt. r_frac(1)) then
-                print *,"Error in points_2d.f90: inner-most value for s must be smaller than r_frac(1)!"
-                error stop
-            endif
+           n_theta_current = n_center_point
+           select case (inp_label)
+           case (1)  ! normalized toroidal flux s
+              s = s_min !0.0
+              if (s .gt. r_frac(1)) then
+                 print *,"Error in points_2d.f90: inner-most value for s (s_min) must be smaller than r_frac(1)!"
+                 error stop
+              endif
+           case (2)  ! poloidal flux psi
+              psi = s_min * psipol_max
+              if (abs(psi) .gt. abs(r_frac(1))) then
+                 print *,"Error in points_2d.f90: inner-most value for psi (s_min * psipol_max) must be smaller than r_frac(1)!"
+                 error stop
+              endif
+           end select
         else
-            n_theta_current = n_theta(isurf)
-            s = r_frac(isurf)
+           n_theta_current = n_theta(isurf)
+           select case (inp_label)
+           case (1)
+              s = r_frac(isurf)
+           case (2)
+              psi = r_frac(isurf)
+           end select
         end if
 
         theta_frac(:n_theta_current) = [(i, i=0, n_theta_current-1, 1)] / dfloat(n_theta_current)
@@ -95,12 +105,12 @@ subroutine create_points_2d(n_theta, points, points_s_theta_phi, r_scaling_func,
 !
           case(2) !Theta scaling in geometrical theta
             !Transform geometric theta to symmetry flux theta (!De-normalize theta_frac --> real angle)
-            call theta_geom2theta_flux(s,theta_frac*2.d0*pi,theta_flux)
+            call theta_geom2theta_flux(inp_label, s, psi, theta_frac*2.d0*pi,theta_flux)
         end select   
 !              
         do j = 1, n_theta_current
             theta = theta_flux(j)
-            call magdata_in_symfluxcoord_ext(1, s,psi,theta,q,dq_ds,sqrtg,bmod,dbmod_dtheta, &
+            call magdata_in_symfluxcoord_ext(inp_label, s,psi,theta,q,dq_ds,sqrtg,bmod,dbmod_dtheta, &
                                              R,dR_ds,dR_dtheta,Z,dZ_ds,dZ_dtheta)
             points(:, point_idx) = [R, 0.d0, Z]
             points_s_theta_phi(:, point_idx) = [s, theta, 0.d0]
@@ -201,7 +211,7 @@ end subroutine create_points_2d
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
-  subroutine theta_geom2theta_flux(s,theta_geom_vec,theta_flux_vec)
+  subroutine theta_geom2theta_flux(inp_label, s, psi, theta_geom_vec,theta_flux_vec)
 !
     use magdata_in_symfluxcoor_mod, only : raxis,zaxis !<=sergei10.11.19
     use field_line_integration_mod, only: theta0_at_xpoint, theta_axis
@@ -211,7 +221,7 @@ end subroutine create_points_2d
     double precision :: s, diff, diff1, diff2
     double precision, dimension(:), intent(in) :: theta_geom_vec
     double precision, dimension(:), intent(out) :: theta_flux_vec
-    integer :: ntheta, i, i_theta_geom
+    integer :: ntheta, i, i_theta_geom, inp_label
     integer, parameter :: ntheta_interp = 500, nplag = 10
     double precision, dimension(nplag) :: coef
     double precision :: psi,theta,q,dq_ds,sqrtg,bmod,dbmod_dtheta,R,dR_ds,dR_dtheta,Z,dZ_ds,dZ_dtheta,R0,Z0
@@ -233,7 +243,7 @@ end subroutine create_points_2d
     do i = 1,ntheta_interp+nplag !size theta_flux_interp
       theta = modulo(theta_flux_interp(i),2.d0*pi)
 !       print *, 'i,s,theta',i,s,theta
-      call magdata_in_symfluxcoord_ext(1, s,psi,theta,q,dq_ds,sqrtg,bmod,dbmod_dtheta, &
+      call magdata_in_symfluxcoord_ext(inp_label, s,psi,theta,q,dq_ds,sqrtg,bmod,dbmod_dtheta, &
                                              R,dR_ds,dR_dtheta,Z,dZ_ds,dZ_dtheta)
       if (theta0_at_xpoint) then
          !to shift it to the same regime
