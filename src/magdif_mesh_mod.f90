@@ -109,8 +109,8 @@ contains
     nflux = nflux_unref + 2 * sum(additions - deletions)
     allocate(refined(0:nflux))
     refined = 0d0
-    coarse_lo = floor(res * (nflux_unref + 1)) - deletions;
-    coarse_hi = ceiling(res * (nflux_unref + 1)) + deletions;
+    coarse_lo = floor(res * (nflux_unref + 1)) - deletions
+    coarse_hi = ceiling(res * (nflux_unref + 1)) + deletions
     ! compute upper and lower array indices of refined regions
     fine_lo = coarse_lo + [(2 * sum(additions(1:kref) - deletions(1:kref)), &
          kref = 0, nref - 1)]

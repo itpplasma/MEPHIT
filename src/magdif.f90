@@ -1454,12 +1454,12 @@ contains
          pol_flux(ktri, 3) * (z - node(2)%zcoord))
   end subroutine interp_RT0
 
-  pure function sqrt_g(kf, kt, r) result(metric_det)
+  pure function jacobian(kf, kt, r) result(metric_det)
     integer, intent(in) :: kf, kt
     real(dp), intent(in) :: r
     real(dp) :: metric_det
     metric_det = equil%cocos%sgn_dpsi * fs_half%q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
-  end function sqrt_g
+  end function jacobian
 
   subroutine radially_outward_normal(ktri, n_r, n_z)
     integer, intent(in) :: ktri
@@ -1502,10 +1502,10 @@ contains
           call interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)
           ! projection to contravariant psi component
           dens_psi_contravar = (pol_comp_r * B0z_Omega(ktri) - &
-               pol_comp_z * B0r_Omega(ktri)) * r * sqrt_g(kf, kt, r)
+               pol_comp_z * B0r_Omega(ktri)) * r * jacobian(kf, kt, r)
           ! projection to covariant theta component
           proj_theta_covar = equil%cocos%sgn_dpsi * (pol_comp_r * B0r_Omega(ktri) + &
-               pol_comp_z * B0z_Omega(ktri)) * sqrt_g(kf, kt, r)
+               pol_comp_z * B0z_Omega(ktri)) * jacobian(kf, kt, r)
           write (fid, '(12(1x, es23.16))') r, z, real(pol_comp_r), aimag(pol_comp_r), &
                real(pol_comp_z), aimag(pol_comp_z), &
                real(tor_comp(ktri)), aimag(tor_comp(ktri)), &
@@ -1712,7 +1712,7 @@ contains
     integer :: kf, kt, ktri, m, fid_psi, fid_theta, fid_phi
     type(triangle_rmp) :: tri
     complex(dp) :: pol_comp_r, pol_comp_z, pol_comp_psi, pol_comp_theta
-    real(dp) :: r, z, theta, sqrt_g, dR_dtheta, dZ_dtheta, q, q_sum, dum
+    real(dp) :: r, z, theta, sqrt_g, dR_dtheta, dZ_dtheta, q, q_sum, dum, B0_R, B0_Z
 
     write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(1es22.15, 1x))'
     open(newunit = fid_psi, recl = 3 * longlines, status = 'replace', &
@@ -1734,11 +1734,12 @@ contains
           ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
           call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), theta, &
                q, dum, sqrt_g, dum, dum, r, dum, dR_dtheta, z, dum, dZ_dtheta)
+          call field(r, 0d0, z, B0_R, dum, B0_Z, dum, dum, dum, dum, dum, dum, dum, dum, &
+               dum)
           ktri = point_location(r, z)
           tri = mesh_element_rmp(ktri)
           call interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)
-          pol_comp_psi = (pol_comp_r * B0z_Omega(ktri) + pol_comp_z * B0r_Omega(ktri)) &
-               * r * sqrt_g
+          pol_comp_psi = (pol_comp_r * B0_Z - pol_comp_z * B0_R) * r * sqrt_g * q
           pol_comp_theta = pol_comp_r * dR_dtheta + pol_comp_z * dZ_dtheta
           coeff_psi = coeff_psi + pol_comp_psi * fourier_basis
           coeff_theta = coeff_theta + pol_comp_theta * fourier_basis
