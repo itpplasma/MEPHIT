@@ -40,6 +40,10 @@ extract_theta() {
 
 
 magdif_init() {
+    config=$datadir/magdif.in
+    geqdsk=$datadir/g30835.3200_EQH
+    convexwall=$datadir/convexwall.asdex
+    vacfield=
     TEMP=$(getopt -o 'c:g:v:w:' --long 'config:,g-eqdsk:,vacuum-field:,convex-wall:' -n "$scriptname" -- "$@")
     eval set -- "$TEMP"
     unset TEMP
@@ -158,6 +162,9 @@ magdif_prepare() {
         if [ $kilca_scale_factor -eq 0 ]; then
             replace_first_in_line field_divB0.inp 1 1  # ipert
             # replace_first_in_line field_divB0.inp 2 0  # iequil
+            ## uncomment to use at most half of available RAM and go to swap instead
+            ## MemFree=$(sed -ne '/MemFree/ s/MemFree: *\([0-9]*\) kB/\1/gp' /proc/meminfo)
+            ## systemd-run --scope --user -p MemoryHigh=$((MemFree / 2048))M \
             "$bindir/vacfield.x" "$config"
             lasterr=$?
             replace_first_in_line field_divB0.inp 1 0  # ipert
@@ -247,11 +254,11 @@ magdif_clean() {
     for workdir; do
         pushd "$workdir"
         # files from magdif_prepare
-        rm -f fort.* bmod_psipol_vac.dat Bn_flux.dat BR_im.dat BR_re.dat BZ_im.dat BZ_re.dat hpsi_vac.dat p0.dat inputformaxwell_ext.msh mesh.png bmod_psipol.dat inputformaxwell.msh boundary_sqz.dat mesh_all_sqz.dat points_asc_sqz.dat mesh_all.dat points_asc.dat source.dat boundary.dat thermostat.dat triangles.dat wall_loads.dat points.dat wsrr_rec_fix.dat neighbour.fmt boundary_qq.fmt 17151.aug_qq.ele triangles.fmt points_m.fmt index_sol.pnt points.fmt index_pfr.pnt index_core.pnt RZpsirho.dat Opoint.dat
+        rm -f fort.* Bn_flux.dat inputformaxwell_ext.msh inputformaxwell.msh points.fmt mesh.dat mesh_new.asc box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat
         # files from magdif_run
         rm -f fort.* plot*.dat fluxvar.dat j0phi.dat j0_gs.dat j0_amp.dat cmp_prof.dat Bn*.dat eigvec*.dat presn*.dat currn*.dat freefem.out convergence.dat rect*.dat *.log Bmn*.dat currmn*.dat
         # files from magdif_plot
-        rm -f plot*.pdf convergence.pdf
+        rm -f plot*.pdf convergence.pdf Bmn*.pdf currmn*.pdf
         popd
     done
 }
