@@ -73,8 +73,6 @@
    kilca_pol_mode = 4
    ! scaling factor used in EQDSK rmaxis from KiLCA
    kilca_scale_factor = 1000
-   ! output file for Fourier coefficients
-   kilca_pol_mode_file = 'Bmn.dat'
 /
 &delayed
    ! relative refinement around resonances
