@@ -63,6 +63,9 @@ module magdif_util
      !> positive and its magnitude is growing in the radially inward direction.
      real(dp), dimension(:), allocatable, public :: psi
 
+     !> Minor radius \f$ r \f$ in centimeter.
+     real(dp), dimension(:), allocatable, public :: rad
+
      real(dp), dimension(:), allocatable, public :: F
 
      !> Unperturbed pressure \f$ p_{0} \f$ in barye.
@@ -508,6 +511,7 @@ contains
     call flux_func_cache_destructor(this)
     if (half_step) then
        allocate(this%psi(nflux))
+       allocate(this%rad(nflux))
        allocate(this%F(nflux))
        allocate(this%p(nflux))
        allocate(this%FdF_dpsi(nflux))
@@ -515,6 +519,7 @@ contains
        allocate(this%q(nflux))
     else
        allocate(this%psi(0:nflux))
+       allocate(this%rad(0:nflux))
        allocate(this%F(0:nflux))
        allocate(this%p(0:nflux))
        allocate(this%FdF_dpsi(0:nflux))
@@ -522,6 +527,7 @@ contains
        allocate(this%q(0:nflux))
     end if
     this%psi = 0d0
+    this%rad = 0d0
     this%F = 0d0
     this%p = 0d0
     this%FdF_dpsi = 0d0
@@ -533,6 +539,7 @@ contains
     type(flux_func_cache), intent(inout) :: this
 
     if (allocated(this%psi)) deallocate(this%psi)
+    if (allocated(this%rad)) deallocate(this%rad)
     if (allocated(this%F)) deallocate(this%F)
     if (allocated(this%p)) deallocate(this%p)
     if (allocated(this%FdF_dpsi)) deallocate(this%FdF_dpsi)

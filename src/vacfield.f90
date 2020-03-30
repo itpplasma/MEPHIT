@@ -30,8 +30,8 @@ program vacfield
   read (fid) nflux, npoint, ntri
   call fs%init(nflux, .false.)
   call fs_half%init(nflux, .true.)
-  read (fid) fs%psi
-  read (fid) fs_half%psi
+  read (fid) fs%psi, fs%rad
+  read (fid) fs_half%psi, fs_half%rad
   allocate(mesh_point(npoint))
   read (fid) mesh_point
   allocate(mesh_element(ntri))
