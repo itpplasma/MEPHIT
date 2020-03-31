@@ -169,7 +169,7 @@ contains
     function q_interp_resonant(psi)
       real(dp), intent(in) :: psi
       real(dp) :: q_interp_resonant
-      q_interp_resonant = psi_eqd%interp(abs(q_sample) - dble(m) / dble(n), psi)
+      q_interp_resonant = psi_eqd%interp(abs(q_sample), psi) - dble(m) / dble(n)
     end function q_interp_resonant
   end subroutine refine_resonant_surfaces
 
@@ -181,9 +181,9 @@ contains
     use magdif, only: equil, kp_low, kp_max, kt_low, init_indices, fs, fs_half
 
     character(len = *), intent(in) :: convexfile
-    integer :: fid, k, nlabel, kf, kp, kpoi
-    real(dp) :: rho_max, theta
-    real(dp), dimension(:), allocatable :: r_eqd, rho_norm_eqd, sample_psi
+    integer :: fid, k, nlabel, ntheta, kq, kf, kp, kpoi
+    real(dp) :: rho, rho_max, theta, R, Z, B0_phi, dum
+    real(dp), dimension(:), allocatable :: r_eqd, rho_norm_eqd, sample_psi, q_half
     type(flux_func) :: psi_interpolator
 
     ! calculate maximal extent from magnetic axis
@@ -196,6 +196,7 @@ contains
     open(newunit = fid, file = 'preload_for_SYNCH.inp', status = 'old')
     read (fid, *)
     read (fid, *) nlabel
+    read (fid, *) ntheta
     close(fid)
     allocate(r_eqd(nlabel))
     allocate(sample_psi(nlabel))
@@ -205,10 +206,27 @@ contains
     rho_norm_eqd = linspace(0d0, 1d0, nlabel, 0, 0)
     call psi_interpolator%init(4, sample_psi)
 
+    ! interpolate between psi and q
+    allocate(q_half(nlabel - 1))
+    q_half = 0d0
+    do k = 1, nlabel - 1
+       rho = 0.5d0 * sum(rho_norm_eqd(k:k+1)) * rho_max
+       do kq = 1, ntheta
+          theta = (kq - 0.5d0) / dble(ntheta) * 2d0 * pi
+          R = equil%rmaxis + rho * cos(theta)
+          Z = equil%zmaxis + rho * sin(theta)
+          call field(R, 0d0, Z, dum, B0_phi, dum, dum, dum, dum, dum, dum, dum, dum, &
+               dum, dum)
+          q_half(k) = q_half(k) + B0_phi
+       end do
+       q_half(k) = q_half(k) * 0.5d0 * (rho_norm_eqd(k+1) ** 2 - rho_norm_eqd(k) ** 2) * &
+            rho_max ** 2 / (sample_psi(k+1) - sample_psi(k)) / dble(ntheta)
+    end do
+
     call fs%init(nflux, .false.)
     call fs_half%init(nflux, .true.)
-    call refine_resonant_surfaces(linspace(equil%simag, equil%sibry, equil%nw, 0, 0), &
-         equil%qpsi, psi2rho_norm, fs%rad)
+    call refine_resonant_surfaces([(interp_psi_pol(0.5d0 * sum(r_eqd(k:k+1)), &
+         equil%zmaxis), k = 1, nlabel - 1)], q_half, psi2rho_norm, fs%rad)
     fs%rad = fs%rad * rho_max
     fs%psi = [(interp_psi_pol(equil%rmaxis + fs%rad(kf), equil%zmaxis), kf = 0, nflux)]
     fs_half%rad = 0.5d0 * (fs%rad(0:nflux-1) + fs%rad(1:nflux))
@@ -233,6 +251,7 @@ contains
        end do
     end do
     call write_kilca_convexfile(rho_max, convexfile)
+    if (allocated(q_half)) deallocate(q_half)
     if (allocated(rho_norm_eqd)) deallocate(rho_norm_eqd)
     if (allocated(sample_psi)) deallocate(sample_psi)
     if (allocated(r_eqd)) deallocate(r_eqd)
@@ -267,9 +286,10 @@ contains
   subroutine create_mesh_points
     use mesh_mod, only: npoint, mesh_point, ntri, mesh_element, mesh_element_rmp
     use magdif_config, only: nflux, nkpol
-    use magdif_util, only: interp_psi_pol, linspace, flux_func
-    use magdif, only: equil, kp_low, kt_low, init_indices, fs, fs_half
-    use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, raxis, zaxis
+    use magdif_util, only: interp_psi_pol, flux_func
+    use magdif, only: kp_low, kt_low, init_indices, fs, fs_half
+    use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
+         raxis, zaxis
     use field_line_integration_mod, only: theta0_at_xpoint, theta_axis
     use points_2d, only: s_min, create_points_2d
 
@@ -295,8 +315,8 @@ contains
 
     call fs%init(nflux, .false.)
     call fs_half%init(nflux, .true.)
-    call refine_resonant_surfaces(linspace(equil%simag, equil%sibry, equil%nw, 0, 0), &
-         equil%qpsi, psi2rho_norm, fs%rad)
+    call refine_resonant_surfaces(psisurf * psipol_max + psi_axis, qsaf, psi2rho_norm, &
+         fs%rad)
     fs%psi = [(interp_psi_pol(raxis + fs%rad(kf) * theta_axis(1), &
          zaxis + fs%rad(kf) * theta_axis(2)), kf = 0, nflux)]
     fs_half%rad = 0.5d0 * (fs%rad(0:nflux-1) + fs%rad(1:nflux))
