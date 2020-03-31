@@ -58,28 +58,6 @@ contains
     if (allocated(mesh_point)) deallocate(mesh_point)
   end subroutine generate_mesh
 
-  subroutine compute_resonant_surfaces(m_res_min, m_res_max, psi_res)
-    use magdif_config, only: n
-    use magdif_util, only: linspace, flux_func
-    use magdif, only: equil
-    use netlib_mod, only: zeroin
-    integer, intent(in) :: m_res_min, m_res_max
-    real(dp), intent(out) :: psi_res(m_res_min:m_res_max)
-    integer :: m
-    type(flux_func) :: psi_eqd
-
-    call psi_eqd%init(4, linspace(equil%simag, equil%sibry, equil%nw, 0, 0))
-    do m = m_res_min, m_res_max
-       psi_res(m) = zeroin(equil%simag, equil%sibry, q_interp_resonant, 1d-9)
-    end do
-  contains
-    function q_interp_resonant(psi)
-      real(dp), intent(in) :: psi
-      real(dp) :: q_interp_resonant
-      q_interp_resonant = psi_eqd%interp(abs(equil%qpsi) - dble(m) / dble(n), psi)
-    end function q_interp_resonant
-  end subroutine compute_resonant_surfaces
-
   subroutine refine_eqd_partition(nref, deletions, additions, refinement, res, refined)
     use magdif_config, only: nflux_unref, nflux
     use magdif_util, only: linspace
@@ -147,38 +125,53 @@ contains
     if (allocated(geom_ser)) deallocate(geom_ser)
   end subroutine refine_eqd_partition
 
-  subroutine radial_refinement(rho_norm_ref, psi2rho_norm)
+  subroutine refine_resonant_surfaces(psi_sample, q_sample, psi2rho_norm, rho_norm_ref)
     use magdif_config, only: n, refinement, additions, deletions, sheet_current_factor, &
          read_delayed_config
-    use magdif, only: equil
+    use magdif_util, only: flux_func
+    use netlib_mod, only: zeroin
+    real(dp), dimension(:), intent(in) :: psi_sample
+    real(dp), dimension(size(psi_sample)) :: q_sample
+    procedure(mapping) :: psi2rho_norm
     real(dp), dimension(:), allocatable, intent(out) :: rho_norm_ref
-    procedure(mapping), optional :: psi2rho_norm
+    real(dp) :: psi_min, psi_max
     integer :: m_res_min, m_res_max, m
+    type(flux_func) :: psi_eqd
     real(dp), dimension(:), allocatable :: psi_res, rho_res
     logical, dimension(:), allocatable :: mask
 
-    m_res_min = ceiling(minval(abs(equil%qpsi)) * dble(n))
-    m_res_max = floor(maxval(abs(equil%qpsi)) * dble(n))
+    psi_min = minval(psi_sample)
+    psi_max = maxval(psi_sample)
+    call psi_eqd%init(4, psi_sample)
+    m_res_min = ceiling(minval(abs(q_sample)) * dble(n))
+    m_res_max = floor(maxval(abs(q_sample)) * dble(n))
     allocate(psi_res(m_res_min:m_res_max))
-    call compute_resonant_surfaces(m_res_min, m_res_max, psi_res)
-    allocate(rho_res(size(psi_res)))
-    if (present(psi2rho_norm)) then
-       rho_res = [(psi2rho_norm(psi_res(m)), m = m_res_min, m_res_max)]
-    else
-       rho_res = sqrt((psi_res - equil%simag) / (equil%sibry - equil%simag))  ! stub
-    end if
+    do m = m_res_min, m_res_max
+       psi_res(m) = zeroin(psi_min, psi_max, q_interp_resonant, 1d-9)
+    end do
+    allocate(rho_res(m_res_min:m_res_max))
+    rho_res = [(psi2rho_norm(psi_res(m)), m = m_res_min, m_res_max)]
     call read_delayed_config(m_res_min, m_res_max)
+    allocate(mask(m_res_min:m_res_max))
     mask = 0d0 < refinement .and. refinement < 1d0
     call refine_eqd_partition(count(mask), pack(deletions, mask), pack(additions, mask), &
          pack(refinement, mask), pack(rho_res, mask), rho_norm_ref)
 
+    if (allocated(mask)) deallocate(mask)
     if (allocated(rho_res)) deallocate(rho_res)
     if (allocated(psi_res)) deallocate(psi_res)
     if (allocated(refinement)) deallocate(refinement)
     if (allocated(deletions)) deallocate(deletions)
     if (allocated(additions)) deallocate(additions)
     if (allocated(sheet_current_factor)) deallocate(sheet_current_factor)
-  end subroutine radial_refinement
+
+  contains
+    function q_interp_resonant(psi)
+      real(dp), intent(in) :: psi
+      real(dp) :: q_interp_resonant
+      q_interp_resonant = psi_eqd%interp(abs(q_sample) - dble(m) / dble(n), psi)
+    end function q_interp_resonant
+  end subroutine refine_resonant_surfaces
 
   subroutine create_kilca_mesh_points(convexfile)
     use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
@@ -214,7 +207,8 @@ contains
 
     call fs%init(nflux, .false.)
     call fs_half%init(nflux, .true.)
-    call radial_refinement(fs%rad, psi2rho_norm)
+    call refine_resonant_surfaces(linspace(equil%simag, equil%sibry, equil%nw, 0, 0), &
+         equil%qpsi, psi2rho_norm, fs%rad)
     fs%rad = fs%rad * rho_max
     fs%psi = [(interp_psi_pol(equil%rmaxis + fs%rad(kf), equil%zmaxis), kf = 0, nflux)]
     fs_half%rad = 0.5d0 * (fs%rad(0:nflux-1) + fs%rad(1:nflux))
@@ -273,8 +267,8 @@ contains
   subroutine create_mesh_points
     use mesh_mod, only: npoint, mesh_point, ntri, mesh_element, mesh_element_rmp
     use magdif_config, only: nflux, nkpol
-    use magdif_util, only: interp_psi_pol, flux_func
-    use magdif, only: kp_low, kt_low, init_indices, fs, fs_half
+    use magdif_util, only: interp_psi_pol, linspace, flux_func
+    use magdif, only: equil, kp_low, kt_low, init_indices, fs, fs_half
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, raxis, zaxis
     use field_line_integration_mod, only: theta0_at_xpoint, theta_axis
     use points_2d, only: s_min, create_points_2d
@@ -301,7 +295,8 @@ contains
 
     call fs%init(nflux, .false.)
     call fs_half%init(nflux, .true.)
-    call radial_refinement(fs%rad, psi2rho_norm)
+    call refine_resonant_surfaces(linspace(equil%simag, equil%sibry, equil%nw, 0, 0), &
+         equil%qpsi, psi2rho_norm, fs%rad)
     fs%psi = [(interp_psi_pol(raxis + fs%rad(kf) * theta_axis(1), &
          zaxis + fs%rad(kf) * theta_axis(2)), kf = 0, nflux)]
     fs_half%rad = 0.5d0 * (fs%rad(0:nflux-1) + fs%rad(1:nflux))
