@@ -167,12 +167,19 @@ contains
   !> Initialize magdif module
   subroutine magdif_init
     use input_files, only: gfile
+    use magdata_in_symfluxcoor_mod, only: nlabel, ntheta
+    integer :: fid
 
     call log_open
 
     ! only depends on config variables
     call read_mesh
     if (kilca_scale_factor /= 0) then
+       open(newunit = fid, file = 'preload_for_SYNCH.inp', status = 'old')
+       read (fid, *)
+       read (fid, *) nlabel
+       read (fid, *) ntheta
+       close(fid)
     else
        call load_magdata_in_symfluxcoord
     end if
@@ -1689,6 +1696,7 @@ contains
   end subroutine write_fluxvar
 
   subroutine write_poloidal_modes(pol_flux, tor_comp, outfile)
+    use magdata_in_symfluxcoor_mod, only: nlabel, ntheta
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
@@ -1697,12 +1705,12 @@ contains
     character(len = 19) :: fmt
     complex(dp), dimension(-mmax:mmax) :: coeff_rad, coeff_pol, coeff_tor, fourier_basis
     integer :: kf, kt, ktri, m, fid_rad, fid_pol, fid_tor
-    integer :: kilca_m_res, fid_furth  ! only KiLCA geometry
+    integer :: kilca_m_res, fid_furth, fid_par  ! only KiLCA geometry
     type(triangle_rmp) :: tri
     complex(dp) :: comp_r, comp_z, comp_rad, comp_pol
-    complex(dp) :: sheet_current  ! only KiLCA geometry
+    complex(dp) :: comp_par, sheet_current  ! only KiLCA geometry
     real(dp) :: r, z, theta, B0_R, B0_Z, dum
-    real(dp) :: k_zeta, k_theta  ! only KiLCA geometry
+    real(dp) :: k_zeta, k_theta, rho, B0_phi  ! only KiLCA geometry
     real(dp) :: sqrt_g, dR_dtheta, dZ_dtheta, q, q_sum  ! only ASDEX geometry
 
     write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(1es22.15, 1x))'
@@ -1790,6 +1798,30 @@ contains
     close(fid_tor)
     if (kilca_pol_mode /= 0) then
        close(fid_furth)
+    end if
+    ! calculate parallel current (density) on a finer grid
+    if (kilca_pol_mode /= 0) then
+       open(newunit = fid_par, status = 'replace', &
+            file = decorate_filename(outfile, '', '_par'))
+       do kf = 1, nlabel
+          rho = fs%rad(nflux) * (dble(kf) - 0.5d0) / dble(nlabel)
+          comp_par = 0d0
+          do kt = 1, ntheta
+             theta = 2d0 * pi * (dble(kt) - 0.5d0) / dble(ntheta)
+             R = equil%rmaxis + rho * cos(theta)
+             Z = equil%zmaxis + rho * sin(theta)
+             call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
+                  dum, dum)
+             ktri = point_location(R, Z)
+             tri = mesh_element_rmp(ktri)
+             call interp_RT0(ktri, pol_flux, R, Z, comp_r, comp_z)
+             comp_par = comp_par + (comp_r * B0_R + comp_z * B0_Z + jnphi(ktri) * B0_phi) / &
+                  sqrt(B0_R * B0_R + B0_Z * B0_Z + B0_phi * B0_phi)
+          end do
+          comp_par = comp_par * 2d0 * pi / dble(ntheta)
+          write (fid_par, '(3(1x, es23.16))') rho, comp_par
+       end do
+       close(fid_par)
     end if
   end subroutine write_poloidal_modes
 end module magdif
