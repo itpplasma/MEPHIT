@@ -372,6 +372,7 @@ contains
     call write_poloidal_modes(Bnflux, Bnphi, 'Bmn.dat')
     call write_poloidal_modes(Bnflux_vac, Bnphi_vac, 'Bmn_vac.dat')
     call write_poloidal_modes(Bnflux - Bnflux_vac, Bnphi - Bnphi_vac, 'Bmn_plas.dat')
+    call write_poloidal_modes(jnflux, jnphi, 'currmn.dat')
 
     if (allocated(Lr)) deallocate(Lr)
 
