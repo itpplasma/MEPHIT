@@ -311,11 +311,11 @@ contains
     ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
     ! load_magdata_in_symfluxcoord_ext divides by psipol_max
     psi_axis = interp_psi_pol(raxis, zaxis)
-    call psi_interpolator%init(4, psisurf * psipol_max + psi_axis)
+    call psi_interpolator%init(4, psisurf(1:) * psipol_max + psi_axis)
 
     call fs%init(nflux, .false.)
     call fs_half%init(nflux, .true.)
-    call refine_resonant_surfaces(psisurf * psipol_max + psi_axis, qsaf, psi2rho_norm, &
+    call refine_resonant_surfaces(psisurf(1:) * psipol_max + psi_axis, qsaf, psi2rho_norm, &
          fs%rad)
     fs%psi = [(interp_psi_pol(raxis + fs%rad(kf) * theta_axis(1), &
          zaxis + fs%rad(kf) * theta_axis(2)), kf = 0, nflux)]

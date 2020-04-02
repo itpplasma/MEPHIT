@@ -22,8 +22,12 @@ find_package(SuperLU REQUIRED)
 include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
 
 ### Set compiler flags
-set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fbounds-check -Wall")  # -ffpe-trap=invalid,zero,overflow
-# set(CMAKE_Fortran_FLAGS "-O2 -fpp -g -check all -warn all")  # ifort configuration
+# gfortran configuration
+set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fcheck=all -ffpe-trap=invalid,zero,overflow")
+set(WARNING_FLAGS "-Wall -Wextra")
+# ifort configuration
+# set(CMAKE_Fortran_FLAGS "-O2 -fpp -g -check all")
+# set(WARNING_FLAGS "-warn all")
 
 ### Define libraries
 add_library(magdif SHARED
@@ -63,7 +67,7 @@ find_library(gsl_lib gsl ${GSL_LIB})
 set(FGSL_LIB ${FGSL_PATH}/lib/ CACHE STRING "FGSL lib")
 set(FGSL_INC ${FGSL_PATH}/include/fgsl/ CACHE STRING "FGSL include")
 find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
-set(FGSL_FLAGS "${CMAKE_Fortran_FLAGS} -I${FGSL_INC}")
+set(FGSL_FLAGS "-I${FGSL_INC}")
 
 ### Add helper script to binaries
 configure_file(scripts/magdif.bash bin/magdif COPYONLY)
@@ -74,7 +78,16 @@ add_executable(standardise_equilibrium.x src/standardise_equilibrium.f90)
 add_executable(magdif_mesher.x src/magdif_mesher.f90)
 add_executable(vacfield.x src/vacfield.f90)
 
-set_target_properties(magdif PROPERTIES COMPILE_FLAGS ${FGSL_FLAGS})
+### Add compiler flags
+set_target_properties(magdif PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${FGSL_FLAGS}")
+set_source_files_properties(src/magdif.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
+set_source_files_properties(src/magdif_config.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
+set_source_files_properties(src/magdif_util.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
+set_source_files_properties(src/magdif_mesh_mod.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
+set_source_files_properties(src/magdif_mesher.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
+set_source_files_properties(src/magdif_test.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
+set_source_files_properties(src/vacfield.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
+set_source_files_properties(src/standardise_equilibrium.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
 
 ### Linking
 set(MAGDIF_LIBS magdif ${SUPERLU_LIBRARIES} ${SUITESPARSE_LIBRARIES} ${gsl_lib} ${fgsl_lib} blas lapack)
