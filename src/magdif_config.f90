@@ -53,9 +53,6 @@ module magdif_config
   real(dp) :: di0             !< interpolation step for density
   real(dp) :: damp            !< damping factor for resonances
 
-  !> Distance of magnetic axis from center \f$ R_{0} \f$ in cm.
-  real(dp) :: R0 = 172.74467899999999d0
-
   integer, dimension(:), allocatable :: deletions
   integer, dimension(:), allocatable :: additions
   real(dp), dimension(:), allocatable :: refinement
@@ -137,7 +134,7 @@ module magdif_config
 
   !> namelists for input parameters
   namelist /settings/ log_level, runmode, pres_prof, nonres, quad_avg, niter, nritz, &
-       tol, n, nkpol, nflux_unref, ti0, di0, t_min, d_min, damp, R0, meshdata_file, &
+       tol, n, nkpol, nflux_unref, ti0, di0, t_min, d_min, damp, meshdata_file, &
        Bn_vacout_file, Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, &
        presn_file, currn_file, eigvec_file, rel_err_Bn, rel_err_currn, kilca_pol_mode, &
        kilca_vac_coeff, kilca_scale_factor, max_eig_out, curr_prof, q_prof, conv_file, &
@@ -164,7 +161,6 @@ contains
     if (log_level > 3) log_debug = .true.
 
     if (kilca_scale_factor /= 0) then
-       R0 = R0 * kilca_scale_factor
        n = n * kilca_scale_factor
     end if
   end subroutine read_config

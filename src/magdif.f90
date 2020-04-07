@@ -894,9 +894,6 @@ contains
           write (fid, '(5(1x, es23.16))') r, z, Br, Bz, Bp
        end do
     end do
-    do ktri = kt_low(nflux+1) + 1, ntri
-       write (fid, '(5(1x, es23.16))') R0, 0d0, 0d0, 0d0, 0d0
-    end do
     close(fid)
   end subroutine cache_equilibrium_field
 
@@ -1002,9 +999,6 @@ contains
           write (fid, '(4(1x, es23.16))') &
                j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), plot_j0phi
        end do
-    end do
-    do ktri = kt_low(nflux+1) + 1, ntri
-       write (fid, '(4(1x, es23.16))') j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), 0d0
     end do
     close(fid)
 
@@ -1415,7 +1409,7 @@ contains
           r = (base%rcoord + tip%rcoord) * 0.5d0
           lr = tip%rcoord - base%rcoord
           lz = tip%zcoord - base%zcoord
-          Bnpsi = -R0 * B0phi(ktri, tri%ef) / r
+          Bnpsi = -equil%rcentr * B0phi(ktri, tri%ef) / r
           Bnflux(ktri, tri%ef) = Bnpsi * (lr ** 2 + lz ** 2) / &
                (B0r(ktri, tri%ef) * lr + B0z(ktri, tri%ef) * lz)
           Bnphi(ktri) = imun / n * Bnflux(ktri, tri%ef) / tri%area
@@ -1477,7 +1471,7 @@ contains
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
 
-    integer :: kf, kt, ktri, n_cutoff, fid
+    integer :: k, kf, kt, ktri, n_cutoff, fid
     type(triangle_rmp) :: tri
     complex(dp) :: pol_comp_r, pol_comp_z, dens_psi_contravar, proj_theta_covar
     real(dp) :: r, z
@@ -1511,7 +1505,7 @@ contains
     r = mesh_point(1)%rcoord
     z = mesh_point(1)%zcoord
     do ktri = kt_low(n_cutoff+1) + 1, ntri
-       write (fid, '(12(1x, es23.16))') r, z, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
+       write (fid, '(12(1x, es23.16))') r, z, (0d0, k = 1, 10)
     end do
     close(fid)
   end subroutine write_vector_plot
@@ -1656,9 +1650,6 @@ contains
             real(tor_comp(ktri) * mesh_element_rmp(ktri)%area), &
             aimag(tor_comp(ktri) * mesh_element_rmp(ktri)%area)
     end do
-    do ktri = kt_low(nflux+1) + 1, ntri
-       write (fid, '(8(1x, es23.16))') 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0, 0d0
-    end do
     close(fid)
   end subroutine write_vector_dof
 
@@ -1674,9 +1665,6 @@ contains
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
     do kpoint = 1, kp_low(nflux+1)
        write (fid, '(2(1x, es23.16))') real(scalar_dof(kpoint)), aimag(scalar_dof(kpoint))
-    end do
-    do kpoint = kp_low(nflux+1) + 1, npoint ! write zeroes in remaining points until end
-       write (fid, '(2(1x, es23.16))') 0d0, 0d0
     end do
     close(fid)
   end subroutine write_scalar_dof
@@ -1717,7 +1705,7 @@ contains
     write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(1es22.15, 1x))'
     if (kilca_scale_factor /= 0) then
        kilca_m_res = -equil%cocos%sgn_q * abs(kilca_pol_mode)
-       k_zeta = n / R0
+       k_zeta = n / equil%rcentr
        open(newunit = fid_rad, recl = 3 * longlines, status = 'replace', &
             file = decorate_filename(outfile, '', '_r'))
        open(newunit = fid_pol, recl = 3 * longlines, status = 'replace', &

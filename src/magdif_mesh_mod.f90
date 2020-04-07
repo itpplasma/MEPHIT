@@ -493,7 +493,7 @@ contains
   ! calculate resonant vacuum perturbation
   subroutine compute_kilca_vacuum
     use mesh_mod, only: ntri, triangle_rmp, mesh_element_rmp, mesh_point
-    use magdif_config, only: n, R0, kilca_scale_factor, kilca_pol_mode, Bn_vac_file
+    use magdif_config, only: n, kilca_scale_factor, kilca_pol_mode, Bn_vac_file
     use magdif_util, only: imun
     use magdif, only: equil, Bnflux, Bnphi, check_redundant_edges, check_div_free, &
          write_vector_dof
@@ -514,7 +514,7 @@ contains
        z = sum(mesh_point(tri%lf(:))%zcoord) * 0.5d0
        rho = hypot(r - equil%rmaxis, z - equil%zmaxis)
        theta = atan2(z - equil%zmaxis, r - equil%rmaxis)
-       call kilca_vacuum(n, kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
+       call kilca_vacuum(n, kilca_pol_mode, equil%rcentr, rho, theta, Br, Bp, Bz)
        Bnflux(ktri, tri%ef) = (Br * n_r + Bz * n_z) * r
        ! flux through edge i
        n_r = mesh_point(tri%li(2))%zcoord - mesh_point(tri%li(1))%zcoord
@@ -523,7 +523,7 @@ contains
        z = sum(mesh_point(tri%li(:))%zcoord) * 0.5d0
        rho = hypot(r - equil%rmaxis, z - equil%zmaxis)
        theta = atan2(z - equil%zmaxis, r - equil%rmaxis)
-       call kilca_vacuum(n, kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
+       call kilca_vacuum(n, kilca_pol_mode, equil%rcentr, rho, theta, Br, Bp, Bz)
        Bnflux(ktri, tri%ei) = (Br * n_r + Bz * n_z) * r
        ! flux through edge o
        n_r = mesh_point(tri%lo(2))%zcoord - mesh_point(tri%lo(1))%zcoord
@@ -532,7 +532,7 @@ contains
        z = sum(mesh_point(tri%lo(:))%zcoord) * 0.5d0
        rho = hypot(r - equil%rmaxis, z - equil%zmaxis)
        theta = atan2(z - equil%zmaxis, r - equil%rmaxis)
-       call kilca_vacuum(n, kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
+       call kilca_vacuum(n, kilca_pol_mode, equil%rcentr, rho, theta, Br, Bp, Bz)
        Bnflux(ktri, tri%eo) = (Br * n_r + Bz * n_z) * r
        ! toroidal flux
        Bnphi(ktri) = imun / n * sum(Bnflux(ktri, :)) / tri%area

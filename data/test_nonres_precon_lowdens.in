@@ -36,8 +36,6 @@
    d_min = 2d11
    ! damping factor for resonances
    damp = 0d0
-   ! distance of magnetic axis from center in cm
-   R0 = 172.74467899999999d0
    ! meshdata file
    meshdata_file = 'mesh.dat'
    ! vacuum perturbation field
