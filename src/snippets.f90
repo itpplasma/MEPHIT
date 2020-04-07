@@ -188,3 +188,31 @@ end program connectivity
                / elem%det_3 * 2d0
           Bnflux(kt_low(kf) + kt, ei) = -1d-2 * (psi(kf) - psi(kf-1))
           Bnflux(kt_low(kf) + kt, eo) = 1d-2 * (psi(kf) - psi(kf-1))
+
+  subroutine check_kilca_vacuum
+    use fgsl, only: fgsl_double, fgsl_int, fgsl_success, fgsl_sf_bessel_icn_array
+    use magdif_config, only: n, nkpol, R0, kilca_pol_mode, log_msg, log_err, log_write, kilca_vac_coeff, longlines
+    use magdif_util, only: imun
+    use magdif, only: fs_half
+    complex(dp) :: B_r, B_theta, B_z
+    real(fgsl_double) :: I_m(-1:1), k_z_r
+    integer(fgsl_int) :: status
+    integer :: kf, fid
+    real(dp) :: r
+
+    open(newunit = fid, file = 'cmp_vac.dat', recl = longlines)
+    do kf = 1, ubound(fs_half%rad, 1)
+       r = fs_half%rad(kf)
+       k_z_r = n / R0 * r
+       status = fgsl_sf_bessel_icn_array(abs(kilca_pol_mode)-1, abs(kilca_pol_mode)+1, k_z_r, I_m)
+       if (status /= fgsl_success .and. log_err) then
+          write (log_msg, '("fgsl_sf_bessel_icn_array returned error ", i0)') status
+          call log_write
+       end if
+       B_r = 0.5d0 * (I_m(-1) + I_m(1)) * kilca_vac_coeff
+       B_theta = imun * kilca_pol_mode / k_z_r * I_m(0) * kilca_vac_coeff
+       B_z = imun * I_m(0) * kilca_vac_coeff
+       write (fid, '(7(1x, es23.16))') r, B_r, B_theta, B_z
+    end do
+    close(fid)
+  end subroutine check_kilca_vacuum

@@ -498,13 +498,11 @@ contains
     use magdif, only: equil, Bnflux, Bnphi, check_redundant_edges, check_div_free, &
          write_vector_dof
 
-    integer :: tor_mode, ktri
+    integer :: ktri
     real(dp) :: r, z, n_r, n_z, rho, theta
     complex(dp) :: Br, Bp, Bz
     type(triangle_rmp) :: tri
 
-    ! n is already rescaled, but we need the unmodified toroidal mode number here
-    tor_mode = n / kilca_scale_factor
     allocate(Bnflux(ntri, 3))
     allocate(Bnphi(ntri))
     do ktri = 1, ntri
@@ -516,7 +514,7 @@ contains
        z = sum(mesh_point(tri%lf(:))%zcoord) * 0.5d0
        rho = hypot(r - equil%rmaxis, z - equil%zmaxis)
        theta = atan2(z - equil%zmaxis, r - equil%rmaxis)
-       call kilca_vacuum(tor_mode, kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
+       call kilca_vacuum(n, kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
        Bnflux(ktri, tri%ef) = (Br * n_r + Bz * n_z) * r
        ! flux through edge i
        n_r = mesh_point(tri%li(2))%zcoord - mesh_point(tri%li(1))%zcoord
@@ -525,7 +523,7 @@ contains
        z = sum(mesh_point(tri%li(:))%zcoord) * 0.5d0
        rho = hypot(r - equil%rmaxis, z - equil%zmaxis)
        theta = atan2(z - equil%zmaxis, r - equil%rmaxis)
-       call kilca_vacuum(tor_mode, kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
+       call kilca_vacuum(n, kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
        Bnflux(ktri, tri%ei) = (Br * n_r + Bz * n_z) * r
        ! flux through edge o
        n_r = mesh_point(tri%lo(2))%zcoord - mesh_point(tri%lo(1))%zcoord
@@ -534,14 +532,13 @@ contains
        z = sum(mesh_point(tri%lo(:))%zcoord) * 0.5d0
        rho = hypot(r - equil%rmaxis, z - equil%zmaxis)
        theta = atan2(z - equil%zmaxis, r - equil%rmaxis)
-       call kilca_vacuum(tor_mode, kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
+       call kilca_vacuum(n, kilca_pol_mode, R0, rho, theta, Br, Bp, Bz)
        Bnflux(ktri, tri%eo) = (Br * n_r + Bz * n_z) * r
        ! toroidal flux
-       Bnphi(ktri) = imun / tor_mode * sum(Bnflux(ktri, :)) / tri%area
+       Bnphi(ktri) = imun / n * sum(Bnflux(ktri, :)) / tri%area
     end do
     call check_redundant_edges(Bnflux, .false., 'vacuum B_n')
-    call check_div_free(Bnflux, Bnphi, tor_mode, 1d-9, 'vacuum B_n')
-    Bnflux = Bnflux * kilca_scale_factor
+    call check_div_free(Bnflux, Bnphi, n, 1d-9, 'vacuum B_n')
     call write_vector_dof(Bnflux, Bnphi, Bn_vac_file)
     if (allocated(Bnflux)) deallocate(Bnflux)
     if (allocated(Bnphi)) deallocate(Bnphi)
@@ -569,8 +566,7 @@ contains
     B_theta = -pol_mode / k_z_r * I_m(0) * sin(pol_mode * theta) * kilca_vac_coeff
     B_z = imun * I_m(0) * cos(pol_mode * theta) * kilca_vac_coeff
     Br = B_r * cos(theta) - B_theta * sin(theta)
-    Bp = B_z
+    Bp = B_z ! * (1d0 + r / R_0 * cos(theta))  ! exact version - probably not necessary
     Bz = B_r * sin(theta) + B_theta * cos(theta)
   end subroutine kilca_vacuum
-
 end module magdif_mesh_mod
