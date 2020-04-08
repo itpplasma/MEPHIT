@@ -283,12 +283,13 @@ contains
     this%cocos = sign_convention(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
     this%cocos%exp_Bpol = 0  ! specified by G EQDSK format and assumed in field_divB0.f90
     this%cocos%sgn_cyl = +1  ! specified by G EQDSK format and assumed in field_divB0.f90
-    this%cocos%sgn_dpsi = sign_array([this%sibry - this%simag], 'SIMAG/SIBRY', this%fname)
-    this%cocos%sgn_Btor = sign_array([this%bcentr], 'BCENTR', this%fname)
-    this%cocos%sgn_Itor = sign_array([this%current], 'CURRENT', this%fname)
-    this%cocos%sgn_F = sign_array(this%fpol, 'FPOL', this%fname)
-    this%cocos%sgn_dp_dpsi = sign_array(this%pprime, 'PPRIME', this%fname)
-    this%cocos%sgn_q = sign_array(this%qpsi, 'QPSI', this%fname)
+    this%cocos%sgn_dpsi = sign_array([this%sibry - this%simag], .true., 'SIMAG/SIBRY')
+    this%cocos%sgn_Btor = sign_array([this%bcentr], .true., 'BCENTR')
+    this%cocos%sgn_Itor = sign_array([this%current], .true., 'CURRENT')
+    this%cocos%sgn_F = sign_array(this%fpol, .true., 'FPOL')
+    ! p may increase outwardly over a small region, so we avoid a strict comparison
+    this%cocos%sgn_dp_dpsi = sign_array(this%pprime, .false., 'PPRIME')
+    this%cocos%sgn_q = sign_array(this%qpsi, .true., 'QPSI')
     this%cocos%sgn_Bpol = this%cocos%sgn_dpsi * this%cocos%sgn_Itor
     this%cocos%sgn_pol = this%cocos%sgn_q * this%cocos%sgn_Itor * this%cocos%sgn_Btor
     if (this%cocos%sgn_Bpol == +1) then
@@ -310,19 +311,23 @@ contains
     end if
 
   contains
-    function sign_array(array, name, fname) result(sign)
+    function sign_array(array, strict, name)
       use magdif_config, only: log_msg, log_write, log_warn
       real(dp), intent(in), dimension(:) :: array
-      character(len = *), intent(in) :: name, fname
-      integer :: sign
-      if (all(array > 0d0)) then
-         sign = +1
-      elseif (all(array < 0d0)) then
-         sign = -1
+      logical, intent(in) :: strict
+      character(len = *), intent(in) :: name
+      integer :: sign_array, pos, neg, all
+      pos = count(array > 0d0)
+      neg = count(array < 0d0)
+      all = size(array)
+      if ((strict .and. all == pos) .or. (.not. strict .and. pos > neg)) then
+         sign_array = +1
+      elseif ((strict .and. all == neg) .or. (.not. strict .and. neg > pos)) then
+         sign_array = -1
       else
-         sign = 0
+         sign_array = 0
          write (log_msg, '("Sign of ", a, " is inconsistent in ", a)') &
-              trim(name), trim(fname)
+              trim(name), trim(this%fname)
          if (log_warn) call log_write
       end if
     end function sign_array
@@ -337,20 +342,26 @@ contains
     if (this%cocos%sgn_Btor /= this%cocos%sgn_F) then
        write (log_msg, incons_fmt) 'FPOL', 'BCENTR'
        if (log_warn) call log_write
-       write (log_msg, invert_fmt) 'FPOL'
-       if (log_info) call log_write
-       this%fpol = -this%fpol
-       this%cocos%sgn_F = -this%cocos%sgn_F
+       ! only modify array if signs are consistent
+       if (this%cocos%sgn_F /= 0) then
+          write (log_msg, invert_fmt) 'FPOL'
+          if (log_info) call log_write
+          this%fpol = -this%fpol
+          this%cocos%sgn_F = -this%cocos%sgn_F
+       end if
     end if
     if (this%cocos%sgn_dp_dpsi /= -this%cocos%sgn_dpsi) then
        write (log_msg, incons_fmt) 'PPRIME', 'SIMAG/SIBRY'
        if (log_warn) call log_write
-       write (log_msg, invert_fmt) 'PPRIME'
-       if (log_info) call log_write
-       this%pprime = -this%pprime
-       this%cocos%sgn_dp_dpsi = -this%cocos%sgn_dp_dpsi
+       ! only modify array if signs are consistent
+       if (this%cocos%sgn_dp_dpsi /= 0) then
+          write (log_msg, invert_fmt) 'PPRIME'
+          if (log_info) call log_write
+          this%pprime = -this%pprime
+          this%cocos%sgn_dp_dpsi = -this%cocos%sgn_dp_dpsi
+       end if
     end if
-    if (this%cocos%sgn_Bpol /= -1) then
+    if (this%cocos%sgn_Bpol == +1) then
        write (log_msg, invert_fmt) 'SIMAG/SIBRY, PSIRZ, PPRIME, FFPRIM'
        this%simag = -this%simag
        this%sibry = -this%sibry
@@ -361,7 +372,7 @@ contains
        this%ffprim = -this%ffprim
        this%cocos%sgn_Bpol = -this%cocos%sgn_Bpol
     end if
-    if (this%cocos%sgn_pol /= -1) then
+    if (this%cocos%sgn_pol == +1) then
        write (log_msg, invert_fmt) 'QPSI'
        this%qpsi = -this%qpsi
        this%cocos%sgn_q = -this%cocos%sgn_q
