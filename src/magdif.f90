@@ -369,10 +369,10 @@ contains
     call write_vector_dof(Bnflux, Bnphi, Bn_file)
     call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_', ''))
     call write_vector_plot_rect(Bnflux, Bnphi, decorate_filename(Bn_file, 'rect_', ''))
-    call write_poloidal_modes(Bnflux, Bnphi, 'Bmn.dat')
+    call write_poloidal_modes(Bnflux, Bnphi, 'Bmn.dat', .true.)
     call write_poloidal_modes(Bnflux_vac, Bnphi_vac, 'Bmn_vac.dat')
     call write_poloidal_modes(Bnflux - Bnflux_vac, Bnphi - Bnphi_vac, 'Bmn_plas.dat')
-    call write_poloidal_modes(jnflux, jnphi, 'currmn.dat')
+    call write_poloidal_modes(jnflux, jnphi, 'currmn.dat', .true.)
 
     if (allocated(Lr)) deallocate(Lr)
 
@@ -1684,11 +1684,12 @@ contains
     close(fid)
   end subroutine write_fluxvar
 
-  subroutine write_poloidal_modes(pol_flux, tor_comp, outfile)
+  subroutine write_poloidal_modes(pol_flux, tor_comp, outfile, calc_par)
     use magdata_in_symfluxcoor_mod, only: nlabel, ntheta
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
+    logical, intent(in), optional :: calc_par
 
     integer, parameter :: mmax = 24
     character(len = 19) :: fmt
@@ -1789,7 +1790,7 @@ contains
        close(fid_furth)
     end if
     ! calculate parallel current (density) on a finer grid
-    if (kilca_pol_mode /= 0) then
+    if (present(calc_par) .and. kilca_pol_mode /= 0) then
        open(newunit = fid_par, status = 'replace', &
             file = decorate_filename(outfile, '', '_par'))
        do kf = 1, nlabel
@@ -1802,12 +1803,12 @@ contains
              call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
                   dum, dum)
              ktri = point_location(R, Z)
-             tri = mesh_element_rmp(ktri)
              call interp_RT0(ktri, pol_flux, R, Z, comp_r, comp_z)
-             comp_par = comp_par + (comp_r * B0_R + comp_z * B0_Z + jnphi(ktri) * B0_phi) / &
-                  sqrt(B0_R * B0_R + B0_Z * B0_Z + B0_phi * B0_phi)
+             comp_par = comp_par + (comp_r * B0_R + comp_z * B0_Z + tor_comp(ktri) * &
+                  B0_phi) * B0_phi / (B0_R * B0_R + B0_Z * B0_Z + B0_phi * B0_phi) * &
+                  exp(-imun * kilca_m_res * theta)
           end do
-          comp_par = comp_par * 2d0 * pi / dble(ntheta)
+          comp_par = comp_par / dble(ntheta)
           write (fid_par, '(3(1x, es23.16))') rho, comp_par
        end do
        close(fid_par)
