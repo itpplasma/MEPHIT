@@ -254,11 +254,10 @@ class magdif_poloidal_plots:
                 m = (2 * k - 1) * m_abs
                 if m in resonance:
                     ax.axvline(resonance[m], color='b', alpha=0.5)
-                # q is negative in result_spectrum.f90, so index is reversed
                 if self.ref is not None and m_abs <= self.ref.m_max:
-                    ax.plot(self.ref.rho, self.ref.abs[:, self.ref.offset - m],
+                    ax.plot(self.ref.rho, self.ref.abs[:, self.ref.offset + m],
                             'r--', label=self.ref.label)
-                ax.plot(self.data.rho, self.data.abs[:, self.data.offset - m],
+                ax.plot(self.data.rho, self.data.abs[:, self.data.offset + m],
                         label=self.data.label)
                 ax.legend()
                 ax.ticklabel_format(style='sci', scilimits=(-3, 4))
@@ -283,8 +282,7 @@ class magdif_poloidal_plots:
         ax.set_xlabel(xlabel)
         ax.set_ylabel(self.ylabel)
         ax = plt.subplot(vert_plot, horz_plot, 2)
-        # q is negative in result_spectrum.f90
-        ax.plot(self.data.rho, np.abs(self.data.q), label='kinetic')
+        ax.plot(self.data.rho, self.data.q, label='kinetic')
         ax.plot(rho, self.q, 'r--', label='MHD')
         ax.legend()
         ax.set_xlabel(xlabel)

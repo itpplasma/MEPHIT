@@ -1722,9 +1722,7 @@ contains
        sheet_current = 0d0
        do kt = 1, kt_max(kf)
           theta = (dble(kt) - 0.5d0) / dble(kt_max(kf)) * 2d0 * pi
-          ! result_spectrum.f90 uses negative q, so poloidal modes are switched
-          ! we invert the sign here to keep post-processing consistent
-          fourier_basis = [(exp(imun * m * theta), m = -mmax, mmax)]
+          fourier_basis = [(exp(-imun * m * theta), m = -mmax, mmax)]
           ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
           call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), &
                theta, q, dum, sqrt_g, dum, dum, r, dum, dR_dtheta, z, dum, dZ_dtheta)
@@ -1737,7 +1735,7 @@ contains
              comp_rad = comp_r * cos(theta) + comp_z * sin(theta)
              comp_pol = comp_z * cos(theta) - comp_r * sin(theta)
              sheet_current = sheet_current + tri%area * jnphi(ktri) * &
-                  fourier_basis(-kilca_m_res)
+                  fourier_basis(kilca_m_res)
           else
              comp_rad = (comp_r * B0_Z - comp_z * B0_R) * r * sqrt_g * q
              comp_pol = comp_r * dR_dtheta + comp_z * dZ_dtheta
