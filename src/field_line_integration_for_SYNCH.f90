@@ -3,9 +3,13 @@
   end module rhs_surf_mod
 !
   module field_line_integration_mod
+    ! If a circular mesh with large aspect ratio is used, this gives the scale factor.
+    ! In this case, o_point and x_point are input instead of output variables.
+    ! Set to 0 for regular toroidal geometry.
+    integer :: circ_mesh_scale = 0
     ! set this to true to let theta start at the line between O- and X-Point
     logical :: theta0_at_xpoint = .true.
-    double precision, dimension(2) :: theta_axis
+    double precision, dimension(2) :: o_point, x_point, theta_axis
     double precision :: theta0
   end module field_line_integration_mod
 !
@@ -18,7 +22,8 @@
                             icall_eq,nrad,nzet,rad,zet,rtf,btf
   !use theta_rz_mod, only : nsqp,hsqpsi,spllabel
   use rhs_surf_mod, only : dr_dphi, dz_dphi
-  use field_line_integration_mod, only: theta0_at_xpoint, theta_axis, theta0
+  use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
+       theta0_at_xpoint, theta_axis, theta0
 !
   implicit none
 !
@@ -39,7 +44,7 @@
                      ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
   double precision :: psi_axis,h,sig,sig_start,sig_end,phi_sep,sigma,min_d,new_d,r_sep, alpha, beta
 !
-  double precision, dimension(2) :: x_point, prev_ymet, ymet_axis
+  double precision, dimension(2) :: prev_ymet, ymet_axis
 
   double precision, dimension(neq)           :: ymet
   double precision, dimension(nlabel)        :: rbeg,rsmall,qsaf,psisurf,phitor
@@ -49,6 +54,7 @@
   double precision, external :: cross_2d_sign
 !
 !
+  relerr = 1.d-9
   nmap=10         !number of maps for finding magnetic axis
 !
 ! Computation box:
@@ -57,27 +63,32 @@
   zmn=zet(1)
   zmx=zet(nzet)
 !
-  rrr=0.5d0*(rmn+rmx)
-  ppp=0.d0
-  zzz=0.5d0*(zmn+zmx)
-!
-! Search for the magnetic axis
-!
-  relerr = 1.d-9
-  phi=0.d0
-  phiout=2.d0*pi
-  ymet=0.d0
-  ymet(1)=rrr
-  ymet(2)=zzz
-  do iter=1,niter_axis
-    ymet(3:4)=0.d0
-    do i=1,nmap
-      call odeint_allroutines(ymet,neq,phi,phiout,relerr,rhs_axis)
-    enddo
-    ymet(1:2)=ymet(3:4)/(phiout-phi)/dfloat(nmap)
-  enddo
-  raxis=ymet(1)
-  zaxis=ymet(2)
+  if (circ_mesh_scale /= 0) then
+     raxis = o_point(1)
+     zaxis = o_point(2)
+  else
+     rrr=0.5d0*(rmn+rmx)
+     ppp=0.d0
+     zzz=0.5d0*(zmn+zmx)
+     !
+     ! Search for the magnetic axis
+     !
+     phi=0.d0
+     phiout=2.d0*pi
+     ymet=0.d0
+     ymet(1)=rrr
+     ymet(2)=zzz
+     do iter=1,niter_axis
+        ymet(3:4)=0.d0
+        do i=1,nmap
+           call odeint_allroutines(ymet,neq,phi,phiout,relerr,rhs_axis)
+        enddo
+        ymet(1:2)=ymet(3:4)/(phiout-phi)/dfloat(nmap)
+     enddo
+     raxis=ymet(1)
+     zaxis=ymet(2)
+  end if
+  o_point = [raxis, zaxis]
   print *, 'O-point found ', raxis, zaxis
 !
   call field_eq(raxis,ppp,zaxis,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ  &
@@ -107,37 +118,43 @@
 !
   h=2.d0*pi/nstep_min
 !
-  surf: do isurf=1,nsurfmax
-    phi=0.d0
-    phiout=h
-    ymet(1)=raxis+hbr*isurf
-    ymet(2)=zaxis
-    ymet(3)=0.d0
-    ymet(4)=0.d0
-    call odeint_allroutines(ymet,neq,phi,phiout,relerr,rhs_surf)
-    sig=ymet(2)-zaxis
-    do while(sig*(ymet(2)-zaxis).gt.0.d0)
-      call odeint_allroutines(ymet,neq,phi,phiout,relerr,rhs_surf)
-      if( ymet(1).lt.rmn .or. ymet(1).gt.rmx .or.            &
-          ymet(2).lt.zmn .or. ymet(2).gt.zmx ) then
-        nsurf=isurf-1
-        exit surf
-      endif
-    enddo
-    sig=ymet(2)-zaxis
-    do while(sig*(ymet(2)-zaxis).gt.0.d0)
-      call odeint_allroutines(ymet,neq,phi,phiout,relerr,rhs_surf)
-      if( ymet(1).lt.rmn .or. ymet(1).gt.rmx .or.            &
-          ymet(2).lt.zmn .or. ymet(2).gt.zmx ) then
-        nsurf=isurf-1
-        exit surf
-      endif
-    enddo
+  if (circ_mesh_scale /= 0) then
+     h = h / dble(circ_mesh_scale)  ! for odeint integration interval
+     r_sep = x_point(1)
+     nsurf = floor((r_sep - raxis) / hbr) - 1
+  else
+     surf: do isurf=1,nsurfmax
+        phi=0.d0
+        phiout=h
+        ymet(1)=raxis+hbr*isurf
+        ymet(2)=zaxis
+        ymet(3)=0.d0
+        ymet(4)=0.d0
+        call odeint_allroutines(ymet,neq,phi,phiout,relerr,rhs_surf)
+        sig=ymet(2)-zaxis
+        do while(sig*(ymet(2)-zaxis).gt.0.d0)
+           call odeint_allroutines(ymet,neq,phi,phiout,relerr,rhs_surf)
+           if( ymet(1).lt.rmn .or. ymet(1).gt.rmx .or.            &
+                ymet(2).lt.zmn .or. ymet(2).gt.zmx ) then
+              nsurf=isurf-1
+              exit surf
+           endif
+        enddo
+        sig=ymet(2)-zaxis
+        do while(sig*(ymet(2)-zaxis).gt.0.d0)
+           call odeint_allroutines(ymet,neq,phi,phiout,relerr,rhs_surf)
+           if( ymet(1).lt.rmn .or. ymet(1).gt.rmx .or.            &
+                ymet(2).lt.zmn .or. ymet(2).gt.zmx ) then
+              nsurf=isurf-1
+              exit surf
+           endif
+        enddo
 !
-    r_sep = raxis+hbr*isurf
-  enddo surf
+        r_sep = raxis+hbr*isurf
+     enddo surf
 !
-  nsurf=nsurf-1  !last point is bad, remove it
+     nsurf=nsurf-1  !last point is bad, remove it
+  end if
 !
   print *,'Separatrix found'
 !
@@ -147,31 +164,34 @@
   hbr=hbr*dfloat(nsurf)/dfloat(nlabel)
 !
 ! find x-point
-  phi = 0.d0
-  phiout = h * sigma
+  if (circ_mesh_scale /= 0) then
+  else
+     phi = 0.d0
+     phiout = h * sigma
 !
-  ymet(1) = raxis+hbr*dfloat(nlabel)
-  ymet(2) = zaxis
-  ymet(3) = 0.d0
-  ymet(4) = 0.d0
-  theta_axis = ymet(1:2) - [raxis, zaxis]
+     ymet(1) = raxis+hbr*dfloat(nlabel)
+     ymet(2) = zaxis
+     ymet(3) = 0.d0
+     ymet(4) = 0.d0
+     theta_axis = ymet(1:2) - [raxis, zaxis]
 
-  prev_ymet = ymet(1:2)
-  min_d = huge(0.d0)
+     prev_ymet = ymet(1:2)
+     min_d = huge(0.d0)
 
-  sig_start = 1.d0
-  sig_end = 1.d0
-  do while (sig_start >= sig_end)
-    call odeint_allroutines(ymet,neq,phi,phiout,relerr,rhs_surf)
-    new_d = sum((prev_ymet - ymet(1:2)) * (prev_ymet - ymet(1:2)))
-    if (new_d < min_d) then
-      min_d  = new_d
-      x_point = ymet(1:2)
-    end if
-    prev_ymet = ymet(1:2)
-    sig_start = sig_end
-    sig_end = cross_2d_sign(theta_axis, ymet(1:2) - [raxis, zaxis])
-  enddo
+     sig_start = 1.d0
+     sig_end = 1.d0
+     do while (sig_start >= sig_end)
+        call odeint_allroutines(ymet,neq,phi,phiout,relerr,rhs_surf)
+        new_d = sum((prev_ymet - ymet(1:2)) * (prev_ymet - ymet(1:2)))
+        if (new_d < min_d) then
+           min_d  = new_d
+           x_point = ymet(1:2)
+        end if
+        prev_ymet = ymet(1:2)
+        sig_start = sig_end
+        sig_end = cross_2d_sign(theta_axis, ymet(1:2) - [raxis, zaxis])
+     enddo
+  end if
 !
   print *,'X-Point found', x_point
   if (theta0_at_xpoint) then

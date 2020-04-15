@@ -167,22 +167,12 @@ contains
   !> Initialize magdif module
   subroutine magdif_init
     use input_files, only: gfile
-    use magdata_in_symfluxcoor_mod, only: nlabel, ntheta
-    integer :: fid
 
     call log_open
 
     ! only depends on config variables
     call read_mesh
-    if (kilca_scale_factor /= 0) then
-       open(newunit = fid, file = 'preload_for_SYNCH.inp', status = 'old')
-       read (fid, *)
-       read (fid, *) nlabel
-       read (fid, *) ntheta
-       close(fid)
-    else
-       call load_magdata_in_symfluxcoord
-    end if
+    call load_magdata_in_symfluxcoord
 
     ! depends on mesh data
     call init_indices
@@ -1735,16 +1725,11 @@ contains
           ! result_spectrum.f90 uses negative q, so poloidal modes are switched
           ! we invert the sign here to keep post-processing consistent
           fourier_basis = [(exp(imun * m * theta), m = -mmax, mmax)]
-          if (kilca_scale_factor /= 0) then
-             r = equil%rmaxis + fs_half%rad(kf) * cos(theta)
-             z = equil%zmaxis + fs_half%rad(kf) * sin(theta)
-          else
-             ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
-             call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), &
-                  theta, q, dum, sqrt_g, dum, dum, r, dum, dR_dtheta, z, dum, dZ_dtheta)
-             call field(r, 0d0, z, B0_R, dum, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
-                  dum, dum)
-          end if
+          ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
+          call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), &
+               theta, q, dum, sqrt_g, dum, dum, r, dum, dR_dtheta, z, dum, dZ_dtheta)
+          call field(r, 0d0, z, B0_R, dum, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
+               dum, dum)
           ktri = point_location(r, z)
           tri = mesh_element_rmp(ktri)
           call interp_RT0(ktri, pol_flux, r, z, comp_r, comp_z)
@@ -1756,28 +1741,25 @@ contains
           else
              comp_rad = (comp_r * B0_Z - comp_z * B0_R) * r * sqrt_g * q
              comp_pol = comp_r * dR_dtheta + comp_z * dZ_dtheta
-             q_sum = q_sum + q
           end if
           coeff_rad = coeff_rad + comp_rad * fourier_basis
           coeff_pol = coeff_pol + comp_pol * fourier_basis
           coeff_tor = coeff_tor + tor_comp(ktri) * fourier_basis
+          q_sum = q_sum + q
        end do
        coeff_rad = coeff_rad / kt_max(kf)
        coeff_pol = coeff_pol / kt_max(kf)
        coeff_tor = coeff_tor / kt_max(kf)
+       q = q_sum / kt_max(kf)
        if (kilca_scale_factor /= 0) then
-          write (fid_rad, fmt) fs_half%rad(kf), fs_half%q(kf), real(coeff_rad), &
-               aimag(coeff_rad)
-          write (fid_pol, fmt) fs_half%rad(kf), fs_half%q(kf), real(coeff_pol), &
-               aimag(coeff_pol)
-          write (fid_tor, fmt) fs_half%rad(kf), fs_half%q(kf), real(coeff_tor), &
-               aimag(coeff_tor)
+          write (fid_rad, fmt) fs_half%rad(kf), q, real(coeff_rad), aimag(coeff_rad)
+          write (fid_pol, fmt) fs_half%rad(kf), q, real(coeff_pol), aimag(coeff_pol)
+          write (fid_tor, fmt) fs_half%rad(kf), q, real(coeff_tor), aimag(coeff_tor)
           k_theta = kilca_m_res / fs_half%rad(kf)
           sheet_current = -2d0 * imun / clight / k_theta * sheet_current
           write (fid_furth, '(7(1x, es23.16))') fs_half%rad(kf), k_zeta, k_theta, &
                coeff_rad(-kilca_m_res), sheet_current
        else
-          q = q_sum / kt_max(kf)
           write (fid_rad, fmt) fs_half%psi(kf), q, real(coeff_rad), aimag(coeff_rad)
           write (fid_pol, fmt) fs_half%psi(kf), q, real(coeff_pol), aimag(coeff_pol)
           write (fid_tor, fmt) fs_half%psi(kf), q, real(coeff_tor), aimag(coeff_tor)

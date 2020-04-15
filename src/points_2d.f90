@@ -214,7 +214,7 @@ end subroutine create_points_2d
   subroutine theta_geom2theta_flux(inp_label, s, psi, theta_geom_vec,theta_flux_vec)
 !
     use magdata_in_symfluxcoor_mod, only : raxis,zaxis !<=sergei10.11.19
-    use field_line_integration_mod, only: theta0_at_xpoint, theta_axis
+    use field_line_integration_mod, only: theta0_at_xpoint, theta0
 !
     implicit none
 !
@@ -248,7 +248,7 @@ end subroutine create_points_2d
       if (theta0_at_xpoint) then
          !to shift it to the same regime
          theta_geom_interp(i) = modulo(atan2(Z - Z0, R - R0) - &
-              atan2(theta_axis(2), theta_axis(1)), 2.d0 * pi) - 2.d0 * pi
+              theta0, 2.d0 * pi) - 2.d0 * pi
       else
          !to shift it to the same regime
          theta_geom_interp(i) = modulo(atan2(Z - Z0, R - R0), 2.d0 * pi) - 2.d0 * pi
