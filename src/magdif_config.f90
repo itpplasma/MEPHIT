@@ -151,6 +151,7 @@ contains
     read(fid, nml = settings)
     close(fid)
 
+    log_file = '-'  ! always write to stdout for now
     log_err = .false.
     log_warn = .false.
     log_info = .false.
@@ -202,10 +203,23 @@ contains
     if (log /= output_unit) close(log)
   end subroutine log_close
 
+  !> Generate timestamp
+  function timestamp()
+    character(len=25) :: timestamp
+    character(len=*), parameter :: ISO_8601 = &
+         '(ss, i4, 2("-", i2.2), "T", i2.2, 2(":", i2.2), sp, i3.2, ":", ss, i2.2, s)'
+    integer :: values(8)
+    call date_and_time(values = values)
+    write (timestamp, ISO_8601) values(1:3), values(5:7), &
+         values(4) / 60, mod(values(4), 60)
+  end function timestamp
+
   !> Write to logfile and flush if necessary.
   subroutine log_write
-    write (log, '(a)') trim(log_msg)
-    if (log /= output_unit .and. .not. quiet) write (output_unit, '(a)') trim(log_msg)
+    character(len = 28 + len_trim(log_msg)) :: full_msg
+    write (full_msg, '("[", a25, "] ", a)') timestamp(), trim(log_msg)
+    write (log, '(a)') full_msg
+    if (log /= output_unit .and. .not. quiet) write (output_unit, '(a)') full_msg
   end subroutine log_write
 
   !> Generates a new filename from a given template.

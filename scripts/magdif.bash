@@ -30,19 +30,11 @@ nml_read_integer() {
     sed -Ene "s/ *$2 *= *([-0-9]+).*/\1/i p" $1
 }
 
-extract_psi() {
-    sed -e 's/ \+/\t/g; s/^\t//g' $1 | cut -f 9-10 > $2
-}
-
-extract_theta() {
-    sed -e 's/ \+/\t/g; s/^\t//g' $1 | cut -f 11-12 > $2
-}
-
 
 magdif_init() {
-    config=$datadir/magdif.in
-    geqdsk=$datadir/g30835.3200_EQH
-    convexwall=$datadir/convexwall.asdex
+    config=
+    geqdsk=
+    convexwall=
     vacfield=
     TEMP=$(getopt -o 'c:g:v:w:' --long 'config:,g-eqdsk:,vacuum-field:,convex-wall:' -n "$scriptname" -- "$@")
     eval set -- "$TEMP"
@@ -95,10 +87,11 @@ magdif_init() {
            $(absolutize "$config") \
            $(absolutize "$geqdsk") \
            $(absolutize "$convexwall")
-        if [ -n $vacfield ]; then
+        if [ -n "$vacfield" ]; then
             ln -s $(absolutize "$vacfield") "$workdir/${vacfield##*/}"
         fi
 
+        mv "$workdir/${config##*/}" "$workdir/magdif.inp"
         replace_first_in_line "$workdir/field_divB0.inp" 7 "'${geqdsk##*/}'"     # gfile
         replace_first_in_line "$workdir/field_divB0.inp" 8 "'${vacfield##*/}'"   # pfile
         replace_first_in_line "$workdir/field_divB0.inp" 9 "'${convexwall##*/}'" # convex
@@ -107,28 +100,9 @@ magdif_init() {
 }
 
 magdif_prepare() {
-    TEMP=$(getopt -o 'c:' --long 'config:' -n "$scriptname" -- "$@")
-    eval set -- "$TEMP"
-    unset TEMP
-    while true; do
-        case "$1" in
-            '-c'|'--config')
-                config=$2
-                shift 2
-                continue
-                ;;
-            '--')
-                shift
-                break
-                ;;
-            *)
-                echo "$scriptname: unrecognized option '$1'" >&2
-                exit 1
-                ;;
-        esac
-    done
-
-    # implement mesh file options when geomint_mesh.f90 is complete
+    config=magdif.inp
+    log=magdif.log
+    # maybe implement mesh file options when magdif_mesh_mod.f90 is complete
     mesh=inputformaxwell.msh
     extended=inputformaxwell_ext.msh
 
@@ -139,38 +113,38 @@ magdif_prepare() {
         replace_first_in_line field_divB0.inp 7 "'\1_processed'"  # gfile
         replace_first_in_line field_divB0.inp 1 0  # ipert
         replace_first_in_line field_divB0.inp 2 1  # iequil
-        "$bindir/magdif_mesher.x" "$config" "$unprocessed"
+        "$bindir/magdif_mesher.x" "$config" "$unprocessed" |& tee "$log"
         lasterr=$?
         if [ $lasterr -ne 0 ]; then
-            echo "$scriptname: error $lasterr during mesh generation in $workdir" >&2
+            echo "$scriptname: error $lasterr during mesh generation in $workdir" | tee -a "$log" >&2
             popd
             anyerr=$lasterr
             continue
         fi
-        FreeFem++ "$scriptdir/extmesh.edp"
+        FreeFem++ "$scriptdir/extmesh.edp" |& tee -a "$log"
         lasterr=$?
         if [ $lasterr -ne 0 ]; then
-            echo "$scriptname: error $lasterr during mesh generation in $workdir" >&2
+            echo "$scriptname: error $lasterr during mesh generation in $workdir" | tee -a "$log" >&2
             popd
             anyerr=$lasterr
             continue
         fi
         kilca_scale_factor=$(nml_read_integer "$config" kilca_scale_factor)
-        if [ -z $kilca_scale_factor ]; then
+        if [ -z "$kilca_scale_factor" ]; then
             kilca_scale_factor=0
         fi
-        if [ $kilca_scale_factor -eq 0 ]; then
+        if [ "$kilca_scale_factor" -eq 0 ]; then
             replace_first_in_line field_divB0.inp 1 1  # ipert
             # replace_first_in_line field_divB0.inp 2 0  # iequil
             ## uncomment to use at most half of available RAM and go to swap instead
             ## MemFree=$(sed -ne '/MemFree/ s/MemFree: *\([0-9]*\) kB/\1/gp' /proc/meminfo)
             ## systemd-run --scope --user -p MemoryHigh=$((MemFree / 2048))M \
-            "$bindir/vacfield.x" "$config"
+            "$bindir/vacfield.x" "$config" |& tee -a "$log"
             lasterr=$?
             replace_first_in_line field_divB0.inp 1 0  # ipert
             # replace_first_in_line field_divB0.inp 2 1  # iequil
             if [ $lasterr -ne 0 ]; then
-                echo "$scriptname: error $lasterr during mesh generation in $workdir" >&2
+                echo "$scriptname: error $lasterr during mesh generation in $workdir" | tee -a "$log" >&2
                 popd
                 anyerr=$lasterr
                 continue
@@ -181,34 +155,16 @@ magdif_prepare() {
 }
 
 magdif_run() {
-    TEMP=$(getopt -o 'c:' --long 'config:' -n "$scriptname" -- "$@")
-    eval set -- "$TEMP"
-    unset TEMP
-    while true; do
-        case "$1" in
-            '-c'|'--config')
-                config=$2
-                shift 2
-                continue
-                ;;
-            '--')
-                shift
-                break
-                ;;
-            *)
-                echo "$scriptname: unrecognized option '$1'" >&2
-                exit 1
-                ;;
-        esac
-    done
+    config=magdif.inp
+    log=magdif.log
 
     for workdir; do
         pushd "$workdir"
-        rm -f "$config.log" convergence.dat
-        "$bindir/magdif_test.x" "$config" "$scriptdir"
+        rm -f magdif.log convergence.dat
+        "$bindir/magdif_test.x" "$config" "$scriptdir" |& tee -a "$log"
         lasterr=$?
         if [ $lasterr -ne 0 ]; then
-            echo "$scriptname: error $lasterr during run in $workdir" >&2
+            echo "$scriptname: error $lasterr during run in $workdir" | tee -a "$log" >&2
             popd
             anyerr=$lasterr
             continue
@@ -218,34 +174,15 @@ magdif_run() {
 }
 
 magdif_plot() {
-    TEMP=$(getopt -o 'c:' --long 'config:' -n "$scriptname" -- "$@")
-    eval set -- "$TEMP"
-    unset TEMP
-    while true; do
-        case "$1" in
-            '-c'|'--config')
-                config=$2
-                shift 2
-                continue
-                ;;
-            '--')
-                shift
-                break
-                ;;
-            *)
-                echo "$scriptname: unrecognized option '$1'" >&2
-                exit 1
-                ;;
-        esac
-    done
-
+    config=magdif.inp
+    log=magdif.log
     # implement mesh file options when geomint_mesh.f90 is complete
     mesh=inputformaxwell.msh
     extended=inputformaxwell_ext.msh
 
     for workdir; do
         pushd "$workdir"
-        python3 "$scriptdir/magdifplot.py" . "$config" "$mesh"
+        python3 "$scriptdir/magdifplot.py" . "$config" "$mesh" |& tee -a "$log"
         popd
     done
 }
