@@ -1,8 +1,7 @@
 module magdif_config
-  use from_nrtype, only: dp  ! PRELOAD/SRC/from_nrtype.f90
-  use arnoldi_mod, only: tol ! RUN/SRC/arnoldi.f90
-  use for_macrostep, only: t_min, d_min  ! PRELOAD/SRC/orbit_mod.f90
-  use iso_fortran_env, only: output_unit
+  use arnoldi_mod, only: tol ! arnoldi.f90
+  use for_macrostep, only: t_min, d_min  ! orbit_mod.f90
+  use iso_fortran_env, only: output_unit, dp => real64
 
   implicit none
 
@@ -20,16 +19,16 @@ module magdif_config
   integer, parameter :: runmode_direct = 1 !< direct iteration mode
   integer, parameter :: runmode_precon = 2 !< preconditioned iteration mode
 
-  integer, parameter :: pres_prof_eps = 0  !< pressure profile from EPS paper
-  integer, parameter :: pres_prof_par = 1  !< parabolic pressure profile
-  integer, parameter :: pres_prof_efit = 2 !< pressure profile from EFIT file
+  integer, parameter :: pres_prof_eps = 0    !< pressure profile from EPS paper
+  integer, parameter :: pres_prof_par = 1    !< parabolic pressure profile
+  integer, parameter :: pres_prof_geqdsk = 2 !< pressure profile from G EQDSK file
 
-  integer, parameter :: curr_prof_ps = 0   !< only Pfirsch-Schlueter current
-  integer, parameter :: curr_prof_rot = 1  !< current via Ampere's law
-  integer, parameter :: curr_prof_efit = 2 !< current profile from EFIT file
+  integer, parameter :: curr_prof_ps = 0     !< only Pfirsch-Schlueter current
+  integer, parameter :: curr_prof_rot = 1    !< current via Ampere's law
+  integer, parameter :: curr_prof_geqdsk = 2 !< current profile from G EQDSK file
 
-  integer, parameter :: q_prof_flux = 0 !< q profile from flux between flux surfaces
-  integer, parameter :: q_prof_efit = 2 !< q profile from EFIT file
+  integer, parameter :: q_prof_flux = 0   !< q profile from flux between flux surfaces
+  integer, parameter :: q_prof_geqdsk = 2 !< q profile from G EQDSK file
 
   integer, private :: log = output_unit  !< log file id
   logical :: quiet = .false.  !< suppress log messages to stdout

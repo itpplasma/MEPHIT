@@ -1,6 +1,6 @@
 module magdif_util
 
-  use from_nrtype, only: dp
+  use iso_fortran_env, only: dp => real64
 
   implicit none
 

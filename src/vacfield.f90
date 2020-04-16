@@ -3,7 +3,7 @@
 ! into ascii files
 program vacfield
 
-  use from_nrtype, only: dp
+  use iso_fortran_env, only: dp => real64
   use mesh_mod, only: npoint, ntri, knot, mesh_point, mesh_element, mesh_element_rmp
   use magdif_config, only: n_tor_out => n, nflux, meshdata_file, Bn_vac_file, &
        config_file, read_config

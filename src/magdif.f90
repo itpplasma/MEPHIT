@@ -1,13 +1,14 @@
 module magdif
-  use from_nrtype, only: dp                            ! PRELOAD/SRC/from_nrtype.f90
-  use constants, only: pi                              ! PRELOAD/SRC/orbit_mod.f90
-  use mesh_mod, only: npoint, ntri, knot, triangle, &  ! PRELOAD/SRC/mesh_mod.f90
-       mesh_point, mesh_element, triangle_rmp, mesh_element_rmp
-  use sparse_mod, only: sparse_solve, sparse_matmul    ! MHD/SRC/sparse_mod.f90
-  use magdif_config                                    ! MHD/SRC/magdif_config.f90
-  use magdif_util                                      ! MHD/SRC/magdif_util.f90
+  use iso_fortran_env, only: dp => real64
+  use magdif_util, only: g_eqdsk, flux_func, flux_func_cache
 
   implicit none
+
+  private
+
+  public :: equil, fluxvar, fs, fs_half, kp_low, kp_max, kt_low, kt_max, Bnflux, Bnphi, &
+       init_indices, cache_mesh_data, check_redundant_edges, check_div_free, &
+       write_vector_dof, magdif_init, magdif_cleanup, magdif_single, magdif_iterated
 
   type(g_eqdsk) :: equil
   type(flux_func) :: fluxvar
@@ -167,6 +168,8 @@ contains
   !> Initialize magdif module
   subroutine magdif_init
     use input_files, only: gfile
+    use magdif_config, only: nonres, Bn_vac_file, Bn_vacout_file, log_msg, log_info, &
+         log_err, log_open, log_write, decorate_filename
 
     call log_open
 
@@ -211,6 +214,8 @@ contains
 
   !> Deallocates all previously allocated variables.
   subroutine magdif_cleanup
+    use mesh_mod, only: mesh_point, mesh_element, mesh_element_rmp
+    use magdif_config, only: sheet_current_factor, log_msg, log_info, log_write, log_close
     if (allocated(m_res)) deallocate(m_res)
     if (allocated(sheet_current_factor)) deallocate(sheet_current_factor)
     if (allocated(B0r)) deallocate(B0r)
@@ -241,6 +246,7 @@ contains
   end subroutine magdif_cleanup
 
   subroutine magdif_single
+    use magdif_config, only: Bn_file, decorate_filename
     call compute_presn     ! compute pressure based on previous perturbation field
     call compute_currn     ! compute currents based on previous perturbation field
     call compute_Bn        ! use field code to generate new field from currents
@@ -249,7 +255,11 @@ contains
   end subroutine magdif_single
 
   subroutine magdif_iterated
-    use arnoldi_mod
+    use arnoldi_mod, only: ieigen, ngrow, tol, eigvecs
+    use mesh_mod, only: ntri
+    use magdif_config, only: n, runmode, runmode_precon, nritz, niter, max_eig_out, &
+         rel_err_Bn, log_msg, log_info, log_err, log_write, presn_file, currn_file, &
+         Bn_file, Bn_diff_file, eigvec_file, decorate_filename, cmplx_fmt
 
     logical :: preconditioned
     integer :: kiter, ndim, i, j, info
@@ -378,6 +388,9 @@ contains
     end subroutine pack_dof
 
     pure subroutine unpack_dof(pol_flux, tor_comp, packed)
+      use magdif_config, only: nflux
+      use magdif_util, only: imun
+      use mesh_mod, only: mesh_element_rmp
       complex(dp), intent(out) :: pol_flux(ntri, 3), tor_comp(ntri)
       complex(dp), intent(in) :: packed(nedge)
       integer :: kedge, ktri
@@ -421,6 +434,7 @@ contains
   !> of #magdif_config::nflux and #magdif_config::nkpol. Deallocation is done in
   !> magdif_cleanup().
   subroutine init_indices
+    use magdif_config, only: nflux, nkpol, log_msg, log_info, log_write, nl_fmt
     integer :: kf
 
     allocate (kp_max(nflux+1))
@@ -454,6 +468,8 @@ contains
   !> #bnflux_vac, #bnphi_vac, #j0phi, #jnphi and #jnflux are allocated and initialized to
   !> zero. Deallocation is done in magdif_cleanup().
   subroutine read_mesh
+    use magdif_config, only: nflux, meshdata_file, log_msg, log_info, log_write
+    use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, mesh_element_rmp
     integer :: fid
 
     open(newunit = fid, file = meshdata_file, form = 'unformatted', status = 'old')
@@ -508,6 +524,9 @@ contains
   end subroutine read_mesh
 
   subroutine cache_mesh_data
+    use mesh_mod, only: triangle, triangle_rmp, mesh_element, mesh_element_rmp, mesh_point
+    use magdif_config, only: nflux
+    use magdif_util, only: ring_centered_avg_coord
     integer :: ktri, kedge, ke, ke_adj, ktri_adj
     type(triangle) :: elem
     type(triangle_rmp) :: tri
@@ -564,6 +583,8 @@ contains
   !> directory and handles the exit code. For further information see maxwell.sh and the
   !> script called therein.
   subroutine compute_Bn
+    use magdif_config, only: bin_dir, n, nflux, currn_file, Bn_file, log_msg, log_err, &
+         log_write
     integer :: stat = 0, dummy = 0
     character(len = 1024) :: fem_cmd
     write (fem_cmd, '(a, "/maxwell.sh -n ", i0, " -N ", i0, " -J ", a, " -B ", a)') &
@@ -577,6 +598,8 @@ contains
   end subroutine compute_Bn
 
   subroutine compute_L2int
+    use magdif_config, only: bin_dir, nflux, Bn_diff_file, conv_file, log_msg, log_err, &
+         log_write
     integer :: stat = 0, dummy = 0
     character(len = 1024) :: L2int_cmd
     write (L2int_cmd, '(a, "/L2int.sh -N ", i0, " -B ", a, " -C ", a)') &
@@ -604,6 +627,9 @@ contains
   !> up the fluxes of the vector field through triangle edges. If this sum, divided by the
   !> absolute flux, is higher than \p rel_err on any triangle, it halts the program.
   subroutine check_div_free(pol_flux, tor_comp, n, rel_err, field_name)
+    use magdif_config, only: log_msg, log_err, log_write
+    use magdif_util, only: imun
+    use mesh_mod, only: ntri, mesh_element_rmp
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     integer, intent(in) :: n
@@ -631,6 +657,7 @@ contains
   end subroutine check_div_free
 
   subroutine check_redundant_edges(pol_quant, same_sign, name)
+    use magdif_config, only: cmplx_fmt, log_msg, log_err, log_write
     complex(dp), intent(in) :: pol_quant(:,:)
     logical, intent(in) :: same_sign
     character(len = *), intent(in) :: name
@@ -688,6 +715,8 @@ contains
   !> with numbering of edges in #bnflux as in #mesh_mod::mesh_element and the imaginary
   !> part of each value immediately following the real part.
   subroutine read_Bn(filename)
+    use magdif_config, only: n, rel_err_Bn, longlines
+    use mesh_mod, only: ntri, mesh_element_rmp
     character(len = 1024) :: filename
     integer :: ktri, fid
     real(dp) :: dummy8(8)
@@ -712,6 +741,11 @@ contains
   !> magdif_config::read_delayed_config() in magdif_init(). All deallocation is done in
   !> magdif_cleanup().
   subroutine compute_safety_factor
+    use constants, only: pi  ! orbit_mod.f90
+    use magdif_config, only: cmplx_fmt, n, nflux, q_prof, q_prof_flux, q_prof_geqdsk, &
+         kilca_scale_factor, sheet_current_factor, read_delayed_config, log_msg, &
+         log_info, log_err, log_write
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp
     integer :: kf, kt, ktri
     type(triangle_rmp) :: tri
     integer :: m_res_min, m_res_max, m
@@ -733,7 +767,7 @@ contains
        ! linear extrapolation for values at separatrix and magnetic axis
        fs%q(nflux) = fs%q(nflux-1) + (fs%q(nflux-1) - fs%q(nflux-2))
        fs%q(0) = fs%q(1) - (fs%q(2) - fs%q(1))
-    case (q_prof_efit)
+    case (q_prof_geqdsk)
        fs%q = [(fluxvar%interp(equil%qpsi, fs%psi(kf)), kf = 0, nflux)]
        fs_half%q = [(fluxvar%interp(equil%qpsi, fs_half%psi(kf)), kf = 1, nflux)]
     case default
@@ -774,6 +808,7 @@ contains
   !> #psimax, #psi, #magdif_conf::di0, #magdif_conf::d_min, #magdif_conf::ti0 and
   !> #magdif_conf::t_min.
   subroutine init_flux_variables
+    use magdif_config, only: nflux
     integer :: kf, kw
 
     ! initialize fluxvar with equidistant psi values
@@ -790,8 +825,10 @@ contains
   end subroutine init_flux_variables
 
   subroutine compute_pres_prof
-    use for_macrostep, only: t_min, d_min  ! PRELOAD/SRC/orbit_mod.f90
-    use constants, only: ev2erg            ! PRELOAD/SRC/orbit_mod.f90
+    use for_macrostep, only: t_min, d_min  ! orbit_mod.f90
+    use constants, only: ev2erg            ! orbit_mod.f90
+    use magdif_config, only: nflux, di0, ti0, pres_prof, pres_prof_eps, pres_prof_par, &
+         pres_prof_geqdsk, log_msg, log_info, log_err, log_write
     integer :: kf
     real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
 
@@ -835,7 +872,7 @@ contains
        temp(1:) = (fs_half%psi - psi_ext) / (psi_int - psi_ext) * (ti0 - t_min) + t_min
        fs_half%p = dens(1:) * temp(1:) * ev2erg
        fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
-    case (pres_prof_efit)
+    case (pres_prof_geqdsk)
        fs%p = [(fluxvar%interp(equil%pres, fs%psi(kf)), kf = 0, nflux)]
        fs%dp_dpsi = [(fluxvar%interp(equil%pprime, fs%psi(kf)), kf = 0, nflux)]
        fs_half%p = [(fluxvar%interp(equil%pres, fs_half%psi(kf)), kf = 1, nflux)]
@@ -849,6 +886,9 @@ contains
 
 
   subroutine cache_equilibrium_field
+    use mesh_mod, only: knot, triangle, mesh_point, mesh_element
+    use magdif_config, only: longlines, nflux
+    use magdif_util, only: ring_centered_avg_coord
     real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
     integer :: kf, kt, ktri, ke, fid
@@ -894,6 +934,11 @@ contains
   !> \f$ \vec{B}_{0} \f$; arbitrary values are assumed. Consistency of MHD equilibrium is
   !> necessary in the derivation, while Ampere's equation is not used.
   subroutine compute_j0phi
+    use constants, only: pi  ! orbit_mod.f90
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
+    use magdif_config, only: nflux, curr_prof, curr_prof_ps, curr_prof_rot, &
+         curr_prof_geqdsk, longlines, j0phi_file
+    use magdif_util, only: clight
     integer :: kf, kt, ktri, fid
     real(dp) :: r, z
     real(dp) :: Btor2
@@ -924,7 +969,7 @@ contains
 
           r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
           select case (curr_prof)
-          case (curr_prof_efit)
+          case (curr_prof_geqdsk)
              if (tri%orient) then
                 j0phi(ktri, tri%ef) = clight * (fs%dp_dpsi(kf) * r + &
                      0.25d0 / pi * fs%FdF_dpsi(kf) / r)
@@ -948,7 +993,7 @@ contains
 
           r = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
           select case (curr_prof)
-          case (curr_prof_efit)
+          case (curr_prof_geqdsk)
              j0phi(ktri, tri%ei) = clight * (fs_half%dp_dpsi(kf) * r + &
                   0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
           case (curr_prof_rot)
@@ -962,7 +1007,7 @@ contains
 
           r = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
           select case (curr_prof)
-          case (curr_prof_efit)
+          case (curr_prof_geqdsk)
              j0phi(ktri, tri%eo) = clight * (fs_half%dp_dpsi(kf) * r + &
                   0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
           case (curr_prof_rot)
@@ -975,7 +1020,7 @@ contains
           end select
 
           select case (curr_prof)
-          case (curr_prof_efit)
+          case (curr_prof_geqdsk)
              plot_j0phi = clight * (fs_half%dp_dpsi(kf) * tri%r_Omega + &
                   0.25d0 / pi * fs_half%FdF_dpsi(kf) / tri%r_Omega)
           case (curr_prof_rot)
@@ -1009,6 +1054,10 @@ contains
 
 
   subroutine check_curr0
+    use constants, only: pi  ! orbit_mod.f90
+    use magdif_config, only: nflux, longlines
+    use magdif_util, only: clight
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp
     integer :: kf, kt, ktri, fid_amp, fid_gs, fid_prof
     real(dp) :: r, z, n_r, n_z, cmp_amp, cmp_gs, Jr, Jp, Jz
     real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
@@ -1057,6 +1106,11 @@ contains
 
   !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
   subroutine compute_presn
+    use sparse_mod, only: sparse_solve, sparse_matmul
+    use magdif_config, only: n, nflux, nkpol, damp, presn_file, log_msg, log_debug, &
+         log_write
+    use magdif_util, only: assemble_sparse, imun
+    use mesh_mod, only: knot, triangle_rmp, mesh_point, mesh_element_rmp
     real(dp) :: r
     real(dp) :: lr, lz  ! edge vector components
     complex(dp), dimension(nkpol) :: a, b, x, d, du, inhom
@@ -1145,6 +1199,8 @@ contains
   !> counter-clockwise locally.
 
   subroutine get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
+    use mesh_mod, only: triangle
+    use magdif_config, only: log_msg, log_err, log_write
     type(triangle), intent(in) :: elem
     integer, dimension(2), intent(out) :: li, lo, lf
     integer, intent(out) :: ei, eo, ef
@@ -1227,6 +1283,11 @@ contains
   !> This subroutine computes the fluxes through each triangle, separately for each flux
   !> surface. The result is written to #magdif_conf::currn_file.
   subroutine compute_currn
+    use sparse_mod, only: sparse_solve, sparse_matmul
+    use mesh_mod, only: triangle, triangle_rmp, mesh_element, mesh_element_rmp, mesh_point
+    use magdif_config, only: n, nflux, nkpol, damp, rel_err_currn, currn_file, &
+         decorate_filename, log_msg, log_debug, log_write
+    use magdif_util, only: imun, clight, assemble_sparse
     complex(dp), dimension(2 * nkpol) :: x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(2 * nkpol) :: rel_err
@@ -1312,6 +1373,9 @@ contains
   end subroutine compute_currn
 
   subroutine add_sheet_current
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_element
+    use magdif_config, only: n, nflux, sheet_current_factor
+    use magdif_util, only: imun
     integer :: kf, kt, ktri
     type(triangle_rmp) :: tri, tri_adj
     complex(dp) :: presn_half
@@ -1359,6 +1423,9 @@ contains
   end subroutine add_sheet_current
 
   subroutine avg_flux_on_quad(pol_flux, tor_comp)
+    use magdif_config, only: n, nflux
+    use magdif_util, only: imun
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp
     complex(dp), intent(inout) :: pol_flux(:,:)
     complex(dp), intent(inout) :: tor_comp(:)
 
@@ -1385,6 +1452,9 @@ contains
   end subroutine avg_flux_on_quad
 
   subroutine compute_Bn_nonres
+    use mesh_mod, only: knot, triangle_rmp, mesh_point, mesh_element_rmp
+    use magdif_config, only: n, nflux, quad_avg, rel_err_Bn
+    use magdif_util, only: imun
     integer :: kf, kt, ktri
     type(triangle_rmp) :: tri
     type(knot) :: base, tip
@@ -1415,6 +1485,7 @@ contains
   end subroutine compute_Bn_nonres
 
   subroutine interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)
+    use mesh_mod, only: knot, triangle, mesh_point, mesh_element
     integer, intent(in) :: ktri
     complex(dp), intent(in) :: pol_flux(:,:)
     real(dp), intent(in) :: r, z
@@ -1443,6 +1514,7 @@ contains
   end function jacobian
 
   subroutine radially_outward_normal(ktri, n_r, n_z)
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
     integer, intent(in) :: ktri
     real(dp), intent(out) :: n_r
     real(dp), intent(out) :: n_z
@@ -1459,6 +1531,8 @@ contains
   end subroutine radially_outward_normal
 
   subroutine write_vector_plot(pol_flux, tor_comp, outfile)
+    use magdif_config, only: nflux, nonres, longlines
+    use mesh_mod, only: ntri, triangle_rmp, mesh_element_rmp
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
@@ -1494,8 +1568,8 @@ contains
                real(proj_theta_covar), aimag(proj_theta_covar)
        end do
     end do
-    r = mesh_point(1)%rcoord
-    z = mesh_point(1)%zcoord
+    r = equil%rmaxis
+    z = equil%zmaxis
     do ktri = kt_low(n_cutoff+1) + 1, ntri
        write (fid, '(12(1x, es23.16))') r, z, (0d0, k = 1, 10)
     end do
@@ -1503,6 +1577,7 @@ contains
   end subroutine write_vector_plot
 
   function point_in_triangle(ktri, r, z) result(probably)
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
     integer, intent(in) :: ktri
     real(dp), intent(in) :: r, z
     logical :: probably
@@ -1522,6 +1597,10 @@ contains
   end function point_in_triangle
 
   function point_location(r, z) result(location)
+    use constants, only: pi  ! orbit_mod.f90
+    use magdif_config, only: nflux, nkpol
+    use magdif_util, only: interp_psi_pol
+    use mesh_mod, only: mesh_point
     real(dp), intent(in) :: r, z
     integer :: location
 
@@ -1595,6 +1674,8 @@ contains
   end function point_location
 
   subroutine write_vector_plot_rect(pol_flux, tor_comp, outfile)
+    use magdif_config, only: nflux, longlines
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
@@ -1627,6 +1708,8 @@ contains
   end subroutine write_vector_plot_rect
 
   subroutine write_vector_dof(pol_flux, tor_comp, outfile)
+    use magdif_config, only: nflux, longlines
+    use mesh_mod, only: mesh_element_rmp
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
@@ -1649,6 +1732,7 @@ contains
   !> to \p outfile (e.g. #magdif_conf::presn_file), where line number corresponds to the
   !> knot index in #mesh_mod::mesh_point.
   subroutine write_scalar_dof(scalar_dof, outfile)
+    use magdif_config, only: nflux, longlines
     complex(dp), intent(in) :: scalar_dof(:)
     character(len = *), intent(in) :: outfile
 
@@ -1662,6 +1746,8 @@ contains
   end subroutine write_scalar_dof
 
   subroutine write_fluxvar
+    use magdif_config, only: nflux, fluxvar_file, longlines
+    use mesh_mod, only: mesh_point
     integer :: kf, fid
     real(dp) :: rho_r, rho_z
 
@@ -1677,7 +1763,12 @@ contains
   end subroutine write_fluxvar
 
   subroutine write_poloidal_modes(pol_flux, tor_comp, outfile, calc_par)
+    use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: nlabel, ntheta
+    use magdif_config, only: n, nflux, kilca_scale_factor, kilca_pol_mode, longlines, &
+         decorate_filename
+    use magdif_util, only: imun, clight
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile

@@ -1,6 +1,6 @@
 module magdif_mesh_mod
 
-  use from_nrtype, only: dp  ! PRELOAD/SRC/from_nrtype.f90
+  use iso_fortran_env, only: dp => real64
 
   implicit none
 
