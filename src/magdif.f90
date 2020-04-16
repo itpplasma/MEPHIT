@@ -636,7 +636,7 @@ contains
     character(len = *), intent(in) :: name
     integer :: kedge, ktri, ktri_adj, ke, ke_adj
     logical :: inconsistent
-    real(dp), parameter :: eps = epsilon(1d0)
+    real(dp), parameter :: eps = epsilon(1d0), small = tiny(0d0)
 
     do kedge = 1, nedge
        ktri = edge_map2ktri(kedge, 1)
@@ -645,8 +645,8 @@ contains
        ke_adj = edge_map2ke(kedge, 2)
        if (ktri_adj <= 0) cycle
        inconsistent = .false.
-       if (real(pol_quant(ktri, ke)) == 0d0) then
-          inconsistent = inconsistent .or. real(pol_quant(ktri_adj, ke_adj)) /= 0d0
+       if (abs(real(pol_quant(ktri, ke))) < small) then
+          inconsistent = inconsistent .or. abs(real(pol_quant(ktri_adj, ke_adj))) >= small
        else
           if (same_sign) then
              inconsistent = inconsistent .or. eps < abs(1d0 - &
@@ -656,8 +656,8 @@ contains
                   real(pol_quant(ktri_adj, ke_adj)) / real(pol_quant(ktri, ke)))
           end if
        end if
-       if (aimag(pol_quant(ktri, ke)) == 0d0) then
-          inconsistent = inconsistent .or. aimag(pol_quant(ktri_adj, ke_adj)) /= 0d0
+       if (abs(aimag(pol_quant(ktri, ke))) < small) then
+          inconsistent = inconsistent .or. abs(aimag(pol_quant(ktri_adj, ke_adj))) >= small
        else
           if (same_sign) then
              inconsistent = inconsistent .or. eps < abs(1d0 - &
@@ -937,7 +937,7 @@ contains
              j0phi(ktri, tri%ef) = j0phi_ampere(r, z)
           case (curr_prof_ps)
              Btor2 = B0phi(ktri, tri%ef) ** 2
-             if (.not. tri%orient) then
+             if (kf > 1 .and. .not. tri%orient) then
                 j0phi(ktri, tri%ef) = clight * r * fs%dp_dpsi(kf-1) * (1d0 - &
                      Btor2 / B2avg(kf-1))
              else
@@ -1069,6 +1069,7 @@ contains
     complex(dp), dimension(2*nkpol) :: aval
     type(triangle_rmp) :: tri
     type(knot) :: base, tip
+    real(dp), parameter :: small = tiny(0d0)
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
@@ -1101,7 +1102,7 @@ contains
        call sparse_solve(nkpol, nkpol, nz, irow, icol, aval, x)
        call sparse_matmul(nkpol, nkpol, irow, icol, aval, x, resid)
        resid = resid - inhom
-       where (inhom /= 0d0)
+       where (abs(inhom) >= small)
           rel_err = abs(resid) / abs(inhom)
        elsewhere
           rel_err = 0d0
@@ -1238,6 +1239,7 @@ contains
     type(triangle_rmp) :: tri
     complex(dp) :: Bnphi_Gamma
     real(dp) :: r
+    real(dp), parameter :: small = tiny(0d0)
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
@@ -1281,7 +1283,7 @@ contains
        call sparse_matmul(kt_max(kf), kt_max(kf), irow(:nz), icol(:nz), aval(:nz), &
             x(:kt_max(kf)), resid)
        resid = resid - inhom(:kt_max(kf))
-       where (inhom(:kt_max(kf)) /= 0d0)
+       where (abs(inhom(:kt_max(kf))) >= small)
           rel_err(:kt_max(kf)) = abs(resid(:kt_max(kf))) / abs(inhom(:kt_max(kf)))
        elsewhere
           rel_err(:kt_max(kf)) = 0d0
@@ -1316,7 +1318,7 @@ contains
 
     do kf = 1, nflux
        if (m_res(kf) > 0) then
-          if (sheet_current_factor(m_res(kf)) /= (0d0, 0d0)) then
+          if (abs(sheet_current_factor(m_res(kf))) > 0d0) then
              do kt = 1, kt_max(kf)
                 ktri = kt_low(kf) + kt
                 tri = mesh_element_rmp(ktri)
