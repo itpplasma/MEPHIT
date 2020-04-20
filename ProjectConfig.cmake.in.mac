@@ -1,0 +1,5 @@
+### Installation directory
+set (CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
+
+set(FGSL_PATH /opt/local)
+

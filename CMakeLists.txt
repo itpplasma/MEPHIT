@@ -90,8 +90,9 @@ set_source_files_properties(src/vacfield.f90 PROPERTIES COMPILE_FLAGS "${WARNING
 set_source_files_properties(src/standardise_equilibrium.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
 
 ### Linking
-set(MAGDIF_LIBS magdif ${SUPERLU_LIBRARIES} ${SUITESPARSE_LIBRARIES} ${gsl_lib} ${fgsl_lib} blas lapack)
-target_link_libraries(magdif_test.x ${MAGDIF_LIBS})
-target_link_libraries(standardise_equilibrium.x ${MAGDIF_LIBS})
-target_link_libraries(magdif_mesher.x ${MAGDIF_LIBS})
-target_link_libraries(vacfield.x ${MAGDIF_LIBS})
+set(MAGDIF_LIBS ${SUPERLU_LIBRARIES} ${SUITESPARSE_LIBRARIES} ${gsl_lib} ${fgsl_lib} blas lapack)
+target_link_libraries(magdif ${MAGDIF_LIBS})
+target_link_libraries(magdif_test.x magdif)
+target_link_libraries(standardise_equilibrium.x magdif)
+target_link_libraries(magdif_mesher.x magdif)
+target_link_libraries(vacfield.x magdif)
