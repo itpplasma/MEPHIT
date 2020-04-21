@@ -5,6 +5,9 @@ libmagdif = FortranLibrary('magdif', path=expanduser('~/src/NEO-EQ/build/lib'))
 magdif = FortranModule(libmagdif, name='magdif')
 magdif_config = FortranModule(libmagdif, name='magdif_config')
 
+# TODO: add more definitions useful for testing
+# Attention: private variables and routines are inaccessible
+
 magdif.fdef("""
     subroutine magdif_init
     end

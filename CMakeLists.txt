@@ -23,7 +23,7 @@ include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
 
 ### Set compiler flags
 # gfortran configuration
-set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fcheck=all -ffpe-trap=invalid,zero,overflow")
+set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow")
 set(WARNING_FLAGS "-Wall -Wextra")
 # ifort configuration
 # set(CMAKE_Fortran_FLAGS "-O2 -fpp -g -check all")

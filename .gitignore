@@ -13,5 +13,4 @@ build/
 fort.*
 __pycache__
 *.pyc
-*.inp
-_*.*
+_*
