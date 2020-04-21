@@ -10,3 +10,4 @@ build/
 fort.*
 __pycache__
 *.pyc
+*.inp

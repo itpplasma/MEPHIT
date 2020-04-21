@@ -9,13 +9,16 @@ magdif.fdef("""
     subroutine magdif_init
     end
 
-    subroutine read_mesh
-    end
+!    subroutine read_mesh
+!    end
 """)
 
 magdif_config.fdef("""
-    subroutine log_open
+    subroutine read_config
     end
+
+!    subroutine log_open
+!    end
 """)
 
 libmagdif.compile(verbose=1)
