@@ -1,5 +1,9 @@
 #!/bin/bash
 
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    PATH=/opt/local/libexec/gnubin:$PATH
+fi
+
 # if first argument is absolute path, return it unchanged
 # if first argument is relative path, prefix it with second argument and return absolute path
 # if second argument is empty, use current path
