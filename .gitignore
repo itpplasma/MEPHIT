@@ -5,9 +5,13 @@ build/
 *~
 *.mod
 *.o
+*.so
+*.dylib
+*.dll
 *.x
 *.dat
 fort.*
 __pycache__
 *.pyc
 *.inp
+_*.*
