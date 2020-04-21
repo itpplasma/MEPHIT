@@ -6,7 +6,7 @@ module magdif_config
   implicit none
 
   character(len = 1024) :: bin_dir = '.'
-  character(len = 1024) :: config_file
+  character(len = 1024) :: config_file = 'magdif.in'
   character(len = 1024) :: log_file = ''
   character(len = 1024) :: log_msg = ''
 
