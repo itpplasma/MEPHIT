@@ -113,7 +113,7 @@ magdif_prepare() {
         replace_first_in_line field_divB0.inp 7 "'\1_processed'"  # gfile
         replace_first_in_line field_divB0.inp 1 0  # ipert
         replace_first_in_line field_divB0.inp 2 1  # iequil
-        "$bindir/magdif_mesher.x" "$config" "$unprocessed" |& tee "$log"
+        "$bindir/magdif_mesher.x" "$config" "$unprocessed" 2>&1 | tee "$log"
         lasterr=$?
         if [ $lasterr -ne 0 ]; then
             echo "$scriptname: error $lasterr during mesh generation in $workdir" | tee -a "$log" >&2
@@ -121,7 +121,7 @@ magdif_prepare() {
             anyerr=$lasterr
             continue
         fi
-        FreeFem++ "$scriptdir/extmesh.edp" |& tee -a "$log"
+        FreeFem++ "$scriptdir/extmesh.edp" 2>&1 | tee -a "$log"
         lasterr=$?
         if [ $lasterr -ne 0 ]; then
             echo "$scriptname: error $lasterr during mesh generation in $workdir" | tee -a "$log" >&2
@@ -139,7 +139,7 @@ magdif_prepare() {
             ## uncomment to use at most half of available RAM and go to swap instead
             ## MemFree=$(sed -ne '/MemFree/ s/MemFree: *\([0-9]*\) kB/\1/gp' /proc/meminfo)
             ## systemd-run --scope --user -p MemoryHigh=$((MemFree / 2048))M \
-            "$bindir/vacfield.x" "$config" |& tee -a "$log"
+            "$bindir/vacfield.x" "$config" 2>&1 | tee -a "$log"
             lasterr=$?
             replace_first_in_line field_divB0.inp 1 0  # ipert
             # replace_first_in_line field_divB0.inp 2 1  # iequil
@@ -161,7 +161,7 @@ magdif_run() {
     for workdir; do
         pushd "$workdir"
         rm -f magdif.log convergence.dat
-        "$bindir/magdif_test.x" "$config" "$scriptdir" |& tee -a "$log"
+        "$bindir/magdif_test.x" "$config" "$scriptdir" 2>&1 | tee -a "$log"
         lasterr=$?
         if [ $lasterr -ne 0 ]; then
             echo "$scriptname: error $lasterr during run in $workdir" | tee -a "$log" >&2
@@ -182,7 +182,7 @@ magdif_plot() {
 
     for workdir; do
         pushd "$workdir"
-        python3 "$scriptdir/magdifplot.py" . "$config" "$mesh" |& tee -a "$log"
+        python3 "$scriptdir/magdifplot.py" . "$config" "$mesh" 2>&1 | tee -a "$log"
         popd
     done
 }
