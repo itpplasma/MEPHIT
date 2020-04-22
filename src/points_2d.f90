@@ -101,11 +101,12 @@ subroutine create_points_2d(inp_label, n_theta, points, points_s_theta_phi, r_sc
 !
         select case(geom_flux)
           case(1) !Theta scaling in flux coordinates
-            theta_flux = theta_frac * 2.d0 * pi     
+            theta_flux(:n_theta_current) = theta_frac(:n_theta_current) * 2.d0 * pi
 !
           case(2) !Theta scaling in geometrical theta
             !Transform geometric theta to symmetry flux theta (!De-normalize theta_frac --> real angle)
-            call theta_geom2theta_flux(inp_label, s, psi, theta_frac*2.d0*pi,theta_flux)
+            call theta_geom2theta_flux(inp_label, s, psi, &
+              theta_frac(:n_theta_current) * 2.d0 * pi, theta_flux(:n_theta_current))
         end select   
 !              
         do j = 1, n_theta_current
