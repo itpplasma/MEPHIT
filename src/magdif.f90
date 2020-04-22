@@ -1767,7 +1767,7 @@ contains
     use magdata_in_symfluxcoor_mod, only: nlabel, ntheta
     use magdif_config, only: n, nflux, kilca_scale_factor, kilca_pol_mode, longlines, &
          decorate_filename
-    use magdif_util, only: imun, clight
+    use magdif_util, only: imun, clight, bent_cyl2straight_cyl
     use mesh_mod, only: triangle_rmp, mesh_element_rmp
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
@@ -1780,16 +1780,16 @@ contains
     integer :: kf, kt, ktri, m, fid_rad, fid_pol, fid_tor
     integer :: kilca_m_res, fid_furth, fid_par  ! only KiLCA geometry
     type(triangle_rmp) :: tri
-    complex(dp) :: comp_r, comp_z, comp_rad, comp_pol
-    complex(dp) :: comp_par, sheet_current  ! only KiLCA geometry
-    real(dp) :: r, z, theta, B0_R, B0_Z, dum
-    real(dp) :: k_zeta, k_theta, rho, B0_phi  ! only KiLCA geometry
+    complex(dp) :: comp_R, comp_Z, comp_rad, comp_pol, comp_tor
+    complex(dp) :: comp_par, comp_par_neg, comp_par_pos, sheet_flux  ! only KiLCA geometry
+    real(dp) :: R, Z, theta, B0_R, B0_Z, dum
+    real(dp) :: k_z, k_theta, rad, B0_phi, B0  ! only KiLCA geometry
     real(dp) :: sqrt_g, dR_dtheta, dZ_dtheta, q, q_sum  ! only ASDEX geometry
 
     write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(1es22.15, 1x))'
     if (kilca_scale_factor /= 0) then
        kilca_m_res = -equil%cocos%sgn_q * abs(kilca_pol_mode)
-       k_zeta = n / equil%rcentr
+       k_z = n / equil%rcentr
        open(newunit = fid_rad, recl = 3 * longlines, status = 'replace', &
             file = decorate_filename(outfile, '', '_r'))
        open(newunit = fid_pol, recl = 3 * longlines, status = 'replace', &
@@ -1812,30 +1812,30 @@ contains
        coeff_pol = 0d0
        coeff_tor = 0d0
        q_sum = 0d0
-       sheet_current = 0d0
+       sheet_flux = 0d0
        do kt = 1, kt_max(kf)
           theta = (dble(kt) - 0.5d0) / dble(kt_max(kf)) * 2d0 * pi
           fourier_basis = [(exp(-imun * m * theta), m = -mmax, mmax)]
           ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
           call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), &
-               theta, q, dum, sqrt_g, dum, dum, r, dum, dR_dtheta, z, dum, dZ_dtheta)
-          call field(r, 0d0, z, B0_R, dum, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
+               theta, q, dum, sqrt_g, dum, dum, R, dum, dR_dtheta, Z, dum, dZ_dtheta)
+          call field(R, 0d0, Z, B0_R, dum, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
                dum, dum)
-          ktri = point_location(r, z)
+          ktri = point_location(R, Z)
           tri = mesh_element_rmp(ktri)
-          call interp_RT0(ktri, pol_flux, r, z, comp_r, comp_z)
+          call interp_RT0(ktri, pol_flux, R, Z, comp_R, comp_Z)
           if (kilca_scale_factor /= 0) then
-             comp_rad = comp_r * cos(theta) + comp_z * sin(theta)
-             comp_pol = comp_z * cos(theta) - comp_r * sin(theta)
-             sheet_current = sheet_current + tri%area * jnphi(ktri) * &
-                  fourier_basis(kilca_m_res)
+             call bent_cyl2straight_cyl(comp_R, tor_comp(ktri), comp_Z, theta, &
+                  comp_rad, comp_pol, comp_tor)
+             sheet_flux = sheet_flux + tri%area * comp_tor * fourier_basis(kilca_m_res)
           else
-             comp_rad = (comp_r * B0_Z - comp_z * B0_R) * r * sqrt_g * q
-             comp_pol = comp_r * dR_dtheta + comp_z * dZ_dtheta
+             comp_rad = (comp_R * B0_Z - comp_Z * B0_R) * R * sqrt_g * q
+             comp_pol = comp_R * dR_dtheta + comp_Z * dZ_dtheta
+             comp_tor = tor_comp(ktri)
           end if
           coeff_rad = coeff_rad + comp_rad * fourier_basis
           coeff_pol = coeff_pol + comp_pol * fourier_basis
-          coeff_tor = coeff_tor + tor_comp(ktri) * fourier_basis
+          coeff_tor = coeff_tor + comp_tor * fourier_basis
           q_sum = q_sum + q
        end do
        coeff_rad = coeff_rad / kt_max(kf)
@@ -1847,9 +1847,9 @@ contains
           write (fid_pol, fmt) fs_half%rad(kf), q, real(coeff_pol), aimag(coeff_pol)
           write (fid_tor, fmt) fs_half%rad(kf), q, real(coeff_tor), aimag(coeff_tor)
           k_theta = kilca_m_res / fs_half%rad(kf)
-          sheet_current = -2d0 * imun / clight / k_theta * sheet_current
-          write (fid_furth, '(7(1x, es23.16))') fs_half%rad(kf), k_zeta, k_theta, &
-               coeff_rad(-kilca_m_res), sheet_current
+          sheet_flux = -2d0 * imun / clight / k_theta * sheet_flux
+          write (fid_furth, '(7(1x, es23.16))') fs_half%rad(kf), k_z, k_theta, &
+               coeff_rad(-kilca_m_res), sheet_flux
        else
           write (fid_rad, fmt) fs_half%psi(kf), q, real(coeff_rad), aimag(coeff_rad)
           write (fid_pol, fmt) fs_half%psi(kf), q, real(coeff_pol), aimag(coeff_pol)
@@ -1864,25 +1864,28 @@ contains
     end if
     ! calculate parallel current (density) on a finer grid
     if (present(calc_par) .and. kilca_pol_mode /= 0) then
-       open(newunit = fid_par, status = 'replace', &
+       open(newunit = fid_par, status = 'replace', recl = longlines, &
             file = decorate_filename(outfile, '', '_par'))
        do kf = 1, nlabel
-          rho = fs%rad(nflux) * (dble(kf) - 0.5d0) / dble(nlabel)
-          comp_par = 0d0
+          rad = fs%rad(nflux) * (dble(kf) - 0.5d0) / dble(nlabel)
+          comp_par_neg = 0d0
+          comp_par_pos = 0d0
           do kt = 1, ntheta
              theta = 2d0 * pi * (dble(kt) - 0.5d0) / dble(ntheta)
-             R = equil%rmaxis + rho * cos(theta)
-             Z = equil%zmaxis + rho * sin(theta)
+             R = equil%rmaxis + rad * cos(theta)
+             Z = equil%zmaxis + rad * sin(theta)
              call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
                   dum, dum)
              ktri = point_location(R, Z)
-             call interp_RT0(ktri, pol_flux, R, Z, comp_r, comp_z)
-             comp_par = comp_par + (comp_r * B0_R + comp_z * B0_Z + tor_comp(ktri) * &
-                  B0_phi) * B0_phi / (B0_R * B0_R + B0_Z * B0_Z + B0_phi * B0_phi) * &
-                  exp(-imun * kilca_m_res * theta)
+             call interp_RT0(ktri, pol_flux, R, Z, comp_R, comp_Z)
+             B0 = sqrt(B0_R * B0_R + B0_Z * B0_Z + B0_phi * B0_phi)
+             comp_par = (comp_R * B0_R + comp_Z * B0_Z + tor_comp(ktri) * B0_phi) / B0
+             comp_par_neg = comp_par_neg + comp_par * exp(imun * abs(kilca_m_res) * theta)
+             comp_par_pos = comp_par_pos + comp_par * exp(-imun * abs(kilca_m_res) * theta)
           end do
-          comp_par = comp_par / dble(ntheta)
-          write (fid_par, '(3(1x, es23.16))') rho, comp_par
+          comp_par_neg = comp_par_neg / dble(ntheta)
+          comp_par_pos = comp_par_pos / dble(ntheta)
+          write (fid_par, '(6(1x, es23.16))') rad, B0_phi / B0, comp_par_neg, comp_par_pos
        end do
        close(fid_par)
     end if

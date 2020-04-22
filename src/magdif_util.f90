@@ -7,8 +7,8 @@ module magdif_util
   private
 
   public :: clight, imun, initialize_globals, get_equil_filenames, interp_psi_pol, &
-       ring_centered_avg_coord, assemble_sparse, linspace, interleave, calculate_det_3, &
-       add_node_owner
+       ring_centered_avg_coord, assemble_sparse, linspace, straight_cyl2bent_cyl, &
+       bent_cyl2straight_cyl, interleave, calculate_det_3, add_node_owner
 
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
@@ -209,6 +209,50 @@ contains
     step = (hi - lo) / dble(cnt - 1 + excl_lo + excl_hi)
     linspace = lo + [(k * step, k = excl_lo, cnt - 1 + excl_lo)]
   end function linspace
+
+  !> Transform components of a vector \f$ \vec{v} \f$ from straight cylinder coordinates
+  !> \f$ (r, \theta, z) \f$ to bent cylinder coordinates \f$ (R, \varphi, Z) \f$.
+  !>
+  !> @param comp_rad physical component \f$ v_{r} \f$
+  !> @param comp_pol physical component \f$ v_{(\theta)} \f$
+  !> @param comp_tor physical component \f$ v_{z} \f$
+  !> @param theta geometrical poloidal angle \f$ theta \f$ (coinciding with symmetry flux
+  !> coordinates' poloidal angle in this geometry)
+  !> @param comp_R physical component \f$ v_{R} \f$
+  !> @param comp_phi physical component \f$ v_{(\varphi)} \f$
+  !> @param comp_Z physical component \f$ v_{Z} \f$
+  subroutine straight_cyl2bent_cyl(comp_rad, comp_pol, comp_tor, theta, &
+       comp_R, comp_phi, comp_Z)
+    complex(dp), intent(in) :: comp_rad, comp_pol, comp_tor
+    real(dp), intent(in) :: theta
+    complex(dp), intent(out) :: comp_R, comp_phi, comp_Z
+
+    comp_R = comp_rad * cos(theta) - comp_pol * sin(theta)
+    comp_phi = comp_tor ! * (1d0 + r / R_0 * cos(theta))  ! exact version
+    comp_Z = comp_rad * sin(theta) + comp_pol * cos(theta)
+  end subroutine straight_cyl2bent_cyl
+
+  !> Transform components of a vector \f$ \vec{v} \f$ from bent cylinder coordinates
+  !> \f$ (R, \varphi, Z) \f$ to straight cylinder coordinates \f$ (r, \theta, z) \f$.
+  !>
+  !> @param comp_R physical component \f$ v_{R} \f$
+  !> @param comp_phi physical component \f$ v_{(\varphi)} \f$
+  !> @param comp_Z physical component \f$ v_{Z} \f$
+  !> @param theta geometrical poloidal angle \f$ theta \f$ (coinciding with symmetry flux
+  !> coordinates' poloidal angle in this geometry)
+  !> @param comp_rad physical component \f$ v_{r} \f$
+  !> @param comp_pol physical component \f$ v_{(\theta)} \f$
+  !> @param comp_tor physical component \f$ v_{z} \f$
+  subroutine bent_cyl2straight_cyl(comp_R, comp_phi, comp_Z, theta, &
+       comp_rad, comp_pol, comp_tor)
+    complex(dp), intent(in) :: comp_R, comp_phi, comp_Z
+    real(dp), intent(in) :: theta
+    complex(dp), intent(out) :: comp_rad, comp_pol, comp_tor
+
+    comp_rad = comp_Z * sin(theta) + comp_R * cos(theta)
+    comp_pol = comp_Z * cos(theta) - comp_R * sin(theta)
+    comp_tor = comp_phi ! / (1d0 + r / R_0 * cos(theta))  ! exact version
+  end subroutine bent_cyl2straight_cyl
 
   subroutine g_eqdsk_read(this, fname)
     class(g_eqdsk), intent(inout) :: this

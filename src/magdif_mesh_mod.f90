@@ -47,6 +47,7 @@ contains
     call cache_mesh_data
     if (kilca_scale_factor /= 0) then
        call compute_kilca_vacuum
+       call check_kilca_vacuum
     end if
 
     if (allocated(mesh_element_rmp)) deallocate(mesh_element)
@@ -419,11 +420,13 @@ contains
 
     integer :: ktri
     real(dp) :: r, z, n_r, n_z, rho, theta
+    integer, dimension(:), allocatable:: pol_modes
     complex(dp) :: Br, Bp, Bz
     type(triangle_rmp) :: tri
 
     allocate(Bnflux(ntri, 3))
     allocate(Bnphi(ntri))
+    pol_modes = [kilca_pol_mode, -kilca_pol_mode]
     do ktri = 1, ntri
        tri = mesh_element_rmp(ktri)
        ! flux through edge f
@@ -433,7 +436,7 @@ contains
        z = sum(mesh_point(tri%lf(:))%zcoord) * 0.5d0
        rho = hypot(r - equil%rmaxis, z - equil%zmaxis)
        theta = atan2(z - equil%zmaxis, r - equil%rmaxis)
-       call kilca_vacuum(n, kilca_pol_mode, equil%rcentr, rho, theta, Br, Bp, Bz)
+       call kilca_vacuum(n, pol_modes, equil%rcentr, rho, theta, Br, Bp, Bz)
        Bnflux(ktri, tri%ef) = (Br * n_r + Bz * n_z) * r
        ! flux through edge i
        n_r = mesh_point(tri%li(2))%zcoord - mesh_point(tri%li(1))%zcoord
@@ -442,7 +445,7 @@ contains
        z = sum(mesh_point(tri%li(:))%zcoord) * 0.5d0
        rho = hypot(r - equil%rmaxis, z - equil%zmaxis)
        theta = atan2(z - equil%zmaxis, r - equil%rmaxis)
-       call kilca_vacuum(n, kilca_pol_mode, equil%rcentr, rho, theta, Br, Bp, Bz)
+       call kilca_vacuum(n, pol_modes, equil%rcentr, rho, theta, Br, Bp, Bz)
        Bnflux(ktri, tri%ei) = (Br * n_r + Bz * n_z) * r
        ! flux through edge o
        n_r = mesh_point(tri%lo(2))%zcoord - mesh_point(tri%lo(1))%zcoord
@@ -451,7 +454,7 @@ contains
        z = sum(mesh_point(tri%lo(:))%zcoord) * 0.5d0
        rho = hypot(r - equil%rmaxis, z - equil%zmaxis)
        theta = atan2(z - equil%zmaxis, r - equil%rmaxis)
-       call kilca_vacuum(n, kilca_pol_mode, equil%rcentr, rho, theta, Br, Bp, Bz)
+       call kilca_vacuum(n, pol_modes, equil%rcentr, rho, theta, Br, Bp, Bz)
        Bnflux(ktri, tri%eo) = (Br * n_r + Bz * n_z) * r
        ! toroidal flux
        Bnphi(ktri) = imun / n * sum(Bnflux(ktri, :)) / tri%area
@@ -463,15 +466,68 @@ contains
     if (allocated(Bnphi)) deallocate(Bnphi)
   end subroutine compute_kilca_vacuum
 
-  subroutine kilca_vacuum(tor_mode, pol_mode, R_0, r, theta, Br, Bp, Bz)
+  !> Calculate the vacuum perturbation field in cylindrical coordinates from the Fourier
+  !> series of all given modes.
+  !>
+  !> @param tor_mode toroidal mode number, scaled by magdif_config::kilca_scale_factor
+  !> (usually magdif_config::n)
+  !> @param pol_modes array of poloidal mode numbers
+  !> @param R_0 distance of straight cylinder axis to torus axis (usually
+  !> magdif_util::g_eqdsk::rcentr)
+  !> @param r radial distance \f$ r \f$ from magnetic axis
+  !> @param theta geometrical poloidal angle \f$ theta \f$ (coinciding with symmetry flux
+  !> coordinates' poloidal angle in this geometry)
+  !> @param B_R physical component \f$ B_{R} (r, theta, n) \f$ of the vacuum perturbation
+  !> field
+  !> @param B_phi physical component \f$ B_{(\varphi)} (r, theta, n) \f$ of the vacuum
+  !> perturbation field
+  !> @param B_Z physical component \f$ B_{Z} (r, theta, n) \f$ of the vacuum perturbation
+  !> field
+  subroutine kilca_vacuum(tor_mode, pol_modes, R_0, r, theta, B_R, B_phi, B_Z)
+    use magdif_util, only: imun, straight_cyl2bent_cyl
+    integer, intent(in) :: tor_mode, pol_modes(1:)
+    real(dp), intent(in) :: R_0, r, theta
+    complex(dp), intent(out) :: B_R, B_phi, B_Z
+    complex(dp) :: B_rad, B_pol, B_tor, temp_B_rad, temp_B_pol, temp_B_tor
+    complex(dp), dimension(:), allocatable :: fourier_basis
+    integer :: k
+
+    B_rad = (0d0, 0d0)
+    B_pol = (0d0, 0d0)
+    B_tor = (0d0, 0d0)
+    fourier_basis = exp(imun * pol_modes * theta)
+    do k = 1, ubound(pol_modes, 1)
+       call kilca_vacuum_fourier(tor_mode, pol_modes(k), R_0, r, &
+            temp_B_rad, temp_B_pol, temp_B_tor)
+       B_rad = B_rad + temp_B_rad * fourier_basis(k)
+       B_pol = B_pol + temp_B_pol * fourier_basis(k)
+       B_tor = B_tor + temp_B_tor * fourier_basis(k)
+    end do
+    call straight_cyl2bent_cyl(B_rad, B_pol, B_tor, theta, B_R, B_phi, B_Z)
+  end subroutine kilca_vacuum
+
+  !> Calculate the Fourier coefficient of the vacuum perturbation field for a given
+  !> toroidal-poloidal mode.
+  !>
+  !> @param tor_mode toroidal mode number, scaled by magdif_config::kilca_scale_factor
+  !> (usually magdif_config::n)
+  !> @param pol_mode poloidal mode number
+  !> @param R_0 distance of straight cylinder axis to torus axis (usually
+  !> magdif_util::g_eqdsk::rcentr)
+  !> @param r radial distance \f$ r \f$ from magnetic axis
+  !> @param B_rad physical component \f$ B_{r} (r, m, n) \f$ of the vacuum perturbation
+  !> field
+  !> @param B_pol physical component \f$ B_{(\theta)} (r, m, n) \f$ of the vacuum
+  !> perturbation field
+  !> @param B_tor physical component \f$ B_{z} (r, m, n) \f$ of the vacuum perturbation
+  !> field
+  subroutine kilca_vacuum_fourier(tor_mode, pol_mode, R_0, r, B_rad, B_pol, B_tor)
     use fgsl, only: fgsl_double, fgsl_int, fgsl_success, fgsl_sf_bessel_icn_array
     use magdif_config, only: log_msg, log_err, log_write, kilca_vac_coeff
     use magdif_util, only: imun
-
     integer, intent(in) :: tor_mode, pol_mode
-    real(dp), intent(in) :: R_0, r, theta
-    complex(dp), intent(out) :: Br, Bp, Bz
-    complex(dp) :: B_r, B_theta, B_z
+    real(dp), intent(in) :: R_0, r
+    complex(dp), intent(out) :: B_rad, B_pol, B_tor
     real(fgsl_double) :: I_m(-1:1), k_z_r
     integer(fgsl_int) :: status
 
@@ -481,11 +537,28 @@ contains
        write (log_msg, '("fgsl_sf_bessel_icn_array returned error ", i0)') status
        call log_write
     end if
-    B_r = 0.5d0 * (I_m(-1) + I_m(1)) * cos(pol_mode * theta) * kilca_vac_coeff
-    B_theta = -pol_mode / k_z_r * I_m(0) * sin(pol_mode * theta) * kilca_vac_coeff
-    B_z = imun * I_m(0) * cos(pol_mode * theta) * kilca_vac_coeff
-    Br = B_r * cos(theta) - B_theta * sin(theta)
-    Bp = B_z ! * (1d0 + r / R_0 * cos(theta))  ! exact version - probably not necessary
-    Bz = B_r * sin(theta) + B_theta * cos(theta)
-  end subroutine kilca_vacuum
+    B_rad = 0.5d0 * (I_m(-1) + I_m(1)) * kilca_vac_coeff
+    B_pol = imun * pol_mode / k_z_r * I_m(0) * kilca_vac_coeff
+    B_tor = imun * I_m(0) * kilca_vac_coeff
+  end subroutine kilca_vacuum_fourier
+
+  subroutine check_kilca_vacuum
+    use magdif_config, only: n, kilca_pol_mode, longlines
+    use magdif, only: equil, fs_half
+    complex(dp) :: B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
+    real(dp) :: rad
+    integer :: kf, fid
+
+    open(newunit = fid, file = 'cmp_vac.dat', recl = 3 * longlines)
+    do kf = lbound(fs_half%rad, 1), ubound(fs_half%rad, 1)
+       rad = fs_half%rad(kf)
+       call kilca_vacuum_fourier(n, -abs(kilca_pol_mode), equil%rcentr, rad, &
+            B_rad_neg, B_pol_neg, B_tor_neg)
+       call kilca_vacuum_fourier(n, abs(kilca_pol_mode), equil%rcentr, rad, &
+            B_rad_pos, B_pol_pos, B_tor_pos)
+       write (fid, '(13(1x, es23.16))') rad, &
+           B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
+    end do
+    close(fid)
+  end subroutine check_kilca_vacuum
 end module magdif_mesh_mod
