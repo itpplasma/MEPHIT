@@ -23,9 +23,9 @@
    ! threshold for eigenvalues in preconditioner
    tol = 0.5d0
    ! number of knots per poloidal loop
-   nkpol = 300
+   nkpol = 64
    ! number of flux surfaces up to and counting LCFS (before refinement)
-   nflux_unref = 100
+   nflux_unref = 32
    ! temperature on magnetic axis
    ti0 = 3.d3
    ! minimum temperature

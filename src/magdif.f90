@@ -6,7 +6,7 @@ module magdif
 
   private
 
-  public :: equil, fluxvar, fs, fs_half, kp_low, kp_max, kt_low, kt_max, Bnflux, Bnphi, &
+  public :: equil, fluxvar, fs, fs_half, kp_low, kp_max, kt_low, kt_max, B0flux, Bnflux, Bnphi, &
        init_indices, cache_mesh_data, check_redundant_edges, check_div_free, &
        write_vector_dof, magdif_init, magdif_cleanup, magdif_single, magdif_iterated
 

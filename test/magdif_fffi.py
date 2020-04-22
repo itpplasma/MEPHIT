@@ -9,19 +9,23 @@ magdif_config = FortranModule(libmagdif, name='magdif_config')
 # Attention: private variables and routines are inaccessible
 
 magdif.fdef("""
-    subroutine magdif_init
-    end
+  real(8), allocatable    :: B0flux(:,:)
+  complex(8), allocatable :: Bnflux(:,:)
+  complex(8), allocatable :: Bnphi(:)
 
-!    subroutine read_mesh
-!    end
+  subroutine magdif_init
+  end
+
+  !subroutine read_mesh
+  !end
 """)
 
 magdif_config.fdef("""
-    subroutine read_config
-    end
+  subroutine read_config
+  end
 
-!    subroutine log_open
-!    end
+  !subroutine log_open
+  !end
 """)
 
 libmagdif.compile(verbose=1)
