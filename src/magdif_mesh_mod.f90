@@ -55,13 +55,15 @@ contains
     if (allocated(mesh_point)) deallocate(mesh_point)
   end subroutine generate_mesh
 
-  subroutine refine_eqd_partition(nref, deletions, additions, refinement, res, refined)
+  subroutine refine_eqd_partition(nref, deletions, additions, refinement, res, refined, &
+       ref_ind)
     use magdif_config, only: nflux_unref, nflux
     use magdif_util, only: linspace
     integer, intent(in) :: nref
     integer, dimension(nref), intent(in) :: deletions, additions
-    real(dp), dimension(nref), intent(in) :: res, refinement
+    real(dp), dimension(nref), intent(in) :: refinement, res
     real(dp), dimension(:), allocatable, intent(out) :: refined
+    integer, dimension(nref), intent(out) :: ref_ind
     integer :: kref, k
     integer, dimension(:), allocatable :: coarse_lo, coarse_hi, fine_lo, fine_hi
     real(dp) :: coarse_sep
@@ -92,6 +94,7 @@ contains
          kref = 0, nref - 1)]
     fine_hi = coarse_hi + [(2 * sum(additions(1:kref) - deletions(1:kref)), &
          kref = 1, nref)]
+    ref_ind = fine_hi - additions
     ! compute separations between flux surfaces using geometric series
     coarse_sep = 1d0 / dble(nflux_unref)
     fine_sep = coarse_sep * refinement
@@ -124,17 +127,19 @@ contains
 
   subroutine refine_resonant_surfaces(psi_sample, q_sample, psi2rho_norm, rho_norm_ref)
     use magdif_config, only: n, refinement, additions, deletions, sheet_current_factor, &
-         read_delayed_config
+         read_delayed_config, log_msg, log_debug, log_write
     use magdif_util, only: flux_func
+    use magdif, only: m_res_min, m_res_max
     use netlib_mod, only: zeroin
     real(dp), dimension(:), intent(in) :: psi_sample
     real(dp), dimension(size(psi_sample)) :: q_sample
     procedure(mapping) :: psi2rho_norm
     real(dp), dimension(:), allocatable, intent(out) :: rho_norm_ref
     real(dp) :: psi_min, psi_max
-    integer :: m_res_min, m_res_max, m
+    integer :: m, kref
     type(flux_func) :: psi_eqd
     real(dp), dimension(:), allocatable :: psi_res, rho_res
+    integer, dimension(:), allocatable :: ref_ind
     logical, dimension(:), allocatable :: mask
 
     psi_min = minval(psi_sample)
@@ -143,17 +148,36 @@ contains
     m_res_min = ceiling(minval(abs(q_sample)) * dble(n))
     m_res_max = floor(maxval(abs(q_sample)) * dble(n))
     allocate(psi_res(m_res_min:m_res_max))
+    allocate(rho_res(m_res_min:m_res_max))
+    log_msg = 'resonance positions:'
+    if (log_debug) call log_write
     do m = m_res_min, m_res_max
        psi_res(m) = zeroin(psi_min, psi_max, q_interp_resonant, 1d-9)
+       rho_res(m) = psi2rho_norm(psi_res(m))
+       write (log_msg, '("m = ", i2, ", psi_m = ", es23.16, ", rho_m = ", f19.16)') &
+            m, psi_res(m), rho_res(m)
+       if (log_debug) call log_write
     end do
-    allocate(rho_res(m_res_min:m_res_max))
-    rho_res = [(psi2rho_norm(psi_res(m)), m = m_res_min, m_res_max)]
     call read_delayed_config(m_res_min, m_res_max)
     allocate(mask(m_res_min:m_res_max))
     mask = 0d0 < refinement .and. refinement < 1d0
+    allocate(ref_ind(count(mask)))
     call refine_eqd_partition(count(mask), pack(deletions, mask), pack(additions, mask), &
-         pack(refinement, mask), pack(rho_res, mask), rho_norm_ref)
+         pack(refinement, mask), pack(rho_res, mask), rho_norm_ref, ref_ind)
 
+    log_msg = 'refinement positions:'
+    if (log_debug) call log_write
+    kref = 0
+    do m = m_res_min, m_res_max
+       if (.not. mask(m)) cycle
+       kref = kref + 1
+       write (log_msg, '("m = ", i0, ", kf = ", i0, ' // &
+            '", rho: ", f19.16, 2(" < ", f19.16))') m, ref_ind(kref), &
+            rho_norm_ref(ref_ind(kref) - 1), rho_res(m), rho_norm_ref(ref_ind(kref))
+       if (log_debug) call log_write
+    end do
+
+    if (allocated(ref_ind)) deallocate(ref_ind)
     if (allocated(mask)) deallocate(mask)
     if (allocated(rho_res)) deallocate(rho_res)
     if (allocated(psi_res)) deallocate(psi_res)
@@ -369,7 +393,7 @@ contains
   subroutine write_mesh_data
     use mesh_mod, only: npoint, ntri, knot, triangle, mesh_point, mesh_element
     use magdif_config, only: nflux, longlines, meshdata_file
-    use magdif, only: kp_max, kp_low, fs, fs_half
+    use magdif, only: kp_max, kp_low, fs, fs_half, m_res_min, m_res_max
 
     integer :: fid, kpoi, ktri, kp, ke
     type(triangle) :: elem
@@ -384,7 +408,7 @@ contains
     close(fid)
 
     open(newunit = fid, file = meshdata_file, form = 'unformatted', status = 'replace')
-    write (fid) nflux, npoint, ntri
+    write (fid) nflux, npoint, ntri, m_res_min, m_res_max
     write (fid) fs%psi, fs%rad
     write (fid) fs_half%psi, fs_half%rad
     write (fid) mesh_point

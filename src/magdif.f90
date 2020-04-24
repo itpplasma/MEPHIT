@@ -6,15 +6,17 @@ module magdif
 
   private
 
-  public :: equil, fluxvar, fs, fs_half, kp_low, kp_max, kt_low, kt_max, B0flux, Bnflux, Bnphi, &
-       init_indices, cache_mesh_data, check_redundant_edges, check_div_free, &
-       write_vector_dof, magdif_init, magdif_cleanup, magdif_single, magdif_iterated
+  public :: equil, fluxvar, fs, fs_half, m_res_min, m_res_max, kp_low, kp_max, kt_low, kt_max, &
+       B0flux, Bnflux, Bnphi, init_indices, cache_mesh_data, check_redundant_edges, &
+       check_div_free, write_vector_dof, magdif_init, magdif_cleanup, magdif_single, &
+       magdif_iterated
 
   type(g_eqdsk) :: equil
   type(flux_func) :: fluxvar
   type(flux_func_cache) :: fs
   type(flux_func_cache) :: fs_half
 
+  integer :: m_res_min, m_res_max
   real(dp) :: r_o, z_o, r_min, r_max, z_min, z_max  ! TODO: mesh_global_props type
 
   !> Poloidal mode number \f$ m \f$ (dimensionless) in resonance at given flux surface.
@@ -473,7 +475,7 @@ contains
     integer :: fid
 
     open(newunit = fid, file = meshdata_file, form = 'unformatted', status = 'old')
-    read (fid) nflux, npoint, ntri
+    read (fid) nflux, npoint, ntri, m_res_min, m_res_max
     write (log_msg, '("nflux = ", i0, ", npoint = ", i0, ", ntri = ", i0)') &
          nflux, npoint, ntri
     if (log_info) call log_write
@@ -744,11 +746,10 @@ contains
     use constants, only: pi  ! orbit_mod.f90
     use magdif_config, only: cmplx_fmt, n, nflux, q_prof, q_prof_flux, q_prof_geqdsk, &
          kilca_scale_factor, sheet_current_factor, read_delayed_config, log_msg, &
-         log_info, log_err, log_write
+         log_debug, log_info, log_err, log_write
     use mesh_mod, only: triangle_rmp, mesh_element_rmp
-    integer :: kf, kt, ktri
+    integer :: kf, kt, ktri, m, kf_res
     type(triangle_rmp) :: tri
-    integer :: m_res_min, m_res_max, m
     real(dp), dimension(nflux) :: abs_err
 
     select case (q_prof)
@@ -778,15 +779,16 @@ contains
 
     allocate(m_res(nflux))
     m_res = 0
-    if (kilca_scale_factor /= 0) then
-       m_res_min = max(ceiling(minval(abs(fs_half%q)) * n), n / kilca_scale_factor + 1)
-    else
-       m_res_min = max(ceiling(minval(abs(fs_half%q)) * n), n + 1)
-    end if
-    m_res_max = floor(maxval(abs(fs_half%q)) * n)
+    log_msg = 'resonance positions:'
+    if (log_debug) call log_write
     do m = m_res_max, m_res_min, -1
        abs_err = [(abs(abs(fs_half%q(kf)) - dble(m) / dble(n)), kf = 1, nflux)]
-       m_res(minloc(abs_err, 1)) = m
+       kf_res = minloc(abs_err, 1)
+       m_res(kf_res) = m
+       write (log_msg, '("m = ", i0, ", kf_res = ", i0, ' // &
+            '", rho: ", f19.16, 2(" < ", f19.16))') m, kf_res, &
+            [fs%rad(kf_res - 1), fs_half%rad(kf_res), fs%rad(kf_res)] / fs%rad(nflux)
+       if (log_debug) call log_write
     end do
 
     call read_delayed_config(m_res_min, m_res_max)
