@@ -28,6 +28,7 @@ module magdif_config
   integer, parameter :: curr_prof_geqdsk = 2 !< current profile from G EQDSK file
 
   integer, parameter :: q_prof_flux = 0   !< q profile from flux between flux surfaces
+  integer, parameter :: q_prof_rot = 1    !< q profile from rotational transform
   integer, parameter :: q_prof_geqdsk = 2 !< q profile from G EQDSK file
 
   integer, private :: log = output_unit  !< log file id

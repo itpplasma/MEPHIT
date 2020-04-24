@@ -11,7 +11,7 @@
    pres_prof = 1
    ! 0: only PS current, 1: rot B_0, 2: EQDSK profile
    curr_prof = 0
-   ! 0: surface integral, 2: EQDSK profile
+   ! 0: surface integral, 1: field line integral, 2: EQDSK profile
    q_prof = 0
 
    ! harmonic index of perturbation

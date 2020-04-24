@@ -232,15 +232,14 @@ contains
     type(flux_func) :: psi_interpolator
     real(dp) :: psi_axis, rho_max
 
-    ! calculate maximal extent from magnetic axis
-    rho_max = min(equil%rmaxis - equil%rleft, &
-         equil%rleft + equil%rdim - equil%rmaxis, &
-         equil%zdim * 0.5d0 + equil%zmid - equil%zmaxis, &
-         equil%zdim * 0.5d0 - equil%zmid + equil%zmaxis)
-
     theta0_at_xpoint = .true.
     circ_mesh_scale = kilca_scale_factor
     if (kilca_scale_factor /= 0) then
+       ! calculate maximal extent from magnetic axis
+       rho_max = min(equil%rmaxis - equil%rleft, &
+            equil%rleft + equil%rdim - equil%rmaxis, &
+            equil%zdim * 0.5d0 + equil%zmid - equil%zmaxis, &
+            equil%zdim * 0.5d0 - equil%zmid + equil%zmaxis)
        call write_kilca_convexfile(rho_max, convexfile)
        o_point = [equil%rmaxis, equil%zmaxis]
        x_point = o_point + [rho_max, 0d0]
@@ -250,13 +249,13 @@ contains
     ! loads points that are calculated in preload_for_SYNCH into module variables
     ! and spline interpolates them for use with magdata_in_symfluxcoord_ext
     call load_magdata_in_symfluxcoord
-    ! interpolate between rho and psi
-    allocate(rho_norm_eqd(nlabel))
-    rho_norm_eqd = rbeg / hypot(theta_axis(1), theta_axis(2))
     ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
     ! load_magdata_in_symfluxcoord_ext divides by psipol_max
     psi_axis = interp_psi_pol(raxis, zaxis)
     call psi_interpolator%init(4, psisurf(1:) * psipol_max + psi_axis)
+    ! interpolate between psi and rho
+    allocate(rho_norm_eqd(nlabel))
+    rho_norm_eqd = rbeg / hypot(theta_axis(1), theta_axis(2))
 
     call fs%init(nflux, .false.)
     call fs_half%init(nflux, .true.)

@@ -744,12 +744,15 @@ contains
   !> magdif_cleanup().
   subroutine compute_safety_factor
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_config, only: cmplx_fmt, n, nflux, q_prof, q_prof_flux, q_prof_geqdsk, &
-         kilca_scale_factor, sheet_current_factor, read_delayed_config, log_msg, &
+    use magdif_config, only: cmplx_fmt, n, nflux, q_prof, q_prof_flux, q_prof_rot, &
+         q_prof_geqdsk, sheet_current_factor, read_delayed_config, log_msg, &
          log_debug, log_info, log_err, log_write
+    use magdif_util, only: flux_func
+    use magdata_in_symfluxcoor_mod, only: psipol_max, psisurf, qsaf
     use mesh_mod, only: triangle_rmp, mesh_element_rmp
     integer :: kf, kt, ktri, m, kf_res
     type(triangle_rmp) :: tri
+    type(flux_func) :: psi_interpolator
     real(dp), dimension(nflux) :: abs_err
 
     select case (q_prof)
@@ -763,11 +766,16 @@ contains
           end do
           fs_half%q(kf) = fs_half%q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
        end do
-       ! use linear interpolation for full-grid steps for now
-       fs%q(1:nflux-1) = 0.5d0 * (fs_half%q(1:nflux-1) + fs_half%q(2:nflux))
-       ! linear extrapolation for values at separatrix and magnetic axis
-       fs%q(nflux) = fs%q(nflux-1) + (fs%q(nflux-1) - fs%q(nflux-2))
-       fs%q(0) = fs%q(1) - (fs%q(2) - fs%q(1))
+       call psi_interpolator%init(4, fs_half%psi)
+       ! Lagrange polynomial extrapolation for values at separatrix and magnetic axis
+       fs%q = [(psi_interpolator%interp(fs_half%q, fs%psi(kf)), kf = 0, nflux)]
+    case (q_prof_rot)
+       ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
+       ! load_magdata_in_symfluxcoord_ext divides by psipol_max
+       call psi_interpolator%init(4, psisurf(1:) * psipol_max + fs%psi(0))
+       ! Lagrange polynomial extrapolation for value at magnetic axis
+       fs%q = [(psi_interpolator%interp(qsaf, fs%psi(kf)), kf = 0, nflux)]
+       fs_half%q = [(psi_interpolator%interp(qsaf, fs_half%psi(kf)), kf = 1, nflux)]
     case (q_prof_geqdsk)
        fs%q = [(fluxvar%interp(equil%qpsi, fs%psi(kf)), kf = 0, nflux)]
        fs_half%q = [(fluxvar%interp(equil%qpsi, fs_half%psi(kf)), kf = 1, nflux)]
