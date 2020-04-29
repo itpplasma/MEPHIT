@@ -46,6 +46,7 @@ contains
     call write_mesh_data
     call cache_mesh_data
     if (kilca_scale_factor /= 0) then
+       call compute_kilca_vac_coeff
        call compute_kilca_vacuum
        call check_kilca_vacuum
     end if
@@ -507,6 +508,7 @@ contains
   !> @param B_Z physical component \f$ B_{Z} (r, theta, n) \f$ of the vacuum perturbation
   !> field
   subroutine kilca_vacuum(tor_mode, pol_modes, R_0, r, theta, B_R, B_phi, B_Z)
+    use magdif_config, only: kilca_vac_coeff
     use magdif_util, only: imun, straight_cyl2bent_cyl
     integer, intent(in) :: tor_mode, pol_modes(1:)
     real(dp), intent(in) :: R_0, r, theta
@@ -521,13 +523,40 @@ contains
     fourier_basis = exp(imun * pol_modes * theta)
     do k = 1, ubound(pol_modes, 1)
        call kilca_vacuum_fourier(tor_mode, pol_modes(k), R_0, r, &
-            temp_B_rad, temp_B_pol, temp_B_tor)
+            kilca_vac_coeff(abs(pol_modes(k))), temp_B_rad, temp_B_pol, temp_B_tor)
        B_rad = B_rad + temp_B_rad * fourier_basis(k)
        B_pol = B_pol + temp_B_pol * fourier_basis(k)
        B_tor = B_tor + temp_B_tor * fourier_basis(k)
     end do
     call straight_cyl2bent_cyl(B_rad, B_pol, B_tor, theta, B_R, B_phi, B_Z)
   end subroutine kilca_vacuum
+
+  subroutine compute_kilca_vac_coeff
+    use magdif_config, only: kilca_vac_r, kilca_vac_Bz, kilca_vac_coeff, n, cmplx_fmt, &
+         log_msg, log_info, log_write
+    use magdif, only: m_res_min, m_res_max, equil
+    integer :: m
+    complex(dp) :: B_rad, B_pol, B_tor
+
+    do m = m_res_min, m_res_max
+       if (abs(kilca_vac_r(m)) <= 0d0) then
+          write (log_msg, '("ignoring kilca_vac_r(", i0, "), ' // &
+               'resorting to kilca_vac_coeff(", i0, ")")') m, m
+          if (log_info) call log_write
+          cycle
+       end if
+       call kilca_vacuum_fourier(n, m, equil%rcentr, kilca_vac_r(m), (1d0, 0d0), &
+            B_rad, B_pol, B_tor)
+       kilca_vac_coeff(m) = kilca_vac_Bz(m) / B_tor
+    end do
+    log_msg = 'effective vacuum perturbation field coefficients:'
+    if (log_info) call log_write
+    do m = m_res_min, m_res_max
+       write (log_msg, '("kilca_vac_coeff(", i0, ") = ", ' // cmplx_fmt // ')') m, &
+            kilca_vac_coeff(m)
+       if (log_info) call log_write
+    end do
+  end subroutine compute_kilca_vac_coeff
 
   !> Calculate the Fourier coefficient of the vacuum perturbation field for a given
   !> toroidal-poloidal mode.
@@ -538,18 +567,21 @@ contains
   !> @param R_0 distance of straight cylinder axis to torus axis (usually
   !> magdif_util::g_eqdsk::rcentr)
   !> @param r radial distance \f$ r \f$ from magnetic axis
+  !> @param vac_coeff coefficient of modified Bessel functions (integration constant)
   !> @param B_rad physical component \f$ B_{r} (r, m, n) \f$ of the vacuum perturbation
   !> field
   !> @param B_pol physical component \f$ B_{(\theta)} (r, m, n) \f$ of the vacuum
   !> perturbation field
   !> @param B_tor physical component \f$ B_{z} (r, m, n) \f$ of the vacuum perturbation
   !> field
-  subroutine kilca_vacuum_fourier(tor_mode, pol_mode, R_0, r, B_rad, B_pol, B_tor)
+  subroutine kilca_vacuum_fourier(tor_mode, pol_mode, R_0, r, vac_coeff, &
+       B_rad, B_pol, B_tor)
     use fgsl, only: fgsl_double, fgsl_int, fgsl_success, fgsl_sf_bessel_icn_array
-    use magdif_config, only: log_msg, log_err, log_write, kilca_vac_coeff
+    use magdif_config, only: log_msg, log_err, log_write
     use magdif_util, only: imun
     integer, intent(in) :: tor_mode, pol_mode
     real(dp), intent(in) :: R_0, r
+    complex(dp), intent(in) :: vac_coeff
     complex(dp), intent(out) :: B_rad, B_pol, B_tor
     real(fgsl_double) :: I_m(-1:1), k_z_r
     integer(fgsl_int) :: status
@@ -560,25 +592,26 @@ contains
        write (log_msg, '("fgsl_sf_bessel_icn_array returned error ", i0)') status
        call log_write
     end if
-    B_rad = 0.5d0 * (I_m(-1) + I_m(1)) * kilca_vac_coeff
-    B_pol = imun * pol_mode / k_z_r * I_m(0) * kilca_vac_coeff
-    B_tor = imun * I_m(0) * kilca_vac_coeff
+    B_rad = 0.5d0 * (I_m(-1) + I_m(1)) * vac_coeff
+    B_pol = imun * pol_mode / k_z_r * I_m(0) * vac_coeff
+    B_tor = imun * I_m(0) * vac_coeff
   end subroutine kilca_vacuum_fourier
 
   subroutine check_kilca_vacuum
-    use magdif_config, only: n, kilca_pol_mode, longlines
+    use magdif_config, only: n, kilca_pol_mode, kilca_vac_coeff, longlines
     use magdif, only: equil, fs_half
     complex(dp) :: B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
     real(dp) :: rad
-    integer :: kf, fid
+    integer :: kf, fid, abs_pol_mode
 
+    abs_pol_mode = abs(kilca_pol_mode)
     open(newunit = fid, file = 'cmp_vac.dat', recl = 3 * longlines)
     do kf = lbound(fs_half%rad, 1), ubound(fs_half%rad, 1)
        rad = fs_half%rad(kf)
-       call kilca_vacuum_fourier(n, -abs(kilca_pol_mode), equil%rcentr, rad, &
-            B_rad_neg, B_pol_neg, B_tor_neg)
-       call kilca_vacuum_fourier(n, abs(kilca_pol_mode), equil%rcentr, rad, &
-            B_rad_pos, B_pol_pos, B_tor_pos)
+       call kilca_vacuum_fourier(n, -abs_pol_mode, equil%rcentr, rad, &
+            kilca_vac_coeff(abs_pol_mode), B_rad_neg, B_pol_neg, B_tor_neg)
+       call kilca_vacuum_fourier(n, abs_pol_mode, equil%rcentr, rad, &
+            kilca_vac_coeff(abs_pol_mode), B_rad_pos, B_pol_pos, B_tor_pos)
        write (fid, '(13(1x, es23.16))') rad, &
            B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
     end do

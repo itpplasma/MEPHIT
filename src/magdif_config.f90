@@ -118,7 +118,13 @@ module magdif_config
   real(dp) :: rel_err_currn = 1d-8
 
   !> Integration constant for resonant vacuum perturbation in KiLCA comparison.
-  complex(dp) :: kilca_vac_coeff
+  complex(dp), dimension(:), allocatable :: kilca_vac_coeff
+
+  !> Data point for resonant vacuum perturbation in KiLCA comparison.
+  real(dp), dimension(:), allocatable :: kilca_vac_r
+
+  !> Data point for resonant vacuum perturbation in KiLCA comparison.
+  complex(dp), dimension(:), allocatable :: kilca_vac_Bz
 
   !> single poloidal mode used in comparison with KiLCA code
   integer :: kilca_pol_mode = 0
@@ -137,9 +143,10 @@ module magdif_config
        tol, n, nkpol, nflux_unref, ti0, di0, t_min, d_min, damp, meshdata_file, &
        Bn_vacout_file, Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, &
        presn_file, currn_file, eigvec_file, rel_err_Bn, rel_err_currn, kilca_pol_mode, &
-       kilca_vac_coeff, kilca_scale_factor, max_eig_out, curr_prof, q_prof, conv_file, &
+       kilca_scale_factor, max_eig_out, curr_prof, q_prof, conv_file, &
        quiet
-  namelist /delayed/ refinement, deletions, additions, sheet_current_factor
+  namelist /delayed/ refinement, deletions, additions, sheet_current_factor, &
+       kilca_vac_coeff, kilca_vac_r, kilca_vac_Bz
 
 contains
 
@@ -182,6 +189,15 @@ contains
     if (allocated(sheet_current_factor)) deallocate(sheet_current_factor)
     allocate(sheet_current_factor(m_res_min:m_res_max))
     sheet_current_factor = (0d0, 0d0)
+    if (allocated(kilca_vac_coeff)) deallocate(kilca_vac_coeff)
+    allocate(kilca_vac_coeff(m_res_min:m_res_max))
+    kilca_vac_coeff = (1d0, 0d0)
+    if (allocated(kilca_vac_r)) deallocate(kilca_vac_r)
+    allocate(kilca_vac_r(m_res_min:m_res_max))
+    kilca_vac_r = 0d0
+    if (allocated(kilca_vac_Bz)) deallocate(kilca_vac_Bz)
+    allocate(kilca_vac_Bz(m_res_min:m_res_max))
+    kilca_vac_Bz = (0d0, 0d0)
     open(newunit = fid, file = config_file)
     read(fid, nml = delayed)
     close(fid)
