@@ -1586,24 +1586,41 @@ contains
     close(fid)
   end subroutine write_vector_plot
 
-  function point_in_triangle(ktri, r, z) result(probably)
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
+  ! based on http://totologic.blogspot.com/2014/01/accurate-point-in-triangle-test.html
+  function point_in_triangle(ktri, R, Z, thickness) result(probably)
+    use mesh_mod, only: triangle, mesh_element, mesh_point
     integer, intent(in) :: ktri
-    real(dp), intent(in) :: r, z
+    real(dp), intent(in) :: R, Z
+    real(dp), intent(in), optional :: thickness
     logical :: probably
-    integer :: le(3, 2)
-    real(dp) :: perp_r(3), perp_z(3), dist_r(3), dist_z(3), dotprod(3)
-    type(triangle_rmp) :: tri
-    tri = mesh_element_rmp(ktri)
-    le(1, :) = tri%li
-    le(2, :) = tri%lo
-    le(3, :) = tri%lf
-    perp_r = mesh_point(le(:, 2))%zcoord - mesh_point(le(:, 1))%zcoord
-    perp_z = mesh_point(le(:, 1))%rcoord - mesh_point(le(:, 2))%rcoord
-    dist_r = r - mesh_point(le(:, 1))%rcoord
-    dist_z = z - mesh_point(le(:, 1))%zcoord
-    dotprod = perp_r * dist_r + perp_z * dist_z
+    real(dp), dimension(1:4) :: node_R, node_Z, dist_R, dist_Z
+    real(dp), dimension(1:3) :: edge_R, edge_Z, edge_2, dist_2, dotprod
+    type(triangle) :: elem
+
+    probably = .false.
+    if (ktri <= 0) return
+    elem = mesh_element(ktri)
+    node_R = mesh_point([elem%i_knot, elem%i_knot(1)])%rcoord
+    node_Z = mesh_point([elem%i_knot, elem%i_knot(1)])%zcoord
+    dist_R = R - node_R
+    dist_Z = Z - node_Z
+    edge_R = node_R(2:4) - node_R(1:3)
+    edge_Z = node_Z(2:4) - node_Z(1:3)
+    edge_2 = edge_R ** 2 + edge_Z ** 2
+    ! perp_R = edge_Z, perp_Z = -edge_R
+    dotprod = edge_Z * dist_R(1:3) - edge_R * dist_Z(1:3)
     probably = all(dotprod <= 0d0)
+    if (probably .or. .not. present(thickness)) return
+    ! reuse dotprod as parameter of edge vector in linear equation
+    dotprod = edge_R * dist_R(1:3) + edge_Z * dist_Z(1:3)
+    where (dotprod < 0d0)
+       dist_2 = dist_R(1:3) ** 2 + dist_Z(1:3) ** 2
+    elsewhere (dotprod > edge_2)
+       dist_2 = dist_R(2:4) ** 2 + dist_Z(2:4) ** 2
+    elsewhere
+       dist_2 = dist_R(1:3) ** 2 + dist_Z(1:3) ** 2 - dotprod ** 2 / edge_2
+    end where
+    probably = any(dist_2 < thickness ** 2)
   end function point_in_triangle
 
   function point_location(r, z) result(location)
@@ -1615,11 +1632,11 @@ contains
     integer :: location
 
     integer :: ub, lb, kf, kq, k, k_max, ktri, candidates(6)
-    real(dp) :: psi, pol_frac, pol_offset, &
-         pol_interval(nkpol + 1)
+    real(dp) :: psi, pol_frac, pol_offset, pol_interval(nkpol + 1), thickness
 
     location = -1
     if (r < r_min .or. r > r_max .or. z < z_min .or. z > z_max) return
+    location = -2
     psi = interp_psi_pol(r, z)
     if (equil%cocos%sgn_dpsi == +1) then
        if (psi > fs%psi(nflux)) return
@@ -1635,6 +1652,7 @@ contains
        call binsrc(fs%psi(ub:lb:-1), 0, ub - lb, psi, kf)
        kf = ub - (kf - 1)
     end if
+    location = -3
 
     pol_interval = 0d0
     pol_interval(1:kp_max(kf)) = 0.5d0 / pi * atan2( &
@@ -1674,9 +1692,10 @@ contains
             kt_low(kf - 1) + 2 * kq - 1, kt_low(kf - 1) + 2 * kq]     ! inner loop
     end if
 
+    thickness = fs%rad(nflux) * sqrt(epsilon(1d0)) * 8d0
     do k = 1, k_max
        ktri = candidates(k)
-       if (point_in_triangle(ktri, r, z)) then
+       if (point_in_triangle(ktri, R, Z, thickness)) then
           location = ktri
           exit
        end if
@@ -1785,7 +1804,7 @@ contains
     logical, intent(in), optional :: calc_par
 
     integer, parameter :: mmax = 24
-    character(len = 19) :: fmt
+    character(len = 20) :: fmt
     complex(dp), dimension(-mmax:mmax) :: coeff_rad, coeff_pol, coeff_tor, fourier_basis
     integer :: kf, kt, ktri, m, fid_rad, fid_pol, fid_tor
     integer :: kilca_m_res, fid_furth, fid_par  ! only KiLCA geometry
@@ -1796,7 +1815,7 @@ contains
     real(dp) :: k_z, k_theta, rad, B0_phi, B0  ! only KiLCA geometry
     real(dp) :: sqrt_g, dR_dtheta, dZ_dtheta, q, q_sum  ! only ASDEX geometry
 
-    write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(1es22.15, 1x))'
+    write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(es23.15e3, 1x))'
     if (kilca_scale_factor /= 0) then
        kilca_m_res = -equil%cocos%sgn_q * abs(kilca_pol_mode)
        k_z = n / equil%rcentr
