@@ -8,8 +8,8 @@ module magdif
 
   public :: equil, fluxvar, fs, fs_half, m_res_min, m_res_max, kp_low, kp_max, kt_low, kt_max, &
        B0flux, Bnflux, Bnphi, init_indices, cache_mesh_data, check_redundant_edges, &
-       check_div_free, write_vector_dof, magdif_init, magdif_cleanup, magdif_single, &
-       magdif_iterated
+       check_div_free, point_location, interp_RT0, write_vector_dof, magdif_init, &
+       magdif_cleanup, magdif_single, magdif_iterated
 
   type(g_eqdsk) :: equil
   type(flux_func) :: fluxvar

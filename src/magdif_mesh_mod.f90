@@ -22,7 +22,7 @@ contains
     use mesh_mod, only: mesh_point, mesh_element, mesh_element_rmp
     use magdif_config, only: log_msg, log_info, log_write, kilca_scale_factor
     use magdif_util, only: get_equil_filenames, initialize_globals
-    use magdif, only: equil, cache_mesh_data
+    use magdif, only: equil, cache_mesh_data, Bnflux, Bnphi
 
     character(len = *), intent(in) :: unprocessed_geqdsk
     character(len = 1024) :: gfile, convexfile
@@ -49,8 +49,11 @@ contains
        call compute_kilca_vac_coeff
        call compute_kilca_vacuum
        call check_kilca_vacuum
+       call check_RT0
     end if
 
+    if (allocated(Bnflux)) deallocate(Bnflux)
+    if (allocated(Bnphi)) deallocate(Bnphi)
     if (allocated(mesh_element_rmp)) deallocate(mesh_element)
     if (allocated(mesh_element)) deallocate(mesh_element)
     if (allocated(mesh_point)) deallocate(mesh_point)
@@ -486,8 +489,6 @@ contains
     call check_redundant_edges(Bnflux, .false., 'vacuum B_n')
     call check_div_free(Bnflux, Bnphi, n, 1d-9, 'vacuum B_n')
     call write_vector_dof(Bnflux, Bnphi, Bn_vac_file)
-    if (allocated(Bnflux)) deallocate(Bnflux)
-    if (allocated(Bnphi)) deallocate(Bnphi)
   end subroutine compute_kilca_vacuum
 
   !> Calculate the vacuum perturbation field in cylindrical coordinates from the Fourier
@@ -617,4 +618,32 @@ contains
     end do
     close(fid)
   end subroutine check_kilca_vacuum
+
+  subroutine check_RT0
+    use magdif_config, only: n, kilca_pol_mode, nflux, nkpol, longlines
+    use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
+    use magdif, only: equil, fs_half, Bnflux, Bnphi, point_location, interp_RT0
+    integer :: fid, kf, kpol, ktri
+    real(dp) :: rad, theta, R, Z
+    complex(dp) :: B_R, B_Z, B_phi, B_R_interp, B_Z_interp, B_phi_interp
+    integer, dimension(:), allocatable :: pol_modes
+
+    pol_modes = [kilca_pol_mode, -kilca_pol_mode]
+    open(newunit = fid, file = 'cmp_RT0.dat', recl = longlines)
+    do kf = 1, nflux - 1
+       rad = fs_half%rad(kf)
+       do kpol = 1, 2 * nkpol
+          theta = (kpol - 0.5d0) / dble(2 * nkpol) * 2d0 * pi
+          call kilca_vacuum(n, pol_modes, equil%rcentr, rad, theta, B_R, B_phi, B_Z)
+          R = equil%rmaxis + rad * cos(theta)
+          Z = equil%zmaxis + rad * sin(theta)
+          ktri = point_location(R, Z)
+          call interp_RT0(ktri, Bnflux, R, Z, B_R_interp, B_Z_interp)
+          B_phi_interp = Bnphi(ktri)
+          write (fid, '(14(1x, es24.16e3))') rad, theta, B_R, B_phi, B_Z, &
+               B_R_interp, B_phi_interp, B_Z_interp
+       end do
+    end do
+    close(fid)
+  end subroutine check_RT0
 end module magdif_mesh_mod
