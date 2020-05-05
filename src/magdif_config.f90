@@ -138,13 +138,16 @@ module magdif_config
   !> maximum number of eigenvectors to be dumped in #eigvec_file
   integer :: max_eig_out = 10
 
+  real(dp) :: debug_pol_offset = 0.5d0
+  logical :: debug_kilca_geom_theta = .false.
+
   !> namelists for input parameters
   namelist /settings/ log_level, runmode, pres_prof, nonres, quad_avg, niter, nritz, &
        tol, n, nkpol, nflux_unref, ti0, di0, t_min, d_min, damp, meshdata_file, &
        Bn_vacout_file, Bn_vac_file, Bn_file, Bn_diff_file, fluxvar_file, j0phi_file, &
        presn_file, currn_file, eigvec_file, rel_err_Bn, rel_err_currn, kilca_pol_mode, &
-       kilca_scale_factor, max_eig_out, curr_prof, q_prof, conv_file, &
-       quiet
+       kilca_scale_factor, max_eig_out, curr_prof, q_prof, conv_file, debug_pol_offset, &
+       debug_kilca_geom_theta, quiet
   namelist /delayed/ refinement, deletions, additions, sheet_current_factor, &
        kilca_vac_coeff, kilca_vac_r, kilca_vac_Bz
 

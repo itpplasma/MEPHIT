@@ -1795,7 +1795,7 @@ contains
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: nlabel, ntheta
     use magdif_config, only: n, nflux, kilca_scale_factor, kilca_pol_mode, longlines, &
-         decorate_filename
+         decorate_filename, debug_pol_offset, debug_kilca_geom_theta
     use magdif_util, only: imun, clight, bent_cyl2straight_cyl
     use mesh_mod, only: triangle_rmp, mesh_element_rmp
     complex(dp), intent(in) :: pol_flux(:,:)
@@ -1843,11 +1843,16 @@ contains
        q_sum = 0d0
        sheet_flux = 0d0
        do kt = 1, kt_max(kf)
-          theta = (dble(kt) - 0.5d0) / dble(kt_max(kf)) * 2d0 * pi
+          theta = (dble(kt) - debug_pol_offset) / dble(kt_max(kf)) * 2d0 * pi
           fourier_basis = [(exp(-imun * m * theta), m = -mmax, mmax)]
-          ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
-          call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), &
-               theta, q, dum, sqrt_g, dum, dum, R, dum, dR_dtheta, Z, dum, dZ_dtheta)
+          if (kilca_pol_mode /= 0 .and. debug_kilca_geom_theta) then
+             R = equil%rmaxis + fs_half%rad(kf) * cos(theta)
+             Z = equil%zmaxis + fs_half%rad(kf) * sin(theta)
+          else
+             ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
+             call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), &
+                  theta, q, dum, sqrt_g, dum, dum, R, dum, dR_dtheta, Z, dum, dZ_dtheta)
+          end if
           call field(R, 0d0, Z, B0_R, dum, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
                dum, dum)
           ktri = point_location(R, Z)
