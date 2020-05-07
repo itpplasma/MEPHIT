@@ -407,11 +407,22 @@ contains
       end do
     end subroutine unpack_dof
 
+    ! computes B_(n+1) = K*B_n + B_vac ... different from kin2d.f90
     subroutine next_iteration(n, xold, xnew)
-      ! computes B_(n+1) = K*B_n + B_vac ... different from kin2d.f90
+      use magdif_config, only: log_msg_arg_size, log_err, log_write
       integer, intent(in) :: n
-      complex(dp), intent(in) :: xold(n)
-      complex(dp), intent(out) :: xnew(n)
+      complex(dp), intent(in) :: xold(:)
+      complex(dp), intent(out) :: xnew(:)
+      if (n /= size(xold)) then
+         call log_msg_arg_size('next_iteration', 'n', 'size(xold)', n, size(xold))
+         if (log_err) call log_write
+         error stop
+      end if
+      if (n /= size(xnew)) then
+         call log_msg_arg_size('next_iteration', 'n', 'size(xnew)', n, size(xnew))
+         if (log_err) call log_write
+         error stop
+      end if
       call unpack_dof(Bnflux, Bnphi, xold)
       call magdif_single
       Bnflux = Bnflux + Bnflux_vac
@@ -419,8 +430,10 @@ contains
       call pack_dof(Bnflux, xnew)
     end subroutine next_iteration
 
+    ! computes B_(n+1) = K*(B_n + B_vac) ... as in kin2d.f90
+    ! next_iteration in arnoldi_mod is still declared external and has no interface,
+    ! so we use explicit-shape arrays here
     subroutine next_iteration_arnoldi(n, xold, xnew)
-      ! computes B_(n+1) = K*(B_n + B_vac) ... as in kin2d.f90
       integer, intent(in) :: n
       complex(dp), intent(in) :: xold(n)
       complex(dp), intent(out) :: xnew(n)
@@ -1210,9 +1223,9 @@ contains
 
   subroutine get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
     use mesh_mod, only: triangle
-    use magdif_config, only: log_msg, log_err, log_write
+    use magdif_config, only: log_msg, log_msg_arg_size, log_err, log_write
     type(triangle), intent(in) :: elem
-    integer, dimension(2), intent(out) :: li, lo, lf
+    integer, dimension(:), intent(out) :: li, lo, lf
     integer, intent(out) :: ei, eo, ef
     logical, intent(out) :: orient
     integer, dimension(3) :: i_knot_diff
@@ -1220,6 +1233,24 @@ contains
     integer :: i1, i2
     logical :: closing_loop
 
+    if (2 /= size(li)) then
+       call log_msg_arg_size('get_labeled_edges', 'expected size(li)', 'actual size(li)', &
+            2, size(li))
+       if (log_err) call log_write
+       error stop
+    end if
+    if (2 /= size(lo)) then
+       call log_msg_arg_size('get_labeled_edges', 'expected size(lo)', 'actual size(lo)', &
+            2, size(lo))
+       if (log_err) call log_write
+       error stop
+    end if
+    if (2 /= size(lf)) then
+       call log_msg_arg_size('get_labeled_edges', 'expected size(lf)', 'actual size(lf)', &
+            2, size(lf))
+       if (log_err) call log_write
+       error stop
+    end if
     log_msg = 'cannot find correct label for triangle edges'
 
     ! initialize to suppress compiler warnings

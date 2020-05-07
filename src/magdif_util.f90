@@ -167,14 +167,43 @@ contains
   !> the upper diagonal and, due to periodicity, in the lower left corner. This shape
   !> results from the problems in compute_presn() and compute_currn().
   subroutine assemble_sparse(nrow, d, du, nz, irow, icol, aval)
+    use magdif_config, only: log_msg_arg_size, log_err, log_write
     integer, intent(in)  :: nrow
-    complex(dp), intent(in)  :: d(nrow)
-    complex(dp), intent(in)  :: du(nrow)
+    complex(dp), intent(in)  :: d(1:)  !nrow
+    complex(dp), intent(in)  :: du(1:)  !nrow
     integer, intent(out) :: nz
-    integer, intent(out) :: irow(2*nrow), icol(2*nrow)
-    complex(dp), intent(out) :: aval(2*nrow)
+    integer, intent(out) :: irow(1:), icol(1:)  !2*nrow
+    complex(dp), intent(out) :: aval(1:)  !2*nrow
 
     integer :: k
+
+    nz = 2*nrow
+
+    if (nrow /= size(d)) then
+       call log_msg_arg_size('assemble_sparse', 'nrow', 'size(d)', nrow, size(d))
+       if (log_err) call log_write
+       error stop
+    end if
+    if (nrow /= size(du)) then
+       call log_msg_arg_size('assemble_sparse', 'nrow', 'size(du)', nrow, size(du))
+       if (log_err) call log_write
+       error stop
+    end if
+    if (nz /= size(irow)) then
+       call log_msg_arg_size('assemble_sparse', 'nz', 'size(irow)', nz, size(irow))
+       if (log_err) call log_write
+       error stop
+    end if
+    if (nz /= size(icol)) then
+       call log_msg_arg_size('assemble_sparse', 'nz', 'size(icol)', nz, size(icol))
+       if (log_err) call log_write
+       error stop
+    end if
+    if (nz /= size(aval)) then
+       call log_msg_arg_size('assemble_sparse', 'nz', 'size(aval)', nz, size(aval))
+       if (log_err) call log_write
+       error stop
+    end if
 
     irow(1) = 1
     icol(1) = 1
@@ -184,7 +213,7 @@ contains
     icol(2) = 1
     aval(2) = du(nrow)
 
-    do k = 2,nrow
+    do k = 2, nrow
        ! off-diagonal
        irow(2*k-1) = k-1
        icol(2*k-1) = k
@@ -195,8 +224,6 @@ contains
        icol(2*k) = k
        aval(2*k) = d(k)
     end do
-
-    nz = 2*nrow
   end subroutine assemble_sparse
 
   function linspace(lo, hi, cnt, excl_lo, excl_hi)
@@ -511,17 +538,25 @@ contains
     this%lb = lbound(indep_var, 1)
     this%ub = ubound(indep_var, 1)
     this%n_var = size(indep_var)
+    allocate(this%indep_var(this%lb:this%ub))
     this%indep_var = indep_var
   end subroutine flux_func_init
 
   function flux_func_interp(this, sample, position) result(interp)
+    use magdif_config, only: log_msg_arg_size, log_err, log_write
     class(flux_func) :: this
-    real(dp), intent(in) :: sample(this%n_var)
+    real(dp), intent(in) :: sample(:)
     real(dp), intent(in) :: position
     real(dp) :: interp
     real(dp) :: lag_coeff(this%n_lag)
     integer :: k
 
+    if (this%n_var /= size(sample)) then
+       call log_msg_arg_size('flux_func_interp', 'this%n_var', 'size(sample)', &
+            this%n_var, size(sample))
+       if (log_err) call log_write
+       error stop
+    end if
     if (this%indep_var(this%lb) < this%indep_var(this%ub)) then
        call binsrc(this%indep_var, 0, this%ub - this%lb, position, k)
        k = this%lb + k

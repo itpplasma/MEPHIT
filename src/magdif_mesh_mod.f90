@@ -61,18 +61,18 @@ contains
 
   subroutine refine_eqd_partition(nref, deletions, additions, refinement, res, refined, &
        ref_ind)
-    use magdif_config, only: nflux_unref, nflux
+    use magdif_config, only: nflux_unref, nflux, log_msg_arg_size, log_err, log_write
     use magdif_util, only: linspace
     integer, intent(in) :: nref
-    integer, dimension(nref), intent(in) :: deletions, additions
-    real(dp), dimension(nref), intent(in) :: refinement, res
+    integer, dimension(:), intent(in) :: deletions, additions
+    real(dp), dimension(:), intent(in) :: refinement, res
     real(dp), dimension(:), allocatable, intent(out) :: refined
-    integer, dimension(nref), intent(out) :: ref_ind
+    integer, dimension(:), intent(out) :: ref_ind
     integer :: kref, k
-    integer, dimension(:), allocatable :: coarse_lo, coarse_hi, fine_lo, fine_hi
+    integer, dimension(nref) :: coarse_lo, coarse_hi, fine_lo, fine_hi
     real(dp) :: coarse_sep
-    real(dp), dimension(:), allocatable :: fine_sep, factor
-    real(dp), dimension(:, :), allocatable :: geom_ser
+    real(dp), dimension(nref) :: fine_sep, factor
+    real(dp), dimension(maxval(additions) + 1, nref) :: geom_ser
 
     if (allocated(refined)) deallocate(refined)
     if (nref < 1) then
@@ -81,13 +81,35 @@ contains
        refined = linspace(0d0, 1d0, nflux + 1, 0, 0)
        return
     end if
-    allocate(coarse_lo(nref))
-    allocate(coarse_hi(nref))
-    allocate(fine_lo(nref))
-    allocate(fine_hi(nref))
-    allocate(fine_sep(nref))
-    allocate(factor(nref))
-    allocate(geom_ser(maxval(additions) + 1, nref))
+    if (nref /= size(deletions)) then
+       call log_msg_arg_size('refine_eqd_partition', 'nref', 'size(deletions)', nref, &
+            size(deletions))
+       if (log_err) call log_write
+       error stop
+    end if
+    if (nref /= size(additions)) then
+       call log_msg_arg_size('refine_eqd_partition', 'nref', 'size(additions)', nref, &
+            size(additions))
+       if (log_err) call log_write
+       error stop
+    end if
+    if (nref /= size(refinement)) then
+       call log_msg_arg_size('refine_eqd_partition', 'nref', 'size(refinement)', nref, &
+            size(refinement))
+       if (log_err) call log_write
+       error stop
+    end if
+    if (nref /= size(res)) then
+       call log_msg_arg_size('refine_eqd_partition', 'nref', 'size(res)', nref, size(res))
+       if (log_err) call log_write
+       error stop
+    end if
+    if (nref /= size(ref_ind)) then
+       call log_msg_arg_size('refine_eqd_partition', 'nref', 'size(ref_ind)', nref, &
+            size(ref_ind))
+       if (log_err) call log_write
+       error stop
+    end if
     nflux = nflux_unref + 2 * sum(additions - deletions)
     allocate(refined(0:nflux))
     refined = 0d0
@@ -120,23 +142,16 @@ contains
     end do
     refined(fine_hi(nref)+1:nflux) = linspace(refined(fine_hi(nref)), 1d0, &
          nflux - fine_hi(nref), 1, 0)
-    if (allocated(coarse_lo)) deallocate(coarse_lo)
-    if (allocated(coarse_hi)) deallocate(coarse_hi)
-    if (allocated(fine_lo)) deallocate(fine_lo)
-    if (allocated(fine_hi)) deallocate(fine_hi)
-    if (allocated(fine_sep)) deallocate(fine_sep)
-    if (allocated(factor)) deallocate(factor)
-    if (allocated(geom_ser)) deallocate(geom_ser)
   end subroutine refine_eqd_partition
 
   subroutine refine_resonant_surfaces(psi_sample, q_sample, psi2rho_norm, rho_norm_ref)
     use magdif_config, only: n, refinement, additions, deletions, sheet_current_factor, &
-         read_delayed_config, log_msg, log_debug, log_write
+         read_delayed_config, log_msg, log_debug, log_err, log_write, log_msg_arg_size
     use magdif_util, only: flux_func
     use magdif, only: m_res_min, m_res_max
     use netlib_mod, only: zeroin
     real(dp), dimension(:), intent(in) :: psi_sample
-    real(dp), dimension(size(psi_sample)) :: q_sample
+    real(dp), dimension(:), intent(in) :: q_sample
     procedure(mapping) :: psi2rho_norm
     real(dp), dimension(:), allocatable, intent(out) :: rho_norm_ref
     real(dp) :: psi_min, psi_max
@@ -146,6 +161,12 @@ contains
     integer, dimension(:), allocatable :: ref_ind
     logical, dimension(:), allocatable :: mask
 
+    if (size(psi_sample) /= size(q_sample)) then
+       call log_msg_arg_size('refine_resonant_surfaces', 'size(psi_sample)', &
+            'size(q_sample)', size(psi_sample), size(q_sample))
+       if (log_err) call log_write
+       error stop
+    end if
     psi_min = minval(psi_sample)
     psi_max = maxval(psi_sample)
     call psi_eqd%init(4, psi_sample)
@@ -219,7 +240,8 @@ contains
 
   subroutine create_mesh_points(convexfile)
     use mesh_mod, only: npoint, mesh_point, ntri, mesh_element, mesh_element_rmp
-    use magdif_config, only: nflux, nkpol, kilca_scale_factor
+    use magdif_config, only: nflux, nkpol, kilca_scale_factor, log_msg_arg_size, &
+         log_err, log_write
     use magdif_util, only: interp_psi_pol, flux_func
     use magdif, only: equil, kp_low, kt_low, init_indices, fs, fs_half
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
@@ -231,7 +253,7 @@ contains
     character(len = *), intent(in) :: convexfile
     integer :: kf, kpoi
     integer, dimension(:), allocatable :: n_theta
-    real(dp), dimension(:), allocatable :: rho_norm_eqd
+    real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_norm_ref
     real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
     type(flux_func) :: psi_interpolator
     real(dp) :: psi_axis, rho_max
@@ -261,15 +283,18 @@ contains
     allocate(rho_norm_eqd(nlabel))
     rho_norm_eqd = rbeg / hypot(theta_axis(1), theta_axis(2))
 
+    call refine_resonant_surfaces(psisurf(1:) * psipol_max + psi_axis, qsaf, psi2rho_norm, &
+         rho_norm_ref)
     call fs%init(nflux, .false.)
     call fs_half%init(nflux, .true.)
-    call refine_resonant_surfaces(psisurf(1:) * psipol_max + psi_axis, qsaf, psi2rho_norm, &
-         fs%rad)
+    fs%rad = rho_norm_ref
     fs%psi = [(interp_psi_pol(raxis + fs%rad(kf) * theta_axis(1), &
          zaxis + fs%rad(kf) * theta_axis(2)), kf = 0, nflux)]
     fs_half%rad = 0.5d0 * (fs%rad(0:nflux-1) + fs%rad(1:nflux))
     fs_half%psi = [(interp_psi_pol(raxis + fs_half%rad(kf) * theta_axis(1), &
          zaxis + fs_half%rad(kf) * theta_axis(2)), kf = 1, nflux)]
+    fs%rad = fs%rad * hypot(theta_axis(1), theta_axis(2))
+    fs_half%rad = fs_half%rad * hypot(theta_axis(1), theta_axis(2))
 
     call init_indices
     ntri = kt_low(nflux+1)
@@ -286,9 +311,6 @@ contains
     ! inp_label 2 to use poloidal psi with magdata_in_symfluxcoord_ext
     ! psi is not normalized by psipol_max, but shifted by -psi_axis
     call create_points_2d(2, n_theta, points, points_s_theta_phi, r_scaling_func = psi_ref)
-    ! normalize %rad after psi_ref is called
-    fs%rad = fs%rad * hypot(theta_axis(1), theta_axis(2))
-    fs_half%rad = fs_half%rad * hypot(theta_axis(1), theta_axis(2))
     mesh_point(1)%rcoord = raxis
     mesh_point(1)%zcoord = zaxis
     do kpoi = 2, npoint
@@ -299,6 +321,7 @@ contains
     if (allocated(n_theta)) deallocate(n_theta)
     if (allocated(points)) deallocate(points)
     if (allocated(points_s_theta_phi)) deallocate(points_s_theta_phi)
+    if (allocated(rho_norm_ref)) deallocate(rho_norm_ref)
     if (allocated(rho_norm_eqd)) deallocate(rho_norm_eqd)
 
   contains
@@ -311,8 +334,13 @@ contains
       real(dp), dimension(:), intent(in) :: psi_eqd
       real(dp), dimension(size(psi_eqd)) :: psi_ref
       integer :: kf
-      psi_ref = [(interp_psi_pol(raxis + fs%rad(kf) * theta_axis(1), &
-           zaxis + fs%rad(kf) * theta_axis(2)) - psi_axis, kf = 1, nflux)]
+      if (nflux /= size(psi_eqd)) then
+         call log_msg_arg_size('psi_ref', 'nflux', 'size(psi_eqd)', nflux, size(psi_eqd))
+         if (log_err) call log_write
+         error stop
+      end if
+      psi_ref = [(interp_psi_pol(raxis + rho_norm_ref(kf) * theta_axis(1), &
+           zaxis + rho_norm_ref(kf) * theta_axis(2)) - psi_axis, kf = 1, nflux)]
     end function psi_ref
   end subroutine create_mesh_points
 
@@ -323,14 +351,10 @@ contains
     use magdif, only: kt_max, kt_low, kp_low
 
     integer :: kf, k
-    integer, dimension(:), allocatable :: kq, kt, tri_f, tri_i, tri_o
-    integer, dimension(:,:), allocatable :: quad
+    integer, dimension(maxval(kt_max)) :: kq, kt, tri_f, tri_i, tri_o
+    integer, dimension(4, maxval(kt_max)) :: quad
 
-    allocate (kt(maxval(kt_max)))
     kt = [(k, k = 1, maxval(kt_max))]
-    allocate (tri_f(maxval(kt_max)))
-    allocate (tri_i(maxval(kt_max)))
-    allocate (tri_o(maxval(kt_max)))
     kf = 1
     mesh_element(kt_low(kf)+1:kt_low(kf+1))%i_knot(1) = &
          kt_low(kf) + kt(1:kt_max(kf)) + 1
@@ -347,9 +371,7 @@ contains
     mesh_element(kt_low(kf)+1:kt_low(kf+1))%neighbour_edge(1) = 2
     mesh_element(kt_low(kf)+1:kt_low(kf+1))%neighbour_edge(2) = 3
     mesh_element(kt_low(kf)+1:kt_low(kf+1))%neighbour_edge(3) = 2
-    allocate (kq(maxval(kt_max)))
     kq = (kt + 1) / 2
-    allocate (quad(4, maxval(kt_max)))
     do kf = 2, nflux
        ! assign nodes of quadrilaterals in ascending global order
        quad(1,:) = kp_low(kf-1) + kq
@@ -385,12 +407,6 @@ contains
             interleave(1, 2, kt_max(kf))
     end do
     call calculate_det_3(mesh_element(1:kt_low(nflux+1)))
-    if (allocated(kt)) deallocate(kt)
-    if (allocated(tri_f)) deallocate(tri_f)
-    if (allocated(tri_i)) deallocate(tri_i)
-    if (allocated(tri_o)) deallocate(tri_o)
-    if (allocated(kq)) deallocate(kq)
-    if (allocated(quad)) deallocate(quad)
   end subroutine connect_mesh_points
 
   subroutine write_mesh_data
@@ -447,7 +463,7 @@ contains
 
     integer :: ktri
     real(dp) :: r, z, n_r, n_z, rho, theta
-    integer, dimension(:), allocatable:: pol_modes
+    integer :: pol_modes(2)
     complex(dp) :: Br, Bp, Bz
     type(triangle_rmp) :: tri
 
@@ -515,7 +531,7 @@ contains
     real(dp), intent(in) :: R_0, r, theta
     complex(dp), intent(out) :: B_R, B_phi, B_Z
     complex(dp) :: B_rad, B_pol, B_tor, temp_B_rad, temp_B_pol, temp_B_tor
-    complex(dp), dimension(:), allocatable :: fourier_basis
+    complex(dp), dimension(size(pol_modes)) :: fourier_basis
     integer :: k
 
     B_rad = (0d0, 0d0)
@@ -626,7 +642,7 @@ contains
     integer :: fid, kf, kpol, ktri
     real(dp) :: rad, theta, R, Z
     complex(dp) :: B_R, B_Z, B_phi, B_R_interp, B_Z_interp, B_phi_interp
-    integer, dimension(:), allocatable :: pol_modes
+    integer :: pol_modes(2)
 
     pol_modes = [kilca_pol_mode, -kilca_pol_mode]
     open(newunit = fid, file = 'cmp_RT0.dat', recl = longlines)

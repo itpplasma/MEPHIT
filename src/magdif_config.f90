@@ -241,6 +241,13 @@ contains
     if (log /= output_unit .and. .not. quiet) write (output_unit, '(a)') full_msg
   end subroutine log_write
 
+  subroutine log_msg_arg_size(funcname, name1, name2, value1, value2)
+    character(len = *), intent(in) :: funcname, name1, name2
+    integer, intent(in) :: value1, value2
+    write (log_msg, '("Argument size mismatch in ", a, ": ", a, " = ", i0, ' // &
+         '", ", a, " = ", i0)') funcname, name1, value1, name2, value2
+  end subroutine log_msg_arg_size
+
   !> Generates a new filename from a given template.
   !>
   !> @param in_name undecorated filename
