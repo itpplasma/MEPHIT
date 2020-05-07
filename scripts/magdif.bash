@@ -213,6 +213,7 @@ bindir=$(realpath $(dirname $0))
 scriptdir=$(realpath -m "$bindir/../../scripts")
 datadir=$(realpath -m "$bindir/../../data")
 
+set -o pipefail
 scriptname=$0
 anyerr=0
 case "$1" in
