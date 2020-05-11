@@ -8,7 +8,7 @@ module magdif_util
 
   public :: clight, imun, initialize_globals, get_equil_filenames, interp_psi_pol, &
        ring_centered_avg_coord, assemble_sparse, linspace, straight_cyl2bent_cyl, &
-       bent_cyl2straight_cyl, interleave, calculate_det_3, add_node_owner
+       bent_cyl2straight_cyl, binsearch, interleave, calculate_det_3, add_node_owner
 
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
@@ -43,7 +43,7 @@ module magdif_util
 
   type, public :: flux_func
     private
-    integer :: n_lag, lb, ub, n_var
+    integer :: n_lag, n_var
     real(dp), dimension(:), allocatable :: indep_var
   contains
     procedure :: init => flux_func_init
@@ -236,6 +236,48 @@ contains
     step = (hi - lo) / dble(cnt - 1 + excl_lo + excl_hi)
     linspace = lo + [(k * step, k = excl_lo, cnt - 1 + excl_lo)]
   end function linspace
+
+
+  !> Binary search to find index \p k of ordered array \p x so that \p xi lies between
+  !> x(k-1) and x(k). The lower bound of \p x is given by \p lb.
+  !>
+  !> When \p x is strictly monotonically increasing, \f$ x_{k-1} < \xi < x_{k} \f$.
+  !> When \p x is strictly monotonically decreasing, \f$ x_{k-1} > \xi > x_{k} \f$.
+  !> It is not checked whether \p x is ordered; only the first and last value are used
+  !> to determine wether the array values are increasing or decrasing.
+  subroutine binsearch(x, lb, xi, k)
+    real(dp), intent(in) :: x(lb:)
+    integer, intent(in) :: lb
+    real(dp), intent(in) :: xi
+    integer, intent(out) :: k
+    integer :: k_min, k_max, iter
+
+    k_min = lbound(x, 1)
+    k_max = ubound(x, 1)
+    if (x(k_min) < x(k_max)) then
+       do iter = 1, size(x) - 1
+          k = (k_max - k_min) / 2 + k_min
+          if (x(k) > xi) then
+             k_max = k
+          else
+             k_min = k
+          end if
+          if (k_max == k_min + 1) exit
+       end do
+    else
+       do iter = 1, size(x) - 1
+          k = (k_max - k_min) / 2 + k_min
+          if (x(k) < xi) then
+             k_max = k
+          else
+             k_min = k
+          end if
+          if (k_max == k_min + 1) exit
+       end do
+    end if
+    k = k_max
+  end subroutine binsearch
+
 
   !> Transform components of a vector \f$ \vec{v} \f$ from straight cylinder coordinates
   !> \f$ (r, \theta, z) \f$ to bent cylinder coordinates \f$ (R, \varphi, Z) \f$.
@@ -535,10 +577,8 @@ contains
     end if
     call flux_func_destructor(this)
     this%n_lag = n_lag
-    this%lb = lbound(indep_var, 1)
-    this%ub = ubound(indep_var, 1)
     this%n_var = size(indep_var)
-    allocate(this%indep_var(this%lb:this%ub))
+    allocate(this%indep_var(this%n_var))
     this%indep_var = indep_var
   end subroutine flux_func_init
 
@@ -557,18 +597,13 @@ contains
        if (log_err) call log_write
        error stop
     end if
-    if (this%indep_var(this%lb) < this%indep_var(this%ub)) then
-       call binsrc(this%indep_var, 0, this%ub - this%lb, position, k)
-       k = this%lb + k
-    else
-       ! binsrc expects strictly monotonically increasing arrays, so we reverse fs%psi
-       call binsrc(this%indep_var(this%ub:this%lb:-1), 0, this%ub - this%lb, position, k)
-       k = this%ub - (k - 1)
-    end if
-    if (k < this%lb + this%n_lag / 2) then
-       k = this%lb + this%n_lag / 2
-    elseif (k > this%ub - this%n_lag / 2 + 1) then
-       k = this%ub - this%n_lag / 2 + 1
+    call binsearch(this%indep_var, lbound(this%indep_var, 1), position, k)
+    ! ensure that polynomial sample points do not go below lower bound of 1
+    if (k < 1 + this%n_lag / 2) then
+       k = 1 + this%n_lag / 2
+    ! ensure that polynomial sample points do not go above upper bound of this%n_var
+    elseif (k > this%n_var - this%n_lag / 2 + 1) then
+       k = this%n_var - this%n_lag / 2 + 1
     end if
     call plag_coeff(this%n_lag, 0, position, &
          this%indep_var(k - this%n_lag / 2:k + this%n_lag / 2 - 1), lag_coeff)

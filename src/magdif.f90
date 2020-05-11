@@ -1679,13 +1679,13 @@ contains
   function point_location(r, z) result(location)
     use constants, only: pi  ! orbit_mod.f90
     use magdif_config, only: nflux, nkpol
-    use magdif_util, only: interp_psi_pol
+    use magdif_util, only: interp_psi_pol, binsearch
     use mesh_mod, only: mesh_point
     real(dp), intent(in) :: r, z
     integer :: location
 
-    integer :: ub, lb, kf, kq, k, k_max, ktri, candidates(6)
-    real(dp) :: psi, pol_frac, pol_offset, pol_interval(nkpol + 1), thickness
+    integer :: kf, kq, k, k_max, ktri, candidates(6)
+    real(dp) :: psi, pol_frac, pol_offset, pol_interval(0:nkpol), thickness
 
     location = -1
     if (r < r_min .or. r > r_max .or. z < z_min .or. z > z_max) return
@@ -1693,33 +1693,25 @@ contains
     psi = interp_psi_pol(r, z)
     if (equil%cocos%sgn_dpsi == +1) then
        if (psi > fs%psi(nflux)) return
-       lb = lbound(fs%psi, 1)
-       ub = ubound(fs%psi, 1)
-       call binsrc(fs%psi, 0, ub - lb, psi, kf)
-       kf = lb + kf
     else
        if (psi < fs%psi(nflux)) return
-       ! binsrc expects strictly monotonically increasing arrays, so we reverse fs%psi
-       lb = lbound(fs%psi, 1)
-       ub = ubound(fs%psi, 1)
-       call binsrc(fs%psi(ub:lb:-1), 0, ub - lb, psi, kf)
-       kf = ub - (kf - 1)
     end if
+    call binsearch(fs%psi, lbound(fs%psi, 1), psi, kf)
     location = -3
 
     pol_interval = 0d0
-    pol_interval(1:kp_max(kf)) = 0.5d0 / pi * atan2( &
+    pol_interval(0:kp_max(kf)-1) = 0.5d0 / pi * atan2( &
          mesh_point((kp_low(kf) + 1):(kp_low(kf) + kp_max(kf)))%zcoord - z_o, &
          mesh_point((kp_low(kf) + 1):(kp_low(kf) + kp_max(kf)))%rcoord - r_o)
-    pol_offset = pol_interval(1)
+    pol_offset = pol_interval(0)
     pol_interval = pol_interval - pol_offset
-    pol_interval(kp_max(kf) + 1) = 1d0
+    pol_interval(kp_max(kf)) = 1d0
     where (pol_interval < 0d0) pol_interval = pol_interval + 1d0
     where (pol_interval > 1d0) pol_interval = pol_interval - 1d0
     pol_frac = 0.5d0 / pi * atan2(z - z_o, r - r_o) - pol_offset
     if (pol_frac < 0d0) pol_frac = pol_frac + 1d0
     if (pol_frac > 1d0) pol_frac = pol_frac - 1d0
-    call binsrc(pol_interval, 0, kp_max(kf), pol_frac, kq)
+    call binsearch(pol_interval, lbound(pol_interval, 1), pol_frac, kq)
 
     ! fs%psi is averaged from interpolated values and triangle edges do not lie exactly
     ! on flux surfaces, so we include the two adjacent triangle strips in the search

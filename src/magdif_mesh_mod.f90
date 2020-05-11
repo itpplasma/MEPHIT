@@ -619,7 +619,7 @@ contains
   end subroutine kilca_vacuum_fourier
 
   subroutine check_kilca_vacuum
-    use magdif_config, only: n, kilca_pol_mode, kilca_vac_coeff, longlines
+    use magdif_config, only: n, nflux, kilca_pol_mode, kilca_vac_coeff, longlines
     use magdif, only: equil, fs_half
     complex(dp) :: B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
     real(dp) :: rad
@@ -627,7 +627,7 @@ contains
 
     abs_pol_mode = abs(kilca_pol_mode)
     open(newunit = fid, file = 'cmp_vac.dat', recl = 3 * longlines)
-    do kf = lbound(fs_half%rad, 1), ubound(fs_half%rad, 1)
+    do kf = 1, nflux
        rad = fs_half%rad(kf)
        call kilca_vacuum_fourier(n, -abs_pol_mode, equil%rcentr, rad, &
             kilca_vac_coeff(abs_pol_mode), B_rad_neg, B_pol_neg, B_tor_neg)
