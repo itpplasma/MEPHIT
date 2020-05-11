@@ -243,7 +243,8 @@ contains
     use magdif_config, only: nflux, nkpol, kilca_scale_factor, log_msg_arg_size, &
          log_err, log_write
     use magdif_util, only: interp_psi_pol, flux_func
-    use magdif, only: equil, kp_low, kt_low, init_indices, fs, fs_half
+    use magdif, only: equil, kp_low, kt_low, init_indices, fs, fs_half, &
+         flux_func_cache_check
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
          raxis, zaxis
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
@@ -295,6 +296,7 @@ contains
          zaxis + fs_half%rad(kf) * theta_axis(2)), kf = 1, nflux)]
     fs%rad = fs%rad * hypot(theta_axis(1), theta_axis(2))
     fs_half%rad = fs_half%rad * hypot(theta_axis(1), theta_axis(2))
+    call flux_func_cache_check
 
     call init_indices
     ntri = kt_low(nflux+1)
@@ -412,7 +414,8 @@ contains
   subroutine write_mesh_data
     use mesh_mod, only: npoint, ntri, knot, triangle, mesh_point, mesh_element
     use magdif_config, only: nflux, longlines, meshdata_file
-    use magdif, only: kp_max, kp_low, fs, fs_half, m_res_min, m_res_max
+    use magdif, only: kp_max, kp_low, fs, fs_half, m_res_min, m_res_max, &
+         flux_func_cache_check
 
     integer :: fid, kpoi, ktri, kp, ke
     type(triangle) :: elem
@@ -426,6 +429,7 @@ contains
     end do
     close(fid)
 
+    call flux_func_cache_check
     open(newunit = fid, file = meshdata_file, form = 'unformatted', status = 'replace')
     write (fid) nflux, npoint, ntri, m_res_min, m_res_max
     write (fid) fs%psi, fs%rad
@@ -646,7 +650,7 @@ contains
 
     pol_modes = [kilca_pol_mode, -kilca_pol_mode]
     open(newunit = fid, file = 'cmp_RT0.dat', recl = longlines)
-    do kf = 1, nflux - 1
+    do kf = 1, nflux
        rad = fs_half%rad(kf)
        do kpol = 1, 2 * nkpol
           theta = (kpol - 0.5d0) / dble(2 * nkpol) * 2d0 * pi

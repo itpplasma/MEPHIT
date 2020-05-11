@@ -9,7 +9,7 @@ module magdif
   public :: equil, fluxvar, fs, fs_half, m_res_min, m_res_max, kp_low, kp_max, kt_low, kt_max, &
        B0flux, Bnflux, Bnphi, init_indices, cache_mesh_data, check_redundant_edges, &
        check_div_free, point_location, interp_RT0, write_vector_dof, magdif_init, &
-       magdif_cleanup, magdif_single, magdif_iterated
+       magdif_cleanup, magdif_single, magdif_iterated, flux_func_cache_check
 
   type(g_eqdsk) :: equil
   type(flux_func) :: fluxvar
@@ -194,6 +194,7 @@ contains
     end if
 
     ! depends on mesh data, equilibrium field and G EQDSK profiles
+    call flux_func_cache_check
     call init_flux_variables
 
     ! depends on flux variables
@@ -720,6 +721,27 @@ contains
        end if
     end do
   end subroutine check_redundant_edges
+
+  subroutine flux_func_cache_check
+    use magdif_config, only: log_msg, log_debug, log_write
+    log_msg = '("checking flux_func_cache...")'
+    if (log_debug) call log_write
+    write (log_msg, '("array bounds: fs%psi(", i0, ":", i0, "), ' // &
+         ' fs%rad(", i0, ":", i0, "), fs_half%psi(", i0, ":", i0, "), ' // &
+         'fs_half%rad(", i0, ":", i0, ")")') lbound(fs%psi, 1), ubound(fs%psi, 1), &
+         lbound(fs%rad, 1), ubound(fs%rad, 1), lbound(fs_half%psi, 1), &
+         ubound(fs_half%psi, 1), lbound(fs_half%rad, 1), ubound(fs_half%rad, 1)
+    if (log_debug) call log_write
+    write (log_msg, '("expected sign of psi''(r): ", sp, i0, ss)') equil%cocos%sgn_dpsi
+    if (log_debug) call log_write
+    write (log_msg, '(i0, " ordering violations for psi")') &
+         count((fs%psi(1:) - fs_half%psi) * equil%cocos%sgn_dpsi <= 0d0) + &
+         count([(fs_half%psi(1) - fs%psi(0)) * equil%cocos%sgn_dpsi] <= 0d0)
+    if (log_debug) call log_write
+    write (log_msg, '(i0, " ordering violations for rad")') &
+         count(fs%rad(1:) <= fs_half%rad) + count([fs_half%rad(1)] <= [fs%rad(0)])
+    if (log_debug) call log_write
+  end subroutine flux_func_cache_check
 
   !> Reads fluxes of perturbation field and checks divergence-freeness.
   !>
