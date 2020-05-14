@@ -1,0 +1,88 @@
+load "Element_Mixte"
+load "gsl"
+
+include "getARGV.idp"
+int nmode = getARGV("-n", 2000);
+int mmode = getARGV("-m", 9);
+int nkpol = getARGV("-M", 300);
+complex vaccoeff = getARGV("-C", 2.8114278075878412E+08);
+string meshfile = "inputformaxwell_ext.msh";
+
+mesh Th = readmesh(meshfile);
+
+real rmaxis, zmaxis;
+rmaxis = Th(0).x;
+zmaxis = Th(0).y;
+
+func complex KiLCABrad(int m, real rad, real theta) {
+  real kzr = nmode / rmaxis * rad;
+  return -0.5i * vaccoeff * (gslsfbesselIn(abs(m) - 1, kzr) + gslsfbesselIn(abs(m) + 1, kzr));
+}
+func complex KiLCABpol(int m, real rad, real theta) {
+  real kzr = nmode / rmaxis * rad;
+  return vaccoeff * m / kzr * gslsfbesselIn(abs(m), kzr);
+}
+func complex KiLCABtor(int m, real rad, real theta) {
+  real kzr = nmode / rmaxis * rad;
+  return vaccoeff * gslsfbesselIn(abs(m), kzr);
+}
+func complex KiLCABR(real R, real Z) {
+  real rad, theta;
+  rad = dist(R - rmaxis, Z - zmaxis);
+  theta = atan2(Z - zmaxis, R - rmaxis);
+  return (KiLCABrad(-mmode, rad, theta) * exp(-1i * mmode * theta) +
+          KiLCABrad(mmode, rad, theta) * exp(1i * mmode * theta)) * cos(theta) -
+    (KiLCABpol(-mmode, rad, theta) * exp(-1i * mmode * theta) +
+     KiLCABpol(mmode, rad, theta) * exp(1i * mmode * theta)) * sin(theta);
+}
+func complex KiLCABZ(real R, real Z) {
+  real rad, theta;
+  rad = dist(R - rmaxis, Z - zmaxis);
+  theta = atan2(Z - zmaxis, R - rmaxis);
+  return (KiLCABrad(-mmode, rad, theta) * exp(-1i * mmode * theta) +
+          KiLCABrad(mmode, rad, theta) * exp(1i * mmode * theta)) * sin(theta) +
+    (KiLCABpol(-mmode, rad, theta) * exp(-1i * mmode * theta) +
+     KiLCABpol(mmode, rad, theta) * exp(1i * mmode * theta)) * cos(theta);
+}
+func complex KiLCABphi(real R, real Z) {
+  real rad, theta;
+  rad = dist(R - rmaxis, Z - zmaxis);
+  theta = atan2(Z - zmaxis, R - rmaxis);
+  return (KiLCABtor(-mmode, rad, theta) * exp(-1i * mmode * theta) +
+          KiLCABtor(mmode, rad, theta) * exp(1i * mmode * theta)) / rmaxis;
+}
+
+fespace Vh0(Th, P0);
+fespace Hdiv(Th, RT0);
+Hdiv <complex> [Br, Bz];
+[Br, Bz] = [0.0, 0.0];
+Vh0 <complex> Bphi;
+Bphi = 0.0;
+[Br, Bz] = [x * KiLCABR(x, y), x * KiLCABZ(x, y)];
+Bphi = (dx(Br) + dy(Bz)) * 1.0i / nmode;
+
+ifstream compin("cmp_RT0.dat");
+ofstream compout("cmp_RT0_ff.dat");
+compout.scientific.precision(15);
+real R, Z;
+real[int] data(14);
+int done = 0;
+for (int k = 0; k < 2 * nkpol; k++) {
+  for (int j = 0; j < 14; j++) {
+    compin >> data[j];
+    if (!compin.good()) {
+      done = 1;
+      break;
+    }
+  }
+  if (done) break;
+  R = rmaxis + data[0] * cos(data[1]);
+  Z = zmaxis + data[0] * sin(data[1]);
+  for (int j = 0; j < 14; j++) {
+    compout << " " << data[j];
+  }
+  compout << " " << real(Br(R, Z)) / R << " " << imag(Br(R, Z)) / R
+          << " " << real(Bphi(R, Z)) << " " << imag(Bphi(R, Z))
+          << " " << real(Bz(R, Z)) / R << " " << imag(Bz(R, Z)) / R
+          << endl;
+}

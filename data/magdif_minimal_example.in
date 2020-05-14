@@ -12,7 +12,7 @@
    ! 0: only PS current, 1: rot B_0, 2: EQDSK profile
    curr_prof = 2
    ! 0: surface integral, 1: field line integral, 2: EQDSK profile
-   q_prof = 2
+   q_prof = 1
 
    ! harmonic index of perturbation
    n = 2
@@ -66,19 +66,19 @@
    rel_err_currn = 1d-8
 
    ! single poloidal mode number used with KiLCA
-   kilca_pol_mode = 4
+   kilca_pol_mode = 9
    ! scaling factor used in EQDSK rmaxis from KiLCA
    kilca_scale_factor = 1000
 /
 &delayed
    ! relative refinement around resonances
-   refinement(4) = 0.25d0
+   refinement(9) = 0.0625d0
    ! deleted flux surfaces around resonances
-   deletions(4) = 1
+   deletions(9) = 2
    ! added flux surfaces around resonances
-   additions(4) = 3
+   additions(9) = 7
    ! coefficients for sheet currents
-   sheet_current_factor(4) = (1d4, 1d4)
+   sheet_current_factor(9) = (1d4, 1d4)
    ! KiLCA vacuum perturbation datapoints
    kilca_vac_r(3) = 6.693593593593593e+01
    kilca_vac_Bz(3) = (1.465800455939027e-01, 0.000000000000000e+00)

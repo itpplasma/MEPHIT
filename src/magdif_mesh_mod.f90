@@ -650,7 +650,7 @@ contains
 
     pol_modes = [kilca_pol_mode, -kilca_pol_mode]
     open(newunit = fid, file = 'cmp_RT0.dat', recl = longlines)
-    do kf = 1, nflux
+    do kf = nflux / 3, nflux / 3 ! 1, nflux
        rad = fs_half%rad(kf)
        do kpol = 1, 2 * nkpol
           theta = (kpol - 0.5d0) / dble(2 * nkpol) * 2d0 * pi
@@ -660,7 +660,7 @@ contains
           ktri = point_location(R, Z)
           call interp_RT0(ktri, Bnflux, R, Z, B_R_interp, B_Z_interp)
           B_phi_interp = Bnphi(ktri)
-          write (fid, '(14(1x, es24.16e3))') rad, theta, B_R, B_phi, B_Z, &
+          write (fid, '(14(1x, es23.15e3))') rad, theta, B_R, B_phi, B_Z, &
                B_R_interp, B_phi_interp, B_Z_interp
        end do
     end do
