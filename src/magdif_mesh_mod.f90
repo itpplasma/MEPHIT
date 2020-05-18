@@ -8,14 +8,6 @@ module magdif_mesh_mod
 
   public :: generate_mesh, write_kilca_convexfile, kilca_vacuum
 
-  interface
-     function mapping(val)
-       import :: dp
-       real(dp), intent(in) :: val
-       real(dp) :: mapping
-     end function mapping
-  end interface
-
 contains
 
   subroutine generate_mesh(unprocessed_geqdsk)
@@ -152,7 +144,13 @@ contains
     use netlib_mod, only: zeroin
     real(dp), dimension(:), intent(in) :: psi_sample
     real(dp), dimension(:), intent(in) :: q_sample
-    procedure(mapping) :: psi2rho_norm
+    interface
+       function psi2rho_norm(psi)
+         import :: dp
+         real(dp), intent(in) :: psi
+         real(dp) :: psi2rho_norm
+       end function psi2rho_norm
+    end interface
     real(dp), dimension(:), allocatable, intent(out) :: rho_norm_ref
     real(dp) :: psi_min, psi_max
     integer :: m, kref

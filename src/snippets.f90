@@ -23,35 +23,6 @@
     end do
   end subroutine common_triangles
 
-complex(dp) function neumaier_sum(length, array)
-  integer, intent(in) :: length
-  complex(dp), intent(in), dimension(length) :: array
-  real(dp) :: sr, si, cr, ci, tr, ti
-  integer :: k
-
-  sr = real(array(1))
-  si = aimag(array(1))
-  cr = 0.0d0
-  ci = 0.0d0
-  do k = 2, length
-     tr = sr + real(array(k))
-     if (abs(sr) >= abs(real(array(k)))) then
-        cr = cr + (sr - tr) + real(array(k))
-     else
-        cr = cr + (real(array(k)) - tr) + sr
-     end if
-     sr = tr
-     ti = si + aimag(array(k))
-     if (abs(si) >= abs(aimag(array(k)))) then
-        ci = ci + (si - ti) + aimag(array(k))
-     else
-        ci = ci + (aimag(array(k)) - ti) + si
-     end if
-     si = ti
-  end do
-  neumaier_sum = cmplx(sr + cr, si + ci)
-end function neumaier_sum
-
 
 subroutine unshared_knots(common_tri, outer_knot, inner_knot)
   integer, intent(in) :: common_tri(2)

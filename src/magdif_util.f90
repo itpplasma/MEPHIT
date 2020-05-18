@@ -8,7 +8,8 @@ module magdif_util
 
   public :: clight, imun, initialize_globals, get_equil_filenames, interp_psi_pol, &
        ring_centered_avg_coord, assemble_sparse, linspace, straight_cyl2bent_cyl, &
-       bent_cyl2straight_cyl, binsearch, interleave, calculate_det_3, add_node_owner
+       bent_cyl2straight_cyl, binsearch, interleave, calculate_det_3, add_node_owner, &
+       heapsort_complex, complex_abs_asc
 
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
@@ -83,6 +84,24 @@ module magdif_util
      procedure :: init => flux_func_cache_init
      final :: flux_func_cache_destructor
   end type flux_func_cache
+
+  type, public :: neumaier_accumulator_real
+     private
+     real(dp) :: sum, c, t
+   contains
+     procedure :: init => neumaier_accumulator_real_init
+     procedure :: add => neumaier_accumulator_real_add
+     procedure :: get_sum => neumaier_accumulator_real_get_sum
+  end type neumaier_accumulator_real
+
+  type, public :: neumaier_accumulator_complex
+     private
+     type(neumaier_accumulator_real) :: real_part, imag_part
+   contains
+     procedure :: init => neumaier_accumulator_complex_init
+     procedure :: add => neumaier_accumulator_complex_add
+     procedure :: get_sum => neumaier_accumulator_complex_get_sum
+  end type neumaier_accumulator_complex
 
   interface interleave
      procedure interleave_vv, interleave_vs, interleave_sv, interleave_ss
@@ -671,6 +690,100 @@ contains
     if (allocated(this%dp_dpsi)) deallocate(this%dp_dpsi)
     if (allocated(this%q)) deallocate(this%q)
   end subroutine flux_func_cache_destructor
+
+  subroutine neumaier_accumulator_real_init(this)
+    class(neumaier_accumulator_real), intent(inout) :: this
+    this%sum = 0d0
+    this%c = 0d0
+    this%t = 0d0
+  end subroutine neumaier_accumulator_real_init
+
+  subroutine neumaier_accumulator_real_add(this, val)
+    class(neumaier_accumulator_real), intent(inout) :: this
+    real(dp) :: val
+    this%t = this%sum + val
+    if (abs(this%sum) >= abs(val)) then
+       this%c = this%c + ((this%sum - this%t) + val)
+    else
+       this%c = this%c + ((val - this%t) + this%sum)
+    end if
+    this%sum = this%t
+  end subroutine neumaier_accumulator_real_add
+
+  function neumaier_accumulator_real_get_sum(this) result(acc)
+    class(neumaier_accumulator_real), intent(inout) :: this
+    real(dp) :: acc
+    acc = this%sum + this%c
+  end function neumaier_accumulator_real_get_sum
+
+  subroutine neumaier_accumulator_complex_init(this)
+    class(neumaier_accumulator_complex), intent(inout) :: this
+    call this%real_part%init
+    call this%imag_part%init
+  end subroutine neumaier_accumulator_complex_init
+
+  subroutine neumaier_accumulator_complex_add(this, val)
+    class(neumaier_accumulator_complex), intent(inout) :: this
+    complex(dp) :: val
+    call this%real_part%add(real(val))
+    call this%imag_part%add(aimag(val))
+  end subroutine neumaier_accumulator_complex_add
+
+  function neumaier_accumulator_complex_get_sum(this) result(acc)
+    class(neumaier_accumulator_complex), intent(inout) :: this
+    complex(dp) :: acc
+    acc = cmplx(this%real_part%get_sum(), this%imag_part%get_sum(), dp)
+  end function neumaier_accumulator_complex_get_sum
+
+  subroutine heapsort_complex(array, comparison)
+    complex(dp), intent(inout) :: array(0:)
+    interface
+       function comparison(val1, val2)
+         import :: dp
+         complex(dp), intent(in) :: val1, val2
+         logical :: comparison
+       end function comparison
+    end interface
+    integer :: n, k, child, root
+    complex(dp) :: temp
+    n = size(array)
+    do k = (n - 2) / 2, 0, -1
+       call siftdown(k, n);
+    end do
+    do k = n - 1, 1, -1
+       temp = array(0)
+       array(0) = array(k)
+       array(k) = temp;
+       call siftdown(0, k)
+    end do
+  contains
+    subroutine siftdown(start, bottom)
+      integer, intent(in) :: start, bottom
+      root = start
+      do while (root * 2 + 1 < bottom)
+         child = root * 2 + 1
+         if (child + 1 < bottom) then
+            if (comparison(array(child), array(child+1))) then
+               child = child + 1
+            end if
+         end if
+         if (comparison(array(root), array(child))) then
+            temp = array(child)
+            array(child) = array (root)
+            array(root) = temp
+            root = child
+         else
+            return
+         end if
+      end do
+    end subroutine siftdown
+  end subroutine heapsort_complex
+
+  function complex_abs_asc(val1, val2)
+    complex(dp), intent(in) :: val1, val2
+    logical :: complex_abs_asc
+    complex_abs_asc = abs(val1) < abs(val2)
+  end function complex_abs_asc
 
   pure function interleave_vv(first_v, second_v, num) result(merged)
     integer, intent(in) :: first_v(:), second_v(:), num
