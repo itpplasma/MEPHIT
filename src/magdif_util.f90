@@ -9,7 +9,7 @@ module magdif_util
   public :: clight, imun, initialize_globals, get_equil_filenames, interp_psi_pol, &
        ring_centered_avg_coord, assemble_sparse, linspace, straight_cyl2bent_cyl, &
        bent_cyl2straight_cyl, binsearch, interleave, calculate_det_3, add_node_owner, &
-       heapsort_complex, complex_abs_asc
+       gauss_legendre_unit_interval, heapsort_complex, complex_abs_asc
 
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
@@ -296,6 +296,40 @@ contains
     end if
     k = k_max
   end subroutine binsearch
+
+  subroutine gauss_legendre_unit_interval(order, points, weights)
+    use magdif_config, only: log_msg_arg_size, log_msg, log_err, log_write
+    use fgsl, only: fgsl_size_t, fgsl_double, fgsl_int, fgsl_success, &
+         fgsl_integration_glfixed_point, fgsl_integration_glfixed_table, &
+         fgsl_integration_glfixed_table_alloc, fgsl_integration_glfixed_table_free
+    integer, intent(in) :: order
+    real(fgsl_double), dimension(:), intent(out) :: points, weights
+    type(fgsl_integration_glfixed_table) :: table
+    integer(fgsl_size_t) :: k
+    integer(fgsl_int) :: err
+    if (order /= size(points)) then
+       call log_msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(points)', &
+            order, size(points))
+       if (log_err) call log_write
+       error stop
+    end if
+    if (order /= size(weights)) then
+       call log_msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(weights)', &
+            order, size(weights))
+       if (log_err) call log_write
+       error stop
+    end if
+    table = fgsl_integration_glfixed_table_alloc(int(order, fgsl_size_t))
+    do k = 1, int(order, fgsl_size_t)
+       err = fgsl_integration_glfixed_point(0d0, 1d0, k-1, points(k), weights(k), table)
+       if (err /= fgsl_success) then
+          write (log_msg, '("fgsl_integration_glfixed_point returned error ", i0)') err
+          if (log_err) call log_write
+          error stop
+       end if
+    end do
+    call fgsl_integration_glfixed_table_free(table)
+  end subroutine gauss_legendre_unit_interval
 
 
   !> Transform components of a vector \f$ \vec{v} \f$ from straight cylinder coordinates
