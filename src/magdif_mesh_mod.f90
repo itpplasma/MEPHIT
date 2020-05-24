@@ -487,14 +487,8 @@ contains
        edge_R = tip_R - base_R
        edge_Z = tip_Z - base_Z
        do k = 1, order
-          ! take sample points in counter-clockwise direction
-          if (tri%orient) then
-             R = base_R + points(k) * edge_R
-             Z = base_Z + points(k) * edge_Z
-          else
-             R = tip_R - points(k) * edge_R
-             Z = tip_Z - points(k) * edge_Z
-          end if
+          R = base_R * points(k) + tip_R * points(order - k + 1)
+          Z = base_Z * points(k) + tip_Z * points(order - k + 1)
           rho = hypot(R - equil%rmaxis, Z - equil%zmaxis)
           theta = atan2(Z - equil%zmaxis, R - equil%rmaxis)
           call kilca_vacuum(n, pol_modes, equil%rcentr, rho, theta, B_R, B_phi, B_Z)
@@ -509,9 +503,8 @@ contains
        edge_R = tip_R - base_R
        edge_Z = tip_Z - base_Z
        do k = 1, order
-          ! take sample points in radially outward direction
-          R = base_R + points(k) * edge_R
-          Z = base_Z + points(k) * edge_Z
+          R = base_R * points(k) + tip_R * points(order - k + 1)
+          Z = base_Z * points(k) + tip_Z * points(order - k + 1)
           rho = hypot(R - equil%rmaxis, Z - equil%zmaxis)
           theta = atan2(Z - equil%zmaxis, R - equil%rmaxis)
           call kilca_vacuum(n, pol_modes, equil%rcentr, rho, theta, B_R, B_phi, B_Z)
@@ -526,9 +519,8 @@ contains
        edge_R = tip_R - base_R
        edge_Z = tip_Z - base_Z
        do k = 1, order
-          ! take sample points in radially outward direction
-          R = tip_R - points(k) * edge_R
-          Z = tip_Z - points(k) * edge_Z
+          R = base_R * points(k) + tip_R * points(order - k + 1)
+          Z = base_Z * points(k) + tip_Z * points(order - k + 1)
           rho = hypot(R - equil%rmaxis, Z - equil%zmaxis)
           theta = atan2(Z - equil%zmaxis, R - equil%rmaxis)
           call kilca_vacuum(n, pol_modes, equil%rcentr, rho, theta, B_R, B_phi, B_Z)

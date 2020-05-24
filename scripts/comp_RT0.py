@@ -119,10 +119,10 @@ def compare(datafile, outdir, prefix, subtitle, m, avg):
     
     return {'Bmn_r': np.mean(Br * np.exp(-1j * m * th)),
             'Bmn_theta': np.mean(Bth * np.exp(-1j * m * th)),
-            'Bmn_z': 170000.0 * np.mean(Bph * np.exp(-1j * m * th)),
+            'Bmn_z': np.mean(Bph * np.exp(-1j * m * th)),
             'int_Bmn_r': np.mean(Br_int * np.exp(-1j * m * th_int)),
             'int_Bmn_theta': np.mean(Bth_int * np.exp(-1j * m * th_int)),
-            'int_Bmn_z': 170000.0 * np.mean(Bph_int * np.exp(-1j * m * th_int))}
+            'int_Bmn_z': np.mean(Bph_int * np.exp(-1j * m * th_int))}
 
 
 coeff_RT0_GL2 = compare('cmp_RT0.dat', '.', 'cmp_RT0_GL2_cut',
