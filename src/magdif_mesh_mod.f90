@@ -545,19 +545,17 @@ contains
 
   ! calculate resonant vacuum perturbation
   subroutine compute_kilca_vacuum
-    use mesh_mod, only: ntri, triangle_rmp, mesh_element_rmp, mesh_point
+    use mesh_mod, only: ntri, mesh_element_rmp, mesh_point, mesh_element
     use magdif_config, only: n, kilca_pol_mode, Bn_vac_file
     use magdif_util, only: imun, gauss_legendre_unit_interval
     use magdif, only: equil, Bnflux, Bnphi, check_redundant_edges, check_div_free, &
          write_vector_dof
 
     integer, parameter :: order = 2
-    integer :: ktri, k
-    real(dp) :: R, Z, rho, theta, edge_R, edge_Z, base_R, base_Z, tip_R, tip_Z
+    integer :: ktri, k, ke, pol_modes(2)
+    real(dp) :: R, Z, rho, theta, edge_R, edge_Z, node_R(4), node_Z(4)
     real(dp), dimension(order) :: points, weights
-    integer :: pol_modes(2)
     complex(dp) :: B_R, B_phi, B_Z
-    type(triangle_rmp) :: tri
 
     call gauss_legendre_unit_interval(order, points, weights)
     allocate(Bnflux(ntri, 3))
@@ -566,57 +564,26 @@ contains
     Bnphi = (0d0, 0d0)
     pol_modes = [kilca_pol_mode, -kilca_pol_mode]
     do ktri = 1, ntri
-       tri = mesh_element_rmp(ktri)
-       ! flux through edge f
-       base_R = mesh_point(tri%lf(1))%rcoord
-       base_Z = mesh_point(tri%lf(1))%zcoord
-       tip_R = mesh_point(tri%lf(2))%rcoord
-       tip_Z = mesh_point(tri%lf(2))%zcoord
-       edge_R = tip_R - base_R
-       edge_Z = tip_Z - base_Z
-       do k = 1, order
-          R = base_R * points(k) + tip_R * points(order - k + 1)
-          Z = base_Z * points(k) + tip_Z * points(order - k + 1)
-          rho = hypot(R - equil%rmaxis, Z - equil%zmaxis)
-          theta = atan2(Z - equil%zmaxis, R - equil%rmaxis)
-          call kilca_vacuum(n, pol_modes, equil%rcentr, rho, theta, B_R, B_phi, B_Z)
-          Bnflux(ktri, tri%ef) = Bnflux(ktri, tri%ef) + &
-               weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
-       end do
-       ! flux through edge i
-       base_R = mesh_point(tri%li(1))%rcoord
-       base_Z = mesh_point(tri%li(1))%zcoord
-       tip_R = mesh_point(tri%li(2))%rcoord
-       tip_Z = mesh_point(tri%li(2))%zcoord
-       edge_R = tip_R - base_R
-       edge_Z = tip_Z - base_Z
-       do k = 1, order
-          R = base_R * points(k) + tip_R * points(order - k + 1)
-          Z = base_Z * points(k) + tip_Z * points(order - k + 1)
-          rho = hypot(R - equil%rmaxis, Z - equil%zmaxis)
-          theta = atan2(Z - equil%zmaxis, R - equil%rmaxis)
-          call kilca_vacuum(n, pol_modes, equil%rcentr, rho, theta, B_R, B_phi, B_Z)
-          Bnflux(ktri, tri%ei) = Bnflux(ktri, tri%ei) + &
-               weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
-       end do
-       ! flux through edge o
-       base_R = mesh_point(tri%lo(1))%rcoord
-       base_Z = mesh_point(tri%lo(1))%zcoord
-       tip_R = mesh_point(tri%lo(2))%rcoord
-       tip_Z = mesh_point(tri%lo(2))%zcoord
-       edge_R = tip_R - base_R
-       edge_Z = tip_Z - base_Z
-       do k = 1, order
-          R = base_R * points(k) + tip_R * points(order - k + 1)
-          Z = base_Z * points(k) + tip_Z * points(order - k + 1)
-          rho = hypot(R - equil%rmaxis, Z - equil%zmaxis)
-          theta = atan2(Z - equil%zmaxis, R - equil%rmaxis)
-          call kilca_vacuum(n, pol_modes, equil%rcentr, rho, theta, B_R, B_phi, B_Z)
-          Bnflux(ktri, tri%eo) = Bnflux(ktri, tri%eo) + &
-               weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
-       end do
-       ! toroidal flux
-       Bnphi(ktri) = imun / n * sum(Bnflux(ktri, :)) / tri%area
+       associate(tri => mesh_element_rmp(ktri), &
+            knots => mesh_point(mesh_element(ktri)%i_knot))
+         node_R = [knots(:)%rcoord, knots(1)%rcoord]
+         node_Z = [knots(:)%zcoord, knots(1)%zcoord]
+         do ke = 1, 3
+            edge_R = node_R(ke + 1) - node_R(ke)
+            edge_Z = node_Z(ke + 1) - node_Z(ke)
+            do k = 1, order
+               R = node_R(ke) * points(k) + node_R(ke + 1) * points(order - k + 1)
+               Z = node_Z(ke) * points(k) + node_Z(ke + 1) * points(order - k + 1)
+               rho = hypot(R - equil%rmaxis, Z - equil%zmaxis)
+               theta = atan2(Z - equil%zmaxis, R - equil%rmaxis)
+               call kilca_vacuum(n, pol_modes, equil%rcentr, rho, theta, B_R, B_phi, B_Z)
+               Bnflux(ktri, ke) = Bnflux(ktri, ke) + &
+                    weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
+            end do
+         end do
+         ! toroidal flux via zero divergence
+         Bnphi(ktri) = imun / n * sum(Bnflux(ktri, :)) / tri%area
+       end associate
     end do
     call check_redundant_edges(Bnflux, .false., 'vacuum B_n')
     call check_div_free(Bnflux, Bnphi, n, 1d-9, 'vacuum B_n')
