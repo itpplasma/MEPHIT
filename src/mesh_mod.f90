@@ -10,53 +10,53 @@ module mesh_mod
 !------------------------------------------------------------------------------------
   type :: knot
      sequence
-     real(dp) :: rcoord 
-     real(dp) :: zcoord
-     real(dp) :: psi_pol
-     real(dp) :: b_mod
-     real(dp) :: b_phi
-     real(dp) :: PhiovB2
-     real(dp), dimension(4,nsorts) :: pl_parms_knot ! 1-n, 2-V, 3-T, 4-Tperp (interpolated to mesh points)
-     integer(i4b) :: n_owners    !true number of triangles own the point    
-     integer(i4b), dimension(n_owners_max) :: i_owner_tri  ! indexes of triangles own the point
-     real(dp), dimension(n_owners_max) :: weight_intp ! weights of tr.'s for interpolation
+     real(dp) :: rcoord = 0d0
+     real(dp) :: zcoord = 0d0
+     real(dp) :: psi_pol = 0d0
+     real(dp) :: b_mod = 0d0
+     real(dp) :: b_phi = 0d0
+     real(dp) :: PhiovB2 = 0d0
+     real(dp), dimension(4,nsorts) :: pl_parms_knot = 0d0 ! 1-n, 2-V, 3-T, 4-Tperp (interpolated to mesh points)
+     integer(i4b) :: n_owners = 0 !true number of triangles own the point
+     integer(i4b), dimension(n_owners_max) :: i_owner_tri = 0 ! indexes of triangles own the point
+     real(dp), dimension(n_owners_max) :: weight_intp = 0d0 ! weights of tr.'s for interpolation
 !     logical :: qq_bc  ! barycenter of qq-cell, [y|n]
   end type knot
   type(knot), dimension(:), allocatable :: mesh_point
 !------------------------------------------------------------------------------------
   type :: triangle
      sequence
-     integer(i4b) :: ix_qq
-     integer(i4b) :: iy_qq
+     integer(i4b) :: ix_qq = 0
+     integer(i4b) :: iy_qq = 0
 !     integer(i4b) :: iqq_gc ! guard cell, obsolete (0-reg.cell, -1-left DP, -2-right DP, 1-core, 2-out.bound.GC), 3-PFZ  
-     integer(i4b), dimension(legs) :: i_knot ! index of the vertice in the "knot" list
-     integer(i4b), dimension(legs) :: neighbour ! index of the next tr. (sharing the borderline # LEG)
-     integer(i4b), dimension(legs) :: neighbour_edge ! index of the next tr. edge sharing the borderline # LEG
-     real(dp) :: sizmaxtri ! max. size of the triangle
-     real(dp) :: det_3  ! (r2-r1)(z3-z1) - (r3-r1)(z2-z1) 
-     real(dp) :: oneoverD3  ! 1/det_3
-     real(dp) :: V_tri  ! triangular cell volume  
+     integer(i4b), dimension(legs) :: i_knot = 0 ! index of the vertice in the "knot" list
+     integer(i4b), dimension(legs) :: neighbour = 0 ! index of the next tr. (sharing the borderline # LEG)
+     integer(i4b), dimension(legs) :: neighbour_edge = 0! index of the next tr. edge sharing the borderline # LEG
+     real(dp) :: sizmaxtri = 0d0 ! max. size of the triangle
+     real(dp) :: det_3 = 0d0  ! (r2-r1)(z3-z1) - (r3-r1)(z2-z1)
+     real(dp) :: oneoverD3 = 0d0  ! 1/det_3
+     real(dp) :: V_tri = 0d0  ! triangular cell volume
 ! derivatives (constant within each triangle)
-     real(dp) :: dBinv_dR
-     real(dp) :: dBinv_dZ
-     real(dp) :: dPsi_dR
-     real(dp) :: dPsi_dZ
-     real(dp) :: dPhiovB2_dR
-     real(dp) :: dPhiovB2_dZ
+     real(dp) :: dBinv_dR = 0d0
+     real(dp) :: dBinv_dZ = 0d0
+     real(dp) :: dPsi_dR = 0d0
+     real(dp) :: dPsi_dZ = 0d0
+     real(dp) :: dPhiovB2_dR = 0d0
+     real(dp) :: dPhiovB2_dZ = 0d0
      ! for linear interpolation of bphicovar
-     integer(i4b) :: knot_h
-     real(dp) :: dbphicovdpsi   
+     integer(i4b) :: knot_h = 0
+     real(dp) :: dbphicovdpsi = 0d0
 ! test particles parameters:
-     real(dp), dimension(nsorts) :: Dm_part  ! marker density
-     real(dp), dimension(nsorts) :: D_part   ! particle density
-     real(dp), dimension(nsorts) :: V_part
-     real(dp), dimension(nsorts) :: T_part
-     real(dp), dimension(nsorts) :: Vt2_part ! for C-G-L pressure
-     real(dp) :: ePhi_tri ! potential related to triangle
+     real(dp), dimension(nsorts) :: Dm_part = 0d0 ! marker density
+     real(dp), dimension(nsorts) :: D_part = 0d0  ! particle density
+     real(dp), dimension(nsorts) :: V_part = 0d0
+     real(dp), dimension(nsorts) :: T_part = 0d0
+     real(dp), dimension(nsorts) :: Vt2_part = 0d0 ! for C-G-L pressure
+     real(dp) :: ePhi_tri = 0d0 ! potential related to triangle
 ! index of the triangle in the list of thermostat cells:
-     integer(i4b) :: i_therm
+     integer(i4b) :: i_therm = 0
 !
-     double precision, dimension(2,nsorts)    :: thermforces
+     double precision, dimension(2,nsorts)    :: thermforces = 0d0
   end type triangle
   type(triangle), dimension(:), allocatable :: mesh_element
 !------------------------------------------------------------------------------------
@@ -82,25 +82,25 @@ module mesh_mod
 ! (for slow rotations these are pressure tensor components) and parallel current density:
      complex(dp),      dimension(nsorts)      :: denspert,prespert_perp,prespert_par,parcurrpert
      !> area of the triangle
-     real(dp) :: area
+     real(dp) :: area = 0d0
      !> indices of nodes in #mesh_point for edge i, going counter-clockwise
-     integer :: li(2)
+     integer :: li(2) = [0, 0]
      !> indices of nodes in #mesh_point for edge o, going counter-clockwise
-     integer :: lo(2)
+     integer :: lo(2) = [0, 0]
      !> indices of nodes in #mesh_point for edge f, going counter-clockwise
-     integer :: lf(2)
+     integer :: lf(2) = [0, 0]
      !> index of edge i in #mesh_element
-     integer :: ei
+     integer :: ei = 0
      !> index of edge o in #mesh_element
-     integer :: eo
+     integer :: eo = 0
      !> index of edge f in #mesh_element
-     integer :: ef
+     integer :: ef = 0
      !> orientation of the triangle: if true, edge f lies on the outer flux surface
-     logical :: orient
+     logical :: orient = .true.
      !> \f$ R \f$ coordinate of triangle 'center'
-     real(dp) :: R_Omega
+     real(dp) :: R_Omega = 0d0
      !> \f$ Z \f$ coordinate of triangle 'center'
-     real(dp) :: Z_Omega
+     real(dp) :: Z_Omega = 0d0
   end type triangle_rmp
   type(triangle_rmp), dimension(:), allocatable :: mesh_element_rmp
 !------------------------------------------------------------------------------------

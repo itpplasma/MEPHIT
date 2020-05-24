@@ -344,69 +344,157 @@ contains
     end function psi_ref
   end subroutine create_mesh_points
 
+  elemental subroutine calculate_det_3(elem)
+    use mesh_mod, only: triangle, knot, mesh_point
+    type(triangle), intent(inout) :: elem
+    real(dp) :: e1_r, e1_z, e2_r, e2_z
+    e1_r = mesh_point(elem%i_knot(1))%rcoord - mesh_point(elem%i_knot(3))%rcoord
+    e1_z = mesh_point(elem%i_knot(1))%zcoord - mesh_point(elem%i_knot(3))%zcoord
+    e2_r = mesh_point(elem%i_knot(2))%rcoord - mesh_point(elem%i_knot(3))%rcoord
+    e2_z = mesh_point(elem%i_knot(2))%zcoord - mesh_point(elem%i_knot(3))%zcoord
+    elem%det_3 = abs(e1_r * e2_z - e1_z * e2_r)
+  end subroutine calculate_det_3
+
+  subroutine add_node_owner(kpoint, ktri)
+    use mesh_mod, only: knot, mesh_point, n_owners_max
+    use magdif_config, only: log_msg, log_write, log_warn
+    integer, intent(in) :: kpoint, ktri
+    if (mesh_point(kpoint)%n_owners < n_owners_max) then
+       mesh_point(kpoint)%i_owner_tri(mesh_point(kpoint)%n_owners + 1) = ktri
+       mesh_point(kpoint)%n_owners = mesh_point(kpoint)%n_owners + 1
+    else
+       write (log_msg, '("Maximal number of owning triangles exceeded at point ", i0)') &
+            kpoint
+       if (log_warn) call log_write
+    end if
+  end subroutine add_node_owner
+
+  !> Returns the indices of the two triangles sharing an edge.
+  !>
+  !> @param knot1 index of first knot of the edge
+  !> @param knot2 index of second knot of the edge
+  !> @param common_tri indices of the triangles sharing the given edge
+  !>
+  !> The program is halted if the input data is invalid, i.e. if more than two triangles
+  !> appear to share the edge.
+  subroutine common_triangles(knot1, knot2, common_tri)
+    use mesh_mod, only: mesh_point
+    use magdif_config, only: log_msg, log_err, log_write
+    integer, intent(in) :: knot1, knot2
+    integer, intent(out) :: common_tri(2)
+    integer :: k, l, kcom
+
+    common_tri = [0, 0]
+    kcom = 0
+    do k = 1, mesh_point(knot1)%n_owners
+       do l = 1, mesh_point(knot2)%n_owners
+          if (mesh_point(knot1)%i_owner_tri(k) == mesh_point(knot2)%i_owner_tri(l)) then
+             kcom = kcom + 1
+             if (kcom > 2) then
+                write (log_msg, '("More than two common triangles for knots ", ' // &
+                     'i0, " and ", i0)') knot1, knot2
+                if (log_err) call log_write
+                error stop
+             end if
+             common_tri(kcom) = mesh_point(knot1)%i_owner_tri(k)
+          end if
+       end do
+    end do
+  end subroutine common_triangles
+
   subroutine connect_mesh_points
     use mesh_mod, only: mesh_element
     use magdif_config, only: nflux
-    use magdif_util, only: interleave, calculate_det_3
-    use magdif, only: kt_max, kt_low, kp_low
+    use magdif, only: kt_low, kt_max, kp_low, kp_max
+    integer :: kf, kp, kt, ktri, ktri_adj, common_tri(2)
 
-    integer :: kf, k
-    integer, dimension(maxval(kt_max)) :: kq, kt, tri_f, tri_i, tri_o
-    integer, dimension(4, maxval(kt_max)) :: quad
-
-    kt = [(k, k = 1, maxval(kt_max))]
+    ktri = kt_low(1)
+    ! define trianlges on innermost flux surface
     kf = 1
-    mesh_element(kt_low(kf)+1:kt_low(kf+1))%i_knot(1) = &
-         kt_low(kf) + kt(1:kt_max(kf)) + 1
-    mesh_element(kt_low(kf)+1:kt_low(kf+1))%i_knot(2) = &
-         kt_low(kf) + mod(kt(1:kt_max(kf)), kt_max(kf)) + 2
-    mesh_element(kt_low(kf)+1:kt_low(kf+1))%i_knot(3) = 1
-    mesh_element(kt_low(kf)+1:kt_low(kf+1))%knot_h = 3
-    mesh_element(kt_low(kf)+1:kt_low(kf+1))%neighbour(1) = &
-         kt_low(kf+1) + 2 * kt(1:kt_max(kf))
-    mesh_element(kt_low(kf)+1:kt_low(kf+1))%neighbour(2) = &
-         mod(kt(1:kt_max(kf)), kt_max(kf)) + 1
-    mesh_element(kt_low(kf)+1:kt_low(kf+1))%neighbour(3) = &
-         mod(kt(1:kt_max(kf)) + kt_max(kf) - 2, kt_max(kf)) + 1
-    mesh_element(kt_low(kf)+1:kt_low(kf+1))%neighbour_edge(1) = 2
-    mesh_element(kt_low(kf)+1:kt_low(kf+1))%neighbour_edge(2) = 3
-    mesh_element(kt_low(kf)+1:kt_low(kf+1))%neighbour_edge(3) = 2
-    kq = (kt + 1) / 2
-    do kf = 2, nflux
-       ! assign nodes of quadrilaterals in ascending global order
-       quad(1,:) = kp_low(kf-1) + kq
-       quad(2,:) = kp_low(kf-1) + mod(kq, kt_max(kf) / 2) + 1
-       quad(3,:) = kp_low(kf) + kq
-       quad(4,:) = kp_low(kf) + mod(kq, kt_max(kf) / 2) + 1
-       mesh_element(kt_low(kf)+1:kt_low(kf)+kt_max(kf))%i_knot(1) = &
-            interleave(quad(3,:), quad(4,:), kt_max(kf))
-       mesh_element(kt_low(kf)+1:kt_low(kf)+kt_max(kf))%i_knot(2) = &
-            interleave(quad(4,:), quad(2,:), kt_max(kf))
-       mesh_element(kt_low(kf)+1:kt_low(kf)+kt_max(kf))%i_knot(3) = quad(1, 1:kt_max(kf))
-       mesh_element(kt_low(kf)+1:kt_low(kf)+kt_max(kf))%knot_h = &
-            interleave(3, 1, kt_max(kf))
-       tri_o = kt_low(kf) + mod(kt, kt_max(kf)) + 1
-       tri_i = kt_low(kf) + mod(kt + kt_max(kf) - 2, kt_max(kf)) + 1
-       if (kf == 2) then
-          tri_f = interleave(kt_low(kf+1) + kt + 1, kt_low(kf-1) + kq, kt_max(kf))
-!!$     elseif (kf == nflux) then
-!!$        tri_f = interleave(0, kt_low(kf-1) + kt - 1, kt_max(kf))
-       else
-          tri_f = interleave(kt_low(kf+1) + kt + 1, kt_low(kf-1) + kt - 1, kt_max(kf))
-       end if
-       mesh_element(kt_low(kf)+1:kt_low(kf)+kt_max(kf))%neighbour(1) = &
-            interleave(tri_f, tri_o, kt_max(kf))
-       mesh_element(kt_low(kf)+1:kt_low(kf)+kt_max(kf))%neighbour(2) = &
-            interleave(tri_o, tri_f, kt_max(kf))
-       mesh_element(kt_low(kf)+1:kt_low(kf)+kt_max(kf))%neighbour(3) = tri_i(1:kt_max(kf))
-       mesh_element(kt_low(kf)+1:kt_low(kf)+kt_max(kf))%neighbour_edge(1) = &
-            interleave(2, 3, kt_max(kf))
-       mesh_element(kt_low(kf)+1:kt_low(kf)+kt_max(kf))%neighbour_edge(2) = &
-            interleave(3, 1, kt_max(kf))
-       mesh_element(kt_low(kf)+1:kt_low(kf)+kt_max(kf))%neighbour_edge(3) = &
-            interleave(1, 2, kt_max(kf))
+    do kp = 1, kp_max(kf)
+       ktri = ktri + 1
+       mesh_element(ktri)%i_knot(1) = kp_low(kf) + kp
+       mesh_element(ktri)%i_knot(2) = kp_low(kf) + mod(kp, kp_max(kf)) + 1
+       mesh_element(ktri)%i_knot(3) = kp_low(kf)
+       mesh_element(ktri)%knot_h = 3
+       call add_node_owner(mesh_element(ktri)%i_knot(1), ktri)
+       call add_node_owner(mesh_element(ktri)%i_knot(2), ktri)
+       call calculate_det_3(mesh_element(ktri))
     end do
-    call calculate_det_3(mesh_element(1:kt_low(nflux+1)))
+    ! define triangles on outer flux surfaces
+    do kf = 2, nflux
+       do kp = 1, kp_max(kf)
+          ktri = ktri + 1
+          mesh_element(ktri)%i_knot(1) = kp_low(kf) + kp
+          mesh_element(ktri)%i_knot(2) = kp_low(kf) + mod(kp, kp_max(kf)) + 1
+          mesh_element(ktri)%i_knot(3) = kp_low(kf - 1) + kp
+          mesh_element(ktri)%knot_h = 3
+          call add_node_owner(mesh_element(ktri)%i_knot(1), ktri)
+          call add_node_owner(mesh_element(ktri)%i_knot(2), ktri)
+          call add_node_owner(mesh_element(ktri)%i_knot(3), ktri)
+          call calculate_det_3(mesh_element(ktri))
+          ktri = ktri + 1
+          mesh_element(ktri)%i_knot(1) = kp_low(kf) + mod(kp, kp_max(kf)) + 1
+          mesh_element(ktri)%i_knot(2) = kp_low(kf - 1) + mod(kp, kp_max(kf - 1)) + 1
+          mesh_element(ktri)%i_knot(3) = kp_low(kf - 1) + kp
+          mesh_element(ktri)%knot_h = 1
+          call add_node_owner(mesh_element(ktri)%i_knot(1), ktri)
+          call add_node_owner(mesh_element(ktri)%i_knot(2), ktri)
+          call add_node_owner(mesh_element(ktri)%i_knot(3), ktri)
+          call calculate_det_3(mesh_element(ktri))
+       end do
+    end do
+    ! set neighbours for edges i and o on innermost flux surface
+    kf = 1
+    do kt = 1, kt_max(kf)
+       ktri = kt_low(kf) + kt
+       ktri_adj = kt_low(kf) + mod(kt, kt_max(kf)) + 1
+       mesh_element(ktri)%neighbour(2) = ktri_adj
+       mesh_element(ktri)%neighbour_edge(2) = 3
+       mesh_element(ktri_adj)%neighbour(3) = ktri
+       mesh_element(ktri_adj)%neighbour_edge(3) = 2
+    end do
+    ! set neighbours for edges i and o on outer flux surfaces
+    do kf = 2, nflux
+       do kt = 1, kt_max(kf)
+          ktri = kt_low(kf) + kt
+          ktri_adj = kt_low(kf) + mod(kt, kt_max(kf)) + 1
+          if (mod(kt, 2) == 1) then
+             mesh_element(ktri)%neighbour(2) = ktri_adj
+             mesh_element(ktri)%neighbour_edge(2) = 3
+             mesh_element(ktri_adj)%neighbour(3) = ktri
+             mesh_element(ktri_adj)%neighbour_edge(3) = 2
+          else
+             mesh_element(ktri)%neighbour(1) = ktri_adj
+             mesh_element(ktri)%neighbour_edge(1) = 3
+             mesh_element(ktri_adj)%neighbour(3) = ktri
+             mesh_element(ktri_adj)%neighbour_edge(3) = 1
+          end if
+       end do
+    end do
+    ! set neighbours for edges f
+    do kf = 1, nflux - 1
+       do kp = 1, kp_max(kf)
+          call common_triangles(kp_low(kf) + kp, kp_low(kf) + mod(kp, kp_max(kf)) + 1, &
+               common_tri)
+          ktri = minval(common_tri)
+          ktri_adj = maxval(common_tri)
+          mesh_element(ktri)%neighbour(1) = ktri_adj
+          mesh_element(ktri)%neighbour_edge(1) = 2
+          mesh_element(ktri_adj)%neighbour(2) = ktri
+          mesh_element(ktri_adj)%neighbour_edge(2) = 1
+       end do
+    end do
+    ! set dummy values for edges on boundary
+    kf = nflux
+    do kt = 1, kt_max(kf)
+       if (mod(kt, 2) == 1) then
+          ktri = kt_low(kf) + kt
+          ktri_adj = ktri + kt_max(kf) + 1
+          mesh_element(ktri)%neighbour(1) = ktri_adj
+          mesh_element(ktri)%neighbour_edge(1) = 2
+       end if
+    end do
   end subroutine connect_mesh_points
 
   subroutine write_mesh_data
