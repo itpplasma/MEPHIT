@@ -177,7 +177,7 @@ contains
     do m = m_res_min, m_res_max
        psi_res(m) = zeroin(psi_min, psi_max, q_interp_resonant, 1d-9)
        rho_res(m) = psi2rho_norm(psi_res(m))
-       write (log_msg, '("m = ", i2, ", psi_m = ", es23.16, ", rho_m = ", f19.16)') &
+       write (log_msg, '("m = ", i2, ", psi_m = ", es24.16e3, ", rho_m = ", f19.16)') &
             m, psi_res(m), rho_res(m)
        if (log_debug) call log_write
     end do
@@ -230,7 +230,7 @@ contains
     open(newunit = fid, file = convexfile, status = 'replace')
     do kp = 1, nrz
        theta = dble(kp) / dble(nrz) * 2d0 * pi
-       write (fid, '(2(1x, es23.16))') equil%rmaxis + rho_max * cos(theta), &
+       write (fid, '(2(1x, es24.16e3))') equil%rmaxis + rho_max * cos(theta), &
             equil%zmaxis + rho_max * sin(theta)
     end do
     close(fid)
@@ -439,11 +439,11 @@ contains
     open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace')
     write (fid, '(3(1x, i0))') npoint, ntri, kp_max(nflux+1) - 1
     do kpoi = 1, kp_low(nflux+1)
-       write (fid, '(2(1x, es23.16), 1x, i0)') &
+       write (fid, '(2(1x, es23.15e3), 1x, i0)') &
             mesh_point(kpoi)%rcoord, mesh_point(kpoi)%zcoord, 0
     end do
     do kpoi = kp_low(nflux+1) + 1, npoint
-       write (fid, '(2(1x, es23.16), 1x, i0)') &
+       write (fid, '(2(1x, es23.15e3), 1x, i0)') &
             mesh_point(kpoi)%rcoord, mesh_point(kpoi)%zcoord, 1
     end do
     do ktri = 1, ntri
@@ -657,7 +657,7 @@ contains
             kilca_vac_coeff(abs_pol_mode), B_rad_neg, B_pol_neg, B_tor_neg)
        call kilca_vacuum_fourier(n, abs_pol_mode, equil%rcentr, rad, &
             kilca_vac_coeff(abs_pol_mode), B_rad_pos, B_pol_pos, B_tor_pos)
-       write (fid, '(13(1x, es23.16))') rad, &
+       write (fid, '(13(1x, es24.16e3))') rad, &
            B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
     end do
     close(fid)

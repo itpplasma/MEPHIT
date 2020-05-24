@@ -663,7 +663,7 @@ contains
                mesh_element_rmp(ktri)%area)) / abs_flux
           if (div > rel_err) then
              write (log_msg, '("divergence of ", a, ' // &
-                  '" above threshold in triangle ", i0, ": ", es23.16)') &
+                  '" above threshold in triangle ", i0, ": ", es24.16e3)') &
                   trim(field_name), ktri, div
               if (log_err) call log_write
               error stop
@@ -898,7 +898,8 @@ contains
        dtemp_dpsi = ti0 / psi_int
        dens = (fs%psi - psi_ext) / psi_int * di0 + d_min
        temp = (fs%psi - psi_ext) / psi_int * ti0 + t_min
-       write (log_msg, '("temp@axis: ", es23.16, ", dens@axis: ", es23.16)') temp(0), dens(0)
+       write (log_msg, '("temp@axis: ", es24.16e3, ", dens@axis: ", es24.16e3)') &
+            temp(0), dens(0)
        if (log_info) call log_write
        fs%p = dens * temp * ev2erg
        fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
@@ -966,7 +967,7 @@ contains
           B0r_Omega(ktri) = Br
           B0phi_Omega(ktri) = Bp
           B0z_Omega(ktri) = Bz
-          write (fid, '(5(1x, es23.16))') r, z, Br, Bz, Bp
+          write (fid, '(5(1x, es24.16e3))') r, z, Br, Bz, Bp
        end do
     end do
     close(fid)
@@ -1076,7 +1077,7 @@ contains
                   Btor2 / B2avg_half(kf))
           end select
 
-          write (fid, '(4(1x, es23.16))') &
+          write (fid, '(4(1x, es24.16e3))') &
                j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), plot_j0phi
        end do
     end do
@@ -1130,19 +1131,19 @@ contains
           Jz = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * &
                B0z_Omega(ktri)
           Jp = clight * (fs_half%dp_dpsi(kf) * r + 0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
-          write (fid_gs, '(3(1x, es23.16))') Jr, Jp, Jz
+          write (fid_gs, '(3(1x, es24.16e3))') Jr, Jp, Jz
           cmp_gs = cmp_gs + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
                (n_r**2 + n_z**2) / (fs%psi(kf) - fs%psi(kf-1)) * 2d0 * tri%area / clight
           Jr = 0.25d0 / pi * clight * (-dBpdZ)
           Jp = 0.25d0 / pi * clight * (dBrdZ - dBzdR)
           Jz = 0.25d0 / pi * clight * (dBpdR + Bp / r)
-          write (fid_amp, '(3(1x, es23.16))') Jr, Jp, Jz
+          write (fid_amp, '(3(1x, es24.16e3))') Jr, Jp, Jz
           cmp_amp = cmp_amp + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
                (n_r**2 + n_z**2) / (fs%psi(kf) - fs%psi(kf-1)) * 2d0 * tri%area / clight
        end do
        cmp_amp = cmp_amp / kt_max(kf)
        cmp_gs = cmp_gs / kt_max(kf)
-       write (fid_prof, '(2(1x, es23.16))') cmp_amp, cmp_gs
+       write (fid_prof, '(2(1x, es24.16e3))') cmp_amp, cmp_gs
     end do
     close(fid_prof)
     close(fid_amp)
@@ -1219,7 +1220,7 @@ contains
 
     avg_rel_err = avg_rel_err / sum(kp_max(1:nflux))
     write (log_msg, '("compute_presn: diagonalization max_rel_err = ", ' // &
-         'es23.16, ", avg_rel_err = ", es23.16)') max_rel_err, avg_rel_err
+         'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (log_debug) call log_write
     if (allocated(resid)) deallocate(resid)
 
@@ -1424,7 +1425,7 @@ contains
     end do
     avg_rel_err = avg_rel_err / sum(kt_max(1:nflux))
     write (log_msg, '("compute_currn: diagonalization max_rel_err = ", ' // &
-         'es23.16, ", avg_rel_err = ", es23.16)') max_rel_err, avg_rel_err
+         'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (log_debug) call log_write
     if (allocated(resid)) deallocate(resid)
 
@@ -1624,17 +1625,14 @@ contains
           ! projection to covariant theta component
           proj_theta_covar = equil%cocos%sgn_dpsi * (pol_comp_r * B0r_Omega(ktri) + &
                pol_comp_z * B0z_Omega(ktri)) * jacobian(kf, kt, r)
-          write (fid, '(12(1x, es23.16))') r, z, real(pol_comp_r), aimag(pol_comp_r), &
-               real(pol_comp_z), aimag(pol_comp_z), &
-               real(tor_comp(ktri)), aimag(tor_comp(ktri)), &
-               real(dens_psi_contravar), aimag(dens_psi_contravar), &
-               real(proj_theta_covar), aimag(proj_theta_covar)
+          write (fid, '(12(1x, es24.16e3))') r, z, pol_comp_r, pol_comp_z, &
+               tor_comp(ktri), dens_psi_contravar, proj_theta_covar
        end do
     end do
     r = equil%rmaxis
     z = equil%zmaxis
     do ktri = kt_low(n_cutoff+1) + 1, ntri
-       write (fid, '(12(1x, es23.16))') r, z, (0d0, k = 1, 10)
+       write (fid, '(12(1x, es24.16e3))') r, z, (0d0, k = 1, 10)
     end do
     close(fid)
   end subroutine write_vector_plot
@@ -1774,8 +1772,7 @@ contains
              comp_z = 0d0
              comp_phi = 0d0
           end if
-          write (fid, '(i6, 12(1x, es23.16))') ktri, r, z, real(comp_r), aimag(comp_r), &
-               real(comp_z), aimag(comp_z), real(comp_phi), aimag(comp_phi)
+          write (fid, '(i6, 12(1x, es24.16e3))') ktri, r, z, comp_r, comp_z, comp_phi
        end do
     end do
     close(fid)
@@ -1788,16 +1785,12 @@ contains
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
 
-    integer :: ktri, fid
+    integer :: ktri, fid, ke
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
     do ktri = 1, kt_low(nflux+1)
-       write (fid, '(8(1x, es23.16))') &
-            real(pol_flux(ktri, 1)), aimag(pol_flux(ktri, 1)), &
-            real(pol_flux(ktri, 2)), aimag(pol_flux(ktri, 2)), &
-            real(pol_flux(ktri, 3)), aimag(pol_flux(ktri, 3)), &
-            real(tor_comp(ktri) * mesh_element_rmp(ktri)%area), &
-            aimag(tor_comp(ktri) * mesh_element_rmp(ktri)%area)
+       write (fid, '(8(1x, es24.16e3))') (pol_flux(ktri, ke), ke = 1, 3), &
+            tor_comp(ktri) * mesh_element_rmp(ktri)%area
     end do
     close(fid)
   end subroutine write_vector_dof
@@ -1814,7 +1807,7 @@ contains
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
     do kpoint = 1, kp_low(nflux+1)
-       write (fid, '(2(1x, es23.16))') real(scalar_dof(kpoint)), aimag(scalar_dof(kpoint))
+       write (fid, '(2(1x, es24.16e3))') scalar_dof(kpoint)
     end do
     close(fid)
   end subroutine write_scalar_dof
@@ -1826,11 +1819,11 @@ contains
     real(dp) :: rho_r, rho_z
 
     open(newunit = fid, file = fluxvar_file, recl = longlines, status = 'replace')
-    write (fid, '(5(1x, es23.16))') 0d0, fs%psi(0), fs%q(0), fs%p(0), fs%dp_dpsi(0)
+    write (fid, '(5(1x, es24.16e3))') 0d0, fs%psi(0), fs%q(0), fs%p(0), fs%dp_dpsi(0)
     do kf = 1, nflux
        rho_r = mesh_point(kp_low(kf) + 1)%rcoord - mesh_point(1)%rcoord
        rho_z = mesh_point(kp_low(kf) + 1)%zcoord - mesh_point(1)%zcoord
-       write (fid, '(5(1x, es23.16))') &
+       write (fid, '(5(1x, es24.16e3))') &
             hypot(rho_r, rho_z), fs%psi(kf), fs%q(kf), fs%p(kf), fs%dp_dpsi(kf)
     end do
     close(fid)
@@ -1922,17 +1915,17 @@ contains
        coeff_tor = coeff_tor / kt_max(kf)
        q = q_sum / kt_max(kf)
        if (kilca_scale_factor /= 0) then
-          write (fid_rad, fmt) fs_half%rad(kf), q, real(coeff_rad), aimag(coeff_rad)
-          write (fid_pol, fmt) fs_half%rad(kf), q, real(coeff_pol), aimag(coeff_pol)
-          write (fid_tor, fmt) fs_half%rad(kf), q, real(coeff_tor), aimag(coeff_tor)
+          write (fid_rad, fmt) fs_half%rad(kf), q, coeff_rad
+          write (fid_pol, fmt) fs_half%rad(kf), q, coeff_pol
+          write (fid_tor, fmt) fs_half%rad(kf), q, coeff_tor
           k_theta = kilca_m_res / fs_half%rad(kf)
           sheet_flux = -2d0 * imun / clight / k_theta * sheet_flux
-          write (fid_furth, '(7(1x, es23.16))') fs_half%rad(kf), k_z, k_theta, &
+          write (fid_furth, '(7(1x, es24.16e3))') fs_half%rad(kf), k_z, k_theta, &
                coeff_rad(-kilca_m_res), sheet_flux
        else
-          write (fid_rad, fmt) fs_half%psi(kf), q, real(coeff_rad), aimag(coeff_rad)
-          write (fid_pol, fmt) fs_half%psi(kf), q, real(coeff_pol), aimag(coeff_pol)
-          write (fid_tor, fmt) fs_half%psi(kf), q, real(coeff_tor), aimag(coeff_tor)
+          write (fid_rad, fmt) fs_half%psi(kf), q, coeff_rad
+          write (fid_pol, fmt) fs_half%psi(kf), q, coeff_pol
+          write (fid_tor, fmt) fs_half%psi(kf), q, coeff_tor
        end if
     end do
     close(fid_rad)
@@ -1964,7 +1957,8 @@ contains
           end do
           comp_par_neg = comp_par_neg / dble(ntheta)
           comp_par_pos = comp_par_pos / dble(ntheta)
-          write (fid_par, '(6(1x, es23.16))') rad, B0_phi / B0, comp_par_neg, comp_par_pos
+          write (fid_par, '(6(1x, es24.16e3))') rad, B0_phi / B0, comp_par_neg, &
+               comp_par_pos
        end do
        close(fid_par)
     end if

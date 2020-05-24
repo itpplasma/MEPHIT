@@ -66,7 +66,7 @@ program vacfield
         Bnflux(ke) = (lz(ke) * B_Rn - lr(ke) * B_Zn) * rr(ke)
      end do
      Bnphiflux = imun / n_tor_out * sum(Bnflux)
-     write (fid, '(8(1x, es23.16))') Bnflux, Bnphiflux
+     write (fid, '(8(1x, es24.16e3))') Bnflux, Bnphiflux
   end do
   close(fid)
 
