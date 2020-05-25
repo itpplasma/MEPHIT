@@ -724,7 +724,7 @@ contains
 
   subroutine flux_func_cache_check
     use magdif_config, only: log_msg, log_debug, log_write
-    log_msg = '("checking flux_func_cache...")'
+    log_msg = 'checking flux_func_cache...'
     if (log_debug) call log_write
     write (log_msg, '("array bounds: fs%psi(", i0, ":", i0, "), ' // &
          ' fs%rad(", i0, ":", i0, "), fs_half%psi(", i0, ":", i0, "), ' // &
@@ -1785,11 +1785,11 @@ contains
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
 
-    integer :: ktri, fid, ke
+    integer :: ktri, fid
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
     do ktri = 1, kt_low(nflux+1)
-       write (fid, '(8(1x, es24.16e3))') (pol_flux(ktri, ke), ke = 1, 3), &
+       write (fid, '(8(1x, es23.15e3))') pol_flux(ktri, :), &
             tor_comp(ktri) * mesh_element_rmp(ktri)%area
     end do
     close(fid)
@@ -1915,17 +1915,17 @@ contains
        coeff_tor = coeff_tor / kt_max(kf)
        q = q_sum / kt_max(kf)
        if (kilca_scale_factor /= 0) then
-          write (fid_rad, fmt) fs_half%rad(kf), q, coeff_rad
-          write (fid_pol, fmt) fs_half%rad(kf), q, coeff_pol
-          write (fid_tor, fmt) fs_half%rad(kf), q, coeff_tor
+          write (fid_rad, fmt) fs_half%rad(kf), q, real(coeff_rad), aimag(coeff_rad)
+          write (fid_pol, fmt) fs_half%rad(kf), q, real(coeff_pol), aimag(coeff_pol)
+          write (fid_tor, fmt) fs_half%rad(kf), q, real(coeff_tor), aimag(coeff_tor)
           k_theta = kilca_m_res / fs_half%rad(kf)
           sheet_flux = -2d0 * imun / clight / k_theta * sheet_flux
           write (fid_furth, '(7(1x, es24.16e3))') fs_half%rad(kf), k_z, k_theta, &
                coeff_rad(-kilca_m_res), sheet_flux
        else
-          write (fid_rad, fmt) fs_half%psi(kf), q, coeff_rad
-          write (fid_pol, fmt) fs_half%psi(kf), q, coeff_pol
-          write (fid_tor, fmt) fs_half%psi(kf), q, coeff_tor
+          write (fid_rad, fmt) fs_half%psi(kf), q, real(coeff_rad), aimag(coeff_rad)
+          write (fid_pol, fmt) fs_half%psi(kf), q, real(coeff_pol), aimag(coeff_pol)
+          write (fid_tor, fmt) fs_half%psi(kf), q, real(coeff_tor), aimag(coeff_tor)
        end if
     end do
     close(fid_rad)
@@ -1935,6 +1935,7 @@ contains
        close(fid_furth)
     end if
     ! calculate parallel current (density) on a finer grid
+    B0 = 0d0
     if (present(calc_par) .and. kilca_pol_mode /= 0) then
        open(newunit = fid_par, status = 'replace', recl = longlines, &
             file = decorate_filename(outfile, '', '_par'))
