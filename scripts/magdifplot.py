@@ -184,6 +184,9 @@ class magdif_mnDat:
         self.abs = np.hypot(
                 data[:, 2:(2 + self.range)], data[:, (2 + self.range):]
         )
+        self.arg = np.arctan2(
+                data[:, (2 + self.range):], data[:, 2:(2 + self.range)]
+        )
         self.ymax = np.amax(self.abs, axis=0)
         self.ymax = np.fmax(self.ymax[self.offset:-1],
                             self.ymax[self.offset:0:-1])
