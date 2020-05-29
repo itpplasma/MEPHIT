@@ -237,6 +237,7 @@ contains
   end subroutine write_kilca_convexfile
 
   subroutine create_mesh_points(convexfile)
+    use constants, only: pi
     use mesh_mod, only: npoint, mesh_point, ntri, mesh_element, mesh_element_rmp
     use magdif_config, only: nflux, nkpol, kilca_scale_factor, log_msg_arg_size, &
          log_err, log_write
@@ -250,7 +251,7 @@ contains
     use points_2d, only: s_min, create_points_2d
 
     character(len = *), intent(in) :: convexfile
-    integer :: kf, kpoi
+    integer :: kf, kpoi, fid
     integer, dimension(:), allocatable :: n_theta
     real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_norm_ref
     real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
@@ -295,6 +296,15 @@ contains
     fs%rad = fs%rad * hypot(theta_axis(1), theta_axis(2))
     fs_half%rad = fs_half%rad * hypot(theta_axis(1), theta_axis(2))
     call flux_func_cache_check
+    ! dump presumedly optimal values for poloidal resolution
+    open(newunit = fid, file = 'optpolres.dat', status = 'replace')
+    do kf = 1, nflux - 1
+       write (fid, '(2(1x, es24.16e3))') fs%rad(kf), 2d0 * pi * fs%rad(kf) / &
+            (fs_half%rad(kf + 1) - fs_half%rad(kf))
+    end do
+    write (fid, '(2(1x, es24.16e3))') fs%rad(nflux), 2d0 * pi * fs%rad(nflux) / &
+         (fs%rad(nflux) - fs%rad(nflux - 1))
+    close(fid)
 
     call init_indices
     ntri = kt_low(nflux+1)

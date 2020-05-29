@@ -149,3 +149,10 @@ print("Bmn_r_BDM1_avg = {:.15e}".format(coeff_BDM1_avg['int_Bmn_r']))
 print("Bmn_z = {:.15e}".format(coeff_BDM1['Bmn_z']))
 print("Bmn_z_BDM1 = {:.15e}".format(coeff_BDM1['int_Bmn_z']))
 print("Bmn_z_BDM1_avg = {:.15e}".format(coeff_BDM1_avg['int_Bmn_z']))
+
+coeff_optpolres = compare('cmp_polres.dat', '.', 'cmp_optpolres_cut',
+        'BDM1 elements, optimized poloidal resolution', 9, False)
+print("Bmn_r = {:.15e}".format(coeff_optpolres['Bmn_r']))
+print("Bmn_r_optpolres = {:.15e}".format(coeff_optpolres['int_Bmn_r']))
+print("Bmn_z = {:.15e}".format(coeff_optpolres['Bmn_z']))
+print("Bmn_z_optpolres = {:.15e}".format(coeff_optpolres['int_Bmn_z']))
