@@ -7,10 +7,13 @@ Created on Mon May  4 15:56:57 2020
 """
 
 from os import path
-from matplotlib import use, ticker, pyplot as plt
+from matplotlib import use, rcParams, ticker, pyplot as plt
 import numpy as np
 from scipy import interpolate
 
+rcParams['text.usetex'] = True
+rcParams['font.family'] = 'serif'
+rcParams['mathtext.fontset'] = 'cm'
 use('Agg')
 scifmt = ticker.ScalarFormatter()
 scifmt.set_powerlimits((-3, 4))
@@ -138,7 +141,7 @@ print("Bmn_z_RT0_GL2_avg = {:.15e}".format(coeff_RT0_GL2_avg['int_Bmn_z']))
 
 coeff_BDM1 = compare('cmp_RT0_ff.dat', '.', 'cmp_BDM1_cut',
         'BDM1 elements, w/o averaging', 9, False)
-coeff_BDM1_avg = compare('cmp_RT0.dat', '.', 'cmp_BDM1_cut_avg',
+coeff_BDM1_avg = compare('cmp_RT0_ff.dat', '.', 'cmp_BDM1_cut_avg',
         'BDM1 elements, w/ averaging', 9, True)
 print("Bmn_r = {:.15e}".format(coeff_BDM1['Bmn_r']))
 print("Bmn_r_BDM1 = {:.15e}".format(coeff_BDM1['int_Bmn_r']))

@@ -9,7 +9,7 @@ mesh Th = readmesh(meshfile);
 fespace Vh0(Th, P0);
 fespace Hdiv(Th, RT0);
 
-Hdiv <complex> [Br, Bz];
+Hdiv <complex> [Br, Bz] = [NaN() + 1.0i * NaN(), NaN() + 1.0i * NaN()];
 Vh0 <complex> Bphi;
 
 real BfluxRe, BfluxIm;
@@ -28,6 +28,9 @@ if (ktlownfluxp1 <= 0) {
 
 cout << "Number of triangles in internal region: " << ntri << endl;
 
+int inconsistent;
+real small = 2.2250738585072014e-308, epsilon = 2.2204460492503131e-16; // taken from Fortran
+cerr.scientific.precision(15);
 ifstream ifile(Bndifffile);
 for (int k = 0; k < ktlownfluxp1; k++) {
   for (int j = 0; j < 3; j++) {
@@ -41,19 +44,34 @@ for (int k = 0; k < ktlownfluxp1; k++) {
     } else {
       Br[][DoF] = -BfluxRe - 1.0i * BfluxIm;
     }
-    if (real(redundancy) != 0.0 && imag(redundancy) != 0) {
-      // operator && is apparently not short-circuited in FreeFem...
-      if ((abs(real(Br[][DoF]) / real(redundancy) - 1.0) > 1e-5 ||
-         abs(imag(Br[][DoF]) / imag(redundancy) - 1.0) > 1e-5)) {
-        cerr << "Flux inconsistent in file " << Bndifffile
-             << " at triangle " << k << ", edge " << (j+2) % 3 << ": "
-             << redundancy << " != " << Br[][DoF] << endl;
-        exit(1);
-      }
+    inconsistent = 0;
+    if (abs(real(redundancy)) < small) {
+      inconsistent += abs(real(Br[][DoF])) >= small;
+    } else {
+      inconsistent += abs(1.0 - real(Br[][DoF]) / real(redundancy)) > epsilon;
+    }
+    if (abs(imag(redundancy)) < small) {
+      inconsistent += abs(imag(Br[][DoF])) >= small;
+    } else {
+      inconsistent += abs(1.0 - imag(Br[][DoF]) / imag(redundancy)) > epsilon;
+    }
+    if (inconsistent) {
+      cerr << "Flux inconsistent in file " << Bndifffile
+           << " at triangle " << k << ", edge " << (j+2) % 3 << ": "
+           << redundancy << " != " << Br[][DoF] << endl;
+      exit(1);
     }
   }
   ifile >> BfluxRe >> BfluxIm;
   Bphi[][k] = (BfluxRe + 1.0i * BfluxIm) / Th[k].area;
+}
+for (int k = ktlownfluxp1; k < Th.nt; k++) {
+  for (int j = 0; j < 3; j++) {
+    DoF = Hdiv(k, j);
+    if (isNaN(real(Br[][DoF])) || isNaN(imag(Br[][DoF]))) {
+      Br[][DoF] = 0.0 + 0.0i;
+    }
+  }
 }
 
 {

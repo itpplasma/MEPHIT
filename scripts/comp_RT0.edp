@@ -49,7 +49,7 @@ func complex KiLCABphi(real R, real Z) {
   rad = dist(R - rmaxis, Z - zmaxis);
   theta = atan2(Z - zmaxis, R - rmaxis);
   return (KiLCABtor(-mmode, rad, theta) * exp(-1i * mmode * theta) +
-          KiLCABtor(mmode, rad, theta) * exp(1i * mmode * theta)) / rmaxis;
+          KiLCABtor(mmode, rad, theta) * exp(1i * mmode * theta));
 }
 
 fespace Hdiv(Th, BDM1);

@@ -125,7 +125,13 @@ magdif_prepare() {
             anyerr=$lasterr
             continue
         fi
-        FreeFem++ "$scriptdir/extmesh.edp" 2>&1 | tee -a "$log"
+        if [ -n "$SSH_CLIENT" -o -z "$DISPLAY" ]; then
+            # when connected via SSH or not working in an X environmnent,
+            # suppress graphics to avoid setting an error code
+            FreeFem++ -nw "$scriptdir/extmesh.edp" 2>&1 | tee -a "$log"
+        else
+            FreeFem++ "$scriptdir/extmesh.edp" 2>&1 | tee -a "$log"
+        fi
         lasterr=$?
         if [ $lasterr -ne 0 ]; then
             echo "$scriptname: error $lasterr during mesh generation in $workdir" | tee -a "$log" >&2

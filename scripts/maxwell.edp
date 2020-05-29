@@ -27,7 +27,7 @@ fespace Hdiv(Th, RT0);
 
 Hrot <complex> [ax, ay], [wx, wy];
 Hdiv <complex> [Jr, Jz], [Br, Bz];
-[Jr, Jz] = [0.0, 0.0];
+[Jr, Jz] = [NaN() + 1.0i * NaN(), NaN() + 1.0i * NaN()];
 
 Vh0 <complex> Bphi, Jphi;
 Jphi = 0.0;
@@ -48,6 +48,9 @@ if (ktlownfluxp1 <= 0) {
 
 cout << "Number of triangles in internal region: " << ntri << endl;
 
+int inconsistent;
+real small = 2.2250738585072014e-308, epsilon = 2.2204460492503131e-16; // taken from Fortran
+cerr.scientific.precision(15);
 ifstream ifile(currnfile);
 for (int k = 0; k < ktlownfluxp1; k++) {
   for (int j = 0; j < 3; j++) {
@@ -61,20 +64,36 @@ for (int k = 0; k < ktlownfluxp1; k++) {
     } else {
       Jr[][DoF] = -JfluxRe - 1.0i * JfluxIm;
     }
-    if (real(redundancy) != 0.0 && imag(redundancy) != 0.0) {
-      // operator && is apparently not short-circuited in FreeFem...
-      if ((abs(real(Jr[][DoF]) / real(redundancy) - 1.0) > 1e-5 ||
-           abs(imag(Jr[][DoF]) / imag(redundancy) - 1.0) > 1e-5)) {
-        cerr << "Flux inconsistent in file " << currnfile
-             << " at triangle " << k << ", edge " << (j+2) % 3 << ": "
-             << redundancy << " != " << Jr[][DoF] << endl;
-        exit(1);
-      }
+    inconsistent = 0;
+    if (abs(real(redundancy)) < small) {
+      inconsistent += abs(real(Jr[][DoF])) >= small;
+    } else {
+      inconsistent += abs(1.0 - real(Jr[][DoF]) / real(redundancy)) > epsilon;
+    }
+    if (abs(imag(redundancy)) < small) {
+      inconsistent += abs(imag(Jr[][DoF])) >= small;
+    } else {
+      inconsistent += abs(1.0 - imag(Jr[][DoF]) / imag(redundancy)) > epsilon;
+    }
+    if (inconsistent) {
+      cerr << "Flux inconsistent in file " << currnfile
+           << " at triangle " << k << ", edge " << (j+2) % 3 << ": "
+           << redundancy << " != " << Jr[][DoF] << endl;
+      exit(1);
     }
   }
   ifile >> JfluxRe >> JfluxIm;
   Jphi[][k] = (JfluxRe + 1.0i * JfluxIm) / Th[k].area;
 }
+for (int k = ktlownfluxp1; k < Th.nt; k++) {
+  for (int j = 0; j < 3; j++) {
+    DoF = Hdiv(k, j);
+    if (isNaN(real(Jr[][DoF])) || isNaN(imag(Jr[][DoF]))) {
+      Jr[][DoF] = 0.0 + 0.0i;
+    }
+  }
+}
+
 // Jphi = (dx(Jr) + dy(Jz)) * 1.0i / nmode;
 
 solve Ampere([ax, ay], [wx, wy], solver = sparsesolver) = // defines the PDE
