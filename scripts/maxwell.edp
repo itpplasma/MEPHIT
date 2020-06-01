@@ -27,6 +27,7 @@ fespace Hdiv(Th, RT0);
 
 Hrot <complex> [ax, ay], [wx, wy];
 Hdiv <complex> [Jr, Jz], [Br, Bz];
+// use NaN to signify an unset value
 [Jr, Jz] = [NaN() + 1.0i * NaN(), NaN() + 1.0i * NaN()];
 
 Vh0 <complex> Bphi, Jphi;
@@ -65,6 +66,7 @@ for (int k = 0; k < ktlownfluxp1; k++) {
       Jr[][DoF] = -JfluxRe - 1.0i * JfluxIm;
     }
     inconsistent = 0;
+    // ordered comparisons with NaN always return false, so unset values are never inconsistent
     if (abs(real(redundancy)) < small) {
       inconsistent += abs(real(Jr[][DoF])) >= small;
     } else {
@@ -85,6 +87,7 @@ for (int k = 0; k < ktlownfluxp1; k++) {
   ifile >> JfluxRe >> JfluxIm;
   Jphi[][k] = (JfluxRe + 1.0i * JfluxIm) / Th[k].area;
 }
+// set NaN values on the extended mesh to zero
 for (int k = ktlownfluxp1; k < Th.nt; k++) {
   for (int j = 0; j < 3; j++) {
     DoF = Hdiv(k, j);
@@ -96,6 +99,8 @@ for (int k = ktlownfluxp1; k < Th.nt; k++) {
 
 // Jphi = (dx(Jr) + dy(Jz)) * 1.0i / nmode;
 
+// note that the metric determinant x = R is already contained in the input data
+// for J and thus also in a and B
 solve Ampere([ax, ay], [wx, wy], solver = sparsesolver) = // defines the PDE
   int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(ay) - dy(ax)))
   + int2d(Th)(nmode^2 / x * (wx * ax + wy * ay))

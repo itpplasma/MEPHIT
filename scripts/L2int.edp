@@ -9,6 +9,7 @@ mesh Th = readmesh(meshfile);
 fespace Vh0(Th, P0);
 fespace Hdiv(Th, RT0);
 
+// use NaN to signify an unset value
 Hdiv <complex> [Br, Bz] = [NaN() + 1.0i * NaN(), NaN() + 1.0i * NaN()];
 Vh0 <complex> Bphi;
 
@@ -45,6 +46,7 @@ for (int k = 0; k < ktlownfluxp1; k++) {
       Br[][DoF] = -BfluxRe - 1.0i * BfluxIm;
     }
     inconsistent = 0;
+    // ordered comparisons with NaN always return false, so unset values are never inconsistent
     if (abs(real(redundancy)) < small) {
       inconsistent += abs(real(Br[][DoF])) >= small;
     } else {
@@ -65,6 +67,7 @@ for (int k = 0; k < ktlownfluxp1; k++) {
   ifile >> BfluxRe >> BfluxIm;
   Bphi[][k] = (BfluxRe + 1.0i * BfluxIm) / Th[k].area;
 }
+// set NaN values on the extended mesh to zero
 for (int k = ktlownfluxp1; k < Th.nt; k++) {
   for (int j = 0; j < 3; j++) {
     DoF = Hdiv(k, j);
