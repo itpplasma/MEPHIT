@@ -21,6 +21,24 @@ canvas = (6.6, 3.6)
 res = 300
 thin = 0.5
 
+try:
+    data = np.loadtxt('optpolres.dat')
+except Exception as err:
+    print('Error: {}'.format(err))
+    exit
+plt.figure(figsize=canvas)
+plt.axhline(300, color='k', lw=thin, ls='--',
+            label=r'$N^{\mathrm{pol}} = 300$')
+plt.semilogy(data[:, 0], data[:, 1], '-r', lw=thin,
+             label=r'opt. $N^{\mathrm{pol}}$')
+plt.gca().legend()
+plt.xlabel(r'$r$ / cm')
+plt.ylabel(r'$N^{\mathrm{pol}}$')
+plt.title('Estimate of optimal poloidal resolution (poins per flux surface)')
+plt.savefig('optpolres.png', dpi=res)
+plt.close()
+exit
+
 def compare(datafile, outdir, prefix, subtitle, m, avg):
     try:
         data = np.loadtxt(datafile)
