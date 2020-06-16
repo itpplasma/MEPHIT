@@ -25,6 +25,10 @@ module magdif
   !> expected at a given index, #m_res is 0.
   integer, allocatable :: m_res(:)
 
+  !> Indices of flux surfaces where resonance corresponding to a poloidal mode (given as
+  !> array index) occurs.
+  integer, allocatable :: res_ind(:)
+
   !> \f$ R \f$ component of equilibrium magnetic field \f$ B_{0} \f$.
   !>
   !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
@@ -372,10 +376,13 @@ contains
     call write_vector_dof(Bnflux, Bnphi, Bn_file)
     call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_', ''))
     call write_vector_plot_rect(Bnflux, Bnphi, decorate_filename(Bn_file, 'rect_', ''))
-    call write_poloidal_modes(Bnflux, Bnphi, 'Bmn.dat', .true.)
+    call write_poloidal_modes(Bnflux, Bnphi, 'Bmn.dat')
     call write_poloidal_modes(Bnflux_vac, Bnphi_vac, 'Bmn_vac.dat')
     call write_poloidal_modes(Bnflux - Bnflux_vac, Bnphi - Bnphi_vac, 'Bmn_plas.dat')
-    call write_poloidal_modes(jnflux, jnphi, 'currmn.dat', .true.)
+    call write_poloidal_modes(jnflux, jnphi, 'currmn.dat')
+    call write_Ipar(256)
+    call write_Ipar(512)
+    call write_Ipar(1024)
 
     if (allocated(Lr)) deallocate(Lr)
 
@@ -822,11 +829,14 @@ contains
 
     allocate(m_res(nflux))
     m_res = 0
+    allocate(res_ind(m_res_min:m_res_max))
+    res_ind = 0
     log_msg = 'resonance positions:'
     if (log_debug) call log_write
     do m = m_res_max, m_res_min, -1
        abs_err = [(abs(abs(fs_half%q(kf)) - dble(m) / dble(n)), kf = 1, nflux)]
        kf_res = minloc(abs_err, 1)
+       res_ind(m) = kf_res
        m_res(kf_res) = m
        write (log_msg, '("m = ", i0, ", kf_res = ", i0, ' // &
             '", rho: ", f19.16, 2(" < ", f19.16))') m, kf_res, &
@@ -1829,9 +1839,8 @@ contains
     close(fid)
   end subroutine write_fluxvar
 
-  subroutine write_poloidal_modes(pol_flux, tor_comp, outfile, calc_par)
+  subroutine write_poloidal_modes(pol_flux, tor_comp, outfile)
     use constants, only: pi  ! orbit_mod.f90
-    use magdata_in_symfluxcoor_mod, only: nlabel, ntheta
     use magdif_config, only: n, nflux, kilca_scale_factor, kilca_pol_mode, longlines, &
          decorate_filename, debug_pol_offset, debug_kilca_geom_theta
     use magdif_util, only: imun, clight, bent_cyl2straight_cyl
@@ -1839,18 +1848,17 @@ contains
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
-    logical, intent(in), optional :: calc_par
 
     integer, parameter :: mmax = 24
     character(len = 20) :: fmt
     complex(dp), dimension(-mmax:mmax) :: coeff_rad, coeff_pol, coeff_tor, fourier_basis
     integer :: kf, kt, ktri, m, fid_rad, fid_pol, fid_tor
-    integer :: kilca_m_res, fid_furth, fid_par  ! only KiLCA geometry
+    integer :: kilca_m_res, fid_furth  ! only KiLCA geometry
     type(triangle_rmp) :: tri
     complex(dp) :: comp_R, comp_Z, comp_rad, comp_pol, comp_tor
-    complex(dp) :: comp_par, comp_par_neg, comp_par_pos, sheet_flux  ! only KiLCA geometry
+    complex(dp) :: sheet_flux  ! only KiLCA geometry
     real(dp) :: R, Z, theta, B0_R, B0_Z, dum
-    real(dp) :: k_z, k_theta, rad, B0_phi, B0  ! only KiLCA geometry
+    real(dp) :: k_z, k_theta  ! only KiLCA geometry
     real(dp) :: sqrt_g, dR_dtheta, dZ_dtheta, q, q_sum  ! only ASDEX geometry
 
     write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(es23.15e3, 1x))'
@@ -1934,34 +1942,52 @@ contains
     if (kilca_pol_mode /= 0) then
        close(fid_furth)
     end if
-    ! calculate parallel current (density) on a finer grid
-    B0 = 0d0
-    if (present(calc_par) .and. kilca_pol_mode /= 0) then
-       open(newunit = fid_par, status = 'replace', recl = longlines, &
-            file = decorate_filename(outfile, '', '_par'))
-       do kf = 1, nlabel
-          rad = fs%rad(nflux) * (dble(kf) - 0.5d0) / dble(nlabel)
-          comp_par_neg = 0d0
-          comp_par_pos = 0d0
-          do kt = 1, ntheta
-             theta = 2d0 * pi * (dble(kt) - 0.5d0) / dble(ntheta)
-             R = equil%rmaxis + rad * cos(theta)
-             Z = equil%zmaxis + rad * sin(theta)
-             call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
-                  dum, dum)
-             ktri = point_location(R, Z)
-             call interp_RT0(ktri, pol_flux, R, Z, comp_R, comp_Z)
-             B0 = sqrt(B0_R * B0_R + B0_Z * B0_Z + B0_phi * B0_phi)
-             comp_par = (comp_R * B0_R + comp_Z * B0_Z + tor_comp(ktri) * B0_phi) / B0
-             comp_par_neg = comp_par_neg + comp_par * exp(imun * abs(kilca_m_res) * theta)
-             comp_par_pos = comp_par_pos + comp_par * exp(-imun * abs(kilca_m_res) * theta)
-          end do
-          comp_par_neg = comp_par_neg / dble(ntheta)
-          comp_par_pos = comp_par_pos / dble(ntheta)
-          write (fid_par, '(6(1x, es24.16e3))') rad, B0_phi / B0, comp_par_neg, &
-               comp_par_pos
-       end do
-       close(fid_par)
-    end if
   end subroutine write_poloidal_modes
+
+  !> calculate parallel current (density) on a finer grid
+  subroutine write_Ipar(rad_resolution)
+    use constants, only: pi  ! orbit_mod.f90
+    use magdata_in_symfluxcoor_mod, only: ntheta
+    use magdif_config, only: additions, kilca_pol_mode, longlines, decorate_filename
+    use magdif_util, only: imun, linspace
+    integer, intent(in) :: rad_resolution
+    character(len = 11) :: postfix
+    integer :: kf_min, kf_max, krad, kt, ktri, fid_jpar
+    real(dp) :: theta, R, Z, B0_R, B0_phi, B0_Z, B0_2, dum
+    complex(dp) :: jn_R, jn_Z, jn_par
+    real(dp), dimension(rad_resolution) :: rad
+    complex(dp), dimension(rad_resolution) :: jmn_par_neg, jmn_par_pos
+
+    kf_min = res_ind(abs(kilca_pol_mode)) - additions(abs(kilca_pol_mode))
+    kf_max = res_ind(abs(kilca_pol_mode)) + additions(abs(kilca_pol_mode))
+    rad = linspace(fs%rad(kf_min), fs%rad(kf_max), rad_resolution, 0, 0)
+    jmn_par_neg = (0d0, 0d0)
+    jmn_par_pos = (0d0, 0d0)
+    write (postfix, '("_", i0)') rad_resolution
+    open(newunit = fid_jpar, status = 'replace', recl = longlines, &
+         file = decorate_filename('currn_par.dat', '', trim(postfix)))
+    do krad = 1, rad_resolution
+       do kt = 1, ntheta
+          theta = 2d0 * pi * (dble(kt) - 0.5d0) / dble(ntheta)
+          R = equil%rmaxis + rad(krad) * cos(theta)
+          Z = equil%zmaxis + rad(krad) * sin(theta)
+          call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
+               dum, dum)
+          ktri = point_location(R, Z)
+          call interp_RT0(ktri, jnflux, R, Z, jn_R, jn_Z)
+          B0_2 = B0_R * B0_R + B0_Z * B0_Z + B0_phi * B0_phi
+          ! include h^z in current density
+          jn_par = (jn_R * B0_R + jn_Z * B0_Z + jnphi(ktri) * B0_phi) * B0_phi / B0_2
+          jmn_par_neg(krad) = jmn_par_neg(krad) + jn_par * &
+               exp(imun * abs(kilca_pol_mode) * theta)
+          jmn_par_pos(krad) = jmn_par_pos(krad) + jn_par * &
+               exp(-imun * abs(kilca_pol_mode) * theta)
+       end do
+       jmn_par_neg(krad) = jmn_par_neg(krad) / dble(ntheta)
+       jmn_par_pos(krad) = jmn_par_pos(krad) / dble(ntheta)
+       write (fid_jpar, '(6(1x, es24.16e3))') rad(krad), &
+            jmn_par_neg(krad), jmn_par_pos(krad)
+    end do
+    close(fid_jpar)
+  end subroutine write_Ipar
 end module magdif

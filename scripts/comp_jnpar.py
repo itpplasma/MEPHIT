@@ -40,12 +40,11 @@ magdif_r = np.empty((nlabel, m_max - m_min + 1))
 magdif_jnpar = np.empty((nlabel, m_max - m_min + 1), dtype=complex)
 for m in np.arange(m_min, m_max + 1):
     k = m - m_min
-    data = np.loadtxt(path.join(test_dir,
-                                'TCFP_Ipar_{}/currmn_par.dat'.format(m)))
+    data = np.loadtxt(path.join(test_dir,  # use only one resolution for now
+                                'TCFP_Ipar_{}/currmn_par_512.dat'.format(m)))
     magdif_r[:, k] = data[:, 0].copy()
-    # h_z = data[:, 1].copy()
-    magdif_jnpar[:, k].real = data[:, 2] * statA_per_cm2_to_A_per_m2
-    magdif_jnpar[:, k].imag = data[:, 3] * statA_per_cm2_to_A_per_m2
+    magdif_jnpar[:, k].real = data[:, 1] * statA_per_cm2_to_A_per_m2
+    magdif_jnpar[:, k].imag = data[:, 2] * statA_per_cm2_to_A_per_m2
 
 kilca_r = dict()
 kilca_jnpar = dict()
@@ -68,6 +67,11 @@ for m in range(m_min, m_max + 1):
     kilca_rres[m] = data[loc + '/rres'][0, 0].copy()
     kilca_d[m] = data[loc + '/d'][0, 0].copy()
     kilca_Inpar[m] = data[loc + '/Ipar'][0, 0] * c1_statA_to_A
+kilca_hz = (data['/output/background/b0z'][0, :] /
+            data['/output/background/b0'][0, :])
+kilca_r[0] = data['/output/background/R'][0, :]
+kilca_hz_int = interp.interp1d(kilca_r[0], kilca_hz, kind='cubic',
+                               fill_value='extrapolate', assume_sorted=True)
 
 plt.figure(figsize=canvas)
 ax = plt.gca()
@@ -117,19 +121,15 @@ I_res_magdif = np.zeros((m_max - m_min + 1), dtype=complex)
 I_res_kilca = np.zeros((m_max - m_min + 1), dtype=complex)
 for m in range(m_min, m_max + 1):
     k = m - m_min
-    interval = np.linspace(kilca_rres[m] - 0.5 * kilca_d[m],
-                           kilca_rres[m] + 0.5 * kilca_d[m], 512)
-    sampling_magdif = interp.interp1d(magdif_r[:, k], magdif_r[:, k] * 
-                                      magdif_jnpar[:, k], kind='cubic',
-                                      fill_value='extrapolate',
-                                      assume_sorted=True)
-    I_res_magdif[k] = 2.0 * np.pi * \
-        np.trapz(sampling_magdif(interval), interval) * cm2_to_m2
-    sampling_kilca = interp.interp1d(kilca_r[m], kilca_r[m] * kilca_jnpar[m],
-                                     kind='cubic', fill_value='extrapolate',
-                                     assume_sorted=True)
-    I_res_kilca[k] = 2.0 * np.pi * \
-        np.trapz(sampling_kilca(interval), interval) * cm2_to_m2
+    mask_magdif = (magdif_r[:, k] >= kilca_rres[m] - 0.5 * kilca_d[m] &
+                   magdif_r[:, k] <= kilca_rres[m] + 0.5 * kilca_d[m])
+    I_res_magdif[k] = 2.0 * np.pi * np.trapz(magdif_jnpar[mask_magdif, k] *
+                magdif_r[mask_magdif, k], magdif_r[mask_magdif, k]) * cm2_to_m2
+    mask_kilca = (kilca_r[m] >= kilca_rres[m] - 0.5 * kilca_d[m] &
+                  kilca_r[m] <= kilca_rres[m] + 0.5 * kilca_d[m])
+    I_res_kilca[k] = 2.0 * np.pi * np.trapz(kilca_jnpar[m][mask_kilca] *
+               kilca_r[m][mask_kilca] * kilca_hz_int(kilca_r[m][mask_kilca]),
+               kilca_r[m][mask_kilca]) * cm2_to_m2
     print(f"I_res_magdif({m}) = {np.abs(I_res_magdif[k]):.15f}, "
           f"I_res_kilca({m}) = {np.abs(I_res_kilca[k]):.15f}, "
           f"kilca_Ipar({m}) = {kilca_Inpar[m]:.15f}")
