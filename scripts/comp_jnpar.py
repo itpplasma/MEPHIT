@@ -32,16 +32,15 @@ c1_statA_to_A = 1.0e+01
 test_dir = '/home/patrick/itp-temp/NEO-EQ/run'
 work_dir = '/home/patrick/git/NEO-EQ/run/geomint_TCFP'
 
-nlabel = 3000
+rad_resolution = 1024
 m_min = 3
 m_max = 9
 
-magdif_r = np.empty((nlabel, m_max - m_min + 1))
-magdif_jnpar = np.empty((nlabel, m_max - m_min + 1), dtype=complex)
+magdif_r = np.empty((rad_resolution, m_max - m_min + 1))
+magdif_jnpar = np.empty((rad_resolution, m_max - m_min + 1), dtype=complex)
 for m in np.arange(m_min, m_max + 1):
     k = m - m_min
-    data = np.loadtxt(path.join(test_dir,  # use only one resolution for now
-                                'TCFP_Ipar_{}/currmn_par_512.dat'.format(m)))
+    data = np.loadtxt(path.join(test_dir, f"TCFP_Ipar_{m}/currn_par.dat"))
     magdif_r[:, k] = data[:, 0].copy()
     magdif_jnpar[:, k].real = data[:, 1] * statA_per_cm2_to_A_per_m2
     magdif_jnpar[:, k].imag = data[:, 2] * statA_per_cm2_to_A_per_m2
@@ -72,6 +71,7 @@ kilca_hz = (data['/output/background/b0z'][0, :] /
 kilca_r[0] = data['/output/background/R'][0, :]
 kilca_hz_int = interp.interp1d(kilca_r[0], kilca_hz, kind='cubic',
                                fill_value='extrapolate', assume_sorted=True)
+full_r_range = (0.0, np.amax(kilca_r[0]))
 
 plt.figure(figsize=canvas)
 ax = plt.gca()
@@ -81,7 +81,7 @@ for m in np.arange(m_min, m_max + 1):
              label='m = {}'.format(m))
 ax.get_yaxis().set_major_formatter(scifmt)
 plt.legend(loc='upper right')
-full_r_range = plt.xlim()
+plt.xlim(full_r_range)
 c = plt.rcParams['axes.prop_cycle'].by_key()['color']
 ax_ins_1 = ax.inset_axes([3.0, 0.6e+05, 10.0, 0.8e+05], transform=ax.transData)
 ax_ins_1.plot(magdif_r[:, 0], np.abs(magdif_jnpar[:, 0]), '-', lw=thin, c=c[0])
@@ -121,12 +121,12 @@ I_res_magdif = np.zeros((m_max - m_min + 1), dtype=complex)
 I_res_kilca = np.zeros((m_max - m_min + 1), dtype=complex)
 for m in range(m_min, m_max + 1):
     k = m - m_min
-    mask_magdif = (magdif_r[:, k] >= kilca_rres[m] - 0.5 * kilca_d[m] &
-                   magdif_r[:, k] <= kilca_rres[m] + 0.5 * kilca_d[m])
+    mask_magdif = ((magdif_r[:, k] >= kilca_rres[m] - 0.5 * kilca_d[m]) &
+                   (magdif_r[:, k] <= kilca_rres[m] + 0.5 * kilca_d[m]))
     I_res_magdif[k] = 2.0 * np.pi * np.trapz(magdif_jnpar[mask_magdif, k] *
                 magdif_r[mask_magdif, k], magdif_r[mask_magdif, k]) * cm2_to_m2
-    mask_kilca = (kilca_r[m] >= kilca_rres[m] - 0.5 * kilca_d[m] &
-                  kilca_r[m] <= kilca_rres[m] + 0.5 * kilca_d[m])
+    mask_kilca = ((kilca_r[m] >= kilca_rres[m] - 0.5 * kilca_d[m]) &
+                  (kilca_r[m] <= kilca_rres[m] + 0.5 * kilca_d[m]))
     I_res_kilca[k] = 2.0 * np.pi * np.trapz(kilca_jnpar[m][mask_kilca] *
                kilca_r[m][mask_kilca] * kilca_hz_int(kilca_r[m][mask_kilca]),
                kilca_r[m][mask_kilca]) * cm2_to_m2

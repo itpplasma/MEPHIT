@@ -380,8 +380,6 @@ contains
     call write_poloidal_modes(Bnflux_vac, Bnphi_vac, 'Bmn_vac.dat')
     call write_poloidal_modes(Bnflux - Bnflux_vac, Bnphi - Bnphi_vac, 'Bmn_plas.dat')
     call write_poloidal_modes(jnflux, jnphi, 'currmn.dat')
-    call write_Ipar(256)
-    call write_Ipar(512)
     call write_Ipar(1024)
 
     if (allocated(Lr)) deallocate(Lr)
@@ -1951,7 +1949,6 @@ contains
     use magdif_config, only: additions, kilca_pol_mode, longlines, decorate_filename
     use magdif_util, only: imun, linspace
     integer, intent(in) :: rad_resolution
-    character(len = 11) :: postfix
     integer :: kf_min, kf_max, krad, kt, ktri, fid_jpar
     real(dp) :: theta, R, Z, B0_R, B0_phi, B0_Z, B0_2, dum
     complex(dp) :: jn_R, jn_Z, jn_par
@@ -1963,9 +1960,8 @@ contains
     rad = linspace(fs%rad(kf_min), fs%rad(kf_max), rad_resolution, 0, 0)
     jmn_par_neg = (0d0, 0d0)
     jmn_par_pos = (0d0, 0d0)
-    write (postfix, '("_", i0)') rad_resolution
     open(newunit = fid_jpar, status = 'replace', recl = longlines, &
-         file = decorate_filename('currn_par.dat', '', trim(postfix)))
+         file = 'currn_par.dat')
     do krad = 1, rad_resolution
        do kt = 1, ntheta
           theta = 2d0 * pi * (dble(kt) - 0.5d0) / dble(ntheta)
