@@ -1946,20 +1946,27 @@ contains
   subroutine write_Ipar(rad_resolution)
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: ntheta
-    use magdif_config, only: additions, kilca_pol_mode, longlines, decorate_filename
-    use magdif_util, only: imun, linspace
+    use magdif_config, only: n, additions, kilca_pol_mode, longlines, decorate_filename
+    use magdif_util, only: imun, linspace, bent_cyl2straight_cyl
     integer, intent(in) :: rad_resolution
     integer :: kf_min, kf_max, krad, kt, ktri, fid_jpar
-    real(dp) :: theta, R, Z, B0_R, B0_phi, B0_Z, B0_2, dum
-    complex(dp) :: jn_R, jn_Z, jn_par
+    real(dp) :: theta, R, Z, dum, B0_R, B0_phi, B0_Z, B0_2, dB0R_dR, dB0R_dZ, dB0phi_dR, &
+         dB0phi_dZ, dB0Z_dR, dB0Z_dZ, dB0R_drad, dB0phi_drad, dB0Z_drad, B0_dB0_drad, &
+         B0_theta, dB0theta_drad, dhz2_drad, dradhthetahz_drad
+    complex(dp) :: jn_R, jn_Z, jn_par, Bn_R, Bn_Z, Bn_rad, Bn_pol, Bn_tor, part_int, bndry
     real(dp), dimension(rad_resolution) :: rad
-    complex(dp), dimension(rad_resolution) :: jmn_par_neg, jmn_par_pos
+    complex(dp), dimension(rad_resolution) :: jmn_par_neg, jmn_par_pos, &
+         part_int_neg, part_int_pos, bndry_neg, bndry_pos
 
     kf_min = res_ind(abs(kilca_pol_mode)) - additions(abs(kilca_pol_mode))
     kf_max = res_ind(abs(kilca_pol_mode)) + additions(abs(kilca_pol_mode))
     rad = linspace(fs%rad(kf_min), fs%rad(kf_max), rad_resolution, 0, 0)
     jmn_par_neg = (0d0, 0d0)
     jmn_par_pos = (0d0, 0d0)
+    part_int_neg = (0d0, 0d0)
+    part_int_pos = (0d0, 0d0)
+    bndry_neg = (0d0, 0d0)
+    bndry_pos = (0d0, 0d0)
     open(newunit = fid_jpar, status = 'replace', recl = longlines, &
          file = 'currn_par.dat')
     do krad = 1, rad_resolution
@@ -1967,22 +1974,57 @@ contains
           theta = 2d0 * pi * (dble(kt) - 0.5d0) / dble(ntheta)
           R = equil%rmaxis + rad(krad) * cos(theta)
           Z = equil%zmaxis + rad(krad) * sin(theta)
-          call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
-               dum, dum)
           ktri = point_location(R, Z)
-          call interp_RT0(ktri, jnflux, R, Z, jn_R, jn_Z)
+          call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dB0R_dR, dum, dB0R_dZ, dB0phi_dR, &
+               dum, dB0phi_dZ, dB0Z_dR, dum, dB0Z_dZ)
           B0_2 = B0_R * B0_R + B0_Z * B0_Z + B0_phi * B0_phi
+          call interp_RT0(ktri, jnflux, R, Z, jn_R, jn_Z)
           ! include h^z in current density
           jn_par = (jn_R * B0_R + jn_Z * B0_Z + jnphi(ktri) * B0_phi) * B0_phi / B0_2
           jmn_par_neg(krad) = jmn_par_neg(krad) + jn_par * &
                exp(imun * abs(kilca_pol_mode) * theta)
           jmn_par_pos(krad) = jmn_par_pos(krad) + jn_par * &
                exp(-imun * abs(kilca_pol_mode) * theta)
+          ! comparison with indirect calculation (Ampere's law and integration by parts)
+          dB0R_drad = dB0R_dR * cos(theta) + dB0R_dZ + sin(theta)
+          dB0phi_drad = dB0phi_dR * cos(theta) + dB0phi_dZ + sin(theta)
+          dB0Z_drad = dB0Z_dR * cos(theta) + dB0Z_dZ + sin(theta)
+          B0_dB0_drad = B0_R * dB0R_drad + B0_phi * dB0phi_drad + B0_Z * dB0Z_drad
+          B0_theta = B0_Z * cos(theta) - B0_R * sin(theta)
+          dB0theta_drad = dB0Z_dR * cos(theta) ** 2 - dB0R_dZ * sin(theta) ** 2 + &
+               (dB0Z_dZ - dB0R_dR) * sin(theta) * cos(theta)
+          dhz2_drad = 2d0 * B0_phi * (B0_2 * dB0phi_drad - B0_phi * B0_dB0_drad) / &
+               B0_2 ** 2
+          dradhthetahz_drad = B0_theta * B0_phi / B0_2 + rad(krad) * &
+               ((B0_theta * dB0phi_drad + dB0theta_drad * B0_phi) / B0_2 - &
+               2d0 * B0_theta * B0_phi * B0_dB0_drad / B0_2 ** 2)
+          call interp_RT0(ktri, Bnflux, R, Z, Bn_R, Bn_Z)
+          call bent_cyl2straight_cyl(Bn_R, Bnphi(ktri), Bn_Z, theta, &
+               Bn_rad, Bn_pol, Bn_tor)
+          part_int = -rad(krad) * Bn_pol * dhz2_drad + Bn_tor * dradhthetahz_drad
+          part_int_neg(krad) = part_int_pos(krad) + (part_int + imun * B0_phi * &
+               (dble(n) / equil%rmaxis * rad(krad) * B0_theta + &
+               abs(kilca_pol_mode) * B0_phi) * Bn_rad / B0_2) * &
+               exp(imun * abs(kilca_pol_mode) * theta)
+          part_int_pos(krad) = part_int_pos(krad) + (part_int + imun * B0_phi * &
+               (dble(n) / equil%rmaxis * rad(krad) * B0_theta - &
+               abs(kilca_pol_mode) * B0_phi) * Bn_rad / B0_2) * &
+               exp(-imun * abs(kilca_pol_mode) * theta)
+          bndry = B0_phi * rad(krad) * (B0_phi * Bn_pol - B0_theta * Bn_tor) / B0_2
+          bndry_neg(krad) = bndry_neg(krad) + bndry * &
+               exp(imun * abs(kilca_pol_mode) * theta)
+          bndry_pos(krad) = bndry_pos(krad) + bndry * &
+               exp(-imun * abs(kilca_pol_mode) * theta)
        end do
        jmn_par_neg(krad) = jmn_par_neg(krad) / dble(ntheta)
        jmn_par_pos(krad) = jmn_par_pos(krad) / dble(ntheta)
-       write (fid_jpar, '(6(1x, es24.16e3))') rad(krad), &
-            jmn_par_neg(krad), jmn_par_pos(krad)
+       part_int_neg(krad) = part_int_neg(krad) / dble(ntheta)
+       part_int_pos(krad) = part_int_pos(krad) / dble(ntheta)
+       bndry_neg(krad) = bndry_neg(krad) / dble(ntheta)
+       bndry_pos(krad) = bndry_pos(krad) / dble(ntheta)
+       write (fid_jpar, '(13(1x, es24.16e3))') rad(krad), &
+            jmn_par_neg(krad), jmn_par_pos(krad), &
+            part_int_neg(krad), part_int_pos(krad), bndry_neg(krad), bndry_pos(krad)
     end do
     close(fid_jpar)
   end subroutine write_Ipar
