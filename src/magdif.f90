@@ -380,7 +380,7 @@ contains
     call write_poloidal_modes(Bnflux_vac, Bnphi_vac, 'Bmn_vac.dat')
     call write_poloidal_modes(Bnflux - Bnflux_vac, Bnphi - Bnphi_vac, 'Bmn_plas.dat')
     call write_poloidal_modes(jnflux, jnphi, 'currmn.dat')
-    call write_Ipar(1024)
+    call write_Ipar(2048)
 
     if (allocated(Lr)) deallocate(Lr)
 
@@ -1946,7 +1946,8 @@ contains
   subroutine write_Ipar(rad_resolution)
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: ntheta
-    use magdif_config, only: n, additions, kilca_pol_mode, longlines, decorate_filename
+    use magdif_config, only: n, additions, kilca_pol_mode, longlines, decorate_filename, &
+         deletions, nflux
     use magdif_util, only: imun, linspace, bent_cyl2straight_cyl
     integer, intent(in) :: rad_resolution
     integer :: kf_min, kf_max, krad, kt, ktri, fid_jpar
@@ -1958,8 +1959,12 @@ contains
     complex(dp), dimension(rad_resolution) :: jmn_par_neg, jmn_par_pos, &
          part_int_neg, part_int_pos, bndry_neg, bndry_pos
 
-    kf_min = res_ind(abs(kilca_pol_mode)) - additions(abs(kilca_pol_mode))
-    kf_max = res_ind(abs(kilca_pol_mode)) + additions(abs(kilca_pol_mode))
+    kf_min = res_ind(abs(kilca_pol_mode)) - additions(abs(kilca_pol_mode)) &
+         - deletions(abs(kilca_pol_mode))
+    if (kf_min < 1) kf_min = 1
+    kf_max = res_ind(abs(kilca_pol_mode)) + additions(abs(kilca_pol_mode)) &
+         + deletions(abs(kilca_pol_mode))
+    if (kf_max > nflux) kf_max = nflux
     rad = linspace(fs%rad(kf_min), fs%rad(kf_max), rad_resolution, 0, 0)
     jmn_par_neg = (0d0, 0d0)
     jmn_par_pos = (0d0, 0d0)
