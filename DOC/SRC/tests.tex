@@ -187,7 +187,7 @@ where the derivative of $I_{m}$ is taken with respect to the entire argument, no
 \end{gather}
 Since $I_{-m}(k_{z} r) = I_{m} (k_{z} r)$, this is the only vector component that changes with a negative mode number $m$. Even though there is no mode coupling in this geometry, our calculations are done in toroidal geometry, hence mode coupling is expected; thus we restrict ourselves to a single poloidal mode number $m$ and take the \textsc{Fourier} transform, i.e.
 \begin{gather}
-  \vec{B}_{n} (r, \theta) = \vec{B}_{m n} (r) \e^{\im m \vartheta}.
+  \vec{B}_{n} (r, \vartheta) = \vec{B}_{m n} (r) \e^{\im m \vartheta}.
 \end{gather}
 To convert back to $(R, \phi, Z)$ vector components, we use \cref{eq:kilca-coord} and arrive at
 \begin{align}
@@ -199,7 +199,7 @@ Note that the same conversions apply in the secondary cylindrical coordinate sys
 \begin{gather}
   B_{n (\phi)} = R B_{n}^{\phi} = \frac{R}{R_{0}} B_{n}^{z} \approx B_{n}^{z}.
 \end{gather}
-Up to this point, calculations have been performed in the cylindrical geometry used by KiLCA code where the torus is explicitly bent into a cylinder. To approximate this geometry in NEO-EQ code, we multiply $R_0$ by a scaling factor $\gamma$ and implement the change by shifting the computational domain in the EFIT file (see \cref{sec:inputs}) to that value. \Cref{eq:kilca-coord} then reads
+Up to this point, calculations have been performed in the cylindrical geometry used by KiLCA code where the torus is explicitly bent into a cylinder. To approximate this geometry in NEO-EQ code, we multiply $R_0$ by an aspect ratio scaling factor $\gamma$ and implement the change by shifting the computational domain in the GEQDSK file (see \cref{sec:inputs}) to that value. \Cref{eq:kilca-coord} then reads
 \begin{align}
   \bar{R} &= \gamma R_{0} + r \cos \vartheta, & \bar{Z} &= r \sin \vartheta, & \bar{\phi} &= \frac{z}{\gamma R_0}. \label{eq:kilca-coord-scaled}
 \end{align}
@@ -211,7 +211,7 @@ which must be identical to the value from \cref{eq:kilca-kz}, so we have
 \begin{gather}
   \bar{n} = \gamma n.
 \end{gather}
-Furthermore, the fluxes in the EFIT file have to be scaled,
+Furthermore, the fluxes in the GEQDSK file have to be scaled,
 \begin{gather}
   \bar{\psi} = \gamma \psi,
 \end{gather}

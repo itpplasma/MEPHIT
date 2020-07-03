@@ -8,22 +8,22 @@ Prior to starting iterations, some input data has to be supplied, namely the fol
 \item the vacuum perturbation field $\Bvac$ and
 \item optionally the equilibrium pressure $p_{0}$.
 \end{itemize}
-Additionally, a configuration file exists to specify the behavior of the implemented algorithms and data input/output.
+Additionally, a configuration file is used to specify the behavior of the implemented algorithms and data input/output.
 
-The equilibrium field $\vec{B}_{0}$ is assumed to be available in GEQDSK format, shortly summarized by \textcite{Lao97}. It consists of data points given on a rectangular grid which are fitted from measurements to the \textsc{Grad}--\textsc{Shafranov} equation. Parts of already existing code import such a file and generate a field-aligned grid as described in \cref{sec:grid} and specified in \cref{sec:grid-impl}. It also supplies values of $\vec{B}_{0}$ and its partial derivatives on arbitrary $R, Z$ coordinates by interpolation with bicubic splines in $R$ and $Z$ based on \cref{eq:B0R,eq:B0Z}. In the implementation of NEO-EQ, the necessary values on edge midpoints and shifted centroids are cached once before calculations start as to avoid repeated function calls to spline interpolation and possibly allow for other data sources. From $\vec{B}_{0}$, the safety factor $q$ is computed as described in \cref{sec:safety_factor}.
+The equilibrium field $\vec{B}_{0}$ is assumed to be available in GEQDSK format, shortly summarized by \textcite{Lao97}. It consists of data points given on a rectangular grid which are fitted from measurements to the \textsc{Grad}--\textsc{Shafranov} equation. Parts of already existing code import such a file and generate a field-aligned grid as described in \cref{sec:grid} and specified in \cref{sec:grid-impl}. It also supplies values of $\vec{B}_{0}$ and its partial derivatives on arbitrary $R, Z$ coordinates by interpolation with quintic splines in $R$ and $Z$ based on \cref{eq:B0R,eq:B0Z}. In the implementation of NEO-EQ, the necessary values on edge midpoints and shifted centroids are cached once before calculations start as to avoid repeated function calls to spline interpolation and possibly allow for other data sources. From $\vec{B}_{0}$, the safety factor $q$ is computed as described in \cref{sec:safety_factor}.
 
 While the equilibrium pressure $p_{0}$ should be available from the GEQDSK file and the equilibrium current $\vec{J}_{0}$ can be computed from the equilibrium field via Ampère's law as in \cref{eq:ampere-gen}, another approach is possible. Since we have never used Ampère's law for equilibrium quantities, it is possible to choose a pressure profile and calculate $J_0^{\phi}$ to be consistent with the MHD equilibrium in \cref{eq:mhd-gen}. The latter is the \textsc{Pfirsch}--\textsc{Schlüter} current and its calculation is outlined in \cref{sec:j0phi}. The simplest approach to the pressure profile assumes a linear profile for the particle density $n$ and temperature $T$,
 \begin{align}
-  n^{(k)} &= n_{\text{min}} + \frac{\psi^{(k)} - \psi_{\text{min}}}{\psi_{\text{axis}} - \psi_{\text{min}}} (n_{\text{axis}} - n_{\text{min}}), \label{eq:dens} \\
-  T^{(k)} &= T_{\text{min}} + \frac{\psi^{(k)} - \psi_{\text{min}}}{\psi_{\text{axis}} - \psi_{\text{min}}} (T_{\text{axis}} - T_{\text{min}}), \label{eq:temp}
+  n^{(k)} &= n_{\text{edge}} + \frac{\psi^{(k)} - \psi_{\text{edge}}}{\psi_{\text{axis}} - \psi_{\text{edge}}} (n_{\text{axis}} - n_{\text{edge}}), \label{eq:dens} \\
+  T^{(k)} &= T_{\text{edge}} + \frac{\psi^{(k)} - \psi_{\text{edge}}}{\psi_{\text{axis}} - \psi_{\text{edge}}} (T_{\text{axis}} - T_{\text{edge}}), \label{eq:temp}
 \end{align}
-where $k$ refers to the index of the flux surface. The subscripts \enquote{min} and \enquote{axis} indicate the value at the plasma edge and the magnetic axis, respectively. The configurable values are then $n_{\text{axis}}$ and $T_{\text{axis}}$ as well as $n_{\text{min}}$ and $T_{\text{min}}$. From these, the pressure is calculated by the ideal gas law:
+where $k$ refers to the index of the flux surface. The subscripts \enquote{edge} and \enquote{axis} indicate the value at the plasma edge and the magnetic axis, respectively. The configurable values are then $n_{\text{axis}}$ and $T_{\text{axis}}$ as well as $n_{\text{edge}}$ and $T_{\text{edge}}$. From these, the pressure is calculated by the ideal gas law:
 \begin{gather}
   p_{0} = n k_{\text{B}} T. \label{eq:pres0}
 \end{gather}
 Additionally, with the formulae given above, one can also derive an expression for the equilibrium pressure gradient:
 \begin{gather}
-  p_{0}' (\psi) = n' (\psi) k_{\text{B}} T + n k_{\text{B}} T' (\psi) = \frac{(n_{\text{axis}} - n_{\text{min}}) k_{\text{B}} T + n k_{\text{B}} (T_{\text{axis}} - T_{\text{min}})}{\psi_{\text{axis}} - \psi_{\text{min}}}.
+  p_{0}' (\psi) = n' (\psi) k_{\text{B}} T + n k_{\text{B}} T' (\psi) = \frac{(n_{\text{axis}} - n_{\text{edge}}) k_{\text{B}} T + n k_{\text{B}} (T_{\text{axis}} - T_{\text{edge}})}{\psi_{\text{axis}} - \psi_{\text{edge}}}.
 \end{gather}
 Thus all necessary equilibrium quantities are established.
 
@@ -84,13 +84,13 @@ which is the diamagnetic current density. For the parallel current density we us
  0 = \divg \vec{J}_{0} &= \divg \vec{J}_{0}^{\perp} + \divg (J_{0}^{\parallel} \vec{h}_{0}) \nonumber \\
  &= -c \divg \frac{\grad p_{0} \times \vec{B}_{0}}{B_{0}^{2}} + \vec{B}_{0} \cdot \grad \frac{J_{0}^{\parallel}}{B_{0}}.
 \end{align}
-In symmetry flux coordinates $(\rho, \phi, \theta)$ and Jacobian $\sqrt{g}$ outlined in \cref{sec:cocos}, the divergence of the diamagnetic current is
+In symmetry flux coordinates $(\rho, \phi, \theta)$ with associated Jacobian $\sqrt{g}$, outlined in \cref{sec:cocos}, the divergence of the diamagnetic current is
 \begin{align}
   \divg \vec{J}_{0}^{\perp} &= -\frac{c}{\sqrt{g}} \pd{u^{k}} \left[ \frac{\sqrt{g}}{B_{0}^{2}} \left( \grad p_{0} \times \vec{B}_{0} \right)^{k} \right] \nonumber \\
   &= -\frac{c}{\sqrt{g}} \pd{u^{k}} \left( \frac{\sqrt{g}}{B_{0}^{2}} \frac{\varepsilon^{ijk}}{\sqrt{g}} \pd[p_{0}]{u^{i}} B_{0 j} \right) \nonumber \\
   &= -\frac{c p_{0}' (\rho) B_{0 \phi}}{\sqrt{g}} \pd{\theta} \frac{1}{B_{0}^{2}},
 \end{align}
-since $p_{0}$ and $B_{0 \phi}$ are constant on a flux surface, $\pd[p_{0}]{\theta} = 0$ and due to axisymmetry $\pd{\phi} = 0$ for equilibrium quantities. The divergence of the parallel current is
+since $p_{0}$ and $B_{0 \phi}$ are constant on a flux surface, $\pd[p_{0}]{\theta} = 0$, and due to axisymmetry, $\pd{\phi} = 0$ for equilibrium quantities. The divergence of the parallel current is
 \begin{gather}
   \divg(J_{0}^{\parallel} \vec{h}_{0}) = \vec{B}_{0} \cdot \grad \frac{J_{0}^{\parallel}}{B_{0}} = B_{0}^{\theta} \pd{\theta} \frac{J_{0}^{\parallel}}{B_{0}}.
 \end{gather}
