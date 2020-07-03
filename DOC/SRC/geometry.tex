@@ -236,35 +236,22 @@ Furthermore, toroidal components of vector fields are approximated by a single v
 \end{gather}
 These degrees of freedom are usually set to a value that assures zero divergence in conjunction with the degrees of freedom of the associated triangle in the poloidal plane.
 
-Some further interpolations will become necessary, using the approximations now established. In the formulae derived in \cref{sec:linmhd}, terms of the form $\vec{v} \cdot \grad \psi$ appear, where $\vec{v}$ is an arbitrary vector, usually the vector of a triangle edge or some field quantity. In the latter case, this reduces to the projection on the normal vector of an edge, since we represent perturbed vector fields by \textsc{Raviart}--\textsc{Thomas} elements. The relation of the degrees of freedom to the contravariant $\psi$ component of the magnetic perturbation on edge \fs\ is derived here as an example, as we use it for computations in \cref{sec:compute_presn,sec:nonres}. The general expression on a given triangle is given by
+Some further interpolations will become necessary, using the approximations now established. In the formulae derived in \cref{sec:linmhd}, terms of the form $\vec{v} \cdot \grad \psi$ appear, where $\vec{v}$ is an arbitrary vector, usually the vector of a triangle edge or some field quantity. \Cref{eq:B0R,eq:B0Z} can be rearranged to give an expression for $\grad \psi$ in terms of $\vec{B}_{0}$,
+\begin{align}
+  \pd[\psi]{R} &= R B_{0}^{Z}, & \pd[\psi]{Z} &= -R B_{0}^{R}. \label{eq:gradpsi}
+\end{align}
+Sometimes, further simplifications are possible. The relation of the degrees of freedom with the contravariant $\psi$ component of the magnetic perturbation on edge \fs\ is derived here as an example, as we use it for computations in \cref{sec:compute_presn,sec:nonres}. The general expression on a given triangle is given by
 \begin{gather}
-  B_{n}^{\psi} (\Gamma_{\fs}) = \vec{B}_{n} (\Gamma_{\fs}) \cdot \grad \psi (\Gamma_{\fs}) = \vec{B}_{n} (\Gamma_{\fs}) \cdot \hat{\vec{n}}_{\fs} \pd[\psi]{n_{\fs}} (\Gamma_{\fs}).
+  B_{n}^{\psi} (\Gamma_{\fs}) = \vec{B}_{n} (\Gamma_{\fs}) \cdot \grad \psi (\Gamma_{\fs}) = \left ( \vec{B}_{n} (\Gamma_{\fs}) \cdot \hat{\vec{n}}_{\fs} \right ) \left ( \hat{\vec{n}}_{\fs} \cdot \grad \psi \right ).
 \end{gather}
-Here we used the fact that the gradient of $\psi$ is parallel to $\vec{n}_{\fs}$. To approximate the directional derivative on $\Gamma_{\fs}$, first consider \cref{fig:altitudes}. The indices $\pm 1$ here refer to the adjacent outer and inner flux surface that are realized on grid points. Likewise, $\Omega^{(\pm 1)}$ refers to the triangles that touch the adjacent flux surfaces and edge \fs\ in question. $a_{\fs}$ refers to the altitude of edge \fs\ on a given triangle.
-\begin{figure}[bth]
-  \centering
-  \input{./altitudes.tikz}
-  \caption{Geometrical considerations in the calculation of $B_{n}^{\psi} (\Gamma_{\fs})$.}
-  \label{fig:altitudes}
-\end{figure}
-Since $\vec{n}_{\fs}$ is pointing toward the outer flux surface, i.e. it is defined in regard to $\Omega^{(-1)}$, the difference in $\psi$ is computed in the same direction, while the distance between the flux surfaces is approximated by the sum of the altitudes:
+Here we used the fact that the gradient of $\psi$ is parallel to $\vec{n}_{\fs}$ and inserted the unit dyad $\hat{\vec{n}}_{\fs} \hat{\vec{n}}_{\fs}$. Now, remembering that the degrees of freedom are given by $\Psi_{\fs} = R (\Gamma_{\fs}) \vec{B}_{n} (\Gamma_{\fs}) \cdot \vec{n}_{\fs}$ and that
+\begin{align}
+  \vec{n} &= l^{Z} \vec{e}_{R} - l^{R} \vec{e}_{Z}, & \grad \psi &= R B_{0}^{Z} \vec{e}_{R} -R B_{0}^{R} \vec{e}_{Z},
+\end{align}
+we can put everything together and arrive at a direct relation between $B_{n}^{\psi} (\Gamma_{\fs})$ and the corresponding degree of freedom $\Psi_{\fs}$:
 \begin{gather}
-  \pd[\psi]{n_{\fs}} (\Gamma_{\fs}) \approx \frac{\psi^{(+1)} - \psi^{(-1)}}{a_{\fs}^{(+1)} + a_{\fs}^{(-1)}}.
+  B_{n}^{\psi} (\Gamma_{\fs}) = \frac{\Psi_{\fs}}{R l_{\fs}} \frac{R \vec{B}_{0} \cdot \vec{l}_{\fs}}{l_{\fs}} = \Psi_{\fs} \frac{\vec{B}_{0} \cdot \vec{l}_{\fs}}{l_{\fs}^{2}}. \label{eq:Bnpsi}
 \end{gather}
-The altitudes can be calculated via triangle area and edge length,
-\begin{gather}
-  S_{\Omega^{(\pm 1)}} = \frac{l_{\fs} a_{\fs}^{(\pm 1)}}{2},
-\end{gather}
-yielding
-\begin{gather}
-  \pd[\psi]{n_{\fs}} (\Gamma_{\fs}) \approx \frac{l_{\fs}}{2} \frac{\psi^{(+1)} - \psi^{(-1)}}{S_{\Omega^{(+1)}} + S_{\Omega^{(-1)}}}.
-\end{gather}
-Now, remembering that $\vec{n}_{\fs} = l_{\fs} \hat{\vec{n}}_{\fs}$ and that the degrees of freedom are given by $\Psi_{\fs} = R (\Gamma_{\fs}) \vec{B}_{n} (\Gamma_{\fs}) \cdot \vec{n}_{\fs}$, we can put everything together and arrive at a direct relation between $B_{n}^{\psi}$ and the degrees of freedom:
-\begin{gather}
-  B_{n}^{\psi} (\Gamma_{\fs}) \approx \frac{\vec{B}_{n} (\Gamma_{\fs}) \cdot l_{\fs} \hat{\vec{n}}_{\fs}}{2} \frac{\psi^{(+1)} - \psi^{(-1)}}{S_{\Omega^{(+1)}} + S_{\Omega^{(-1)}}} = \frac{\Psi_{\fs}}{2 R} \frac{\psi^{(+1)} - \psi^{(-1)}}{S_{\Omega^{(+1)}} + S_{\Omega^{(-1)}}}. \label{eq:Bnpsi}
-\end{gather}
-When $\vec{n}_{\fs}$ and $\Psi_{\fs}$ are defined in regard to $\Omega^{(+1)}$ instead, both quantities switch sign. Since $B_{n}^{\psi}$ does not depend on the choice of triangle, the sign on the right-hand side of \cref{eq:Bnpsi} would also change in this case.
-
 Another useful quantity is the covariant $\theta$ component of a vector field, here derived for the example of the current perturbation,
 \begin{gather}
   J_{n \theta} = \vec{J}_{n} \cdot \vec{e}_{\theta} = \vec{J}_{n} \cdot \sqrt{g} \left ( \vec{e}^{\rho} \times \vec{e}^{\phi} \right ) = -\vec{J}_{n} \cdot \sqrt{g} (\grad \psi \times \grad \phi) = \vec{J}_{n} \cdot \frac{q \vec{B}_{0}^{\pol}}{B_{0}^{\phi}},
