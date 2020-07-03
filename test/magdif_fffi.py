@@ -40,6 +40,7 @@ libmagdif.fdef("""
   real(8), intent(out) :: Br,Bp,Bz,dBrdR,dBrdp,dBrdZ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
   
   end subroutine field
+  
 """)
 
 libmagdif.compile(verbose=1)
