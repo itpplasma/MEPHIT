@@ -7,17 +7,16 @@ program vacfield
   use mesh_mod, only: npoint, ntri, knot, mesh_point, mesh_element, mesh_element_rmp
   use magdif_config, only: n_tor_out => n, nflux, meshdata_file, Bn_vac_file, &
        config_file, read_config
-  use magdif_util, only: initialize_globals, imun
+  use magdif_util, only: initialize_globals, gauss_legendre_unit_interval, imun
   use magdif, only: fs, fs_half
 
   implicit none
 
-  integer :: fid, ktri, ke
-  real(dp) :: R, Z
-  type(knot), dimension(3) :: knots
-  real(dp), dimension(3) :: rr, zz, lr, lz
-  complex(dp), dimension(3) :: Bnflux
-  complex(dp) :: B_Rn, B_Zn, Bnphiflux
+  integer, parameter :: order = 2
+  integer :: fid, ktri, ke, k
+  real(dp) :: R, Z, edge_R, edge_Z, node_R(4), node_Z(4)
+  real(dp), dimension(order) :: points, weights
+  complex(dp) :: B_Rn, B_Zn, Bnflux(3), Bnphiflux
 
   if (command_argument_count() >= 1) then
      call get_command_argument(1, config_file)
@@ -25,6 +24,8 @@ program vacfield
      error stop 'expected path to config file as first parameter'
   endif
   call read_config
+
+  call gauss_legendre_unit_interval(order, points, weights)
 
   open(newunit = fid, file = meshdata_file, form = 'unformatted', status = 'old')
   read (fid) nflux, npoint, ntri
@@ -45,26 +46,24 @@ program vacfield
 
   open(newunit = fid, file = trim(Bn_vac_file), status = 'replace')
   do ktri = 1, ntri
-     knots = mesh_point(mesh_element(ktri)%i_knot)
-     ! edge midpoints
-     rr(1) = (knots(1)%rcoord + knots(2)%rcoord) * 0.5d0
-     rr(2) = (knots(2)%rcoord + knots(3)%rcoord) * 0.5d0
-     rr(3) = (knots(3)%rcoord + knots(1)%rcoord) * 0.5d0
-     zz(1) = (knots(1)%zcoord + knots(2)%zcoord) * 0.5d0
-     zz(2) = (knots(2)%zcoord + knots(3)%zcoord) * 0.5d0
-     zz(3) = (knots(3)%zcoord + knots(1)%zcoord) * 0.5d0
-     ! edge vector components (counterclockwise)
-     lr(1) = knots(2)%rcoord - knots(1)%rcoord
-     lr(2) = knots(3)%rcoord - knots(2)%rcoord
-     lr(3) = knots(1)%rcoord - knots(3)%rcoord
-     lz(1) = knots(2)%zcoord - knots(1)%zcoord
-     lz(2) = knots(3)%zcoord - knots(2)%zcoord
-     lz(3) = knots(1)%zcoord - knots(3)%zcoord
-     do ke = 1, 3
-        call spline_bpol_n(n_tor_out, rr(ke), zz(ke), B_Rn, B_Zn)
-        ! project vector onto outward edge normal
-        Bnflux(ke) = (lz(ke) * B_Rn - lr(ke) * B_Zn) * rr(ke)
-     end do
+     Bnflux = (0d0, 0d0)
+     associate(tri => mesh_element_rmp(ktri), &
+          knots => mesh_point(mesh_element(ktri)%i_knot))
+       node_R = [knots(:)%rcoord, knots(1)%rcoord]
+       node_Z = [knots(:)%zcoord, knots(1)%zcoord]
+       do ke = 1, 3
+          edge_R = node_R(ke + 1) - node_R(ke)
+          edge_Z = node_Z(ke + 1) - node_Z(ke)
+          do k = 1, order
+             R = node_R(ke) * points(k) + node_R(ke + 1) * points(order - k + 1)
+             Z = node_Z(ke) * points(k) + node_Z(ke + 1) * points(order - k + 1)
+             call spline_bpol_n(n_tor_out, R, Z, B_Rn, B_Zn)
+             ! project vector onto outward edge normal
+             Bnflux(ke) = Bnflux(ke) + weights(k) * (B_Rn * edge_Z - B_Zn * edge_R) * R
+          end do
+       end do
+     end associate
+     ! toroidal flux via zero divergence
      Bnphiflux = imun / n_tor_out * sum(Bnflux)
      write (fid, '(8(1x, es24.16e3))') Bnflux, Bnphiflux
   end do

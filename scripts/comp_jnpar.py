@@ -33,7 +33,7 @@ statA_per_cm2_to_A_per_m2 = c1_statA_per_cm2_to_A_per_m2 / c_cgs
 
 test_dir = '/home/patrick/itp-temp/NEO-EQ/run'
 work_dir = '/home/patrick/git/NEO-EQ/run/geomint_TCFP'
-rad_resolution = 1024
+rad_resolution = 2048
 m_min = 3
 m_max = 9
 
@@ -58,6 +58,7 @@ kilca_r = dict()
 kilca_jnpar = dict()
 kilca_rres = dict()
 kilca_d = dict()
+kilca_jnpar_int = dict()
 data = h5py.File(path.join(work_dir, 'TCFP_flre_hip.hdf5'), 'r')
 for m in range(m_min, m_max + 1):
     loc = f"/output/postprocessor{m - m_min + 1}"
@@ -68,6 +69,8 @@ for m in range(m_min, m_max + 1):
         kilca_jnpar[m].imag = data[loc + '/Jpar'][1, ...].copy()
     else:
         kilca_jnpar[m].imag = np.zeros(data[loc + '/Jpar'].shape[1:])
+    kilca_jnpar_int[m] = interp.interp1d(kilca_r[m], kilca_jnpar[m],
+                   kind='cubic', fill_value='extrapolate', assume_sorted=True)
     kilca_rres[m] = data[loc + '/rres'][0, 0].copy()
     kilca_d[m] = data[loc + '/d'][0, 0].copy()
 kilca_hz = (data['/output/background/b0z'][0, :] /
@@ -129,49 +132,54 @@ kilca_Imnpar = dict()
 for m in range(m_min, m_max + 1):
     # magdif
     magdif_min = np.searchsorted(magdif_r[m],
-                                 kilca_rres[m] - 0.5 * kilca_d[m], 'left')
+                                 kilca_rres[m] - kilca_d[m], 'left')
     magdif_max = np.searchsorted(magdif_r[m],
-                                 kilca_rres[m] + 0.5 * kilca_d[m], 'right') - 1
-    magdif_mid = (magdif_min + magdif_max) // 2
-    magdif_half = min(magdif_max - magdif_mid, magdif_mid - magdif_min)
+                                 kilca_rres[m] + kilca_d[m], 'right') - 1
+    magdif_mid = np.searchsorted(magdif_r[m], kilca_rres[m])
+    magdif_half = min(magdif_max - magdif_mid + 1, magdif_mid - magdif_min)
     magdif_width = np.empty(magdif_half)
     magdif_intJ = np.empty(magdif_half, dtype=complex)
     magdif_intB = np.empty(magdif_half, dtype=complex)
     magdif_bndryB = np.empty(magdif_half, dtype=complex)
-    for w in range(1, magdif_half + 1):
-        magdif_lo = magdif_mid - w
+    for w in range(0, magdif_half):
+        magdif_lo = magdif_mid - 1 - w
         magdif_hi = magdif_mid + w
-        magdif_width[w - 1] = magdif_r[m][magdif_hi] - magdif_r[m][magdif_lo]
-        magdif_intJ[w - 1] = np.trapz(magdif_jnpar[m][magdif_lo:magdif_hi] *
+        magdif_width[w] = magdif_r[m][magdif_hi] - magdif_r[m][magdif_lo]
+        magdif_intJ[w] = np.trapz(magdif_jnpar[m][magdif_lo:magdif_hi] *
                    magdif_r[m][magdif_lo:magdif_hi],
                    magdif_r[m][magdif_lo:magdif_hi]) * 2.0 * np.pi * statA_to_A
-        magdif_intB[w - 1] = np.trapz(magdif_part_int[m][magdif_lo:magdif_hi],
+        magdif_intB[w] = np.trapz(magdif_part_int[m][magdif_lo:magdif_hi],
                    magdif_r[m][magdif_lo:magdif_hi]) * 0.5 * c_cgs * statA_to_A
-        magdif_bndryB[w - 1] = (magdif_bndry[m][magdif_hi] -
+        magdif_bndryB[w] = (magdif_bndry[m][magdif_hi] -
                      magdif_bndry[m][magdif_lo]) * 0.5 * c_cgs * statA_to_A
-    magdif_Imnpar[m] = np.trapz(magdif_jnpar[m][magdif_min:magdif_max] *
-                 magdif_r[m][magdif_min:magdif_max],
-                 magdif_r[m][magdif_min:magdif_max]) * 2.0 * np.pi * statA_to_A
-    # KiLCA
-    kilca_min = np.searchsorted(kilca_r[m],
+    magdif_lo = np.searchsorted(magdif_r[m],
                                 kilca_rres[m] - 0.5 * kilca_d[m], 'left')
-    kilca_max = np.searchsorted(kilca_r[m],
-                                kilca_rres[m] + 0.5 * kilca_d[m], 'right') - 1
-    kilca_mid = (kilca_min + kilca_max) // 2
-    kilca_half = min(kilca_max - kilca_mid, kilca_mid - kilca_min)
+    magdif_hi = np.searchsorted(magdif_r[m],
+                                 kilca_rres[m] + 0.5 * kilca_d[m], 'right') - 1
+    magdif_Imnpar[m] = np.trapz(magdif_jnpar[m][magdif_lo:magdif_hi] *
+                 magdif_r[m][magdif_lo:magdif_hi],
+                 magdif_r[m][magdif_lo:magdif_hi]) * 2.0 * np.pi * statA_to_A
+    # KiLCA
+    interval = np.linspace(kilca_rres[m] - kilca_d[m],
+                           kilca_rres[m] + kilca_d[m], rad_resolution)
+    kilca_mid = rad_resolution // 2
+    kilca_half = rad_resolution // 2 - 1
     kilca_width = np.empty(kilca_half)
     kilca_intJ = np.empty(kilca_half, dtype=complex)
     ### kilca_intB = np.empty(kilca_half, dtype=complex)
     ### kilca_bndryB = np.empty(kilca_half, dtype=complex)
-    for w in range(1, kilca_half + 1):
-        kilca_lo = kilca_mid - w
+    for w in range(0, kilca_half):
+        kilca_lo = kilca_mid - 1 - w
         kilca_hi = kilca_mid + w
-        kilca_width[w - 1] = kilca_r[m][kilca_hi] - kilca_r[m][kilca_lo]
-        kilca_intJ[w - 1] = np.trapz(kilca_jnpar[m][kilca_lo:kilca_hi] *
-                  kilca_r[m][kilca_lo:kilca_hi] *
-                  kilca_hz_int(kilca_r[m][kilca_lo:kilca_hi]),
-                  kilca_r[m][kilca_lo:kilca_hi]) * 2.0 * np.pi * c1_statA_to_A
-    kilca_Imnpar[m] = kilca_intJ[-1]
+        kilca_width[w] = interval[kilca_hi] - interval[kilca_lo]
+        kilca_intJ[w] = np.trapz(kilca_jnpar_int[m](interval[kilca_lo:kilca_hi]) *
+                  interval[kilca_lo:kilca_hi] *
+                  kilca_hz_int(interval[kilca_lo:kilca_hi]),
+                  interval[kilca_lo:kilca_hi]) * 2.0 * np.pi * c1_statA_to_A
+    interval = np.linspace(kilca_rres[m] - 0.5 * kilca_d[m],
+                           kilca_rres[m] + 0.5 * kilca_d[m], rad_resolution // 2)
+    kilca_Imnpar[m] = np.trapz(kilca_jnpar_int[m](interval) * interval *
+                  kilca_hz_int(interval), interval) * 2.0 * np.pi * c1_statA_to_A
     plt.figure(figsize=canvas)
     plt.axvline(kilca_d[m], lw=0.25 * thin, color='k')
     plt.axhline(np.abs(kilca_Imnpar[m]), lw=0.25 * thin, color='k')
@@ -184,7 +192,7 @@ for m in range(m_min, m_max + 1):
              label='magdif, B, part.int.')
     plt.plot(magdif_width, np.abs(magdif_bndryB), ':r', lw=thin,
              label='magdif, B, bndry.')
-    plt.gca().legend()
+    plt.gca().legend(loc='lower right')
     plt.xlabel(r'$d$ / cm')
     plt.ylabel(r'$\vert I_{m n}^{\parallel} \vert$ / A')
     plt.title(f"Parallel current depending on assumed layer width (m = {m})")

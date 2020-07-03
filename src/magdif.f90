@@ -204,6 +204,7 @@ contains
     ! depends on flux variables
     call compute_j0phi
     call check_curr0
+    call check_safety_factor
 
     if (nonres) then
        call compute_Bn_nonres
@@ -380,7 +381,7 @@ contains
     call write_poloidal_modes(Bnflux_vac, Bnphi_vac, 'Bmn_vac.dat')
     call write_poloidal_modes(Bnflux - Bnflux_vac, Bnphi - Bnphi_vac, 'Bmn_plas.dat')
     call write_poloidal_modes(jnflux, jnphi, 'currmn.dat')
-    call write_Ipar(1024)
+    call write_Ipar(2048)
 
     if (allocated(Lr)) deallocate(Lr)
 
@@ -1157,6 +1158,46 @@ contains
     close(fid_amp)
     close(fid_gs)
   end subroutine check_curr0
+
+
+  subroutine check_safety_factor
+    use constants, only: pi  ! orbit_mod.f90
+    use magdif_config, only: n, nflux
+    use magdata_in_symfluxcoor_mod, only: nlabel, psipol_max, psisurf, rbeg, qsaf
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp
+    integer :: kf, kt, ktri, fid
+    type(triangle_rmp) :: tri
+    real(dp), allocatable :: q(:)
+
+    allocate(q(nflux))
+    q = 0d0
+    do kf = 1, nflux
+       do kt = 1, kt_max(kf)
+          ktri = kt_low(kf) + kt
+          tri = mesh_element_rmp(ktri)
+          q(kf) = q(kf) + B0phi_Omega(ktri) * tri%area
+       end do
+       q(kf) = q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
+    end do
+    open(newunit = fid, file = 'check_q_step.dat', status = 'replace')
+    do kf = 1, nflux
+       write (fid, '(2(1x, es24.16e3))') fs_half%rad(kf), q(kf)
+    end do
+    close(fid)
+    deallocate(q)
+    allocate(q(nlabel))
+    ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
+    ! load_magdata_in_symfluxcoord_ext divides by psipol_max
+    q = [(fluxvar%interp(equil%qpsi, psisurf(kf) * psipol_max + fs%psi(0)), &
+         kf = 1, nlabel)]
+    open(newunit = fid, file = 'check_q_cont.dat', status = 'replace')
+    do kf = 1, nlabel
+       write (fid, '(3(1x, es24.16e3))') rbeg(kf), qsaf(kf), q(kf)
+    end do
+    close(fid)
+    deallocate(q)
+  end subroutine check_safety_factor
+
 
   !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
   subroutine compute_presn
@@ -1946,7 +1987,8 @@ contains
   subroutine write_Ipar(rad_resolution)
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: ntheta
-    use magdif_config, only: n, additions, kilca_pol_mode, longlines, decorate_filename
+    use magdif_config, only: n, additions, kilca_pol_mode, longlines, decorate_filename, &
+         deletions, nflux
     use magdif_util, only: imun, linspace, bent_cyl2straight_cyl
     integer, intent(in) :: rad_resolution
     integer :: kf_min, kf_max, krad, kt, ktri, fid_jpar
@@ -1958,8 +2000,12 @@ contains
     complex(dp), dimension(rad_resolution) :: jmn_par_neg, jmn_par_pos, &
          part_int_neg, part_int_pos, bndry_neg, bndry_pos
 
-    kf_min = res_ind(abs(kilca_pol_mode)) - additions(abs(kilca_pol_mode))
-    kf_max = res_ind(abs(kilca_pol_mode)) + additions(abs(kilca_pol_mode))
+    kf_min = res_ind(abs(kilca_pol_mode)) - additions(abs(kilca_pol_mode)) &
+         - deletions(abs(kilca_pol_mode))
+    if (kf_min < 1) kf_min = 1
+    kf_max = res_ind(abs(kilca_pol_mode)) + additions(abs(kilca_pol_mode)) &
+         + deletions(abs(kilca_pol_mode))
+    if (kf_max > nflux) kf_max = nflux
     rad = linspace(fs%rad(kf_min), fs%rad(kf_max), rad_resolution, 0, 0)
     jmn_par_neg = (0d0, 0d0)
     jmn_par_pos = (0d0, 0d0)
@@ -2002,7 +2048,7 @@ contains
           call bent_cyl2straight_cyl(Bn_R, Bnphi(ktri), Bn_Z, theta, &
                Bn_rad, Bn_pol, Bn_tor)
           part_int = -rad(krad) * Bn_pol * dhz2_drad + Bn_tor * dradhthetahz_drad
-          part_int_neg(krad) = part_int_pos(krad) + (part_int + imun * B0_phi * &
+          part_int_neg(krad) = part_int_neg(krad) + (part_int + imun * B0_phi * &
                (dble(n) / equil%rmaxis * rad(krad) * B0_theta + &
                abs(kilca_pol_mode) * B0_phi) * Bn_rad / B0_2) * &
                exp(imun * abs(kilca_pol_mode) * theta)
