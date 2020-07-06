@@ -122,7 +122,11 @@ where $\vec{S}$ is the disc that at a point of evaluation $(R_{S}, Z_{S})$ is gi
   B_{0}^{R} &= (\grad \psi \times \grad \phi)^{R} = -\frac{1}{R} \pd[\psi]{Z}, \label{eq:B0R} \\
   B_{0}^{Z} &= (\grad \psi \times \grad \phi)^{Z} = \frac{1}{R} \pd[\psi]{R}. \label{eq:B0Z}
 \end{align}
-Note that the toroidal field coils produce a magnetic field that is roughly proportional to $\frac{1}{R}$, so $B_{0 \phi}$ is assumed to be constant over the entire plasma volume.
+Note that the toroidal field coils produce a magnetic field that is roughly proportional to $\frac{1}{R}$, so $B_{0 \phi}$ varies only slightly over the entire plasma volume. More specifically, the flux surface quantity
+\begin{gather}
+  F(\psi) = B_{0 \phi} \label{eq:F}
+\end{gather}
+appears in the \textsc{Grad}--\textsc{Shafranov} equation, so from a given solution, $B_{0 \phi}$ can be reconstructed.
 
 The second set of coordinates represent a distorted pseudotoroidal system used as symmetry flux coordinates for derivations in \cref{sec:j0phi,sec:nonres}. We keep the toroidal angle $\phi$, but the poloidal plane is spanned by a pseudoradial \emph{flux surface label} $\rho$ centered at the magnetic axis and a poloidal angle $\theta$. $\rho$ and $\theta$ are chosen so that magnetic field lines are straight in these coordinates, requiring the solution of a \emph{magnetic differential equation} involving $\vec{B}_{0}$. As a consequence, $\theta$ is not a geometric angle by itself, but there is a one-to-one correspondence with the poloidal angle in an elementary geometric sense. On the other hand, $\rho$ can be any quantity that is constant on a flux surface and strictly monotonous in the radial direction. While it is common to use $\psi$ as the flux surface label, for derivations, we keep the more intuitive notation of \textcite{dHaeseleer91} where $\rho$ is increasing towards the outside of the torus, i.e., $\rho = -\psi$. With $\theta$ pointing in the counter-clockwise direction, $(\rho, \phi, \theta)$ constitutes a right-hand system. While this deviates from \textcite{dHaeseleer91}, where $\zeta = \frac{\pi}{2} - \phi$ is used instead, it is consistent with the COCOS~3 convention of \textcite{Sauter13}, where an overview of possible combinations of coordinates are considered along with conversion between these choices and a procedure to check the consistency. As a consequence, the safety factor $q$ is positive, and one of a few equivalent definitions is
 \begin{gather}

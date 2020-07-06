@@ -1,40 +1,24 @@
 \section{Preprocessing of Input Data}
 \label{sec:inputs}
 
-Prior to starting iterations, some input data has to be supplied, namely the following:
-\begin{itemize}
-\item coordinates of grid points, the numbering of grid points, and triangles including edge adjacency list -- described in \cref{sec:grid-impl};
-\item the equilibrium magnetic field $\vec{B}_{0}$ from which the grid is generated;
-\item the vacuum perturbation field $\Bvac$ and
-\item optionally the equilibrium pressure $p_{0}$.
-\end{itemize}
-Additionally, a configuration file is used to specify the behavior of the implemented algorithms and data input/output.
+To provide the necessary input data to the iteration steps, the following steps are taken in order.
+\begin{enumerate}
+\item Field line integration of the equilibrium magnetic field $\vec{B}_{0}$ yields $(R, Z)$ coordinates of points of constant $\psi$ with high resolution, i.e., flux surfaces.
+\item From these, a coarser, but still field-aligned grid is derived, with indexing described in \cref{sec:grid-impl}. Most computations are performed on the triangles constructed from this grid.
+\item Flux surface quantities are interpolated on this grid, but note the details on equilibrium pressure $p_{0}$ in \cref{sec:pres0}, toroidal equilibrium current $\vec{J}_{0}^{\tor}$ in \cref{sec:j0phi}, and the safety factor $q$ in \cref{sec:safety_factor}.
+\item The vacuum perturbation field $\Bvac$ is calculated from the external coil currents $I_{\text{c}}$ by the \textsc{Biot}--\textsc{Savart} law (\cref{eq:biot-savart}) on a regular grid in $(R, \phi, Z)$ coordinates. For a given toroidal mode number $n$, $\vec{B}_{n}$ is then projected onto triangle edges, yielding $\Psi$ for a representation by \textsc{Raviart}--\textsc{Thomas} elements.
+\end{enumerate}
 
-The equilibrium field $\vec{B}_{0}$ is assumed to be available in GEQDSK format, shortly summarized by \textcite{Lao97}. It consists of data points given on a rectangular grid which are fitted from measurements to the \textsc{Grad}--\textsc{Shafranov} equation. Parts of already existing code import such a file and generate a field-aligned grid as described in \cref{sec:grid} and specified in \cref{sec:grid-impl}. It also supplies values of $\vec{B}_{0}$ and its partial derivatives on arbitrary $R, Z$ coordinates by interpolation with quintic splines in $R$ and $Z$ based on \cref{eq:B0R,eq:B0Z}. In the implementation of NEO-EQ, the necessary values on edge midpoints and shifted centroids are cached once before calculations start as to avoid repeated function calls to spline interpolation and possibly allow for other data sources. From $\vec{B}_{0}$, the safety factor $q$ is computed as described in \cref{sec:safety_factor}.
+The equilibrium quantities are assumed to be available in GEQDSK format, shortly summarized by \textcite{Lao97}. It consists of $\psi$ data points given on a rectangular $(R, Z)$ grid, as well as \emph{profiles} of flux surface quantities given for equidistant values of $\psi$. These data points derive from measurements fitted to the \textsc{Grad}--\textsc{Shafranov} equation. Builiding on already existing code, we import such a GEQDSK file and generate a field-aligned grid as described in \cref{sec:grid} and specified in \cref{sec:grid-impl}. Values of $\vec{B}_{0}^{\pol}$ and its partial derivatives on arbitrary $(R, Z)$ coordinates are supplied by interpolation with quintic splines in $R$ and $Z$ based on \cref{eq:B0R,eq:B0Z}. Flux surface quantities are interpolated by fourth-order \textsc{Lagrange} polynomials, which includes the calculation of $\vec{B}_{0}^{\tor}$ from $F(\psi)$ (see \cref{eq:F}).
 
-While the equilibrium pressure $p_{0}$ should be available from the GEQDSK file and the equilibrium current $\vec{J}_{0}$ can be computed from the equilibrium field via Ampère's law as in \cref{eq:ampere-gen}, another approach is possible. Since we have never used Ampère's law for equilibrium quantities, it is possible to choose a pressure profile and calculate $J_0^{\phi}$ to be consistent with the MHD equilibrium in \cref{eq:mhd-gen}. The latter is the \textsc{Pfirsch}--\textsc{Schlüter} current and its calculation is outlined in \cref{sec:j0phi}. The simplest approach to the pressure profile assumes a linear profile for the particle density $n$ and temperature $T$,
-\begin{align}
-  n^{(k)} &= n_{\text{edge}} + \frac{\psi^{(k)} - \psi_{\text{edge}}}{\psi_{\text{axis}} - \psi_{\text{edge}}} (n_{\text{axis}} - n_{\text{edge}}), \label{eq:dens} \\
-  T^{(k)} &= T_{\text{edge}} + \frac{\psi^{(k)} - \psi_{\text{edge}}}{\psi_{\text{axis}} - \psi_{\text{edge}}} (T_{\text{axis}} - T_{\text{edge}}), \label{eq:temp}
-\end{align}
-where $k$ refers to the index of the flux surface. The subscripts \enquote{edge} and \enquote{axis} indicate the value at the plasma edge and the magnetic axis, respectively. The configurable values are then $n_{\text{axis}}$ and $T_{\text{axis}}$ as well as $n_{\text{edge}}$ and $T_{\text{edge}}$. From these, the pressure is calculated by the ideal gas law:
-\begin{gather}
-  p_{0} = n k_{\text{B}} T. \label{eq:pres0}
-\end{gather}
-Additionally, with the formulae given above, one can also derive an expression for the equilibrium pressure gradient:
-\begin{gather}
-  p_{0}' (\psi) = n' (\psi) k_{\text{B}} T + n k_{\text{B}} T' (\psi) = \frac{(n_{\text{axis}} - n_{\text{edge}}) k_{\text{B}} T + n k_{\text{B}} (T_{\text{axis}} - T_{\text{edge}})}{\psi_{\text{axis}} - \psi_{\text{edge}}}.
-\end{gather}
-Thus all necessary equilibrium quantities are established.
+In the implementation of NEO-EQ, the necessary values of $\vec{B}_{0}$ on edge midpoints and shifted centroids are cached once before calculations start as to avoid repeated function calls to spline interpolation and possibly allow for other data sources. The values of flux surface quantities on the computational grid are also cached, i.e., there is one value \emph{on} each flux surface, referred to as \emph{full-grid} value, and one value \emph{between} flux surfaces, referred to as \emph{half-grid} value.
 
-The vacuum perturbation field $\Bvac$ is calculated beforehand from the external coil currents $I_{\text{c}}$ by the \textsc{Biot}--\textsc{Savart} law (\cref{eq:biot-savart}) on a regular grid in $(R, \phi, Z)$ coordinates, from which the fluxes through triangle edges are computed for representation as \textsc{Raviart}--\textsc{Thomas} elements.
-
-\subsection{Grid Implementation}
+\subsection{Grid Indexing}
 \label{sec:grid-impl}
 
-Since the grid is field-aligned, there are a few conventions to be considered compared to more arbitrary grids. The code has to \enquote{find its way}, so we make assumptions on numbering.
+Necessary information regarding any grid include the coordinates of grid points, the numbering of grid points and triangles including edge adjacency list. Since our grid is field-aligned, there are a few conventions to be considered compared to more arbitrary grids. The code has to \enquote{find its way}, so we make assumptions on numbering.
 
-The number of flux surfaces realized on the grid is known and referred to as \nflux. The numbers increase going outward from the magnetic axis, which is \emph{not} included and thus gets the index 0. Flux variables like $\psi$, $p_{0}$ and $p_{0}' (\psi)$ are calculated at these flux surfaces and use the same indexing scheme. Others, like $q$, are calculated \emph{between} flux surfaces and are called half-grid quantities. In this case, the index refers to the outer or enclosing flux surface and starts at 1. When we need half-grid quantities at full-grid positions or vice versa, we use linear interpolated between neighboring values, with one exception: If an interpolation point lies outside the separatrix, we use an appropriate interpolation point on the separatrix instead.
+The number of flux surfaces realized on the grid is known and referred to as \nflux. The numbers increase going outward from the magnetic axis, which is \emph{not} included and thus gets the index 0. Full-grid quantities use the same indexing scheme, whereas for half-grid quantities, the index refers to the outer or enclosing flux surface and starts at 1.
 
 Node numbering starts from 1 at the magnetic axis, increasing towards the separatrix. Then, the nodes on the enclosing flux surface (index 1) are enumerated counter-clockwise, starting with the node lying on the line connecting the magnetic axis and the X point. Then the next enclosing flux surface (index 2) is enumerated, and so on. This way, a simple bijection between \enquote{global} node numbering and the \enquote{local} numbering on a specific flux surface can be implemented. The flux surface indexing is the same as for full-grid quantities, and the number of nodes per flux surface needs to be known. \Cref{fig:numbering_nodes} illustrates global node numbering.
 
@@ -64,10 +48,35 @@ Associated with each triangle are local indices, i.e., 1 to 3, for nodes and edg
 
 Scalar quantities like $p_{n}$ are indexed by global node number and vector quantities like $\vec{B}_{n}$ and $\vec{J}_{n}$ are indexed by global triangle number and local edge number. The latter convention involves some redundancy as it takes twice the storage that would be necessary, but it also allows for consistency checks and more straightforward implementation.
 
-\subsection{Toroidal Unperturbed Current}
+\subsection{Alternative Pressure Profiles}
+\label{sec:pres0}
+
+While the equilibrium pressure $p_{0}$ should be available from the GEQDSK file and the equilibrium current $\vec{J}_{0}$ can be computed from the equilibrium field via Ampère's law as in \cref{eq:ampere-gen}, another approach is possible. Since we have never used Ampère's law for equilibrium quantities, it is possible to choose a pressure profile and calculate $J_0^{\phi}$ to be consistent with the MHD equilibrium in \cref{eq:mhd-gen}. The latter is the \textsc{Pfirsch}--\textsc{Schlüter} current and its calculation is outlined in \cref{sec:j0phi}. The simplest approach to the pressure profile assumes a linear profile for the particle density $n$ and temperature $T$,
+\begin{align}
+  n^{(k)} &= n_{\text{edge}} + \frac{\psi^{(k)} - \psi_{\text{edge}}}{\psi_{\text{axis}} - \psi_{\text{edge}}} (n_{\text{axis}} - n_{\text{edge}}), \label{eq:dens} \\
+  T^{(k)} &= T_{\text{edge}} + \frac{\psi^{(k)} - \psi_{\text{edge}}}{\psi_{\text{axis}} - \psi_{\text{edge}}} (T_{\text{axis}} - T_{\text{edge}}), \label{eq:temp}
+\end{align}
+where $k$ refers to the index of the flux surface. The subscripts \enquote{edge} and \enquote{axis} indicate the value at the plasma edge and the magnetic axis, respectively. The configurable values are then $n_{\text{axis}}$ and $T_{\text{axis}}$ as well as $n_{\text{edge}}$ and $T_{\text{edge}}$. From these, the pressure is calculated by the ideal gas law:
+\begin{gather}
+  p_{0} = n k_{\text{B}} T. \label{eq:pres0}
+\end{gather}
+Additionally, with the formulae given above, one can also derive an expression for the equilibrium pressure gradient:
+\begin{gather}
+  p_{0}' (\psi) = n' (\psi) k_{\text{B}} T + n k_{\text{B}} T' (\psi) = \frac{(n_{\text{axis}} - n_{\text{edge}}) k_{\text{B}} T + n k_{\text{B}} (T_{\text{axis}} - T_{\text{edge}})}{\psi_{\text{axis}} - \psi_{\text{edge}}}.
+\end{gather}
+
+\subsection{Toroidal Equilibrium Current}
 \label{sec:j0phi}
 
-Since $\vec{B}_{0}$ and $p_{0}$ are directly available as input data, but $\vec{J}_{0}$ is not, the latter will be derived below from \cref{eq:mhd-gen}, the condition of divergence-freeness and symmetry considerations.
+Since $\vec{B}_{0}$ and $p_{0}$ are directly available as input data, but $\vec{J}_{0}$ is not, it may be computed by Ampère's law:
+\begin{gather}
+  J_{0 (\phi)} = \frac{c_{0}}{4 \pi} \left ( \pd[B_{0}^{R}]{Z} - \pd[B_{0}^{Z}]{R} \right ).
+\end{gather}
+This reduces to the second derivative of a spline in $\psi$, which may result in unacceptable amplification of any noise present in the input data. One solution to this problem is to smooth out input data by averaging over a given number of neighbouring data points. Alternatively, the toroidal equilibrium current may be recovered from the solution of the \textsc{Grad}--\textsc{Shafranov} equation, the necessary data being contained in the GEQDSK file. \textcite{Lao97} includes the corresponding formula, but note that compared to e.g. \textcite{Freidberg14}, a factor of $\mu_{0}$ is missing in the denominator of the second term on the right-hand side. The relation in Gaussian units is given by
+\begin{gather}
+  J_{0 (\phi)} = c_{0} R p_{0}'(\psi) + \frac{c_{0}}{4 \pi R} F F'(\psi).
+\end{gather}
+Furthermore, the \textsc{Pfirsch}--\textsc{Schlüter} current will be derived below just from $\vec{B}_{0}$ and $p_{0}$ via \cref{eq:mhd-gen}, the condition of divergence-freeness, and symmetry considerations.
 
 We take a cross-product of \cref{eq:mhd-gen} by $\vec{B}_{0}$:
 \begin{align}
@@ -144,7 +153,7 @@ It follows that
 \subsection{Safety Factor}
 \label{sec:safety_factor}
 
-Computing the safety factor from \cref{eq:q_field_line_pitch} would require the calculation of $\theta$ coordinate lines from $\vec{B}_{0}$. An equivalent definition from \textcite{dHaeseleer91} involves the toroidal flux $\psi_{\tor}$, which in our choice of coordinates is given by
+Instead of using the safety factor stored in a given GEQDSK file, it can be computed from \cref{eq:q_field_line_pitch}, but this requires the calculation of $\theta$ coordinate lines from $\vec{B}_{0}$. A simple approximation follows from an equivalent definition in \textcite{dHaeseleer91}, involving the toroidal flux $\psi_{\tor}$ which in our choice of coordinates is given by
 \begin{gather}
   \psi_{\tor} = \frac{1}{(2 \pi)^{2}} \int \diff V \, \vec{B}_{0} \cdot \grad \phi = \frac{1}{2 \pi} \int \diff R \, \diff Z \, R B_{0}^{\phi} = \frac{1}{2 \pi} \int \diff R \, \diff Z \, B_{0 (\phi)}.
 \end{gather}
@@ -152,7 +161,7 @@ Note that $\psi_{\tor} < 0$ and $\psi_{\tor}' (\rho) < 0$. The safety factor is 
 \begin{gather}
   q = \frac{\psi_{\tor}' (\rho)}{\psi_{\pol}' (\rho)} = \frac{-\psi_{\tor}' (\psi)}{-\psi_{\pol}' (\psi)} = \td[\psi_{\tor}]{\psi} = \frac{1}{2 \pi} \td{\psi} \int \diff R \, \diff Z \, B_{0 (\phi)}.
 \end{gather}
-This flux quantity can be evaluated numerically at half-grid steps by adding up $B_{0 (\phi)}$ inside the volume between two flux surfaces and dividing by the the difference in $\psi$:
+This flux quantity can be evaluated numerically at half-grid positions\footnote{Full-grid values are then interpolated via \textsc{Lagrange} polynomials as usual.} by adding up $B_{0 (\phi)}$ inside the volume between two flux surfaces and dividing by the the difference in $\psi$:
 \begin{gather}
   q \approx \frac{1}{2 \pi \symup{\Delta} \psi} \sum_{k} B_{0 (\phi)} (\Omega^{(k)}) S_{\Omega^{(k)}}, \label{eq:q-impl}
 \end{gather}
