@@ -863,11 +863,10 @@ contains
   !> #magdif_conf::t_min.
   subroutine init_flux_variables
     use magdif_config, only: nflux
-    integer :: kf, kw
+    integer :: kf
 
     ! initialize fluxvar with equidistant psi values
-    call fluxvar%init(4, fs%psi(0) + [(dble(kw - 1) / dble(equil%nw - 1) * &
-         (fs%psi(nflux) - fs%psi(0)), kw = 1, equil%nw)])
+    call fluxvar%init(4, equil%psi_eqd)
 
     call compute_pres_prof
     call compute_safety_factor
@@ -1779,25 +1778,25 @@ contains
 
     integer :: kw, kh, ktri, fid
     type(triangle_rmp) :: tri
-    complex(dp) :: comp_r, comp_z, comp_phi
-    real(dp) :: r, z
+    complex(dp) :: comp_R, comp_Z, comp_phi
+    real(dp) :: R, Z
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
     do kw = 1, equil%nw
        do kh = 1, equil%nh
-          r = equil%rleft + dble(kw - 1) / dble(equil%nw - 1) * equil%rdim
-          z = equil%zmid + (kh - 0.5d0 * (equil%nw + 1)) / dble(equil%nh - 1) * equil%zdim
-          ktri = point_location(r, z)
+          R = equil%R_eqd(kw)
+          Z = equil%Z_eqd(kh)
+          ktri = point_location(R, Z)
           if (ktri > kt_low(1) .and. ktri <= kt_low(nflux + 1)) then
              tri = mesh_element_rmp(ktri)
-             call interp_RT0(ktri, pol_flux, r, z, comp_r, comp_z)
+             call interp_RT0(ktri, pol_flux, R, Z, comp_R, comp_Z)
              comp_phi = tor_comp(ktri)
           else
-             comp_r = 0d0
-             comp_z = 0d0
+             comp_R = 0d0
+             comp_Z = 0d0
              comp_phi = 0d0
           end if
-          write (fid, '(i6, 12(1x, es24.16e3))') ktri, r, z, comp_r, comp_z, comp_phi
+          write (fid, '(i6, 12(1x, es24.16e3))') ktri, R, Z, comp_R, comp_Z, comp_phi
        end do
     end do
     close(fid)
