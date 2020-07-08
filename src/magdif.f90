@@ -1112,47 +1112,40 @@ contains
     use constants, only: pi  ! orbit_mod.f90
     use magdif_config, only: nflux, longlines
     use magdif_util, only: clight
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp
-    integer :: kf, kt, ktri, fid_amp, fid_gs, fid_prof
-    real(dp) :: r, z, n_r, n_z, cmp_amp, cmp_gs, Jr, Jp, Jz
-    real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-    type(triangle_rmp) :: tri
+    integer :: kf, kt, fid_amp, fid_gs, fid_prof
+    real(dp) :: cmp_gradp, cmp_amp, cmp_gs, theta, R, Z, dum, B0_R, B0_phi, B0_Z, &
+         dB0R_dZ, dB0phi_dR, dB0phi_dZ, dB0Z_dR, J0_R, J0_phi, J0_Z
 
     open(newunit = fid_prof, file = 'cmp_prof.dat', recl = longlines, status = 'replace')
     open(newunit = fid_amp, file = 'j0_amp.dat', recl = longlines, status = 'replace')
     open(newunit = fid_gs, file = 'j0_gs.dat', recl = longlines, status = 'replace')
     do kf = 1, nflux
-       cmp_amp = 0d0
-       cmp_gs = 0d0
        do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
-          tri = mesh_element_rmp(ktri)
-          call radially_outward_normal(ktri, n_r, n_z)
-          r = tri%r_Omega
-          z = tri%z_Omega
-          call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          dBpdR = dBpdR + fs_half%FdF_dpsi(kf) / fs_half%F(kf) * Bz
-          dBpdZ = -fs_half%FdF_dpsi(kf) / fs_half%F(kf) * Br
-          Jr = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * &
-               B0r_Omega(ktri)
-          Jz = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * &
-               B0z_Omega(ktri)
-          Jp = clight * (fs_half%dp_dpsi(kf) * r + 0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
-          write (fid_gs, '(3(1x, es24.16e3))') Jr, Jp, Jz
-          cmp_gs = cmp_gs + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
-               (n_r**2 + n_z**2) / (fs%psi(kf) - fs%psi(kf-1)) * 2d0 * tri%area / clight
-          Jr = 0.25d0 / pi * clight * (-dBpdZ)
-          Jp = 0.25d0 / pi * clight * (dBrdZ - dBzdR)
-          Jz = 0.25d0 / pi * clight * (dBpdR + Bp / r)
-          write (fid_amp, '(3(1x, es24.16e3))') Jr, Jp, Jz
-          cmp_amp = cmp_amp + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
-               (n_r**2 + n_z**2) / (fs%psi(kf) - fs%psi(kf-1)) * 2d0 * tri%area / clight
+          theta = (dble(kt) - 0.5d0) / dble(kt_max(kf)) * 2d0 * pi
+          ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
+          call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), &
+               theta, dum, dum, dum, dum, dum, R, dum, dum, Z, dum, dum)
+          call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dB0R_dZ, dB0phi_dR, &
+               dum, dB0phi_dZ, dB0Z_dR, dum, dum)
+          ! left-hand side of iMHD force balance
+          cmp_gradp = fs_half%dp_dpsi(kf) * hypot(R * B0_Z, -R * B0_R)
+          ! current density via Grad-Shafranov equation
+          J0_R = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * B0_R
+          J0_Z = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * B0_Z
+          J0_phi = clight * (fs_half%dp_dpsi(kf) * R + &
+               0.25d0 / pi * fs_half%FdF_dpsi(kf) / R)
+          write (fid_gs, '(3(1x, es24.16e3))') J0_R, J0_phi, J0_Z
+          cmp_gs = norm2([J0_phi * B0_Z - J0_Z * B0_phi, J0_Z * B0_R - J0_R * B0_Z, &
+               J0_R * B0_phi - J0_phi * B0_R]) / clight
+          ! current density via Ampere's equation
+          J0_R = 0.25d0 / pi * clight * (-dB0phi_dZ)
+          J0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+          J0_Z = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
+          write (fid_amp, '(3(1x, es24.16e3))') J0_R, J0_phi, J0_Z
+          cmp_amp = norm2([J0_phi * B0_Z - J0_Z * B0_phi, J0_Z * B0_R - J0_R * B0_Z, &
+               J0_R * B0_phi - J0_phi * B0_R]) / clight
+          write (fid_prof, '(3(1x, es24.16e3))') cmp_gradp, cmp_amp, cmp_gs
        end do
-       cmp_amp = cmp_amp / kt_max(kf)
-       cmp_gs = cmp_gs / kt_max(kf)
-       write (fid_prof, '(2(1x, es24.16e3))') cmp_amp, cmp_gs
     end do
     close(fid_prof)
     close(fid_amp)
@@ -1625,23 +1618,6 @@ contains
     real(dp) :: metric_det
     metric_det = equil%cocos%sgn_dpsi * fs_half%q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
   end function jacobian
-
-  subroutine radially_outward_normal(ktri, n_r, n_z)
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
-    integer, intent(in) :: ktri
-    real(dp), intent(out) :: n_r
-    real(dp), intent(out) :: n_z
-    type(triangle_rmp) :: tri
-
-    tri = mesh_element_rmp(ktri)
-    if (tri%orient) then
-       n_r = mesh_point(tri%lf(2))%zcoord - mesh_point(tri%lf(1))%zcoord
-       n_z = mesh_point(tri%lf(1))%rcoord - mesh_point(tri%lf(2))%rcoord
-    else
-       n_r = mesh_point(tri%lf(1))%zcoord - mesh_point(tri%lf(2))%zcoord
-       n_z = mesh_point(tri%lf(2))%rcoord - mesh_point(tri%lf(1))%rcoord
-    end if
-  end subroutine radially_outward_normal
 
   subroutine write_vector_plot(pol_flux, tor_comp, outfile)
     use magdif_config, only: nflux, nonres, longlines
