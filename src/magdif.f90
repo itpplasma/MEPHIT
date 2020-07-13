@@ -796,6 +796,7 @@ contains
     type(flux_func) :: psi_interpolator
     real(dp), dimension(nflux) :: abs_err
 
+    qsaf = sign(qsaf, dble(equil%cocos%sgn_q))  ! also affects magdata_in_symfluxcoord_ext
     select case (q_prof)
     case (q_prof_flux)
        fs_half%q = 0d0
@@ -1113,7 +1114,7 @@ contains
     use magdif_util, only: clight
     integer :: kf, kt, fid_amp, fid_gs, fid_prof
     real(dp) :: cmp_gradp, cmp_amp, cmp_gs, theta, R, Z, dum, B0_R, B0_phi, B0_Z, &
-         dB0R_dZ, dB0phi_dR, dB0phi_dZ, dB0Z_dR, J0_R, J0_phi, J0_Z
+         dB0R_dZ, dB0phi_dR, dB0phi_dZ, dB0Z_dR, J0_R, J0_phi, J0_Z, grad_psi(3)
 
     open(newunit = fid_prof, file = 'cmp_prof.dat', recl = longlines, status = 'replace')
     open(newunit = fid_amp, file = 'j0_amp.dat', recl = longlines, status = 'replace')
@@ -1127,22 +1128,24 @@ contains
           call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dB0R_dZ, dB0phi_dR, &
                dum, dB0phi_dZ, dB0Z_dR, dum, dum)
           ! left-hand side of iMHD force balance
-          cmp_gradp = fs_half%dp_dpsi(kf) * hypot(R * B0_Z, -R * B0_R)
+          grad_psi = [R * B0_Z, 0d0, -R * B0_R]
+          cmp_gradp = fs_half%dp_dpsi(kf) * dot_product(grad_psi, grad_psi) / &
+               norm2(grad_psi)
           ! current density via Grad-Shafranov equation
           J0_R = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * B0_R
           J0_Z = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * B0_Z
           J0_phi = clight * (fs_half%dp_dpsi(kf) * R + &
                0.25d0 / pi * fs_half%FdF_dpsi(kf) / R)
           write (fid_gs, '(3(1x, es24.16e3))') J0_R, J0_phi, J0_Z
-          cmp_gs = norm2([J0_phi * B0_Z - J0_Z * B0_phi, J0_Z * B0_R - J0_R * B0_Z, &
-               J0_R * B0_phi - J0_phi * B0_R]) / clight
+          cmp_gs = dot_product([J0_phi * B0_Z - J0_Z * B0_phi, J0_Z * B0_R - J0_R * B0_Z, &
+               J0_R * B0_phi - J0_phi * B0_R], grad_psi) / norm2(grad_psi) / clight
           ! current density via Ampere's equation
           J0_R = 0.25d0 / pi * clight * (-dB0phi_dZ)
           J0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
           J0_Z = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
           write (fid_amp, '(3(1x, es24.16e3))') J0_R, J0_phi, J0_Z
-          cmp_amp = norm2([J0_phi * B0_Z - J0_Z * B0_phi, J0_Z * B0_R - J0_R * B0_Z, &
-               J0_R * B0_phi - J0_phi * B0_R]) / clight
+          cmp_amp = dot_product([J0_phi * B0_Z - J0_Z * B0_phi, J0_Z * B0_R - J0_R * B0_Z, &
+               J0_R * B0_phi - J0_phi * B0_R], grad_psi) / norm2(grad_psi) / clight
           write (fid_prof, '(3(1x, es24.16e3))') cmp_gradp, cmp_amp, cmp_gs
        end do
     end do
@@ -1963,7 +1966,7 @@ contains
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: ntheta
     use magdif_config, only: n, additions, kilca_pol_mode, longlines, decorate_filename, &
-         deletions, nflux
+         deletions, nflux, kilca_scale_factor
     use magdif_util, only: imun, linspace, bent_cyl2straight_cyl
     integer, intent(in) :: rad_resolution
     integer :: kf_min, kf_max, krad, kt, ktri, fid_jpar
@@ -1975,6 +1978,7 @@ contains
     complex(dp), dimension(rad_resolution) :: jmn_par_neg, jmn_par_pos, &
          part_int_neg, part_int_pos, bndry_neg, bndry_pos
 
+    if (kilca_scale_factor /= 0) return
     kf_min = res_ind(abs(kilca_pol_mode)) - additions(abs(kilca_pol_mode)) &
          - deletions(abs(kilca_pol_mode))
     if (kf_min < 1) kf_min = 1
