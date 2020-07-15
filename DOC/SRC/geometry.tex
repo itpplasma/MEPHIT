@@ -82,9 +82,9 @@ Here, $\varepsilon_{ijk}$ is the \textsc{Levi}--\textsc{Cività} symbol. On occa
 \end{gather}
 Here, $\hat{\vec{B}}$ denotes the unit vector of $\vec{B}$, but in the special case of the magnetic field, $\vec{h}$ may be used as well.
 
-With these conventions set forth, we can define the necessary coordinate systems. We use two different right-handed coordinate systems, one cylindrical and one pseudotoroidal. As cylindrical coordinates we use $(R, \phi, Z)$ with $\phi$ running counter-clockwise as seen from above, so
+With these conventions set forth, we can define the necessary coordinate systems. We use two different right-handed coordinate systems, one cylindrical and one pseudotoroidal. As cylindrical coordinates we use $(R, \phi, Z)$, where $R$ is oriented along the major radius $R_{0}$ and points outwards, $Z$ is oriented along the axis of symmetry and points upwards, and $\phi$ runs counter-clockwise as seen from above. The relation to Cartesian coordinates $(X, Y, Z)$ then reads
 \begin{gather}
-  x = R \cos \phi, \quad y = R \sin \phi, \quad z = Z.
+  X = R \cos \phi, \quad Y = R \sin \phi, \quad Z = Z.
 \end{gather}
 These coordinates are used in computations and for meshes. They are orthogonal, as can be seen from the metric tensor, which is given by
 \begin{gather}
@@ -96,7 +96,7 @@ These coordinates are used in computations and for meshes. They are orthogonal, 
 \end{gather}
 In general curvilinear coordinates, different basis vectors and vector components can have different physical dimensions depending on the coordinates used. Especially when dealing with numerical data, it would be desirable to use a representation with the \enquote{right} units and a normalized basis. In the given cylindrical coordinates, $\vec{e}_{R}$ and $\vec{e}_{Z}$ are normalized and equal to $\vec{e}^{R}$ and $\vec{e}^{Z}$ respectively, as are the corresponding components. In Cartesian coordinates, the basis vectors in toroidal direction are given by
 \begin{gather}
-  \vec{e}_{\phi} = R \cos \phi \, \vec{e}_{x} + R \sin \phi \, \vec{e}_{y}, \quad \vec{e}^{\phi} = \frac{1}{R} \cos \phi \, \vec{e}_{x} + \frac{1}{R} \sin \phi \, \vec{e}_{y}.
+  \vec{e}_{\phi} = R \cos \phi \, \vec{e}_{X} + R \sin \phi \, \vec{e}_{Y}, \quad \vec{e}^{\phi} = \frac{1}{R} \cos \phi \, \vec{e}_{X} + \frac{1}{R} \sin \phi \, \vec{e}_{Y}.
 \end{gather}
 These point in the same direction and are easily normalized. Taking into account these dimensions of the basis vectors, we can write the physical toroidal component as
 \begin{gather}
@@ -104,39 +104,59 @@ These point in the same direction and are easily normalized. Taking into account
 \end{gather}
 where the parentheses signify that it is the physical component and not the covariant component. Note that \cref{eq:physical_phi} is not necessarily true in other coordinate systems using the $\phi$ coordinate because $\vec{e}^{\phi}$ and $\vec{e}_{\phi}$ might not point in the same direction.
 
-In regards to this coordinate system, we can characterize the experimental setup. When viewing the poloidal plane, $B_{0 (\phi)}$ points in the negative $\phi$ direction, the plasma current $I_{\text{p}}$ points in the positive $\phi$ direction and the poloidal field $\vec{B}_{0}^{\pol}$ is going in the clockwise direction. Poloidal-toroidal decomposition of the equilibrium field $\vec{B}_{0}$ then yields the representation
+The topology of nested flux surfaces described by the \textsc{Grad}--\textsc{Shafranov} equation suggest the use of a distorted pseudotoroidal\footnote{Pseudotoroidal coordinates result from a rotation of an excentric polar coordinate system and contrasts with toroidal coordinates which result from the rotation of a bipolar coordinate system.} coordinate system as a second set of coordinates. For \emph{symmetry flux coordinates}, we keep the toroidal angle $\phi$, but the poloidal plane is spanned by a pseudoradial \emph{flux surface label} $\rho$ originating from the magnetic axis and a poloidal angle $\theta$. $\rho$ and $\theta$ are chosen so that magnetic field lines are straight in these coordinates, requiring the solution of a \emph{magnetic differential equation} involving $\vec{B}_{0}$. As a consequence, $\theta$ is not a geometric angle by itself, but there is a one-to-one correspondence with the poloidal angle in an elementary geometric sense, $\vartheta$. On the other hand, $\rho$ can be any flux surface quantity that is strictly monotonous in the radial direction, reflecting the usage by \textcite{dHaeseleer91}. A common choice is to use $\psi$ as the flux surface label, but see below for some caveats that apply.
+
+\textcite{Sauter13} present an overview of different choices of coordinate systems along with a conversion scheme between these, a classification (the COCOS index), and a procedure to check the consistency. We shall now use this convention to characterize our approach. We have already fixed $(R, \phi, Z)$ to be right-handed, i.e. counter-clockwise $\phi$, which results in an odd-numbered COCOS index. This is consistent with the most common file format for equilibrium data (GEQDSK, see the specification by \textcite{Lao97} and \cref{sec:inputs} for more details), and notably different from the derivation of flux symmetry coordinates by \textcite{dHaeseleer91}, where the toroidal angle $\zeta = \frac{\pi}{2} - \phi$ is used instead. On the other hand, we follow the latter in having $\theta$ counter-clockwise in the poloidal plane when viewed in the direction of increasing $\phi$. This way, $(\rho, \phi, \theta)$ constitutes a right-handed system, and the COCOS index is narrowed down to one of 3, 5, 13, or 15.
+
+With the form of the \textsc{Grad}--\textsc{Shafranov} equation given in \cref{eq:grad-shafranov}, $\psi$ is the normalized \emph{disc} poloidal flux, i.e.,
+\begin{gather}
+  \psi = \frac{1}{2 \pi} \Psi_{\pol} = \frac{1}{2 \pi} \int \vec{B}_{0} \cdot \diff \vec{S}, \label{eq:psi}
+\end{gather}
+where $\vec{S}$ is the disc that at a point of evaluation $(R_{S}, Z_{S})$ is given by $R \leq R_{S}, Z = Z_{S}$. The orientation of $\vec{S}$ fixes the sign\footnote{Since $\vec{B}_{0}$ is not defined outside the plasma volume and only $\grad \psi$ enters calculations, $\psi$ is defined up to a constant and thus could be shifted to change sign. However, the sign of $\grad \psi$ is fixed.} of $\psi$. The division by $2 \pi$ is reflected in the specification by \textcite{Lao97}, where the unit of flux is given as \si{\weber\per\radian}, and further limits us to a COCOS index 3 or 5. When using $\Psi_{\pol}$ without this normalization, \cref{eq:grad-shafranov} would have to include a factor of $(2 \pi)^{2}$ on the right-hand side. In fact, this is the only way to infer to which convention a given set of values for $\psi$, $p'(\psi)$, and $FF'(\psi)$ adheres; this is further discussed in \cref{sec:inputs}.
+
+Now, the equilibrium field $\vec{B}_{0}$ can be recovered from the solution of the \textsc{Grad}--\textsc{Shafranov} equation. Poloidal-toroidal decomposition gives
 \begin{gather}
   \vec{B}_{0} = \vec{B}_{0}^{\pol} + \vec{B}_{0}^{\tor}, \label{eq:B_pol_tor}
 \end{gather}
 where 
 \begin{align}
   \vec{B}_{0}^{\pol} &= \grad \psi \times \grad \phi, \label{eq:B_pol} \\
-  \vec{B}_{0}^{\tor} &= B_{0 \phi} \grad \phi. \label{eq:B_tor}
+  \vec{B}_{0}^{\tor} &= F \grad \phi = B_{0 \phi} \grad \phi, \label{eq:B_tor}
 \end{align}
-Here, $\psi$ is the normalized \emph{disc} poloidal flux, i.e.
-\begin{gather}
-  \psi = \frac{1}{2 \pi} \Psi_{\pol} = \frac{1}{2 \pi} \int \vec{B}_{0} \cdot \diff \vec{S}, \label{eq:psi}
-\end{gather}
-where $\vec{S}$ is the disc that at a point of evaluation $(R_{S}, Z_{S})$ is given by $R \leq R_{S}, Z = Z_{S}$. The orientation of $\vec{S}$ fixes the sign\footnote{Since $\vec{B}_{0}$ is not defined outside the plasma volume and only $\grad \psi$ enters calculations, $\psi$ is defined up to a constant and thus could be shifted to change sign. However, the sign of $\grad \psi$ is fixed.} of $\psi$. Here, $\psi$ is expected to increase towards the magnetic axis -- $\psi_{\text{min}}$ is located at the outermost flux surface and $\psi_{\text{max}}$ is located at the magnetic axis. This leads to the following contravariant components for $\vec{B}_{0}^{\pol}$ in cylindrical coordinates (see also \cite{Sauter13}):
+or explicitly for cylindrical coordinates,
 \begin{align}
   B_{0}^{R} &= (\grad \psi \times \grad \phi)^{R} = -\frac{1}{R} \pd[\psi]{Z}, \label{eq:B0R} \\
-  B_{0}^{Z} &= (\grad \psi \times \grad \phi)^{Z} = \frac{1}{R} \pd[\psi]{R}. \label{eq:B0Z}
+  B_{0}^{Z} &= (\grad \psi \times \grad \phi)^{Z} = \frac{1}{R} \pd[\psi]{R}, \label{eq:B0Z}, \\
+  R B_{0}^{\phi} &= \frac{F}{R}.
 \end{align}
-Note that the toroidal field coils produce a magnetic field that is roughly proportional to $\frac{1}{R}$, so $B_{0 \phi}$ varies only slightly over the entire plasma volume. More specifically, the flux surface quantity
+The choice of sign in \cref{eq:B_pol} resolves the last ambiguity and yields COCOS index 3. For a consistent representation of the actual $\vec{B}$, the sign of $\psi'(\rho)$ and $\diff \vec{S}$ in \cref{eq:psi} has to be determined from additional data of the experimental setup. Specifically, the sign of the toroidal equilibrium field $B_{0}^{\tor}$ and the toroidal plasma current $I^{\tor}$ with regard to $\phi$ need to be known. With all other signs fixed as described up to now, $\psi'(\rho)$ will be negative for positive $I^{\tor}$ and vice versa. Thus, while it is common to use $\psi$ as a flux surface label, we keep the more intuitive notation of \textcite{dHaeseleer91} where $\rho$ is increasing towards the outside of the torus, i.e.,
 \begin{gather}
-  F(\psi) = B_{0 \phi} \label{eq:F}
+  \rho = \sigma_{\psi'} \psi,
 \end{gather}
-appears in the \textsc{Grad}--\textsc{Shafranov} equation, so from a given solution, $B_{0 \phi}$ can be reconstructed.
+with either $\sigma_{\psi'} = +1$ or $\sigma_{\psi'} = -1$. This should be contrasted with the use of the normalized effective radius defined as
+\begin{gather}
+  \hat{\rho}_{\pol} = \sqrt{\hat{\psi}},
+\end{gather}
+where the normalized poloidal flux is given by
+\begin{gather}
+  \hat{\psi} = \frac{\psi - \psi_{\text{axis}}}{\psi_{\text{edge}} - \psi_{\text{axis}}},
+\end{gather}
+as well as the minor radius $r$ defined as the geometrical distance from the magnetic axis.
 
-The second set of coordinates represent a distorted pseudotoroidal system used as symmetry flux coordinates for derivations in \cref{sec:j0phi,sec:nonres}. We keep the toroidal angle $\phi$, but the poloidal plane is spanned by a pseudoradial \emph{flux surface label} $\rho$ centered at the magnetic axis and a poloidal angle $\theta$. $\rho$ and $\theta$ are chosen so that magnetic field lines are straight in these coordinates, requiring the solution of a \emph{magnetic differential equation} involving $\vec{B}_{0}$. As a consequence, $\theta$ is not a geometric angle by itself, but there is a one-to-one correspondence with the poloidal angle in an elementary geometric sense. On the other hand, $\rho$ can be any quantity that is constant on a flux surface and strictly monotonous in the radial direction. While it is common to use $\psi$ as the flux surface label, for derivations, we keep the more intuitive notation of \textcite{dHaeseleer91} where $\rho$ is increasing towards the outside of the torus, i.e., $\rho = -\psi$. With $\theta$ pointing in the counter-clockwise direction, $(\rho, \phi, \theta)$ constitutes a right-hand system. While this deviates from \textcite{dHaeseleer91}, where $\zeta = \frac{\pi}{2} - \phi$ is used instead, it is consistent with the COCOS~3 convention of \textcite{Sauter13}, where an overview of possible combinations of coordinates are considered along with conversion between these choices and a procedure to check the consistency. As a consequence, the safety factor $q$ is positive, and one of a few equivalent definitions is
+By the choices made above, we have committed to fixed coordinates, especially in regard to the signs of $\psi$, $\theta$, and $\phi$. On one hand, we have fixed directions and signs for the \textsc{Fourier} components of $\phi$ and $\theta$, on the other hand we have to keep track of the sign $\sigma_{\psi'}$ in derivations. Furthermore, we opt to convert any input data to this convention as to avoid case distinctions later on; this procedure is outlined in \cref{sec:inputs}.
+
+As a consequence of the above, the safety factor $q$ can be positive or negative, and one of a few equivalent definitions is
 \begin{gather}
   q = \frac{B_{0}^{\phi}}{B_{0}^{\theta}}. \label{eq:q_field_line_pitch}
 \end{gather}
-The sign of $q$ describes the sign of the helicity in $(\phi, \theta)$ and can be explicitly computed as described in \cref{sec:safety_factor}. The Jacobian of symmetry flux coordinates $(\rho, \phi, \theta)$ is
+The sign of $q$ describes the sign of the helicity in $(\phi, \theta)$ and can be explicitly computed as described in \cref{sec:safety_factor}. The Jacobian of symmetry flux coordinates $(\rho, \phi, \theta)$ can be derived from its inverse,
 \begin{gather}
-  \sqrt{g} = \frac{-1}{B_{0}^{\theta}} = -\frac{q}{B_{0}^{\phi}} = -\frac{q R^{2}}{B_{0 \phi}}. \label{eq:flux_metric}
+  \sqrt{g^{-1}} = (\grad \rho \times \grad \phi) \cdot \grad \theta = \sigma_{\psi'} (\grad \psi \times \grad \phi) \cdot \grad \theta = \sigma_{\psi'} \vec{B}_{0}^{\pol} \cdot \grad \theta = \sigma_{\psi'} B_{0}^{\theta},
 \end{gather}
-The change of sign in comparison to \textcite{dHaeseleer91} is due to the reversed toroidal angle. This way, $\sqrt{g}$ is still positive.
+yielding
+\begin{gather}
+  \sqrt{g} = \frac{\sigma_{\psi'}}{B_{0}^{\theta}} = \sigma_{\psi'} \frac{q}{B_{0}^{\phi}} = \sigma_{\psi'} \frac{q R^{2}}{B_{0 \phi}}. \label{eq:flux_metric}
+\end{gather}
 
 For the sake of completeness and since it will be used extensively in \cref{sec:linmhd}, the $\nabla$ operator shall be given explicitly for the gradient and divergence in cylindrical coordinates:
 \begin{gather}
