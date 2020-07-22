@@ -25,17 +25,18 @@ dyn_per_cm3_to_N_per_m3 = 10.0
 c_cgs = 2.9979246e+10
 statA_per_cm2_to_A_per_m2 = 1.0e+05 / c_cgs
 
-# work_dir = '/home/patrick/git/NEO-EQ/run/ED6_30835_3200'
+work_dir = '/home/patrick/git/NEO-EQ/run/ED6_30835_3200'
 # work_dir = '/home/patrick/itp-temp/NEO-EQ/run/30835_3200'
-work_dir = '/home/patrick/git/NEO-EQ/run/geomint_TCFP'
+# work_dir = '/home/patrick/git/NEO-EQ/run/geomint_TCFP'
+
 data_gs = np.loadtxt(path.join(work_dir, 'j0_gs.dat'))
 data_amp = np.loadtxt(path.join(work_dir, 'j0_amp.dat'))
 data_prof = np.loadtxt(path.join(work_dir, 'cmp_prof.dat'))
 
 nflux = 91
 kt_max = np.empty((nflux + 1), dtype=int)
-kt_max[0] = 300
-kt_max[1:] = 600
+kt_max[0] = 200
+kt_max[1:] = 400
 kt_low = np.empty((nflux + 1), dtype=int)
 kt_low[0] = 0
 kt_low[1:] = np.cumsum(kt_max[:-1]) + kt_low[0]

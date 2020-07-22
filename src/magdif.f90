@@ -796,7 +796,6 @@ contains
     type(flux_func) :: psi_interpolator
     real(dp), dimension(nflux) :: abs_err
 
-    qsaf = sign(qsaf, dble(equil%cocos%sgn_q))  ! also affects magdata_in_symfluxcoord_ext
     select case (q_prof)
     case (q_prof_flux)
        fs_half%q = 0d0
@@ -1176,7 +1175,8 @@ contains
     end do
     open(newunit = fid, file = 'check_q_step.dat', status = 'replace')
     do kf = 1, nflux
-       write (fid, '(2(1x, es24.16e3))') fs_half%rad(kf), q(kf)
+       write (fid, '(3(1x, es24.16e3))') (fs_half%psi(kf) - fs%psi(0)) / &
+            (fs%psi(nflux) - fs%psi(0)), fs_half%rad(kf), q(kf)
     end do
     close(fid)
     deallocate(q)
@@ -1187,7 +1187,7 @@ contains
          kf = 1, nlabel)]
     open(newunit = fid, file = 'check_q_cont.dat', status = 'replace')
     do kf = 1, nlabel
-       write (fid, '(3(1x, es24.16e3))') rbeg(kf), qsaf(kf), q(kf)
+       write (fid, '(4(1x, es24.16e3))') psisurf(kf), rbeg(kf), qsaf(kf), q(kf)
     end do
     close(fid)
     deallocate(q)
@@ -1960,6 +1960,7 @@ contains
        close(fid_furth)
     end if
   end subroutine write_poloidal_modes
+
 
   !> calculate parallel current (density) on a finer grid
   subroutine write_Ipar(rad_resolution)

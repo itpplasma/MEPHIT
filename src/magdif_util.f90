@@ -461,8 +461,10 @@ contains
     use constants, only: pi  ! src/orbit_mod.f90
     use magdif_config, only: log_msg, log_write, log_warn, log_info
     class(g_eqdsk), intent(inout) :: this
+    integer, parameter :: ignore = 3
     type(flux_func) :: psi_interpolator
     real(dp) :: deriv_eqd(this%nw), factor
+    logical :: mask(this%nw)
     integer :: k
 
     if (this%cocos%sgn_Btor /= this%cocos%sgn_F) then
@@ -479,7 +481,11 @@ contains
     call psi_interpolator%init(4, this%psi_eqd)
     deriv_eqd(:) = [(psi_interpolator%interp(this%pres, this%psi_eqd(k), .true.), &
          k = 1, this%nw)]
-    factor = sum(deriv_eqd / this%pprime) / dble(this%nw)
+    ! ignore a few possibly unreliable values on both ends of the interval
+    mask = .true.
+    mask(1:1+ignore) = .false.
+    mask(this%nw-ignore:this%nw) = .false.
+    factor = sum(deriv_eqd / this%pprime, mask = mask) / dble(count(mask))
     if (abs(factor) >= sqrt(2d0 * pi)) then
        write (log_msg, unscaled_fmt) 'PPRIME'
        if (log_warn) call log_write
@@ -496,7 +502,7 @@ contains
     end if
     deriv_eqd(:) = [(psi_interpolator%interp(this%fpol, this%psi_eqd(k), .true.), &
          k = 1, this%nw)] * this%fpol
-    factor = sum(deriv_eqd / this%ffprim) / dble(this%nw)
+    factor = sum(deriv_eqd / this%ffprim, mask = mask) / dble(count(mask))
     if (abs(factor) >= sqrt(2d0 * pi)) then
        write (log_msg, unscaled_fmt) 'FFPRIM'
        if (log_warn) call log_write
@@ -526,8 +532,8 @@ contains
     ! find evaluation point to the upper right of the magnetic axis
     call binsearch(this%R_eqd, lbound(this%R_eqd, 1), this%rmaxis, kw)
     call binsearch(this%Z_eqd, lbound(this%Z_eqd, 1), this%zmaxis, kh)
-    kw = kw + 1
-    kh = kh + 1
+    kw = kw + 2
+    kh = kh + 2
     psi = this%psirz(kw, kh)
     ! evaluate flux functions on RHS of GS equation
     call psi_interpolator%init(4, this%psi_eqd)
@@ -544,17 +550,24 @@ contains
     if (log_info) call log_write
   end function g_eqdsk_grad_shafranov_normalization
 
-  function sign_array(array, name)
+  function sign_array(array, name, most)
     use magdif_config, only: log_msg, log_write, log_warn
     real(dp), intent(in), dimension(:) :: array
     character(len = *), intent(in) :: name
+    logical, intent(in), optional :: most
+    logical :: strict
     integer :: sign_array, pos, neg, all
+
+    strict = .true.
+    if (present(most)) then
+       strict = .not. most
+    end if
     pos = count(array > 0d0)
     neg = count(array < 0d0)
     all = size(array)
-    if (all == pos) then
+    if ((strict .and. all == pos) .or. (.not. strict .and. pos > neg)) then
        sign_array = +1
-    elseif (all == neg) then
+    elseif ((strict .and. all == neg) .or. (.not. strict .and. neg > pos)) then
        sign_array = -1
     else
        sign_array = 0
@@ -574,7 +587,9 @@ contains
     this%cocos%sgn_Btor = sign_array([this%bcentr], 'BCENTR')
     this%cocos%sgn_Itor = sign_array([this%current], 'CURRENT')
     this%cocos%sgn_F = sign_array(this%fpol, 'FPOL')
-    this%cocos%sgn_q = sign_array(this%qpsi, 'QPSI')
+    ! q is often unreliable in gfiles and its sign is only necessary for exact
+    ! classification, not for calculations where the poloidal direction is fixed anyway
+    this%cocos%sgn_q = sign_array(this%qpsi, 'QPSI', .true.)
     this%cocos%sgn_Bpol = this%cocos%sgn_dpsi * this%cocos%sgn_Itor
     this%cocos%sgn_pol = this%cocos%sgn_q * this%cocos%sgn_Itor * this%cocos%sgn_Btor
     if (this%cocos%sgn_Bpol == +1) then
