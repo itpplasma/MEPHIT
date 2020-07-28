@@ -267,7 +267,8 @@ contains
     use mesh_mod, only: ntri
     use magdif_config, only: n, runmode, runmode_precon, nritz, niter, max_eig_out, &
          rel_err_Bn, log_msg, log_info, log_err, log_write, presn_file, currn_file, &
-         Bn_file, Bn_diff_file, eigvec_file, decorate_filename, cmplx_fmt
+         Bn_file, Bn_diff_file, eigvec_file, decorate_filename, cmplx_fmt, &
+         kilca_scale_factor
 
     logical :: preconditioned
     integer :: kiter, ndim, i, j, info
@@ -381,7 +382,10 @@ contains
     call write_poloidal_modes(Bnflux_vac, Bnphi_vac, 'Bmn_vac.dat')
     call write_poloidal_modes(Bnflux - Bnflux_vac, Bnphi - Bnphi_vac, 'Bmn_plas.dat')
     call write_poloidal_modes(jnflux, jnphi, 'currmn.dat')
-    call write_Ipar(2048)
+    call write_Ipar_symfluxcoord(2048)
+    if (kilca_scale_factor /= 0) then
+       call write_Ipar(2048)
+    end if
 
     if (allocated(Lr)) deallocate(Lr)
 
@@ -1592,26 +1596,43 @@ contains
     call check_redundant_edges(Bnflux, .false., 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
-  subroutine interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)
+  subroutine interp_RT0(ktri, pol_flux, R, Z, comp_R, comp_Z, &
+       comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ)
     use mesh_mod, only: knot, triangle, mesh_point, mesh_element
     integer, intent(in) :: ktri
     complex(dp), intent(in) :: pol_flux(:,:)
     real(dp), intent(in) :: r, z
-    complex(dp), intent(out) :: pol_comp_r, pol_comp_z
+    complex(dp), intent(out) :: comp_R, comp_Z
+    complex(dp), intent(out), optional :: comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ
     type(triangle) :: elem
     type(knot) :: node(3)
 
     elem = mesh_element(ktri)
     node = mesh_point(elem%i_knot(:))
     ! edge 1 lies opposite to knot 3, etc.
-    pol_comp_r = 1d0 / elem%det_3 / r * ( &
-         pol_flux(ktri, 1) * (r - node(3)%rcoord) + &
-         pol_flux(ktri, 2) * (r - node(1)%rcoord) + &
-         pol_flux(ktri, 3) * (r - node(2)%rcoord))
-    pol_comp_z = 1d0 / elem%det_3 / r * ( &
-         pol_flux(ktri, 1) * (z - node(3)%zcoord) + &
-         pol_flux(ktri, 2) * (z - node(1)%zcoord) + &
-         pol_flux(ktri, 3) * (z - node(2)%zcoord))
+    comp_R = 1d0 / elem%det_3 / R * ( &
+         pol_flux(ktri, 1) * (R - node(3)%Rcoord) + &
+         pol_flux(ktri, 2) * (R - node(1)%Rcoord) + &
+         pol_flux(ktri, 3) * (R - node(2)%Rcoord))
+    comp_Z = 1d0 / elem%det_3 / R * ( &
+         pol_flux(ktri, 1) * (Z - node(3)%Zcoord) + &
+         pol_flux(ktri, 2) * (Z - node(1)%Zcoord) + &
+         pol_flux(ktri, 3) * (Z - node(2)%Zcoord))
+    if (present(comp_R_dR)) then
+       comp_R_dR = 1d0 / elem%det_3 / R ** 2 * ( &
+            pol_flux(ktri, 1) * node(3)%Rcoord + &
+            pol_flux(ktri, 2) * node(1)%Rcoord + &
+            pol_flux(ktri, 3) * node(2)%Rcoord)
+    end if
+    if (present(comp_R_dZ)) then
+       comp_R_dZ = (0d0, 0d0)
+    end if
+    if (present(comp_Z_dR)) then
+       comp_Z_dR = -comp_Z / R
+    end if
+    if (present(comp_Z_dZ)) then
+       comp_Z_dZ = sum(pol_flux(ktri, :)) / elem%det_3 / R
+    end if
   end subroutine interp_RT0
 
   pure function jacobian(kf, kt, r) result(metric_det)
@@ -1963,6 +1984,98 @@ contains
 
 
   !> calculate parallel current (density) on a finer grid
+  subroutine write_Ipar_symfluxcoord(rad_resolution)
+    use constants, only: pi  ! orbit_mod.f90
+    use magdata_in_symfluxcoor_mod, only: ntheta, raxis, zaxis, psipol_max
+    use field_line_integration_mod, only: theta_axis
+    use magdif_config, only: n, additions, longlines, deletions, nflux, kilca_scale_factor
+    use magdif_util, only: imun, clight, linspace, interp_psi_pol
+    integer, intent(in) :: rad_resolution
+    character(len = *), parameter :: fname_fmt = '("currn_par_", i0, ".dat")'
+    character(len = 1024) :: fname
+    integer :: m, kf_min, kf_max, krad, kt, ktri, fid_jpar
+    real(dp) :: theta, q, dq_dpsi, sqrt_g, R, Z, dR_dpsi, dZ_dPsi, B0_R, B0_phi, B0_Z, &
+         dB0R_dR, dB0R_dZ, dB0phi_dR, dB0phi_dZ, dB0Z_dR, dB0Z_dZ, B0_2, dum, &
+         dB0phi_dpsi
+    complex(dp) :: jn_R, jn_Z, jn_par, Bn_R, Bn_Z, dBnR_dR, dBnR_dZ, dBnZ_dR, dBnZ_dZ, &
+         Bn_psi, dBnpsi_dpsi, Delta_mn
+    real(dp), dimension(rad_resolution) :: rad, psi, I_char
+    complex(dp), dimension(rad_resolution) :: jmn_par_neg, jmn_par_pos, &
+         Delta_mn_neg, Delta_mn_pos
+
+    do m = m_res_min, m_res_max
+       kf_min = res_ind(m) - additions(m) - deletions(m)
+       if (kf_min < 1) kf_min = 1
+       kf_max = res_ind(m) + additions(m) + deletions(m)
+       if (kf_max > nflux) kf_max = nflux
+       rad = linspace(fs%rad(kf_min), fs%rad(kf_max), rad_resolution, 0, 0)
+       ! TODO: replace by dedicated interpolation function
+       if (kilca_scale_factor /= 0) then
+          psi = [(interp_psi_pol(raxis, zaxis + rad(krad)), krad = 1, rad_resolution)]
+       else
+          psi = [(interp_psi_pol(raxis + rad(krad) * theta_axis(1), &
+               zaxis + rad(krad) * theta_axis(2)), krad = 1, rad_resolution)]
+       end if
+       jmn_par_neg = (0d0, 0d0)
+       jmn_par_pos = (0d0, 0d0)
+       I_char = (0d0, 0d0)
+       Delta_mn_neg = (0d0, 0d0)
+       Delta_mn_pos = (0d0, 0d0)
+       write (fname, fname_fmt) m
+       open(newunit = fid_jpar, file = fname, status = 'replace', recl = longlines)
+       do krad = 1, rad_resolution
+          do kt = 1, ntheta
+             theta = 2d0 * pi * (dble(kt) - 0.5d0) / dble(ntheta)
+             ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
+             call magdata_in_symfluxcoord_ext(2, dum, psi(krad) - fs%psi(0), theta, q, &
+                  dq_dpsi, sqrt_g, dum, dum, R, dR_dpsi, dum, Z, dZ_dpsi, dum)
+             ! psi is normalized in derivatives - rescale
+             dq_dpsi = dq_dpsi / psipol_max
+             dR_dpsi = dR_dpsi / psipol_max
+             dZ_dpsi = dZ_dpsi / psipol_max
+             call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dB0R_dR, dum, dB0R_dZ, dB0phi_dR, &
+                  dum, dB0phi_dZ, dB0Z_dR, dum, dB0Z_dZ)
+             B0_2 = B0_R * B0_R + B0_Z * B0_Z + B0_phi * B0_phi
+             ktri = point_location(R, Z)
+             call interp_RT0(ktri, jnflux, R, Z, jn_R, jn_Z)
+             ! include h^phi in current density
+             jn_par = (jn_R * B0_R + jn_Z * B0_Z + jnphi(ktri) * B0_phi) * B0_phi / B0_2 &
+                  * sqrt_g / R
+             jmn_par_neg(krad) = jmn_par_neg(krad) + jn_par * exp(imun * m * theta)
+             jmn_par_pos(krad) = jmn_par_pos(krad) + jn_par * exp(-imun * m * theta)
+             ! comparison with indirect calculation (Boozer and Nuehrenberg 2006)
+             call interp_RT0(ktri, Bnflux, R, Z, Bn_R, Bn_Z, &
+                  dBnR_dR, dBnR_dZ, dBnZ_dR, dBnZ_dZ)
+             dB0phi_dpsi = (dB0phi_dR * dR_dpsi + dB0phi_dZ * dZ_dpsi) / R - &
+                  B0_phi * dR_dpsi / R ** 2
+             Bn_psi = R * (Bn_R * B0_Z - Bn_Z * B0_R)
+             dBnpsi_dpsi = dR_dpsi * (Bn_R * B0_Z - Bn_Z * B0_R) + R * ( &
+                  Bn_R * (dB0Z_dR * dR_dpsi + dB0Z_dZ * dZ_dpsi) - &
+                  Bn_Z * (dB0R_dR * dR_dpsi + dB0R_dZ * dZ_dpsi) + &
+                  (dBnR_dR * dR_dpsi + dBnR_dZ * dZ_dpsi) * B0_Z - &
+                  (dBnZ_dR * dR_dpsi + dBnZ_dZ * dZ_dpsi) * B0_R)
+             Delta_mn = dq_dpsi / q * ((Bn_psi + dBnpsi_dpsi) / B0_phi * R - &
+                  Bn_psi * dB0phi_dpsi / B0_phi ** 2 * R ** 2)
+             Delta_mn_neg(krad) = Delta_mn_neg(krad) + Delta_mn * exp(imun * m * theta)
+             Delta_mn_pos(krad) = Delta_mn_pos(krad) + Delta_mn * exp(-imun * m * theta)
+             I_char(krad) = I_char(krad) + B0_2 / &
+                  ((B0_R ** 2 + B0_Z ** 2) * q * q * R * B0_phi)
+          end do
+          jmn_par_neg(krad) = jmn_par_neg(krad) / dble(ntheta)
+          jmn_par_pos(krad) = jmn_par_pos(krad) / dble(ntheta)
+          Delta_mn_neg(krad) = Delta_mn_neg(krad) / dble(ntheta)
+          Delta_mn_pos(krad) = Delta_mn_pos(krad) / dble(ntheta)
+          I_char(krad) = dble(ntheta) * 0.5d0 * clight / I_char(krad)
+          write (fid_jpar, '(11(1x, es24.16e3))') psi(krad), rad(krad), &
+               jmn_par_neg(krad), jmn_par_pos(krad), I_char(krad), &
+               Delta_mn_neg(krad), Delta_mn_pos(krad)
+       end do
+       close(fid_jpar)
+    end do
+  end subroutine write_Ipar_symfluxcoord
+
+
+  !> calculate parallel current (density) on a finer grid
   subroutine write_Ipar(rad_resolution)
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: ntheta
@@ -1979,7 +2092,6 @@ contains
     complex(dp), dimension(rad_resolution) :: jmn_par_neg, jmn_par_pos, &
          part_int_neg, part_int_pos, bndry_neg, bndry_pos
 
-    if (kilca_scale_factor /= 0) return
     kf_min = res_ind(abs(kilca_pol_mode)) - additions(abs(kilca_pol_mode)) &
          - deletions(abs(kilca_pol_mode))
     if (kf_min < 1) kf_min = 1
