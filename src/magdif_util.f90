@@ -194,7 +194,7 @@ contains
   !> the upper diagonal and, due to periodicity, in the lower left corner. This shape
   !> results from the problems in compute_presn() and compute_currn().
   subroutine assemble_sparse(nrow, d, du, nz, irow, icol, aval)
-    use magdif_config, only: log_msg_arg_size, log_err, log_write
+    use magdif_conf, only: log
     integer, intent(in)  :: nrow
     complex(dp), intent(in)  :: d(1:)  !nrow
     complex(dp), intent(in)  :: du(1:)  !nrow
@@ -207,28 +207,28 @@ contains
     nz = 2*nrow
 
     if (nrow /= size(d)) then
-       call log_msg_arg_size('assemble_sparse', 'nrow', 'size(d)', nrow, size(d))
-       if (log_err) call log_write
+       call log%msg_arg_size('assemble_sparse', 'nrow', 'size(d)', nrow, size(d))
+       if (log%err) call log%write
        error stop
     end if
     if (nrow /= size(du)) then
-       call log_msg_arg_size('assemble_sparse', 'nrow', 'size(du)', nrow, size(du))
-       if (log_err) call log_write
+       call log%msg_arg_size('assemble_sparse', 'nrow', 'size(du)', nrow, size(du))
+       if (log%err) call log%write
        error stop
     end if
     if (nz /= size(irow)) then
-       call log_msg_arg_size('assemble_sparse', 'nz', 'size(irow)', nz, size(irow))
-       if (log_err) call log_write
+       call log%msg_arg_size('assemble_sparse', 'nz', 'size(irow)', nz, size(irow))
+       if (log%err) call log%write
        error stop
     end if
     if (nz /= size(icol)) then
-       call log_msg_arg_size('assemble_sparse', 'nz', 'size(icol)', nz, size(icol))
-       if (log_err) call log_write
+       call log%msg_arg_size('assemble_sparse', 'nz', 'size(icol)', nz, size(icol))
+       if (log%err) call log%write
        error stop
     end if
     if (nz /= size(aval)) then
-       call log_msg_arg_size('assemble_sparse', 'nz', 'size(aval)', nz, size(aval))
-       if (log_err) call log_write
+       call log%msg_arg_size('assemble_sparse', 'nz', 'size(aval)', nz, size(aval))
+       if (log%err) call log%write
        error stop
     end if
 
@@ -306,7 +306,7 @@ contains
   end subroutine binsearch
 
   subroutine gauss_legendre_unit_interval(order, points, weights)
-    use magdif_config, only: log_msg_arg_size, log_msg, log_err, log_write
+    use magdif_conf, only: log
     use fgsl, only: fgsl_size_t, fgsl_double, fgsl_int, fgsl_success, &
          fgsl_integration_glfixed_point, fgsl_integration_glfixed_table, &
          fgsl_integration_glfixed_table_alloc, fgsl_integration_glfixed_table_free
@@ -316,23 +316,23 @@ contains
     integer(fgsl_size_t) :: k
     integer(fgsl_int) :: err
     if (order /= size(points)) then
-       call log_msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(points)', &
+       call log%msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(points)', &
             order, size(points))
-       if (log_err) call log_write
+       if (log%err) call log%write
        error stop
     end if
     if (order /= size(weights)) then
-       call log_msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(weights)', &
+       call log%msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(weights)', &
             order, size(weights))
-       if (log_err) call log_write
+       if (log%err) call log%write
        error stop
     end if
     table = fgsl_integration_glfixed_table_alloc(int(order, fgsl_size_t))
     do k = 1, int(order, fgsl_size_t)
        err = fgsl_integration_glfixed_point(0d0, 1d0, k-1, points(k), weights(k), table)
        if (err /= fgsl_success) then
-          write (log_msg, '("fgsl_integration_glfixed_point returned error ", i0)') err
-          if (log_err) call log_write
+          write (log%msg, '("fgsl_integration_glfixed_point returned error ", i0)') err
+          if (log%err) call log%write
           error stop
        end if
     end do
@@ -459,7 +459,7 @@ contains
 
   subroutine g_eqdsk_check_consistency(this)
     use constants, only: pi  ! src/orbit_mod.f90
-    use magdif_config, only: log_msg, log_write, log_warn, log_info
+    use magdif_conf, only: log
     class(g_eqdsk), intent(inout) :: this
     integer, parameter :: ignore = 3
     type(flux_func) :: psi_interpolator
@@ -468,12 +468,12 @@ contains
     integer :: k
 
     if (this%cocos%sgn_Btor /= this%cocos%sgn_F) then
-       write (log_msg, incons_fmt) 'FPOL', 'BCENTR'
-       if (log_warn) call log_write
+       write (log%msg, incons_fmt) 'FPOL', 'BCENTR'
+       if (log%warn) call log%write
        ! only modify array if signs are consistent
        if (this%cocos%sgn_F /= 0) then
-          write (log_msg, invert_fmt) 'FPOL'
-          if (log_info) call log_write
+          write (log%msg, invert_fmt) 'FPOL'
+          if (log%info) call log%write
           this%fpol = -this%fpol
           this%cocos%sgn_F = -this%cocos%sgn_F
        end if
@@ -487,34 +487,34 @@ contains
     mask(this%nw-ignore:this%nw) = .false.
     factor = sum(deriv_eqd / this%pprime, mask = mask) / dble(count(mask))
     if (abs(factor) >= sqrt(2d0 * pi)) then
-       write (log_msg, unscaled_fmt) 'PPRIME'
-       if (log_warn) call log_write
-       write (log_msg, rescale_fmt) 'PPRIME'
-       if (log_info) call log_write
+       write (log%msg, unscaled_fmt) 'PPRIME'
+       if (log%warn) call log%write
+       write (log%msg, rescale_fmt) 'PPRIME'
+       if (log%info) call log%write
        this%pprime = this%pprime * (2d0 * pi)
     end if
     if (factor < 0d0) then
-       write (log_msg, incons_fmt) 'PPRIME', 'PRES/SIBRY-SIMAG'
-       if (log_warn) call log_write
-       write (log_msg, invert_fmt) 'PPRIME'
-       if (log_info) call log_write
+       write (log%msg, incons_fmt) 'PPRIME', 'PRES/SIBRY-SIMAG'
+       if (log%warn) call log%write
+       write (log%msg, invert_fmt) 'PPRIME'
+       if (log%info) call log%write
        this%pprime = -this%pprime
     end if
     deriv_eqd(:) = [(psi_interpolator%interp(this%fpol, this%psi_eqd(k), .true.), &
          k = 1, this%nw)] * this%fpol
     factor = sum(deriv_eqd / this%ffprim, mask = mask) / dble(count(mask))
     if (abs(factor) >= sqrt(2d0 * pi)) then
-       write (log_msg, unscaled_fmt) 'FFPRIM'
-       if (log_warn) call log_write
-       write (log_msg, rescale_fmt) 'FFPRIM'
-       if (log_info) call log_write
+       write (log%msg, unscaled_fmt) 'FFPRIM'
+       if (log%warn) call log%write
+       write (log%msg, rescale_fmt) 'FFPRIM'
+       if (log%info) call log%write
        this%ffprim = this%ffprim * (2d0 * pi)
     end if
     if (factor < 0d0) then
-       write (log_msg, incons_fmt) 'FFPRIM', 'FPOL/SIBRY-SIMAG'
-       if (log_warn) call log_write
-       write (log_msg, invert_fmt) 'FFPRIM'
-       if (log_info) call log_write
+       write (log%msg, incons_fmt) 'FFPRIM', 'FPOL/SIBRY-SIMAG'
+       if (log%warn) call log%write
+       write (log%msg, invert_fmt) 'FFPRIM'
+       if (log%info) call log%write
        this%ffprim = -this%ffprim
     end if
   end subroutine g_eqdsk_check_consistency
@@ -522,7 +522,7 @@ contains
   !> Estimates terms of Grad-Shafranov equation to determine sign_convention::exp_bpol.
   function g_eqdsk_grad_shafranov_normalization(this) result(gs_factor)
     use constants, only: pi  ! src/orbit_mod.f90
-    use magdif_config, only: log_msg, log_info, log_write
+    use magdif_conf, only: log
     class(g_eqdsk), intent(inout) :: this
     real(dp) :: gs_factor
     type(flux_func) :: psi_interpolator
@@ -546,12 +546,12 @@ contains
          + (this%psirz(kw + 1, kh) - 2d0 * psi + this%psirz(kw - 1, kh)) / Delta_R ** 2 &
          - (this%psirz(kw + 1, kh) - this%psirz(kw - 1, kh)) / (2d0 * Delta_R * this%R_eqd(kw))
     gs_factor = gs_lhs / gs_rhs
-    write (log_msg, '("Grad-Shafranov equation LHS / RHS: ", f19.16)') gs_factor
-    if (log_info) call log_write
+    write (log%msg, '("Grad-Shafranov equation LHS / RHS: ", f19.16)') gs_factor
+    if (log%info) call log%write
   end function g_eqdsk_grad_shafranov_normalization
 
   function sign_array(array, name, most)
-    use magdif_config, only: log_msg, log_write, log_warn
+    use magdif_conf, only: log
     real(dp), intent(in), dimension(:) :: array
     character(len = *), intent(in) :: name
     logical, intent(in), optional :: most
@@ -571,14 +571,14 @@ contains
        sign_array = -1
     else
        sign_array = 0
-       write (log_msg, '("Sign of ", a, " is inconsistent.")') trim(name)
-       if (log_warn) call log_write
+       write (log%msg, '("Sign of ", a, " is inconsistent.")') trim(name)
+       if (log%warn) call log%write
     end if
   end function sign_array
 
   subroutine g_eqdsk_classify(this)
     use constants, only: pi  ! src/orbit_mod.f90
-    use magdif_config, only: log_msg, log_write, log_warn
+    use magdif_conf, only: log
     class(g_eqdsk), intent(inout) :: this
 
     this%cocos = sign_convention(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -606,8 +606,8 @@ contains
        end if
     end if
     if (this%cocos%index == 0) then
-       log_msg = 'COCOS index could not be determined for ' // trim(this%fname)
-       if (log_warn) call log_write
+       log%msg = 'COCOS index could not be determined for ' // trim(this%fname)
+       if (log%warn) call log%write
     end if
     call this%check_consistency
     if (abs(this%grad_shafranov_normalization()) >= 2d0 * pi) then
@@ -621,12 +621,12 @@ contains
 
   subroutine g_eqdsk_standardise(this)
     use constants, only: pi  ! src/orbit_mod.f90
-    use magdif_config, only: log_msg, log_write, log_info, log_warn
+    use magdif_conf, only: log
     class(g_eqdsk), intent(inout) :: this
 
     if (this%cocos%sgn_Bpol == +1) then
-       write (log_msg, invert_fmt) 'SIMAG, SIBRY, PSIRZ, PPRIME, FFPRIM'
-       if (log_info) call log_write
+       write (log%msg, invert_fmt) 'SIMAG, SIBRY, PSIRZ, PPRIME, FFPRIM'
+       if (log%info) call log%write
        this%simag = -this%simag
        this%sibry = -this%sibry
        this%psirz = -this%psirz
@@ -637,17 +637,17 @@ contains
        this%cocos%sgn_Bpol = -this%cocos%sgn_Bpol
     end if
     if (this%cocos%sgn_pol == +1) then
-       write (log_msg, invert_fmt) 'QPSI'
-       if (log_info) call log_write
+       write (log%msg, invert_fmt) 'QPSI'
+       if (log%info) call log%write
        this%qpsi = -this%qpsi
        this%cocos%sgn_q = -this%cocos%sgn_q
        this%cocos%sgn_pol = -this%cocos%sgn_pol
     end if
     if (this%cocos%exp_Bpol == 1) then
-       write (log_msg, unscaled_fmt) 'SIMAG, SIBRY, PSIRZ, PPRIME, FFPRIM'
-       if (log_warn) call log_write
-       write (log_msg, rescale_fmt) 'SIMAG, SIBRY, PSIRZ, PPRIME, FFPRIM'
-       if (log_info) call log_write
+       write (log%msg, unscaled_fmt) 'SIMAG, SIBRY, PSIRZ, PPRIME, FFPRIM'
+       if (log%warn) call log%write
+       write (log%msg, rescale_fmt) 'SIMAG, SIBRY, PSIRZ, PPRIME, FFPRIM'
+       if (log%info) call log%write
        this%simag = this%simag / (2d0 * pi)
        this%sibry = this%sibry / (2d0 * pi)
        this%psirz = this%psirz / (2d0 * pi)
@@ -734,15 +734,15 @@ contains
   end subroutine g_eqdsk_destructor
 
   subroutine flux_func_init(this, n_lag, indep_var)
-    use magdif_config, only: log_msg, log_write, log_err
+    use magdif_conf, only: log
     class(flux_func), intent(inout) :: this
     integer, intent(in) :: n_lag
     real(dp), intent(in), dimension(:) :: indep_var
 
     if (n_lag >= size(indep_var)) then
-       write (log_msg, '("Lagrange polynomial order ", i0, ' // &
+       write (log%msg, '("Lagrange polynomial order ", i0, ' // &
             '" must be lower than number of sample points", i0)') n_lag, size(indep_var)
-       if (log_err) call log_write
+       if (log%err) call log%write
        return
     end if
     call flux_func_destructor(this)
@@ -753,7 +753,7 @@ contains
   end subroutine flux_func_init
 
   function flux_func_interp(this, sample, position, deriv) result(interp)
-    use magdif_config, only: log_msg_arg_size, log_err, log_write
+    use magdif_conf, only: log
     class(flux_func) :: this
     real(dp), intent(in) :: sample(:)
     real(dp), intent(in) :: position
@@ -769,9 +769,9 @@ contains
        end if
     end if
     if (this%n_var /= size(sample)) then
-       call log_msg_arg_size('flux_func_interp', 'this%n_var', 'size(sample)', &
+       call log%msg_arg_size('flux_func_interp', 'this%n_var', 'size(sample)', &
             this%n_var, size(sample))
-       if (log_err) call log_write
+       if (log%err) call log%write
        error stop
     end if
     call binsearch(this%indep_var, lbound(this%indep_var, 1), position, k)

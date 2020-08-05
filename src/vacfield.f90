@@ -5,13 +5,13 @@ program vacfield
 
   use iso_fortran_env, only: dp => real64
   use mesh_mod, only: npoint, ntri, knot, mesh_point, mesh_element, mesh_element_rmp
-  use magdif_config, only: n_tor_out => n, nflux, meshdata_file, Bn_vac_file, &
-       config_file, read_config
+  use magdif_conf, only: conf, magdif_config_read
   use magdif_util, only: initialize_globals, gauss_legendre_unit_interval, imun
   use magdif, only: fs, fs_half
 
   implicit none
 
+  character(len = 1024) :: config_file
   integer, parameter :: order = 2
   integer :: fid, ktri, ke, k
   real(dp) :: R, Z, edge_R, edge_Z, node_R(4), node_Z(4)
@@ -23,14 +23,14 @@ program vacfield
   else
      error stop 'expected path to config file as first parameter'
   endif
-  call read_config
+  call magdif_config_read(conf, config_file)
 
   call gauss_legendre_unit_interval(order, points, weights)
 
-  open(newunit = fid, file = meshdata_file, form = 'unformatted', status = 'old')
-  read (fid) nflux, npoint, ntri
-  call fs%init(nflux, .false.)
-  call fs_half%init(nflux, .true.)
+  open(newunit = fid, file = conf%meshdata_file, form = 'unformatted', status = 'old')
+  read (fid) conf%nflux, npoint, ntri
+  call fs%init(conf%nflux, .false.)
+  call fs_half%init(conf%nflux, .true.)
   read (fid) fs%psi, fs%rad
   read (fid) fs_half%psi, fs_half%rad
   allocate(mesh_point(npoint))
@@ -44,7 +44,7 @@ program vacfield
   Z = mesh_point(1)%zcoord
   call initialize_globals(R, Z)
 
-  open(newunit = fid, file = trim(Bn_vac_file), status = 'replace')
+  open(newunit = fid, file = trim(conf%Bn_vac_file), status = 'replace')
   do ktri = 1, ntri
      Bnflux = (0d0, 0d0)
      associate(tri => mesh_element_rmp(ktri), &
@@ -57,14 +57,14 @@ program vacfield
           do k = 1, order
              R = node_R(ke) * points(k) + node_R(ke + 1) * points(order - k + 1)
              Z = node_Z(ke) * points(k) + node_Z(ke + 1) * points(order - k + 1)
-             call spline_bpol_n(n_tor_out, R, Z, B_Rn, B_Zn)
+             call spline_bpol_n(conf%n, R, Z, B_Rn, B_Zn)
              ! project vector onto outward edge normal
              Bnflux(ke) = Bnflux(ke) + weights(k) * (B_Rn * edge_Z - B_Zn * edge_R) * R
           end do
        end do
      end associate
      ! toroidal flux via zero divergence
-     Bnphiflux = imun / n_tor_out * sum(Bnflux)
+     Bnphiflux = imun / conf%n * sum(Bnflux)
      write (fid, '(8(1x, es24.16e3))') Bnflux, Bnphiflux
   end do
   close(fid)

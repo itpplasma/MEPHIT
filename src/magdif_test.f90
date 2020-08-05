@@ -1,9 +1,11 @@
 program magdif_test
-  use magdif_config, only: bin_dir, config_file, read_config, runmode, runmode_single, &
+  use magdif_conf, only: conf, magdif_config_read, conf_arr, runmode_single, &
        runmode_direct, runmode_precon
   use magdif, only: magdif_init, magdif_cleanup, magdif_single, magdif_iterated
 
   implicit none
+
+  character(len = 1024) :: config_file, bin_dir
 
   if (command_argument_count() >= 1) then
      call get_command_argument(1, config_file)
@@ -14,9 +16,10 @@ program magdif_test
      call get_command_argument(2, bin_dir)
   end if
 
-  call read_config
-  call magdif_init
-  select case (runmode)
+  call magdif_config_read(conf, config_file)
+  call conf_arr%read(config_file, conf%m_min, conf%m_max)
+  call magdif_init(bin_dir)
+  select case (conf%runmode)
   case (runmode_single)
      call magdif_single
   case (runmode_direct)

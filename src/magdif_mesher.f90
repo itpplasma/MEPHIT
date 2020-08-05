@@ -1,11 +1,11 @@
 program magdif_mesher
 
-  use magdif_config, only: config_file, read_config, log_file, log_open, log_close
+  use magdif_conf, only: conf, magdif_config_read, conf_arr, log, magdif_log
   use magdif_mesh_mod, only: generate_mesh
 
   implicit none
 
-  character(len = 1024) :: unprocessed_geqdsk
+  character(len = 1024) :: config_file, unprocessed_geqdsk
 
   if (command_argument_count() >= 1) then
      call get_command_argument(1, config_file)
@@ -18,12 +18,10 @@ program magdif_mesher
      error stop 'expected path to magdif config file as first parameter'
   endif
 
-  call read_config
-  log_file = '-'
-  call log_open
+  call magdif_config_read(conf, config_file)
+  call conf_arr%read(config_file, conf%m_min, conf%m_max)
+  log = magdif_log('-', conf%log_level, conf%quiet)
 
   call generate_mesh(unprocessed_geqdsk)
-
-  call log_close
 
 end program magdif_mesher
