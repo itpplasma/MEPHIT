@@ -139,7 +139,7 @@ contains
   subroutine refine_resonant_surfaces(psi_sample, q_sample, psi2rho_norm, rho_norm_ref)
     use magdif_conf, only: conf, conf_arr, log
     use magdif_util, only: flux_func
-    use magdif, only: m_res_min, m_res_max
+    use magdif, only: mesh
     use netlib_mod, only: zeroin
     real(dp), dimension(:), intent(in) :: psi_sample
     real(dp), dimension(:), intent(in) :: q_sample
@@ -167,13 +167,13 @@ contains
     psi_min = minval(psi_sample)
     psi_max = maxval(psi_sample)
     call psi_eqd%init(4, psi_sample)
-    m_res_min = ceiling(minval(abs(q_sample)) * dble(conf%n))
-    m_res_max = floor(maxval(abs(q_sample)) * dble(conf%n))
-    allocate(psi_res(m_res_min:m_res_max))
-    allocate(rho_res(m_res_min:m_res_max))
+    mesh%m_res_min = ceiling(minval(abs(q_sample)) * dble(conf%n))
+    mesh%m_res_max = floor(maxval(abs(q_sample)) * dble(conf%n))
+    allocate(psi_res(mesh%m_res_min:mesh%m_res_max))
+    allocate(rho_res(mesh%m_res_min:mesh%m_res_max))
     log%msg = 'resonance positions:'
     if (log%debug) call log%write
-    do m = m_res_min, m_res_max
+    do m = mesh%m_res_min, mesh%m_res_max
        psi_res(m) = zeroin(psi_min, psi_max, q_interp_resonant, 1d-9)
        rho_res(m) = psi2rho_norm(psi_res(m))
        write (log%msg, '("m = ", i2, ", psi_m = ", es24.16e3, ", rho_m = ", f19.16)') &
@@ -181,7 +181,7 @@ contains
        if (log%debug) call log%write
     end do
     ! TODO: make separate array variables in mesh type for actual m_[res_]min/max
-    allocate(mask(m_res_min:m_res_max))
+    allocate(mask(mesh%m_res_min:mesh%m_res_max))
     mask = 0d0 < conf_arr%refinement .and. conf_arr%refinement < 1d0
     allocate(ref_ind(count(mask)))
     call refine_eqd_partition(count(mask), pack(conf_arr%deletions, mask), &
@@ -191,7 +191,7 @@ contains
     log%msg = 'refinement positions:'
     if (log%debug) call log%write
     kref = 0
-    do m = m_res_min, m_res_max
+    do m = mesh%m_res_min, mesh%m_res_max
        if (.not. mask(m)) cycle
        kref = kref + 1
        write (log%msg, '("m = ", i0, ", kf = ", i0, ' // &
@@ -237,8 +237,7 @@ contains
     use mesh_mod, only: npoint, mesh_point, ntri, mesh_element, mesh_element_rmp
     use magdif_conf, only: conf, log
     use magdif_util, only: interp_psi_pol, flux_func
-    use magdif, only: equil, kp_low, kt_low, init_indices, fs, fs_half, &
-         flux_func_cache_check
+    use magdif, only: equil, mesh, init_indices, fs, fs_half, flux_func_cache_check
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
          raxis, zaxis
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
@@ -302,8 +301,8 @@ contains
     close(fid)
 
     call init_indices
-    ntri = kt_low(conf%nflux + 1)
-    npoint = kp_low(conf%nflux + 1)
+    ntri = mesh%kt_low(conf%nflux + 1)
+    npoint = mesh%kp_low(conf%nflux + 1)
     allocate(mesh_point(npoint))
     allocate(mesh_element(ntri))
     allocate(mesh_element_rmp(ntri))
@@ -411,17 +410,17 @@ contains
   subroutine connect_mesh_points
     use mesh_mod, only: mesh_element
     use magdif_conf, only: conf
-    use magdif, only: kt_low, kt_max, kp_low, kp_max
+    use magdif, only: mesh
     integer :: kf, kp, kt, ktri, ktri_adj, common_tri(2)
 
-    ktri = kt_low(1)
+    ktri = mesh%kt_low(1)
     ! define trianlges on innermost flux surface
     kf = 1
-    do kp = 1, kp_max(kf)
+    do kp = 1, mesh%kp_max(kf)
        ktri = ktri + 1
-       mesh_element(ktri)%i_knot(1) = kp_low(kf) + kp
-       mesh_element(ktri)%i_knot(2) = kp_low(kf) + mod(kp, kp_max(kf)) + 1
-       mesh_element(ktri)%i_knot(3) = kp_low(kf)
+       mesh_element(ktri)%i_knot(1) = mesh%kp_low(kf) + kp
+       mesh_element(ktri)%i_knot(2) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
+       mesh_element(ktri)%i_knot(3) = mesh%kp_low(kf)
        mesh_element(ktri)%knot_h = 3
        call add_node_owner(mesh_element(ktri)%i_knot(1), ktri)
        call add_node_owner(mesh_element(ktri)%i_knot(2), ktri)
@@ -429,20 +428,20 @@ contains
     end do
     ! define triangles on outer flux surfaces
     do kf = 2, conf%nflux
-       do kp = 1, kp_max(kf)
+       do kp = 1, mesh%kp_max(kf)
           ktri = ktri + 1
-          mesh_element(ktri)%i_knot(1) = kp_low(kf) + kp
-          mesh_element(ktri)%i_knot(2) = kp_low(kf) + mod(kp, kp_max(kf)) + 1
-          mesh_element(ktri)%i_knot(3) = kp_low(kf - 1) + kp
+          mesh_element(ktri)%i_knot(1) = mesh%kp_low(kf) + kp
+          mesh_element(ktri)%i_knot(2) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
+          mesh_element(ktri)%i_knot(3) = mesh%kp_low(kf - 1) + kp
           mesh_element(ktri)%knot_h = 3
           call add_node_owner(mesh_element(ktri)%i_knot(1), ktri)
           call add_node_owner(mesh_element(ktri)%i_knot(2), ktri)
           call add_node_owner(mesh_element(ktri)%i_knot(3), ktri)
           call calculate_det_3(mesh_element(ktri))
           ktri = ktri + 1
-          mesh_element(ktri)%i_knot(1) = kp_low(kf) + mod(kp, kp_max(kf)) + 1
-          mesh_element(ktri)%i_knot(2) = kp_low(kf - 1) + mod(kp, kp_max(kf - 1)) + 1
-          mesh_element(ktri)%i_knot(3) = kp_low(kf - 1) + kp
+          mesh_element(ktri)%i_knot(1) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
+          mesh_element(ktri)%i_knot(2) = mesh%kp_low(kf - 1) + mod(kp, mesh%kp_max(kf - 1)) + 1
+          mesh_element(ktri)%i_knot(3) = mesh%kp_low(kf - 1) + kp
           mesh_element(ktri)%knot_h = 1
           call add_node_owner(mesh_element(ktri)%i_knot(1), ktri)
           call add_node_owner(mesh_element(ktri)%i_knot(2), ktri)
@@ -452,9 +451,9 @@ contains
     end do
     ! set neighbours for edges i and o on innermost flux surface
     kf = 1
-    do kt = 1, kt_max(kf)
-       ktri = kt_low(kf) + kt
-       ktri_adj = kt_low(kf) + mod(kt, kt_max(kf)) + 1
+    do kt = 1, mesh%kt_max(kf)
+       ktri = mesh%kt_low(kf) + kt
+       ktri_adj = mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf)) + 1
        mesh_element(ktri)%neighbour(2) = ktri_adj
        mesh_element(ktri)%neighbour_edge(2) = 3
        mesh_element(ktri_adj)%neighbour(3) = ktri
@@ -462,9 +461,9 @@ contains
     end do
     ! set neighbours for edges i and o on outer flux surfaces
     do kf = 2, conf%nflux
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
-          ktri_adj = kt_low(kf) + mod(kt, kt_max(kf)) + 1
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          ktri_adj = mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf)) + 1
           if (mod(kt, 2) == 1) then
              mesh_element(ktri)%neighbour(2) = ktri_adj
              mesh_element(ktri)%neighbour_edge(2) = 3
@@ -480,9 +479,9 @@ contains
     end do
     ! set neighbours for edges f
     do kf = 1, conf%nflux - 1
-       do kp = 1, kp_max(kf)
-          call common_triangles(kp_low(kf) + kp, kp_low(kf) + mod(kp, kp_max(kf)) + 1, &
-               common_tri)
+       do kp = 1, mesh%kp_max(kf)
+          call common_triangles(mesh%kp_low(kf) + kp, &
+               mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1, common_tri)
           ktri = minval(common_tri)
           ktri_adj = maxval(common_tri)
           mesh_element(ktri)%neighbour(1) = ktri_adj
@@ -493,10 +492,10 @@ contains
     end do
     ! set dummy values for edges on boundary
     kf = conf%nflux
-    do kt = 1, kt_max(kf)
+    do kt = 1, mesh%kt_max(kf)
        if (mod(kt, 2) == 1) then
-          ktri = kt_low(kf) + kt
-          ktri_adj = ktri + kt_max(kf) + 1
+          ktri = mesh%kt_low(kf) + kt
+          ktri_adj = ktri + mesh%kt_max(kf) + 1
           mesh_element(ktri)%neighbour(1) = ktri_adj
           mesh_element(ktri)%neighbour_edge(1) = 2
        end if
@@ -506,8 +505,7 @@ contains
   subroutine write_mesh_data
     use mesh_mod, only: npoint, ntri, knot, triangle, mesh_point, mesh_element
     use magdif_conf, only: conf, longlines
-    use magdif, only: kp_max, kp_low, fs, fs_half, m_res_min, m_res_max, &
-         flux_func_cache_check
+    use magdif, only: mesh, fs, fs_half, flux_func_cache_check
 
     integer :: fid, kpoi, ktri, kp, ke
     type(triangle) :: elem
@@ -523,7 +521,7 @@ contains
 
     call flux_func_cache_check
     open(newunit = fid, file = conf%meshdata_file, form = 'unformatted', status = 'replace')
-    write (fid) conf%nflux, npoint, ntri, m_res_min, m_res_max
+    write (fid) conf%nflux, npoint, ntri, mesh%m_res_min, mesh%m_res_max
     write (fid) fs%psi, fs%rad
     write (fid) fs_half%psi, fs_half%rad
     write (fid) mesh_point
@@ -531,20 +529,20 @@ contains
     close(fid)
 
     open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace')
-    write (fid, '(3(1x, i0))') npoint, ntri, kp_max(conf%nflux + 1) - 1
-    do kpoi = 1, kp_low(conf%nflux + 1)
+    write (fid, '(3(1x, i0))') npoint, ntri, mesh%kp_max(conf%nflux) - 1
+    do kpoi = 1, mesh%kp_low(conf%nflux + 1)
        write (fid, '(2(1x, es23.15e3), 1x, i0)') &
             mesh_point(kpoi)%rcoord, mesh_point(kpoi)%zcoord, 0
     end do
-    do kpoi = kp_low(conf%nflux + 1) + 1, npoint
+    do kpoi = mesh%kp_low(conf%nflux + 1) + 1, npoint
        write (fid, '(2(1x, es23.15e3), 1x, i0)') &
             mesh_point(kpoi)%rcoord, mesh_point(kpoi)%zcoord, 1
     end do
     do ktri = 1, ntri
        write (fid, '(4(1x, i0))') mesh_element(ktri)%i_knot(:), 0
     end do
-    do kp = 1, kp_max(conf%nflux + 1) - 1
-       write (fid, '(4(1x, i0))') kp_low(conf%nflux + 1) + kp, kp_low(conf%nflux + 1) + kp + 1, 1
+    do kp = 1, mesh%kp_max(conf%nflux) - 1
+       write (fid, '(4(1x, i0))') mesh%kp_low(conf%nflux) + kp, mesh%kp_low(conf%nflux) + kp + 1, 1
     end do
     close(fid)
   end subroutine write_mesh_data
@@ -639,11 +637,11 @@ contains
 
   subroutine compute_kilca_vac_coeff
     use magdif_conf, only: conf, conf_arr, log, cmplx_fmt
-    use magdif, only: m_res_min, m_res_max, equil
+    use magdif, only: mesh, equil
     integer :: m
     complex(dp) :: B_rad, B_pol, B_tor
 
-    do m = m_res_min, m_res_max
+    do m = mesh%m_res_min, mesh%m_res_max
        if (abs(conf_arr%kilca_vac_r(m)) <= 0d0) then
           write (log%msg, '("ignoring kilca_vac_r(", i0, "), ' // &
                'resorting to kilca_vac_coeff(", i0, ")")') m, m
@@ -656,7 +654,7 @@ contains
     end do
     log%msg = 'effective vacuum perturbation field coefficients:'
     if (log%info) call log%write
-    do m = m_res_min, m_res_max
+    do m = mesh%m_res_min, mesh%m_res_max
        write (log%msg, '("kilca_vac_coeff(", i0, ") = ", ' // cmplx_fmt // ')') m, &
             conf_arr%kilca_vac_coeff(m)
        if (log%info) call log%write

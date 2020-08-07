@@ -6,7 +6,7 @@ module magdif
 
   private
 
-  public :: equil, fluxvar, fs, fs_half, m_res_min, m_res_max, kp_low, kp_max, kt_low, kt_max, &
+  public :: equil, fluxvar, fs, fs_half, magdif_mesh, mesh, &
        B0flux, Bnflux, Bnphi, init_indices, cache_mesh_data, check_redundant_edges, &
        check_div_free, point_location, interp_RT0, write_vector_dof, magdif_init, &
        magdif_cleanup, magdif_single, magdif_iterated, flux_func_cache_check
@@ -18,18 +18,110 @@ module magdif
   type(flux_func_cache) :: fs
   type(flux_func_cache) :: fs_half
 
-  integer :: m_res_min, m_res_max
-  real(dp) :: r_o, z_o, r_min, r_max, z_min, z_max  ! TODO: mesh_global_props type
+  type :: magdif_mesh
 
-  !> Poloidal mode number \f$ m \f$ (dimensionless) in resonance at given flux surface.
-  !>
-  !> Indexing is the same as for #q, on which the values depend. If no resonances are
-  !> expected at a given index, #m_res is 0.
-  integer, allocatable :: m_res(:)
+     !> R coordinate of the O point in cm.
+     real(dp) :: R_O
 
-  !> Indices of flux surfaces where resonance corresponding to a poloidal mode (given as
-  !> array index) occurs.
-  integer, allocatable :: res_ind(:)
+     !> Z coordinate of the O point in cm.
+     real(dp) :: Z_O
+
+     !> R coordinate of the X point in cm.
+     real(dp) :: R_X
+
+     !> Z coordinate of the X point in cm.
+     real(dp) :: Z_X
+
+     !> Minimal R value on computational grid in cm.
+     real(dp) :: R_min
+
+     !> Maximal Z value on computational grid in cm.
+     real(dp) :: R_max
+
+     !> Minimal R value on computational grid in cm.
+     real(dp) :: Z_min
+
+     !> Maximal Z value on computational grid in cm.
+     real(dp) :: Z_max
+
+     !> Number of flux surfaces. May differ from #magdif_conf::magdif_config::nflux due
+     !> to refinement of flux surfaces.
+     integer :: nflux
+
+     !> Number of triangle edges. TODO: Add npoint and ntri along with mesh_element_rmp.
+     integer :: nedge
+
+     !> Toroidal mode number. May differ from #magdif_conf::magdif_config#n due to large
+     !> aspect ratio scaling.
+     integer :: n
+
+     !> Minimal poloidal mode number in resonance.
+     integer :: m_res_min
+
+     !> Maximal poloidal mode number in resonance
+     integer ::  m_res_max
+
+     !> Number of unrefined flux surfaces to be replaced by refined ones.
+     integer, allocatable :: deletions(:)
+
+     !> Number of refined flux surfaces.
+     integer, allocatable :: additions(:)
+
+     !> Relative size of most refined flux surface.
+     real(dp), allocatable :: refinement(:)
+
+     !> Poloidal mode number \f$ m \f$ (dimensionless) in resonance at given flux surface.
+     !>
+     !> Indexing is the same as for #q, on which the values depend. If no resonances are
+     !> expected at a given index, #m_res is 0.
+     integer, allocatable :: m_res(:)
+
+     !> Indices of flux surfaces where resonance corresponding to a poloidal mode (given as
+     !> array index) occurs.
+     integer, allocatable :: res_ind(:)
+
+     !> Number of knots on the flux surface given by the array index.
+     !>
+     !> The array index ranges from 1 for the innermost flux surface to
+     !> #magdif_config::nflux for the last closed flux surface.
+     integer, allocatable :: kp_max(:)
+
+     !> Number of triangles inside the flux surface given by the array index.
+     !>
+     !> The array index ranges from 1 for the innermost flux surface to
+     !> #magdif_config::nflux for the last closed flux surface.
+     integer, allocatable :: kt_max(:)
+
+     !> Global index of the last knot of the previous flux surface given by the array index.
+     !>
+     !> The global index of knots in #mesh_mod::mesh_point on the flux surface kf runs from
+     !> #kp_low (kf)+1 to #kp_low (kf)+#kp_max (kf), so #kp_low is determined by cumulatively
+     !> adding consecutive values of #kp_max. The array index ranges from 1, giving the
+     !> global index of the knot on the magnetic axis (which has to be 1), to
+     !> #magdif_config::nflux+1, effectively giving the last knot on the last closed
+     !> flux surface.
+     integer, allocatable :: kp_low(:)
+
+     !> Global index of the last triangle of the previous flux surface given by the array
+     !> index.
+     !>
+     !> The global index of triangles in #mesh_mod::mesh_element inside the flux surface kf
+     !> runs from #kt_low (kf)+1 to #kt_low (kf)+#kt_max (kf), so #kt_low is determined by
+     !> cumulatively adding consecutive values of #kt_max. The array index ranges from 1,
+     !> giving the global index of the non-existent triangle on the magnetic axis (which is
+     !> therefore 0), to #magdif_config::nflux+1, giving the last triangle inside the last
+     !> closed flux surface.
+     integer, allocatable :: kt_low(:)
+
+     integer, allocatable :: edge_map2global(:, :)
+     integer, allocatable :: edge_map2ktri(:, :)
+     integer, allocatable :: edge_map2ke(:, :)
+
+   contains
+     final :: magdif_mesh_destructor
+  end type magdif_mesh
+
+  type(magdif_mesh) :: mesh
 
   !> \f$ R \f$ component of equilibrium magnetic field \f$ B_{0} \f$.
   !>
@@ -133,44 +225,6 @@ module magdif
   !> by get_labeled_edges().
   real(dp), allocatable :: j0phi(:,:)
 
-  !> Number of knots on the flux surface given by the array index.
-  !>
-  !> The array index ranges from 1 for the innermost flux surface to
-  !> #magdif_config::nflux+2 for consistency with #kp_low.
-  integer, allocatable :: kp_max(:)
-
-  !> Number of triangles inside the flux surface given by the array index.
-  !>
-  !> The array index ranges from 1 for the innermost flux surface to
-  !> #magdif_config::nflux+1 for consistency with #kt_low.
-  integer, allocatable :: kt_max(:)
-
-  !> Global index of the last knot of the previous flux surface given by the array index.
-  !>
-  !> The global index of knots in #mesh_mod::mesh_point on the flux surface kf runs from
-  !> #kp_low (kf)+1 to #kp_low (kf)+#kp_max (kf), so #kp_low is determined by cumulatively
-  !> adding consecutive values of #kp_max. The array index ranges from 1, giving the
-  !> global index of the knot on the magnetic axis (which has to be 1), to
-  !> #magdif_config::nflux+1, giving the last knot on the flux surface just outside the
-  !> last closed flux surface. The latter is needed for some interpolations.
-  integer, allocatable :: kp_low(:)
-
-  !> Global index of the last triangle of the previous flux surface given by the array
-  !> index.
-  !>
-  !> The global index of triangles in #mesh_mod::mesh_element inside the flux surface kf
-  !> runs from #kt_low (kf)+1 to #kt_low (kf)+#kt_max (kf), so #kt_low is determined by
-  !> cumulatively adding consecutive values of #kt_max. The array index ranges from 1,
-  !> giving the global index of the non-existent triangle on the magnetic axis (which is
-  !> therefore 0), to #magdif_config::nflux+1, giving the last triangle just outside the
-  !> last closed flux surface. The latter is needed for some interpolations.
-  integer, allocatable :: kt_low(:)
-
-  integer :: nedge
-  integer, allocatable :: edge_map2global(:, :)
-  integer, allocatable :: edge_map2ktri(:, :)
-  integer, allocatable :: edge_map2ke(:, :)
-
 contains
 
   !> Initialize magdif module
@@ -223,11 +277,23 @@ contains
     if (log%info) call log%write
   end subroutine magdif_init
 
+  subroutine magdif_mesh_destructor(this)
+    type(magdif_mesh), intent(inout) :: this
+    if (allocated(this%deletions)) deallocate(this%deletions)
+    if (allocated(this%additions)) deallocate(this%additions)
+    if (allocated(this%refinement)) deallocate(this%refinement)
+    if (allocated(this%m_res)) deallocate(this%m_res)
+    if (allocated(this%res_ind)) deallocate(this%res_ind)
+    if (allocated(this%kp_max)) deallocate(this%kp_max)
+    if (allocated(this%kt_max)) deallocate(this%kt_max)
+    if (allocated(this%kp_low)) deallocate(this%kp_low)
+    if (allocated(this%kt_low)) deallocate(this%kt_low)
+  end subroutine magdif_mesh_destructor
+
   !> Deallocates all previously allocated variables.
   subroutine magdif_cleanup
     use mesh_mod, only: mesh_point, mesh_element, mesh_element_rmp
     use magdif_conf, only: log
-    if (allocated(m_res)) deallocate(m_res)
     if (allocated(B0r)) deallocate(B0r)
     if (allocated(B0phi)) deallocate(B0phi)
     if (allocated(B0z)) deallocate(B0z)
@@ -246,10 +312,6 @@ contains
     if (allocated(mesh_point)) deallocate(mesh_point)
     if (allocated(mesh_element)) deallocate(mesh_element)
     if (allocated(mesh_element_rmp)) deallocate(mesh_element_rmp)
-    if (allocated(kp_max)) deallocate(kp_max)
-    if (allocated(kt_max)) deallocate(kt_max)
-    if (allocated(kp_low)) deallocate(kp_low)
-    if (allocated(kt_low)) deallocate(kt_low)
     log%msg = 'magdif cleanup finished'
     if (log%info) call log%write
   end subroutine magdif_cleanup
@@ -276,7 +338,7 @@ contains
     integer :: kiter, ndim, i, j, info
     complex(dp) :: Bnflux_diff(ntri, 3)
     complex(dp) :: Bnphi_diff(ntri)
-    complex(dp) :: Bn(nedge), Bn_prev(nedge)
+    complex(dp) :: Bn(mesh%nedge), Bn_prev(mesh%nedge)
     complex(dp) :: eigvals(conf%nritz)
     complex(dp), allocatable :: Lr(:,:), Yr(:,:)
     integer, allocatable :: ipiv(:)
@@ -284,7 +346,7 @@ contains
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
 
     ! system dimension: number of non-redundant edges in core plasma
-    ndim = nedge
+    ndim = mesh%nedge
     preconditioned = runmode_precon == conf%runmode
     if (preconditioned) then
        tol = conf%ritz_threshold
@@ -394,10 +456,10 @@ contains
 
     pure subroutine pack_dof(pol_flux, packed)
       complex(dp), intent(in) :: pol_flux(ntri, 3)
-      complex(dp), intent(out) :: packed(nedge)
+      complex(dp), intent(out) :: packed(mesh%nedge)
       integer :: kedge
-      do kedge = 1, nedge
-         packed(kedge) = pol_flux(edge_map2ktri(kedge, 1), edge_map2ke(kedge, 1))
+      do kedge = 1, mesh%nedge
+         packed(kedge) = pol_flux(mesh%edge_map2ktri(kedge, 1), mesh%edge_map2ke(kedge, 1))
       end do
     end subroutine pack_dof
 
@@ -405,15 +467,17 @@ contains
       use magdif_util, only: imun
       use mesh_mod, only: mesh_element_rmp
       complex(dp), intent(out) :: pol_flux(ntri, 3), tor_comp(ntri)
-      complex(dp), intent(in) :: packed(nedge)
+      complex(dp), intent(in) :: packed(mesh%nedge)
       integer :: kedge, ktri
-      do kedge = 1, nedge
-         pol_flux(edge_map2ktri(kedge, 1), edge_map2ke(kedge, 1)) = packed(kedge)
-         if (edge_map2ktri(kedge, 2) > 0) then
-            pol_flux(edge_map2ktri(kedge, 2), edge_map2ke(kedge, 2)) = -packed(kedge)
+      do kedge = 1, mesh%nedge
+         pol_flux(mesh%edge_map2ktri(kedge, 1), mesh%edge_map2ke(kedge, 1)) = &
+              packed(kedge)
+         if (mesh%edge_map2ktri(kedge, 2) > 0) then
+            pol_flux(mesh%edge_map2ktri(kedge, 2), mesh%edge_map2ke(kedge, 2)) = &
+                 -packed(kedge)
          end if
       end do
-      do ktri = 1, kt_low(conf%nflux + 1)
+      do ktri = 1, mesh%kt_low(conf%nflux + 1)
          tor_comp(ktri) = sum(pol_flux(ktri, :)) * &
               imun / conf%n / mesh_element_rmp(ktri)%area
       end do
@@ -463,27 +527,27 @@ contains
     use magdif_conf, only: conf, log
     integer :: kf
 
-    allocate (kp_max(conf%nflux + 1))
-    allocate (kt_max(conf%nflux + 1))
-    allocate (kp_low(conf%nflux + 1))
-    allocate (kt_low(conf%nflux + 1))
+    allocate(mesh%kp_max(conf%nflux))
+    allocate(mesh%kt_max(conf%nflux))
+    allocate(mesh%kp_low(conf%nflux + 1))
+    allocate(mesh%kt_low(conf%nflux + 1))
 
-    kp_max = conf%nkpol
-    kt_max = 2 * conf%nkpol
-    kt_max(1) = conf%nkpol
+    mesh%kp_max = conf%nkpol
+    mesh%kt_max = 2 * conf%nkpol
+    mesh%kt_max(1) = conf%nkpol
 
-    kp_low(1) = 1
+    mesh%kp_low(1) = 1
     do kf = 2, conf%nflux + 1
-       kp_low(kf) = kp_low(kf-1) + kp_max(kf-1)
+       mesh%kp_low(kf) = mesh%kp_low(kf-1) + mesh%kp_max(kf-1)
     end do
-    kt_low(1) = 0
+    mesh%kt_low(1) = 0
     do kf = 2, conf%nflux + 1
-       kt_low(kf) = kt_low(kf-1) + kt_max(kf-1)
+       mesh%kt_low(kf) = mesh%kt_low(kf-1) + mesh%kt_max(kf-1)
     end do
 
-    write (log%msg, '("Number of points up to LCFS: ", i0)') kp_low(conf%nflux + 1)
+    write (log%msg, '("Number of points up to LCFS: ", i0)') mesh%kp_low(conf%nflux + 1)
     if (log%info) call log%write
-    write (log%msg, '("Number of triangles up to LCFS: ", i0)') kt_low(conf%nflux + 1)
+    write (log%msg, '("Number of triangles up to LCFS: ", i0)') mesh%kt_low(conf%nflux + 1)
     if (log%info) call log%write
   end subroutine init_indices
 
@@ -500,7 +564,7 @@ contains
     integer :: fid
 
     open(newunit = fid, file = conf%meshdata_file, form = 'unformatted', status = 'old')
-    read (fid) conf%nflux, npoint, ntri, m_res_min, m_res_max
+    read (fid) conf%nflux, npoint, ntri, mesh%m_res_min, mesh%m_res_max
     write (log%msg, '("nflux = ", i0, ", npoint = ", i0, ", ntri = ", i0)') &
          conf%nflux, npoint, ntri
     if (log%info) call log%write
@@ -558,23 +622,23 @@ contains
     type(triangle) :: elem
     type(triangle_rmp) :: tri
 
-    r_o = mesh_point(1)%rcoord
-    z_o = mesh_point(1)%zcoord
-    r_min = minval(mesh_point(:kp_low(conf%nflux + 1))%rcoord)
-    r_max = maxval(mesh_point(:kp_low(conf%nflux + 1))%rcoord)
-    z_min = minval(mesh_point(:kp_low(conf%nflux + 1))%zcoord)
-    z_max = maxval(mesh_point(:kp_low(conf%nflux + 1))%zcoord)
+    mesh%R_O = mesh_point(1)%rcoord
+    mesh%Z_O = mesh_point(1)%zcoord
+    mesh%R_min = minval(mesh_point(:mesh%kp_low(conf%nflux + 1))%rcoord)
+    mesh%R_max = maxval(mesh_point(:mesh%kp_low(conf%nflux + 1))%rcoord)
+    mesh%Z_min = minval(mesh_point(:mesh%kp_low(conf%nflux + 1))%zcoord)
+    mesh%Z_max = maxval(mesh_point(:mesh%kp_low(conf%nflux + 1))%zcoord)
 
-    nedge = (3 * kt_low(conf%nflux + 1) + kp_max(conf%nflux)) / 2
-    allocate(edge_map2global(kt_low(conf%nflux + 1), 3))
-    allocate(edge_map2ktri(nedge, 2))
-    allocate(edge_map2ke(nedge, 2))
-    edge_map2global = 0
-    edge_map2ktri = 0
-    edge_map2ke = 0
+    mesh%nedge = (3 * mesh%kt_low(conf%nflux + 1) + mesh%kp_max(conf%nflux)) / 2
+    allocate(mesh%edge_map2global(mesh%kt_low(conf%nflux + 1), 3))
+    allocate(mesh%edge_map2ktri(mesh%nedge, 2))
+    allocate(mesh%edge_map2ke(mesh%nedge, 2))
+    mesh%edge_map2global = 0
+    mesh%edge_map2ktri = 0
+    mesh%edge_map2ke = 0
     kedge = 1
 
-    do ktri = 1, kt_low(conf%nflux + 1)
+    do ktri = 1, mesh%kt_low(conf%nflux + 1)
        elem = mesh_element(ktri)
        tri%area = 0.5d0 * elem%det_3
        call get_labeled_edges(elem, tri%li, tri%lo, tri%lf, tri%ei, tri%eo, tri%ef, &
@@ -583,19 +647,19 @@ contains
        mesh_element_rmp(ktri) = tri
 
        do ke = 1, 3
-          if (edge_map2global(ktri, ke) == 0) then
+          if (mesh%edge_map2global(ktri, ke) == 0) then
              ktri_adj = elem%neighbour(ke)
              ke_adj = elem%neighbour_edge(ke)
-             if (ktri_adj > kt_low(conf%nflux + 1)) then
-                edge_map2global(ktri, ke) = kedge
-                edge_map2ktri(kedge, :) = [ktri, -1]
-                edge_map2ke(kedge, :) = [ke, -1]
+             if (ktri_adj > mesh%kt_low(conf%nflux + 1)) then
+                mesh%edge_map2global(ktri, ke) = kedge
+                mesh%edge_map2ktri(kedge, :) = [ktri, -1]
+                mesh%edge_map2ke(kedge, :) = [ke, -1]
                 kedge = kedge + 1
              else
-                edge_map2global(ktri, ke) = kedge
-                edge_map2global(ktri_adj, ke_adj) = kedge
-                edge_map2ktri(kedge, :) = [ktri, ktri_adj]
-                edge_map2ke(kedge, :) = [ke, ke_adj]
+                mesh%edge_map2global(ktri, ke) = kedge
+                mesh%edge_map2global(ktri_adj, ke_adj) = kedge
+                mesh%edge_map2ktri(kedge, :) = [ktri, ktri_adj]
+                mesh%edge_map2ke(kedge, :) = [ke, ke_adj]
                 kedge = kedge + 1
              end if
           end if
@@ -614,7 +678,7 @@ contains
     integer :: stat = 0, dummy = 0
     character(len = 1024) :: fem_cmd
     write (fem_cmd, '(a, "/maxwell.sh -n ", i0, " -N ", i0, " -J ", a, " -B ", a)') &
-         trim(magdif_bin_dir), conf%n, kt_low(conf%nflux + 1), trim(conf%currn_file), &
+         trim(magdif_bin_dir), conf%n, mesh%kt_low(conf%nflux + 1), trim(conf%currn_file), &
          trim(conf%Bn_file)
     call execute_command_line(fem_cmd, exitstat = stat, cmdstat = dummy)
     if (stat /= 0) then
@@ -629,7 +693,7 @@ contains
     integer :: stat = 0, dummy = 0
     character(len = 1024) :: L2int_cmd
     write (L2int_cmd, '(a, "/L2int.sh -N ", i0, " -B ", a, " -C ", a)') &
-         trim(magdif_bin_dir), kt_low(conf%nflux + 1), trim(conf%Bn_diff_file), &
+         trim(magdif_bin_dir), mesh%kt_low(conf%nflux + 1), trim(conf%Bn_diff_file), &
          trim(conf%conv_file)
     call execute_command_line(L2int_cmd, exitstat = stat, cmdstat = dummy)
     if (stat /= 0) then
@@ -692,11 +756,11 @@ contains
     logical :: inconsistent
     real(dp), parameter :: eps = epsilon(1d0), small = tiny(0d0)
 
-    do kedge = 1, nedge
-       ktri = edge_map2ktri(kedge, 1)
-       ktri_adj = edge_map2ktri(kedge, 2)
-       ke = edge_map2ke(kedge, 1)
-       ke_adj = edge_map2ke(kedge, 2)
+    do kedge = 1, mesh%nedge
+       ktri = mesh%edge_map2ktri(kedge, 1)
+       ktri_adj = mesh%edge_map2ktri(kedge, 2)
+       ke = mesh%edge_map2ke(kedge, 1)
+       ke_adj = mesh%edge_map2ke(kedge, 2)
        if (ktri_adj <= 0) cycle
        inconsistent = .false.
        if (abs(real(pol_quant(ktri, ke))) < small) then
@@ -804,8 +868,8 @@ contains
     case (q_prof_flux)
        fs_half%q = 0d0
        do kf = 1, conf%nflux
-          do kt = 1, kt_max(kf)
-             ktri = kt_low(kf) + kt
+          do kt = 1, mesh%kt_max(kf)
+             ktri = mesh%kt_low(kf) + kt
              tri = mesh_element_rmp(ktri)
              fs_half%q(kf) = fs_half%q(kf) + B0phi_Omega(ktri) * tri%area
           end do
@@ -830,17 +894,17 @@ contains
        error stop
     end select
 
-    allocate(m_res(conf%nflux))
-    m_res = 0
-    allocate(res_ind(m_res_min:m_res_max))
-    res_ind = 0
+    allocate(mesh%m_res(conf%nflux))
+    mesh%m_res = 0
+    allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
+    mesh%res_ind = 0
     log%msg = 'resonance positions:'
     if (log%debug) call log%write
-    do m = m_res_max, m_res_min, -1
+    do m = mesh%m_res_max, mesh%m_res_min, -1
        abs_err = [(abs(abs(fs_half%q(kf)) - dble(m) / dble(conf%n)), kf = 1, conf%nflux)]
        kf_res = minloc(abs_err, 1)
-       res_ind(m) = kf_res
-       m_res(kf_res) = m
+       mesh%res_ind(m) = kf_res
+       mesh%m_res(kf_res) = m
        write (log%msg, '("m = ", i0, ", kf_res = ", i0, ' // &
             '", rho: ", f19.16, 2(" < ", f19.16))') m, kf_res, &
             [fs%rad(kf_res - 1), fs_half%rad(kf_res), fs%rad(kf_res)] / fs%rad(conf%nflux)
@@ -953,8 +1017,8 @@ contains
 
     open(newunit = fid, file = 'plot_B0.dat', recl = longlines, status = 'replace')
     do kf = 1, conf%nflux
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
           elem = mesh_element(ktri)
           do ke = 1, 3
              base = mesh_point(elem%i_knot(ke))
@@ -1004,8 +1068,8 @@ contains
     B2avg = 0d0
     B2avg_half = 0d0
     do kf = 1, conf%nflux
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
           r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
           B2avg(kf) = B2avg(kf) + B0r(ktri, tri%ef) ** 2 + &
@@ -1014,11 +1078,11 @@ contains
           B2avg_half(kf) = B2avg_half(kf) + B0r(ktri, tri%ei) ** 2 + &
                B0phi(ktri, tri%ei) ** 2 + B0z(ktri, tri%ei) ** 2
        end do
-       B2avg(kf) = B2avg(kf) / kt_max(kf)
-       B2avg_half(kf) = B2avg_half(kf) / kt_max(kf)
+       B2avg(kf) = B2avg(kf) / mesh%kt_max(kf)
+       B2avg_half(kf) = B2avg_half(kf) / mesh%kt_max(kf)
 
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
 
           r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
@@ -1119,8 +1183,8 @@ contains
     open(newunit = fid_amp, file = 'j0_amp.dat', recl = longlines, status = 'replace')
     open(newunit = fid_gs, file = 'j0_gs.dat', recl = longlines, status = 'replace')
     do kf = 1, conf%nflux
-       do kt = 1, kt_max(kf)
-          theta = (dble(kt) - 0.5d0) / dble(kt_max(kf)) * 2d0 * pi
+       do kt = 1, mesh%kt_max(kf)
+          theta = (dble(kt) - 0.5d0) / dble(mesh%kt_max(kf)) * 2d0 * pi
           ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
           call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), &
                theta, dum, dum, dum, dum, dum, R, dum, dum, Z, dum, dum)
@@ -1166,8 +1230,8 @@ contains
     allocate(q(conf%nflux))
     q = 0d0
     do kf = 1, conf%nflux
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
           q(kf) = q(kf) + B0phi_Omega(ktri) * tri%area
        end do
@@ -1217,8 +1281,8 @@ contains
     max_rel_err = 0d0
     avg_rel_err = 0d0
     do kf = 1, conf%nflux
-       inner: do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
+       inner: do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
           if (.not. tri%orient) cycle inner
           ! use midpoint of edge f
@@ -1228,7 +1292,7 @@ contains
           lr = tip%rcoord - base%rcoord
           lz = tip%zcoord - base%zcoord
 
-          kp = tri%lf(1) - kp_low(kf)
+          kp = tri%lf(1) - mesh%kp_low(kf)
 
           a(kp) = (B0r(ktri, tri%ef) * lr + B0z(ktri, tri%ef) * lz) / (lr ** 2 + lz ** 2)
 
@@ -1256,12 +1320,12 @@ contains
        if (kf == 1) then ! first point on axis - average over enclosing flux surface
           presn(1) = sum(x) / size(x)
        end if
-       do kp = 1, kp_max(kf)
-          presn(kp_low(kf) + kp) = x(kp)
+       do kp = 1, mesh%kp_max(kf)
+          presn(mesh%kp_low(kf) + kp) = x(kp)
        end do
     end do
 
-    avg_rel_err = avg_rel_err / sum(kp_max(1:conf%nflux))
+    avg_rel_err = avg_rel_err / sum(mesh%kp_max(1:conf%nflux))
     write (log%msg, '("compute_presn: diagonalization max_rel_err = ", ' // &
          'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (log%debug) call log%write
@@ -1411,8 +1475,8 @@ contains
     max_rel_err = 0d0
     avg_rel_err = 0d0
     do kf = 1, conf%nflux ! loop through flux surfaces
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
           elem = mesh_element(ktri)
           tri = mesh_element_rmp(ktri)
           ! first term on source side: flux through edge f
@@ -1442,30 +1506,30 @@ contains
                (presn(tri%lo(2)) - presn(tri%lo(1)))) + j0phi(ktri, tri%eo) * &
                (Bnphi_Gamma / B0phi(ktri, tri%eo) - Bnflux(ktri, tri%eo) / B0flux(ktri, tri%eo)))
        end do
-       call assemble_sparse(kt_max(kf), d(:kt_max(kf)), du(:kt_max(kf)), nz, &
-            irow(:(2*kt_max(kf))), icol(:(2*kt_max(kf))), aval(:(2*kt_max(kf))))
-       inhom = x  ! remember inhomogeneity before x is overwritten with the solution
-       call sparse_solve(kt_max(kf), kt_max(kf), nz, irow(:nz), icol(:nz), aval(:nz), &
-            x(:kt_max(kf)))
-       call sparse_matmul(kt_max(kf), kt_max(kf), irow(:nz), icol(:nz), aval(:nz), &
-            x(:kt_max(kf)), resid)
-       resid = resid - inhom(:kt_max(kf))
-       where (abs(inhom(:kt_max(kf))) >= small)
-          rel_err(:kt_max(kf)) = abs(resid(:kt_max(kf))) / abs(inhom(:kt_max(kf)))
-       elsewhere
-          rel_err(:kt_max(kf)) = 0d0
-       end where
-       max_rel_err = max(max_rel_err, maxval(rel_err(:kt_max(kf))))
-       avg_rel_err = avg_rel_err + sum(rel_err(:kt_max(kf)))
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
+       associate (ndim => mesh%kt_max(kf))
+         call assemble_sparse(ndim, d(:ndim), du(:ndim), nz, &
+              irow(:2*ndim), icol(:2*ndim), aval(:2*ndim))
+         inhom = x  ! remember inhomogeneity before x is overwritten with the solution
+         call sparse_solve(ndim, ndim, nz, irow(:nz), icol(:nz), aval(:nz), x(:ndim))
+         call sparse_matmul(ndim, ndim, irow(:nz), icol(:nz), aval(:nz), x(:ndim), resid)
+         resid = resid - inhom(:ndim)
+         where (abs(inhom(:ndim)) >= small)
+            rel_err(:ndim) = abs(resid(:ndim)) / abs(inhom(:ndim))
+         elsewhere
+            rel_err(:ndim) = 0d0
+         end where
+         max_rel_err = max(max_rel_err, maxval(rel_err(:ndim)))
+         avg_rel_err = avg_rel_err + sum(rel_err(:ndim))
+       end associate
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
           jnflux(ktri, tri%ei) = -x(kt)
-          jnflux(ktri, tri%eo) = x(mod(kt, kt_max(kf)) + 1)
+          jnflux(ktri, tri%eo) = x(mod(kt, mesh%kt_max(kf)) + 1)
           jnphi(ktri) = sum(jnflux(ktri, :)) * imun / conf%n / tri%area
        end do
     end do
-    avg_rel_err = avg_rel_err / sum(kt_max(1:conf%nflux))
+    avg_rel_err = avg_rel_err / sum(mesh%kt_max(1:conf%nflux))
     write (log%msg, '("compute_currn: diagonalization max_rel_err = ", ' // &
          'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (log%debug) call log%write
@@ -1487,10 +1551,10 @@ contains
     complex(dp) :: presn_half
 
     do kf = 1, conf%nflux
-       if (m_res(kf) > 0) then
-          if (abs(conf_arr%sheet_current_factor(m_res(kf))) > 0d0) then
-             do kt = 1, kt_max(kf)
-                ktri = kt_low(kf) + kt
+       if (mesh%m_res(kf) > 0) then
+          if (abs(conf_arr%sheet_current_factor(mesh%m_res(kf))) > 0d0) then
+             do kt = 1, mesh%kt_max(kf)
+                ktri = mesh%kt_low(kf) + kt
                 tri = mesh_element_rmp(ktri)
                 ! add sheet current on edge i
                 if (mod(kt, 2) == 0) then
@@ -1505,7 +1569,7 @@ contains
                    presn_half = presn(tri%li(2))
                 end if
                 jnflux(ktri, tri%ei) = jnflux(ktri, tri%ei) + &
-                     conf_arr%sheet_current_factor(m_res(kf)) * &
+                     conf_arr%sheet_current_factor(mesh%m_res(kf)) * &
                      B0flux(ktri, tri%ei) * presn_half
                 ! add sheet current on edge o
                 if (mod(kt, 2) == 1) then
@@ -1520,7 +1584,7 @@ contains
                    presn_half = presn(tri%lo(1))
                 end if
                 jnflux(ktri, tri%eo) = jnflux(ktri, tri%eo) + &
-                     conf_arr%sheet_current_factor(m_res(kf)) * &
+                     conf_arr%sheet_current_factor(mesh%m_res(kf)) * &
                      B0flux(ktri, tri%eo) * presn_half
                 ! adjust toroidal current density
                 jnphi(ktri) = sum(jnflux(ktri, :)) * imun / conf%n / tri%area
@@ -1542,9 +1606,9 @@ contains
     type(triangle_rmp) :: tri1, tri2
 
     do kf = 2, conf%nflux
-       do kt = 1, kt_max(kf), 2
-          ktri1 = kt_low(kf) + kt
-          ktri2 = kt_low(kf) + kt + 1
+       do kt = 1, mesh%kt_max(kf), 2
+          ktri1 = mesh%kt_low(kf) + kt
+          ktri2 = mesh%kt_low(kf) + kt + 1
           tri1 = mesh_element_rmp(ktri1)
           tri2 = mesh_element_rmp(ktri2)
           tor_flux_avg = 0.5d0 * (tor_comp(ktri2) * tri2%area + &
@@ -1570,8 +1634,8 @@ contains
     complex(dp) :: Bnpsi
 
     do kf = 1, conf%nflux
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
           ! use midpoint of edge f
           base = mesh_point(tri%lf(1))
@@ -1618,7 +1682,7 @@ contains
     integer, intent(in) :: kf, kt
     real(dp), intent(in) :: r
     real(dp) :: metric_det
-    metric_det = equil%cocos%sgn_dpsi * fs_half%q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
+    metric_det = equil%cocos%sgn_dpsi * fs_half%q(kf) * r / B0phi_Omega(mesh%kt_low(kf) + kt)
   end function jacobian
 
   subroutine write_vector_plot(pol_flux, tor_comp, outfile)
@@ -1640,8 +1704,8 @@ contains
        n_cutoff = conf%nflux
     end if
     do kf = 1, n_cutoff
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
           r = tri%R_Omega
           z = tri%Z_Omega
@@ -1658,7 +1722,7 @@ contains
     end do
     r = equil%rmaxis
     z = equil%zmaxis
-    do ktri = kt_low(n_cutoff+1) + 1, ntri
+    do ktri = mesh%kt_low(n_cutoff+1) + 1, ntri
        write (fid, '(12(1x, es24.16e3))') r, z, (0d0, k = 1, 10)
     end do
     close(fid)
@@ -1713,7 +1777,7 @@ contains
     real(dp) :: psi, pol_frac, pol_offset, pol_interval(0:conf%nkpol), thickness
 
     location = -1
-    if (r < r_min .or. r > r_max .or. z < z_min .or. z > z_max) return
+    if (R < mesh%R_min .or. R > mesh%R_max .or. Z < mesh%Z_min .or. Z > mesh%Z_max) return
     location = -2
     psi = interp_psi_pol(r, z)
     if (equil%cocos%sgn_dpsi == +1) then
@@ -1725,41 +1789,43 @@ contains
     location = -3
 
     pol_interval = 0d0
-    pol_interval(0:kp_max(kf)-1) = 0.5d0 / pi * atan2( &
-         mesh_point((kp_low(kf) + 1):(kp_low(kf) + kp_max(kf)))%zcoord - z_o, &
-         mesh_point((kp_low(kf) + 1):(kp_low(kf) + kp_max(kf)))%rcoord - r_o)
+    pol_interval(0:mesh%kp_max(kf)-1) = 0.5d0 / pi * atan2( &
+         mesh_point((mesh%kp_low(kf) + 1):(mesh%kp_low(kf) + mesh%kp_max(kf)))%zcoord - mesh%Z_O, &
+         mesh_point((mesh%kp_low(kf) + 1):(mesh%kp_low(kf) + mesh%kp_max(kf)))%rcoord - mesh%R_O)
     pol_offset = pol_interval(0)
     pol_interval = pol_interval - pol_offset
-    pol_interval(kp_max(kf)) = 1d0
+    pol_interval(mesh%kp_max(kf)) = 1d0
     where (pol_interval < 0d0) pol_interval = pol_interval + 1d0
     where (pol_interval > 1d0) pol_interval = pol_interval - 1d0
-    pol_frac = 0.5d0 / pi * atan2(z - z_o, r - r_o) - pol_offset
+    pol_frac = 0.5d0 / pi * atan2(Z - mesh%Z_O, R - mesh%R_O) - pol_offset
     if (pol_frac < 0d0) pol_frac = pol_frac + 1d0
     if (pol_frac > 1d0) pol_frac = pol_frac - 1d0
     call binsearch(pol_interval, lbound(pol_interval, 1), pol_frac, kq)
 
-    ! fs%psi is averaged from interpolated values and triangle edges do not lie exactly
-    ! on flux surfaces, so we include the two adjacent triangle strips in the search
+    ! Triangle edges do not lie exactly on flux surfaces, so we include the two adjacent
+    ! triangle strips in the search. The candidates are ordered by decreasing likelihood
+    ! of being the correct guess, i.e., the current loop, the outer loop and the inner
+    ! loop, or filler if any of these is not applicable.
     if (kf == 1) then
        k_max = 3
-       candidates = [kt_low(kf) + kq, &                               ! best guess
-            kt_low(kf + 1) + 2 * kq - 1, kt_low(kf + 1) + 2 * kq, &   ! outer loop
-            -1, -1, -1]                                               ! filler
+       candidates = [mesh%kt_low(kf) + kq, &
+            mesh%kt_low(kf + 1) + 2 * kq - 1, mesh%kt_low(kf + 1) + 2 * kq, &
+            -1, -1, -1]
     elseif (kf == 2) then
        k_max = 5
-       candidates = [kt_low(kf) + 2 * kq - 1, kt_low(kf) + 2 * kq, &  ! best guesses
-            kt_low(kf + 1) + 2 * kq - 1, kt_low(kf + 1) + 2 * kq, &   ! outer loop
-            kt_low(kf - 1) + kq, -1]                                  ! inner loop, filler
+       candidates = [mesh%kt_low(kf) + 2 * kq - 1, mesh%kt_low(kf) + 2 * kq, &
+            mesh%kt_low(kf + 1) + 2 * kq - 1, mesh%kt_low(kf + 1) + 2 * kq, &
+            mesh%kt_low(kf - 1) + kq, -1]
     elseif (kf == conf%nflux) then
        k_max = 4
-       candidates = [kt_low(kf) + 2 * kq - 1, kt_low(kf) + 2 * kq, &  ! best guesses
-            kt_low(kf - 1) + 2 * kq - 1, kt_low(kf - 1) + 2 * kq, &   ! inner loop
-            -1, -1]                                                   ! filler
+       candidates = [mesh%kt_low(kf) + 2 * kq - 1, mesh%kt_low(kf) + 2 * kq, &
+            mesh%kt_low(kf - 1) + 2 * kq - 1, mesh%kt_low(kf - 1) + 2 * kq, &
+            -1, -1]
     else
        k_max = 6
-       candidates = [kt_low(kf) + 2 * kq - 1, kt_low(kf) + 2 * kq, &  ! best guesses
-            kt_low(kf + 1) + 2 * kq - 1, kt_low(kf + 1) + 2 * kq, &   ! outer loop
-            kt_low(kf - 1) + 2 * kq - 1, kt_low(kf - 1) + 2 * kq]     ! inner loop
+       candidates = [mesh%kt_low(kf) + 2 * kq - 1, mesh%kt_low(kf) + 2 * kq, &
+            mesh%kt_low(kf + 1) + 2 * kq - 1, mesh%kt_low(kf + 1) + 2 * kq, &
+            mesh%kt_low(kf - 1) + 2 * kq - 1, mesh%kt_low(kf - 1) + 2 * kq]
     end if
 
     thickness = fs%rad(conf%nflux) * sqrt(epsilon(1d0)) * 8d0
@@ -1790,7 +1856,7 @@ contains
           R = equil%R_eqd(kw)
           Z = equil%Z_eqd(kh)
           ktri = point_location(R, Z)
-          if (ktri > kt_low(1) .and. ktri <= kt_low(conf%nflux + 1)) then
+          if (ktri > mesh%kt_low(1) .and. ktri <= mesh%kt_low(conf%nflux + 1)) then
              tri = mesh_element_rmp(ktri)
              call interp_RT0(ktri, pol_flux, R, Z, comp_R, comp_Z)
              comp_phi = tor_comp(ktri)
@@ -1815,7 +1881,7 @@ contains
     integer :: ktri, fid
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
-    do ktri = 1, kt_low(conf%nflux + 1)
+    do ktri = 1, mesh%kt_low(conf%nflux + 1)
        write (fid, '(8(1x, es23.15e3))') pol_flux(ktri, :), &
             tor_comp(ktri) * mesh_element_rmp(ktri)%area
     end do
@@ -1833,7 +1899,7 @@ contains
     integer :: kpoint, fid
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
-    do kpoint = 1, kp_low(conf%nflux + 1)
+    do kpoint = 1, mesh%kp_low(conf%nflux + 1)
        write (fid, '(2(1x, es24.16e3))') scalar_dof(kpoint)
     end do
     close(fid)
@@ -1848,8 +1914,8 @@ contains
     open(newunit = fid, file = conf%fluxvar_file, recl = longlines, status = 'replace')
     write (fid, '(5(1x, es24.16e3))') 0d0, fs%psi(0), fs%q(0), fs%p(0), fs%dp_dpsi(0)
     do kf = 1, conf%nflux
-       rho_r = mesh_point(kp_low(kf) + 1)%rcoord - mesh_point(1)%rcoord
-       rho_z = mesh_point(kp_low(kf) + 1)%zcoord - mesh_point(1)%zcoord
+       rho_r = mesh_point(mesh%kp_low(kf) + 1)%rcoord - mesh_point(1)%rcoord
+       rho_z = mesh_point(mesh%kp_low(kf) + 1)%zcoord - mesh_point(1)%zcoord
        write (fid, '(5(1x, es24.16e3))') &
             hypot(rho_r, rho_z), fs%psi(kf), fs%q(kf), fs%p(kf), fs%dp_dpsi(kf)
     end do
@@ -1904,8 +1970,8 @@ contains
        coeff_tor = 0d0
        q_sum = 0d0
        sheet_flux = 0d0
-       do kt = 1, kt_max(kf)
-          theta = (dble(kt) - conf%debug_pol_offset) / dble(kt_max(kf)) * 2d0 * pi
+       do kt = 1, mesh%kt_max(kf)
+          theta = (dble(kt) - conf%debug_pol_offset) / dble(mesh%kt_max(kf)) * 2d0 * pi
           fourier_basis = [(exp(-imun * m * theta), m = -mmax, mmax)]
           if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
              R = equil%rmaxis + fs_half%rad(kf) * cos(theta)
@@ -1934,10 +2000,10 @@ contains
           coeff_tor = coeff_tor + comp_tor * fourier_basis
           q_sum = q_sum + q
        end do
-       coeff_rad = coeff_rad / kt_max(kf)
-       coeff_pol = coeff_pol / kt_max(kf)
-       coeff_tor = coeff_tor / kt_max(kf)
-       q = q_sum / kt_max(kf)
+       coeff_rad = coeff_rad / mesh%kt_max(kf)
+       coeff_pol = coeff_pol / mesh%kt_max(kf)
+       coeff_tor = coeff_tor / mesh%kt_max(kf)
+       q = q_sum / mesh%kt_max(kf)
        if (conf%kilca_scale_factor /= 0) then
           write (fid_rad, fmt) fs_half%rad(kf), q, real(coeff_rad), aimag(coeff_rad)
           write (fid_pol, fmt) fs_half%rad(kf), q, real(coeff_pol), aimag(coeff_pol)
@@ -1978,11 +2044,11 @@ contains
          part_int_neg, part_int_pos, bndry_neg, bndry_pos
 
     if (conf%kilca_scale_factor /= 0) return
-    kf_min = res_ind(abs(conf%kilca_pol_mode)) &
+    kf_min = mesh%res_ind(abs(conf%kilca_pol_mode)) &
          - conf_arr%additions(abs(conf%kilca_pol_mode)) &
          - conf_arr%deletions(abs(conf%kilca_pol_mode))
     if (kf_min < 1) kf_min = 1
-    kf_max = res_ind(abs(conf%kilca_pol_mode)) &
+    kf_max = mesh%res_ind(abs(conf%kilca_pol_mode)) &
          + conf_arr%additions(abs(conf%kilca_pol_mode)) &
          + conf_arr%deletions(abs(conf%kilca_pol_mode))
     if (kf_max > conf%nflux) kf_max = conf%nflux
