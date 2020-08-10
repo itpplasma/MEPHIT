@@ -239,7 +239,7 @@ contains
     use magdif_util, only: interp_psi_pol, flux_func
     use magdif, only: equil, mesh, init_indices, fs, fs_half, flux_func_cache_check
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
-         raxis, zaxis
+         raxis, zaxis, load_magdata_in_symfluxcoord
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
          theta0_at_xpoint, theta_axis
     use points_2d, only: s_min, create_points_2d

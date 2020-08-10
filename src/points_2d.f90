@@ -19,7 +19,7 @@ contains
 ! so that magdata_in_symfluxcoord_ext can be called within this subroutine
 subroutine create_points_2d(inp_label, n_theta, points, points_s_theta_phi, r_scaling_func, theta_scaling_func, repeat_center_point)
 !
-    use magdata_in_symfluxcoor_mod, only: psipol_max
+    use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext, psipol_max
     integer, intent(in) :: inp_label
     integer, dimension(:), intent(in) :: n_theta
     double precision, dimension(:,:), intent(out) :: points
@@ -214,7 +214,7 @@ end subroutine create_points_2d
 !
   subroutine theta_geom2theta_flux(inp_label, s, psi, theta_geom_vec,theta_flux_vec)
 !
-    use magdata_in_symfluxcoor_mod, only : raxis,zaxis !<=sergei10.11.19
+    use magdata_in_symfluxcoor_mod, only : raxis,zaxis, magdata_in_symfluxcoord_ext
     use field_line_integration_mod, only: theta0_at_xpoint, theta0
 !
     implicit none
