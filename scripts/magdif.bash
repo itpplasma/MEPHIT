@@ -139,7 +139,7 @@ magdif_prepare() {
             anyerr=$lasterr
             continue
         fi
-        kilca_scale_factor=$(nml_read_integer "$config" kilca_scale_factor)
+        kilca_scale_factor=$(nml_read_integer "$config" config%kilca_scale_factor)
         if [ -z "$kilca_scale_factor" ]; then
             kilca_scale_factor=0
         fi
