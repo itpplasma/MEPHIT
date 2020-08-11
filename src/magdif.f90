@@ -2286,7 +2286,7 @@ contains
        part_int_pos(krad) = part_int_pos(krad) / dble(ntheta) * 0.25d0 * clight / pi
        bndry_neg(krad) = bndry_neg(krad) / dble(ntheta) * 0.25d0 * clight / pi
        bndry_pos(krad) = bndry_pos(krad) / dble(ntheta) * 0.25d0 * clight / pi
-       write (fid_jpar, '(14(1x, es24.16e3))') rad(krad), psi(krad), &
+       write (fid_jpar, '(14(1x, es24.16e3))') psi(krad), rad(krad), &
             jmn_par_neg(krad), jmn_par_pos(krad), &
             part_int_neg(krad), part_int_pos(krad), bndry_neg(krad), bndry_pos(krad)
     end do
