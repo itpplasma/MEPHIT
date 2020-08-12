@@ -2,6 +2,7 @@ program magdif_mesher
 
   use magdif_conf, only: conf, magdif_config_read, conf_arr, log, magdif_log
   use magdif_mesh_mod, only: generate_mesh
+  use hdf5_tools, only: h5_init, h5_deinit
 
   implicit none
 
@@ -18,10 +19,11 @@ program magdif_mesher
      error stop 'expected path to magdif config file as first parameter'
   endif
 
+  call h5_init
   call magdif_config_read(conf, config_file)
   call conf_arr%read(config_file, conf%m_min, conf%m_max)
   log = magdif_log('-', conf%log_level, conf%quiet)
-
   call generate_mesh(unprocessed_geqdsk)
+  call h5_deinit
 
 end program magdif_mesher

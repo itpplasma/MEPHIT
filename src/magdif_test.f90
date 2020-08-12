@@ -2,6 +2,7 @@ program magdif_test
   use magdif_conf, only: conf, magdif_config_read, conf_arr, runmode_single, &
        runmode_direct, runmode_precon
   use magdif, only: magdif_init, magdif_cleanup, magdif_single, magdif_iterated
+  use hdf5_tools, only: h5_init, h5_deinit
 
   implicit none
 
@@ -16,6 +17,7 @@ program magdif_test
      call get_command_argument(2, bin_dir)
   end if
 
+  call h5_init
   call magdif_config_read(conf, config_file)
   call conf_arr%read(config_file, conf%m_min, conf%m_max)
   call magdif_init(bin_dir)
@@ -30,5 +32,6 @@ program magdif_test
      error stop 'unknown runmode'
   end select
   call magdif_cleanup
+  call h5_deinit
 
 end program magdif_test

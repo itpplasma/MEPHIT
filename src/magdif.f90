@@ -561,23 +561,48 @@ contains
   subroutine read_mesh
     use magdif_conf, only: conf, log
     use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, mesh_element_rmp
-    integer :: fid
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    integer(HID_T) :: h5id_magdif
+    integer :: ktri
+    integer, dimension(:, :), allocatable :: tri_node, adj_tri, adj_edge
 
-    open(newunit = fid, file = conf%meshdata_file, form = 'unformatted', status = 'old')
-    read (fid) conf%nflux, npoint, ntri, mesh%m_res_min, mesh%m_res_max
+    call h5_open('magdif.h5', h5id_magdif)
+    call h5_get(h5id_magdif, 'mesh/nflux', conf%nflux)
+    call h5_get(h5id_magdif, 'mesh/npoint', npoint)
+    call h5_get(h5id_magdif, 'mesh/ntri', ntri)
     write (log%msg, '("nflux = ", i0, ", npoint = ", i0, ", ntri = ", i0)') &
          conf%nflux, npoint, ntri
     if (log%info) call log%write
-
     call fs%init(conf%nflux, .false.)
     call fs_half%init(conf%nflux, .true.)
-    read (fid) fs%psi, fs%rad
-    read (fid) fs_half%psi, fs_half%rad
     allocate(mesh_point(npoint))
-    read (fid) mesh_point
     allocate(mesh_element(ntri))
-    read (fid) mesh_element
-    close(fid)
+    allocate(tri_node(3, ntri))
+    allocate(adj_tri(3, ntri))
+    allocate(adj_edge(3, ntri))
+    call h5_get(h5id_magdif, 'mesh/m_res_min', mesh%m_res_min)
+    call h5_get(h5id_magdif, 'mesh/m_res_max', mesh%m_res_max)
+    call h5_get(h5id_magdif, 'mesh/node_R', mesh_point%rcoord)
+    call h5_get(h5id_magdif, 'mesh/node_Z', mesh_point%zcoord)
+    call h5_get(h5id_magdif, 'mesh/tri_node', tri_node)
+    call h5_get(h5id_magdif, 'mesh/tri_node_F', mesh_element%knot_h)
+    call h5_get(h5id_magdif, 'mesh/adj_tri', adj_tri)
+    call h5_get(h5id_magdif, 'mesh/adj_edge', adj_edge)
+    call h5_get(h5id_magdif, 'mesh/det', mesh_element%det_3)
+    call h5_get(h5id_magdif, 'cache/fs/psi', fs%psi)
+    call h5_get(h5id_magdif, 'cache/fs/rad', fs%rad)
+    call h5_get(h5id_magdif, 'cache/fs_half/psi', fs_half%psi)
+    call h5_get(h5id_magdif, 'cache/fs_half/rad', fs_half%rad)
+    call h5_close(h5id_magdif)
+    ! intermediate until mesh_mod is refactored into magdif_mesh
+    do ktri = 1, ntri
+       mesh_element(ktri)%i_knot = tri_node(:, ktri)
+       mesh_element(ktri)%neighbour = adj_tri(:, ktri)
+       mesh_element(ktri)%neighbour_edge = adj_edge(:, ktri)
+    end do
+    deallocate(tri_node)
+    deallocate(adj_tri)
+    deallocate(adj_edge)
 
     allocate(mesh_element_rmp(ntri))
 

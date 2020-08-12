@@ -4,16 +4,18 @@
 program vacfield
 
   use iso_fortran_env, only: dp => real64
-  use mesh_mod, only: npoint, ntri, knot, mesh_point, mesh_element, mesh_element_rmp
+  use mesh_mod, only: npoint, ntri, knot, mesh_point, mesh_element
+  use hdf5_tools, only: HID_T, h5_init, h5_open, h5_get, h5_close, h5_deinit
   use magdif_conf, only: conf, magdif_config_read
   use magdif_util, only: initialize_globals, gauss_legendre_unit_interval, imun
-  use magdif, only: fs, fs_half
 
   implicit none
 
   character(len = 1024) :: config_file
   integer, parameter :: order = 2
   integer :: fid, ktri, ke, k
+  integer(HID_T) :: h5id_magdif
+  integer, dimension(:, :), allocatable :: tri_node
   real(dp) :: R, Z, edge_R, edge_Z, node_R(4), node_Z(4)
   real(dp), dimension(order) :: points, weights
   complex(dp) :: B_Rn, B_Zn, Bnflux(3), Bnphiflux
@@ -23,22 +25,26 @@ program vacfield
   else
      error stop 'expected path to config file as first parameter'
   endif
+  call h5_init
   call magdif_config_read(conf, config_file)
 
   call gauss_legendre_unit_interval(order, points, weights)
 
-  open(newunit = fid, file = conf%meshdata_file, form = 'unformatted', status = 'old')
-  read (fid) conf%nflux, npoint, ntri
-  call fs%init(conf%nflux, .false.)
-  call fs_half%init(conf%nflux, .true.)
-  read (fid) fs%psi, fs%rad
-  read (fid) fs_half%psi, fs_half%rad
+  call h5_open('magdif.h5', h5id_magdif)
+  call h5_get(h5id_magdif, 'mesh/npoint', npoint)
+  call h5_get(h5id_magdif, 'mesh/ntri', ntri)
   allocate(mesh_point(npoint))
-  read (fid) mesh_point
   allocate(mesh_element(ntri))
-  read (fid) mesh_element
-  close(fid)
-  allocate(mesh_element_rmp(ntri))
+  allocate(tri_node(3, ntri))
+  call h5_get(h5id_magdif, 'mesh/node_R', mesh_point%rcoord)
+  call h5_get(h5id_magdif, 'mesh/node_Z', mesh_point%zcoord)
+  call h5_get(h5id_magdif, 'mesh/tri_node', tri_node)
+  call h5_close(h5id_magdif)
+  ! intermediate until mesh_mod is refactored into magdif_mesh
+  do ktri = 1, ntri
+     mesh_element(ktri)%i_knot = tri_node(:, ktri)
+  end do
+  deallocate(tri_node)
 
   R = mesh_point(1)%rcoord
   Z = mesh_point(1)%zcoord
@@ -47,8 +53,7 @@ program vacfield
   open(newunit = fid, file = trim(conf%Bn_vac_file), status = 'replace')
   do ktri = 1, ntri
      Bnflux = (0d0, 0d0)
-     associate(tri => mesh_element_rmp(ktri), &
-          knots => mesh_point(mesh_element(ktri)%i_knot))
+     associate(knots => mesh_point(mesh_element(ktri)%i_knot))
        node_R = [knots(:)%rcoord, knots(1)%rcoord]
        node_Z = [knots(:)%zcoord, knots(1)%zcoord]
        do ke = 1, 3
@@ -71,6 +76,5 @@ program vacfield
 
   if (allocated(mesh_point)) deallocate(mesh_point)
   if (allocated(mesh_element)) deallocate(mesh_element)
-  if (allocated(mesh_element_rmp)) deallocate(mesh_element_rmp)
-
+  call h5_deinit
 end program vacfield

@@ -506,7 +506,11 @@ contains
     use mesh_mod, only: npoint, ntri, knot, triangle, mesh_point, mesh_element
     use magdif_conf, only: conf, longlines
     use magdif, only: mesh, fs, fs_half, flux_func_cache_check
+    use hdf5_tools, only: HID_T, h5_create, h5_define_group, h5_close_group, h5_add, &
+         h5_close
 
+    integer(HID_T) :: h5id_magdif, h5id_mesh, h5id_cache, h5id_fs, h5id_fs_half
+    integer :: tri_node(3, ntri), adj_tri(3, ntri), adj_edge(3, ntri)
     integer :: fid, kpoi, ktri, kp, ke
     type(triangle) :: elem
 
@@ -520,13 +524,50 @@ contains
     close(fid)
 
     call flux_func_cache_check
-    open(newunit = fid, file = conf%meshdata_file, form = 'unformatted', status = 'replace')
-    write (fid) conf%nflux, npoint, ntri, mesh%m_res_min, mesh%m_res_max
-    write (fid) fs%psi, fs%rad
-    write (fid) fs_half%psi, fs_half%rad
-    write (fid) mesh_point
-    write (fid) mesh_element
-    close(fid)
+    ! intermediate until mesh_mod is refactored into magdif_mesh
+    do ktri = 1, ntri
+       tri_node(:, ktri) = mesh_element(ktri)%i_knot
+       adj_tri(:, ktri) = mesh_element(ktri)%neighbour
+       adj_edge(:, ktri) = mesh_element(ktri)%neighbour_edge
+    end do
+    call h5_create('magdif.h5', h5id_magdif)
+    call h5_define_group(h5id_magdif, 'mesh', h5id_mesh)
+    call h5_add(h5id_mesh, 'nflux', conf%nflux, comment = 'number of flux surfaces')
+    call h5_add(h5id_mesh, 'npoint', npoint, comment = 'number of points')
+    call h5_add(h5id_mesh, 'ntri', ntri, comment = 'number of triangles')
+    call h5_add(h5id_mesh, 'm_res_min', mesh%m_res_min, &
+         comment = 'minimal absolute poloidal mode number')
+    call h5_add(h5id_mesh, 'm_res_max', mesh%m_res_max, &
+         comment = 'maximal absolute poloidal mode number')
+    call h5_add(h5id_mesh, 'node_R', mesh_point%rcoord, [1], [npoint], &
+         comment = 'R coordinates of mesh points', unit = 'cm')
+    call h5_add(h5id_mesh, 'node_Z', mesh_point%zcoord, [1], [npoint], &
+         comment = 'Z coordinates of mesh points', unit = 'cm')
+    call h5_add(h5id_mesh, 'tri_node', tri_node, lbound(tri_node), ubound(tri_node), &
+         comment = 'triangle node indices')
+    call h5_add(h5id_mesh, 'tri_node_F', mesh_element%knot_h, [1], [ntri])
+    call h5_add(h5id_mesh, 'adj_tri', adj_tri, lbound(adj_tri), ubound(adj_tri), &
+         comment = 'adjacent triangle indices')
+    call h5_add(h5id_mesh, 'adj_edge', adj_edge, lbound(adj_edge), ubound(adj_edge), &
+         comment = 'adjacent triangle edge indices')
+    call h5_add(h5id_mesh, 'det', mesh_element%det_3, [1], [ntri], &
+         comment = 'determinant of triangle node coordinates')
+    call h5_close_group(h5id_mesh)
+    call h5_define_group(h5id_magdif, 'cache', h5id_cache)
+    call h5_define_group(h5id_cache, 'fs', h5id_fs)
+    call h5_add(h5id_fs, 'psi', fs%psi, lbound(fs%psi), ubound(fs%psi), &
+         comment = 'poloidal flux on flux surfaces', unit = 'Mx')
+    call h5_add(h5id_fs, 'rad', fs%rad, lbound(fs%rad), ubound(fs%rad), &
+         comment = 'radial position on OX line on flux surfaces', unit = 'cm')
+    call h5_close_group(h5id_fs)
+    call h5_define_group(h5id_cache, 'fs_half', h5id_fs_half)
+    call h5_add(h5id_fs_half, 'psi', fs_half%psi, lbound(fs_half%psi), ubound(fs_half%psi), &
+         comment = 'poloidal flux between flux surfaces', unit = 'Mx')
+    call h5_add(h5id_fs_half, 'rad', fs_half%rad, lbound(fs_half%rad), ubound(fs_half%rad), &
+         comment = 'radial position on OX line between flux surfaces', unit = 'cm')
+    call h5_close_group(h5id_fs_half)
+    call h5_close_group(h5id_cache)
+    call h5_close(h5id_magdif)
 
     open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace')
     write (fid, '(3(1x, i0))') npoint, ntri, mesh%kp_max(conf%nflux) - 1
