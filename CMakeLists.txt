@@ -14,12 +14,17 @@ include(${CMAKE_SOURCE_DIR}/ProjectConfig.cmake.in)
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 
-### SuiteSparse and SuperLU
+### dependencies in standard directories
 find_package(SuiteSparse REQUIRED)
 find_package(SuperLU REQUIRED)
+find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 
 ### External source files
 include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
+
+### internal dependencies
+find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
+include_directories(${HDF5_tools_include_dir})
 
 ### Set compiler flags
 # gfortran configuration
@@ -56,6 +61,7 @@ add_library(magdif SHARED
   src/magdif_config.f90
   src/magdif_util.f90
   src/magdif_mesh_mod.f90
+  src/magdif_pert.f90
   ${SUITESPARSE_SRC_FILES}
   ${SUPERLU_SRC_FILES}
 )
@@ -90,7 +96,19 @@ set_source_files_properties(src/vacfield.f90 PROPERTIES COMPILE_FLAGS "${WARNING
 set_source_files_properties(src/standardise_equilibrium.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
 
 ### Linking
-set(MAGDIF_LIBS ${SUPERLU_LIBRARIES} ${SUITESPARSE_LIBRARIES} ${gsl_lib} ${fgsl_lib} blas lapack)
+set(MAGDIF_LIBS
+  ${SUPERLU_LIBRARIES}
+  ${SUITESPARSE_LIBRARIES}
+  ${HDF5_tools_lib}
+  ${HDF5_Fortran_HL_LIBRARIES}
+  ${HDF5_HL_LIBRARIES}
+  ${HDF5_Fortran_LIBRARIES}
+  ${HDF5_LIBRARIES}
+  ${gsl_lib}
+  ${fgsl_lib}
+  blas
+  lapack
+)
 target_link_libraries(magdif ${MAGDIF_LIBS})
 target_link_libraries(magdif_test.x magdif)
 target_link_libraries(standardise_equilibrium.x magdif)

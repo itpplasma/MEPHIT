@@ -7,8 +7,7 @@ module magdif_util
   private
 
   public :: clight, imun, initialize_globals, get_equil_filenames, interp_psi_pol, &
-       ring_centered_avg_coord, assemble_sparse, linspace, straight_cyl2bent_cyl, &
-       bent_cyl2straight_cyl, binsearch, interleave, &
+       linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, binsearch, interleave, &
        gauss_legendre_unit_interval, heapsort_complex, complex_abs_asc
 
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
@@ -59,39 +58,6 @@ module magdif_util
     procedure :: interp => flux_func_interp
     final :: flux_func_destructor
   end type flux_func
-
-  !> Structure containing flux functions evaluated at a specific flux surface, indicated
-  !> by a common array index. For details see flux_func_cache_init().
-  type, public :: flux_func_cache
-     private
-     integer :: nflux
-
-     !> Magnetic flux surface label \f$ \psi \f$ in maxwell.
-     !>
-     !> \f$ \psi \f$ is the disc poloidal flux divided by \f$ 2 \pi \f$. Its sign is
-     !> positive and its magnitude is growing in the radially inward direction.
-     real(dp), dimension(:), allocatable, public :: psi
-
-     !> Minor radius \f$ r \f$ in centimeter.
-     real(dp), dimension(:), allocatable, public :: rad
-
-     real(dp), dimension(:), allocatable, public :: F
-
-     !> Unperturbed pressure \f$ p_{0} \f$ in barye.
-     real(dp), dimension(:), allocatable, public :: p
-
-     real(dp), dimension(:), allocatable, public :: FdF_dpsi
-
-     !> Derivative of unperturbed pressure w.r.t. flux surface label,
-     !> \f$ p_{0}'(\psi) \f$, in barye per maxwell.
-     real(dp), dimension(:), allocatable, public :: dp_dpsi
-
-     !> Safety factor \f$ q \f$ (dimensionless).
-     real(dp), dimension(:), allocatable, public :: q
-   contains
-     procedure :: init => flux_func_cache_init
-     final :: flux_func_cache_destructor
-  end type flux_func_cache
 
   type, public :: neumaier_accumulator_real
      private
@@ -153,105 +119,6 @@ contains
     ! field_divB0.f90 adds psib (SIBRY, i.e., flux at the boundary) to interpolated psi[f]
     psi_pol = psif - psib
   end function interp_psi_pol
-
-  !> Computes the "weighted" centroid for a triangle so that it is approximately
-  !> equidistant between the enclosing flux surfaces, independent of triangle orientation.
-  !>
-  !> @param elem the triangle for which the centroid is to be computed
-  !> @param r radial cylindrical coordinate of the centroid
-  !> @param z axial cylindrical coordinate of the centroid
-  !>
-  !> Depending on the orientation of the triangle (see also \p orient of
-  !> get_labeled_edges()), two knots lie on the inner flux surface and one on the outer
-  !> one, or vice versa. A simple arithmetic mean of the three knots' coordinates would
-  !> place the centroid closer to the inner flux surface for one orientation and closer
-  !> to the outer one for the other. To counteract this, the "lonely" knot is counted
-  !> twice in the averaging procedure, i.e. with double weighting.
-  pure subroutine ring_centered_avg_coord(elem, r, z)
-    use mesh_mod, only: triangle, knot, mesh_point
-    type(triangle), intent(in) :: elem
-    real(dp), intent(out) :: r, z
-    type(knot), dimension(3) :: knots
-
-    knots = mesh_point(elem%i_knot)
-    r = (sum(knots%rcoord) + knots(elem%knot_h)%rcoord) * 0.25d0
-    z = (sum(knots%zcoord) + knots(elem%knot_h)%zcoord) * 0.25d0
-  end subroutine ring_centered_avg_coord
-
-  !> Assembles a sparse matrix in coordinate list (COO) representation for use with
-  !> sparse_mod::sparse_solve().
-  !>
-  !> @param nrow number \f$ n \f$ of rows in the matrix
-  !> @param d \f$ n \f$ diagnonal elements of stiffness matrix \f$ A \f$
-  !> @param du \f$ n-1 \f$ superdiagonal elements of stiffness matrix \f$ A \f$ and
-  !> \f$ A_{n, 1} \f$ (lower left corner)
-  !> @param nz number of non-zero entries (2*nrow)
-  !> @param irow nz row indices of non-zero entries
-  !> @param icol nz column indices of non-zero entries
-  !> @param aval nz values of non-zero entries
-  !>
-  !> The input is a stiffness matrix \f$ K \f$ with non-zero entries on the main diagonal,
-  !> the upper diagonal and, due to periodicity, in the lower left corner. This shape
-  !> results from the problems in compute_presn() and compute_currn().
-  subroutine assemble_sparse(nrow, d, du, nz, irow, icol, aval)
-    use magdif_conf, only: log
-    integer, intent(in)  :: nrow
-    complex(dp), intent(in)  :: d(1:)  !nrow
-    complex(dp), intent(in)  :: du(1:)  !nrow
-    integer, intent(out) :: nz
-    integer, intent(out) :: irow(1:), icol(1:)  !2*nrow
-    complex(dp), intent(out) :: aval(1:)  !2*nrow
-
-    integer :: k
-
-    nz = 2*nrow
-
-    if (nrow /= size(d)) then
-       call log%msg_arg_size('assemble_sparse', 'nrow', 'size(d)', nrow, size(d))
-       if (log%err) call log%write
-       error stop
-    end if
-    if (nrow /= size(du)) then
-       call log%msg_arg_size('assemble_sparse', 'nrow', 'size(du)', nrow, size(du))
-       if (log%err) call log%write
-       error stop
-    end if
-    if (nz /= size(irow)) then
-       call log%msg_arg_size('assemble_sparse', 'nz', 'size(irow)', nz, size(irow))
-       if (log%err) call log%write
-       error stop
-    end if
-    if (nz /= size(icol)) then
-       call log%msg_arg_size('assemble_sparse', 'nz', 'size(icol)', nz, size(icol))
-       if (log%err) call log%write
-       error stop
-    end if
-    if (nz /= size(aval)) then
-       call log%msg_arg_size('assemble_sparse', 'nz', 'size(aval)', nz, size(aval))
-       if (log%err) call log%write
-       error stop
-    end if
-
-    irow(1) = 1
-    icol(1) = 1
-    aval(1) = d(1)
-
-    irow(2) = nrow
-    icol(2) = 1
-    aval(2) = du(nrow)
-
-    do k = 2, nrow
-       ! off-diagonal
-       irow(2*k-1) = k-1
-       icol(2*k-1) = k
-       aval(2*k-1) = du(k-1)
-
-       ! diagonal
-       irow(2*k) = k
-       icol(2*k) = k
-       aval(2*k) = d(k)
-    end do
-  end subroutine assemble_sparse
 
   function linspace(lo, hi, cnt, excl_lo, excl_hi)
     real(dp), intent(in) :: lo, hi
@@ -792,62 +659,6 @@ contains
 
     if (allocated(this%indep_var)) deallocate(this%indep_var)
   end subroutine flux_func_destructor
-
-  !> Set up arrays of cached values of flux functions.
-  !>
-  !> @nflux number of flux surfaces
-  !> @half_step values are taken at flux surfaces (false) or between flux surfaces (true)
-  !>
-  !> For full-grid quantities, values are taken on flux surfaces with indices running
-  !> from 0 to \p nflux, i.e. from the magnetic axis to the separatrix. An exception is
-  !> made for \psi, where the index runs up to \p nflux +1. This value is extrapolated for
-  !> finite differences in magdif::compute_presn() and magdif::compute_bn_nonres().
-  !> For half-grid quantities, values are taken between two flux surfaces with indices
-  !> running from 1 to \p nflux, i.e. from the triangle strip surrounding the magnetic
-  !> axis to the triangle strip just inside the separatrix.
-  subroutine flux_func_cache_init(this, nflux, half_step)
-    class(flux_func_cache), intent(inout) :: this
-    integer, intent(in) :: nflux
-    logical, intent(in) :: half_step
-
-    call flux_func_cache_destructor(this)
-    if (half_step) then
-       allocate(this%psi(nflux))
-       allocate(this%rad(nflux))
-       allocate(this%F(nflux))
-       allocate(this%p(nflux))
-       allocate(this%FdF_dpsi(nflux))
-       allocate(this%dp_dpsi(nflux))
-       allocate(this%q(nflux))
-    else
-       allocate(this%psi(0:nflux))
-       allocate(this%rad(0:nflux))
-       allocate(this%F(0:nflux))
-       allocate(this%p(0:nflux))
-       allocate(this%FdF_dpsi(0:nflux))
-       allocate(this%dp_dpsi(0:nflux))
-       allocate(this%q(0:nflux))
-    end if
-    this%psi = 0d0
-    this%rad = 0d0
-    this%F = 0d0
-    this%p = 0d0
-    this%FdF_dpsi = 0d0
-    this%dp_dpsi = 0d0
-    this%q = 0d0
-  end subroutine flux_func_cache_init
-
-  subroutine flux_func_cache_destructor(this)
-    type(flux_func_cache), intent(inout) :: this
-
-    if (allocated(this%psi)) deallocate(this%psi)
-    if (allocated(this%rad)) deallocate(this%rad)
-    if (allocated(this%F)) deallocate(this%F)
-    if (allocated(this%p)) deallocate(this%p)
-    if (allocated(this%FdF_dpsi)) deallocate(this%FdF_dpsi)
-    if (allocated(this%dp_dpsi)) deallocate(this%dp_dpsi)
-    if (allocated(this%q)) deallocate(this%q)
-  end subroutine flux_func_cache_destructor
 
   subroutine neumaier_accumulator_real_init(this)
     class(neumaier_accumulator_real), intent(inout) :: this

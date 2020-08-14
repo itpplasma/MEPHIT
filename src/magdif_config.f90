@@ -116,7 +116,7 @@ module magdif_conf
 
      !> Unformatted input data file containing mesh data. Defaults to `mesh.dat`.
      !>
-     !> This file is generated in magdif_mesh_mod::generate_mesh() and is read in by
+     !> This file is generated in magdif_mesh::generate_mesh() and is read in by
      !> magdif::read_mesh().
      character(len = 1024) :: meshdata_file = 'mesh.dat'
 
