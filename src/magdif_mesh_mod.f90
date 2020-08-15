@@ -36,12 +36,12 @@ module magdif_mesh
 
      real(dp), dimension(:), allocatable, public :: F
 
-     !> Unperturbed pressure \f$ p_{0} \f$ in barye.
+     !> Equilibrium pressure \f$ p_{0} \f$ in barye.
      real(dp), dimension(:), allocatable, public :: p
 
      real(dp), dimension(:), allocatable, public :: FdF_dpsi
 
-     !> Derivative of unperturbed pressure w.r.t. flux surface label,
+     !> Derivative of equilibrium pressure w.r.t. flux surface label,
      !> \f$ p_{0}'(\psi) \f$, in barye per maxwell.
      real(dp), dimension(:), allocatable, public :: dp_dpsi
 
@@ -296,8 +296,8 @@ contains
 
     call create_mesh_points(convexfile)
     call connect_mesh_points
-    call write_mesh_data
     call cache_mesh_data
+    call write_mesh_data
 
     if (allocated(mesh_element_rmp)) deallocate(mesh_element)
     if (allocated(mesh_element)) deallocate(mesh_element)
@@ -1082,13 +1082,15 @@ contains
   end function point_in_triangle
 
   subroutine write_mesh_data
-    use mesh_mod, only: npoint, ntri, knot, triangle, mesh_point, mesh_element
+    use mesh_mod, only: npoint, ntri, knot, triangle, mesh_point, mesh_element, &
+         mesh_element_rmp
     use magdif_conf, only: conf, longlines
     use hdf5_tools, only: HID_T, h5_create, h5_define_group, h5_close_group, h5_add, &
          h5_close
 
     integer(HID_T) :: h5id_magdif, h5id_mesh, h5id_cache, h5id_fs, h5id_fs_half
-    integer :: tri_node(3, ntri), adj_tri(3, ntri), adj_edge(3, ntri)
+    integer :: tri_node(3, ntri), adj_tri(3, ntri), adj_edge(3, ntri), &
+         tri_li(2, ntri), tri_lo(2, ntri), tri_lf(2, ntri), tri_orient(ntri)
     integer :: fid, kpoi, ktri, kp, ke
     type(triangle) :: elem
 
@@ -1107,27 +1109,89 @@ contains
        tri_node(:, ktri) = mesh_element(ktri)%i_knot
        adj_tri(:, ktri) = mesh_element(ktri)%neighbour
        adj_edge(:, ktri) = mesh_element(ktri)%neighbour_edge
+       tri_li(:, ktri) = mesh_element_rmp(ktri)%li
+       tri_lo(:, ktri) = mesh_element_rmp(ktri)%lo
+       tri_lf(:, ktri) = mesh_element_rmp(ktri)%lf
     end do
+    where (mesh_element_rmp%orient)
+       tri_orient = 1
+    elsewhere
+       tri_orient = 0
+    end where
     call h5_create('magdif.h5', h5id_magdif)
     call h5_define_group(h5id_magdif, 'mesh', h5id_mesh)
+    call h5_add(h5id_mesh, 'R_O', mesh%R_O, &
+         comment = 'R coordinate of O point', unit = 'cm')
+    call h5_add(h5id_mesh, 'Z_O', mesh%Z_O, &
+         comment = 'Z coordinate of O point', unit = 'cm')
+    call h5_add(h5id_mesh, 'R_min', mesh%R_min, &
+         comment = 'minimal R coordinate of computational grid', unit = 'cm')
+    call h5_add(h5id_mesh, 'Z_min', mesh%Z_min, &
+         comment = 'minimal Z coordinate of computational grid', unit = 'cm')
+    call h5_add(h5id_mesh, 'R_max', mesh%R_max, &
+         comment = 'maximal R coordinate of computational grid', unit = 'cm')
+    call h5_add(h5id_mesh, 'Z_max', mesh%Z_max, &
+         comment = 'maximal Z coordinate of computational grid', unit = 'cm')
     call h5_add(h5id_mesh, 'nflux', conf%nflux, comment = 'number of flux surfaces')
     call h5_add(h5id_mesh, 'npoint', npoint, comment = 'number of points')
     call h5_add(h5id_mesh, 'ntri', ntri, comment = 'number of triangles')
+    call h5_add(h5id_mesh, 'nedge', mesh%nedge, comment = 'number of edges')
     call h5_add(h5id_mesh, 'm_res_min', mesh%m_res_min, &
          comment = 'minimal absolute poloidal mode number')
     call h5_add(h5id_mesh, 'm_res_max', mesh%m_res_max, &
          comment = 'maximal absolute poloidal mode number')
+    call h5_add(h5id_mesh, 'kp_max', mesh%kp_max, lbound(mesh%kp_max), ubound(mesh%kp_max), &
+         comment = 'number of nodes on flux surface')
+    call h5_add(h5id_mesh, 'kp_low', mesh%kp_low, lbound(mesh%kp_low), ubound(mesh%kp_low), &
+         comment = 'index of last node on previous flux surface')
+    call h5_add(h5id_mesh, 'kt_max', mesh%kt_max, lbound(mesh%kt_max), ubound(mesh%kt_max), &
+         comment = 'number of triangles on flux surface')
+    call h5_add(h5id_mesh, 'kt_low', mesh%kt_low, lbound(mesh%kt_low), ubound(mesh%kt_low), &
+         comment = 'index of last triangle on previous flux surface')
     call h5_add(h5id_mesh, 'node_R', mesh_point%rcoord, [1], [npoint], &
          comment = 'R coordinates of mesh points', unit = 'cm')
     call h5_add(h5id_mesh, 'node_Z', mesh_point%zcoord, [1], [npoint], &
          comment = 'Z coordinates of mesh points', unit = 'cm')
     call h5_add(h5id_mesh, 'tri_node', tri_node, lbound(tri_node), ubound(tri_node), &
          comment = 'triangle node indices')
-    call h5_add(h5id_mesh, 'tri_node_F', mesh_element%knot_h, [1], [ntri])
+    call h5_add(h5id_mesh, 'tri_node_F', mesh_element%knot_h, [1], [ntri], &
+         comment = 'local node index of node F')
+    call h5_add(h5id_mesh, 'tri_li', tri_li, lbound(tri_li), ubound(tri_li), &
+         comment = 'local node indices of edge i, counter-clockwise')
+    call h5_add(h5id_mesh, 'tri_lo', tri_lo, lbound(tri_lo), ubound(tri_lo), &
+         comment = 'local node indices of edge o, counter-clockwise')
+    call h5_add(h5id_mesh, 'tri_lf', tri_lf, lbound(tri_lf), ubound(tri_lf), &
+         comment = 'local node indices of edge f, counter-clockwise')
+    call h5_add(h5id_mesh, 'tri_ei', mesh_element_rmp%ei, &
+         lbound(mesh_element_rmp), ubound(mesh_element_rmp), &
+         comment = 'local edge index of edge i')
+    call h5_add(h5id_mesh, 'tri_eo', mesh_element_rmp%eo, &
+         lbound(mesh_element_rmp), ubound(mesh_element_rmp), &
+         comment = 'local edge index of edge o')
+    call h5_add(h5id_mesh, 'tri_ef', mesh_element_rmp%ef, &
+         lbound(mesh_element_rmp), ubound(mesh_element_rmp), &
+         comment = 'local edge index of edge f')
+    call h5_add(h5id_mesh, 'tri_orient', tri_orient, [1], [ntri], &
+         comment = 'triangle orientation: true (1) if edge f lies on outer flux surface')
     call h5_add(h5id_mesh, 'adj_tri', adj_tri, lbound(adj_tri), ubound(adj_tri), &
          comment = 'adjacent triangle indices')
     call h5_add(h5id_mesh, 'adj_edge', adj_edge, lbound(adj_edge), ubound(adj_edge), &
          comment = 'adjacent triangle edge indices')
+    call h5_add(h5id_mesh, 'edge_map2kedge', mesh%edge_map2global, &
+         lbound(mesh%edge_map2global), ubound(mesh%edge_map2global), &
+         comment = 'mapping of triangle & local edge index to global edge index')
+    call h5_add(h5id_mesh, 'edge_map2ktri', mesh%edge_map2ktri, &
+         lbound(mesh%edge_map2ktri), ubound(mesh%edge_map2ktri), &
+         comment = 'mapping of global edge index to triangle index')
+    call h5_add(h5id_mesh, 'edge_map2ke', mesh%edge_map2ke, &
+         lbound(mesh%edge_map2ke), ubound(mesh%edge_map2ke), &
+         comment = 'mapping of global edge index to local edge index')
+    call h5_add(h5id_mesh, 'tri_centr_R', mesh_element_rmp%R_Omega, &
+         lbound(mesh_element_rmp), ubound(mesh_element_rmp), &
+         'R coordinate of triangle ''centroid''', unit = 'cm')
+    call h5_add(h5id_mesh, 'tri_centr_Z', mesh_element_rmp%Z_Omega, &
+         lbound(mesh_element_rmp), ubound(mesh_element_rmp), &
+         'Z coordinate of triangle ''centroid''', unit = 'cm')
     call h5_add(h5id_mesh, 'det', mesh_element%det_3, [1], [ntri], &
          comment = 'determinant of triangle node coordinates')
     call h5_close_group(h5id_mesh)
@@ -1426,7 +1490,6 @@ contains
     use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
     use magdif_conf, only: conf, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, longlines
     use magdif_util, only: clight
-    use magdif_pert, only: check_redundant_edges
     integer :: kf, kt, ktri, fid
     real(dp) :: r, z
     real(dp) :: Btor2
@@ -1525,7 +1588,8 @@ contains
     end do
     close(fid)
 
-    call check_redundant_edges(cmplx(j0phi, 0d0, dp), .true., 'j0phi')
+    ! TODO: replace by real array with kedge index
+    ! call check_redundant_edges(cmplx(j0phi, 0d0, dp), .true., 'j0phi')
 
   contains
     function j0phi_ampere(r, z) result (rotB_phi)
