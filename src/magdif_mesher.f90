@@ -6,6 +6,7 @@ program magdif_preprocess
   use magdif_pert, only: compute_kilca_vac_coeff, compute_kilca_vacuum, &
        check_kilca_vacuum, check_RT0
   use magdif, only: Bnflux, Bnphi
+  use mesh_mod, only: mesh_point, mesh_element, mesh_element_rmp
 
   implicit none
 
@@ -34,5 +35,8 @@ program magdif_preprocess
      call check_RT0(Bnflux, Bnphi)
   end if
   call h5_deinit
-
+  ! TODO: proper cleanup
+  if (allocated(mesh_element_rmp)) deallocate(mesh_element)
+  if (allocated(mesh_element)) deallocate(mesh_element)
+  if (allocated(mesh_point)) deallocate(mesh_point)
 end program magdif_preprocess

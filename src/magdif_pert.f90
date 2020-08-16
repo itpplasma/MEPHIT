@@ -25,7 +25,7 @@ contains
     integer :: kpoint, fid
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
-    do kpoint = 1, mesh%kp_low(conf%nflux + 1)
+    do kpoint = 1, mesh%kp_low(mesh%nflux + 1)
        write (fid, '(2(1x, es24.16e3))') scalar_dof(kpoint)
     end do
     close(fid)
@@ -159,7 +159,7 @@ contains
     integer :: ktri, fid
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
-    do ktri = 1, mesh%kt_low(conf%nflux + 1)
+    do ktri = 1, mesh%kt_low(mesh%nflux + 1)
        write (fid, '(8(1x, es23.15e3))') pol_flux(ktri, :), &
             tor_comp(ktri) * mesh_element_rmp(ktri)%area
     end do
@@ -189,9 +189,9 @@ contains
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
     if (conf%nonres) then
-       n_cutoff = conf%nflux - 1
+       n_cutoff = mesh%nflux - 1
     else
-       n_cutoff = conf%nflux
+       n_cutoff = mesh%nflux
     end if
     do kf = 1, n_cutoff
        do kt = 1, mesh%kt_max(kf)
@@ -210,8 +210,8 @@ contains
                tor_comp(ktri), dens_psi_contravar, proj_theta_covar
        end do
     end do
-    r = equil%rmaxis
-    z = equil%zmaxis
+    r = mesh%R_O
+    z = mesh%Z_O
     do ktri = mesh%kt_low(n_cutoff+1) + 1, ntri
        write (fid, '(12(1x, es24.16e3))') r, z, (0d0, k = 1, 10)
     end do
@@ -237,7 +237,7 @@ contains
           R = equil%R_eqd(kw)
           Z = equil%Z_eqd(kh)
           ktri = point_location(R, Z)
-          if (ktri > mesh%kt_low(1) .and. ktri <= mesh%kt_low(conf%nflux + 1)) then
+          if (ktri > mesh%kt_low(1) .and. ktri <= mesh%kt_low(mesh%nflux + 1)) then
              tri = mesh_element_rmp(ktri)
              call interp_RT0(ktri, pol_flux, R, Z, comp_R, comp_Z)
              comp_phi = tor_comp(ktri)
@@ -264,7 +264,7 @@ contains
     real(dp) :: r, lr, lz
     complex(dp) :: Bnpsi
 
-    do kf = 1, conf%nflux
+    do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
@@ -274,16 +274,16 @@ contains
           r = (base%rcoord + tip%rcoord) * 0.5d0
           lr = tip%rcoord - base%rcoord
           lz = tip%zcoord - base%zcoord
-          Bnpsi = -equil%rcentr * B0phi(ktri, tri%ef) / r
+          Bnpsi = -mesh%R_O * B0phi(ktri, tri%ef) / r
           Bnflux(ktri, tri%ef) = Bnpsi * (lr ** 2 + lz ** 2) / &
                (B0r(ktri, tri%ef) * lr + B0z(ktri, tri%ef) * lz)
-          Bnphi(ktri) = imun / conf%n * Bnflux(ktri, tri%ef) / tri%area
+          Bnphi(ktri) = imun / mesh%n * Bnflux(ktri, tri%ef) / tri%area
           Bnflux(ktri, tri%ei) = (0d0, 0d0)
           Bnflux(ktri, tri%eo) = (0d0, 0d0)
        end do
     end do
     if (conf%quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
-    call check_div_free(Bnflux, Bnphi, conf%n, conf%rel_err_Bn, 'non-resonant B_n')
+    call check_div_free(Bnflux, Bnphi, mesh%n, conf%rel_err_Bn, 'non-resonant B_n')
     call check_redundant_edges(Bnflux, .false., 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
@@ -299,7 +299,7 @@ contains
     complex(dp) :: tor_flux_avg, tor_flux_diff
     type(triangle_rmp) :: tri1, tri2
 
-    do kf = 2, conf%nflux
+    do kf = 2, mesh%nflux
        do kt = 1, mesh%kt_max(kf), 2
           ktri1 = mesh%kt_low(kf) + kt
           ktri2 = mesh%kt_low(kf) + kt + 1
@@ -310,19 +310,19 @@ contains
           tor_flux_diff = 0.5d0 * (tor_comp(ktri2) * tri2%area - &
                tor_comp(ktri1) * tri1%area)
           tor_comp(ktri1) = tor_flux_avg / tri1%area
-          pol_flux(ktri1, tri1%eo) = pol_flux(ktri1, tri1%eo) - imun * conf%n * tor_flux_diff
+          pol_flux(ktri1, tri1%eo) = pol_flux(ktri1, tri1%eo) - imun * mesh%n * tor_flux_diff
           tor_comp(ktri2) = tor_flux_avg / tri2%area
-          pol_flux(ktri2, tri2%ei) = pol_flux(ktri2, tri2%ei) + imun * conf%n * tor_flux_diff
+          pol_flux(ktri2, tri2%ei) = pol_flux(ktri2, tri2%ei) + imun * mesh%n * tor_flux_diff
        end do
     end do
   end subroutine avg_flux_on_quad
 
   ! calculate resonant vacuum perturbation
   subroutine compute_kilca_vacuum(Bnflux, Bnphi)
-    use mesh_mod, only: ntri, mesh_element_rmp, mesh_point, mesh_element
+    use mesh_mod, only: ntri, knot, triangle, mesh_point, mesh_element, mesh_element_rmp
     use magdif_conf, only: conf
     use magdif_util, only: imun, gauss_legendre_unit_interval
-    use magdif_mesh, only: equil
+    use magdif_mesh, only: equil, mesh
     complex(dp), allocatable, intent(out) :: Bnflux(:,:), Bnphi(:)
     integer, parameter :: order = 2
     integer :: ktri, k, ke, pol_modes(2)
@@ -347,19 +347,19 @@ contains
             do k = 1, order
                R = node_R(ke) * points(k) + node_R(ke + 1) * points(order - k + 1)
                Z = node_Z(ke) * points(k) + node_Z(ke + 1) * points(order - k + 1)
-               rho = hypot(R - equil%rmaxis, Z - equil%zmaxis)
-               theta = atan2(Z - equil%zmaxis, R - equil%rmaxis)
-               call kilca_vacuum(conf%n, pol_modes, equil%rcentr, rho, theta, B_R, B_phi, B_Z)
+               rho = hypot(R - mesh%R_O, Z - mesh%Z_O)
+               theta = atan2(Z - mesh%Z_O, R - mesh%R_O)
+               call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, rho, theta, B_R, B_phi, B_Z)
                Bnflux(ktri, ke) = Bnflux(ktri, ke) + &
                     weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
             end do
          end do
          ! toroidal flux via zero divergence
-         Bnphi(ktri) = imun / conf%n * sum(Bnflux(ktri, :)) / tri%area
+         Bnphi(ktri) = imun / mesh%n * sum(Bnflux(ktri, :)) / tri%area
        end associate
     end do
     call check_redundant_edges(Bnflux, .false., 'vacuum B_n')
-    call check_div_free(Bnflux, Bnphi, conf%n, 1d-9, 'vacuum B_n')
+    call check_div_free(Bnflux, Bnphi, mesh%n, 1d-9, 'vacuum B_n')
     call write_vector_dof(Bnflux, Bnphi, conf%Bn_vac_file)
   end subroutine compute_kilca_vacuum
 
@@ -417,7 +417,7 @@ contains
           if (log%info) call log%write
           cycle
        end if
-       call kilca_vacuum_fourier(conf%n, m, equil%rcentr, conf_arr%kilca_vac_r(m), (1d0, 0d0), &
+       call kilca_vacuum_fourier(mesh%n, m, mesh%R_O, conf_arr%kilca_vac_r(m), (1d0, 0d0), &
             B_rad, B_pol, B_tor)
        conf_arr%kilca_vac_coeff(m) = conf_arr%kilca_vac_Bz(m) / B_tor
     end do
@@ -471,18 +471,18 @@ contains
 
   subroutine check_kilca_vacuum
     use magdif_conf, only: conf, conf_arr, longlines
-    use magdif_mesh, only: equil, fs_half
+    use magdif_mesh, only: equil, fs_half, mesh
     complex(dp) :: B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
     real(dp) :: rad
     integer :: kf, fid, abs_pol_mode
 
     abs_pol_mode = abs(conf%kilca_pol_mode)
     open(newunit = fid, file = 'cmp_vac.dat', recl = 3 * longlines)
-    do kf = 1, conf%nflux
+    do kf = 1, mesh%nflux
        rad = fs_half%rad(kf)
-       call kilca_vacuum_fourier(conf%n, -abs_pol_mode, equil%rcentr, rad, &
+       call kilca_vacuum_fourier(mesh%n, -abs_pol_mode, mesh%R_O, rad, &
             conf_arr%kilca_vac_coeff(abs_pol_mode), B_rad_neg, B_pol_neg, B_tor_neg)
-       call kilca_vacuum_fourier(conf%n, abs_pol_mode, equil%rcentr, rad, &
+       call kilca_vacuum_fourier(mesh%n, abs_pol_mode, mesh%R_O, rad, &
             conf_arr%kilca_vac_coeff(abs_pol_mode), B_rad_pos, B_pol_pos, B_tor_pos)
        write (fid, '(13(1x, es24.16e3))') rad, &
            B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
@@ -492,7 +492,7 @@ contains
 
   subroutine check_RT0(Bnflux, Bnphi)
     use magdif_conf, only: conf, longlines
-    use magdif_mesh, only: equil, fs_half, point_location
+    use magdif_mesh, only: equil, fs_half, mesh, point_location
     use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
     complex(dp), intent(in) :: Bnflux(:,:), Bnphi(:)
     integer :: fid, kf, kpol, ktri
@@ -502,13 +502,13 @@ contains
 
     pol_modes = [conf%kilca_pol_mode, -conf%kilca_pol_mode]
     open(newunit = fid, file = 'cmp_RT0.dat', recl = longlines)
-    do kf = conf%nflux / 3, conf%nflux / 3 ! 1, nflux
+    do kf = mesh%nflux / 3, mesh%nflux / 3 ! 1, nflux
        rad = fs_half%rad(kf)
        do kpol = 1, 2 * conf%nkpol
           theta = (kpol - 0.5d0) / dble(2 * conf%nkpol) * 2d0 * pi
-          call kilca_vacuum(conf%n, pol_modes, equil%rcentr, rad, theta, B_R, B_phi, B_Z)
-          R = equil%rmaxis + rad * cos(theta)
-          Z = equil%zmaxis + rad * sin(theta)
+          call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, rad, theta, B_R, B_phi, B_Z)
+          R = mesh%R_O + rad * cos(theta)
+          Z = mesh%Z_O + rad * sin(theta)
           ktri = point_location(R, Z)
           call interp_RT0(ktri, Bnflux, R, Z, B_R_interp, B_Z_interp)
           B_phi_interp = Bnphi(ktri)

@@ -245,7 +245,7 @@ contains
                matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn - Bn_prev)))
           call unpack_dof(Bnflux, Bnphi, Bn)
           call check_redundant_edges(Bnflux, .false., 'B_n')
-          call check_div_free(Bnflux, Bnphi, conf%n, conf%rel_err_Bn, 'B_n')
+          call check_div_free(Bnflux, Bnphi, mesh%n, conf%rel_err_Bn, 'B_n')
        end if
 
        call unpack_dof(Bnflux_diff, Bnphi_diff, Bn - Bn_prev)
@@ -304,9 +304,9 @@ contains
                  -packed(kedge)
          end if
       end do
-      do ktri = 1, mesh%kt_low(conf%nflux + 1)
+      do ktri = 1, mesh%kt_low(mesh%nflux + 1)
          tor_comp(ktri) = sum(pol_flux(ktri, :)) * &
-              imun / conf%n / mesh_element_rmp(ktri)%area
+              imun / mesh%n / mesh_element_rmp(ktri)%area
       end do
     end subroutine unpack_dof
 
@@ -355,7 +355,7 @@ contains
   !> #bnflux_vac, #bnphi_vac, #j0phi, #jnphi and #jnflux are allocated and initialized to
   !> zero. Deallocation is done in magdif_cleanup().
   subroutine read_mesh
-    use magdif_conf, only: conf, log
+    use magdif_conf, only: log
     use magdif_mesh, only: fs, fs_half, mesh, &
          B0R, B0phi, B0Z, B0R_Omega, B0phi_Omega, B0Z_Omega, B0flux, j0phi
     use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, mesh_element_rmp
@@ -372,22 +372,23 @@ contains
     call h5_get(h5id_magdif, 'mesh/Z_min', mesh%Z_min)
     call h5_get(h5id_magdif, 'mesh/R_max', mesh%R_max)
     call h5_get(h5id_magdif, 'mesh/Z_max', mesh%Z_max)
-    call h5_get(h5id_magdif, 'mesh/nflux', conf%nflux)
+    call h5_get(h5id_magdif, 'mesh/nflux', mesh%nflux)
     call h5_get(h5id_magdif, 'mesh/npoint', npoint)
     call h5_get(h5id_magdif, 'mesh/ntri', ntri)
     call h5_get(h5id_magdif, 'mesh/nedge', mesh%nedge)
+    call h5_get(h5id_magdif, 'mesh/n', mesh%n)
     call h5_get(h5id_magdif, 'mesh/m_res_min', mesh%m_res_min)
     call h5_get(h5id_magdif, 'mesh/m_res_max', mesh%m_res_max)
     write (log%msg, '("nflux = ", i0, ", npoint = ", i0, ", ntri = ", i0)') &
-         conf%nflux, npoint, ntri
+         mesh%nflux, npoint, ntri
     if (log%info) call log%write
-    call fs%init(conf%nflux, .false.)
-    call fs_half%init(conf%nflux, .true.)
+    call fs%init(mesh%nflux, .false.)
+    call fs_half%init(mesh%nflux, .true.)
     ! TODO: allocate deferred-shape arrays in hdf5_tools and skip allocation here
-    allocate(mesh%kp_max(conf%nflux))
-    allocate(mesh%kt_max(conf%nflux))
-    allocate(mesh%kp_low(conf%nflux + 1))
-    allocate(mesh%kt_low(conf%nflux + 1))
+    allocate(mesh%kp_max(mesh%nflux))
+    allocate(mesh%kt_max(mesh%nflux))
+    allocate(mesh%kp_low(mesh%nflux + 1))
+    allocate(mesh%kt_low(mesh%nflux + 1))
     allocate(mesh_point(npoint))
     allocate(mesh_element(ntri))
     allocate(mesh_element_rmp(ntri))
@@ -497,7 +498,7 @@ contains
     integer :: stat = 0, dummy = 0
     character(len = 1024) :: fem_cmd
     write (fem_cmd, '(a, "/maxwell.sh -n ", i0, " -N ", i0, " -J ", a, " -B ", a)') &
-         trim(magdif_bin_dir), conf%n, mesh%kt_low(conf%nflux + 1), trim(conf%currn_file), &
+         trim(magdif_bin_dir), mesh%n, mesh%kt_low(mesh%nflux + 1), trim(conf%currn_file), &
          trim(conf%Bn_file)
     call execute_command_line(fem_cmd, exitstat = stat, cmdstat = dummy)
     if (stat /= 0) then
@@ -513,7 +514,7 @@ contains
     integer :: stat = 0, dummy = 0
     character(len = 1024) :: L2int_cmd
     write (L2int_cmd, '(a, "/L2int.sh -N ", i0, " -B ", a, " -C ", a)') &
-         trim(magdif_bin_dir), mesh%kt_low(conf%nflux + 1), trim(conf%Bn_diff_file), &
+         trim(magdif_bin_dir), mesh%kt_low(mesh%nflux + 1), trim(conf%Bn_diff_file), &
          trim(conf%conv_file)
     call execute_command_line(L2int_cmd, exitstat = stat, cmdstat = dummy)
     if (stat /= 0) then
@@ -534,6 +535,7 @@ contains
   subroutine read_Bn(filename)
     use magdif_conf, only: conf, longlines
     use mesh_mod, only: ntri, mesh_element_rmp
+    use magdif_mesh, only: mesh
     use magdif_pert, only: check_div_free, check_redundant_edges
     character(len = 1024) :: filename
     integer :: ktri, fid
@@ -550,7 +552,7 @@ contains
     close(fid)
 
     call check_redundant_edges(Bnflux, .false., 'B_n')
-    call check_div_free(Bnflux, Bnphi, conf%n, conf%rel_err_Bn, 'B_n')
+    call check_div_free(Bnflux, Bnphi, mesh%n, conf%rel_err_Bn, 'B_n')
   end subroutine read_Bn
 
   !> Assembles a sparse matrix in coordinate list (COO) representation for use with
@@ -652,7 +654,7 @@ contains
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
-    do kf = 1, conf%nflux
+    do kf = 1, mesh%nflux
        inner: do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
@@ -670,7 +672,7 @@ contains
 
           x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bnflux(ktri, tri%ef)
 
-          b(kp) = imun * (conf%n + imun * conf%damp) * B0phi(ktri, tri%ef) / r
+          b(kp) = imun * (mesh%n + imun * conf%damp) * B0phi(ktri, tri%ef) / r
        end do inner
 
        ! solve linear system
@@ -697,7 +699,7 @@ contains
        end do
     end do
 
-    avg_rel_err = avg_rel_err / sum(mesh%kp_max(1:conf%nflux))
+    avg_rel_err = avg_rel_err / sum(mesh%kp_max(1:mesh%nflux))
     write (log%msg, '("compute_presn: diagonalization max_rel_err = ", ' // &
          'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (log%debug) call log%write
@@ -735,7 +737,7 @@ contains
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
-    do kf = 1, conf%nflux ! loop through flux surfaces
+    do kf = 1, mesh%nflux ! loop through flux surfaces
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           elem = mesh_element(ktri)
@@ -747,22 +749,22 @@ contains
                clight * r / B0phi(ktri, tri%ef) * (presn(tri%lf(2)) - presn(tri%lf(1)))
           x(kt) = -jnflux(ktri, tri%ef)
           ! diagonal matrix element - edge i
-          d(kt) = -1d0 - imun * (conf%n + imun * conf%damp) * tri%area * 0.5d0 * &
+          d(kt) = -1d0 - imun * (mesh%n + imun * conf%damp) * tri%area * 0.5d0 * &
                B0phi(ktri, tri%ei) / B0flux(ktri, tri%ei)
           ! additional term from edge i on source side
           r = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
           Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(tri%ei)))
-          x(kt) = x(kt) - imun * conf%n * tri%area * 0.5d0 * (clight * r / B0flux(ktri, tri%ei) * &
+          x(kt) = x(kt) - imun * mesh%n * tri%area * 0.5d0 * (clight * r / B0flux(ktri, tri%ei) * &
                (Bnphi_Gamma / B0phi(ktri, tri%ei) * (fs%p(kf) - fs%p(kf-1)) - &
                (presn(tri%li(2)) - presn(tri%li(1)))) + j0phi(ktri, tri%ei) * &
                (Bnphi_Gamma / B0phi(ktri, tri%ei) - Bnflux(ktri, tri%ei) / B0flux(ktri, tri%ei)))
           ! superdiagonal matrix element - edge o
-          du(kt) = 1d0 + imun * (conf%n + imun * conf%damp) * tri%area * 0.5d0 * &
+          du(kt) = 1d0 + imun * (mesh%n + imun * conf%damp) * tri%area * 0.5d0 * &
                B0phi(ktri, tri%eo) / B0flux(ktri, tri%eo)
           ! additional term from edge o on source side
           r = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
           Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(tri%eo)))
-          x(kt) = x(kt) - imun * conf%n * tri%area * 0.5d0 * (clight * r / B0flux(ktri, tri%eo) * &
+          x(kt) = x(kt) - imun * mesh%n * tri%area * 0.5d0 * (clight * r / B0flux(ktri, tri%eo) * &
                (Bnphi_Gamma / B0phi(ktri, tri%eo) * (fs%p(kf-1) - fs%p(kf)) - &
                (presn(tri%lo(2)) - presn(tri%lo(1)))) + j0phi(ktri, tri%eo) * &
                (Bnphi_Gamma / B0phi(ktri, tri%eo) - Bnflux(ktri, tri%eo) / B0flux(ktri, tri%eo)))
@@ -787,10 +789,10 @@ contains
           tri = mesh_element_rmp(ktri)
           jnflux(ktri, tri%ei) = -x(kt)
           jnflux(ktri, tri%eo) = x(mod(kt, mesh%kt_max(kf)) + 1)
-          jnphi(ktri) = sum(jnflux(ktri, :)) * imun / conf%n / tri%area
+          jnphi(ktri) = sum(jnflux(ktri, :)) * imun / mesh%n / tri%area
        end do
     end do
-    avg_rel_err = avg_rel_err / sum(mesh%kt_max(1:conf%nflux))
+    avg_rel_err = avg_rel_err / sum(mesh%kt_max(1:mesh%nflux))
     write (log%msg, '("compute_currn: diagonalization max_rel_err = ", ' // &
          'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (log%debug) call log%write
@@ -798,21 +800,21 @@ contains
 
     call add_sheet_current
     call check_redundant_edges(jnflux, .false., 'jnflux')
-    call check_div_free(jnflux, jnphi, conf%n, conf%rel_err_currn, 'jnflux')
+    call check_div_free(jnflux, jnphi, mesh%n, conf%rel_err_currn, 'jnflux')
     call write_vector_dof(jnflux, jnphi, conf%currn_file)
     call write_vector_plot(jnflux, jnphi, decorate_filename(conf%currn_file, 'plot_', ''))
   end subroutine compute_currn
 
   subroutine add_sheet_current
     use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_element
-    use magdif_conf, only: conf, conf_arr
+    use magdif_conf, only: conf_arr
     use magdif_util, only: imun
     use magdif_mesh, only: mesh, B0flux
     integer :: kf, kt, ktri
     type(triangle_rmp) :: tri, tri_adj
     complex(dp) :: presn_half
 
-    do kf = 1, conf%nflux
+    do kf = 1, mesh%nflux
        if (mesh%m_res(kf) > 0) then
           if (abs(conf_arr%sheet_current_factor(mesh%m_res(kf))) > 0d0) then
              do kt = 1, mesh%kt_max(kf)
@@ -849,7 +851,7 @@ contains
                      conf_arr%sheet_current_factor(mesh%m_res(kf)) * &
                      B0flux(ktri, tri%eo) * presn_half
                 ! adjust toroidal current density
-                jnphi(ktri) = sum(jnflux(ktri, :)) * imun / conf%n / tri%area
+                jnphi(ktri) = sum(jnflux(ktri, :)) * imun / mesh%n / tri%area
              end do
           end if
        end if
@@ -882,7 +884,7 @@ contains
     write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(es23.15e3, 1x))'
     if (conf%kilca_scale_factor /= 0) then
        kilca_m_res = -equil%cocos%sgn_q * abs(conf%kilca_pol_mode)
-       k_z = conf%n / equil%rcentr
+       k_z = mesh%n / mesh%R_O
        open(newunit = fid_rad, recl = 3 * longlines, status = 'replace', &
             file = decorate_filename(outfile, '', '_r'))
        open(newunit = fid_pol, recl = 3 * longlines, status = 'replace', &
@@ -900,7 +902,7 @@ contains
        open(newunit = fid_tor, recl = 3 * longlines, status = 'replace', &
             file = decorate_filename(outfile, '', '_phi'))
     end if
-    do kf = 1, conf%nflux
+    do kf = 1, mesh%nflux
        coeff_rad = 0d0
        coeff_pol = 0d0
        coeff_tor = 0d0
@@ -910,8 +912,8 @@ contains
           theta = (dble(kt) - conf%debug_pol_offset) / dble(mesh%kt_max(kf)) * 2d0 * pi
           fourier_basis = [(exp(-imun * m * theta), m = -mmax, mmax)]
           if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
-             R = equil%rmaxis + fs_half%rad(kf) * cos(theta)
-             Z = equil%zmaxis + fs_half%rad(kf) * sin(theta)
+             R = mesh%R_O + fs_half%rad(kf) * cos(theta)
+             Z = mesh%Z_O + fs_half%rad(kf) * sin(theta)
           else
              ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
              call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), &
@@ -967,9 +969,9 @@ contains
   subroutine write_Ipar(rad_resolution)
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: ntheta
-    use magdif_conf, only: conf, conf_arr, longlines, decorate_filename
+    use magdif_conf, only: conf, longlines, decorate_filename
     use magdif_util, only: imun, linspace, bent_cyl2straight_cyl
-    use magdif_mesh, only: equil, fs, mesh, point_location
+    use magdif_mesh, only: fs, mesh, point_location
     use magdif_pert, only: interp_RT0
     integer, intent(in) :: rad_resolution
     integer :: kf_min, kf_max, krad, kt, ktri, fid_jpar
@@ -983,13 +985,13 @@ contains
 
     if (conf%kilca_scale_factor /= 0) return
     kf_min = mesh%res_ind(abs(conf%kilca_pol_mode)) &
-         - conf_arr%additions(abs(conf%kilca_pol_mode)) &
-         - conf_arr%deletions(abs(conf%kilca_pol_mode))
+         - mesh%additions(abs(conf%kilca_pol_mode)) &
+         - mesh%deletions(abs(conf%kilca_pol_mode))
     if (kf_min < 1) kf_min = 1
     kf_max = mesh%res_ind(abs(conf%kilca_pol_mode)) &
-         + conf_arr%additions(abs(conf%kilca_pol_mode)) &
-         + conf_arr%deletions(abs(conf%kilca_pol_mode))
-    if (kf_max > conf%nflux) kf_max = conf%nflux
+         + mesh%additions(abs(conf%kilca_pol_mode)) &
+         + mesh%deletions(abs(conf%kilca_pol_mode))
+    if (kf_max > mesh%nflux) kf_max = mesh%nflux
     rad = linspace(fs%rad(kf_min), fs%rad(kf_max), rad_resolution, 0, 0)
     jmn_par_neg = (0d0, 0d0)
     jmn_par_pos = (0d0, 0d0)
@@ -1002,8 +1004,8 @@ contains
     do krad = 1, rad_resolution
        do kt = 1, ntheta
           theta = 2d0 * pi * (dble(kt) - 0.5d0) / dble(ntheta)
-          R = equil%rmaxis + rad(krad) * cos(theta)
-          Z = equil%zmaxis + rad(krad) * sin(theta)
+          R = mesh%R_O + rad(krad) * cos(theta)
+          Z = mesh%Z_O + rad(krad) * sin(theta)
           ktri = point_location(R, Z)
           call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dB0R_dR, dum, dB0R_dZ, dB0phi_dR, &
                dum, dB0phi_dZ, dB0Z_dR, dum, dB0Z_dZ)
@@ -1033,11 +1035,11 @@ contains
                Bn_rad, Bn_pol, Bn_tor)
           part_int = -rad(krad) * Bn_pol * dhz2_drad + Bn_tor * dradhthetahz_drad
           part_int_neg(krad) = part_int_neg(krad) + (part_int + imun * B0_phi * &
-               (dble(conf%n) / equil%rmaxis * rad(krad) * B0_theta + &
+               (dble(mesh%n) / mesh%R_O * rad(krad) * B0_theta + &
                abs(conf%kilca_pol_mode) * B0_phi) * Bn_rad / B0_2) * &
                exp(imun * abs(conf%kilca_pol_mode) * theta)
           part_int_pos(krad) = part_int_pos(krad) + (part_int + imun * B0_phi * &
-               (dble(conf%n) / equil%rmaxis * rad(krad) * B0_theta - &
+               (dble(mesh%n) / mesh%R_O * rad(krad) * B0_theta - &
                abs(conf%kilca_pol_mode) * B0_phi) * Bn_rad / B0_2) * &
                exp(-imun * abs(conf%kilca_pol_mode) * theta)
           bndry = B0_phi * rad(krad) * (B0_phi * Bn_pol - B0_theta * Bn_tor) / B0_2

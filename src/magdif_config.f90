@@ -92,9 +92,6 @@ module magdif_conf
      !> Number of flux surfaces before refinement. Defaults to 100.
      integer :: nflux_unref = 100
 
-     !> Number of flux surfaces after refinement. TODO: Move to mesh type.
-     integer :: nflux
-
      !> Minimum temperature. Does not apply when #pres_prof equals #pres_prof_geqdsk.
      !> Defaults to 20 eV.
      real(dp) :: temp_min = 2d1
@@ -259,10 +256,6 @@ contains
     open(newunit = fid, file = filename)
     read(fid, nml = scalars)
     close(fid)
-    ! TODO: make a separate variable in mesh type
-    if (config%kilca_scale_factor /= 0) then
-       config%n = config%n * config%kilca_scale_factor
-    end if
   end subroutine magdif_config_read
 
   !> Read dynamic configuration from configuration file for magdif.

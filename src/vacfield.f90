@@ -8,6 +8,7 @@ program vacfield
   use hdf5_tools, only: HID_T, h5_init, h5_open, h5_get, h5_close, h5_deinit
   use magdif_conf, only: conf, magdif_config_read
   use magdif_util, only: initialize_globals, gauss_legendre_unit_interval, imun
+  use magdif_mesh, only: mesh
 
   implicit none
 
@@ -31,6 +32,8 @@ program vacfield
   call gauss_legendre_unit_interval(order, points, weights)
 
   call h5_open('magdif.h5', h5id_magdif)
+  call h5_get(h5id_magdif, 'mesh/R_O', mesh%R_O)
+  call h5_get(h5id_magdif, 'mesh/Z_O', mesh%Z_O)
   call h5_get(h5id_magdif, 'mesh/npoint', npoint)
   call h5_get(h5id_magdif, 'mesh/ntri', ntri)
   allocate(mesh_point(npoint))
@@ -46,8 +49,8 @@ program vacfield
   end do
   deallocate(tri_node)
 
-  R = mesh_point(1)%rcoord
-  Z = mesh_point(1)%zcoord
+  R = mesh%R_O
+  Z = mesh%Z_O
   call initialize_globals(R, Z)
 
   open(newunit = fid, file = trim(conf%Bn_vac_file), status = 'replace')
