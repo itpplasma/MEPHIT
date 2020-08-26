@@ -31,26 +31,43 @@ contains
     close(fid)
   end subroutine write_scalar_dof
 
-  subroutine interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)
+  subroutine interp_RT0(ktri, pol_flux, R, Z, comp_R, comp_Z, &
+       comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ)
     use mesh_mod, only: knot, triangle, mesh_point, mesh_element
     integer, intent(in) :: ktri
     complex(dp), intent(in) :: pol_flux(:,:)
     real(dp), intent(in) :: r, z
-    complex(dp), intent(out) :: pol_comp_r, pol_comp_z
+    complex(dp), intent(out) :: comp_R, comp_Z
+    complex(dp), intent(out), optional :: comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ
     type(triangle) :: elem
     type(knot) :: node(3)
 
     elem = mesh_element(ktri)
     node = mesh_point(elem%i_knot(:))
     ! edge 1 lies opposite to knot 3, etc.
-    pol_comp_r = 1d0 / elem%det_3 / r * ( &
-         pol_flux(ktri, 1) * (r - node(3)%rcoord) + &
-         pol_flux(ktri, 2) * (r - node(1)%rcoord) + &
-         pol_flux(ktri, 3) * (r - node(2)%rcoord))
-    pol_comp_z = 1d0 / elem%det_3 / r * ( &
-         pol_flux(ktri, 1) * (z - node(3)%zcoord) + &
-         pol_flux(ktri, 2) * (z - node(1)%zcoord) + &
-         pol_flux(ktri, 3) * (z - node(2)%zcoord))
+    comp_R = 1d0 / elem%det_3 / R * ( &
+         pol_flux(ktri, 1) * (R - node(3)%Rcoord) + &
+         pol_flux(ktri, 2) * (R - node(1)%Rcoord) + &
+         pol_flux(ktri, 3) * (R - node(2)%Rcoord))
+    comp_Z = 1d0 / elem%det_3 / R * ( &
+         pol_flux(ktri, 1) * (Z - node(3)%Zcoord) + &
+         pol_flux(ktri, 2) * (Z - node(1)%Zcoord) + &
+         pol_flux(ktri, 3) * (Z - node(2)%Zcoord))
+    if (present(comp_R_dR)) then
+       comp_R_dR = 1d0 / elem%det_3 / R ** 2 * ( &
+            pol_flux(ktri, 1) * node(3)%Rcoord + &
+            pol_flux(ktri, 2) * node(1)%Rcoord + &
+            pol_flux(ktri, 3) * node(2)%Rcoord)
+    end if
+    if (present(comp_R_dZ)) then
+       comp_R_dZ = (0d0, 0d0)
+    end if
+    if (present(comp_Z_dR)) then
+       comp_Z_dR = -comp_Z / R
+    end if
+    if (present(comp_Z_dZ)) then
+       comp_Z_dZ = sum(pol_flux(ktri, :)) / elem%det_3 / R
+    end if
   end subroutine interp_RT0
 
   !> Checks if divergence-freeness of the given vector field is fulfilled on each

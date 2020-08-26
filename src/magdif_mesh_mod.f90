@@ -516,7 +516,7 @@ contains
     use magdif_conf, only: conf, log
     use magdif_util, only: interp_psi_pol, flux_func
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
-         raxis, zaxis
+         raxis, zaxis, load_magdata_in_symfluxcoord
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
          theta0_at_xpoint, theta_axis
     use points_2d, only: s_min, create_points_2d
@@ -1631,6 +1631,7 @@ contains
 
   subroutine check_curr0
     use constants, only: pi  ! orbit_mod.f90
+    use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
     use magdif_conf, only: longlines
     use magdif_util, only: clight
     integer :: kf, kt, fid_amp, fid_gs, fid_prof

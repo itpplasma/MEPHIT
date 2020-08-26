@@ -43,16 +43,41 @@ magdif_part_int = dict()
 magdif_bndry = dict()
 for m in np.arange(m_min, m_max + 1):
     data = np.loadtxt(path.join(test_dir, f"TCFP_Ipar_{m}/currn_par.dat"))
-    magdif_r[m] = data[:, 0].copy()
+    magdif_r[m] = data[:, 1].copy()
     magdif_jnpar[m] = np.empty((rad_resolution), dtype=complex)
-    magdif_jnpar[m].real = data[:, 1].copy()
-    magdif_jnpar[m].imag = data[:, 2].copy()
+    magdif_jnpar[m].real = data[:, 2].copy()
+    magdif_jnpar[m].imag = data[:, 3].copy()
     magdif_part_int[m] = np.empty((rad_resolution), dtype=complex)
-    magdif_part_int[m].real = data[:, 5].copy()
-    magdif_part_int[m].imag = data[:, 6].copy()
+    magdif_part_int[m].real = data[:, 6].copy()
+    magdif_part_int[m].imag = data[:, 7].copy()
     magdif_bndry[m] = np.empty((rad_resolution), dtype=complex)
-    magdif_bndry[m].real = data[:, 9].copy()
-    magdif_bndry[m].imag = data[:, 10].copy()
+    magdif_bndry[m].real = data[:, 10].copy()
+    magdif_bndry[m].imag = data[:, 11].copy()
+
+fluxcoor_psi = dict()
+fluxcoor_r = dict()
+fluxcoor_jnpar = dict()
+fluxcoor_part_int = dict()
+fluxcoor_bndry = dict()
+fluxcoor_Ichar = dict()
+fluxcoor_Delta = dict()
+for m in np.arange(m_min, m_max + 1):
+    data = np.loadtxt(path.join(test_dir, f"TCFP_Ipar_{m}/currn_par_{m}.dat"))
+    fluxcoor_psi[m] = data[:, 0].copy()
+    fluxcoor_r[m] = data[:, 1].copy()
+    fluxcoor_jnpar[m] = np.empty((rad_resolution), dtype=complex)
+    fluxcoor_jnpar[m].real = data[:, 2].copy()
+    fluxcoor_jnpar[m].imag = data[:, 3].copy()
+    fluxcoor_part_int[m] = np.empty((rad_resolution), dtype=complex)
+    fluxcoor_part_int[m].real = data[:, 6].copy()
+    fluxcoor_part_int[m].imag = data[:, 7].copy()
+    fluxcoor_bndry[m] = np.empty((rad_resolution), dtype=complex)
+    fluxcoor_bndry[m].real = data[:, 10].copy()
+    fluxcoor_bndry[m].imag = data[:, 11].copy()
+    fluxcoor_Ichar[m] = data[:, 14].copy()
+    fluxcoor_Delta[m] = np.empty((rad_resolution), dtype=complex)
+    fluxcoor_Delta[m].real = data[:, 15].copy()
+    fluxcoor_Delta[m].imag = data[:, 16].copy()
 
 kilca_r = dict()
 kilca_jnpar = dict()
@@ -110,6 +135,35 @@ plt.savefig(path.join(work_dir, 'plot_Jnpar_magdif.png'), dpi=res)
 plt.close()
 
 plt.figure(figsize=canvas)
+ax = plt.gca()
+for m in np.arange(m_min, m_max + 1):
+    plt.plot(fluxcoor_r[m], np.abs(fluxcoor_jnpar[m]) * statA_per_cm2_to_A_per_m2,
+             '-', lw=thin, label=f"m = {m}")
+ax.get_yaxis().set_major_formatter(scifmt)
+plt.legend(loc='upper right')
+plt.xlim(full_r_range)
+c = plt.rcParams['axes.prop_cycle'].by_key()['color']
+ax_ins_1 = ax.inset_axes([3.0, 0.6e+05, 10.0, 0.8e+05], transform=ax.transData)
+ax_ins_1.plot(fluxcoor_r[3], np.abs(fluxcoor_jnpar[3]) * statA_per_cm2_to_A_per_m2,
+              '-', lw=thin, c=c[0])
+ax_ins_1.get_yaxis().set_major_formatter(copy.copy(scifmt))
+ax_ins_1.set_xlim(kilca_rres[3] - 0.5, kilca_rres[3] + 0.5)
+ax_ins_1.set_ylim(0.0, 0.8e+04)
+ax.indicate_inset_zoom(ax_ins_1)
+ax_ins_2 = ax.inset_axes([19.0, 0.6e+05, 10.0, 0.8e+05], transform=ax.transData)
+ax_ins_2.plot(fluxcoor_r[9], np.abs(fluxcoor_jnpar[9]) * statA_per_cm2_to_A_per_m2,
+              '-', lw=thin, c=c[6])
+ax_ins_2.get_yaxis().set_major_formatter(copy.copy(scifmt))
+ax_ins_2.set_xlim(kilca_rres[9] - 0.5, kilca_rres[9] + 0.5)
+ax_ins_2.set_ylim(0.0, 0.8e+04)
+ax.indicate_inset_zoom(ax_ins_2)
+plt.xlabel(r'$r$ / cm')
+plt.ylabel(r'$|J_{m n}^{\parallel}|$ / A m\textsuperscript{-2}')
+plt.title('Parallel current density of poloidal modes from magdif')
+plt.savefig(path.join(work_dir, 'plot_Jnpar_fluxcoor.png'), dpi=res)
+plt.close()
+
+plt.figure(figsize=canvas)
 for m in np.arange(m_min, m_max + 1):
     plt.axvline(kilca_rres[m], lw=0.25 * thin, color='k')
     plt.axvline(kilca_rres[m] - 0.5 * kilca_d[m], lw=0.25 * thin, color='k',
@@ -128,6 +182,7 @@ plt.savefig(path.join(work_dir, 'plot_Jnpar_kilca.png'), dpi=res)
 plt.close()
 
 magdif_Imnpar = dict()
+fluxcoor_Imnpar = dict()
 kilca_Imnpar = dict()
 for m in range(m_min, m_max + 1):
     # magdif
@@ -149,9 +204,9 @@ for m in range(m_min, m_max + 1):
                    magdif_r[m][magdif_lo:magdif_hi],
                    magdif_r[m][magdif_lo:magdif_hi]) * 2.0 * np.pi * statA_to_A
         magdif_intB[w] = np.trapz(magdif_part_int[m][magdif_lo:magdif_hi],
-                   magdif_r[m][magdif_lo:magdif_hi]) * 0.5 * c_cgs * statA_to_A
+                   magdif_r[m][magdif_lo:magdif_hi]) * 2.0 * np.pi * statA_to_A
         magdif_bndryB[w] = (magdif_bndry[m][magdif_hi] -
-                     magdif_bndry[m][magdif_lo]) * 0.5 * c_cgs * statA_to_A
+                     magdif_bndry[m][magdif_lo]) * 2.0 * np.pi * statA_to_A
     magdif_lo = np.searchsorted(magdif_r[m],
                                 kilca_rres[m] - 0.5 * kilca_d[m], 'left')
     magdif_hi = np.searchsorted(magdif_r[m],
@@ -159,6 +214,29 @@ for m in range(m_min, m_max + 1):
     magdif_Imnpar[m] = np.trapz(magdif_jnpar[m][magdif_lo:magdif_hi] *
                  magdif_r[m][magdif_lo:magdif_hi],
                  magdif_r[m][magdif_lo:magdif_hi]) * 2.0 * np.pi * statA_to_A
+    # symfluxcoord
+    fluxcoor_intJ = np.empty(magdif_half, dtype=complex)
+    fluxcoor_intB = np.empty(magdif_half, dtype=complex)
+    fluxcoor_bndryB = np.empty(magdif_half, dtype=complex)
+    fluxcoor_GPEC = np.empty(magdif_half, dtype=complex)
+    for w in range(0, magdif_half):
+        magdif_lo = magdif_mid - 1 - w
+        magdif_hi = magdif_mid + w
+        magdif_width[w] = magdif_r[m][magdif_hi] - magdif_r[m][magdif_lo]
+        fluxcoor_intJ[w] = np.trapz(fluxcoor_jnpar[m][magdif_lo:magdif_hi],
+                   fluxcoor_psi[m][magdif_lo:magdif_hi]) * statA_to_A
+        fluxcoor_intB[w] = np.trapz(fluxcoor_part_int[m][magdif_lo:magdif_hi],
+                   fluxcoor_psi[m][magdif_lo:magdif_hi]) * 2.0 * np.pi * statA_to_A
+        fluxcoor_bndryB[w] = (fluxcoor_bndry[m][magdif_hi] -
+                     fluxcoor_bndry[m][magdif_lo]) * 2.0 * np.pi * statA_to_A
+        fluxcoor_GPEC[w] = -1j / m * fluxcoor_Ichar[m][magdif_mid] * (
+            fluxcoor_Delta[m][magdif_hi] - fluxcoor_Delta[m][magdif_lo]) * statA_to_A
+    magdif_lo = np.searchsorted(magdif_r[m],
+                                kilca_rres[m] - 0.5 * kilca_d[m], 'left')
+    magdif_hi = np.searchsorted(magdif_r[m],
+                                 kilca_rres[m] + 0.5 * kilca_d[m], 'right') - 1
+    fluxcoor_Imnpar[m] = np.trapz(fluxcoor_jnpar[m][magdif_lo:magdif_hi],
+                   fluxcoor_psi[m][magdif_lo:magdif_hi]) * statA_to_A
     # KiLCA
     interval = np.linspace(kilca_rres[m] - kilca_d[m],
                            kilca_rres[m] + kilca_d[m], rad_resolution)
@@ -183,15 +261,25 @@ for m in range(m_min, m_max + 1):
     plt.figure(figsize=canvas)
     plt.axvline(kilca_d[m], lw=0.25 * thin, color='k')
     plt.axhline(np.abs(kilca_Imnpar[m]), lw=0.25 * thin, color='k')
-    plt.plot(kilca_width, np.abs(kilca_intJ), '-k', lw=thin, label='KiLCA, J')
-    plt.plot(magdif_width, np.abs(magdif_intJ), '-b', lw=thin,
-             label='magdif, J')
-    plt.plot(magdif_width, np.abs(magdif_intB + magdif_bndryB), '-r', lw=thin,
-             label='magdif, B')
-    plt.plot(magdif_width, np.abs(magdif_intB), '--r', lw=thin,
-             label='magdif, B, part.int.')
-    plt.plot(magdif_width, np.abs(magdif_bndryB), ':r', lw=thin,
-             label='magdif, B, bndry.')
+    plt.plot(kilca_width, np.abs(kilca_intJ), '-k', lw=thin, label='KiLCA')
+    plt.plot(magdif_width, np.abs(magdif_intJ), '-r', lw=thin,
+             label='J, cylcoord.')
+    plt.plot(magdif_width, np.abs(magdif_intB + magdif_bndryB), '-m', lw=thin,
+             label='B, cylcoord.')
+    plt.plot(magdif_width, np.abs(magdif_intB), '--m', lw=thin,
+             label='B, cylcoord., part.int.')
+    plt.plot(magdif_width, np.abs(magdif_bndryB), ':m', lw=thin,
+             label='B, cylcoord, bndry.')
+    plt.plot(magdif_width, np.abs(fluxcoor_intJ), '-b', lw=thin,
+             label='J, symfluxcoord.')
+    plt.plot(magdif_width, np.abs(fluxcoor_intB + fluxcoor_bndryB), '-c', lw=thin,
+             label='B, symfluxcoord.')
+    plt.plot(magdif_width, np.abs(fluxcoor_intB), '--c', lw=thin,
+             label='B, symfluxcoord., part.int.')
+    plt.plot(magdif_width, np.abs(fluxcoor_bndryB), ':c', lw=thin,
+             label='B, symfluxcoord, bndry.')
+    plt.plot(magdif_width, np.abs(fluxcoor_GPEC), '-g', lw=thin,
+             label=r'$\Delta_{mn}$')
     plt.gca().legend(loc='lower right')
     plt.xlabel(r'$d$ / cm')
     plt.ylabel(r'$\vert I_{m n}^{\parallel} \vert$ / A')

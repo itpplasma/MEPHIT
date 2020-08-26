@@ -1,17 +1,19 @@
 !
-  module magdata_in_symfluxcoor_mod
-    integer, parameter :: nspl  = 3 !spline order in poloidal angle interpolation
-    integer, parameter :: nplag = 4 !stencil for Largange polynomial interpolation (polynomial order + 1)
-    integer, parameter :: nder  = 1 !number of derivatives from Largange polynomial interpolation
-    logical :: load=.true.
-    integer :: nlabel,ntheta
-    double precision :: rmn,rmx,zmn,zmx,raxis,zaxis,h_theta,twopi,psipol_max,psitor_max
-    double precision, dimension(nplag)        :: R_lag,Z_lag,sqrtg_lag,bmod_lag,dbmod_dt_lag, &
-                                                 dR_dt_lag, dZ_dt_lag
-    double precision, dimension(0:nder,nplag) :: coef
-    double precision, dimension(:),     allocatable :: rbeg,rsmall,qsaf,psisurf,phitor
-    double precision, dimension(:,:,:), allocatable :: R_st,Z_st,bmod_st,sqgnorm_st
-  end module magdata_in_symfluxcoor_mod
+module magdata_in_symfluxcoor_mod
+  public :: load_magdata_in_symfluxcoord, magdata_in_symfluxcoord_ext
+  integer, parameter :: nspl  = 3 !spline order in poloidal angle interpolation
+  integer, parameter :: nplag = 4 !stencil for Largange polynomial interpolation (polynomial order + 1)
+  integer, parameter :: nder  = 1 !number of derivatives from Largange polynomial interpolation
+  logical :: load=.true.
+  integer :: nlabel,ntheta
+  double precision :: rmn,rmx,zmn,zmx,raxis,zaxis,h_theta,twopi,psipol_max,psitor_max
+  double precision, dimension(nplag)        :: R_lag,Z_lag,sqrtg_lag,bmod_lag,dbmod_dt_lag, &
+                                               dR_dt_lag, dZ_dt_lag
+  double precision, dimension(0:nder,nplag) :: coef
+  double precision, dimension(:),     allocatable :: rbeg,rsmall,qsaf,psisurf,phitor
+  double precision, dimension(:,:,:), allocatable :: R_st,Z_st,bmod_st,sqgnorm_st
+!
+contains
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
@@ -19,7 +21,6 @@
 !
 ! Reads and splines magnetic data over theta
 !
-  use magdata_in_symfluxcoor_mod
   use spl_three_to_five_mod, only : spl_per
 !
   implicit none
@@ -119,7 +120,7 @@
 !
   subroutine magdata_in_symfluxcoord_ext(inp_label,s,psi,theta,q,dq_ds, &
                                          sqrtg,bmod,dbmod_dtheta,R,dR_ds,dR_dtheta,       &
-                                         Z,dZ_ds,dZ_dtheta)
+                                         Z,dZ_ds,dZ_dtheta, d2R_dpsi_dtheta, d2Z_dpsi_dtheta)
   !
   ! Computes safety factor, sqrt(g) of symmetry flux coordinates, module of B, cylindrical 
   ! coordinates R and Z
@@ -148,13 +149,12 @@
   !                 dZ_ds     - derivative of Z over normalized toroidal or poloidal flux
   !                 dZ_dtheta - derivative of Z over polidal angle of symmetry flux coordinates theta
   !
-  use magdata_in_symfluxcoor_mod
-  !
   implicit none
   !
   integer :: inp_label,ir,it,k,km1,ibeg,iend
   double precision :: s,psi,theta,q,dq_ds,sqrtg,bmod,dbmod_dtheta,dtheta, &
-                      R,dR_ds,dR_dtheta,Z,dZ_ds,dZ_dtheta
+       R,dR_ds,dR_dtheta,Z,dZ_ds,dZ_dtheta
+  double precision, optional :: d2R_dpsi_dtheta, d2Z_dpsi_dtheta
 !
   if(inp_label.eq.1) then
 !
@@ -229,7 +229,10 @@
   dbmod_dtheta=sum(coef(0,:)*dbmod_dt_lag)
   dR_dtheta=sum(coef(0,:)*dR_dt_lag)
   dZ_dtheta=sum(coef(0,:)*dZ_dt_lag)
-!
-end subroutine magdata_in_symfluxcoord_ext
-!
-!ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+  if (present(d2R_dpsi_dtheta)) d2R_dpsi_dtheta = sum(coef(1,:) * dR_dt_lag)
+  if (present(d2Z_dpsi_dtheta)) d2Z_dpsi_dtheta = sum(coef(1,:) * dZ_dt_lag)
+  !
+  end subroutine magdata_in_symfluxcoord_ext
+  !
+  !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+end module magdata_in_symfluxcoor_mod
