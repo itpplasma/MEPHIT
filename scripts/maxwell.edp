@@ -1,10 +1,11 @@
 //
 // Magnetostatics with Fourier modes in toroidal angle
 //
-// C. Albert, July 2016
-//
+// C. Albert, July 2016 (initial commit)
+// P. Lainer, August 2002 (last change)
 //
 
+load "BinaryIO"
 load "MUMPS"
 
 real c = 29979245800.0; // speed of light
@@ -18,25 +19,6 @@ string Bnfluxfile = getARGV("-B", "Bn.dat");
 bool doplot = false;
 
 mesh Th = readmesh(meshfile);
-
-fespace Vh0(Th, P0);
-fespace Vh1(Th, P1);
-fespace Vh2(Th, P2);
-fespace Hrot(Th, RT0Ortho);
-fespace Hdiv(Th, RT0);
-
-Hrot <complex> [ax, ay], [wx, wy];
-Hdiv <complex> [Jr, Jz], [Br, Bz];
-// use NaN to signify an unset value
-[Jr, Jz] = [NaN() + 1.0i * NaN(), NaN() + 1.0i * NaN()];
-
-Vh0 <complex> Bphi, Jphi;
-Jphi = 0.0;
-
-real JfluxRe, JfluxIm;
-complex redundancy;
-int DoF;
-
 // count triangles in internal region 0
 int ntri = 0;
 for (int k = 0; k < Th.nt; k++) {
@@ -46,24 +28,36 @@ for (int k = 0; k < Th.nt; k++) {
 if (ktlownfluxp1 <= 0) {
   ktlownfluxp1 = ntri;
 }
-
 cout << "Number of triangles in internal region: " << ntri << endl;
 
-int inconsistent;
+fespace Vh0(Th, P0);
+fespace Vh1(Th, P1);
+fespace Vh2(Th, P2);
+fespace Hrot(Th, RT0Ortho);
+fespace Hdiv(Th, RT0);
+Hrot <complex> [ax, ay], [wx, wy];
+Hdiv <complex> [Jr, Jz], [Br, Bz];
+// use NaN to signify an unset value
+[Jr, Jz] = [NaN() + 1.0i * NaN(), NaN() + 1.0i * NaN()];
+Vh0 <complex> Bphi, Jphi;
+Jphi = 0.0;
+real[int] fluxdata(8 * ktlownfluxp1); // (Re, Im) of RT0 DoFs + toroidal component
+
+LoadVec(fluxdata, currnfile);
+complex redundancy;
+int DoF, inconsistent;
 real small = 2.2250738585072014e-308, epsilon = 2.2204460492503131e-16; // taken from Fortran
 cerr.scientific.precision(15);
-ifstream ifile(currnfile);
 for (int k = 0; k < ktlownfluxp1; k++) {
   for (int j = 0; j < 3; j++) {
     DoF = Hdiv(k, (j+2) % 3);
     redundancy = Jr[][DoF];
-    ifile >> JfluxRe >> JfluxIm;
     // check orientation of edges and assign
     // normal flux coordinate accordingly
     if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
-      Jr[][DoF] = JfluxRe + 1.0i * JfluxIm;
+      Jr[][DoF] = fluxdata[8*k + 2*j] + 1.0i * fluxdata[8*k + 2*j + 1];
     } else {
-      Jr[][DoF] = -JfluxRe - 1.0i * JfluxIm;
+      Jr[][DoF] = -fluxdata[8*k + 2*j] - 1.0i * fluxdata[8*k + 2*j + 1];
     }
     inconsistent = 0;
     // ordered comparisons with NaN always return false, so unset values are never inconsistent
@@ -84,8 +78,7 @@ for (int k = 0; k < ktlownfluxp1; k++) {
       exit(1);
     }
   }
-  ifile >> JfluxRe >> JfluxIm;
-  Jphi[][k] = (JfluxRe + 1.0i * JfluxIm) / Th[k].area;
+  Jphi[][k] = (fluxdata[8*k + 6] + 1.0i * fluxdata[8*k + 7]) / Th[k].area;
 }
 // set NaN values on the extended mesh to zero
 for (int k = ktlownfluxp1; k < Th.nt; k++) {
@@ -96,7 +89,6 @@ for (int k = ktlownfluxp1; k < Th.nt; k++) {
     }
   }
 }
-
 // Jphi = (dx(Jr) + dy(Jz)) * 1.0i / nmode;
 
 // note that the metric determinant x = R is already contained in the input data
@@ -109,25 +101,20 @@ solve Ampere([ax, ay], [wx, wy], solver = sparsesolver) = // defines the PDE
 
 [Br, Bz] = [1.0i * nmode * ay, -1.0i * nmode * ax];
 Bphi = -(dx(ay) - dy(ax));
-
-ofstream ofile(Bnfluxfile);
-ofile.scientific.precision(15);
 for (int k = 0; k < ntri; k++) {
   for (int j = 0; j < 3; j++) {
     if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
-      ofile
-        << real(Br[][Hdiv(k, (j+2) % 3)]) << "\t"
-        << imag(Br[][Hdiv(k, (j+2) % 3)]) << "\t";
+      fluxdata[8*k + 2*j] = real(Br[][Hdiv(k, (j+2) % 3)]);
+      fluxdata[8*k + 2*j + 1] = imag(Br[][Hdiv(k, (j+2) % 3)]);
     } else {
-      ofile
-        << -real(Br[][Hdiv(k, (j+2) % 3)]) << "\t"
-        << -imag(Br[][Hdiv(k, (j+2) % 3)]) << "\t";
+      fluxdata[8*k + 2*j] = -real(Br[][Hdiv(k, (j+2) % 3)]);
+      fluxdata[8*k + 2*j + 1] = -imag(Br[][Hdiv(k, (j+2) % 3)]);
     }
   }
-  ofile
-    << real(Bphi[][k]) * Th[k].area << "\t"
-    << imag(Bphi[][k]) * Th[k].area << endl;
+  fluxdata[8*k + 6] = real(Bphi[][k]) * Th[k].area;
+  fluxdata[8*k + 7] = imag(Bphi[][k]) * Th[k].area;
 }
+SaveVec(fluxdata, Bnfluxfile);
 
 if (doplot) {
   Hdiv [JrRe, JzRe], [JrIm, JzIm], [BrRe, BzRe], [BrIm, BzIm];

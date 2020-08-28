@@ -6,7 +6,7 @@ module magdif_pert
 
   private
 
-  public :: write_scalar_dof, interp_RT0, check_div_free, check_redundant_edges, &
+  public :: write_scalar_dof, interp_RT0, check_div_free, check_redundant_edges, read_vector_dof, &
        write_vector_dof, write_vector_plot, write_vector_plot_rect, compute_Bn_nonres, &
        avg_flux_on_quad, compute_kilca_vacuum, kilca_vacuum, compute_kilca_vac_coeff, &
        kilca_vacuum_fourier, check_kilca_vacuum, check_RT0
@@ -166,22 +166,51 @@ contains
   end subroutine check_redundant_edges
 
   subroutine write_vector_dof(pol_flux, tor_comp, outfile)
-    use magdif_conf, only: conf, longlines
+    use iso_c_binding, only: c_long
+    use magdif_conf, only: conf
     use magdif_mesh, only: mesh
     use mesh_mod, only: mesh_element_rmp
     complex(dp), intent(in) :: pol_flux(:,:)
     complex(dp), intent(in) :: tor_comp(:)
     character(len = *), intent(in) :: outfile
-
+    integer(c_long) :: length
     integer :: ktri, fid
 
-    open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
+    length = 8 * mesh%kt_low(mesh%nflux + 1)  ! (Re, Im) of RT0 DoFs + toroidal component
+    open(newunit = fid, file = outfile, access = 'stream', status = 'replace')
+    write (fid) length
     do ktri = 1, mesh%kt_low(mesh%nflux + 1)
-       write (fid, '(8(1x, es23.15e3))') pol_flux(ktri, :), &
-            tor_comp(ktri) * mesh_element_rmp(ktri)%area
+       write (fid) pol_flux(ktri, :), tor_comp(ktri) * mesh_element_rmp(ktri)%area
     end do
     close(fid)
   end subroutine write_vector_dof
+
+  subroutine read_vector_dof(pol_flux, tor_comp, infile)
+    use iso_c_binding, only: c_long
+    use magdif_conf, only: conf, log
+    use magdif_mesh, only: mesh
+    use mesh_mod, only: mesh_element_rmp
+    complex(dp), intent(out) :: pol_flux(:,:)
+    complex(dp), intent(out) :: tor_comp(:)
+    character(len = *), intent(in) :: infile
+    integer(c_long) :: length
+    integer :: ktri, fid
+
+    open(newunit = fid, file = infile, access = 'stream', status = 'old')
+    read (fid) length
+    if (length < 8 * mesh%kt_low(mesh%nflux + 1)) then
+       ! (Re, Im) of RT0 DoFs + toroidal component
+       write (log%msg, '("File ", a, " only contains ", i0, " real values, ' // &
+            'expected ", i0, ".")') length, 8 * mesh%kt_low(mesh%nflux + 1)
+       if (log%err) call log%write
+       error stop
+    end if
+    do ktri = 1, mesh%kt_low(mesh%nflux + 1)
+       read (fid) pol_flux(ktri, :), tor_comp(ktri)
+    end do
+    tor_comp = tor_comp / mesh_element_rmp%area
+    close(fid)
+  end subroutine read_vector_dof
 
   pure function jacobian(kf, kt, r) result(metric_det)
     use magdif_mesh, only: equil, fs_half, mesh, B0phi_Omega
@@ -300,8 +329,6 @@ contains
        end do
     end do
     if (conf%quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
-    call check_div_free(Bnflux, Bnphi, mesh%n, conf%rel_err_Bn, 'non-resonant B_n')
-    call check_redundant_edges(Bnflux, .false., 'non-resonant B_n')
   end subroutine compute_Bn_nonres
 
   subroutine avg_flux_on_quad(pol_flux, tor_comp)

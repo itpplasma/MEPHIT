@@ -4,6 +4,7 @@
 program vacfield
 
   use iso_fortran_env, only: dp => real64
+  use iso_c_binding, only: c_long
   use mesh_mod, only: npoint, ntri, knot, mesh_point, mesh_element
   use hdf5_tools, only: HID_T, h5_init, h5_open, h5_get, h5_close, h5_deinit
   use magdif_conf, only: conf, magdif_config_read
@@ -16,6 +17,7 @@ program vacfield
   integer, parameter :: order = 2
   integer :: fid, ktri, ke, k
   integer(HID_T) :: h5id_magdif
+  integer(c_long) :: length
   integer, dimension(:, :), allocatable :: tri_node
   real(dp) :: R, Z, edge_R, edge_Z, node_R(4), node_Z(4)
   real(dp), dimension(order) :: points, weights
@@ -53,7 +55,9 @@ program vacfield
   Z = mesh%Z_O
   call initialize_globals(R, Z)
 
-  open(newunit = fid, file = trim(conf%Bn_vac_file), status = 'replace')
+  open(newunit = fid, file = conf%Bn_vac_file, access = 'stream', status = 'replace')
+  length = 8 * ntri
+  write (fid) length
   do ktri = 1, ntri
      Bnflux = (0d0, 0d0)
      associate(knots => mesh_point(mesh_element(ktri)%i_knot))
@@ -73,7 +77,7 @@ program vacfield
      end associate
      ! toroidal flux via zero divergence
      Bnphiflux = imun / conf%n * sum(Bnflux)
-     write (fid, '(8(1x, es24.16e3))') Bnflux, Bnphiflux
+     write (fid) Bnflux, Bnphiflux
   end do
   close(fid)
 

@@ -65,9 +65,10 @@ contains
     use input_files, only: gfile
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use magdif_conf, only: conf, log, magdif_log, decorate_filename
-    use magdif_mesh, only: equil, cache_equilibrium_field, flux_func_cache_check, &
+    use magdif_mesh, only: equil, mesh, cache_equilibrium_field, flux_func_cache_check, &
          init_flux_variables, compute_j0phi, check_curr0, check_safety_factor
-    use magdif_pert, only: compute_Bn_nonres, write_vector_dof, write_vector_plot
+    use magdif_pert, only: compute_Bn_nonres, read_vector_dof, write_vector_dof, &
+         write_vector_plot, check_div_free, check_redundant_edges
     character(len = *), intent(in) :: bin_dir
 
     magdif_bin_dir = bin_dir
@@ -99,12 +100,14 @@ contains
     call check_safety_factor
 
     if (conf%nonres) then
-       call compute_Bn_nonres(Bnflux, Bnphi)
+       call compute_Bn_nonres(Bnflux_vac, Bnphi_vac)
     else
-       call read_Bn(conf%Bn_vac_file)
+       call read_vector_dof(Bnflux_vac, Bnphi_vac, conf%Bn_vac_file)
     end if
-    Bnflux_vac = Bnflux
-    Bnphi_vac = Bnphi
+    call check_redundant_edges(Bnflux_vac, .false., 'Bn_vac')
+    call check_div_free(Bnflux_vac, Bnphi_vac, mesh%n, conf%rel_err_Bn, 'Bn_vac')
+    Bnflux = Bnflux_vac
+    Bnphi = Bnphi_vac
     call write_vector_dof(Bnflux_vac, Bnphi_vac, conf%Bn_vacout_file)
     call write_vector_plot(Bnflux_vac, Bnphi_vac, &
          decorate_filename(conf%Bn_vacout_file, 'plot_', ''))
@@ -141,17 +144,12 @@ contains
   end subroutine magdif_cleanup
 
   subroutine magdif_single
-    use magdif_conf, only: conf, decorate_filename
-    use magdif_pert, only: write_vector_plot
     ! compute pressure based on previous perturbation field
     call compute_presn
     ! compute currents based on previous perturbation field
     call compute_currn
     ! use field code to generate new field from currents
     call compute_Bn
-    ! read new bnflux from field code
-    call read_Bn(conf%Bn_file)
-    call write_vector_plot(Bnflux, Bnphi, decorate_filename(conf%Bn_file, 'plot_', ''))
   end subroutine magdif_single
 
   subroutine magdif_iterated
@@ -497,8 +495,10 @@ contains
   !> directory and handles the exit code. For further information see maxwell.sh and the
   !> script called therein.
   subroutine compute_Bn
-    use magdif_conf, only: conf, log
+    use magdif_conf, only: conf, log, decorate_filename
     use magdif_mesh, only: mesh
+    use magdif_pert, only: read_vector_dof, write_vector_plot, check_redundant_edges, &
+         check_div_free
     integer :: stat = 0, dummy = 0
     character(len = 1024) :: fem_cmd
     write (fem_cmd, '(a, "/maxwell.sh -n ", i0, " -N ", i0, " -J ", a, " -B ", a)') &
@@ -510,6 +510,10 @@ contains
        if (log%err) call log%write
        error stop
     end if
+    call read_vector_dof(Bnflux, Bnphi, conf%Bn_file)
+    call check_redundant_edges(Bnflux, .false., 'Bn')
+    call check_div_free(Bnflux, Bnphi, mesh%n, conf%rel_err_Bn, 'Bn')
+    call write_vector_plot(Bnflux, Bnphi, decorate_filename(conf%Bn_file, 'plot_', ''))
   end subroutine compute_Bn
 
   subroutine compute_L2int
@@ -527,37 +531,6 @@ contains
        error stop
     end if
   end subroutine compute_L2int
-
-  !> Reads fluxes of perturbation field and checks divergence-freeness.
-  !>
-  !> @param filename name of the formatted file containing the data
-  !>
-  !> Line numbers in the given file correspond to the global triangle index of
-  !> #mesh_mod::mesh_element. The content of each line is read into #bnflux and #bnphi
-  !> with numbering of edges in #bnflux as in #mesh_mod::mesh_element and the imaginary
-  !> part of each value immediately following the real part.
-  subroutine read_Bn(filename)
-    use magdif_conf, only: conf, longlines
-    use mesh_mod, only: ntri, mesh_element_rmp
-    use magdif_mesh, only: mesh
-    use magdif_pert, only: check_div_free, check_redundant_edges
-    character(len = 1024) :: filename
-    integer :: ktri, fid
-    real(dp) :: dummy8(8)
-
-    open(newunit = fid, file = filename, recl = longlines, status = 'old')
-    do ktri = 1, ntri
-       read (fid, *) dummy8
-       Bnflux(ktri,1) = cmplx(dummy8(1), dummy8(2), dp)
-       Bnflux(ktri,2) = cmplx(dummy8(3), dummy8(4), dp)
-       Bnflux(ktri,3) = cmplx(dummy8(5), dummy8(6), dp)
-       Bnphi(ktri) = cmplx(dummy8(7), dummy8(8), dp) / mesh_element_rmp(ktri)%area
-    end do
-    close(fid)
-
-    call check_redundant_edges(Bnflux, .false., 'B_n')
-    call check_div_free(Bnflux, Bnphi, mesh%n, conf%rel_err_Bn, 'B_n')
-  end subroutine read_Bn
 
   !> Assembles a sparse matrix in coordinate list (COO) representation for use with
   !> sparse_mod::sparse_solve().
