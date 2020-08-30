@@ -1167,6 +1167,16 @@ contains
          comment = 'minimal absolute poloidal mode number')
     call h5_add(h5id_mesh, 'm_res_max', mesh%m_res_max, &
          comment = 'maximal absolute poloidal mode number')
+    call h5_add(h5id_mesh, 'deletions', mesh%deletions, lbound(mesh%deletions), ubound(mesh%deletions), &
+         comment = 'number of unrefined flux surfaces to be replaced by refined ones')
+    call h5_add(h5id_mesh, 'additions', mesh%additions, lbound(mesh%additions), ubound(mesh%additions), &
+         comment = 'number of refined flux surfaces')
+    call h5_add(h5id_mesh, 'refinement', mesh%refinement, lbound(mesh%refinement), ubound(mesh%refinement), &
+         comment = 'relative size of most refined flux surface')
+    call h5_add(h5id_mesh, 'm_res', mesh%m_res, lbound(mesh%m_res), ubound(mesh%m_res), &
+         comment = 'poloidal mode number m in resonance at given flux surface')
+    call h5_add(h5id_mesh, 'res_ind', mesh%res_ind, lbound(mesh%res_ind), ubound(mesh%res_ind), &
+         comment = 'flux surface index in resonance with given poloidal mode number')
     call h5_add(h5id_mesh, 'kp_max', mesh%kp_max, lbound(mesh%kp_max), ubound(mesh%kp_max), &
          comment = 'number of nodes on flux surface')
     call h5_add(h5id_mesh, 'kp_low', mesh%kp_low, lbound(mesh%kp_low), ubound(mesh%kp_low), &
