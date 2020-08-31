@@ -76,6 +76,6 @@ for (int k = ktlownfluxp1; k < Th.nt; k++) {
 {
   ofstream cfile(convfile, append);
   cfile.scientific.precision(15);
-  cfile << sqrt(real(int2d(Th)(Br * conj(Br) * x + Bz * conj(Bz) * x +
-    Bphi * conj(Bphi) / x))) << endl;
+  cfile << sqrt(real(int2d(Th)(Br * conj(Br) / x + Bz * conj(Bz) / x +
+    Bphi * conj(Bphi) * x))) << endl;
 }

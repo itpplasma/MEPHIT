@@ -92,14 +92,15 @@ for (int k = ktlownfluxp1; k < Th.nt; k++) {
 // Jphi = (dx(Jr) + dy(Jz)) * 1.0i / nmode;
 
 // note that the metric determinant x = R is already contained in the input data
-// for J and thus also in a and B
+// for J, but not in A
 solve Ampere([ax, ay], [wx, wy], solver = sparsesolver) = // defines the PDE
   int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(ay) - dy(ax)))
   + int2d(Th)(nmode^2 / x * (wx * ax + wy * ay))
   - int2d(Th)(4.0 * pi / c * (wx * Jr + wy * Jz))
   + on(1, ax = 0, ay = 0);
-
+// contravariant density components include factor R
 [Br, Bz] = [1.0i * nmode * ay, -1.0i * nmode * ax];
+// contravariant density component identical to physical component
 Bphi = -(dx(ay) - dy(ax));
 for (int k = 0; k < ntri; k++) {
   for (int j = 0; j < 3; j++) {
