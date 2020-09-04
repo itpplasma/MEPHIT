@@ -177,7 +177,9 @@ contains
     integer :: ktri, fid
 
     length = 8 * mesh%kt_low(mesh%nflux + 1)  ! (Re, Im) of RT0 DoFs + toroidal component
-    open(newunit = fid, file = outfile, access = 'stream', status = 'replace')
+    ! status = 'old' for writing to named pipe
+    open(newunit = fid, file = outfile, access = 'stream', status = 'old', &
+         action = 'write', form = 'unformatted')
     write (fid) length
     do ktri = 1, mesh%kt_low(mesh%nflux + 1)
        write (fid) pol_flux(ktri, :), tor_comp(ktri) * mesh_element_rmp(ktri)%area
@@ -196,12 +198,13 @@ contains
     integer(c_long) :: length
     integer :: ktri, fid
 
-    open(newunit = fid, file = infile, access = 'stream', status = 'old')
+    open(newunit = fid, file = infile, access = 'stream', status = 'old', &
+         action = 'read', form = 'unformatted')
     read (fid) length
     if (length < 8 * mesh%kt_low(mesh%nflux + 1)) then
        ! (Re, Im) of RT0 DoFs + toroidal component
        write (log%msg, '("File ", a, " only contains ", i0, " real values, ' // &
-            'expected ", i0, ".")') length, 8 * mesh%kt_low(mesh%nflux + 1)
+            'expected ", i0, ".")') infile, length, 8 * mesh%kt_low(mesh%nflux + 1)
        if (log%err) call log%write
        error stop
     end if

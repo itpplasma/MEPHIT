@@ -5,9 +5,7 @@ module magdif
 
   private
 
-  public :: Bnflux, Bnphi, magdif_init, magdif_cleanup, magdif_single, magdif_iterated
-
-  character(len = 1024) :: magdif_bin_dir = '.'
+  public :: Bnflux, Bnphi, magdif_init, magdif_cleanup, magdif_single, magdif_iterate
 
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   !>
@@ -61,7 +59,7 @@ module magdif
 contains
 
   !> Initialize magdif module
-  subroutine magdif_init(bin_dir)
+  subroutine magdif_init
     use input_files, only: gfile
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use magdif_conf, only: conf, log, magdif_log, decorate_filename
@@ -69,9 +67,7 @@ contains
          init_flux_variables, compute_j0phi, check_curr0, check_safety_factor
     use magdif_pert, only: compute_Bn_nonres, read_vector_dof, write_vector_dof, &
          write_vector_plot, check_div_free, check_redundant_edges
-    character(len = *), intent(in) :: bin_dir
 
-    magdif_bin_dir = bin_dir
     log = magdif_log('-', conf%log_level, conf%quiet)
 
     ! only depends on config variables
@@ -152,16 +148,18 @@ contains
     call compute_Bn
   end subroutine magdif_single
 
-  subroutine magdif_iterated
+  subroutine magdif_iterate
     use arnoldi_mod, only: ieigen, ngrow, tol, eigvecs  ! arnoldi.f90
     use mesh_mod, only: ntri
     use magdif_mesh, only: mesh
     use magdif_pert, only: check_div_free, check_redundant_edges, &
          write_vector_dof, write_vector_plot, write_vector_plot_rect, write_scalar_dof
-    use magdif_conf, only: conf, log, runmode_precon, decorate_filename, cmplx_fmt
+    use magdif_conf, only: conf, log, runmode_precon, runmode_single, decorate_filename, &
+         cmplx_fmt
 
     logical :: preconditioned
-    integer :: kiter, ndim, i, j, info
+    integer :: kiter, niter, ndim, i, j, info, fid
+    real(dp) :: integral
     complex(dp) :: Bnflux_diff(ntri, 3)
     complex(dp) :: Bnphi_diff(ntri)
     complex(dp) :: Bn(mesh%nedge), Bn_prev(mesh%nedge)
@@ -171,9 +169,17 @@ contains
     character(len = 4) :: postfix
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
 
+    ! pass effective toroidal mode number to FreeFem++
+    call send_flag_to_freefem(mesh%n, 'maxwell.dat')
     ! system dimension: number of non-redundant edges in core plasma
     ndim = mesh%nedge
+    ! runmodes
     preconditioned = runmode_precon == conf%runmode
+    if (runmode_single == conf%runmode) then
+       niter = 0
+    else
+       niter = conf%niter
+    end if
     if (preconditioned) then
        tol = conf%ritz_threshold
        ! calculate eigenvectors
@@ -226,15 +232,17 @@ contains
        end if
     end if
 
-    call write_vector_dof(Bnflux_vac, Bnphi_vac, conf%Bn_diff_file)
-    call compute_L2int
+    call compute_L2int(Bnflux_vac, Bnphi_vac, integral)
+    open(newunit = fid, file = conf%conv_file, status = 'replace')
+    write (fid, '(es24.16e3)') integral
+    close(fid)
     call pack_dof(Bnflux_vac, Bn_prev)
     if (preconditioned) then
        Bn_prev = Bn_prev - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
             matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn_prev)))
     end if
-    do kiter = 0, conf%niter - 1
-       write (log%msg, '("Iteration ", i2, " of ", i2)') kiter, conf%niter - 1
+    do kiter = 0, niter
+       write (log%msg, '("Iteration ", i2, " of ", i2)') kiter, niter
        if (log%info) call log%write
        write (postfix, postfix_fmt) kiter
 
@@ -248,8 +256,10 @@ contains
        end if
 
        call unpack_dof(Bnflux_diff, Bnphi_diff, Bn - Bn_prev)
-       call write_vector_dof(Bnflux_diff, Bnphi_diff, conf%Bn_diff_file)
-       call compute_L2int
+       call compute_L2int(Bnflux_diff, Bnphi_diff, integral)
+       open(newunit = fid, file = conf%conv_file, status = 'old', position = 'append')
+       write (fid, '(es24.16e3)') integral
+       close(fid)
        call write_vector_dof(Bnflux, Bnphi, &
             decorate_filename(conf%Bn_file, '', postfix))
        if (kiter <= 1) then
@@ -267,6 +277,9 @@ contains
        call pack_dof(Bnflux, Bn_prev)
     end do
     call write_vector_dof(Bnflux, Bnphi, conf%Bn_file)
+    ! tell FreeFem++ to stop processing
+    call send_flag_to_freefem(-3, 'maxwell.dat')
+
     call write_vector_plot(Bnflux, Bnphi, decorate_filename(conf%Bn_file, 'plot_', ''))
     call write_vector_plot_rect(Bnflux, Bnphi, &
          decorate_filename(conf%Bn_file, 'rect_', ''))
@@ -347,7 +360,7 @@ contains
       call magdif_single
       call pack_dof(Bnflux, xnew)
     end subroutine next_iteration_arnoldi
-  end subroutine magdif_iterated
+  end subroutine magdif_iterate
 
   !> Reads mesh points and triangles.
   !>
@@ -498,6 +511,20 @@ contains
     jnflux = 0d0
   end subroutine read_mesh
 
+  subroutine send_flag_to_freefem(flag, namedpipe)
+    use iso_c_binding, only: c_long
+    integer, intent(in) :: flag
+    character(len = *), intent(in) :: namedpipe
+    integer(c_long) :: long_flag
+    integer :: fid
+
+    long_flag = flag
+    open(newunit = fid, file = namedpipe, status = 'old', access = 'stream', &
+         form = 'unformatted', action = 'write')
+    write (fid) long_flag
+    close(fid)
+  end subroutine send_flag_to_freefem
+
   !> Computes #bnflux and #bnphi from #jnflux and #jnphi via an external program. No data
   !> is read yet; this is done by read_bn().
   !>
@@ -505,41 +532,43 @@ contains
   !> directory and handles the exit code. For further information see maxwell.sh and the
   !> script called therein.
   subroutine compute_Bn
-    use magdif_conf, only: conf, log, decorate_filename
+    use iso_c_binding, only: c_long
+    use magdif_conf, only: conf, decorate_filename
     use magdif_mesh, only: mesh
-    use magdif_pert, only: read_vector_dof, write_vector_plot, check_redundant_edges, &
-         check_div_free
-    integer :: stat = 0, dummy = 0
-    character(len = 1024) :: fem_cmd
-    write (fem_cmd, '(a, "/maxwell.sh -n ", i0, " -N ", i0, " -J ", a, " -B ", a)') &
-         trim(magdif_bin_dir), mesh%n, mesh%kt_low(mesh%nflux + 1), trim(conf%currn_file), &
-         trim(conf%Bn_file)
-    call execute_command_line(fem_cmd, exitstat = stat, cmdstat = dummy)
-    if (stat /= 0) then
-       write (log%msg, '("FreeFem++ failed with exit code ", i0)') stat
-       if (log%err) call log%write
-       error stop
-    end if
-    call read_vector_dof(Bnflux, Bnphi, conf%Bn_file)
+    use magdif_pert, only: read_vector_dof, write_vector_dof, write_vector_plot, &
+         check_redundant_edges, check_div_free
+
+    call send_flag_to_freefem(-1, 'maxwell.dat')
+    call write_vector_dof(jnflux, jnphi, 'maxwell.dat')
+    call read_vector_dof(Bnflux, Bnphi, 'maxwell.dat')
     call check_redundant_edges(Bnflux, .false., 'Bn')
     call check_div_free(Bnflux, Bnphi, mesh%n, conf%rel_err_Bn, 'Bn')
     call write_vector_plot(Bnflux, Bnphi, decorate_filename(conf%Bn_file, 'plot_', ''))
   end subroutine compute_Bn
 
-  subroutine compute_L2int
-    use magdif_conf, only: conf, log
-    use magdif_mesh, only: mesh
-    integer :: stat = 0, dummy = 0
-    character(len = 1024) :: L2int_cmd
-    write (L2int_cmd, '(a, "/L2int.sh -N ", i0, " -B ", a, " -C ", a)') &
-         trim(magdif_bin_dir), mesh%kt_low(mesh%nflux + 1), trim(conf%Bn_diff_file), &
-         trim(conf%conv_file)
-    call execute_command_line(L2int_cmd, exitstat = stat, cmdstat = dummy)
-    if (stat /= 0) then
-       write (log%msg, '("FreeFem++ failed with exit code ", i0)') stat
+  subroutine compute_L2int(pol_flux, tor_comp, integral)
+    use iso_c_binding, only: c_long
+    use magdif_conf, only: log
+    use magdif_pert, only: write_vector_dof
+    complex(dp), intent(in) :: pol_flux(:, :)
+    complex(dp), intent(in) :: tor_comp(:)
+    real(dp), intent(out) :: integral
+    integer(c_long) :: length
+    integer :: fid
+
+    call send_flag_to_freefem(-2, 'maxwell.dat')
+    call write_vector_dof(pol_flux, tor_comp, 'maxwell.dat')
+    open(newunit = fid, file = 'maxwell.dat', access = 'stream', status = 'old', &
+         action = 'read', form = 'unformatted')
+    read (fid) length
+    if (length /= 1) then
+       close(fid)
+       write (log%msg, '("Expected 1 double value from FreeFem++, but got ", i0)') length
        if (log%err) call log%write
        error stop
     end if
+    read (fid) integral
+    close(fid)
   end subroutine compute_L2int
 
   !> Assembles a sparse matrix in coordinate list (COO) representation for use with

@@ -170,15 +170,34 @@ magdif_run() {
 
     for workdir; do
         pushd "$workdir"
-        rm -f magdif.log convergence.dat
-        "$bindir/magdif_test.x" "$config" "$scriptdir" 2>&1 | tee -a "$log"
-        lasterr=$?
-        if [ $lasterr -ne 0 ]; then
-            echo "$scriptname: error $lasterr during run in $workdir" | tee -a "$log" >&2
-            popd
-            anyerr=$lasterr
-            continue
-        fi
+        rm -f "$log" convergence.dat maxwell.dat
+        mkfifo maxwell.dat
+        (
+            # send SIGTERM to all processes in subshell when receiving SIGINT, i.e., Ctrl-C
+            trap 'kill -- -$BASHPID' INT
+            # start FreeFem++ in background, waiting for data in the named pipe maxwell.dat
+            FreeFem++-mpi -nw "$scriptdir/maxwell_daemon.edp" 1>> freefem.out 2>&1 & freefem_pid=$!
+            # start magdif in background
+            "$bindir/magdif_test.x" "$config" 1>> "$log" 2>&1 & magdif_pid=$!
+            # continuously print contents of logfile until magdif is finished
+            tail --pid=$magdif_pid -F -s 0.1 "$log" 2> /dev/null &
+            # wait in background for FreeFem++ to finish
+            # and send SIGTERM to all processes in subshell when it has a non-zero exit code
+            wait -f $freefem_pid
+            lasterr=$?
+            if [ "$lasterr" -ne 0 ]; then
+                echo "$scriptname: FreeFem++ exited with code $lasterr during run in $workdir" >&2
+                # sent SIGTERM to remaining processes in subshell
+                kill -- -$BASHPID
+            fi
+            wait -f $magdif_pid
+            lasterr=$?
+            if [ "$lasterr" -ne 0 ]; then
+                echo "$scriptname: magdif exited with code $lasterr during run in $workdir" >&2
+            fi
+            # send SIGTERM to remaining processes in subshell
+            kill -- -$BASHPID
+        )
         popd
     done
 }
@@ -219,6 +238,7 @@ bindir=$(realpath $(dirname $0))
 scriptdir=$(realpath -m "$bindir/../../scripts")
 datadir=$(realpath -m "$bindir/../../data")
 
+set -m
 set -o pipefail
 scriptname=$0
 anyerr=0

@@ -369,6 +369,7 @@ contains
     write (full_msg, '("[", a25, "] ", a)') timestamp(), trim(log%msg)
     write (log%fid, '(a)') full_msg
     if (log%fid /= output_unit .and. .not. log%quiet) write (output_unit, '(a)') full_msg
+    flush(log%fid)
   end subroutine magdif_log_write
 
   subroutine magdif_log_msg_arg_size(log, funcname, name1, name2, value1, value2)
