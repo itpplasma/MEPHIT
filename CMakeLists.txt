@@ -8,7 +8,9 @@ enable_language(Fortran)
 
 ### Define paths to external libraries (load external file)
 include(${CMAKE_SOURCE_DIR}/ProjectConfig.cmake.in)
-
+set(HDF5_tools_include_dir ${CMAKE_SOURCE_DIR}/../libneo/build)
+# should be changed to a less confusing path name...
+set(HDF5_tools_lib_dir ${CMAKE_SOURCE_DIR}/../libneo/build/src/hdf5_tools)
 
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)

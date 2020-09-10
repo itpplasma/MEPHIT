@@ -1,5 +1,6 @@
 ### Installation directory
 set (CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
 
+### Path to the external libraries
 set(FGSL_PATH /usr/local)
 
