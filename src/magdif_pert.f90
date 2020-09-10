@@ -17,7 +17,7 @@ contains
   !> to \p outfile (e.g. #magdif_conf::presn_file), where line number corresponds to the
   !> knot index in #mesh_mod::mesh_point.
   subroutine write_scalar_dof(scalar_dof, outfile)
-    use magdif_conf, only: conf, longlines
+    use magdif_conf, only: longlines
     use magdif_mesh, only: mesh
     complex(dp), intent(in) :: scalar_dof(:)
     character(len = *), intent(in) :: outfile
@@ -167,7 +167,6 @@ contains
 
   subroutine write_vector_dof(pol_flux, tor_comp, outfile)
     use iso_c_binding, only: c_long
-    use magdif_conf, only: conf
     use magdif_mesh, only: mesh
     use mesh_mod, only: mesh_element_rmp
     complex(dp), intent(in) :: pol_flux(:,:)
@@ -189,7 +188,7 @@ contains
 
   subroutine read_vector_dof(pol_flux, tor_comp, infile)
     use iso_c_binding, only: c_long
-    use magdif_conf, only: conf, log
+    use magdif_conf, only: log
     use magdif_mesh, only: mesh
     use mesh_mod, only: mesh_element_rmp
     complex(dp), intent(out) :: pol_flux(:,:)
@@ -268,7 +267,7 @@ contains
   end subroutine write_vector_plot
 
   subroutine write_vector_plot_rect(pol_flux, tor_comp, outfile)
-    use magdif_conf, only: conf, longlines
+    use magdif_conf, only: longlines
     use magdif_mesh, only: equil, mesh, point_location
     use mesh_mod, only: triangle_rmp, mesh_element_rmp
     complex(dp), intent(in) :: pol_flux(:,:)
@@ -305,7 +304,7 @@ contains
     use mesh_mod, only: knot, triangle_rmp, mesh_point, mesh_element_rmp
     use magdif_conf, only: conf
     use magdif_util, only: imun
-    use magdif_mesh, only: equil, mesh, B0R, B0phi, B0Z
+    use magdif_mesh, only: mesh, B0R, B0phi, B0Z
     complex(dp), intent(inout) :: Bnflux(:,:), Bnphi(:)
     integer :: kf, kt, ktri
     type(triangle_rmp) :: tri
@@ -335,7 +334,6 @@ contains
   end subroutine compute_Bn_nonres
 
   subroutine avg_flux_on_quad(pol_flux, tor_comp)
-    use magdif_conf, only: conf
     use magdif_util, only: imun
     use magdif_mesh, only: mesh
     use mesh_mod, only: triangle_rmp, mesh_element_rmp
@@ -369,7 +367,7 @@ contains
     use mesh_mod, only: ntri, knot, triangle, mesh_point, mesh_element, mesh_element_rmp
     use magdif_conf, only: conf
     use magdif_util, only: imun, gauss_legendre_unit_interval
-    use magdif_mesh, only: equil, mesh
+    use magdif_mesh, only: mesh
     complex(dp), allocatable, intent(out) :: Bnflux(:,:), Bnphi(:)
     integer, parameter :: order = 2
     integer :: ktri, k, ke, pol_modes(2)
@@ -452,8 +450,8 @@ contains
   end subroutine kilca_vacuum
 
   subroutine compute_kilca_vac_coeff
-    use magdif_conf, only: conf, conf_arr, log, cmplx_fmt
-    use magdif_mesh, only: equil, mesh
+    use magdif_conf, only: conf_arr, log, cmplx_fmt
+    use magdif_mesh, only: mesh
     integer :: m
     complex(dp) :: B_rad, B_pol, B_tor
 
@@ -518,7 +516,7 @@ contains
 
   subroutine check_kilca_vacuum
     use magdif_conf, only: conf, conf_arr, longlines
-    use magdif_mesh, only: equil, fs_half, mesh
+    use magdif_mesh, only: fs_half, mesh
     complex(dp) :: B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
     real(dp) :: rad
     integer :: kf, fid, abs_pol_mode
@@ -539,7 +537,7 @@ contains
 
   subroutine check_RT0(Bnflux, Bnphi)
     use magdif_conf, only: conf, longlines
-    use magdif_mesh, only: equil, fs_half, mesh, point_location
+    use magdif_mesh, only: fs_half, mesh, point_location
     use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
     complex(dp), intent(in) :: Bnflux(:,:), Bnphi(:)
     integer :: fid, kf, kpol, ktri

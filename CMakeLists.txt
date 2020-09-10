@@ -93,6 +93,7 @@ set_source_files_properties(src/magdif_config.f90 PROPERTIES COMPILE_FLAGS "${WA
 set_source_files_properties(src/magdif_util.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
 set_source_files_properties(src/magdif_mesh_mod.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
 set_source_files_properties(src/magdif_mesher.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
+set_source_files_properties(src/magdif_pert.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
 set_source_files_properties(src/magdif_test.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
 set_source_files_properties(src/vacfield.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
 set_source_files_properties(src/standardise_equilibrium.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
