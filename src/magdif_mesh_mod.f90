@@ -12,7 +12,7 @@ module magdif_mesh
        flux_func_cache_init, flux_func_cache_check, flux_func_cache_destructor, generate_mesh, &
        refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile, &
        create_mesh_points, init_indices, add_node_owner, common_triangles, &
-       connect_mesh_points, get_labeled_edges, cache_mesh_data, write_mesh_data, &
+       connect_mesh_points, get_labeled_edges, cache_mesh_data, write_mesh_data, read_mesh, &
        magdif_mesh_destructor, init_flux_variables, compute_pres_prof, &
        compute_safety_factor, check_safety_factor, cache_equilibrium_field, &
        compute_j0phi, check_curr0, write_fluxvar, point_location, point_in_triangle
@@ -1266,6 +1266,114 @@ contains
     end do
     close(fid)
   end subroutine write_mesh_data
+
+  subroutine read_mesh
+    use magdif_conf, only: log
+    use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, mesh_element_rmp
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    integer(HID_T) :: h5id_magdif
+    integer :: ktri
+    integer, dimension(:, :), allocatable :: tri_node, adj_tri, adj_edge, tri_li, tri_lo, tri_lf
+    integer, dimension(:), allocatable :: tri_orient
+
+    call h5_open('magdif.h5', h5id_magdif)
+    call h5_get(h5id_magdif, 'mesh/R_O', mesh%R_O)
+    call h5_get(h5id_magdif, 'mesh/Z_O', mesh%Z_O)
+    call h5_get(h5id_magdif, 'mesh/R_min', mesh%R_min)
+    call h5_get(h5id_magdif, 'mesh/Z_min', mesh%Z_min)
+    call h5_get(h5id_magdif, 'mesh/R_max', mesh%R_max)
+    call h5_get(h5id_magdif, 'mesh/Z_max', mesh%Z_max)
+    call h5_get(h5id_magdif, 'mesh/nflux', mesh%nflux)
+    call h5_get(h5id_magdif, 'mesh/npoint', npoint)
+    call h5_get(h5id_magdif, 'mesh/ntri', ntri)
+    call h5_get(h5id_magdif, 'mesh/nedge', mesh%nedge)
+    call h5_get(h5id_magdif, 'mesh/n', mesh%n)
+    call h5_get(h5id_magdif, 'mesh/m_res_min', mesh%m_res_min)
+    call h5_get(h5id_magdif, 'mesh/m_res_max', mesh%m_res_max)
+    write (log%msg, '("nflux = ", i0, ", npoint = ", i0, ", ntri = ", i0)') &
+         mesh%nflux, npoint, ntri
+    if (log%info) call log%write
+    call fs%init(mesh%nflux, .false.)
+    call fs_half%init(mesh%nflux, .true.)
+    ! TODO: allocate deferred-shape arrays in hdf5_tools and skip allocation here
+    allocate(mesh%deletions(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%additions(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%refinement(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%m_res(mesh%nflux))
+    allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%kp_max(mesh%nflux))
+    allocate(mesh%kt_max(mesh%nflux))
+    allocate(mesh%kp_low(mesh%nflux + 1))
+    allocate(mesh%kt_low(mesh%nflux + 1))
+    allocate(mesh_point(npoint))
+    allocate(mesh_element(ntri))
+    allocate(mesh_element_rmp(ntri))
+    allocate(tri_node(3, ntri))
+    allocate(adj_tri(3, ntri))
+    allocate(adj_edge(3, ntri))
+    allocate(tri_li(2, ntri))
+    allocate(tri_lo(2, ntri))
+    allocate(tri_lf(2, ntri))
+    allocate(tri_orient(ntri))
+    allocate(mesh%edge_map2global(ntri, 3))
+    allocate(mesh%edge_map2ktri(mesh%nedge, 2))
+    allocate(mesh%edge_map2ke(mesh%nedge, 2))
+    call h5_get(h5id_magdif, 'mesh/deletions', mesh%deletions)
+    call h5_get(h5id_magdif, 'mesh/additions', mesh%additions)
+    call h5_get(h5id_magdif, 'mesh/refinement', mesh%refinement)
+    call h5_get(h5id_magdif, 'mesh/m_res', mesh%m_res)
+    call h5_get(h5id_magdif, 'mesh/res_ind', mesh%res_ind)
+    call h5_get(h5id_magdif, 'mesh/kp_max', mesh%kp_max)
+    call h5_get(h5id_magdif, 'mesh/kp_low', mesh%kp_low)
+    call h5_get(h5id_magdif, 'mesh/kt_max', mesh%kt_max)
+    call h5_get(h5id_magdif, 'mesh/kt_low', mesh%kt_low)
+    call h5_get(h5id_magdif, 'mesh/node_R', mesh_point%rcoord)
+    call h5_get(h5id_magdif, 'mesh/node_Z', mesh_point%zcoord)
+    call h5_get(h5id_magdif, 'mesh/tri_node', tri_node)
+    call h5_get(h5id_magdif, 'mesh/tri_node_F', mesh_element%knot_h)
+    call h5_get(h5id_magdif, 'mesh/tri_li', tri_li)
+    call h5_get(h5id_magdif, 'mesh/tri_lo', tri_lo)
+    call h5_get(h5id_magdif, 'mesh/tri_lf', tri_lf)
+    call h5_get(h5id_magdif, 'mesh/tri_ei', mesh_element_rmp%ei)
+    call h5_get(h5id_magdif, 'mesh/tri_eo', mesh_element_rmp%eo)
+    call h5_get(h5id_magdif, 'mesh/tri_ef', mesh_element_rmp%ef)
+    call h5_get(h5id_magdif, 'mesh/tri_orient', tri_orient)
+    call h5_get(h5id_magdif, 'mesh/adj_tri', adj_tri)
+    call h5_get(h5id_magdif, 'mesh/adj_edge', adj_edge)
+    call h5_get(h5id_magdif, 'mesh/edge_map2kedge', mesh%edge_map2global)
+    call h5_get(h5id_magdif, 'mesh/edge_map2ktri', mesh%edge_map2ktri)
+    call h5_get(h5id_magdif, 'mesh/edge_map2ke', mesh%edge_map2ke)
+    call h5_get(h5id_magdif, 'mesh/tri_centr_R', mesh_element_rmp%R_Omega)
+    call h5_get(h5id_magdif, 'mesh/tri_centr_Z', mesh_element_rmp%Z_Omega)
+    call h5_get(h5id_magdif, 'mesh/det', mesh_element%det_3)
+    call h5_get(h5id_magdif, 'cache/fs/psi', fs%psi)
+    call h5_get(h5id_magdif, 'cache/fs/rad', fs%rad)
+    call h5_get(h5id_magdif, 'cache/fs_half/psi', fs_half%psi)
+    call h5_get(h5id_magdif, 'cache/fs_half/rad', fs_half%rad)
+    call h5_close(h5id_magdif)
+    ! TODO: remove intermediate when mesh_mod is refactored into magdif_mesh
+    mesh_element_rmp%area = 0.5d0 * mesh_element%det_3
+    do ktri = 1, ntri
+       mesh_element(ktri)%i_knot = tri_node(:, ktri)
+       mesh_element(ktri)%neighbour = adj_tri(:, ktri)
+       mesh_element(ktri)%neighbour_edge = adj_edge(:, ktri)
+       mesh_element_rmp(ktri)%li = tri_li(:, ktri)
+       mesh_element_rmp(ktri)%lo = tri_lo(:, ktri)
+       mesh_element_rmp(ktri)%lf = tri_lf(:, ktri)
+    end do
+    where (tri_orient == 0)
+       mesh_element_rmp%orient = .false.
+    elsewhere
+       mesh_element_rmp%orient = .true.
+    end where
+    deallocate(tri_node)
+    deallocate(adj_tri)
+    deallocate(adj_edge)
+    deallocate(tri_li)
+    deallocate(tri_lo)
+    deallocate(tri_lf)
+    deallocate(tri_orient)
+  end subroutine read_mesh
 
   subroutine magdif_mesh_destructor(this)
     type(mesh_t), intent(inout) :: this
