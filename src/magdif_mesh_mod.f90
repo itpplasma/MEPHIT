@@ -302,6 +302,8 @@ contains
     call connect_mesh_points
     call cache_mesh_data
     call cache_equilibrium_field
+    call init_flux_variables
+    call compute_j0phi
     call write_mesh_data
   end subroutine generate_mesh
 
@@ -1239,12 +1241,32 @@ contains
          comment = 'poloidal flux on flux surfaces', unit = 'Mx')
     call h5_add(h5id_fs, 'rad', fs%rad, lbound(fs%rad), ubound(fs%rad), &
          comment = 'radial position on OX line on flux surfaces', unit = 'cm')
+    call h5_add(h5id_fs, 'F', fs%F, lbound(fs%F), ubound(fs%F), &
+         comment = 'covariant toroidal equilibrium field on flux surfaces', unit = 'G cm')
+    call h5_add(h5id_fs, 'p', fs%p, lbound(fs%p), ubound(fs%p), &
+         comment = 'equilibrium pressure on flux surfaces', unit = 'dyn cm^-2')
+    call h5_add(h5id_fs, 'FdF_dpsi', fs%FdF_dpsi, lbound(fs%FdF_dpsi), ubound(fs%FdF_dpsi), &
+         comment = 'FF''(psi) on flux surfaces', unit = 'G')
+    call h5_add(h5id_fs, 'dp_dpsi', fs%dp_dpsi, lbound(fs%dp_dpsi), ubound(fs%dp_dpsi), &
+         comment = 'p''(psi) on flux surfaces', unit = 'dyn cm^-2 Mx^-1')
+    call h5_add(h5id_fs, 'q', fs%q, lbound(fs%q), ubound(fs%q), &
+         comment = 'safety factor on flux surfaces', unit = '1')
     call h5_close_group(h5id_fs)
     call h5_define_group(h5id_cache, 'fs_half', h5id_fs_half)
     call h5_add(h5id_fs_half, 'psi', fs_half%psi, lbound(fs_half%psi), ubound(fs_half%psi), &
          comment = 'poloidal flux between flux surfaces', unit = 'Mx')
     call h5_add(h5id_fs_half, 'rad', fs_half%rad, lbound(fs_half%rad), ubound(fs_half%rad), &
          comment = 'radial position on OX line between flux surfaces', unit = 'cm')
+    call h5_add(h5id_fs_half, 'F', fs_half%F, lbound(fs_half%F), ubound(fs_half%F), &
+         comment = 'covariant toroidal equilibrium field between flux surfaces', unit = 'G cm')
+    call h5_add(h5id_fs_half, 'p', fs_half%p, lbound(fs_half%p), ubound(fs_half%p), &
+         comment = 'equilibrium pressure between flux surfaces', unit = 'dyn cm^-2')
+    call h5_add(h5id_fs_half, 'FdF_dpsi', fs_half%FdF_dpsi, lbound(fs_half%FdF_dpsi), ubound(fs_half%FdF_dpsi), &
+         comment = 'FF''(psi) between flux surfaces', unit = 'G')
+    call h5_add(h5id_fs_half, 'dp_dpsi', fs_half%dp_dpsi, lbound(fs_half%dp_dpsi), ubound(fs_half%dp_dpsi), &
+         comment = 'p''(psi) between flux surfaces', unit = 'dyn cm^-2 Mx^-1')
+    call h5_add(h5id_fs_half, 'q', fs_half%q, lbound(fs_half%q), ubound(fs_half%q), &
+         comment = 'safety factor between flux surfaces', unit = '1')
     call h5_close_group(h5id_fs_half)
     ! TODO: revise naming and indexing when RT0 type is working
     call h5_add(h5id_cache, 'B0R_edge', B0R, lbound(B0R), ubound(B0R), &
@@ -1261,6 +1283,8 @@ contains
          comment = 'phi component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
     call h5_add(h5id_cache, 'B0Z_centr', B0Z_Omega, lbound(B0Z_Omega), ubound(B0Z_Omega), &
          comment = 'Z component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
+    call h5_add(h5id_cache, 'j0phi_edge', j0phi, lbound(j0phi), ubound(j0phi), &
+         comment = 'phi component of equilibrium current density on triangle edge', unit = 'statA cm^-2')
     call h5_close_group(h5id_cache)
     call h5_close(h5id_magdif)
 
@@ -1342,6 +1366,7 @@ contains
     allocate(B0phi_Omega(ntri))
     allocate(B0Z_Omega(ntri))
     allocate(B0flux(ntri, 3))
+    allocate(j0phi(ntri, 3))
     call h5_get(h5id_magdif, 'mesh/deletions', mesh%deletions)
     call h5_get(h5id_magdif, 'mesh/additions', mesh%additions)
     call h5_get(h5id_magdif, 'mesh/refinement', mesh%refinement)
@@ -1372,8 +1397,18 @@ contains
     call h5_get(h5id_magdif, 'mesh/det', mesh_element%det_3)
     call h5_get(h5id_magdif, 'cache/fs/psi', fs%psi)
     call h5_get(h5id_magdif, 'cache/fs/rad', fs%rad)
+    call h5_get(h5id_magdif, 'cache/fs/F', fs%F)
+    call h5_get(h5id_magdif, 'cache/fs/p', fs%p)
+    call h5_get(h5id_magdif, 'cache/fs/FdF_dpsi', fs%FdF_dpsi)
+    call h5_get(h5id_magdif, 'cache/fs/dp_dpsi', fs%dp_dpsi)
+    call h5_get(h5id_magdif, 'cache/fs/q', fs%q)
     call h5_get(h5id_magdif, 'cache/fs_half/psi', fs_half%psi)
     call h5_get(h5id_magdif, 'cache/fs_half/rad', fs_half%rad)
+    call h5_get(h5id_magdif, 'cache/fs_half/F', fs_half%F)
+    call h5_get(h5id_magdif, 'cache/fs_half/p', fs_half%p)
+    call h5_get(h5id_magdif, 'cache/fs_half/FdF_dpsi', fs_half%FdF_dpsi)
+    call h5_get(h5id_magdif, 'cache/fs_half/dp_dpsi', fs_half%dp_dpsi)
+    call h5_get(h5id_magdif, 'cache/fs_half/q', fs_half%q)
     ! TODO: revise naming and indexing when RT0 type is working
     call h5_get(h5id_magdif, 'cache/B0R_edge', B0R)
     call h5_get(h5id_magdif, 'cache/B0phi_edge', B0phi)
@@ -1382,6 +1417,7 @@ contains
     call h5_get(h5id_magdif, 'cache/B0R_centr', B0R_Omega)
     call h5_get(h5id_magdif, 'cache/B0phi_centr', B0phi_Omega)
     call h5_get(h5id_magdif, 'cache/B0Z_centr', B0Z_Omega)
+    call h5_get(h5id_magdif, 'cache/j0phi_edge', j0phi)
     call h5_close(h5id_magdif)
     ! TODO: remove intermediate when mesh_mod is refactored into magdif_mesh
     mesh_element_rmp%area = 0.5d0 * mesh_element%det_3
@@ -1669,7 +1705,7 @@ contains
   !> necessary in the derivation, while Ampere's equation is not used.
   subroutine compute_j0phi
     use constants, only: pi  ! orbit_mod.f90
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
+    use mesh_mod, only: ntri, triangle_rmp, mesh_element_rmp, mesh_point
     use magdif_conf, only: conf, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, longlines
     use magdif_util, only: clight
     integer :: kf, kt, ktri, fid
@@ -1679,6 +1715,8 @@ contains
     real(dp) :: plot_j0phi
     type(triangle_rmp) :: tri
 
+    allocate(j0phi(ntri, 3))
+    j0phi = 0d0
     open(newunit = fid, file = conf%j0phi_file, recl = longlines, status = 'replace')
     B2avg = 0d0
     B2avg_half = 0d0

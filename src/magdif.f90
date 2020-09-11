@@ -65,33 +65,12 @@ contains
     use magdif_conf, only: conf, log, magdif_log, decorate_filename
     use magdif_util, only: initialize_globals
     use mesh_mod, only: npoint, ntri
-    use magdif_mesh, only: equil, mesh, read_mesh, flux_func_cache_check, init_flux_variables, &
-         j0phi, compute_j0phi, check_curr0, check_safety_factor
+    use magdif_mesh, only: equil, mesh, read_mesh, fluxvar, flux_func_cache_check, &
+         check_curr0, check_safety_factor
     use magdif_pert, only: compute_Bn_nonres, read_vector_dof, write_vector_dof, &
          write_vector_plot, check_div_free, check_redundant_edges
 
     log = magdif_log('-', conf%log_level, conf%quiet)
-
-    ! read in preprocessed data
-    call read_mesh
-    call load_magdata_in_symfluxcoord
-
-    allocate(presn(npoint))
-    allocate(Bnflux(ntri, 3))
-    allocate(Bnphi(ntri))
-    allocate(Bnflux_vac(ntri, 3))
-    allocate(Bnphi_vac(ntri))
-    allocate(jnphi(ntri))
-    allocate(j0phi(ntri, 3))
-    allocate(jnflux(ntri, 3))
-    presn = 0d0
-    Bnflux = 0d0
-    Bnphi = 0d0
-    Bnflux_vac = 0d0
-    Bnphi_vac = 0d0
-    jnphi = 0d0
-    j0phi = 0d0
-    jnflux = 0d0
 
     ! needs initialized field_eq
     call initialize_globals(mesh%R_O, mesh%Z_O)
@@ -103,14 +82,32 @@ contains
        error stop
     end if
 
-    ! depends on mesh data, equilibrium field and G EQDSK profiles
-    call flux_func_cache_check
-    call init_flux_variables
+    ! read in preprocessed data
+    call read_mesh
+    call load_magdata_in_symfluxcoord
+    ! TODO: cache Lagrange polynomials instead
+    call fluxvar%init(4, equil%psi_eqd)
 
-    ! depends on flux variables
-    call compute_j0phi
+    ! check preprocessed data
+    call flux_func_cache_check
     call check_curr0
     call check_safety_factor
+
+    ! initialize perturbation
+    allocate(presn(npoint))
+    allocate(Bnflux(ntri, 3))
+    allocate(Bnphi(ntri))
+    allocate(Bnflux_vac(ntri, 3))
+    allocate(Bnphi_vac(ntri))
+    allocate(jnphi(ntri))
+    allocate(jnflux(ntri, 3))
+    presn = 0d0
+    Bnflux = 0d0
+    Bnphi = 0d0
+    Bnflux_vac = 0d0
+    Bnphi_vac = 0d0
+    jnphi = 0d0
+    jnflux = 0d0
 
     if (conf%nonres) then
        call compute_Bn_nonres(Bnflux_vac, Bnphi_vac)
