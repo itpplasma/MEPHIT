@@ -63,27 +63,19 @@ contains
     use input_files, only: gfile
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use magdif_conf, only: conf, log, magdif_log, decorate_filename
+    use magdif_util, only: initialize_globals
     use mesh_mod, only: npoint, ntri
-    use magdif_mesh, only: equil, fs, fs_half, mesh, read_mesh, &
-         B0R, B0phi, B0Z, B0R_Omega, B0phi_Omega, B0Z_Omega, B0flux, j0phi, &
-         cache_equilibrium_field, flux_func_cache_check, init_flux_variables, &
-         compute_j0phi, check_curr0, check_safety_factor
+    use magdif_mesh, only: equil, mesh, read_mesh, flux_func_cache_check, init_flux_variables, &
+         j0phi, compute_j0phi, check_curr0, check_safety_factor
     use magdif_pert, only: compute_Bn_nonres, read_vector_dof, write_vector_dof, &
          write_vector_plot, check_div_free, check_redundant_edges
 
     log = magdif_log('-', conf%log_level, conf%quiet)
 
-    ! only depends on config variables
+    ! read in preprocessed data
     call read_mesh
     call load_magdata_in_symfluxcoord
 
-    allocate(B0r(ntri, 3))
-    allocate(B0phi(ntri, 3))
-    allocate(B0z(ntri, 3))
-    allocate(B0r_Omega(ntri))
-    allocate(B0phi_Omega(ntri))
-    allocate(B0z_Omega(ntri))
-    allocate(B0flux(ntri, 3))
     allocate(presn(npoint))
     allocate(Bnflux(ntri, 3))
     allocate(Bnphi(ntri))
@@ -92,13 +84,6 @@ contains
     allocate(jnphi(ntri))
     allocate(j0phi(ntri, 3))
     allocate(jnflux(ntri, 3))
-    B0r = 0d0
-    B0phi = 0d0
-    B0z = 0d0
-    B0r_Omega = 0d0
-    B0phi_Omega = 0d0
-    B0z_Omega = 0d0
-    B0flux = 0d0
     presn = 0d0
     Bnflux = 0d0
     Bnphi = 0d0
@@ -108,10 +93,8 @@ contains
     j0phi = 0d0
     jnflux = 0d0
 
-    ! depends on mesh data
-    call cache_equilibrium_field
-
     ! needs initialized field_eq
+    call initialize_globals(mesh%R_O, mesh%Z_O)
     call equil%read(gfile)
     call equil%classify
     if (equil%cocos%index /= 3) then

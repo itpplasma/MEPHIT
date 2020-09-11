@@ -301,6 +301,7 @@ contains
     call create_mesh_points(convexfile)
     call connect_mesh_points
     call cache_mesh_data
+    call cache_equilibrium_field
     call write_mesh_data
   end subroutine generate_mesh
 
@@ -1245,6 +1246,21 @@ contains
     call h5_add(h5id_fs_half, 'rad', fs_half%rad, lbound(fs_half%rad), ubound(fs_half%rad), &
          comment = 'radial position on OX line between flux surfaces', unit = 'cm')
     call h5_close_group(h5id_fs_half)
+    ! TODO: revise naming and indexing when RT0 type is working
+    call h5_add(h5id_cache, 'B0R_edge', B0R, lbound(B0R), ubound(B0R), &
+         comment = 'R component of equilibrium magnetic field on triangle edge', unit = 'G')
+    call h5_add(h5id_cache, 'B0phi_edge', B0phi, lbound(B0phi), ubound(B0phi), &
+         comment = 'phi component of equilibrium magnetic field on triangle edge', unit = 'G')
+    call h5_add(h5id_cache, 'B0Z_edge', B0Z, lbound(B0Z), ubound(B0Z), &
+         comment = 'Z component of equilibrium magnetic field on triangle edge', unit = 'G')
+    call h5_add(h5id_cache, 'B0_flux', B0flux, lbound(B0flux), ubound(B0flux), &
+         comment = 'Equilibrium magnetic flux through triangle edge', unit = 'G cm^2')
+    call h5_add(h5id_cache, 'B0R_centr', B0R_Omega, lbound(B0R_Omega), ubound(B0R_Omega), &
+         comment = 'R component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
+    call h5_add(h5id_cache, 'B0phi_centr', B0phi_Omega, lbound(B0phi_Omega), ubound(B0phi_Omega), &
+         comment = 'phi component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
+    call h5_add(h5id_cache, 'B0Z_centr', B0Z_Omega, lbound(B0Z_Omega), ubound(B0Z_Omega), &
+         comment = 'Z component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
     call h5_close_group(h5id_cache)
     call h5_close(h5id_magdif)
 
@@ -1318,6 +1334,14 @@ contains
     allocate(mesh%edge_map2global(ntri, 3))
     allocate(mesh%edge_map2ktri(mesh%nedge, 2))
     allocate(mesh%edge_map2ke(mesh%nedge, 2))
+    ! TODO: exchange indices when RT0 type is working
+    allocate(B0R(ntri, 3))
+    allocate(B0phi(ntri, 3))
+    allocate(B0Z(ntri, 3))
+    allocate(B0R_Omega(ntri))
+    allocate(B0phi_Omega(ntri))
+    allocate(B0Z_Omega(ntri))
+    allocate(B0flux(ntri, 3))
     call h5_get(h5id_magdif, 'mesh/deletions', mesh%deletions)
     call h5_get(h5id_magdif, 'mesh/additions', mesh%additions)
     call h5_get(h5id_magdif, 'mesh/refinement', mesh%refinement)
@@ -1350,6 +1374,14 @@ contains
     call h5_get(h5id_magdif, 'cache/fs/rad', fs%rad)
     call h5_get(h5id_magdif, 'cache/fs_half/psi', fs_half%psi)
     call h5_get(h5id_magdif, 'cache/fs_half/rad', fs_half%rad)
+    ! TODO: revise naming and indexing when RT0 type is working
+    call h5_get(h5id_magdif, 'cache/B0R_edge', B0R)
+    call h5_get(h5id_magdif, 'cache/B0phi_edge', B0phi)
+    call h5_get(h5id_magdif, 'cache/B0Z_edge', B0Z)
+    call h5_get(h5id_magdif, 'cache/B0_flux', B0flux)
+    call h5_get(h5id_magdif, 'cache/B0R_centr', B0R_Omega)
+    call h5_get(h5id_magdif, 'cache/B0phi_centr', B0phi_Omega)
+    call h5_get(h5id_magdif, 'cache/B0Z_centr', B0Z_Omega)
     call h5_close(h5id_magdif)
     ! TODO: remove intermediate when mesh_mod is refactored into magdif_mesh
     mesh_element_rmp%area = 0.5d0 * mesh_element%det_3
@@ -1582,7 +1614,7 @@ contains
   end subroutine check_safety_factor
 
   subroutine cache_equilibrium_field
-    use mesh_mod, only: knot, triangle, mesh_point, mesh_element
+    use mesh_mod, only: ntri, knot, triangle, mesh_point, mesh_element
     use magdif_conf, only: longlines
     real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
          dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
@@ -1591,6 +1623,13 @@ contains
     type(knot) :: base, tip
     real(dp) :: n_r, n_z
 
+    allocate(B0R(ntri, 3))
+    allocate(B0phi(ntri, 3))
+    allocate(B0Z(ntri, 3))
+    allocate(B0R_Omega(ntri))
+    allocate(B0phi_Omega(ntri))
+    allocate(B0Z_Omega(ntri))
+    allocate(B0flux(ntri, 3))
     open(newunit = fid, file = 'plot_B0.dat', recl = longlines, status = 'replace')
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
