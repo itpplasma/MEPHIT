@@ -13,8 +13,9 @@ module magdif_mesh
        refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile, &
        create_mesh_points, init_indices, add_node_owner, common_triangles, &
        connect_mesh_points, get_labeled_edges, cache_mesh_data, write_mesh_data, read_mesh, &
-       magdif_mesh_destructor, init_flux_variables, compute_pres_prof, &
-       compute_safety_factor, check_safety_factor, cache_equilibrium_field, &
+       magdif_mesh_destructor, init_flux_variables, compute_pres_prof_eps, compute_pres_prof_par, &
+       compute_pres_prof_geqdsk, compute_safety_factor_flux, compute_safety_factor_rot, &
+       compute_safety_factor_geqdsk, check_safety_factor, cache_equilibrium_field, &
        compute_j0phi, check_curr0, write_fluxvar, point_location, point_in_triangle
 
   type(g_eqdsk) :: equil
@@ -303,6 +304,7 @@ contains
     call cache_mesh_data
     call cache_equilibrium_field
     call init_flux_variables
+    call cache_resonance_positions
     call compute_j0phi
     call write_mesh_data
   end subroutine generate_mesh
@@ -1457,13 +1459,39 @@ contains
   end subroutine magdif_mesh_destructor
 
   subroutine init_flux_variables
+    use magdif_conf, only: conf, log, pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
+         q_prof_flux, q_prof_rot, q_prof_geqdsk
     integer :: kf
 
     ! initialize fluxvar with equidistant psi values
     call fluxvar%init(4, equil%psi_eqd)
 
-    call compute_pres_prof
-    call compute_safety_factor
+    select case (conf%pres_prof)
+    case (pres_prof_eps)
+       call compute_pres_prof_eps
+    case (pres_prof_par)
+       call compute_pres_prof_par
+    case (pres_prof_geqdsk)
+       call compute_pres_prof_geqdsk
+    case default
+       write (log%msg, '("unknown pressure profile selection", i0)') conf%pres_prof
+       if (log%err) call log%write
+       error stop
+    end select
+
+    select case (conf%q_prof)
+    case (q_prof_flux)
+       call compute_safety_factor_flux
+    case (q_prof_rot)
+       call compute_safety_factor_rot
+    case (q_prof_geqdsk)
+       call compute_safety_factor_geqdsk
+    case default
+       write (log%msg, '("unknown q profile selection: ", i0)') conf%q_prof
+       if (log%err) call log%write
+       error stop
+    end select
+
     fs%F = [(fluxvar%interp(equil%fpol, fs%psi(kf)), kf = 0, mesh%nflux)]
     fs%FdF_dpsi = [(fluxvar%interp(equil%ffprim, fs%psi(kf)), kf = 0, mesh%nflux)]
     fs_half%F = [(fluxvar%interp(equil%fpol, fs_half%psi(kf)), kf = 1, mesh%nflux)]
@@ -1472,16 +1500,15 @@ contains
     call write_fluxvar
   end subroutine init_flux_variables
 
-  subroutine compute_pres_prof
+  subroutine compute_pres_prof_eps
     use constants, only: ev2erg  ! orbit_mod.f90
-    use magdif_conf, only: conf, pres_prof_eps, pres_prof_par, pres_prof_geqdsk, log
-    integer :: kf
+    use magdif_conf, only: conf, log
     real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
 
-    !> Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
+    ! Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
     real(dp) :: dens(0:mesh%nflux)
 
-    !> Temperature \f$ T \f$ on flux surface with \f$ k_{\mathrm{B}} T \f$ in eV.
+    ! Temperature \f$ T \f$ on flux surface with \f$ k_{\mathrm{B}} T \f$ in eV.
     real(dp) :: temp(0:mesh%nflux)
 
     dens = 0d0
@@ -1493,95 +1520,112 @@ contains
        psi_ext = maxval(equil%psirz)
        psi_int = minval(equil%psirz)
     end if
-    select case (conf%pres_prof)
-    case (pres_prof_eps)
-       ddens_dpsi = conf%dens_max / psi_int
-       dtemp_dpsi = conf%temp_max / psi_int
-       dens = (fs%psi - psi_ext) / psi_int * conf%dens_max + conf%dens_min
-       temp = (fs%psi - psi_ext) / psi_int * conf%temp_max + conf%temp_min
-       write (log%msg, '("temp@axis: ", es24.16e3, ", dens@axis: ", es24.16e3)') &
-            temp(0), dens(0)
-       if (log%info) call log%write
-       fs%p = dens * temp * ev2erg
-       fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
-       dens(1:) = (fs_half%psi - psi_ext) / psi_int * conf%dens_max + conf%dens_min
-       temp(1:) = (fs_half%psi - psi_ext) / psi_int * conf%temp_max + conf%temp_min
-       fs_half%p = dens(1:) * temp(1:) * ev2erg
-       fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
-    case (pres_prof_par)
-       ddens_dpsi = (conf%dens_max - conf%dens_min) / (psi_int - psi_ext)
-       dtemp_dpsi = (conf%temp_max - conf%temp_min) / (psi_int - psi_ext)
-       dens = (fs%psi - psi_ext) / (psi_int - psi_ext) * (conf%dens_max - conf%dens_min) &
-            + conf%dens_min
-       temp = (fs%psi - psi_ext) / (psi_int - psi_ext) * (conf%temp_max - conf%temp_min) &
-            + conf%temp_min
-       fs%p = dens * temp * ev2erg
-       fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
-       dens(1:) = (fs_half%psi - psi_ext) / (psi_int - psi_ext) * &
-            (conf%dens_max - conf%dens_min) + conf%dens_min
-       temp(1:) = (fs_half%psi - psi_ext) / (psi_int - psi_ext) * &
-            (conf%temp_max - conf%temp_min) + conf%temp_min
-       fs_half%p = dens(1:) * temp(1:) * ev2erg
-       fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
-    case (pres_prof_geqdsk)
-       fs%p = [(fluxvar%interp(equil%pres, fs%psi(kf)), kf = 0, mesh%nflux)]
-       fs%dp_dpsi = [(fluxvar%interp(equil%pprime, fs%psi(kf)), kf = 0, mesh%nflux)]
-       fs_half%p = [(fluxvar%interp(equil%pres, fs_half%psi(kf)), kf = 1, mesh%nflux)]
-       fs_half%dp_dpsi = [(fluxvar%interp(equil%pprime, fs_half%psi(kf)), &
-            kf = 1, mesh%nflux)]
-    case default
-       write (log%msg, '("unknown pressure profile selection", i0)') conf%pres_prof
-       if (log%err) call log%write
-       error stop
-    end select
-  end subroutine compute_pres_prof
+    ddens_dpsi = conf%dens_max / psi_int
+    dtemp_dpsi = conf%temp_max / psi_int
+    dens = (fs%psi - psi_ext) / psi_int * conf%dens_max + conf%dens_min
+    temp = (fs%psi - psi_ext) / psi_int * conf%temp_max + conf%temp_min
+    write (log%msg, '("temp@axis: ", es24.16e3, ", dens@axis: ", es24.16e3)') &
+         temp(0), dens(0)
+    if (log%info) call log%write
+    fs%p = dens * temp * ev2erg
+    fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
+    dens(1:) = (fs_half%psi - psi_ext) / psi_int * conf%dens_max + conf%dens_min
+    temp(1:) = (fs_half%psi - psi_ext) / psi_int * conf%temp_max + conf%temp_min
+    fs_half%p = dens(1:) * temp(1:) * ev2erg
+    fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
+  end subroutine compute_pres_prof_eps
 
-  !> Allocates and computes the safety factor #q and #m_res.
-  !>
-  !> Also allocates #magdif_config::sheet_current_factor, to be read in via
-  !> magdif_config::read_delayed_config() in magdif_init(). All deallocation is done in
-  !> magdif_cleanup().
-  subroutine compute_safety_factor
+  subroutine compute_pres_prof_par
+    use constants, only: ev2erg  ! orbit_mod.f90
+    use magdif_conf, only: conf
+    real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
+
+    ! Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
+    real(dp) :: dens(0:mesh%nflux)
+
+    ! Temperature \f$ T \f$ on flux surface with \f$ k_{\mathrm{B}} T \f$ in eV.
+    real(dp) :: temp(0:mesh%nflux)
+
+    dens = 0d0
+    temp = 0d0
+    if (equil%cocos%sgn_dpsi == -1) then
+       psi_ext = minval(equil%psirz)
+       psi_int = maxval(equil%psirz)
+    else
+       psi_ext = maxval(equil%psirz)
+       psi_int = minval(equil%psirz)
+    end if
+    ddens_dpsi = (conf%dens_max - conf%dens_min) / (psi_int - psi_ext)
+    dtemp_dpsi = (conf%temp_max - conf%temp_min) / (psi_int - psi_ext)
+    dens = (fs%psi - psi_ext) / (psi_int - psi_ext) * (conf%dens_max - conf%dens_min) &
+         + conf%dens_min
+    temp = (fs%psi - psi_ext) / (psi_int - psi_ext) * (conf%temp_max - conf%temp_min) &
+         + conf%temp_min
+    fs%p = dens * temp * ev2erg
+    fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
+    dens(1:) = (fs_half%psi - psi_ext) / (psi_int - psi_ext) * &
+         (conf%dens_max - conf%dens_min) + conf%dens_min
+    temp(1:) = (fs_half%psi - psi_ext) / (psi_int - psi_ext) * &
+         (conf%temp_max - conf%temp_min) + conf%temp_min
+    fs_half%p = dens(1:) * temp(1:) * ev2erg
+    fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
+  end subroutine compute_pres_prof_par
+
+  subroutine compute_pres_prof_geqdsk
+    integer :: kf
+    fs%p = [(fluxvar%interp(equil%pres, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs%dp_dpsi = [(fluxvar%interp(equil%pprime, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs_half%p = [(fluxvar%interp(equil%pres, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    fs_half%dp_dpsi = [(fluxvar%interp(equil%pprime, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+  end subroutine compute_pres_prof_geqdsk
+
+  subroutine compute_safety_factor_flux
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_conf, only: conf, conf_arr, q_prof_flux, q_prof_rot, q_prof_geqdsk, &
-         log, cmplx_fmt
     use magdif_util, only: flux_func
-    use magdata_in_symfluxcoor_mod, only: psipol_max, psisurf, qsaf
     use mesh_mod, only: triangle_rmp, mesh_element_rmp
-    integer :: kf, kt, ktri, m, kf_res
+    integer :: kf, kt, ktri
     type(triangle_rmp) :: tri
     type(flux_func) :: psi_interpolator
-    real(dp), dimension(mesh%nflux) :: abs_err
 
-    select case (conf%q_prof)
-    case (q_prof_flux)
-       fs_half%q = 0d0
-       do kf = 1, mesh%nflux
-          do kt = 1, mesh%kt_max(kf)
-             ktri = mesh%kt_low(kf) + kt
-             tri = mesh_element_rmp(ktri)
-             fs_half%q(kf) = fs_half%q(kf) + B0phi_Omega(ktri) * tri%area
-          end do
-          fs_half%q(kf) = fs_half%q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
+    fs_half%q = 0d0
+    do kf = 1, mesh%nflux
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          tri = mesh_element_rmp(ktri)
+          fs_half%q(kf) = fs_half%q(kf) + B0phi_Omega(ktri) * tri%area
        end do
-       call psi_interpolator%init(4, fs_half%psi)
-       ! Lagrange polynomial extrapolation for values at separatrix and magnetic axis
-       fs%q = [(psi_interpolator%interp(fs_half%q, fs%psi(kf)), kf = 0, mesh%nflux)]
-    case (q_prof_rot)
-       ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
-       ! load_magdata_in_symfluxcoord_ext divides by psipol_max
-       call psi_interpolator%init(4, psisurf(1:) * psipol_max + fs%psi(0))
-       ! Lagrange polynomial extrapolation for value at magnetic axis
-       fs%q = [(psi_interpolator%interp(qsaf, fs%psi(kf)), kf = 0, mesh%nflux)]
-       fs_half%q = [(psi_interpolator%interp(qsaf, fs_half%psi(kf)), kf = 1, mesh%nflux)]
-    case (q_prof_geqdsk)
-       fs%q = [(fluxvar%interp(equil%qpsi, fs%psi(kf)), kf = 0, mesh%nflux)]
-       fs_half%q = [(fluxvar%interp(equil%qpsi, fs_half%psi(kf)), kf = 1, mesh%nflux)]
-    case default
-       write (log%msg, '("unknown q profile selection: ", i0)') conf%q_prof
-       if (log%err) call log%write
-       error stop
-    end select
+       fs_half%q(kf) = fs_half%q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
+    end do
+    call psi_interpolator%init(4, fs_half%psi)
+    ! Lagrange polynomial extrapolation for values at separatrix and magnetic axis
+    fs%q = [(psi_interpolator%interp(fs_half%q, fs%psi(kf)), kf = 0, mesh%nflux)]
+  end subroutine compute_safety_factor_flux
+
+  subroutine compute_safety_factor_rot
+    use magdif_util, only: flux_func
+    use magdata_in_symfluxcoor_mod, only: psipol_max, psisurf, qsaf
+    integer :: kf
+    type(flux_func) :: psi_interpolator
+
+    ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
+    ! load_magdata_in_symfluxcoord_ext divides by psipol_max
+    call psi_interpolator%init(4, psisurf(1:) * psipol_max + fs%psi(0))
+    ! Lagrange polynomial extrapolation for value at magnetic axis
+    fs%q = [(psi_interpolator%interp(qsaf, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs_half%q = [(psi_interpolator%interp(qsaf, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+  end subroutine compute_safety_factor_rot
+
+  subroutine compute_safety_factor_geqdsk
+    integer :: kf
+
+    fs%q = [(fluxvar%interp(equil%qpsi, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs_half%q = [(fluxvar%interp(equil%qpsi, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+  end subroutine compute_safety_factor_geqdsk
+
+  subroutine cache_resonance_positions
+    use magdif_conf, only: conf, conf_arr, log, cmplx_fmt
+    integer :: kf, m, kf_res
+    real(dp), dimension(mesh%nflux) :: abs_err
 
     allocate(mesh%m_res(mesh%nflux))
     mesh%m_res = 0
@@ -1609,7 +1653,7 @@ contains
           call log%write
        end do
     end if
-  end subroutine compute_safety_factor
+  end subroutine cache_resonance_positions
 
   subroutine check_safety_factor
     use constants, only: pi  ! orbit_mod.f90
@@ -1697,132 +1741,170 @@ contains
     close(fid)
   end subroutine cache_equilibrium_field
 
-  !> Computes equilibrium current density #j0phi from given equilibrium magnetic field and
-  !> assumed equilibrium pressure #pres0.
-  !>
-  !> This step is necessary because equilibrium pressure is not given experimentally as is
-  !> \f$ \vec{B}_{0} \f$; arbitrary values are assumed. Consistency of MHD equilibrium is
-  !> necessary in the derivation, while Ampere's equation is not used.
   subroutine compute_j0phi
-    use constants, only: pi  ! orbit_mod.f90
-    use mesh_mod, only: ntri, triangle_rmp, mesh_element_rmp, mesh_point
-    use magdif_conf, only: conf, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, longlines
-    use magdif_util, only: clight
-    integer :: kf, kt, ktri, fid
-    real(dp) :: r, z
-    real(dp) :: Btor2
-    real(dp), dimension(mesh%nflux) :: B2avg, B2avg_half
-    real(dp) :: plot_j0phi
-    type(triangle_rmp) :: tri
+    use magdif_conf, only: conf, log, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
+         longlines
+    use mesh_mod, only: ntri
+    real(dp) :: plot_j0phi(ntri)
+    integer :: fid, ktri
 
     allocate(j0phi(ntri, 3))
     j0phi = 0d0
+    select case (conf%curr_prof)
+    case (curr_prof_ps)
+       call compute_j0phi_ps(plot_j0phi)
+    case (curr_prof_rot)
+       call compute_j0phi_rot(plot_j0phi)
+    case (curr_prof_geqdsk)
+       call compute_j0phi_geqdsk(plot_j0phi)
+    case default
+       write (log%msg, '("unknown current profile selection: ", i0)') conf%curr_prof
+       if (log%err) call log%write
+       error stop
+    end select
     open(newunit = fid, file = conf%j0phi_file, recl = longlines, status = 'replace')
+    do ktri = 1, ntri
+       write (fid, '(4(1x, es24.16e3))') &
+            j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), plot_j0phi(ktri)
+    end do
+    close(fid)
+    ! TODO: replace by real array with kedge index
+    ! call check_redundant_edges(cmplx(j0phi, 0d0, dp), .true., 'j0phi')
+  end subroutine compute_j0phi
+
+  subroutine compute_j0phi_ps(plot_j0phi)
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
+    use magdif_util, only: clight
+    real(dp), intent(out) :: plot_j0phi(:)
+    integer :: kf, kt, ktri
+    real(dp) :: R
+    real(dp) :: Btor2
+    real(dp), dimension(mesh%nflux) :: B2avg, B2avg_half
+    type(triangle_rmp) :: tri
+
     B2avg = 0d0
     B2avg_half = 0d0
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
-          r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
+          R = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
           B2avg(kf) = B2avg(kf) + B0r(ktri, tri%ef) ** 2 + &
                B0phi(ktri, tri%ef) ** 2 + B0z(ktri, tri%ef) ** 2
-          r = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
+          R = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
           B2avg_half(kf) = B2avg_half(kf) + B0r(ktri, tri%ei) ** 2 + &
                B0phi(ktri, tri%ei) ** 2 + B0z(ktri, tri%ei) ** 2
        end do
        B2avg(kf) = B2avg(kf) / mesh%kt_max(kf)
        B2avg_half(kf) = B2avg_half(kf) / mesh%kt_max(kf)
-
+    end do
+    do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
-
-          r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
-          select case (conf%curr_prof)
-          case (curr_prof_geqdsk)
-             if (tri%orient) then
-                j0phi(ktri, tri%ef) = clight * (fs%dp_dpsi(kf) * r + &
-                     0.25d0 / pi * fs%FdF_dpsi(kf) / r)
-             else
-                j0phi(ktri, tri%ef) = clight * (fs%dp_dpsi(kf-1) * r + &
-                     0.25d0 / pi * fs%FdF_dpsi(kf-1) / r)
-             end if
-          case (curr_prof_rot)
-             z = sum(mesh_point(tri%lf(:))%zcoord) * 0.5d0
-             j0phi(ktri, tri%ef) = j0phi_ampere(r, z)
-          case (curr_prof_ps)
-             Btor2 = B0phi(ktri, tri%ef) ** 2
-             if (kf > 1 .and. .not. tri%orient) then
-                j0phi(ktri, tri%ef) = clight * r * fs%dp_dpsi(kf-1) * (1d0 - &
-                     Btor2 / B2avg(kf-1))
-             else
-                j0phi(ktri, tri%ef) = clight * r * fs%dp_dpsi(kf) * (1d0 - &
-                     Btor2 / B2avg(kf))
-             end if
-          end select
-
-          r = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
-          select case (conf%curr_prof)
-          case (curr_prof_geqdsk)
-             j0phi(ktri, tri%ei) = clight * (fs_half%dp_dpsi(kf) * r + &
-                  0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
-          case (curr_prof_rot)
-             z = sum(mesh_point(tri%li(:))%zcoord) * 0.5d0
-             j0phi(ktri, tri%ei) = j0phi_ampere(r, z)
-          case (curr_prof_ps)
-             Btor2 = B0phi(ktri, tri%ei) ** 2
-             j0phi(ktri, tri%ei) = clight * r * fs_half%dp_dpsi(kf) * (1d0 - &
-                  Btor2 / B2avg_half(kf))
-          end select
-
-          r = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
-          select case (conf%curr_prof)
-          case (curr_prof_geqdsk)
-             j0phi(ktri, tri%eo) = clight * (fs_half%dp_dpsi(kf) * r + &
-                  0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
-          case (curr_prof_rot)
-             z = sum(mesh_point(tri%lo(:))%zcoord) * 0.5d0
-             j0phi(ktri, tri%eo) = j0phi_ampere(r, z)
-          case (curr_prof_ps)
-             Btor2 = B0phi(ktri, tri%eo) ** 2
-             j0phi(ktri, tri%eo) = clight * r * fs_half%dp_dpsi(kf) * (1d0 - &
-                  Btor2 / B2avg_half(kf))
-          end select
-
-          select case (conf%curr_prof)
-          case (curr_prof_geqdsk)
-             plot_j0phi = clight * (fs_half%dp_dpsi(kf) * tri%r_Omega + &
-                  0.25d0 / pi * fs_half%FdF_dpsi(kf) / tri%r_Omega)
-          case (curr_prof_rot)
-             plot_j0phi = j0phi_ampere(tri%r_Omega, tri%z_Omega)
-          case (curr_prof_ps)
-             Btor2 = B0phi_Omega(ktri) ** 2
-             plot_j0phi = clight * tri%r_Omega * fs_half%dp_dpsi(kf) * (1d0 - &
-                  Btor2 / B2avg_half(kf))
-          end select
-
-          write (fid, '(4(1x, es24.16e3))') &
-               j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), plot_j0phi
+          ! edge f
+          R = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
+          Btor2 = B0phi(ktri, tri%ef) ** 2
+          if (kf == 1 .or. tri%orient) then
+             j0phi(ktri, tri%ef) = clight * R * fs%dp_dpsi(kf) * (1d0 - &
+                  Btor2 / B2avg(kf))
+          else
+             j0phi(ktri, tri%ef) = clight * R * fs%dp_dpsi(kf-1) * (1d0 - &
+                  Btor2 / B2avg(kf-1))
+          end if
+          ! edge i
+          R = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
+          Btor2 = B0phi(ktri, tri%ei) ** 2
+          j0phi(ktri, tri%ei) = clight * R * fs_half%dp_dpsi(kf) * (1d0 - &
+               Btor2 / B2avg_half(kf))
+          ! edge o
+          R = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
+          Btor2 = B0phi(ktri, tri%eo) ** 2
+          j0phi(ktri, tri%eo) = clight * R * fs_half%dp_dpsi(kf) * (1d0 - &
+               Btor2 / B2avg_half(kf))
+          ! centroid
+          Btor2 = B0phi_Omega(ktri) ** 2
+          plot_j0phi(ktri) = clight * tri%R_Omega * fs_half%dp_dpsi(kf) * (1d0 - &
+               Btor2 / B2avg_half(kf))
        end do
     end do
-    close(fid)
+  end subroutine compute_j0phi_ps
 
-    ! TODO: replace by real array with kedge index
-    ! call check_redundant_edges(cmplx(j0phi, 0d0, dp), .true., 'j0phi')
+  subroutine compute_j0phi_rot(plot_j0phi)
+    use constants, only: pi  ! orbit_mod.f90
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
+    use magdif_util, only: clight
+    real(dp), intent(out) :: plot_j0phi(:)
+    integer :: kf, kt, ktri
+    real(dp) :: R, Z, dum, dB0R_dZ, dB0Z_dR
+    type(triangle_rmp) :: tri
 
-  contains
-    function j0phi_ampere(r, z) result (rotB_phi)
-      real(dp), intent(in) :: r, z
-      real(dp) :: rotB_phi
-      real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-      call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-      rotB_phi = 0.25d0 / pi * clight * (dBrdZ - dBzdR)
-    end function j0phi_ampere
+    do kf = 1, mesh%nflux
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          tri = mesh_element_rmp(ktri)
+          ! edge f
+          R = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
+          Z = sum(mesh_point(tri%lf(:))%zcoord) * 0.5d0
+          call field(R, 0d0, Z, dum, dum, dum, dum, dum, dB0R_dZ, &
+               dum, dum, dum, dB0Z_dR, dum, dum)
+          j0phi(ktri, tri%ef) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+          ! edge i
+          R = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
+          Z = sum(mesh_point(tri%li(:))%zcoord) * 0.5d0
+          call field(R, 0d0, Z, dum, dum, dum, dum, dum, dB0R_dZ, &
+               dum, dum, dum, dB0Z_dR, dum, dum)
+          j0phi(ktri, tri%ei) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+          ! edge o
+          R = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
+          Z = sum(mesh_point(tri%lo(:))%zcoord) * 0.5d0
+          call field(R, 0d0, Z, dum, dum, dum, dum, dum, dB0R_dZ, &
+               dum, dum, dum, dB0Z_dR, dum, dum)
+          j0phi(ktri, tri%eo) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+          ! centroid
+          call field(tri%R_Omega, 0d0, tri%Z_Omega, dum, dum, dum, dum, dum, dB0R_dZ, &
+               dum, dum, dum, dB0Z_dR, dum, dum)
+          plot_j0phi(ktri) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+       end do
+    end do
+  end subroutine compute_j0phi_rot
 
-  end subroutine compute_j0phi
+  subroutine compute_j0phi_geqdsk(plot_j0phi)
+    use constants, only: pi  ! orbit_mod.f90
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
+    use magdif_util, only: clight
+    real(dp), intent(out) :: plot_j0phi(:)
+    integer :: kf, kt, ktri
+    real(dp) :: R
+    type(triangle_rmp) :: tri
+
+    do kf = 1, mesh%nflux
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          tri = mesh_element_rmp(ktri)
+          ! edge f
+          R = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
+          if (kf == 1 .or. tri%orient) then
+             j0phi(ktri, tri%ef) = clight * (fs%dp_dpsi(kf) * R + &
+                  0.25d0 / pi * fs%FdF_dpsi(kf) / R)
+          else
+             j0phi(ktri, tri%ef) = clight * (fs%dp_dpsi(kf-1) * R + &
+                  0.25d0 / pi * fs%FdF_dpsi(kf-1) / R)
+          end if
+          ! edge i
+          R = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
+          j0phi(ktri, tri%ei) = clight * (fs_half%dp_dpsi(kf) * R + &
+               0.25d0 / pi * fs_half%FdF_dpsi(kf) / R)
+          ! edge o
+          R = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
+          j0phi(ktri, tri%eo) = clight * (fs_half%dp_dpsi(kf) * R + &
+               0.25d0 / pi * fs_half%FdF_dpsi(kf) / R)
+          ! centroid
+          plot_j0phi(ktri) = clight * (fs_half%dp_dpsi(kf) * tri%R_Omega + &
+               0.25d0 / pi * fs_half%FdF_dpsi(kf) / tri%R_Omega)
+       end do
+    end do
+  end subroutine compute_j0phi_geqdsk
 
   subroutine check_curr0
     use constants, only: pi  ! orbit_mod.f90
