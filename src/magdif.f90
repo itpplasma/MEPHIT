@@ -5,7 +5,8 @@ module magdif
 
   private
 
-  public :: Bnflux, Bnphi, magdif_init, magdif_cleanup, magdif_single, magdif_iterate
+  public :: Bnflux, Bnphi, magdif_init, magdif_cleanup, magdif_single, magdif_iterate, &
+       magdif_postprocess
 
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   !>
@@ -291,21 +292,11 @@ contains
        call pack_dof(Bnflux, Bn_prev)
     end do
     call write_vector_dof(Bnflux, Bnphi, conf%Bn_file)
-    ! tell FreeFem++ to stop processing
-    call send_flag_to_freefem(-3, 'maxwell.dat')
-
     call write_vector_plot(Bnflux, Bnphi, decorate_filename(conf%Bn_file, 'plot_', ''))
     call write_vector_plot_rect(Bnflux, Bnphi, &
          decorate_filename(conf%Bn_file, 'rect_', ''))
-    call write_poloidal_modes(Bnflux, Bnphi, 'Bmn.dat')
-    call write_poloidal_modes(Bnflux_vac, Bnphi_vac, 'Bmn_vac.dat')
-    call write_poloidal_modes(Bnflux - Bnflux_vac, Bnphi - Bnphi_vac, 'Bmn_plas.dat')
-    call write_poloidal_modes(jnflux, jnphi, 'currmn.dat')
-    call write_Ipar_symfluxcoord(2048)
-    if (conf%kilca_scale_factor /= 0) then
-       call write_Ipar(2048)
-    end if
-
+    ! tell FreeFem++ to stop processing
+    call send_flag_to_freefem(-3, 'maxwell.dat')
     if (allocated(Lr)) deallocate(Lr)
 
   contains
@@ -738,6 +729,19 @@ contains
        end if
     end do
   end subroutine add_sheet_current
+
+  subroutine magdif_postprocess
+    use magdif_conf, only: conf
+
+    call write_poloidal_modes(Bnflux, Bnphi, 'Bmn.dat')
+    call write_poloidal_modes(Bnflux_vac, Bnphi_vac, 'Bmn_vac.dat')
+    call write_poloidal_modes(Bnflux - Bnflux_vac, Bnphi - Bnphi_vac, 'Bmn_plas.dat')
+    call write_poloidal_modes(jnflux, jnphi, 'currmn.dat')
+    call write_Ipar_symfluxcoord(2048)
+    if (conf%kilca_scale_factor /= 0) then
+       call write_Ipar(2048)
+    end if
+  end subroutine magdif_postprocess
 
   subroutine write_poloidal_modes(pol_flux, tor_comp, outfile)
     use constants, only: pi  ! orbit_mod.f90

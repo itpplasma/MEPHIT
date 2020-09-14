@@ -1,6 +1,6 @@
 program magdif_test
   use magdif_conf, only: conf, magdif_config_read, conf_arr
-  use magdif, only: magdif_init, magdif_cleanup, magdif_iterate
+  use magdif, only: magdif_init, magdif_cleanup, magdif_iterate, magdif_postprocess
   use hdf5_tools, only: h5_init, h5_deinit
 
   implicit none
@@ -18,6 +18,7 @@ program magdif_test
   call conf_arr%read(config_file, conf%m_min, conf%m_max)
   call magdif_init
   call magdif_iterate
+  call magdif_postprocess
   call magdif_cleanup
   call h5_deinit
 
