@@ -33,31 +33,32 @@ contains
 
   subroutine interp_RT0(ktri, pol_flux, R, Z, comp_R, comp_Z, &
        comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ)
-    use mesh_mod, only: knot, triangle, mesh_point, mesh_element
+    use mesh_mod, only: triangle, mesh_element
+    use magdif_mesh, only: mesh
     integer, intent(in) :: ktri
     complex(dp), intent(in) :: pol_flux(:,:)
     real(dp), intent(in) :: r, z
     complex(dp), intent(out) :: comp_R, comp_Z
     complex(dp), intent(out), optional :: comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ
     type(triangle) :: elem
-    type(knot) :: node(3)
+    integer :: nodes(3)
 
     elem = mesh_element(ktri)
-    node = mesh_point(elem%i_knot(:))
+    nodes = mesh%tri_node(:, ktri)
     ! edge 1 lies opposite to knot 3, etc.
     comp_R = 1d0 / elem%det_3 / R * ( &
-         pol_flux(ktri, 1) * (R - node(3)%Rcoord) + &
-         pol_flux(ktri, 2) * (R - node(1)%Rcoord) + &
-         pol_flux(ktri, 3) * (R - node(2)%Rcoord))
+         pol_flux(ktri, 1) * (R - mesh%node_R(nodes(3))) + &
+         pol_flux(ktri, 2) * (R - mesh%node_R(nodes(1))) + &
+         pol_flux(ktri, 3) * (R - mesh%node_R(nodes(2))))
     comp_Z = 1d0 / elem%det_3 / R * ( &
-         pol_flux(ktri, 1) * (Z - node(3)%Zcoord) + &
-         pol_flux(ktri, 2) * (Z - node(1)%Zcoord) + &
-         pol_flux(ktri, 3) * (Z - node(2)%Zcoord))
+         pol_flux(ktri, 1) * (Z - mesh%node_Z(nodes(3))) + &
+         pol_flux(ktri, 2) * (Z - mesh%node_Z(nodes(1))) + &
+         pol_flux(ktri, 3) * (Z - mesh%node_Z(nodes(2))))
     if (present(comp_R_dR)) then
        comp_R_dR = 1d0 / elem%det_3 / R ** 2 * ( &
-            pol_flux(ktri, 1) * node(3)%Rcoord + &
-            pol_flux(ktri, 2) * node(1)%Rcoord + &
-            pol_flux(ktri, 3) * node(2)%Rcoord)
+            pol_flux(ktri, 1) * mesh%node_R(nodes(3)) + &
+            pol_flux(ktri, 2) * mesh%node_R(nodes(1)) + &
+            pol_flux(ktri, 3) * mesh%node_R(nodes(2)))
     end if
     if (present(comp_R_dZ)) then
        comp_R_dZ = (0d0, 0d0)
@@ -301,14 +302,13 @@ contains
   end subroutine write_vector_plot_rect
 
   subroutine compute_Bn_nonres(Bnflux, Bnphi)
-    use mesh_mod, only: knot, triangle_rmp, mesh_point, mesh_element_rmp
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp
     use magdif_conf, only: conf
     use magdif_util, only: imun
     use magdif_mesh, only: mesh, B0R, B0phi, B0Z
     complex(dp), intent(out) :: Bnflux(:, :), Bnphi(:)
-    integer :: kf, kt, ktri
+    integer :: kf, kt, ktri, base, tip
     type(triangle_rmp) :: tri
-    type(knot) :: base, tip
     real(dp) :: r, lr, lz
     complex(dp) :: Bnpsi
 
@@ -317,11 +317,11 @@ contains
           ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
           ! use midpoint of edge f
-          base = mesh_point(tri%lf(1))
-          tip = mesh_point(tri%lf(2))
-          r = (base%rcoord + tip%rcoord) * 0.5d0
-          lr = tip%rcoord - base%rcoord
-          lz = tip%zcoord - base%zcoord
+          base = tri%lf(1)
+          tip = tri%lf(2)
+          R = (mesh%node_R(base) + mesh%node_R(tip)) * 0.5d0
+          lR = mesh%node_R(tip) - mesh%node_R(base)
+          lZ = mesh%node_Z(tip) - mesh%node_Z(base)
           Bnpsi = -mesh%R_O * B0phi(ktri, tri%ef) / r
           Bnflux(ktri, tri%ef) = Bnpsi * (lr ** 2 + lz ** 2) / &
                (B0r(ktri, tri%ef) * lr + B0z(ktri, tri%ef) * lz)
@@ -364,7 +364,7 @@ contains
 
   ! calculate resonant vacuum perturbation
   subroutine compute_kilca_vacuum(Bnflux, Bnphi)
-    use mesh_mod, only: ntri, knot, triangle, mesh_point, mesh_element, mesh_element_rmp
+    use mesh_mod, only: ntri, triangle, mesh_element_rmp
     use magdif_conf, only: conf
     use magdif_util, only: imun, gauss_legendre_unit_interval
     use magdif_mesh, only: mesh
@@ -380,10 +380,9 @@ contains
     Bnphi = (0d0, 0d0)
     call gauss_legendre_unit_interval(order, points, weights)
     do ktri = 1, ntri
-       associate(tri => mesh_element_rmp(ktri), &
-            knots => mesh_point(mesh_element(ktri)%i_knot))
-         node_R = [knots(:)%rcoord, knots(1)%rcoord]
-         node_Z = [knots(:)%zcoord, knots(1)%zcoord]
+       associate(tri => mesh_element_rmp(ktri))
+         node_R = mesh%node_R([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
+         node_Z = mesh%node_Z([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
          do ke = 1, 3
             edge_R = node_R(ke + 1) - node_R(ke)
             edge_Z = node_Z(ke + 1) - node_Z(ke)

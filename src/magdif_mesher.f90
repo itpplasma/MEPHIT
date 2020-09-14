@@ -5,7 +5,7 @@ program magdif_preprocess
   use magdif_mesh, only: generate_mesh
   use magdif_pert, only: compute_kilca_vac_coeff, compute_kilca_vacuum, &
        check_kilca_vacuum, check_RT0
-  use mesh_mod, only: mesh_point, mesh_element, mesh_element_rmp
+  use mesh_mod, only: mesh_element, mesh_element_rmp
 
   implicit none
 
@@ -31,5 +31,4 @@ program magdif_preprocess
   ! TODO: proper cleanup
   if (allocated(mesh_element_rmp)) deallocate(mesh_element)
   if (allocated(mesh_element)) deallocate(mesh_element)
-  if (allocated(mesh_point)) deallocate(mesh_point)
 end program magdif_preprocess

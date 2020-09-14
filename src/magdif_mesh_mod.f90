@@ -11,7 +11,7 @@ module magdif_mesh
        B0r, B0phi, B0z, B0r_Omega, B0phi_Omega, B0z_Omega, B0flux, j0phi, &
        flux_func_cache_init, flux_func_cache_check, flux_func_cache_destructor, generate_mesh, &
        refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile, &
-       create_mesh_points, init_indices, add_node_owner, common_triangles, &
+       create_mesh_points, init_indices, common_triangles, &
        connect_mesh_points, get_labeled_edges, cache_mesh_data, write_mesh_data, read_mesh, &
        magdif_mesh_destructor, init_flux_variables, compute_pres_prof_eps, compute_pres_prof_par, &
        compute_pres_prof_geqdsk, compute_safety_factor_flux, compute_safety_factor_rot, &
@@ -87,7 +87,10 @@ module magdif_mesh
      !> to refinement of flux surfaces.
      integer :: nflux
 
-     !> Number of triangle edges. TODO: Add npoint and ntri along with mesh_element_rmp.
+     !> Number of triangle nodes.
+     integer :: npoint
+
+     !> Number of triangle edges. TODO: Add ntri along with mesh_element_rmp.
      integer :: nedge
 
      !> Toroidal mode number. May differ from #magdif_conf::magdif_config#n due to large
@@ -151,6 +154,12 @@ module magdif_mesh
      !> therefore 0), to #magdif_config::nflux+1, giving the last triangle inside the last
      !> closed flux surface.
      integer, allocatable :: kt_low(:)
+
+     real(dp), allocatable :: node_R(:)
+     real(dp), allocatable :: node_Z(:)
+
+     integer, allocatable :: tri_node(:, :)
+     integer, allocatable :: tri_node_F(:)
 
      integer, allocatable :: edge_map2global(:, :)
      integer, allocatable :: edge_map2ktri(:, :)
@@ -517,7 +526,7 @@ contains
 
   subroutine create_mesh_points(convexfile)
     use constants, only: pi
-    use mesh_mod, only: npoint, mesh_point, ntri, mesh_element, mesh_element_rmp
+    use mesh_mod, only: ntri, mesh_element, mesh_element_rmp
     use magdif_conf, only: conf, log
     use magdif_util, only: interp_psi_pol, flux_func
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
@@ -527,7 +536,7 @@ contains
     use points_2d, only: s_min, create_points_2d
 
     character(len = *), intent(in) :: convexfile
-    integer :: kf, kpoi, fid
+    integer :: kf, fid
     integer, dimension(:), allocatable :: n_theta
     real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_norm_ref
     real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
@@ -588,29 +597,28 @@ contains
 
     call init_indices
     ntri = mesh%kt_low(mesh%nflux + 1)
-    npoint = mesh%kp_low(mesh%nflux + 1)
-    allocate(mesh_point(npoint))
+    mesh%npoint = mesh%kp_low(mesh%nflux + 1)
+    allocate(mesh%node_R(mesh%npoint))
+    allocate(mesh%node_Z(mesh%npoint))
     allocate(mesh_element(ntri))
     allocate(mesh_element_rmp(ntri))
 
     allocate(n_theta(mesh%nflux))
-    allocate(points(3, npoint))
-    allocate(points_s_theta_phi(3, npoint))
+    allocate(points(3, mesh%npoint))
+    allocate(points_s_theta_phi(3, mesh%npoint))
     n_theta = conf%nkpol
     s_min = 1d-16
     ! inp_label 2 to use poloidal psi with magdata_in_symfluxcoord_ext
     ! psi is not normalized by psipol_max, but shifted by -psi_axis
     call create_points_2d(2, n_theta, points, points_s_theta_phi, r_scaling_func = psi_ref)
-    mesh_point(1)%rcoord = mesh%R_O
-    mesh_point(1)%zcoord = mesh%Z_O
-    do kpoi = 2, npoint
-       mesh_point(kpoi)%rcoord = points(1, kpoi)
-       mesh_point(kpoi)%zcoord = points(3, kpoi)
-    end do
-    mesh%R_min = minval(mesh_point%rcoord)
-    mesh%R_max = maxval(mesh_point%rcoord)
-    mesh%Z_min = minval(mesh_point%zcoord)
-    mesh%Z_max = maxval(mesh_point%zcoord)
+    mesh%node_R(1) = mesh%R_O
+    mesh%node_Z(1) = mesh%Z_O
+    mesh%node_R(2:) = points(1, 2:)
+    mesh%node_Z(2:) = points(3, 2:)
+    mesh%R_min = minval(mesh%node_R)
+    mesh%R_max = maxval(mesh%node_R)
+    mesh%Z_min = minval(mesh%node_Z)
+    mesh%Z_max = maxval(mesh%node_Z)
 
     if (allocated(n_theta)) deallocate(n_theta)
     if (allocated(points)) deallocate(points)
@@ -670,30 +678,15 @@ contains
     if (log%info) call log%write
   end subroutine init_indices
 
-  elemental subroutine calculate_det_3(elem)
-    use mesh_mod, only: triangle, knot, mesh_point
-    type(triangle), intent(inout) :: elem
-    real(dp) :: e1_r, e1_z, e2_r, e2_z
-    e1_r = mesh_point(elem%i_knot(1))%rcoord - mesh_point(elem%i_knot(3))%rcoord
-    e1_z = mesh_point(elem%i_knot(1))%zcoord - mesh_point(elem%i_knot(3))%zcoord
-    e2_r = mesh_point(elem%i_knot(2))%rcoord - mesh_point(elem%i_knot(3))%rcoord
-    e2_z = mesh_point(elem%i_knot(2))%zcoord - mesh_point(elem%i_knot(3))%zcoord
-    elem%det_3 = abs(e1_r * e2_z - e1_z * e2_r)
-  end subroutine calculate_det_3
-
-  subroutine add_node_owner(kpoint, ktri)
-    use mesh_mod, only: knot, mesh_point, n_owners_max
-    use magdif_conf, only: log
-    integer, intent(in) :: kpoint, ktri
-    if (mesh_point(kpoint)%n_owners < n_owners_max) then
-       mesh_point(kpoint)%i_owner_tri(mesh_point(kpoint)%n_owners + 1) = ktri
-       mesh_point(kpoint)%n_owners = mesh_point(kpoint)%n_owners + 1
-    else
-       write (log%msg, '("Maximal number of owning triangles exceeded at point ", i0)') &
-            kpoint
-       if (log%warn) call log%write
-    end if
-  end subroutine add_node_owner
+  function calculate_det_3(ktri) result(det_3)
+    integer, intent(in) :: ktri
+    real(dp) :: det_3, e1_R, e1_Z, e2_R, e2_Z
+    e1_R = mesh%node_R(mesh%tri_node(1, ktri)) - mesh%node_R(mesh%tri_node(3, ktri))
+    e1_Z = mesh%node_Z(mesh%tri_node(1, ktri)) - mesh%node_Z(mesh%tri_node(3, ktri))
+    e2_R = mesh%node_R(mesh%tri_node(2, ktri)) - mesh%node_R(mesh%tri_node(3, ktri))
+    e2_Z = mesh%node_Z(mesh%tri_node(2, ktri)) - mesh%node_Z(mesh%tri_node(3, ktri))
+    det_3 = abs(e1_R * e2_Z - e1_Z * e2_R)
+  end function calculate_det_3
 
   !> Returns the indices of the two triangles sharing an edge.
   !>
@@ -704,68 +697,63 @@ contains
   !> The program is halted if the input data is invalid, i.e. if more than two triangles
   !> appear to share the edge.
   subroutine common_triangles(knot1, knot2, common_tri)
-    use mesh_mod, only: mesh_point
+    use mesh_mod, only: ntri
     use magdif_conf, only: log
     integer, intent(in) :: knot1, knot2
     integer, intent(out) :: common_tri(2)
-    integer :: k, l, kcom
+    logical :: tri_mask(ntri)
 
     common_tri = [0, 0]
-    kcom = 0
-    do k = 1, mesh_point(knot1)%n_owners
-       do l = 1, mesh_point(knot2)%n_owners
-          if (mesh_point(knot1)%i_owner_tri(k) == mesh_point(knot2)%i_owner_tri(l)) then
-             kcom = kcom + 1
-             if (kcom > 2) then
-                write (log%msg, '("More than two common triangles for knots ", ' // &
-                     'i0, " and ", i0)') knot1, knot2
-                if (log%err) call log%write
-                error stop
-             end if
-             common_tri(kcom) = mesh_point(knot1)%i_owner_tri(k)
-          end if
-       end do
-    end do
+    tri_mask = any(mesh%tri_node == knot1, 1) .and. any(mesh%tri_node == knot2, 1)
+    select case (count(tri_mask))
+    case (0)
+       common_tri = [0, 0]
+    case (1)
+       common_tri = [findloc(tri_mask, .true., 1), 0]
+    case (2)
+       common_tri = [findloc(tri_mask, .true., 1), findloc(tri_mask, .true., 1, back = .true.)]
+    case default
+       write (log%msg, '("More than two common triangles for knots ", ' // &
+            'i0, " and ", i0)') knot1, knot2
+       if (log%err) call log%write
+       error stop
+    end select
   end subroutine common_triangles
 
   subroutine connect_mesh_points
-    use mesh_mod, only: mesh_element
+    use mesh_mod, only: ntri, mesh_element
     integer :: kf, kp, kt, ktri, ktri_adj, common_tri(2)
 
+    allocate(mesh%tri_node(3, ntri))
+    allocate(mesh%tri_node_F(ntri))
+    mesh%tri_node = 0
+    mesh%tri_node_F = 0
     ktri = mesh%kt_low(1)
     ! define trianlges on innermost flux surface
     kf = 1
     do kp = 1, mesh%kp_max(kf)
        ktri = ktri + 1
-       mesh_element(ktri)%i_knot(1) = mesh%kp_low(kf) + kp
-       mesh_element(ktri)%i_knot(2) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
-       mesh_element(ktri)%i_knot(3) = mesh%kp_low(kf)
-       mesh_element(ktri)%knot_h = 3
-       call add_node_owner(mesh_element(ktri)%i_knot(1), ktri)
-       call add_node_owner(mesh_element(ktri)%i_knot(2), ktri)
-       call calculate_det_3(mesh_element(ktri))
+       mesh%tri_node(1, ktri) = mesh%kp_low(kf) + kp
+       mesh%tri_node(2, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
+       mesh%tri_node(3, ktri) = mesh%kp_low(kf)
+       mesh%tri_node_F(ktri) = 3
+       mesh_element(ktri)%det_3 = calculate_det_3(ktri)
     end do
     ! define triangles on outer flux surfaces
     do kf = 2, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           ktri = ktri + 1
-          mesh_element(ktri)%i_knot(1) = mesh%kp_low(kf) + kp
-          mesh_element(ktri)%i_knot(2) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
-          mesh_element(ktri)%i_knot(3) = mesh%kp_low(kf - 1) + kp
-          mesh_element(ktri)%knot_h = 3
-          call add_node_owner(mesh_element(ktri)%i_knot(1), ktri)
-          call add_node_owner(mesh_element(ktri)%i_knot(2), ktri)
-          call add_node_owner(mesh_element(ktri)%i_knot(3), ktri)
-          call calculate_det_3(mesh_element(ktri))
+          mesh%tri_node(1, ktri) = mesh%kp_low(kf) + kp
+          mesh%tri_node(2, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
+          mesh%tri_node(3, ktri) = mesh%kp_low(kf - 1) + kp
+          mesh%tri_node_F(ktri) = 3
+          mesh_element(ktri)%det_3 = calculate_det_3(ktri)
           ktri = ktri + 1
-          mesh_element(ktri)%i_knot(1) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
-          mesh_element(ktri)%i_knot(2) = mesh%kp_low(kf - 1) + mod(kp, mesh%kp_max(kf - 1)) + 1
-          mesh_element(ktri)%i_knot(3) = mesh%kp_low(kf - 1) + kp
-          mesh_element(ktri)%knot_h = 1
-          call add_node_owner(mesh_element(ktri)%i_knot(1), ktri)
-          call add_node_owner(mesh_element(ktri)%i_knot(2), ktri)
-          call add_node_owner(mesh_element(ktri)%i_knot(3), ktri)
-          call calculate_det_3(mesh_element(ktri))
+          mesh%tri_node(1, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
+          mesh%tri_node(2, ktri) = mesh%kp_low(kf - 1) + mod(kp, mesh%kp_max(kf - 1)) + 1
+          mesh%tri_node(3, ktri) = mesh%kp_low(kf - 1) + kp
+          mesh%tri_node_F(ktri) = 1
+          mesh_element(ktri)%det_3 = calculate_det_3(ktri)
        end do
     end do
     ! set neighbours for edges i and o on innermost flux surface
@@ -838,10 +826,9 @@ contains
   !> and edge 3 from knot 3 to knot 1. It is not assumed that knots are orderd
   !> counter-clockwise locally.
 
-  subroutine get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-    use mesh_mod, only: triangle
+  subroutine get_labeled_edges(ktri, li, lo, lf, ei, eo, ef, orient)
     use magdif_conf, only: log
-    type(triangle), intent(in) :: elem
+    integer, intent(in) :: ktri
     integer, dimension(:), intent(out) :: li, lo, lf
     integer, intent(out) :: ei, eo, ef
     logical, intent(out) :: orient
@@ -873,7 +860,7 @@ contains
     ! initialize to suppress compiler warnings
     i1 = 0
     i2 = 0
-    knot_f = elem%knot_h
+    knot_f = mesh%tri_node_F(ktri)
     select case (knot_f)
     case (1)
        i1 = 2
@@ -885,17 +872,17 @@ contains
        i1 = 1
        i2 = 2
     end select
-    if (elem%i_knot(i1) == elem%i_knot(i2)) then
+    if (mesh%tri_node(i1, ktri) == mesh%tri_node(i2, ktri)) then
        if (log%err) call log%write
        error stop
     end if
     ! last triangle in strip if indices not next to each other
-    closing_loop = abs(elem%i_knot(i1) - elem%i_knot(i2)) /= 1
-    i_knot_diff = elem%i_knot - elem%i_knot(knot_f)
+    closing_loop = abs(mesh%tri_node(i1, ktri) - mesh%tri_node(i2, ktri)) /= 1
+    i_knot_diff = mesh%tri_node(:, ktri) - mesh%tri_node(knot_f, ktri)
     if (all(i_knot_diff >= 0)) then
        ! knot_f lies on inner surface
        orient = .true.
-       if ((elem%i_knot(i1) < elem%i_knot(i2)) .neqv. closing_loop) then
+       if ((mesh%tri_node(i1, ktri) < mesh%tri_node(i2, ktri)) .neqv. closing_loop) then
           ! i1 is next after knot_f counter-clockwise
           knot_o = i1
           knot_i = i2
@@ -907,13 +894,13 @@ contains
        ei = knot_f
        eo = knot_i
        ef = knot_o
-       li = [elem%i_knot(knot_f), elem%i_knot(knot_o)]
-       lo = [elem%i_knot(knot_i), elem%i_knot(knot_f)]
-       lf = [elem%i_knot(knot_o), elem%i_knot(knot_i)]
+       li = [mesh%tri_node(knot_f, ktri), mesh%tri_node(knot_o, ktri)]
+       lo = [mesh%tri_node(knot_i, ktri), mesh%tri_node(knot_f, ktri)]
+       lf = [mesh%tri_node(knot_o, ktri), mesh%tri_node(knot_i, ktri)]
     else if (all(i_knot_diff <= 0)) then
        ! knot_f lies on outer surface
        orient = .false.
-       if ((elem%i_knot(i1) > elem%i_knot(i2)) .neqv. closing_loop) then
+       if ((mesh%tri_node(i1, ktri) > mesh%tri_node(i2, ktri)) .neqv. closing_loop) then
           ! i1 is next after knot_f counter-clockwise
           knot_i = i1
           knot_o = i2
@@ -925,9 +912,9 @@ contains
        ei = knot_o
        eo = knot_f
        ef = knot_i
-       li = [elem%i_knot(knot_o), elem%i_knot(knot_f)]
-       lo = [elem%i_knot(knot_f), elem%i_knot(knot_i)]
-       lf = [elem%i_knot(knot_i), elem%i_knot(knot_o)]
+       li = [mesh%tri_node(knot_o, ktri), mesh%tri_node(knot_f, ktri)]
+       lo = [mesh%tri_node(knot_f, ktri), mesh%tri_node(knot_i, ktri)]
+       lf = [mesh%tri_node(knot_i, ktri), mesh%tri_node(knot_o, ktri)]
     else
        if (log%err) call log%write
        error stop
@@ -947,15 +934,14 @@ contains
   !> place the centroid closer to the inner flux surface for one orientation and closer
   !> to the outer one for the other. To counteract this, the "lonely" knot is counted
   !> twice in the averaging procedure, i.e. with double weighting.
-  pure subroutine ring_centered_avg_coord(elem, r, z)
-    use mesh_mod, only: triangle, knot, mesh_point
-    type(triangle), intent(in) :: elem
-    real(dp), intent(out) :: r, z
-    type(knot), dimension(3) :: knots
+  pure subroutine ring_centered_avg_coord(ktri, R, Z)
+    integer, intent(in) :: ktri
+    real(dp), intent(out) :: R, Z
+    integer :: nodes(4)
 
-    knots = mesh_point(elem%i_knot)
-    r = (sum(knots%rcoord) + knots(elem%knot_h)%rcoord) * 0.25d0
-    z = (sum(knots%zcoord) + knots(elem%knot_h)%zcoord) * 0.25d0
+    nodes = [mesh%tri_node(:, ktri), mesh%tri_node(mesh%tri_node_F(ktri), ktri)]
+    R = sum(mesh%node_R(nodes)) * 0.25d0
+    Z = sum(mesh%node_Z(nodes)) * 0.25d0
   end subroutine ring_centered_avg_coord
 
   subroutine cache_mesh_data
@@ -976,9 +962,9 @@ contains
     do ktri = 1, mesh%kt_low(mesh%nflux + 1)
        elem = mesh_element(ktri)
        tri%area = 0.5d0 * elem%det_3
-       call get_labeled_edges(elem, tri%li, tri%lo, tri%lf, tri%ei, tri%eo, tri%ef, &
+       call get_labeled_edges(ktri, tri%li, tri%lo, tri%lf, tri%ei, tri%eo, tri%ef, &
             tri%orient)
-       call ring_centered_avg_coord(elem, tri%R_Omega, tri%Z_Omega)
+       call ring_centered_avg_coord(ktri, tri%R_Omega, tri%Z_Omega)
        mesh_element_rmp(ktri) = tri
 
        do ke = 1, 3
@@ -1006,7 +992,6 @@ contains
     use constants, only: pi  ! orbit_mod.f90
     use magdif_conf, only: conf
     use magdif_util, only: interp_psi_pol, binsearch
-    use mesh_mod, only: mesh_point
     real(dp), intent(in) :: r, z
     integer :: location
 
@@ -1027,8 +1012,8 @@ contains
 
     pol_interval = 0d0
     pol_interval(0:mesh%kp_max(kf)-1) = 0.5d0 / pi * atan2( &
-         mesh_point((mesh%kp_low(kf) + 1):(mesh%kp_low(kf) + mesh%kp_max(kf)))%zcoord - mesh%Z_O, &
-         mesh_point((mesh%kp_low(kf) + 1):(mesh%kp_low(kf) + mesh%kp_max(kf)))%rcoord - mesh%R_O)
+         mesh%node_Z((mesh%kp_low(kf) + 1):(mesh%kp_low(kf) + mesh%kp_max(kf))) - mesh%Z_O, &
+         mesh%node_R((mesh%kp_low(kf) + 1):(mesh%kp_low(kf) + mesh%kp_max(kf))) - mesh%R_O)
     pol_offset = pol_interval(0)
     pol_interval = pol_interval - pol_offset
     pol_interval(mesh%kp_max(kf)) = 1d0
@@ -1077,7 +1062,7 @@ contains
 
   ! based on http://totologic.blogspot.com/2014/01/accurate-point-in-triangle-test.html
   function point_in_triangle(ktri, R, Z, thickness) result(probably)
-    use mesh_mod, only: triangle, mesh_element, mesh_point
+    use mesh_mod, only: triangle, mesh_element
     integer, intent(in) :: ktri
     real(dp), intent(in) :: R, Z
     real(dp), intent(in), optional :: thickness
@@ -1089,8 +1074,8 @@ contains
     probably = .false.
     if (ktri <= 0) return
     elem = mesh_element(ktri)
-    node_R = mesh_point([elem%i_knot, elem%i_knot(1)])%rcoord
-    node_Z = mesh_point([elem%i_knot, elem%i_knot(1)])%zcoord
+    node_R = mesh%node_R([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
+    node_Z = mesh%node_Z([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
     dist_R = R - node_R
     dist_Z = Z - node_Z
     edge_R = node_R(2:4) - node_R(1:3)
@@ -1113,14 +1098,13 @@ contains
   end function point_in_triangle
 
   subroutine write_mesh_data
-    use mesh_mod, only: npoint, ntri, knot, triangle, mesh_point, mesh_element, &
-         mesh_element_rmp
+    use mesh_mod, only: ntri, knot, triangle, mesh_element, mesh_element_rmp
     use magdif_conf, only: longlines
     use hdf5_tools, only: HID_T, h5_create, h5_define_group, h5_close_group, h5_add, &
          h5_close
 
     integer(HID_T) :: h5id_magdif, h5id_mesh, h5id_cache, h5id_fs, h5id_fs_half
-    integer :: tri_node(3, ntri), adj_tri(3, ntri), adj_edge(3, ntri), &
+    integer :: adj_tri(3, ntri), adj_edge(3, ntri), &
          tri_li(2, ntri), tri_lo(2, ntri), tri_lf(2, ntri), tri_orient(ntri)
     integer :: fid, kpoi, ktri, kp, ke
     type(triangle) :: elem
@@ -1129,7 +1113,7 @@ contains
     do ktri = 1, ntri
        elem = mesh_element(ktri)
        write (fid, '(3(1x, i5), 1x, i1, 3(1x, i5), 3(1x, i3))') &
-            (elem%i_knot(ke), ke = 1, 3), elem%knot_h, &
+            mesh%tri_node(:, ktri), mesh%tri_node_F(ktri), &
             (elem%neighbour(ke), ke = 1, 3), (elem%neighbour_edge(ke), ke = 1, 3)
     end do
     close(fid)
@@ -1137,7 +1121,6 @@ contains
     call flux_func_cache_check
     ! intermediate until mesh_mod is refactored into magdif_mesh
     do ktri = 1, ntri
-       tri_node(:, ktri) = mesh_element(ktri)%i_knot
        adj_tri(:, ktri) = mesh_element(ktri)%neighbour
        adj_edge(:, ktri) = mesh_element(ktri)%neighbour_edge
        tri_li(:, ktri) = mesh_element_rmp(ktri)%li
@@ -1164,7 +1147,7 @@ contains
     call h5_add(h5id_mesh, 'Z_max', mesh%Z_max, &
          comment = 'maximal Z coordinate of computational grid', unit = 'cm')
     call h5_add(h5id_mesh, 'nflux', mesh%nflux, comment = 'number of flux surfaces')
-    call h5_add(h5id_mesh, 'npoint', npoint, comment = 'number of points')
+    call h5_add(h5id_mesh, 'npoint', mesh%npoint, comment = 'number of points')
     call h5_add(h5id_mesh, 'ntri', ntri, comment = 'number of triangles')
     call h5_add(h5id_mesh, 'nedge', mesh%nedge, comment = 'number of edges')
     call h5_add(h5id_mesh, 'n', mesh%n, comment = 'toroidal mode number')
@@ -1190,13 +1173,13 @@ contains
          comment = 'number of triangles on flux surface')
     call h5_add(h5id_mesh, 'kt_low', mesh%kt_low, lbound(mesh%kt_low), ubound(mesh%kt_low), &
          comment = 'index of last triangle on previous flux surface')
-    call h5_add(h5id_mesh, 'node_R', mesh_point%rcoord, [1], [npoint], &
+    call h5_add(h5id_mesh, 'node_R', mesh%node_R, lbound(mesh%node_R), ubound(mesh%node_R), &
          comment = 'R coordinates of mesh points', unit = 'cm')
-    call h5_add(h5id_mesh, 'node_Z', mesh_point%zcoord, [1], [npoint], &
+    call h5_add(h5id_mesh, 'node_Z', mesh%node_Z, lbound(mesh%node_Z), ubound(mesh%node_Z), &
          comment = 'Z coordinates of mesh points', unit = 'cm')
-    call h5_add(h5id_mesh, 'tri_node', tri_node, lbound(tri_node), ubound(tri_node), &
+    call h5_add(h5id_mesh, 'tri_node', mesh%tri_node, lbound(mesh%tri_node), ubound(mesh%tri_node), &
          comment = 'triangle node indices')
-    call h5_add(h5id_mesh, 'tri_node_F', mesh_element%knot_h, [1], [ntri], &
+    call h5_add(h5id_mesh, 'tri_node_F', mesh%tri_node_F, lbound(mesh%tri_node_F), ubound(mesh%tri_node_F), &
          comment = 'local node index of node F')
     call h5_add(h5id_mesh, 'tri_li', tri_li, lbound(tri_li), ubound(tri_li), &
          comment = 'local node indices of edge i, counter-clockwise')
@@ -1291,17 +1274,17 @@ contains
     call h5_close(h5id_magdif)
 
     open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace')
-    write (fid, '(3(1x, i0))') npoint, ntri, mesh%kp_max(mesh%nflux) - 1
+    write (fid, '(3(1x, i0))') mesh%npoint, ntri, mesh%kp_max(mesh%nflux) - 1
     do kpoi = 1, mesh%kp_low(mesh%nflux + 1)
        write (fid, '(2(1x, es23.15e3), 1x, i0)') &
-            mesh_point(kpoi)%rcoord, mesh_point(kpoi)%zcoord, 0
+            mesh%node_R(kpoi), mesh%node_Z(kpoi), 0
     end do
-    do kpoi = mesh%kp_low(mesh%nflux + 1) + 1, npoint
+    do kpoi = mesh%kp_low(mesh%nflux + 1) + 1, mesh%npoint
        write (fid, '(2(1x, es23.15e3), 1x, i0)') &
-            mesh_point(kpoi)%rcoord, mesh_point(kpoi)%zcoord, 1
+            mesh%node_R(kpoi), mesh%node_Z(kpoi), 1
     end do
     do ktri = 1, ntri
-       write (fid, '(4(1x, i0))') mesh_element(ktri)%i_knot(:), 0
+       write (fid, '(4(1x, i0))') mesh%tri_node(:, ktri), 0
     end do
     do kp = 1, mesh%kp_max(mesh%nflux) - 1
        write (fid, '(4(1x, i0))') mesh%kp_low(mesh%nflux) + kp, mesh%kp_low(mesh%nflux) + kp + 1, 1
@@ -1311,11 +1294,11 @@ contains
 
   subroutine read_mesh
     use magdif_conf, only: log
-    use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, mesh_element_rmp
+    use mesh_mod, only: ntri, mesh_element, mesh_element_rmp
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
     integer(HID_T) :: h5id_magdif
     integer :: ktri
-    integer, dimension(:, :), allocatable :: tri_node, adj_tri, adj_edge, tri_li, tri_lo, tri_lf
+    integer, dimension(:, :), allocatable :: adj_tri, adj_edge, tri_li, tri_lo, tri_lf
     integer, dimension(:), allocatable :: tri_orient
 
     call h5_open('magdif.h5', h5id_magdif)
@@ -1326,14 +1309,14 @@ contains
     call h5_get(h5id_magdif, 'mesh/R_max', mesh%R_max)
     call h5_get(h5id_magdif, 'mesh/Z_max', mesh%Z_max)
     call h5_get(h5id_magdif, 'mesh/nflux', mesh%nflux)
-    call h5_get(h5id_magdif, 'mesh/npoint', npoint)
+    call h5_get(h5id_magdif, 'mesh/npoint', mesh%npoint)
     call h5_get(h5id_magdif, 'mesh/ntri', ntri)
     call h5_get(h5id_magdif, 'mesh/nedge', mesh%nedge)
     call h5_get(h5id_magdif, 'mesh/n', mesh%n)
     call h5_get(h5id_magdif, 'mesh/m_res_min', mesh%m_res_min)
     call h5_get(h5id_magdif, 'mesh/m_res_max', mesh%m_res_max)
     write (log%msg, '("nflux = ", i0, ", npoint = ", i0, ", ntri = ", i0)') &
-         mesh%nflux, npoint, ntri
+         mesh%nflux, mesh%npoint, ntri
     if (log%info) call log%write
     call fs%init(mesh%nflux, .false.)
     call fs_half%init(mesh%nflux, .true.)
@@ -1347,10 +1330,12 @@ contains
     allocate(mesh%kt_max(mesh%nflux))
     allocate(mesh%kp_low(mesh%nflux + 1))
     allocate(mesh%kt_low(mesh%nflux + 1))
-    allocate(mesh_point(npoint))
+    allocate(mesh%node_R(mesh%npoint))
+    allocate(mesh%node_Z(mesh%npoint))
     allocate(mesh_element(ntri))
     allocate(mesh_element_rmp(ntri))
-    allocate(tri_node(3, ntri))
+    allocate(mesh%tri_node(3, ntri))
+    allocate(mesh%tri_node_F(ntri))
     allocate(adj_tri(3, ntri))
     allocate(adj_edge(3, ntri))
     allocate(tri_li(2, ntri))
@@ -1378,10 +1363,10 @@ contains
     call h5_get(h5id_magdif, 'mesh/kp_low', mesh%kp_low)
     call h5_get(h5id_magdif, 'mesh/kt_max', mesh%kt_max)
     call h5_get(h5id_magdif, 'mesh/kt_low', mesh%kt_low)
-    call h5_get(h5id_magdif, 'mesh/node_R', mesh_point%rcoord)
-    call h5_get(h5id_magdif, 'mesh/node_Z', mesh_point%zcoord)
-    call h5_get(h5id_magdif, 'mesh/tri_node', tri_node)
-    call h5_get(h5id_magdif, 'mesh/tri_node_F', mesh_element%knot_h)
+    call h5_get(h5id_magdif, 'mesh/node_R', mesh%node_R)
+    call h5_get(h5id_magdif, 'mesh/node_Z', mesh%node_Z)
+    call h5_get(h5id_magdif, 'mesh/tri_node', mesh%tri_node)
+    call h5_get(h5id_magdif, 'mesh/tri_node_F', mesh%tri_node_F)
     call h5_get(h5id_magdif, 'mesh/tri_li', tri_li)
     call h5_get(h5id_magdif, 'mesh/tri_lo', tri_lo)
     call h5_get(h5id_magdif, 'mesh/tri_lf', tri_lf)
@@ -1424,7 +1409,6 @@ contains
     ! TODO: remove intermediate when mesh_mod is refactored into magdif_mesh
     mesh_element_rmp%area = 0.5d0 * mesh_element%det_3
     do ktri = 1, ntri
-       mesh_element(ktri)%i_knot = tri_node(:, ktri)
        mesh_element(ktri)%neighbour = adj_tri(:, ktri)
        mesh_element(ktri)%neighbour_edge = adj_edge(:, ktri)
        mesh_element_rmp(ktri)%li = tri_li(:, ktri)
@@ -1436,7 +1420,6 @@ contains
     elsewhere
        mesh_element_rmp%orient = .true.
     end where
-    deallocate(tri_node)
     deallocate(adj_tri)
     deallocate(adj_edge)
     deallocate(tri_li)
@@ -1456,6 +1439,10 @@ contains
     if (allocated(this%kt_max)) deallocate(this%kt_max)
     if (allocated(this%kp_low)) deallocate(this%kp_low)
     if (allocated(this%kt_low)) deallocate(this%kt_low)
+    if (allocated(this%node_R)) deallocate(this%node_R)
+    if (allocated(this%node_Z)) deallocate(this%node_Z)
+    if (allocated(this%tri_node)) deallocate(this%tri_node)
+    if (allocated(this%tri_node_F)) deallocate(this%tri_node_F)
   end subroutine magdif_mesh_destructor
 
   subroutine init_flux_variables
@@ -1694,13 +1681,12 @@ contains
   end subroutine check_safety_factor
 
   subroutine cache_equilibrium_field
-    use mesh_mod, only: ntri, knot, triangle, mesh_point, mesh_element
+    use mesh_mod, only: ntri, knot, triangle, mesh_element
     use magdif_conf, only: longlines
-    real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
+    real(dp) :: R, Z, B0_R, B0_phi, B0_Z, dum
     integer :: kf, kt, ktri, ke, fid
     type(triangle) :: elem
-    type(knot) :: base, tip
+    integer :: base, tip
     real(dp) :: n_r, n_z
 
     allocate(B0R(ntri, 3))
@@ -1716,26 +1702,26 @@ contains
           ktri = mesh%kt_low(kf) + kt
           elem = mesh_element(ktri)
           do ke = 1, 3
-             base = mesh_point(elem%i_knot(ke))
-             tip = mesh_point(elem%i_knot(mod(ke, 3) + 1))
-             r = (base%rcoord + tip%rcoord) * 0.5d0
-             z = (base%zcoord + tip%zcoord) * 0.5d0
-             call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-                  dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-             B0r(ktri, ke) = Br
-             B0phi(ktri, ke) = Bp
-             B0z(ktri, ke) = Bz
-             n_r = tip%zcoord - base%zcoord
-             n_z = base%rcoord - tip%rcoord
-             B0flux(ktri, ke) = r * (Br * n_r + Bz * n_z)
+             base = mesh%tri_node(ke, ktri)
+             tip = mesh%tri_node(mod(ke, 3) + 1, ktri)
+             R = (mesh%node_R(base) + mesh%node_R(tip)) * 0.5d0
+             Z = (mesh%node_Z(base) + mesh%node_Z(tip)) * 0.5d0
+             call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dum, &
+                  dum, dum, dum, dum, dum, dum)
+             B0R(ktri, ke) = B0_R
+             B0phi(ktri, ke) = B0_phi
+             B0Z(ktri, ke) = B0_Z
+             n_R = mesh%node_Z(tip) - mesh%node_Z(base)
+             n_Z = mesh%node_R(base) - mesh%node_R(tip)
+             B0flux(ktri, ke) = R * (B0_R * n_R + B0_Z * n_Z)
           end do
-          call ring_centered_avg_coord(elem, r, z)
-          call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          B0r_Omega(ktri) = Br
-          B0phi_Omega(ktri) = Bp
-          B0z_Omega(ktri) = Bz
-          write (fid, '(5(1x, es24.16e3))') r, z, Br, Bz, Bp
+          call ring_centered_avg_coord(ktri, R, Z)
+          call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dum, &
+               dum, dum, dum, dum, dum, dum)
+          B0R_Omega(ktri) = B0_R
+          B0phi_Omega(ktri) = B0_phi
+          B0Z_Omega(ktri) = B0_Z
+          write (fid, '(5(1x, es24.16e3))') R, Z, B0_R, B0_Z, B0_phi
        end do
     end do
     close(fid)
@@ -1773,7 +1759,7 @@ contains
   end subroutine compute_j0phi
 
   subroutine compute_j0phi_ps(plot_j0phi)
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp
     use magdif_util, only: clight
     real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kt, ktri
@@ -1788,10 +1774,10 @@ contains
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
-          R = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
+          R = sum(mesh%node_R(tri%lf(:))) * 0.5d0
           B2avg(kf) = B2avg(kf) + B0r(ktri, tri%ef) ** 2 + &
                B0phi(ktri, tri%ef) ** 2 + B0z(ktri, tri%ef) ** 2
-          R = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
+          R = sum(mesh%node_R(tri%li(:))) * 0.5d0
           B2avg_half(kf) = B2avg_half(kf) + B0r(ktri, tri%ei) ** 2 + &
                B0phi(ktri, tri%ei) ** 2 + B0z(ktri, tri%ei) ** 2
        end do
@@ -1803,7 +1789,7 @@ contains
           ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
           ! edge f
-          R = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
+          R = sum(mesh%node_R(tri%lf(:))) * 0.5d0
           Btor2 = B0phi(ktri, tri%ef) ** 2
           if (kf == 1 .or. tri%orient) then
              j0phi(ktri, tri%ef) = clight * R * fs%dp_dpsi(kf) * (1d0 - &
@@ -1813,12 +1799,12 @@ contains
                   Btor2 / B2avg(kf-1))
           end if
           ! edge i
-          R = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
+          R = sum(mesh%node_R(tri%li(:))) * 0.5d0
           Btor2 = B0phi(ktri, tri%ei) ** 2
           j0phi(ktri, tri%ei) = clight * R * fs_half%dp_dpsi(kf) * (1d0 - &
                Btor2 / B2avg_half(kf))
           ! edge o
-          R = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
+          R = sum(mesh%node_R(tri%lo(:))) * 0.5d0
           Btor2 = B0phi(ktri, tri%eo) ** 2
           j0phi(ktri, tri%eo) = clight * R * fs_half%dp_dpsi(kf) * (1d0 - &
                Btor2 / B2avg_half(kf))
@@ -1832,7 +1818,7 @@ contains
 
   subroutine compute_j0phi_rot(plot_j0phi)
     use constants, only: pi  ! orbit_mod.f90
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp
     use magdif_util, only: clight
     real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kt, ktri
@@ -1844,20 +1830,20 @@ contains
           ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
           ! edge f
-          R = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
-          Z = sum(mesh_point(tri%lf(:))%zcoord) * 0.5d0
+          R = sum(mesh%node_R(tri%lf(:))) * 0.5d0
+          Z = sum(mesh%node_Z(tri%lf(:))) * 0.5d0
           call field(R, 0d0, Z, dum, dum, dum, dum, dum, dB0R_dZ, &
                dum, dum, dum, dB0Z_dR, dum, dum)
           j0phi(ktri, tri%ef) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
           ! edge i
-          R = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
-          Z = sum(mesh_point(tri%li(:))%zcoord) * 0.5d0
+          R = sum(mesh%node_R(tri%li(:))) * 0.5d0
+          Z = sum(mesh%node_Z(tri%li(:))) * 0.5d0
           call field(R, 0d0, Z, dum, dum, dum, dum, dum, dB0R_dZ, &
                dum, dum, dum, dB0Z_dR, dum, dum)
           j0phi(ktri, tri%ei) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
           ! edge o
-          R = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
-          Z = sum(mesh_point(tri%lo(:))%zcoord) * 0.5d0
+          R = sum(mesh%node_R(tri%lo(:))) * 0.5d0
+          Z = sum(mesh%node_Z(tri%lo(:))) * 0.5d0
           call field(R, 0d0, Z, dum, dum, dum, dum, dum, dB0R_dZ, &
                dum, dum, dum, dB0Z_dR, dum, dum)
           j0phi(ktri, tri%eo) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
@@ -1871,7 +1857,7 @@ contains
 
   subroutine compute_j0phi_geqdsk(plot_j0phi)
     use constants, only: pi  ! orbit_mod.f90
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
+    use mesh_mod, only: triangle_rmp, mesh_element_rmp
     use magdif_util, only: clight
     real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kt, ktri
@@ -1883,7 +1869,7 @@ contains
           ktri = mesh%kt_low(kf) + kt
           tri = mesh_element_rmp(ktri)
           ! edge f
-          R = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
+          R = sum(mesh%node_R(tri%lf(:))) * 0.5d0
           if (kf == 1 .or. tri%orient) then
              j0phi(ktri, tri%ef) = clight * (fs%dp_dpsi(kf) * R + &
                   0.25d0 / pi * fs%FdF_dpsi(kf) / R)
@@ -1892,11 +1878,11 @@ contains
                   0.25d0 / pi * fs%FdF_dpsi(kf-1) / R)
           end if
           ! edge i
-          R = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
+          R = sum(mesh%node_R(tri%li(:))) * 0.5d0
           j0phi(ktri, tri%ei) = clight * (fs_half%dp_dpsi(kf) * R + &
                0.25d0 / pi * fs_half%FdF_dpsi(kf) / R)
           ! edge o
-          R = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
+          R = sum(mesh%node_R(tri%lo(:))) * 0.5d0
           j0phi(ktri, tri%eo) = clight * (fs_half%dp_dpsi(kf) * R + &
                0.25d0 / pi * fs_half%FdF_dpsi(kf) / R)
           ! centroid
