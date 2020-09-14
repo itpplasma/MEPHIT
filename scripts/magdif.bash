@@ -139,26 +139,20 @@ magdif_prepare() {
             anyerr=$lasterr
             continue
         fi
-        kilca_scale_factor=$(nml_read_integer "$config" config%kilca_scale_factor)
-        if [ -z "$kilca_scale_factor" ]; then
-            kilca_scale_factor=0
-        fi
-        if [ "$kilca_scale_factor" -eq 0 ]; then
-            replace_first_in_line field_divB0.inp 1 1  # ipert
-            # replace_first_in_line field_divB0.inp 2 0  # iequil
-            ## uncomment to use at most half of available RAM and go to swap instead
-            ## MemFree=$(sed -ne '/MemFree/ s/MemFree: *\([0-9]*\) kB/\1/gp' /proc/meminfo)
-            ## systemd-run --scope --user -p MemoryHigh=$((MemFree / 2048))M \
-            "$bindir/vacfield.x" "$config" 2>&1 | tee -a "$log"
-            lasterr=$?
-            replace_first_in_line field_divB0.inp 1 0  # ipert
-            # replace_first_in_line field_divB0.inp 2 1  # iequil
-            if [ $lasterr -ne 0 ]; then
-                echo "$scriptname: error $lasterr during mesh generation in $workdir" | tee -a "$log" >&2
-                popd
-                anyerr=$lasterr
-                continue
-            fi
+        replace_first_in_line field_divB0.inp 1 1  # ipert
+        # replace_first_in_line field_divB0.inp 2 0  # iequil
+        ## uncomment to use at most half of available RAM and go to swap instead
+        ## MemFree=$(sed -ne '/MemFree/ s/MemFree: *\([0-9]*\) kB/\1/gp' /proc/meminfo)
+        ## systemd-run --scope --user -p MemoryHigh=$((MemFree / 2048))M \
+        "$bindir/vacfield.x" "$config" 2>&1 | tee -a "$log"
+        lasterr=$?
+        replace_first_in_line field_divB0.inp 1 0  # ipert
+        # replace_first_in_line field_divB0.inp 2 1  # iequil
+        if [ $lasterr -ne 0 ]; then
+            echo "$scriptname: error $lasterr during mesh generation in $workdir" | tee -a "$log" >&2
+            popd
+            anyerr=$lasterr
+            continue
         fi
         popd
     done

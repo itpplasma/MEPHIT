@@ -68,8 +68,7 @@ contains
     use mesh_mod, only: npoint, ntri
     use magdif_mesh, only: equil, mesh, read_mesh, fluxvar, flux_func_cache_check, &
          check_curr0, check_safety_factor
-    use magdif_pert, only: compute_Bn_nonres, read_vector_dof, write_vector_dof, &
-         write_vector_plot, check_div_free, check_redundant_edges
+    use magdif_pert, only: read_vector_dof, check_RT0, check_div_free, check_redundant_edges
 
     log = magdif_log('-', conf%log_level, conf%quiet)
 
@@ -110,18 +109,15 @@ contains
     jnphi = 0d0
     jnflux = 0d0
 
-    if (conf%nonres) then
-       call compute_Bn_nonres(Bnflux_vac, Bnphi_vac)
-    else
-       call read_vector_dof(Bnflux_vac, Bnphi_vac, conf%Bn_vac_file)
-    end if
+    call read_vector_dof(Bnflux_vac, Bnphi_vac, conf%Bn_vac_file)
     call check_redundant_edges(Bnflux_vac, .false., 'Bn_vac')
     call check_div_free(Bnflux_vac, Bnphi_vac, mesh%n, conf%rel_err_Bn, 'Bn_vac')
+    ! needs field_eq which is not accessible in magdif_prepare
+    if (conf%kilca_scale_factor /= 0) then
+       call check_RT0(Bnflux_vac, Bnphi_vac)
+    end if
     Bnflux = Bnflux_vac
     Bnphi = Bnphi_vac
-    call write_vector_dof(Bnflux_vac, Bnphi_vac, conf%Bn_vacout_file)
-    call write_vector_plot(Bnflux_vac, Bnphi_vac, &
-         decorate_filename(conf%Bn_vacout_file, 'plot_', ''))
     log%msg = 'magdif initialized'
     if (log%info) call log%write
   end subroutine magdif_init

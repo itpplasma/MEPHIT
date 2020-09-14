@@ -305,7 +305,7 @@ contains
     use magdif_conf, only: conf
     use magdif_util, only: imun
     use magdif_mesh, only: mesh, B0R, B0phi, B0Z
-    complex(dp), intent(inout) :: Bnflux(:,:), Bnphi(:)
+    complex(dp), intent(out) :: Bnflux(:, :), Bnphi(:)
     integer :: kf, kt, ktri
     type(triangle_rmp) :: tri
     type(knot) :: base, tip
@@ -368,19 +368,17 @@ contains
     use magdif_conf, only: conf
     use magdif_util, only: imun, gauss_legendre_unit_interval
     use magdif_mesh, only: mesh
-    complex(dp), allocatable, intent(out) :: Bnflux(:,:), Bnphi(:)
+    complex(dp), intent(out) :: Bnflux(:, :), Bnphi(:)
     integer, parameter :: order = 2
     integer :: ktri, k, ke, pol_modes(2)
     real(dp) :: R, Z, rho, theta, edge_R, edge_Z, node_R(4), node_Z(4)
     real(dp), dimension(order) :: points, weights
     complex(dp) :: B_R, B_phi, B_Z
 
-    call gauss_legendre_unit_interval(order, points, weights)
-    allocate(Bnflux(ntri, 3))
-    allocate(Bnphi(ntri))
+    pol_modes = [conf%kilca_pol_mode, -conf%kilca_pol_mode]
     Bnflux = (0d0, 0d0)
     Bnphi = (0d0, 0d0)
-    pol_modes = [conf%kilca_pol_mode, -conf%kilca_pol_mode]
+    call gauss_legendre_unit_interval(order, points, weights)
     do ktri = 1, ntri
        associate(tri => mesh_element_rmp(ktri), &
             knots => mesh_point(mesh_element(ktri)%i_knot))
@@ -403,9 +401,6 @@ contains
          Bnphi(ktri) = imun / mesh%n * sum(Bnflux(ktri, :)) / tri%area
        end associate
     end do
-    call check_redundant_edges(Bnflux, .false., 'vacuum B_n')
-    call check_div_free(Bnflux, Bnphi, mesh%n, 1d-9, 'vacuum B_n')
-    call write_vector_dof(Bnflux, Bnphi, conf%Bn_vac_file)
   end subroutine compute_kilca_vacuum
 
   !> Calculate the vacuum perturbation field in cylindrical coordinates from the Fourier

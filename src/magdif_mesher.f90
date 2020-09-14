@@ -5,7 +5,6 @@ program magdif_preprocess
   use magdif_mesh, only: generate_mesh
   use magdif_pert, only: compute_kilca_vac_coeff, compute_kilca_vacuum, &
        check_kilca_vacuum, check_RT0
-  use magdif, only: Bnflux, Bnphi
   use mesh_mod, only: mesh_point, mesh_element, mesh_element_rmp
 
   implicit none
@@ -28,12 +27,6 @@ program magdif_preprocess
   call conf_arr%read(config_file, conf%m_min, conf%m_max)
   log = magdif_log('-', conf%log_level, conf%quiet)
   call generate_mesh(unprocessed_geqdsk)
-  if (conf%kilca_scale_factor /= 0) then
-     call compute_kilca_vac_coeff
-     call compute_kilca_vacuum(Bnflux, Bnphi)
-     call check_kilca_vacuum
-     call check_RT0(Bnflux, Bnphi)
-  end if
   call h5_deinit
   ! TODO: proper cleanup
   if (allocated(mesh_element_rmp)) deallocate(mesh_element)
