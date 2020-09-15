@@ -5,7 +5,6 @@ program vacfield
   use magdif_conf, only: conf, conf_arr, magdif_config_read, log, magdif_log, &
        decorate_filename
   use magdif_mesh, only: mesh, read_mesh
-  use mesh_mod, only: ntri, mesh_element, mesh_element_rmp
   use magdif_util, only: initialize_globals
   use magdif_pert, only: compute_Bn_nonres, compute_kilca_vac_coeff, compute_kilca_vacuum, &
        check_kilca_vacuum, check_redundant_edges, check_div_free, &
@@ -27,8 +26,8 @@ program vacfield
 
   call h5_init
   call read_mesh
-  allocate(Bnflux(ntri, 3))
-  allocate(Bnphi(ntri))
+  allocate(Bnflux(mesh%ntri, 3))
+  allocate(Bnphi(mesh%ntri))
   if (conf%kilca_scale_factor /= 0) then
      call compute_kilca_vac_coeff
      call compute_kilca_vacuum(Bnflux, Bnphi)
@@ -48,8 +47,6 @@ program vacfield
   call h5_deinit
   if (allocated(Bnflux)) deallocate(Bnflux)
   if (allocated(Bnphi)) deallocate(Bnphi)
-  if (allocated(mesh_element)) deallocate(mesh_element)
-  if (allocated(mesh_element_rmp)) deallocate(mesh_element_rmp)
 
 contains
 
@@ -58,7 +55,6 @@ contains
     use magdif_conf, only: conf
     use magdif_util, only: gauss_legendre_unit_interval, imun
     use magdif_mesh, only: mesh
-    use mesh_mod, only: ntri, mesh_element_rmp
     complex(dp), intent(out) :: Bnflux(:, :), Bnphi(:)
     integer, parameter :: order = 2
     integer :: ktri, ke, k
@@ -69,24 +65,22 @@ contains
     Bnflux = (0d0, 0d0)
     Bnphi = (0d0, 0d0)
     call gauss_legendre_unit_interval(order, points, weights)
-    do ktri = 1, ntri
-       associate(tri => mesh_element_rmp(ktri))
-         node_R = mesh%node_R([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
-         node_Z = mesh%node_Z([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
-         do ke = 1, 3
-            edge_R = node_R(ke + 1) - node_R(ke)
-            edge_Z = node_Z(ke + 1) - node_Z(ke)
-            do k = 1, order
-               R = node_R(ke) * points(k) + node_R(ke + 1) * points(order - k + 1)
-               Z = node_Z(ke) * points(k) + node_Z(ke + 1) * points(order - k + 1)
-               call spline_bpol_n(conf%n, R, Z, B_R, B_Z)
-               Bnflux(ktri, ke) = Bnflux(ktri, ke) + &
-                    weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
-            end do
-         end do
-         ! toroidal flux via zero divergence
-         Bnphi(ktri) = imun / mesh%n * sum(Bnflux(ktri, :)) / tri%area
-       end associate
+    do ktri = 1, mesh%ntri
+       node_R = mesh%node_R([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
+       node_Z = mesh%node_Z([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
+       do ke = 1, 3
+          edge_R = node_R(ke + 1) - node_R(ke)
+          edge_Z = node_Z(ke + 1) - node_Z(ke)
+          do k = 1, order
+             R = node_R(ke) * points(k) + node_R(ke + 1) * points(order - k + 1)
+             Z = node_Z(ke) * points(k) + node_Z(ke + 1) * points(order - k + 1)
+             call spline_bpol_n(conf%n, R, Z, B_R, B_Z)
+             Bnflux(ktri, ke) = Bnflux(ktri, ke) + &
+                  weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
+          end do
+       end do
+       ! toroidal flux via zero divergence
+       Bnphi(ktri) = imun / mesh%n * sum(Bnflux(ktri, :)) / mesh%area(ktri)
     end do
   end subroutine compute_Bnvac
 end program vacfield
