@@ -363,7 +363,6 @@ contains
     integer :: fid
 
     long_flag = flag
-    print *, 'sending flag to FreeFem++:', long_flag  !!!
     open(newunit = fid, file = namedpipe, status = 'old', access = 'stream', &
          form = 'unformatted', action = 'write')
     write (fid) long_flag

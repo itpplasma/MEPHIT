@@ -175,22 +175,20 @@ magdif_run() {
             "$bindir/magdif_test.x" "$config" 1>> "$log" 2>&1 & magdif_pid=$!
             # continuously print contents of logfile until magdif is finished
             tail --pid=$magdif_pid -F -s 0.1 "$log" 2> /dev/null &
-            # wait in background for FreeFem++ to finish
+            # wait for magdif or FreeFem++ to finish (whichever is first)
             # and send SIGTERM to all processes in subshell when it has a non-zero exit code
-            wait -f $freefem_pid
+            wait -fn $freefem_pid $magdif_pid
             lasterr=$?
             if [ "$lasterr" -ne 0 ]; then
-                echo "$scriptname: FreeFem++ exited with code $lasterr during run in $workdir" >&2
-                # sent SIGTERM to remaining processes in subshell
+                echo "$scriptname: magdif/FreeFem++ exited with code $lasterr during run in $workdir" >&2
+                # send SIGTERM to remaining processes in subshell
                 kill -- -$BASHPID
             fi
-            wait -f $magdif_pid
+            wait -fn $freefem_pid $magdif_pid
             lasterr=$?
             if [ "$lasterr" -ne 0 ]; then
-                echo "$scriptname: magdif exited with code $lasterr during run in $workdir" >&2
+                echo "$scriptname: magdif/FreeFem++ exited with code $lasterr during run in $workdir" >&2
             fi
-            # send SIGTERM to remaining processes in subshell
-            kill -- -$BASHPID
         )
         popd
     done
