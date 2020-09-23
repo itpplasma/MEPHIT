@@ -6,10 +6,28 @@ module magdif_pert
 
   private
 
-  public :: write_scalar_dof, interp_RT0, check_div_free, check_redundant_edges, read_vector_dof, &
+  public :: write_scalar_dof, RT0_init, RT0_deinit, RT0_interp, RT0_check_div_free, &
+       RT0_check_redundant_edges, read_vector_dof, &
        write_vector_dof, write_vector_plot, write_vector_plot_rect, compute_Bn_nonres, &
        avg_flux_on_quad, compute_kilca_vacuum, kilca_vacuum, compute_kilca_vac_coeff, &
        kilca_vacuum_fourier, check_kilca_vacuum, check_RT0
+
+  type, public :: RT0_t
+     !> Number of triangles on which the RT0 elements are defined
+     integer :: ntri
+
+     !> Edge fluxes \f$ R \vec{v} \cdot \vec{n} \f$, given in base units of
+     !> \f$ \vec{v} \f$ times cm^2.
+     !>
+     !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
+     !> refers to the edge and the second index refers to the triangle.
+     complex(dp), allocatable :: DOF(:, :)
+
+     !> Physical toroidal component \f$ v_{n (\phi)} \f$ in base units of \f$ \vec{v} \f$.
+     !>
+     !> Values are taken at each triangle.
+     complex(dp), allocatable :: comp_phi(:)
+  end type RT0_t
 
 contains
 
@@ -31,11 +49,31 @@ contains
     close(fid)
   end subroutine write_scalar_dof
 
-  subroutine interp_RT0(ktri, pol_flux, R, Z, comp_R, comp_Z, &
+  subroutine RT0_init(this, ntri)
+    type(RT0_t), intent(inout) :: this
+    integer, intent(in) :: ntri
+
+    call RT0_deinit(this)
+    this%ntri = ntri
+    allocate(this%DOF(3, ntri))
+    allocate(this%comp_phi(ntri))
+    this%DOF = (0d0, 0d0)
+    this%comp_phi = (0d0, 0d0)
+  end subroutine RT0_init
+
+  subroutine RT0_deinit(this)
+    type(RT0_t), intent(inout) :: this
+
+    this%ntri = 0
+    if (allocated(this%DOF)) deallocate(this%DOF)
+    if (allocated(this%comp_phi)) deallocate(this%comp_phi)
+  end subroutine RT0_deinit
+
+  subroutine RT0_interp(ktri, elem, R, Z, comp_R, comp_Z, &
        comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ)
     use magdif_mesh, only: mesh
     integer, intent(in) :: ktri
-    complex(dp), intent(in) :: pol_flux(:,:)
+    type(RT0_t), intent(in) :: elem
     real(dp), intent(in) :: r, z
     complex(dp), intent(out) :: comp_R, comp_Z
     complex(dp), intent(out), optional :: comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ
@@ -44,18 +82,18 @@ contains
     nodes = mesh%tri_node(:, ktri)
     ! edge 1 lies opposite to knot 3, etc.
     comp_R = 0.5d0 / mesh%area(ktri) / R * ( &
-         pol_flux(ktri, 1) * (R - mesh%node_R(nodes(3))) + &
-         pol_flux(ktri, 2) * (R - mesh%node_R(nodes(1))) + &
-         pol_flux(ktri, 3) * (R - mesh%node_R(nodes(2))))
+         elem%DOF(1, ktri) * (R - mesh%node_R(nodes(3))) + &
+         elem%DOF(2, ktri) * (R - mesh%node_R(nodes(1))) + &
+         elem%DOF(3, ktri) * (R - mesh%node_R(nodes(2))))
     comp_Z = 0.5d0 / mesh%area(ktri) / R * ( &
-         pol_flux(ktri, 1) * (Z - mesh%node_Z(nodes(3))) + &
-         pol_flux(ktri, 2) * (Z - mesh%node_Z(nodes(1))) + &
-         pol_flux(ktri, 3) * (Z - mesh%node_Z(nodes(2))))
+         elem%DOF(1, ktri) * (Z - mesh%node_Z(nodes(3))) + &
+         elem%DOF(2, ktri) * (Z - mesh%node_Z(nodes(1))) + &
+         elem%DOF(3, ktri) * (Z - mesh%node_Z(nodes(2))))
     if (present(comp_R_dR)) then
        comp_R_dR = 0.5d0 / mesh%area(ktri) / R ** 2 * ( &
-            pol_flux(ktri, 1) * mesh%node_R(nodes(3)) + &
-            pol_flux(ktri, 2) * mesh%node_R(nodes(1)) + &
-            pol_flux(ktri, 3) * mesh%node_R(nodes(2)))
+            elem%DOF(1, ktri) * mesh%node_R(nodes(3)) + &
+            elem%DOF(2, ktri) * mesh%node_R(nodes(1)) + &
+            elem%DOF(3, ktri) * mesh%node_R(nodes(2)))
     end if
     if (present(comp_R_dZ)) then
        comp_R_dZ = (0d0, 0d0)
@@ -64,9 +102,9 @@ contains
        comp_Z_dR = -comp_Z / R
     end if
     if (present(comp_Z_dZ)) then
-       comp_Z_dZ = sum(pol_flux(ktri, :)) * 0.5d0 / mesh%area(ktri) / R
+       comp_Z_dZ = sum(elem%DOF(:, ktri)) * 0.5d0 / mesh%area(ktri) / R
     end if
-  end subroutine interp_RT0
+  end subroutine RT0_interp
 
   !> Checks if divergence-freeness of the given vector field is fulfilled on each
   !> triangle, otherwise halts the program.
@@ -82,12 +120,11 @@ contains
   !> This subroutine calculates the divergence via the divergence theorem, i.e. by adding
   !> up the fluxes of the vector field through triangle edges. If this sum, divided by the
   !> absolute flux, is higher than \p rel_err on any triangle, it halts the program.
-  subroutine check_div_free(pol_flux, tor_comp, n, rel_err, field_name)
+  subroutine RT0_check_div_free(elem, n, rel_err, field_name)
     use magdif_conf, only: log
     use magdif_util, only: imun
     use magdif_mesh, only: mesh
-    complex(dp), intent(in) :: pol_flux(:,:)
-    complex(dp), intent(in) :: tor_comp(:)
+    type(RT0_t), intent(in) :: elem
     integer, intent(in) :: n
     real(dp), intent(in) :: rel_err
     character(len = *), intent(in) :: field_name
@@ -96,10 +133,10 @@ contains
     real(dp) :: div, abs_flux
 
     do ktri = 1, mesh%ntri
-       abs_flux = sum(abs(pol_flux(ktri,:))) + abs(imun * n * tor_comp(ktri) * &
+       abs_flux = sum(abs(elem%DOF(:, ktri))) + abs(imun * n * elem%comp_phi(ktri) * &
             mesh%area(ktri))
        if (abs_flux > 0d0) then
-          div = abs((sum(pol_flux(ktri,:)) + imun * n * tor_comp(ktri) * &
+          div = abs((sum(elem%DOF(:, ktri)) + imun * n * elem%comp_phi(ktri) * &
                mesh%area(ktri))) / abs_flux
           if (div > rel_err) then
              write (log%msg, '("divergence of ", a, ' // &
@@ -110,85 +147,72 @@ contains
           end if
        end if
     end do
-  end subroutine check_div_free
+  end subroutine RT0_check_div_free
 
-  subroutine check_redundant_edges(pol_quant, same_sign, name)
+  subroutine RT0_check_redundant_edges(elem, name)
     use magdif_conf, only: log, cmplx_fmt
     use magdif_mesh, only: mesh
-    complex(dp), intent(in) :: pol_quant(:,:)
-    logical, intent(in) :: same_sign
+    type(RT0_t), intent(in) :: elem
     character(len = *), intent(in) :: name
     integer :: kedge, ktri, ktri_adj, ke, ke_adj
     logical :: inconsistent
     real(dp), parameter :: eps = epsilon(1d0), small = tiny(0d0)
 
     do kedge = 1, mesh%nedge
-       ktri = mesh%edge_map2ktri(kedge, 1)
-       ktri_adj = mesh%edge_map2ktri(kedge, 2)
-       ke = mesh%edge_map2ke(kedge, 1)
-       ke_adj = mesh%edge_map2ke(kedge, 2)
+       ktri = mesh%edge_map2ktri(1, kedge)
+       ktri_adj = mesh%edge_map2ktri(2, kedge)
+       ke = mesh%edge_map2ke(1, kedge)
+       ke_adj = mesh%edge_map2ke(2, kedge)
        if (ktri_adj <= 0) cycle
        inconsistent = .false.
-       if (abs(real(pol_quant(ktri, ke))) < small) then
-          inconsistent = inconsistent .or. abs(real(pol_quant(ktri_adj, ke_adj))) >= small
+       if (abs(real(elem%DOF(ke, ktri))) < small) then
+          inconsistent = inconsistent .or. abs(real(elem%DOF(ke_adj, ktri_adj))) >= small
        else
-          if (same_sign) then
-             inconsistent = inconsistent .or. eps < abs(1d0 - &
-                  real(pol_quant(ktri_adj, ke_adj)) / real(pol_quant(ktri, ke)))
-          else
-             inconsistent = inconsistent .or. eps < abs(1d0 + &
-                  real(pol_quant(ktri_adj, ke_adj)) / real(pol_quant(ktri, ke)))
-          end if
+          inconsistent = inconsistent .or. eps < abs(1d0 + &
+               real(elem%DOF(ke_adj, ktri_adj)) / real(elem%DOF(ke, ktri)))
        end if
-       if (abs(aimag(pol_quant(ktri, ke))) < small) then
-          inconsistent = inconsistent .or. abs(aimag(pol_quant(ktri_adj, ke_adj))) >= small
+       if (abs(aimag(elem%DOF(ke, ktri))) < small) then
+          inconsistent = inconsistent .or. abs(aimag(elem%DOF(ke_adj, ktri_adj))) >= small
        else
-          if (same_sign) then
-             inconsistent = inconsistent .or. eps < abs(1d0 - &
-                  aimag(pol_quant(ktri_adj, ke_adj)) / aimag(pol_quant(ktri, ke)))
-          else
-             inconsistent = inconsistent .or. eps < abs(1d0 + &
-                  aimag(pol_quant(ktri_adj, ke_adj)) / aimag(pol_quant(ktri, ke)))
-          end if
+          inconsistent = inconsistent .or. eps < abs(1d0 + &
+               aimag(elem%DOF(ke_adj, ktri_adj)) / aimag(elem%DOF(ke, ktri)))
        end if
        if (inconsistent) then
           write (log%msg, '("inconsistent redundant edges: ", ' // &
                'a, "(", i0, ", ", i0, ") = ", ' // cmplx_fmt // ', ", ", ' // &
                'a, "(", i0, ", ", i0, ") = ", ' // cmplx_fmt // ')') &
-               trim(name), ktri, ke, pol_quant(ktri, ke), &
-               trim(name), ktri_adj, ke_adj, pol_quant(ktri_adj, ke_adj)
+               trim(name), ke, ktri, elem%DOF(ke, ktri), &
+               trim(name), ke_adj, ktri_adj, elem%DOF(ke_adj, ktri_adj)
           if (log%err) call log%write
           error stop
        end if
     end do
-  end subroutine check_redundant_edges
+  end subroutine RT0_check_redundant_edges
 
-  subroutine write_vector_dof(pol_flux, tor_comp, outfile)
+  subroutine write_vector_dof(elem, outfile)
     use iso_c_binding, only: c_long
     use magdif_mesh, only: mesh
-    complex(dp), intent(in) :: pol_flux(:,:)
-    complex(dp), intent(in) :: tor_comp(:)
+    type(RT0_t), intent(in) :: elem
     character(len = *), intent(in) :: outfile
     integer(c_long) :: length
     integer :: ktri, fid
 
-    length = 8 * mesh%kt_low(mesh%nflux + 1)  ! (Re, Im) of RT0 DoFs + toroidal component
+    length = 8 * mesh%ntri  ! (Re, Im) of RT0 DoFs + toroidal component
     ! status = 'old' for writing to named pipe
     open(newunit = fid, file = outfile, access = 'stream', status = 'old', &
          action = 'write', form = 'unformatted')
     write (fid) length
-    do ktri = 1, mesh%kt_low(mesh%nflux + 1)
-       write (fid) pol_flux(ktri, :), tor_comp(ktri) * mesh%area(ktri)
+    do ktri = 1, mesh%ntri
+       write (fid) elem%DOF(:, ktri), elem%comp_phi(ktri) * mesh%area(ktri)
     end do
     close(fid)
   end subroutine write_vector_dof
 
-  subroutine read_vector_dof(pol_flux, tor_comp, infile)
+  subroutine read_vector_dof(elem, infile)
     use iso_c_binding, only: c_long
     use magdif_conf, only: log
     use magdif_mesh, only: mesh
-    complex(dp), intent(out) :: pol_flux(:,:)
-    complex(dp), intent(out) :: tor_comp(:)
+    type(RT0_t), intent(inout) :: elem
     character(len = *), intent(in) :: infile
     integer(c_long) :: length
     integer :: ktri, fid
@@ -196,17 +220,17 @@ contains
     open(newunit = fid, file = infile, access = 'stream', status = 'old', &
          action = 'read', form = 'unformatted')
     read (fid) length
-    if (length < 8 * mesh%kt_low(mesh%nflux + 1)) then
+    if (length < 8 * mesh%ntri) then
        ! (Re, Im) of RT0 DoFs + toroidal component
        write (log%msg, '("File ", a, " only contains ", i0, " real values, ' // &
-            'expected ", i0, ".")') infile, length, 8 * mesh%kt_low(mesh%nflux + 1)
+            'expected ", i0, ".")') infile, length, 8 * mesh%ntri
        if (log%err) call log%write
        error stop
     end if
-    do ktri = 1, mesh%kt_low(mesh%nflux + 1)
-       read (fid) pol_flux(ktri, :), tor_comp(ktri)
+    do ktri = 1, mesh%ntri
+       read (fid) elem%DOF(:, ktri), elem%comp_phi(ktri)
     end do
-    tor_comp = tor_comp / mesh%area
+    elem%comp_phi = elem%comp_phi / mesh%area
     close(fid)
   end subroutine read_vector_dof
 
@@ -218,15 +242,14 @@ contains
     metric_det = equil%cocos%sgn_dpsi * fs_half%q(kf) * r / B0phi_Omega(mesh%kt_low(kf) + kt)
   end function jacobian
 
-  subroutine write_vector_plot(pol_flux, tor_comp, outfile)
+  subroutine write_vector_plot(elem, outfile)
     use magdif_conf, only: conf, longlines
     use magdif_mesh, only: equil, mesh, B0R_Omega, B0Z_Omega
-    complex(dp), intent(in) :: pol_flux(:,:)
-    complex(dp), intent(in) :: tor_comp(:)
+    type(RT0_t), intent(in) :: elem
     character(len = *), intent(in) :: outfile
 
     integer :: k, kf, kt, ktri, n_cutoff, fid
-    complex(dp) :: pol_comp_r, pol_comp_z, dens_psi_contravar, proj_theta_covar
+    complex(dp) :: comp_R, comp_Z, dens_psi_contravar, proj_theta_covar
     real(dp) :: r, z
 
     open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
@@ -240,15 +263,15 @@ contains
           ktri = mesh%kt_low(kf) + kt
           R = mesh%R_Omega(ktri)
           Z = mesh%Z_Omega(ktri)
-          call interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)
+          call RT0_interp(ktri, elem, R, Z, comp_R, comp_Z)
           ! projection to contravariant psi component
-          dens_psi_contravar = (pol_comp_r * B0z_Omega(ktri) - &
-               pol_comp_z * B0r_Omega(ktri)) * r * jacobian(kf, kt, r)
+          dens_psi_contravar = (comp_R * B0Z_Omega(ktri) - &
+               comp_Z * B0R_Omega(ktri)) * R * jacobian(kf, kt, R)
           ! projection to covariant theta component
-          proj_theta_covar = equil%cocos%sgn_dpsi * (pol_comp_r * B0r_Omega(ktri) + &
-               pol_comp_z * B0z_Omega(ktri)) * jacobian(kf, kt, r)
-          write (fid, '(12(1x, es24.16e3))') r, z, pol_comp_r, pol_comp_z, &
-               tor_comp(ktri), dens_psi_contravar, proj_theta_covar
+          proj_theta_covar = equil%cocos%sgn_dpsi * (comp_R * B0R_Omega(ktri) + &
+               comp_Z * B0Z_Omega(ktri)) * jacobian(kf, kt, R)
+          write (fid, '(12(1x, es24.16e3))') R, Z, comp_R, comp_Z, &
+               elem%comp_phi(ktri), dens_psi_contravar, proj_theta_covar
        end do
     end do
     r = mesh%R_O
@@ -259,11 +282,10 @@ contains
     close(fid)
   end subroutine write_vector_plot
 
-  subroutine write_vector_plot_rect(pol_flux, tor_comp, outfile)
+  subroutine write_vector_plot_rect(elem, outfile)
     use magdif_conf, only: longlines
     use magdif_mesh, only: equil, mesh, point_location
-    complex(dp), intent(in) :: pol_flux(:,:)
-    complex(dp), intent(in) :: tor_comp(:)
+    type(RT0_t), intent(in) :: elem
     character(len = *), intent(in) :: outfile
 
     integer :: kw, kh, ktri, fid
@@ -276,9 +298,9 @@ contains
           R = equil%R_eqd(kw)
           Z = equil%Z_eqd(kh)
           ktri = point_location(R, Z)
-          if (ktri > mesh%kt_low(1) .and. ktri <= mesh%kt_low(mesh%nflux + 1)) then
-             call interp_RT0(ktri, pol_flux, R, Z, comp_R, comp_Z)
-             comp_phi = tor_comp(ktri)
+          if (ktri > mesh%kt_low(1) .and. ktri <= mesh%ntri) then
+             call RT0_interp(ktri, elem, R, Z, comp_R, comp_Z)
+             comp_phi = elem%comp_phi(ktri)
           else
              comp_R = 0d0
              comp_Z = 0d0
@@ -290,11 +312,11 @@ contains
     close(fid)
   end subroutine write_vector_plot_rect
 
-  subroutine compute_Bn_nonres(Bnflux, Bnphi)
+  subroutine compute_Bn_nonres(Bn)
     use magdif_conf, only: conf
     use magdif_util, only: imun
     use magdif_mesh, only: mesh, B0R, B0phi, B0Z
-    complex(dp), intent(out) :: Bnflux(:, :), Bnphi(:)
+    type(RT0_t), intent(inout) :: Bn
     integer :: kf, kt, ktri, base, tip
     real(dp) :: r, lr, lz
     complex(dp) :: Bnpsi
@@ -308,22 +330,21 @@ contains
           R = (mesh%node_R(base) + mesh%node_R(tip)) * 0.5d0
           lR = mesh%node_R(tip) - mesh%node_R(base)
           lZ = mesh%node_Z(tip) - mesh%node_Z(base)
-          Bnpsi = -mesh%R_O * B0phi(ktri, mesh%ef(ktri)) / r
-          Bnflux(ktri, mesh%ef(ktri)) = Bnpsi * (lR ** 2 + lZ ** 2) / &
-               (B0R(ktri, mesh%ef(ktri)) * lR + B0Z(ktri, mesh%ef(ktri)) * lZ)
-          Bnphi(ktri) = imun / mesh%n * Bnflux(ktri, mesh%ef(ktri)) / mesh%area(ktri)
-          Bnflux(ktri, mesh%ei(ktri)) = (0d0, 0d0)
-          Bnflux(ktri, mesh%eo(ktri)) = (0d0, 0d0)
+          Bnpsi = -mesh%R_O * B0phi(mesh%ef(ktri), ktri) / r
+          Bn%DOF(mesh%ef(ktri), ktri) = Bnpsi * (lR ** 2 + lZ ** 2) / &
+               (B0R(mesh%ef(ktri), ktri) * lR + B0Z(mesh%ef(ktri), ktri) * lZ)
+          Bn%comp_phi(ktri) = imun / mesh%n * Bn%DOF(mesh%ef(ktri), ktri) / mesh%area(ktri)
+          Bn%DOF(mesh%ei(ktri), ktri) = (0d0, 0d0)
+          Bn%DOF(mesh%eo(ktri), ktri) = (0d0, 0d0)
        end do
     end do
-    if (conf%quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
+    if (conf%quad_avg) call avg_flux_on_quad(Bn)
   end subroutine compute_Bn_nonres
 
-  subroutine avg_flux_on_quad(pol_flux, tor_comp)
+  subroutine avg_flux_on_quad(elem)
     use magdif_util, only: imun
     use magdif_mesh, only: mesh
-    complex(dp), intent(inout) :: pol_flux(:,:)
-    complex(dp), intent(inout) :: tor_comp(:)
+    type(RT0_t), intent(inout) :: elem
 
     integer :: kf, kt, ktri1, ktri2
     complex(dp) :: tor_flux_avg, tor_flux_diff
@@ -332,26 +353,26 @@ contains
        do kt = 1, mesh%kt_max(kf), 2
           ktri1 = mesh%kt_low(kf) + kt
           ktri2 = mesh%kt_low(kf) + kt + 1
-          tor_flux_avg = 0.5d0 * (tor_comp(ktri2) * mesh%area(ktri2) + &
-               tor_comp(ktri1) * mesh%area(ktri1))
-          tor_flux_diff = 0.5d0 * (tor_comp(ktri2) * mesh%area(ktri2) - &
-               tor_comp(ktri1) * mesh%area(ktri1))
-          tor_comp(ktri1) = tor_flux_avg / mesh%area(ktri1)
-          pol_flux(ktri1, mesh%eo(ktri1)) = pol_flux(ktri1, mesh%eo(ktri1)) - &
+          tor_flux_avg = 0.5d0 * (elem%comp_phi(ktri2) * mesh%area(ktri2) + &
+               elem%comp_phi(ktri1) * mesh%area(ktri1))
+          tor_flux_diff = 0.5d0 * (elem%comp_phi(ktri2) * mesh%area(ktri2) - &
+               elem%comp_phi(ktri1) * mesh%area(ktri1))
+          elem%comp_phi(ktri1) = tor_flux_avg / mesh%area(ktri1)
+          elem%DOF(mesh%eo(ktri1), ktri1) = elem%DOF(mesh%eo(ktri1), ktri1) - &
                imun * mesh%n * tor_flux_diff
-          tor_comp(ktri2) = tor_flux_avg / mesh%area(ktri2)
-          pol_flux(ktri2, mesh%ei(ktri2)) = pol_flux(ktri2, mesh%ei(ktri2)) + &
+          elem%comp_phi(ktri2) = tor_flux_avg / mesh%area(ktri2)
+          elem%DOF(mesh%ei(ktri2), ktri2) = elem%DOF(mesh%ei(ktri2), ktri2) + &
                imun * mesh%n * tor_flux_diff
        end do
     end do
   end subroutine avg_flux_on_quad
 
   ! calculate resonant vacuum perturbation
-  subroutine compute_kilca_vacuum(Bnflux, Bnphi)
+  subroutine compute_kilca_vacuum(Bn)
     use magdif_conf, only: conf
     use magdif_util, only: imun, gauss_legendre_unit_interval
     use magdif_mesh, only: mesh
-    complex(dp), intent(out) :: Bnflux(:, :), Bnphi(:)
+    type(RT0_t), intent(inout) :: Bn
     integer, parameter :: order = 2
     integer :: ktri, k, ke, pol_modes(2)
     real(dp) :: R, Z, rho, theta, edge_R, edge_Z, node_R(4), node_Z(4)
@@ -359,8 +380,6 @@ contains
     complex(dp) :: B_R, B_phi, B_Z
 
     pol_modes = [conf%kilca_pol_mode, -conf%kilca_pol_mode]
-    Bnflux = (0d0, 0d0)
-    Bnphi = (0d0, 0d0)
     call gauss_legendre_unit_interval(order, points, weights)
     do ktri = 1, mesh%ntri
        node_R = mesh%node_R([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
@@ -374,12 +393,12 @@ contains
              rho = hypot(R - mesh%R_O, Z - mesh%Z_O)
              theta = atan2(Z - mesh%Z_O, R - mesh%R_O)
              call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, rho, theta, B_R, B_phi, B_Z)
-             Bnflux(ktri, ke) = Bnflux(ktri, ke) + &
+             Bn%DOF(ke, ktri) = Bn%DOF(ke, ktri) + &
                   weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
           end do
        end do
        ! toroidal flux via zero divergence
-       Bnphi(ktri) = imun / mesh%n * sum(Bnflux(ktri, :)) / mesh%area(ktri)
+       Bn%comp_phi(ktri) = imun / mesh%n * sum(Bn%DOF(:, ktri)) / mesh%area(ktri)
     end do
   end subroutine compute_kilca_vacuum
 
@@ -510,11 +529,11 @@ contains
     close(fid)
   end subroutine check_kilca_vacuum
 
-  subroutine check_RT0(Bnflux, Bnphi)
+  subroutine check_RT0(Bn)
     use magdif_conf, only: conf, longlines
     use magdif_mesh, only: fs_half, mesh, point_location
     use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
-    complex(dp), intent(in) :: Bnflux(:,:), Bnphi(:)
+    type(RT0_t), intent(in) :: Bn
     integer :: fid, kf, kpol, ktri
     real(dp) :: rad, theta, R, Z
     complex(dp) :: B_R, B_Z, B_phi, B_R_interp, B_Z_interp, B_phi_interp
@@ -530,8 +549,8 @@ contains
           R = mesh%R_O + rad * cos(theta)
           Z = mesh%Z_O + rad * sin(theta)
           ktri = point_location(R, Z)
-          call interp_RT0(ktri, Bnflux, R, Z, B_R_interp, B_Z_interp)
-          B_phi_interp = Bnphi(ktri)
+          call RT0_interp(ktri, Bn, R, Z, B_R_interp, B_Z_interp)
+          B_phi_interp = Bn%comp_phi(ktri)
           write (fid, '(14(1x, es23.15e3))') rad, theta, B_R, B_phi, B_Z, &
                B_R_interp, B_phi_interp, B_Z_interp
        end do

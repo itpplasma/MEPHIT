@@ -7,13 +7,13 @@ program vacfield
   use magdif_mesh, only: mesh, read_mesh
   use magdif_util, only: initialize_globals
   use magdif_pert, only: compute_Bn_nonres, compute_kilca_vac_coeff, compute_kilca_vacuum, &
-       check_kilca_vacuum, check_redundant_edges, check_div_free, &
-       write_vector_dof, write_vector_plot
+       check_kilca_vacuum, RT0_check_redundant_edges, RT0_check_div_free, RT0_t, RT0_init, &
+       RT0_deinit, write_vector_dof, write_vector_plot
 
   implicit none
 
   character(len = 1024) :: config_file
-  complex(dp), allocatable :: Bnflux(:, :), Bnphi(:)
+  type(RT0_t) :: Bn
 
   if (command_argument_count() >= 1) then
      call get_command_argument(1, config_file)
@@ -26,44 +26,40 @@ program vacfield
 
   call h5_init
   call read_mesh
-  allocate(Bnflux(mesh%ntri, 3))
-  allocate(Bnphi(mesh%ntri))
+  call RT0_init(Bn, mesh%ntri)
   if (conf%kilca_scale_factor /= 0) then
      call compute_kilca_vac_coeff
-     call compute_kilca_vacuum(Bnflux, Bnphi)
+     call compute_kilca_vacuum(Bn)
      call check_kilca_vacuum
   else
      if (conf%nonres) then
-        call compute_Bn_nonres(Bnflux, Bnphi)
+        call compute_Bn_nonres(Bn)
      else
         call initialize_globals(mesh%R_O, mesh%Z_O)
-        call compute_Bnvac(Bnflux, Bnphi)
+        call compute_Bnvac(Bn)
      end if
   end if
-  call check_redundant_edges(Bnflux, .false., 'vacuum B_n')
-  call check_div_free(Bnflux, Bnphi, mesh%n, 1d-9, 'vacuum B_n')
-  call write_vector_dof(Bnflux, Bnphi, conf%Bn_vac_file)
-  call write_vector_plot(Bnflux, Bnphi, decorate_filename(conf%Bn_vac_file, 'plot_', ''))
+  call RT0_check_redundant_edges(Bn, 'Bnvac')
+  call RT0_check_div_free(Bn, mesh%n, 1d-9, 'Bnvac')
+  call write_vector_dof(Bn, conf%Bn_vac_file)
+  call write_vector_plot(Bn, decorate_filename(conf%Bn_vac_file, 'plot_', ''))
+  call RT0_deinit(Bn)
   call h5_deinit
-  if (allocated(Bnflux)) deallocate(Bnflux)
-  if (allocated(Bnphi)) deallocate(Bnphi)
 
 contains
 
-  subroutine compute_Bnvac(Bnflux, Bnphi)
+  subroutine compute_Bnvac(Bn)
     use iso_c_binding, only: c_long
     use magdif_conf, only: conf
     use magdif_util, only: gauss_legendre_unit_interval, imun
     use magdif_mesh, only: mesh
-    complex(dp), intent(out) :: Bnflux(:, :), Bnphi(:)
+    type(RT0_t), intent(inout) :: Bn
     integer, parameter :: order = 2
     integer :: ktri, ke, k
     real(dp) :: R, Z, edge_R, edge_Z, node_R(4), node_Z(4)
     real(dp), dimension(order) :: points, weights
     complex(dp) :: B_R, B_Z
 
-    Bnflux = (0d0, 0d0)
-    Bnphi = (0d0, 0d0)
     call gauss_legendre_unit_interval(order, points, weights)
     do ktri = 1, mesh%ntri
        node_R = mesh%node_R([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
@@ -75,12 +71,12 @@ contains
              R = node_R(ke) * points(k) + node_R(ke + 1) * points(order - k + 1)
              Z = node_Z(ke) * points(k) + node_Z(ke + 1) * points(order - k + 1)
              call spline_bpol_n(conf%n, R, Z, B_R, B_Z)
-             Bnflux(ktri, ke) = Bnflux(ktri, ke) + &
+             Bn%DOF(ke, ktri) = Bn%DOF(ke, ktri) + &
                   weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
           end do
        end do
        ! toroidal flux via zero divergence
-       Bnphi(ktri) = imun / mesh%n * sum(Bnflux(ktri, :)) / mesh%area(ktri)
+       Bn%comp_phi(ktri) = imun / mesh%n * sum(Bn%DOF(:, ktri)) / mesh%area(ktri)
     end do
   end subroutine compute_Bnvac
 end program vacfield
