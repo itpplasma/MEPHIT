@@ -8,7 +8,7 @@ program vacfield
   use magdif_util, only: initialize_globals
   use magdif_pert, only: compute_Bn_nonres, compute_kilca_vac_coeff, compute_kilca_vacuum, &
        check_kilca_vacuum, RT0_check_redundant_edges, RT0_check_div_free, RT0_t, RT0_init, &
-       RT0_deinit, write_vector_dof, write_vector_plot
+       RT0_deinit, RT0_write
 
   implicit none
 
@@ -41,8 +41,7 @@ program vacfield
   end if
   call RT0_check_redundant_edges(Bn, 'Bnvac')
   call RT0_check_div_free(Bn, mesh%n, 1d-9, 'Bnvac')
-  call write_vector_dof(Bn, conf%Bn_vac_file)
-  call write_vector_plot(Bn, decorate_filename(conf%Bn_vac_file, 'plot_', ''))
+  call RT0_write(Bn, 'magdif.h5', 'iter/Bnvac', 'magnetic field (vacuum)', 'G', 1)
   call RT0_deinit(Bn)
   call h5_deinit
 

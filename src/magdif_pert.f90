@@ -6,11 +6,10 @@ module magdif_pert
 
   private
 
-  public :: write_scalar_dof, RT0_init, RT0_deinit, RT0_interp, RT0_check_div_free, &
-       RT0_check_redundant_edges, read_vector_dof, &
-       write_vector_dof, write_vector_plot, write_vector_plot_rect, compute_Bn_nonres, &
-       avg_flux_on_quad, compute_kilca_vacuum, kilca_vacuum, compute_kilca_vac_coeff, &
-       kilca_vacuum_fourier, check_kilca_vacuum, check_RT0
+  public :: write_scalar_dof, RT0_init, RT0_deinit, RT0_read, RT0_write, RT0_interp, &
+       RT0_check_div_free, RT0_check_redundant_edges, RT0_triplot, RT0_rectplot, &
+       compute_Bn_nonres, avg_flux_on_quad, compute_kilca_vacuum, kilca_vacuum, &
+       compute_kilca_vac_coeff, kilca_vacuum_fourier, check_kilca_vacuum, check_RT0
 
   type, public :: RT0_t
      !> Number of triangles on which the RT0 elements are defined
@@ -189,50 +188,18 @@ contains
     end do
   end subroutine RT0_check_redundant_edges
 
-  subroutine write_vector_dof(elem, outfile)
-    use iso_c_binding, only: c_long
-    use magdif_mesh, only: mesh
-    type(RT0_t), intent(in) :: elem
-    character(len = *), intent(in) :: outfile
-    integer(c_long) :: length
-    integer :: ktri, fid
-
-    length = 8 * mesh%ntri  ! (Re, Im) of RT0 DoFs + toroidal component
-    ! status = 'old' for writing to named pipe
-    open(newunit = fid, file = outfile, access = 'stream', status = 'old', &
-         action = 'write', form = 'unformatted')
-    write (fid) length
-    do ktri = 1, mesh%ntri
-       write (fid) elem%DOF(:, ktri), elem%comp_phi(ktri) * mesh%area(ktri)
-    end do
-    close(fid)
-  end subroutine write_vector_dof
-
-  subroutine read_vector_dof(elem, infile)
-    use iso_c_binding, only: c_long
-    use magdif_conf, only: log
-    use magdif_mesh, only: mesh
+  subroutine RT0_read(elem, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
     type(RT0_t), intent(inout) :: elem
-    character(len = *), intent(in) :: infile
-    integer(c_long) :: length
-    integer :: ktri, fid
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
 
-    open(newunit = fid, file = infile, access = 'stream', status = 'old', &
-         action = 'read', form = 'unformatted')
-    read (fid) length
-    if (length < 8 * mesh%ntri) then
-       ! (Re, Im) of RT0 DoFs + toroidal component
-       write (log%msg, '("File ", a, " only contains ", i0, " real values, ' // &
-            'expected ", i0, ".")') infile, length, 8 * mesh%ntri
-       if (log%err) call log%write
-       error stop
-    end if
-    do ktri = 1, mesh%ntri
-       read (fid) elem%DOF(:, ktri), elem%comp_phi(ktri)
-    end do
-    elem%comp_phi = elem%comp_phi / mesh%area
-    close(fid)
-  end subroutine read_vector_dof
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/RT0_DOF', elem%DOF)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/RT0_comp_phi', elem%comp_phi)
+    call h5_close(h5id_root)
+  end subroutine RT0_read
 
   pure function jacobian(kf, kt, r) result(metric_det)
     use magdif_mesh, only: equil, fs_half, mesh, B0phi_Omega
@@ -242,75 +209,130 @@ contains
     metric_det = equil%cocos%sgn_dpsi * fs_half%q(kf) * r / B0phi_Omega(mesh%kt_low(kf) + kt)
   end function jacobian
 
-  subroutine write_vector_plot(elem, outfile)
-    use magdif_conf, only: conf, longlines
+  subroutine RT0_write(elem, file, dataset, comment, unit, plots)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    type(RT0_t), intent(in) :: elem
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    character(len = *), intent(in) :: comment
+    character(len = *), intent(in) :: unit
+    integer, intent(in) :: plots
+    integer(HID_T) :: h5id_root
+    complex(dp), allocatable :: comp_R(:), comp_Z(:), comp_psi_contravar_dens(:), &
+         comp_theta_covar(:), rect_comp_R(:, :), rect_comp_phi(:, :), rect_comp_Z(:, :)
+
+    if (plots >= 1) then
+       call RT0_triplot(elem, comp_R, comp_Z, comp_psi_contravar_dens, comp_theta_covar)
+    end if
+    if (plots >= 2) then
+       call RT0_rectplot(elem, rect_comp_R, rect_comp_phi, rect_comp_Z)
+    end if
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/RT0_DOF')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/RT0_DOF', &
+         elem%DOF, lbound(elem%DOF), ubound(elem%DOF), &
+         comment = 'degrees of freedom of ' // trim(adjustl(comment)), &
+         unit = trim(adjustl(unit)) // ' cm^2')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/RT0_comp_phi', &
+         elem%comp_phi, lbound(elem%comp_phi), ubound(elem%comp_phi), &
+         comment = 'phi component of ' // trim(adjustl(comment)), &
+         unit = trim(adjustl(unit)))
+    if (plots >= 1) then
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/comp_R', &
+            comp_R, lbound(comp_R), ubound(comp_R), &
+            comment = 'R component of ' // trim(adjustl(comment)) // ' at centroid', &
+            unit = trim(adjustl(unit)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/comp_Z', &
+            comp_Z, lbound(comp_Z), ubound(comp_Z), &
+            comment = 'Z component of ' // trim(adjustl(comment)) // ' at centroid', &
+            unit = trim(adjustl(unit)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/comp_psi_contravar_dens', &
+            comp_psi_contravar_dens, lbound(comp_psi_contravar_dens), ubound(comp_psi_contravar_dens), &
+            comment = 'contravariant density psi component of ' // trim(adjustl(comment)) // ' at centroid')
+            ! unit = trim(adjustl(unit)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/comp_theta_covar', &
+            comp_theta_covar, lbound(comp_theta_covar), ubound(comp_theta_covar), &
+            comment = 'covariant theta component of ' // trim(adjustl(comment)) // ' at centroid')
+            ! unit = trim(adjustl(unit)))
+    end if
+    if (plots >= 2) then
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/rect_comp_R', &
+            rect_comp_R, lbound(rect_comp_R), ubound(rect_comp_R), &
+            comment = 'R component of ' // trim(adjustl(comment)) // ' on GEQSDK grid', &
+            unit = trim(adjustl(unit)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/rect_comp_phi', &
+            rect_comp_phi, lbound(rect_comp_phi), ubound(rect_comp_phi), &
+            comment = 'phi component of ' // trim(adjustl(comment)) // ' on GEQSDK grid', &
+            unit = trim(adjustl(unit)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/rect_comp_Z', &
+            rect_comp_Z, lbound(rect_comp_Z), ubound(rect_comp_Z), &
+            comment = 'Z component of ' // trim(adjustl(comment)) // ' on GEQDSK grid', &
+            unit = trim(adjustl(unit)))
+    end if
+    call h5_close(h5id_root)
+    if (allocated(comp_R)) deallocate(comp_R)
+    if (allocated(comp_Z)) deallocate(comp_Z)
+    if (allocated(comp_psi_contravar_dens)) deallocate(comp_psi_contravar_dens)
+    if (allocated(comp_theta_covar)) deallocate(comp_theta_covar)
+    if (allocated(rect_comp_R)) deallocate(rect_comp_R)
+    if (allocated(rect_comp_phi)) deallocate(rect_comp_phi)
+    if (allocated(rect_comp_Z)) deallocate(rect_comp_Z)
+  end subroutine RT0_write
+
+  subroutine RT0_triplot(elem, comp_R, comp_Z, comp_psi_contravar_dens, comp_theta_covar)
     use magdif_mesh, only: equil, mesh, B0R_Omega, B0Z_Omega
     type(RT0_t), intent(in) :: elem
-    character(len = *), intent(in) :: outfile
+    complex(dp), intent(out), dimension(:), allocatable :: comp_R, comp_Z, &
+         comp_psi_contravar_dens, comp_theta_covar
+    integer :: kf, kt, ktri
+    real(dp) :: R, Z
 
-    integer :: k, kf, kt, ktri, n_cutoff, fid
-    complex(dp) :: comp_R, comp_Z, dens_psi_contravar, proj_theta_covar
-    real(dp) :: r, z
-
-    open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
-    if (conf%nonres) then
-       n_cutoff = mesh%nflux - 1
-    else
-       n_cutoff = mesh%nflux
-    end if
-    do kf = 1, n_cutoff
+    allocate(comp_R(mesh%ntri))
+    allocate(comp_Z(mesh%ntri))
+    allocate(comp_psi_contravar_dens(mesh%ntri))
+    allocate(comp_theta_covar(mesh%ntri))
+    do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           R = mesh%R_Omega(ktri)
           Z = mesh%Z_Omega(ktri)
-          call RT0_interp(ktri, elem, R, Z, comp_R, comp_Z)
+          call RT0_interp(ktri, elem, R, Z, comp_R(ktri), comp_Z(ktri))
           ! projection to contravariant psi component
-          dens_psi_contravar = (comp_R * B0Z_Omega(ktri) - &
-               comp_Z * B0R_Omega(ktri)) * R * jacobian(kf, kt, R)
+          comp_psi_contravar_dens(ktri) = (comp_R(ktri) * B0Z_Omega(ktri) - &
+               comp_Z(ktri) * B0R_Omega(ktri)) * R * jacobian(kf, kt, R)
           ! projection to covariant theta component
-          proj_theta_covar = equil%cocos%sgn_dpsi * (comp_R * B0R_Omega(ktri) + &
-               comp_Z * B0Z_Omega(ktri)) * jacobian(kf, kt, R)
-          write (fid, '(12(1x, es24.16e3))') R, Z, comp_R, comp_Z, &
-               elem%comp_phi(ktri), dens_psi_contravar, proj_theta_covar
+          comp_theta_covar(ktri) = equil%cocos%sgn_dpsi * (comp_R(ktri) * B0R_Omega(ktri) + &
+               comp_Z(ktri) * B0Z_Omega(ktri)) * jacobian(kf, kt, R)
        end do
     end do
-    r = mesh%R_O
-    z = mesh%Z_O
-    do ktri = mesh%kt_low(n_cutoff+1) + 1, mesh%ntri
-       write (fid, '(12(1x, es24.16e3))') r, z, (0d0, k = 1, 10)
-    end do
-    close(fid)
-  end subroutine write_vector_plot
+  end subroutine RT0_triplot
 
-  subroutine write_vector_plot_rect(elem, outfile)
-    use magdif_conf, only: longlines
+  subroutine RT0_rectplot(elem, comp_R, comp_phi, comp_Z)
     use magdif_mesh, only: equil, mesh, point_location
     type(RT0_t), intent(in) :: elem
-    character(len = *), intent(in) :: outfile
-
-    integer :: kw, kh, ktri, fid
-    complex(dp) :: comp_R, comp_Z, comp_phi
+    complex(dp), intent(out), dimension(:, :), allocatable :: comp_R, comp_phi, comp_Z
+    integer :: kw, kh, ktri
     real(dp) :: R, Z
 
-    open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
+    allocate(comp_R(equil%nw, equil%nh))
+    allocate(comp_phi(equil%nw, equil%nh))
+    allocate(comp_Z(equil%nw, equil%nh))
     do kw = 1, equil%nw
        do kh = 1, equil%nh
           R = equil%R_eqd(kw)
           Z = equil%Z_eqd(kh)
           ktri = point_location(R, Z)
           if (ktri > mesh%kt_low(1) .and. ktri <= mesh%ntri) then
-             call RT0_interp(ktri, elem, R, Z, comp_R, comp_Z)
-             comp_phi = elem%comp_phi(ktri)
+             call RT0_interp(ktri, elem, R, Z, comp_R(kw, kh), comp_Z(kw, kh))
+             comp_phi(kw, kh) = elem%comp_phi(ktri)
           else
-             comp_R = 0d0
-             comp_Z = 0d0
-             comp_phi = 0d0
+             comp_R(kw, kh) = (0d0, 0d0)
+             comp_phi(kw, kh) = (0d0, 0d0)
+             comp_Z(kw, kh) = (0d0, 0d0)
           end if
-          write (fid, '(i6, 12(1x, es24.16e3))') ktri, R, Z, comp_R, comp_Z, comp_phi
        end do
     end do
-    close(fid)
-  end subroutine write_vector_plot_rect
+  end subroutine RT0_rectplot
 
   subroutine compute_Bn_nonres(Bn)
     use magdif_conf, only: conf

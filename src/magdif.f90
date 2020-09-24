@@ -33,8 +33,8 @@ contains
     use magdif_util, only: initialize_globals
     use magdif_mesh, only: equil, mesh, read_mesh, fluxvar, flux_func_cache_check, &
          check_curr0, check_safety_factor
-    use magdif_pert, only: read_vector_dof, check_RT0, RT0_check_div_free, RT0_init, &
-         RT0_check_redundant_edges
+    use magdif_pert, only: check_RT0, RT0_check_div_free, RT0_check_redundant_edges, &
+         RT0_init, RT0_read
 
     log = magdif_log('-', conf%log_level, conf%quiet)
 
@@ -66,7 +66,7 @@ contains
     call RT0_init(Bnvac, mesh%ntri)
     call RT0_init(jn, mesh%ntri)
 
-    call read_vector_dof(Bnvac, conf%Bn_vac_file)
+    call RT0_read(Bnvac, 'magdif.h5', 'iter/Bnvac')
     call RT0_check_redundant_edges(Bnvac, 'Bnvac')
     call RT0_check_div_free(Bnvac, mesh%n, conf%rel_err_Bn, 'Bnvac')
     ! needs field_eq which is not accessible in magdif_prepare
@@ -112,7 +112,7 @@ contains
     use arnoldi_mod, only: ieigen, ngrow, tol, eigvecs  ! arnoldi.f90
     use magdif_mesh, only: mesh
     use magdif_pert, only: RT0_t, RT0_init, RT0_deinit, RT0_check_div_free, RT0_check_redundant_edges, &
-         write_vector_dof, write_vector_plot, write_vector_plot_rect, write_scalar_dof
+         RT0_write, write_scalar_dof
     use magdif_conf, only: conf, log, runmode_precon, runmode_single, decorate_filename, &
          cmplx_fmt
 
@@ -158,8 +158,8 @@ contains
           do i = 1, min(ngrow, conf%max_eig_out)
              write (postfix, postfix_fmt) i
              call unpack_dof(Bn, eigvecs(:, i))
-             call write_vector_dof(Bn, decorate_filename(conf%eigvec_file, '', postfix))
-             call write_vector_plot(Bn, decorate_filename(conf%eigvec_file, 'plot_', postfix))
+             call RT0_write(Bn, 'magdif.h5', 'iter/eigvec' // postfix, &
+                  'iteration eigenvector', 'G', 1)
           end do
           allocate(Lr(ngrow, ngrow), Yr(ngrow, ngrow))
           Yr = (0d0, 0d0)
@@ -220,20 +220,21 @@ contains
        open(newunit = fid, file = conf%conv_file, status = 'old', position = 'append')
        write (fid, '(es24.16e3)') integral
        close(fid)
-       call write_vector_dof(Bn, decorate_filename(conf%Bn_file, '', postfix))
        if (kiter <= 1) then
-          call write_vector_plot(Bn_diff, decorate_filename(conf%Bn_diff_file, 'plot_', postfix))
-          call write_vector_plot(Bn, decorate_filename(conf%Bn_file, 'plot_', postfix))
-          call write_vector_plot(jn, decorate_filename(conf%currn_file, 'plot_', postfix))
+          call RT0_write(jn, 'magdif.h5', 'iter/jn' // postfix, &
+               'current density (after iteration)', 'statA cm^-2', 1)
+          call RT0_write(Bn, 'magdif.h5', 'iter/Bn' // postfix, &
+               'magnetic field (after iteration)', 'G', 1)
+          call RT0_write(Bn_diff, 'magdif.h5', 'iter/Bn_diff' // postfix, &
+               'magnetic field (difference between iterations)', 'G', 1)
           call write_poloidal_modes(jn, decorate_filename('currmn.dat', '', postfix))
           call write_scalar_dof(presn, decorate_filename(conf%presn_file, '', postfix))
        end if
 
        call pack_dof(Bn, packed_Bn_prev)
     end do
-    call write_vector_dof(Bn, conf%Bn_file)
-    call write_vector_plot(Bn, decorate_filename(conf%Bn_file, 'plot_', ''))
-    call write_vector_plot_rect(Bn, decorate_filename(conf%Bn_file, 'rect_', ''))
+    call RT0_write(Bn, 'magdif.h5', 'iter/Bn', &
+         'magnetic field (full perturbation)', 'G', 2)
 
     call RT0_deinit(Bn_diff)
     ! tell FreeFem++ to stop processing
@@ -320,6 +321,51 @@ contains
     close(fid)
   end subroutine send_flag_to_freefem
 
+  subroutine send_RT0_to_freefem(elem, outfile)
+    use iso_c_binding, only: c_long
+    use magdif_mesh, only: mesh
+    type(RT0_t), intent(in) :: elem
+    character(len = *), intent(in) :: outfile
+    integer(c_long) :: length
+    integer :: ktri, fid
+
+    length = 8 * mesh%ntri  ! (Re, Im) of RT0 DoFs + toroidal component
+    ! status = 'old' for writing to named pipe
+    open(newunit = fid, file = outfile, access = 'stream', status = 'old', &
+         action = 'write', form = 'unformatted')
+    write (fid) length
+    do ktri = 1, mesh%ntri
+       write (fid) elem%DOF(:, ktri), elem%comp_phi(ktri) * mesh%area(ktri)
+    end do
+    close(fid)
+  end subroutine send_RT0_to_freefem
+
+  subroutine receive_RT0_from_freefem(elem, infile)
+    use iso_c_binding, only: c_long
+    use magdif_conf, only: log
+    use magdif_mesh, only: mesh
+    type(RT0_t), intent(inout) :: elem
+    character(len = *), intent(in) :: infile
+    integer(c_long) :: length
+    integer :: ktri, fid
+
+    open(newunit = fid, file = infile, access = 'stream', status = 'old', &
+         action = 'read', form = 'unformatted')
+    read (fid) length
+    if (length < 8 * mesh%ntri) then
+       ! (Re, Im) of RT0 DoFs + toroidal component
+       write (log%msg, '("Pipe ", a, " only contains ", i0, " real values, ' // &
+            'expected ", i0, ".")') infile, length, 8 * mesh%ntri
+       if (log%err) call log%write
+       error stop
+    end if
+    do ktri = 1, mesh%ntri
+       read (fid) elem%DOF(:, ktri), elem%comp_phi(ktri)
+    end do
+    elem%comp_phi = elem%comp_phi / mesh%area
+    close(fid)
+  end subroutine receive_RT0_from_freefem
+
   !> Computes #bnflux and #bnphi from #jnflux and #jnphi via an external program. No data
   !> is read yet; this is done by read_bn().
   !>
@@ -330,28 +376,25 @@ contains
     use iso_c_binding, only: c_long
     use magdif_conf, only: conf, decorate_filename
     use magdif_mesh, only: mesh
-    use magdif_pert, only: read_vector_dof, write_vector_dof, write_vector_plot, &
-         RT0_check_redundant_edges, RT0_check_div_free
+    use magdif_pert, only: RT0_check_redundant_edges, RT0_check_div_free
 
     call send_flag_to_freefem(-1, 'maxwell.dat')
-    call write_vector_dof(jn, 'maxwell.dat')
-    call read_vector_dof(Bn, 'maxwell.dat')
+    call send_RT0_to_freefem(jn, 'maxwell.dat')
+    call receive_RT0_from_freefem(Bn, 'maxwell.dat')
     call RT0_check_redundant_edges(Bn, 'Bn')
     call RT0_check_div_free(Bn, mesh%n, conf%rel_err_Bn, 'Bn')
-    call write_vector_plot(Bn, decorate_filename(conf%Bn_file, 'plot_', ''))
   end subroutine compute_Bn
 
   subroutine compute_L2int(elem, integral)
     use iso_c_binding, only: c_long
     use magdif_conf, only: log
-    use magdif_pert, only: write_vector_dof
     type(RT0_t), intent(in) :: elem
     real(dp), intent(out) :: integral
     integer(c_long) :: length
     integer :: fid
 
     call send_flag_to_freefem(-2, 'maxwell.dat')
-    call write_vector_dof(elem, 'maxwell.dat')
+    call send_RT0_to_freefem(elem, 'maxwell.dat')
     open(newunit = fid, file = 'maxwell.dat', access = 'stream', status = 'old', &
          action = 'read', form = 'unformatted')
     read (fid) length
@@ -522,8 +565,7 @@ contains
     use sparse_mod, only: sparse_solve, sparse_matmul
     use magdif_conf, only: conf, log, decorate_filename
     use magdif_mesh, only: fs, mesh, B0phi, B0flux, j0phi
-    use magdif_pert, only: RT0_check_div_free, RT0_check_redundant_edges, &
-         write_vector_dof, write_vector_plot
+    use magdif_pert, only: RT0_check_div_free, RT0_check_redundant_edges
     use magdif_util, only: imun, clight
     complex(dp), dimension(2 * conf%nkpol) :: x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
@@ -603,8 +645,6 @@ contains
     call add_sheet_current
     call RT0_check_redundant_edges(jn, 'jn')
     call RT0_check_div_free(jn, mesh%n, conf%rel_err_currn, 'jn')
-    call write_vector_dof(jn, conf%currn_file)
-    call write_vector_plot(jn, decorate_filename(conf%currn_file, 'plot_', ''))
   end subroutine compute_currn
 
   subroutine add_sheet_current
