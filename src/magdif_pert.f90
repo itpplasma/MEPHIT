@@ -6,10 +6,19 @@ module magdif_pert
 
   private
 
-  public :: write_scalar_dof, RT0_init, RT0_deinit, RT0_read, RT0_write, RT0_interp, &
-       RT0_check_div_free, RT0_check_redundant_edges, RT0_triplot, RT0_rectplot, &
-       compute_Bn_nonres, avg_flux_on_quad, compute_kilca_vacuum, kilca_vacuum, &
-       compute_kilca_vac_coeff, kilca_vacuum_fourier, check_kilca_vacuum, check_RT0
+  public :: L1_init, L1_deinit, L1_read, L1_write, RT0_init, RT0_deinit, RT0_read, &
+       RT0_write, RT0_interp, RT0_check_div_free, RT0_check_redundant_edges, RT0_triplot, &
+       RT0_rectplot, compute_Bn_nonres, avg_flux_on_quad, compute_kilca_vacuum, &
+       kilca_vacuum, compute_kilca_vac_coeff, kilca_vacuum_fourier, check_kilca_vacuum, &
+       check_RT0
+
+  type, public :: L1_t
+     !> Number of points on which the L1 are defined
+     integer :: npoint
+
+     !> Degrees of freedom, given in base units.
+     complex(dp), allocatable :: DOF(:)
+  end type L1_t
 
   type, public :: RT0_t
      !> Number of triangles on which the RT0 elements are defined
@@ -30,23 +39,55 @@ module magdif_pert
 
 contains
 
+  subroutine L1_init(this, npoint)
+    type(L1_t), intent(inout) :: this
+    integer, intent(in) :: npoint
+
+    call L1_deinit(this)
+    this%npoint = npoint
+    allocate(this%DOF(npoint))
+    this%DOF = (0d0, 0d0)
+  end subroutine L1_init
+
+  subroutine L1_deinit(this)
+    type(L1_t), intent(inout) :: this
+
+    this%npoint = 0
+    if (allocated(this%DOF)) deallocate(this%DOF)
+  end subroutine L1_deinit
+
   !> Real and imaginary part of \p scalar_dof (e.g. #presn) are written, in that order,
   !> to \p outfile (e.g. #magdif_conf::presn_file), where line number corresponds to the
   !> knot index in #mesh_mod::mesh_point.
-  subroutine write_scalar_dof(scalar_dof, outfile)
-    use magdif_conf, only: longlines
-    use magdif_mesh, only: mesh
-    complex(dp), intent(in) :: scalar_dof(:)
-    character(len = *), intent(in) :: outfile
+  subroutine L1_write(elem, file, dataset, comment, unit)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    type(L1_t), intent(in) :: elem
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    character(len = *), intent(in) :: comment
+    character(len = *), intent(in) :: unit
+    integer(HID_T) :: h5id_root
 
-    integer :: kpoint, fid
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/L1_DOF')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/L1_DOF', &
+         elem%DOF, lbound(elem%DOF), ubound(elem%DOF), &
+         comment = 'degrees of freedom of ' // trim(adjustl(comment)), &
+         unit = trim(adjustl(unit)))
+    call h5_close(h5id_root)
+  end subroutine L1_write
 
-    open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
-    do kpoint = 1, mesh%kp_low(mesh%nflux + 1)
-       write (fid, '(2(1x, es24.16e3))') scalar_dof(kpoint)
-    end do
-    close(fid)
-  end subroutine write_scalar_dof
+  subroutine L1_read(elem, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    type(L1_t), intent(inout) :: elem
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
+
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/L1_DOF', elem%DOF)
+    call h5_close(h5id_root)
+  end subroutine L1_read
 
   subroutine RT0_init(this, ntri)
     type(RT0_t), intent(inout) :: this

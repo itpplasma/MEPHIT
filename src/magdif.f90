@@ -1,6 +1,6 @@
 module magdif
   use iso_fortran_env, only: dp => real64
-  use magdif_pert, only: RT0_t
+  use magdif_pert, only: L1_t, RT0_t
 
   implicit none
 
@@ -9,10 +9,7 @@ module magdif
   public :: magdif_init, magdif_cleanup, magdif_iterate, magdif_postprocess
 
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
-  !>
-  !> Values are taken at each mesh point and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_point.
-  complex(dp), allocatable :: presn(:)
+  type(L1_t) :: pn
 
   !> Perturbation field in units of Gauss.
   type(RT0_t) :: Bn
@@ -34,7 +31,7 @@ contains
     use magdif_mesh, only: equil, mesh, read_mesh, fluxvar, flux_func_cache_check, &
          check_curr0, check_safety_factor
     use magdif_pert, only: check_RT0, RT0_check_div_free, RT0_check_redundant_edges, &
-         RT0_init, RT0_read
+         RT0_init, RT0_read, L1_init
 
     log = magdif_log('-', conf%log_level, conf%quiet)
 
@@ -60,8 +57,7 @@ contains
     call check_safety_factor
 
     ! initialize perturbation
-    allocate(presn(mesh%npoint))
-    presn = 0d0
+    call L1_init(pn, mesh%npoint)
     call RT0_init(Bn, mesh%ntri)
     call RT0_init(Bnvac, mesh%ntri)
     call RT0_init(jn, mesh%ntri)
@@ -82,7 +78,7 @@ contains
     use magdif_conf, only: log
     use magdif_mesh, only: B0R, B0phi, B0Z, B0R_Omega, B0phi_Omega, B0Z_Omega, B0flux, &
          j0phi
-    use magdif_pert, only: RT0_deinit
+    use magdif_pert, only: L1_deinit, RT0_deinit
     if (allocated(B0r)) deallocate(B0r)
     if (allocated(B0phi)) deallocate(B0phi)
     if (allocated(B0z)) deallocate(B0z)
@@ -91,7 +87,7 @@ contains
     if (allocated(B0z_Omega)) deallocate(B0z_Omega)
     if (allocated(B0flux)) deallocate(B0flux)
     if (allocated(j0phi)) deallocate(j0phi)
-    if (allocated(presn)) deallocate(presn)
+    call L1_deinit(pn)
     call RT0_deinit(Bn)
     call RT0_deinit(Bnvac)
     call RT0_deinit(jn)
@@ -110,15 +106,18 @@ contains
 
   subroutine magdif_iterate
     use arnoldi_mod, only: ieigen, ngrow, tol, eigvecs  ! arnoldi.f90
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
+         h5_close
     use magdif_mesh, only: mesh
-    use magdif_pert, only: RT0_t, RT0_init, RT0_deinit, RT0_check_div_free, RT0_check_redundant_edges, &
-         RT0_write, write_scalar_dof
-    use magdif_conf, only: conf, log, runmode_precon, runmode_single, decorate_filename, &
-         cmplx_fmt
+    use magdif_pert, only: RT0_init, RT0_deinit, RT0_write, L1_write, &
+         RT0_check_div_free, RT0_check_redundant_edges
+    use magdif_conf, only: conf, log, runmode_precon, runmode_single, cmplx_fmt, &
+         decorate_filename
 
     logical :: preconditioned
-    integer :: kiter, niter, ndim, i, j, info, fid
-    real(dp) :: integral
+    integer :: kiter, niter, ndim, i, j, info
+    integer(HID_T) :: h5id_root
+    real(dp), allocatable :: L2int(:)
     type(RT0_t) :: Bn_diff
     complex(dp) :: packed_Bn(mesh%nedge), packed_Bn_prev(mesh%nedge)
     complex(dp) :: eigvals(conf%nritz)
@@ -130,6 +129,10 @@ contains
     call RT0_init(Bn_diff, mesh%ntri)
     ! pass effective toroidal mode number to FreeFem++
     call send_flag_to_freefem(mesh%n, 'maxwell.dat')
+    ! clean datafile
+    call h5_open_rw('magdif.h5', h5id_root)
+    call h5_delete(h5id_root, 'iter')
+    call h5_close(h5id_root)
 
     ! system dimension: number of non-redundant edges in core plasma
     ndim = mesh%nedge
@@ -145,6 +148,11 @@ contains
        ! calculate eigenvectors
        ieigen = 1
        call arnoldi(ndim, conf%nritz, eigvals, next_iteration_arnoldi)
+       call h5_open_rw('magdif.h5', h5id_root)
+       call h5_create_parent_groups(h5id_root, 'iter/eigvals')
+       call h5_add(h5id_root, 'iter/eigvals', eigvals, lbound(eigvals), ubound(eigvals), &
+         comment = 'iteration eigenvalues')
+       call h5_close(h5id_root)
        if (log%info) then
           write (log%msg, '("Arnoldi method yields ", i0, " Ritz eigenvalues > ", f0.2)') &
                ngrow, tol
@@ -190,12 +198,15 @@ contains
        end if
     end if
 
+    allocate(L2int(0:niter))
+    call compute_L2int(Bnvac, L2int(0))
+    call h5_open_rw('magdif.h5', h5id_root)
+    call h5_create_parent_groups(h5id_root, 'iter/L2int_Bnvac')
+    call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int(0), &
+         comment = 'L2 integral of magnetic field (vacuum)')
+    call h5_close(h5id_root)
     Bn%DOF(:, :) = Bnvac%DOF
     Bn%comp_phi(:) = Bnvac%comp_phi
-    call compute_L2int(Bn, integral)
-    open(newunit = fid, file = conf%conv_file, status = 'replace')
-    write (fid, '(es24.16e3)') integral
-    close(fid)
     call pack_dof(Bnvac, packed_Bn_prev)
     if (preconditioned) then
        packed_Bn_prev(:) = packed_Bn_prev - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
@@ -216,11 +227,9 @@ contains
        end if
 
        call unpack_dof(Bn_diff, packed_Bn - packed_Bn_prev)
-       call compute_L2int(Bn_diff, integral)
-       open(newunit = fid, file = conf%conv_file, status = 'old', position = 'append')
-       write (fid, '(es24.16e3)') integral
-       close(fid)
        if (kiter <= 1) then
+          call L1_write(pn, 'magdif.h5', 'iter/pn' // postfix, &
+               'pressure (after iteration)', 'dyn cm^-2')
           call RT0_write(jn, 'magdif.h5', 'iter/jn' // postfix, &
                'current density (after iteration)', 'statA cm^-2', 1)
           call RT0_write(Bn, 'magdif.h5', 'iter/Bn' // postfix, &
@@ -228,18 +237,26 @@ contains
           call RT0_write(Bn_diff, 'magdif.h5', 'iter/Bn_diff' // postfix, &
                'magnetic field (difference between iterations)', 'G', 1)
           call write_poloidal_modes(jn, decorate_filename('currmn.dat', '', postfix))
-          call write_scalar_dof(presn, decorate_filename(conf%presn_file, '', postfix))
        end if
 
        call pack_dof(Bn, packed_Bn_prev)
     end do
+    call h5_open_rw('magdif.h5', h5id_root)
+    call h5_add(h5id_root, 'iter/L2int_Bn_diff', L2int, lbound(L2int), ubound(L2int), &
+         comment = 'L2 integral of magnetic field (difference between iterations)')
+    call h5_close(h5id_root)
+    call L1_write(pn, 'magdif.h5', 'iter/pn', &
+         'pressure (full perturbation)', 'dyn cm^-2')
     call RT0_write(Bn, 'magdif.h5', 'iter/Bn', &
          'magnetic field (full perturbation)', 'G', 2)
+    call RT0_write(jn, 'magdif.h5', 'iter/jn', &
+         'current density (full perturbation)', 'statA cm^-2', 1)
 
     call RT0_deinit(Bn_diff)
+    if (allocated(Lr)) deallocate(Lr)
+    if (allocated(L2int)) deallocate(L2int)
     ! tell FreeFem++ to stop processing
     call send_flag_to_freefem(-3, 'maxwell.dat')
-    if (allocated(Lr)) deallocate(Lr)
 
   contains
 
@@ -489,7 +506,6 @@ contains
     use magdif_conf, only: conf, log
     use magdif_util, only: imun
     use magdif_mesh, only: fs, mesh, B0R, B0phi, B0Z
-    use magdif_pert, only: write_scalar_dof
     real(dp) :: r
     real(dp) :: lr, lz  ! edge vector components
     complex(dp), dimension(conf%nkpol) :: a, b, x, d, du, inhom
@@ -540,10 +556,10 @@ contains
        avg_rel_err = avg_rel_err + sum(rel_err)
 
        if (kf == 1) then ! first point on axis - average over enclosing flux surface
-          presn(1) = sum(x) / size(x)
+          pn%DOF(1) = sum(x) / size(x)
        end if
        do kp = 1, mesh%kp_max(kf)
-          presn(mesh%kp_low(kf) + kp) = x(kp)
+          pn%DOF(mesh%kp_low(kf) + kp) = x(kp)
        end do
     end do
 
@@ -552,8 +568,6 @@ contains
          'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (log%debug) call log%write
     if (allocated(resid)) deallocate(resid)
-
-    call write_scalar_dof(presn, conf%presn_file)
   end subroutine compute_presn
 
   !> Computes current perturbation #jnflux and #jnphi from equilibrium quantities,
@@ -589,7 +603,7 @@ contains
           ke = mesh%ef(ktri)
           R = sum(mesh%node_R(mesh%lf(:, ktri))) * 0.5d0
           jn%DOF(ke, ktri) = j0phi(ke, ktri) / B0phi(ke, ktri) * Bn%DOF(ke, ktri) + &
-               clight * R / B0phi(ke, ktri) * (presn(mesh%lf(2, ktri)) - presn(mesh%lf(1, ktri)))
+               clight * R / B0phi(ke, ktri) * (pn%DOF(mesh%lf(2, ktri)) - pn%DOF(mesh%lf(1, ktri)))
           x(kt) = -jn%DOF(ke, ktri)
           ! diagonal matrix element - edge i
           ke = mesh%ei(ktri)
@@ -600,7 +614,7 @@ contains
           Bnphi_Gamma = 0.5d0 * (Bn%comp_phi(ktri) + Bn%comp_phi(mesh%adj_tri(ke, ktri)))
           x(kt) = x(kt) - imun * mesh%n * area * 0.5d0 * (clight * R / B0flux(ke, ktri) * &
                (Bnphi_Gamma / B0phi(ke, ktri) * (fs%p(kf) - fs%p(kf-1)) - &
-               (presn(mesh%li(2, ktri)) - presn(mesh%li(1, ktri)))) + j0phi(ke, ktri) * &
+               (pn%DOF(mesh%li(2, ktri)) - pn%DOF(mesh%li(1, ktri)))) + j0phi(ke, ktri) * &
                (Bnphi_Gamma / B0phi(ke, ktri) - Bn%DOF(ke, ktri) / B0flux(ke, ktri)))
           ! superdiagonal matrix element - edge o
           ke = mesh%eo(ktri)
@@ -611,7 +625,7 @@ contains
           Bnphi_Gamma = 0.5d0 * (Bn%comp_phi(ktri) + Bn%comp_phi(mesh%adj_tri(ke, ktri)))
           x(kt) = x(kt) - imun * mesh%n * area * 0.5d0 * (clight * r / B0flux(ke, ktri) * &
                (Bnphi_Gamma / B0phi(ke, ktri) * (fs%p(kf-1) - fs%p(kf)) - &
-               (presn(mesh%lo(2, ktri)) - presn(mesh%lo(1, ktri)))) + j0phi(ke, ktri) * &
+               (pn%DOF(mesh%lo(2, ktri)) - pn%DOF(mesh%lo(1, ktri)))) + j0phi(ke, ktri) * &
                (Bnphi_Gamma / B0phi(ke, ktri) - Bn%DOF(ke, ktri) / B0flux(ke, ktri)))
        end do
        associate (ndim => mesh%kt_max(kf))
@@ -652,7 +666,7 @@ contains
     use magdif_util, only: imun
     use magdif_mesh, only: mesh, B0flux
     integer :: kf, kt, ktri, ktri_adj
-    complex(dp) :: presn_half
+    complex(dp) :: pn_half
 
     do kf = 1, mesh%nflux
        if (mesh%m_res(kf) > 0) then
@@ -663,32 +677,32 @@ contains
                 if (mod(kt, 2) == 0) then
                    ! edge i is diagonal
                    if (mesh%orient(ktri)) then
-                      presn_half = 0.5d0 * sum(presn(mesh%lf(:, ktri)))
+                      pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri)))
                    else
                       ktri_adj = mesh%adj_tri(mesh%ei(ktri), ktri)
-                      presn_half = 0.5d0 * sum(presn(mesh%lf(:, ktri_adj)))
+                      pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri_adj)))
                    end if
                 else
-                   presn_half = presn(mesh%li(2, ktri))
+                   pn_half = pn%DOF(mesh%li(2, ktri))
                 end if
                 jn%DOF(mesh%ei(ktri), ktri) = jn%DOF(mesh%ei(ktri), ktri) + &
                      conf_arr%sheet_current_factor(mesh%m_res(kf)) * &
-                     B0flux(mesh%ei(ktri), ktri) * presn_half
+                     B0flux(mesh%ei(ktri), ktri) * pn_half
                 ! add sheet current on edge o
                 if (mod(kt, 2) == 1) then
                    ! edge o is diagonal
                    if (mesh%orient(ktri)) then
-                      presn_half = 0.5d0 * sum(presn(mesh%lf(:, ktri)))
+                      pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri)))
                    else
                       ktri_adj = mesh%adj_tri(mesh%eo(ktri), ktri)
-                      presn_half = 0.5d0 * sum(presn(mesh%lf(:, ktri_adj)))
+                      pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri_adj)))
                    end if
                 else
-                   presn_half = presn(mesh%lo(1, ktri))
+                   pn_half = pn%DOF(mesh%lo(1, ktri))
                 end if
                 jn%DOF(mesh%eo(ktri), ktri) = jn%DOF(mesh%eo(ktri), ktri) + &
                      conf_arr%sheet_current_factor(mesh%m_res(kf)) * &
-                     B0flux(mesh%eo(ktri), ktri) * presn_half
+                     B0flux(mesh%eo(ktri), ktri) * pn_half
                 ! adjust toroidal current density
                 jn%comp_phi(ktri) = sum(jn%DOF(:, ktri)) * imun / mesh%n / mesh%area(ktri)
              end do
