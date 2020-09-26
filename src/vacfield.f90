@@ -2,8 +2,7 @@ program vacfield
 
   use iso_fortran_env, only: dp => real64
   use hdf5_tools, only: h5_init, h5_deinit
-  use magdif_conf, only: conf, conf_arr, magdif_config_read, log, magdif_log, &
-       decorate_filename
+  use magdif_conf, only: conf, conf_arr, magdif_config_read, log, magdif_log, datafile
   use magdif_mesh, only: mesh, read_mesh
   use magdif_util, only: initialize_globals
   use magdif_pert, only: compute_Bn_nonres, compute_kilca_vac_coeff, compute_kilca_vacuum, &
@@ -41,7 +40,7 @@ program vacfield
   end if
   call RT0_check_redundant_edges(Bn, 'Bnvac')
   call RT0_check_div_free(Bn, mesh%n, 1d-9, 'Bnvac')
-  call RT0_write(Bn, 'magdif.h5', 'iter/Bnvac', 'magnetic field (vacuum)', 'G', 1)
+  call RT0_write(Bn, datafile, 'Bnvac', 'magnetic field (vacuum)', 'G', 1)
   call RT0_deinit(Bn)
   call h5_deinit
 

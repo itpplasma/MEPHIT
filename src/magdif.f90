@@ -8,6 +8,8 @@ module magdif
 
   public :: magdif_init, magdif_cleanup, magdif_iterate, magdif_postprocess
 
+  character(len = *), parameter :: freefem_pipe = 'maxwell.dat'
+
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   type(L1_t) :: pn
 
@@ -26,7 +28,7 @@ contains
   subroutine magdif_init
     use input_files, only: gfile
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
-    use magdif_conf, only: conf, log, magdif_log, decorate_filename
+    use magdif_conf, only: conf, log, magdif_log, datafile
     use magdif_util, only: initialize_globals
     use magdif_mesh, only: equil, mesh, read_mesh, fluxvar, flux_func_cache_check, &
          check_curr0, check_safety_factor
@@ -62,7 +64,7 @@ contains
     call RT0_init(Bnvac, mesh%ntri)
     call RT0_init(jn, mesh%ntri)
 
-    call RT0_read(Bnvac, 'magdif.h5', 'iter/Bnvac')
+    call RT0_read(Bnvac, datafile, 'Bnvac')
     call RT0_check_redundant_edges(Bnvac, 'Bnvac')
     call RT0_check_div_free(Bnvac, mesh%n, conf%rel_err_Bn, 'Bnvac')
     ! needs field_eq which is not accessible in magdif_prepare
@@ -111,7 +113,7 @@ contains
     use magdif_mesh, only: mesh
     use magdif_pert, only: RT0_init, RT0_deinit, RT0_write, L1_write, &
          RT0_check_div_free, RT0_check_redundant_edges
-    use magdif_conf, only: conf, log, runmode_precon, runmode_single, cmplx_fmt, &
+    use magdif_conf, only: conf, log, runmode_precon, runmode_single, datafile, cmplx_fmt, &
          decorate_filename
 
     logical :: preconditioned
@@ -128,9 +130,9 @@ contains
 
     call RT0_init(Bn_diff, mesh%ntri)
     ! pass effective toroidal mode number to FreeFem++
-    call send_flag_to_freefem(mesh%n, 'maxwell.dat')
+    call send_flag_to_freefem(mesh%n, freefem_pipe)
     ! clean datafile
-    call h5_open_rw('magdif.h5', h5id_root)
+    call h5_open_rw(datafile, h5id_root)
     call h5_delete(h5id_root, 'iter')
     call h5_close(h5id_root)
 
@@ -148,7 +150,7 @@ contains
        ! calculate eigenvectors
        ieigen = 1
        call arnoldi(ndim, conf%nritz, eigvals, next_iteration_arnoldi)
-       call h5_open_rw('magdif.h5', h5id_root)
+       call h5_open_rw(datafile, h5id_root)
        call h5_create_parent_groups(h5id_root, 'iter/eigvals')
        call h5_add(h5id_root, 'iter/eigvals', eigvals, lbound(eigvals), ubound(eigvals), &
          comment = 'iteration eigenvalues')
@@ -166,7 +168,7 @@ contains
           do i = 1, min(ngrow, conf%max_eig_out)
              write (postfix, postfix_fmt) i
              call unpack_dof(Bn, eigvecs(:, i))
-             call RT0_write(Bn, 'magdif.h5', 'iter/eigvec' // postfix, &
+             call RT0_write(Bn, datafile, 'iter/eigvec' // postfix, &
                   'iteration eigenvector', 'G', 1)
           end do
           allocate(Lr(ngrow, ngrow), Yr(ngrow, ngrow))
@@ -200,7 +202,7 @@ contains
 
     allocate(L2int(0:niter))
     call compute_L2int(Bnvac, L2int(0))
-    call h5_open_rw('magdif.h5', h5id_root)
+    call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, 'iter/L2int_Bnvac')
     call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int(0), &
          comment = 'L2 integral of magnetic field (vacuum)')
@@ -228,35 +230,35 @@ contains
 
        call unpack_dof(Bn_diff, packed_Bn - packed_Bn_prev)
        if (kiter <= 1) then
-          call L1_write(pn, 'magdif.h5', 'iter/pn' // postfix, &
+          call L1_write(pn, datafile, 'iter/pn' // postfix, &
                'pressure (after iteration)', 'dyn cm^-2')
-          call RT0_write(jn, 'magdif.h5', 'iter/jn' // postfix, &
+          call RT0_write(jn, datafile, 'iter/jn' // postfix, &
                'current density (after iteration)', 'statA cm^-2', 1)
-          call RT0_write(Bn, 'magdif.h5', 'iter/Bn' // postfix, &
+          call RT0_write(Bn, datafile, 'iter/Bn' // postfix, &
                'magnetic field (after iteration)', 'G', 1)
-          call RT0_write(Bn_diff, 'magdif.h5', 'iter/Bn_diff' // postfix, &
+          call RT0_write(Bn_diff, datafile, 'iter/Bn_diff' // postfix, &
                'magnetic field (difference between iterations)', 'G', 1)
           call write_poloidal_modes(jn, decorate_filename('currmn.dat', '', postfix))
        end if
 
        call pack_dof(Bn, packed_Bn_prev)
     end do
-    call h5_open_rw('magdif.h5', h5id_root)
+    call h5_open_rw(datafile, h5id_root)
     call h5_add(h5id_root, 'iter/L2int_Bn_diff', L2int, lbound(L2int), ubound(L2int), &
          comment = 'L2 integral of magnetic field (difference between iterations)')
     call h5_close(h5id_root)
-    call L1_write(pn, 'magdif.h5', 'iter/pn', &
+    call L1_write(pn, datafile, 'iter/pn', &
          'pressure (full perturbation)', 'dyn cm^-2')
-    call RT0_write(Bn, 'magdif.h5', 'iter/Bn', &
+    call RT0_write(Bn, datafile, 'iter/Bn', &
          'magnetic field (full perturbation)', 'G', 2)
-    call RT0_write(jn, 'magdif.h5', 'iter/jn', &
+    call RT0_write(jn, datafile, 'iter/jn', &
          'current density (full perturbation)', 'statA cm^-2', 1)
 
     call RT0_deinit(Bn_diff)
     if (allocated(Lr)) deallocate(Lr)
     if (allocated(L2int)) deallocate(L2int)
     ! tell FreeFem++ to stop processing
-    call send_flag_to_freefem(-3, 'maxwell.dat')
+    call send_flag_to_freefem(-3, freefem_pipe)
 
   contains
 
@@ -395,9 +397,9 @@ contains
     use magdif_mesh, only: mesh
     use magdif_pert, only: RT0_check_redundant_edges, RT0_check_div_free
 
-    call send_flag_to_freefem(-1, 'maxwell.dat')
-    call send_RT0_to_freefem(jn, 'maxwell.dat')
-    call receive_RT0_from_freefem(Bn, 'maxwell.dat')
+    call send_flag_to_freefem(-1, freefem_pipe)
+    call send_RT0_to_freefem(jn, freefem_pipe)
+    call receive_RT0_from_freefem(Bn, freefem_pipe)
     call RT0_check_redundant_edges(Bn, 'Bn')
     call RT0_check_div_free(Bn, mesh%n, conf%rel_err_Bn, 'Bn')
   end subroutine compute_Bn
@@ -410,9 +412,9 @@ contains
     integer(c_long) :: length
     integer :: fid
 
-    call send_flag_to_freefem(-2, 'maxwell.dat')
-    call send_RT0_to_freefem(elem, 'maxwell.dat')
-    open(newunit = fid, file = 'maxwell.dat', access = 'stream', status = 'old', &
+    call send_flag_to_freefem(-2, freefem_pipe)
+    call send_RT0_to_freefem(elem, freefem_pipe)
+    open(newunit = fid, file = freefem_pipe, access = 'stream', status = 'old', &
          action = 'read', form = 'unformatted')
     read (fid) length
     if (length /= 1) then

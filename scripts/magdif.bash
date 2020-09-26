@@ -212,9 +212,9 @@ magdif_clean() {
     for workdir; do
         pushd "$workdir"
         # files from magdif_prepare
-        rm -f fort.* Bn_flux.dat inputformaxwell_ext.msh inputformaxwell.msh points.fmt mesh.dat mesh_new.asc box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat
+        rm -f fort.* magdif.h5 inputformaxwell_ext.msh inputformaxwell.msh box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat optpolres.dat j0_gs.dat j0_amp.dat cmp_prof.dat check_q_step.dat check_q_cont.dat cmp_vac.dat cmp_RT0.dat
         # files from magdif_run
-        rm -f fort.* plot*.dat fluxvar.dat j0phi.dat j0_gs.dat j0_amp.dat cmp_prof.dat Bn*.dat eigvec*.dat presn*.dat currn*.dat freefem.out convergence.dat rect*.dat *.log Bmn*.dat currmn*.dat
+        rm -f fort.* magdif.h5 freefem.out magdif.log Bmn*.dat currmn*.dat currn_par*.dat
         # files from magdif_plot
         rm -f plot*.pdf convergence.pdf Bmn*.pdf currmn*.pdf
         popd

@@ -16,7 +16,7 @@ module magdif_mesh
        magdif_mesh_destructor, init_flux_variables, compute_pres_prof_eps, compute_pres_prof_par, &
        compute_pres_prof_geqdsk, compute_safety_factor_flux, compute_safety_factor_rot, &
        compute_safety_factor_geqdsk, check_safety_factor, cache_equilibrium_field, &
-       compute_j0phi, check_curr0, write_fluxvar, point_location, point_in_triangle
+       compute_j0phi, check_curr0, point_location, point_in_triangle
 
   type(g_eqdsk) :: equil
 
@@ -1114,7 +1114,7 @@ contains
   end function point_in_triangle
 
   subroutine write_mesh_data
-    use magdif_conf, only: longlines
+    use magdif_conf, only: datafile
     use hdf5_tools, only: HID_T, h5_create, h5_define_group, h5_close_group, h5_add, &
          h5_close
 
@@ -1122,21 +1122,13 @@ contains
     integer :: orient(mesh%ntri)
     integer :: fid, kpoi, ktri, kp
 
-    open(newunit = fid, file = 'mesh_new.asc', recl = longlines, status = 'replace')
-    do ktri = 1, mesh%ntri
-       write (fid, '(3(1x, i5), 1x, i1, 3(1x, i5), 3(1x, i3))') &
-            mesh%tri_node(:, ktri), mesh%tri_node_F(ktri), &
-            mesh%adj_tri(:, ktri), mesh%adj_edge(:, ktri)
-    end do
-    close(fid)
-
     call flux_func_cache_check
     where (mesh%orient)
        orient = 1
     elsewhere
        orient = 0
     end where
-    call h5_create('magdif.h5', h5id_magdif)
+    call h5_create(datafile, h5id_magdif)
     call h5_define_group(h5id_magdif, 'mesh', h5id_mesh)
     call h5_add(h5id_mesh, 'R_O', mesh%R_O, &
          comment = 'R coordinate of O point', unit = 'cm')
@@ -1292,12 +1284,12 @@ contains
   end subroutine write_mesh_data
 
   subroutine read_mesh
-    use magdif_conf, only: log
+    use magdif_conf, only: log, datafile
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
     integer(HID_T) :: h5id_magdif
     integer, allocatable :: orient(:)
 
-    call h5_open('magdif.h5', h5id_magdif)
+    call h5_open(datafile, h5id_magdif)
     call h5_get(h5id_magdif, 'mesh/R_O', mesh%R_O)
     call h5_get(h5id_magdif, 'mesh/Z_O', mesh%Z_O)
     call h5_get(h5id_magdif, 'mesh/R_min', mesh%R_min)
@@ -1485,7 +1477,6 @@ contains
     fs_half%F = [(fluxvar%interp(equil%fpol, fs_half%psi(kf)), kf = 1, mesh%nflux)]
     fs_half%FdF_dpsi = [(fluxvar%interp(equil%ffprim, fs_half%psi(kf)), &
          kf = 1, mesh%nflux)]
-    call write_fluxvar
   end subroutine init_flux_variables
 
   subroutine compute_pres_prof_eps
@@ -1676,9 +1667,8 @@ contains
   end subroutine check_safety_factor
 
   subroutine cache_equilibrium_field
-    use magdif_conf, only: longlines
     real(dp) :: R, Z, B0_R, B0_phi, B0_Z, dum
-    integer :: kf, kt, ktri, ke, fid
+    integer :: kf, kt, ktri, ke
     integer :: base, tip
     real(dp) :: n_r, n_z
 
@@ -1689,7 +1679,6 @@ contains
     allocate(B0phi_Omega(mesh%ntri))
     allocate(B0Z_Omega(mesh%ntri))
     allocate(B0flux(3, mesh%ntri))
-    open(newunit = fid, file = 'plot_B0.dat', recl = longlines, status = 'replace')
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
@@ -1713,17 +1702,13 @@ contains
           B0R_Omega(ktri) = B0_R
           B0phi_Omega(ktri) = B0_phi
           B0Z_Omega(ktri) = B0_Z
-          write (fid, '(5(1x, es24.16e3))') R, Z, B0_R, B0_Z, B0_phi
        end do
     end do
-    close(fid)
   end subroutine cache_equilibrium_field
 
   subroutine compute_j0phi
-    use magdif_conf, only: conf, log, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
-         longlines
+    use magdif_conf, only: conf, log, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk
     real(dp) :: plot_j0phi(mesh%ntri)
-    integer :: fid, ktri
 
     allocate(j0phi(3, mesh%ntri))
     j0phi = 0d0
@@ -1739,12 +1724,7 @@ contains
        if (log%err) call log%write
        error stop
     end select
-    open(newunit = fid, file = conf%j0phi_file, recl = longlines, status = 'replace')
-    do ktri = 1, mesh%ntri
-       write (fid, '(4(1x, es24.16e3))') &
-            j0phi(1, ktri), j0phi(2, ktri), j0phi(3, ktri), plot_j0phi(ktri)
-    end do
-    close(fid)
+    ! TODO: write out plot_j0phi when edge_cache type is working
     call check_redundant_edges(j0phi, 'j0phi')
   end subroutine compute_j0phi
 
@@ -1972,17 +1952,5 @@ contains
          count(fs%rad(1:) <= fs_half%rad) + count([fs_half%rad(1)] <= [fs%rad(0)])
     if (log%debug) call log%write
   end subroutine flux_func_cache_check
-
-  subroutine write_fluxvar
-    use magdif_conf, only: conf, longlines
-    integer :: kf, fid
-
-    open(newunit = fid, file = conf%fluxvar_file, recl = longlines, status = 'replace')
-    do kf = 0, mesh%nflux
-       write (fid, '(5(1x, es24.16e3))') &
-            fs%rad(kf), fs%psi(kf), fs%q(kf), fs%p(kf), fs%dp_dpsi(kf)
-    end do
-    close(fid)
-  end subroutine write_fluxvar
 
 end module magdif_mesh
