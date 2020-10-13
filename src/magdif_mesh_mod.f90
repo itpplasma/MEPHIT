@@ -20,7 +20,7 @@ module magdif_mesh
 
   type(g_eqdsk) :: equil
 
-    !> Structure containing flux functions evaluated at a specific flux surface, indicated
+  !> Structure containing flux functions evaluated at a specific flux surface, indicated
   !> by a common array index. For details see flux_func_cache_init().
   type, public :: flux_func_cache
      private
@@ -723,9 +723,12 @@ contains
     case (0)
        common_tri = [0, 0]
     case (1)
-       common_tri = [findloc(tri_mask, .true., 1), 0]
+       ! TODO: use findloc intrinsic when implementation is readily available
+       common_tri = [maxloc(merge(1, 0, tri_mask), 1), 0]
     case (2)
-       common_tri = [findloc(tri_mask, .true., 1), findloc(tri_mask, .true., 1, back = .true.)]
+       ! TODO: use findloc intrinsic when implementation is readily available
+       common_tri = [maxloc(merge(1, 0, tri_mask), 1), &
+            mesh%ntri + 1 - maxloc(merge(1, 0, tri_mask(mesh%ntri:1:-1)), 1)]
     case default
        write (log%msg, '("More than two common triangles for knots ", ' // &
             'i0, " and ", i0)') knot1, knot2
