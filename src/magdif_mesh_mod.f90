@@ -125,6 +125,14 @@ module magdif_mesh
      !> array index) occurs.
      integer, allocatable :: res_ind(:)
 
+     !> Poloidal flux at resonance position corresponding to a poloidal mode (given as
+     !> array index).
+     real(dp), allocatable :: psi_res(:)
+
+     !> Normalized minor radius (along line connecting X point and O point) at resonance
+     !> position corresponding to a poloidal mode (given as array index).
+     real(dp), allocatable :: rad_norm_res(:)
+
      !> Number of knots on the flux surface given by the array index.
      !>
      !> The array index ranges from 1 for the innermost flux surface to
@@ -438,7 +446,6 @@ contains
     real(dp) :: psi_min, psi_max
     integer :: m, kref, m_lo, m_hi
     type(flux_func) :: psi_eqd
-    real(dp), dimension(:), allocatable :: psi_res, rho_res
     integer, dimension(:), allocatable :: ref_ind
     logical, dimension(:), allocatable :: mask
 
@@ -481,15 +488,17 @@ contains
     mesh%refinement(m_lo:m_hi) = conf_arr%refinement(m_lo:m_hi)
     mesh%deletions(m_lo:m_hi) = conf_arr%deletions(m_lo:m_hi)
     mesh%additions(m_lo:m_hi) = conf_arr%additions(m_lo:m_hi)
-    allocate(psi_res(mesh%m_res_min:mesh%m_res_max))
-    allocate(rho_res(mesh%m_res_min:mesh%m_res_max))
+    if (allocated(mesh%psi_res)) deallocate(mesh%psi_res)
+    if (allocated(mesh%rad_norm_res)) deallocate(mesh%rad_norm_res)
+    allocate(mesh%psi_res(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%rad_norm_res(mesh%m_res_min:mesh%m_res_max))
     log%msg = 'resonance positions:'
     if (log%debug) call log%write
     do m = mesh%m_res_min, mesh%m_res_max
-       psi_res(m) = zeroin(psi_min, psi_max, q_interp_resonant, 1d-9)
-       rho_res(m) = psi2rho_norm(psi_res(m))
+       mesh%psi_res(m) = zeroin(psi_min, psi_max, q_interp_resonant, 1d-9)
+       mesh%rad_norm_res(m) = psi2rho_norm(mesh%psi_res(m))
        write (log%msg, '("m = ", i2, ", psi_m = ", es24.16e3, ", rho_m = ", f19.16)') &
-            m, psi_res(m), rho_res(m)
+            m, mesh%psi_res(m), mesh%rad_norm_res(m)
        if (log%debug) call log%write
     end do
     allocate(mask(mesh%m_res_min:mesh%m_res_max))
@@ -497,7 +506,7 @@ contains
     allocate(ref_ind(count(mask)))
     call refine_eqd_partition(count(mask), pack(mesh%deletions, mask), &
          pack(mesh%additions, mask), pack(mesh%refinement, mask), &
-         pack(rho_res, mask), rho_norm_ref, ref_ind)
+         pack(mesh%rad_norm_res, mask), rho_norm_ref, ref_ind)
 
     log%msg = 'refinement positions:'
     if (log%debug) call log%write
@@ -507,14 +516,12 @@ contains
        kref = kref + 1
        write (log%msg, '("m = ", i0, ", kf = ", i0, ' // &
             '", rho: ", f19.16, 2(" < ", f19.16))') m, ref_ind(kref), &
-            rho_norm_ref(ref_ind(kref) - 1), rho_res(m), rho_norm_ref(ref_ind(kref))
+            rho_norm_ref(ref_ind(kref) - 1), mesh%rad_norm_res(m), rho_norm_ref(ref_ind(kref))
        if (log%debug) call log%write
     end do
 
     if (allocated(ref_ind)) deallocate(ref_ind)
     if (allocated(mask)) deallocate(mask)
-    if (allocated(rho_res)) deallocate(rho_res)
-    if (allocated(psi_res)) deallocate(psi_res)
 
   contains
     function q_interp_resonant(psi)
@@ -1161,6 +1168,10 @@ contains
          comment = 'poloidal mode number m in resonance at given flux surface')
     call h5_add(h5id_mesh, 'res_ind', mesh%res_ind, lbound(mesh%res_ind), ubound(mesh%res_ind), &
          comment = 'flux surface index in resonance with given poloidal mode number')
+    call h5_add(h5id_mesh, 'psi_res', mesh%psi_res, lbound(mesh%psi_res), ubound(mesh%psi_res), &
+         comment = 'poloidal flux in resonance with given poloidal mode number', unit = 'Mx')
+    call h5_add(h5id_mesh, 'rad_norm_res', mesh%rad_norm_res, lbound(mesh%rad_norm_res), ubound(mesh%rad_norm_res), &
+         comment = 'normalized minor radius (along X-O line) in resonance with given poloidal mode number', unit = '1')
     call h5_add(h5id_mesh, 'kp_max', mesh%kp_max, lbound(mesh%kp_max), ubound(mesh%kp_max), &
          comment = 'number of nodes on flux surface')
     call h5_add(h5id_mesh, 'kp_low', mesh%kp_low, lbound(mesh%kp_low), ubound(mesh%kp_low), &
@@ -1314,6 +1325,8 @@ contains
     allocate(mesh%refinement(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%m_res(mesh%nflux))
     allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%psi_res(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%rad_norm_res(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%kp_max(mesh%nflux))
     allocate(mesh%kt_max(mesh%nflux))
     allocate(mesh%kp_low(mesh%nflux + 1))
@@ -1351,6 +1364,8 @@ contains
     call h5_get(h5id_magdif, 'mesh/refinement', mesh%refinement)
     call h5_get(h5id_magdif, 'mesh/m_res', mesh%m_res)
     call h5_get(h5id_magdif, 'mesh/res_ind', mesh%res_ind)
+    call h5_get(h5id_magdif, 'mesh/psi_res', mesh%psi_res)
+    call h5_get(h5id_magdif, 'mesh/rad_norm_res', mesh%rad_norm_res)
     call h5_get(h5id_magdif, 'mesh/kp_max', mesh%kp_max)
     call h5_get(h5id_magdif, 'mesh/kp_low', mesh%kp_low)
     call h5_get(h5id_magdif, 'mesh/kt_max', mesh%kt_max)
@@ -1413,6 +1428,8 @@ contains
     if (allocated(this%refinement)) deallocate(this%refinement)
     if (allocated(this%m_res)) deallocate(this%m_res)
     if (allocated(this%res_ind)) deallocate(this%res_ind)
+    if (allocated(mesh%psi_res)) deallocate(mesh%psi_res)
+    if (allocated(mesh%rad_norm_res)) deallocate(mesh%rad_norm_res)
     if (allocated(this%kp_max)) deallocate(this%kp_max)
     if (allocated(this%kt_max)) deallocate(this%kt_max)
     if (allocated(this%kp_low)) deallocate(this%kp_low)

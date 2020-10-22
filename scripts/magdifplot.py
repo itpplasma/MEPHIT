@@ -8,25 +8,25 @@ Created on Wed Jun  5 15:39:22 2019
 
 from sys import argv
 from os import path, cpu_count
-import re
 from enum import Enum
 from netCDF4 import Dataset
+import h5py
 import f90nml.parser
 import matplotlib
 import matplotlib.pyplot as plt
 import colorcet
 import numpy as np
 from scipy import interpolate
-from scipy import optimize
-try:
-    from StringIO import StringIO
-except ImportError:
-    from io import StringIO
 from multiprocessing import Pool
 
+# complex values are stored as compound types in libneo/hdf5tools
+h5py.get_config().complex_names = ('real', 'imag')
 matplotlib.rcParams['text.usetex'] = True
 matplotlib.rcParams['font.family'] = 'serif'
 matplotlib.rcParams['mathtext.fontset'] = 'cm'
+latex_preamble = path.join(path.dirname(path.realpath(__file__)),
+                           'magdifplot.tex')
+matplotlib.rcParams['text.latex.preamble'] = fr"\input{{{latex_preamble}}}"
 matplotlib.use('Agg')
 # =============================================================================
 # pgf_config = {
@@ -47,10 +47,10 @@ class magdif_2d_triplot:
     scifmt = matplotlib.ticker.ScalarFormatter()
     scifmt.set_powerlimits((-3, 4))
 
-    def __init__(self, node, tri, data, filename, title=None, clim_scale=None):
-        self.node = node
-        self.tri = tri
+    def __init__(self, mesh, data, label, filename, title=None, clim_scale=None):
+        self.mesh = mesh
         self.data = data
+        self.label = label
         self.title = title
         self.filename = filename
         if clim_scale is not None:
@@ -59,14 +59,16 @@ class magdif_2d_triplot:
             self.clim_scale = 1.0
 
     def dump_plot(self):
-        print('plotting ', self.filename)
+        print(f"plotting {self.filename}")
         plt.figure(figsize=(3.3, 4.4))
         plt.tripcolor(
-                self.node[:, 0], self.node[:, 1],
-                self.tri - 1, self.data, cmap=colorcet.cm.coolwarm
+                self.mesh['node_R'], self.mesh['node_Z'],
+                np.array(self.mesh['tri_node'], dtype=int) - 1, self.data,
+                cmap=colorcet.cm.coolwarm
         )
         plt.gca().set_aspect('equal')
-        plt.colorbar(format=self.__class__.scifmt)
+        cbar = plt.colorbar(format=self.__class__.scifmt)
+        cbar.set_label(self.label, rotation=90)
         plt.clim([-max(abs(self.data)) * self.clim_scale,
                   max(abs(self.data)) * self.clim_scale])
         plt.xlabel(r'$R$ / cm')
@@ -87,7 +89,7 @@ class magdif_1d_cutplot:
         self.filename = filename
 
     def dump_plot(self):
-        print('plotting ', self.filename)
+        print(f"plotting {self.filename}")
         plt.figure(figsize=(6.6, 3.6))
         plt.plot(self.x, self.y, '-k')
         plt.ticklabel_format(style='sci', scilimits=(-3, 4))
@@ -99,32 +101,28 @@ class magdif_1d_cutplot:
 
 
 class magdif_conv_plot:
-    def __init__(self, datadir, conv_file, max_eigval, xlim=None, ylim=None,
-                 title=None):
-        self.datadir = datadir
-        self.conv_file = conv_file
-        self.max_eigval = max_eigval
+    def __init__(self, config, data, filename, xlim=None, ylim=None, title=None):
+        self.config = config
+        self.data = data
+        self.filename = filename
         self.xlim = xlim
         self.ylim = ylim
         self.title = title
 
     def dump_plot(self):
-        try:
-            conv = np.loadtxt(path.join(self.datadir, self.conv_file))
-        except Exception as err:
-            print('Error: {}'.format(err))
-            return
-        niter = len(conv) - 1
-        kiter = np.arange(0, niter + 1)
+        sup_eigval = self.config['ritz_threshold']
+        L2int_Bnvac = self.data['/iter/L2int_Bnvac']
+        L2int_Bn_diff = self.data['/iter/L2int_Bn_diff']
+        kiter = np.arange(0, len(L2int_Bn_diff))
         plt.figure(figsize=(3.2, 3.2))
         plt.semilogy(
-                kiter, conv[0] * self.max_eigval ** kiter, 'r-',
+                kiter, L2int_Bnvac * sup_eigval ** kiter, 'r-',
                 label=r'$\vert \lambda_{\mathrm{max}} \vert^{k} \Vert'
                 + r' \mathbf{B}_{n}^{(0)} \Vert_{2}$'
         )
         plt.semilogy(
-                kiter, conv, 'xk',
-                label=r'$\Vert \mathbf{B}_{n}^{(k)} \Vert_{2}$'
+                kiter, L2int_Bn_diff, 'xk',
+                label=r'$\Vert \delta \mathbf{B}_{n}^{(k)} \Vert_{2}$'
         )
         if self.xlim is not None:
             plt.xlim(self.xlim)
@@ -133,14 +131,14 @@ class magdif_conv_plot:
         plt.gca().legend(loc='upper right')
         plt.xticks(kiter)
         plt.xlabel('iteration step $k$')
-        plt.ylabel(r'$\Vert \delta \mathbf{B} \Vert_{2}$ / G cm')
+        plt.ylabel(r'$\Vert \mathbf{B} \Vert_{2}$ / G cm')
         if self.title is not None:
             plt.title(self.title)
         else:
             plt.title('estimation of convergence')
 
         plt.tight_layout()
-        plt.savefig(path.join(self.datadir, 'convergence.pdf'))
+        plt.savefig(self.filename)
         plt.close()
 
 
@@ -158,7 +156,7 @@ class magdif_mnDat:
         self.label = label
 
     def process(self):
-        print('reading poloidal modes from', self.datafile)
+        print(f"reading poloidal modes from {self.datafile}")
         try:
             data = np.loadtxt(path.join(self.datadir, self.datafile))
         except Exception as err:
@@ -200,7 +198,7 @@ class magdif_GPEC_bnormal:
         self.label = label
 
     def process(self):
-        print('reading poloidal modes from', self.datafile)
+        print(f"reading poloidal modes from {self.datafile}")
         rootgrp = Dataset(self.datafile, 'r')
         self.rho = np.array(rootgrp.variables['psi_n'])
         self.q = np.array(rootgrp.variables['q'])
@@ -217,51 +215,68 @@ class magdif_GPEC_bnormal:
 
 
 class magdif_poloidal_plots:
-    def __init__(self, n, psi, q, resonance, ylabel, data, ref=None,
-                 r_interp=None):
-        self.n = n
-        self.psi = psi
-        self.q = q
-        self.resonance = resonance
-        self.ylabel = ylabel
+    def __init__(self, config, data, xlabel, ylabel, poldata, refdata=None):
+        self.config = config
         self.data = data
-        self.ref = ref
-        self.r_interp = r_interp
+        self.xlabel = xlabel
+        self.ylabel = ylabel
+        self.poldata = poldata
+        self.refdata = refdata
+
+        psi_norm = self.data['/cache/fs/psi']
+        psi_norm = (psi_norm - psi_norm[0]) / (psi_norm[-1] - psi_norm[0])
+        rad = self.data['/cache/fs/rad']
+        self.psi2rad = interpolate.interp1d(psi_norm, rad, kind='cubic')
+        self.rad2psi = interpolate.interp1d(rad, psi_norm, kind='cubic')
+
+    def interp_rho(self, data):
+        if self.xlabel is fslabel.psi_norm and data.rad_coord is fslabel.r:
+            return self.rad2psi(data.rho)
+        elif self.xlabel is fslabel.r and data.rad_coord is fslabel.psi_norm:
+            return self.psi2rad(data.rho)
+        else:
+            return data.rho
 
     def dump_plot(self):
-        if self.r_interp is None:
-            rho = self.psi
-            resonance = self.resonance
-            xlabel = fslabel.psi_norm.value
+        sgn_m_res = -np.sign(self.data['/cache/fs/q'][-1])
+        m_res = range(self.data['/mesh/m_res_min'][()],
+                      self.data['/mesh/m_res_max'][()] + 1) * sgn_m_res
+        if self.xlabel is fslabel.psi_norm:
+            rho = self.data['/cache/fs/psi']
+            resonance = dict(zip(m_res, self.data['/mesh/psi_res'] /
+                                 (rho[-1] - rho[0])))
+            # normalize psi
+            rho = (rho - rho[0]) / (rho[-1] - rho[0])
         else:
-            rho = self.r_interp(self.psi)
-            resonance = {}
-            for k, v in self.resonance.items():
-                resonance[k] = self.r_interp(v)
-            xlabel = fslabel.r.value
+            rho = self.data['/cache/fs/rad']
+            resonance = dict(zip(m_res, self.data['/mesh/rad_norm_res'] *
+                                 rho[-1]))
+        xlabel = self.xlabel.value
 
         # plot non-symmetric modes
-        fmt = path.join(self.data.datadir, path.basename(
-                        path.splitext(self.data.datafile)[0] + '_{}.pdf'))
+        fmt = path.join(self.poldata.datadir, path.basename(
+                        path.splitext(self.poldata.datafile)[0] + '_{}.pdf'))
         horz_plot = 2
         vert_plot = 1
         two_squares = (6.6, 3.3)
-        for m_abs in range(1, self.data.m_max):
-            if self.ref is not None and m_abs <= self.ref.m_max:
-                ymax = max(self.data.ymax[m_abs], self.ref.ymax[m_abs])
+        for m_abs in range(1, self.poldata.m_max):
+            if self.refdata is not None and m_abs <= self.refdata.m_max:
+                ymax = max(self.poldata.ymax[m_abs], self.refdata.ymax[m_abs])
             else:
-                ymax = self.data.ymax[m_abs]
+                ymax = self.poldata.ymax[m_abs]
             plt.figure(figsize=two_squares)
             for k in range(horz_plot):
                 ax = plt.subplot(vert_plot, horz_plot, k+1)
                 m = (2 * k - 1) * m_abs
                 if m in resonance:
                     ax.axvline(resonance[m], color='b', alpha=0.5)
-                if self.ref is not None and m_abs <= self.ref.m_max:
-                    ax.plot(self.ref.rho, self.ref.abs[:, self.ref.offset + m],
-                            'r--', label=self.ref.label)
-                ax.plot(self.data.rho, self.data.abs[:, self.data.offset + m],
-                        label=self.data.label)
+                if self.refdata is not None and m_abs <= self.refdata.m_max:
+                    ax.plot(self.interp_rho(self.refdata),
+                            self.refdata.abs[:, self.refdata.offset + m],
+                            'r--', label=self.refdata.label)
+                ax.plot(self.interp_rho(self.poldata),
+                        self.poldata.abs[:, self.poldata.offset + m],
+                        label=self.poldata.label)
                 ax.legend()
                 ax.ticklabel_format(style='sci', scilimits=(-3, 4))
                 ax.set_ylim(0.0, ymax)
@@ -274,20 +289,22 @@ class magdif_poloidal_plots:
         # plot symmetric mode and safety factor
         plt.figure(figsize=two_squares)
         ax = plt.subplot(vert_plot, horz_plot, 1)
-        if self.ref is not None:
-            ax.plot(self.ref.rho, self.ref.abs[:, self.ref.offset],
-                    'r--', label=self.ref.label)
-        ax.plot(self.data.rho, self.data.abs[:, self.data.offset],
-                label=self.data.label)
+        if self.refdata is not None:
+            ax.plot(self.interp_rho(self.refdata),
+                    self.refdata.abs[:, self.refdata.offset],
+                    'r--', label=self.refdata.label)
+        ax.plot(self.interp_rho(self.poldata),
+                self.poldata.abs[:, self.poldata.offset],
+                label=self.poldata.label)
         ax.legend()
         ax.ticklabel_format(style='sci', scilimits=(-3, 4))
         ax.set_title('$m = 0$')
         ax.set_xlabel(xlabel)
         ax.set_ylabel(self.ylabel)
         ax = plt.subplot(vert_plot, horz_plot, 2)
-        ax.plot(self.data.rho, self.data.q, label='kinetic')
-        ax.plot(rho, self.q, 'r--', label='MHD')
-        ax.legend()
+        for res in resonance.values():
+            ax.axvline(res, color='b', alpha=0.5)
+        ax.plot(rho, self.data['/cache/fs/q'], 'k-')
         ax.set_xlabel(xlabel)
         ax.set_ylabel(r'$q$')
         plt.tight_layout()
@@ -295,158 +312,93 @@ class magdif_poloidal_plots:
         plt.close()
 
 
+RT0_comp = {'/comp_R': {'file': '_R', 'math': lambda vec: fr"{vec}^{{R}}"},
+            '/comp_Z': {'file': '_Z', 'math': lambda vec: fr"{vec}^{{Z}}"},
+            '/RT0_comp_phi': {'file': '_phi', 'math': lambda vec: fr"R {vec}^{{\varphi}}"},
+            '/comp_psi_contravar_dens': {'file': '_contradenspsi',
+                                         'math': lambda vec: fr"\sqrt{{g}} {vec}^{{\psi}}"},
+            '/comp_theta_covar': {'file': '_cotheta',
+                                  'math': lambda vec: fr"\subscript{{{vec}}}{{\vartheta}}"}}
+
+
 class magdif:
 
-    vector_re = re.compile(r'(?<=plot_)([^/]+)\.dat$')
-    scalar_re = re.compile(r'presn([^/]*)\.dat$')
-    default_re = re.compile(r'(plot_)?([^/]+)\.dat$')
-
-    def __init__(self, datadir, configfile, meshfile):
+    def __init__(self, datadir, configfile='magdif.inp', datafile='magdif.h5'):
         self.plots = []
         self.datadir = datadir
         self.configfile = configfile
-        self.meshfile = meshfile
+        self.datafile = datafile
 
     def read_configfile(self):
-        print('reading configuration from ', self.configfile)
+        print(f"reading configuration from {self.configfile}")
         p = f90nml.parser.Parser()
-        nml = p.read(self.configfile)
-        self.config = nml['settings']
+        nml = p.read(path.join(self.datadir, self.configfile))
+        self.config = {**nml['scalars']['config'], **nml['arrays']}
 
-    def read_fluxvar(self):
-        print('reading contents of ', self.config['fluxvar_file'])
-        fluxvar = np.loadtxt(path.join(self.datadir,
-                                       self.config['fluxvar_file']))
-        self.r = fluxvar[:, 0]
-        self.psi = fluxvar[:, 1]
-        self.q = fluxvar[:, 2]
-        self.pres0 = fluxvar[:, 3]
-        self.dpres0_dpsi = fluxvar[:, 4]
-        self.psi_norm = (self.psi - self.psi[0]) / (self.psi[-1] - self.psi[0])
-        self.r_interp = interpolate.interp1d(self.psi_norm, self.r,
-                                             kind='cubic')
+    def read_datafile(self):
+        print(f"reading contents of {self.datafile}")
+        self.data = h5py.File(path.join(self.datadir, self.datafile), 'r')
 
-    def load_mesh(self):
-        with open(self.meshfile, 'r') as f:
-            data = f.readlines()
-        print('meshfile header: ', data[0])
-        [NN, NT, NE] = np.loadtxt(StringIO(data[0]), dtype=int)
-        node = np.loadtxt(StringIO(''.join(data[1:NN+1])), dtype=float)
-        self.node = node[:, 0:2]
-        tri = np.loadtxt(StringIO(''.join(data[NN+1:NN+NT+1])), dtype=int)
-        self.tri = tri[:, 0:3]
-        edge = np.loadtxt(StringIO(''.join(data[NN+NT+1:])), dtype=int)
-        self.edge = edge[:, 0:2]
-
-    def calc_resonances(self):
-        n = self.config['n']
-        if 'kilca_scale_factor' in self.config:
-            kilca_scale_factor = self.config['kilca_scale_factor']
-        else:
-            kilca_scale_factor = 0
-        if kilca_scale_factor == 0:
-            q = self.q
-        else:
-            q = self.q * kilca_scale_factor
-        q_min = np.amin(q)
-        q_max = np.amax(q)
-        psi_min = np.amin(self.psi_norm)
-        psi_max = np.amax(self.psi_norm)
-        q_interp = interpolate.interp1d(self.psi_norm, q, kind='cubic')
-        m_resonant = -np.arange(
-                np.ceil(q_min * n),
-                np.floor(q_max * n) + 1,  # +1 to include end point
-                dtype=int
-        )
-        q_resonant = -m_resonant / n
-        self.resonance = {}
-        for k, m in enumerate(m_resonant):
-            def q_resonant_interp(x):
-                return q_interp(x) - q_resonant[k]
-            self.resonance[m] = optimize.brentq(
-                    q_resonant_interp, psi_min, psi_max)
-        print(self.resonance.values())
-        print(np.array([0.608, 0.760, 0.823, 0.861, 0.891, 0.918])**2)
-
-    @classmethod
-    def decorate_filename_vectorplot(cls, datafile, infix):
-        return cls.vector_re.sub(r'\1' + infix + '.pdf', datafile)
-
-    @classmethod
-    def decorate_filename_presnplot(cls, datafile, infix):
-        return cls.scalar_re.sub(r'plot_presn\1' + infix + '.pdf', datafile)
-
-    @classmethod
-    def decorate_default(cls, datafile, infix):
-        return cls.default_re.sub(r'plot_\2' + infix + '.pdf', datafile)
-
-    def generate_2d_triplots(
-            self, datafile, start_column, infix_list, filename_decorator):
-        print('reading contents of ', datafile)
-        try:
-            contents = np.loadtxt(path.join(self.datadir, datafile))
-        except Exception as err:
-            print('Error: {}'.format(err))
-            return
-        for column, infix in enumerate(infix_list, start_column):
+    def generate_RT0_triplots(self, grp, label, filename):
+        for dataset, decorator in RT0_comp.items():
+            nameparts = path.splitext(filename)
             self.plots.append(magdif_2d_triplot(
-                node=self.node, tri=self.tri,
-                data=contents[:, column],
-                filename=filename_decorator(datafile, infix)
-                ))
+                mesh=self.data['/mesh'],
+                data=self.data[grp + dataset][()].imag,
+                label=r'$\mathrm{Re} \, ' + decorator['math'](label) + r'$',
+                filename=path.join(self.datadir, nameparts[0] +
+                                   decorator['file'] + '_Re' + nameparts[1])))
+            self.plots.append(magdif_2d_triplot(
+                mesh=self.data['/mesh'],
+                data=self.data[grp + dataset][()].imag,
+                label=r'$\mathrm{Im} \, ' + decorator['math'](label) + r'$',
+                filename=path.join(self.datadir, nameparts[0] +
+                                   decorator['file'] + '_Im' + nameparts[1])))
+
+    def generate_L1_triplots(self, grp, label, filename):
+        nameparts = path.splitext(filename)
+        self.plots.append(magdif_2d_triplot(
+            mesh=self.data['/mesh'],
+            data=self.data[grp + '/L1_DOF'][()].real,
+            label=r'$\mathrm{Re} \, ' + label + r'$',
+            filename=path.join(self.datadir, nameparts[0] +
+                               '_Re' + nameparts[1])))
+        self.plots.append(magdif_2d_triplot(
+            mesh=self.data['/mesh'],
+            data=self.data[grp + '/L1_DOF'][()].imag,
+            label=r'$\mathrm{Im} \, ' + label + r'$',
+            filename=path.join(self.datadir, nameparts[0] +
+                               '_Im' + nameparts[1])))
 
     def generate_default_plots(self):
         self.plots.append(magdif_1d_cutplot(
-                self.r, r'$r$ / cm', self.psi, r'$\psi$ / Mx',
-                'disc poloidal flux', 'plot_psi.pdf'
+                self.data['/cache/fs/rad'], r'$r$ / cm',
+                self.data['/cache/fs/psi'], r'$\psi$ / Mx',
+                'disc poloidal flux', path.join(self.datadir, 'plot_psi.pdf')
         ))
         self.plots.append(magdif_1d_cutplot(
-                self.r, r'$r$ / cm', self.q, r'$q$',
-                'safety factor', 'plot_q.pdf'
+                self.data['/cache/fs/rad'], r'$r$ / cm',
+                self.data['/cache/fs/q'], r'$q$',
+                'safety factor', path.join(self.datadir, 'plot_q.pdf')
         ))
-# =============================================================================
-#         self.plots.append(magdif_1d_cutplot(
-#                 self.r, r'$r$ / cm', self.dens,
-#                 r'$n$ / cm\textsuperscript{-3}',
-#                 'particle density', 'plot_dens.pdf'
-#         ))
-#         self.plots.append(magdif_1d_cutplot(
-#                 self.r, r'$r$ / cm', self.temp, r'$T$ / eV',
-#                 'temperature', 'plot_temp.pdf'
-#         ))
-# =============================================================================
         self.plots.append(magdif_1d_cutplot(
-                self.r, r'$r$ / cm', self.pres0,
-                r'$p_{0}$ / dyn cm\textsuperscript{-2}',
-                'pressure', 'plot_pres0.pdf'
+                self.data['/cache/fs/rad'], r'$r$ / cm',
+                self.data['/cache/fs/p'], r'$p_{0}$ / dyn cm\textsuperscript{-2}',
+                'pressure', path.join(self.datadir, 'plot_p0.pdf')
         ))
-        self.generate_2d_triplots(
-                'j0phi.dat', 3, [''], self.__class__.decorate_default
-        )
-
-        Bn_datafiles = ['plot_Bn.dat', 'plot_Bn_000.dat', 'plot_Bn_vac.dat']
-        currn_datafiles = ['plot_currn.dat', 'plot_currn_000.dat']
-        presn_datafiles = ['presn.dat', 'presn_000.dat']
-        vector_infix = [
-                '_R_Re', '_R_Im', '_Z_Re', '_Z_Im', '_phi_Re', '_phi_Im',
-                '_contradenspsi_Re', '_contradenspsi_Im',
-                '_cotheta_Re', '_cotheta_Im'
-        ]
-        scalar_infix = ['_Re', '_Im']
-
-        for datafile in Bn_datafiles + currn_datafiles:
-            self.generate_2d_triplots(
-                    datafile, 2, vector_infix,
-                    self.__class__.decorate_filename_vectorplot
-            )
-        for datafile in presn_datafiles:
-            self.generate_2d_triplots(
-                    datafile, 0, scalar_infix,
-                    self.__class__.decorate_filename_presnplot
-            )
+        # TODO: j0phi edge plot
+        self.generate_RT0_triplots('/iter/Bn', r'B_{n}', 'plot_Bn.pdf')
+        self.generate_RT0_triplots('/iter/Bn_000', r'B_{n}', 'plot_Bn_000.pdf')
+        self.generate_RT0_triplots('/iter/Bn_001', r'B_{n}', 'plot_Bn_001.pdf')
+        self.generate_RT0_triplots('/iter/jn', r'J_{n}', 'plot_Jn.pdf')
+        self.generate_RT0_triplots('/iter/jn_000', r'J_{n}', 'plot_Jn_000.pdf')
+        self.generate_RT0_triplots('/iter/jn_001', r'J_{n}', 'plot_Jn_001.pdf')
+        self.generate_L1_triplots('/iter/pn', r'p_{n}', 'plot_pn.pdf')
+        self.generate_L1_triplots('/iter/pn_000', r'p_{n}', 'plot_pn_000.pdf')
+        self.generate_L1_triplots('/iter/pn_001', r'p_{n}', 'plot_pn_001.pdf')
 
         self.plots.append(magdif_conv_plot(
-                self.datadir, 'convergence.dat', self.config['tol'])
+            self.config, self.data, path.join(self.datadir, 'convergence.pdf'))
         )
 
         if 'kilca_scale_factor' in self.config:
@@ -461,7 +413,7 @@ class magdif:
                                fslabel.psi_norm, 'vacuum perturbation')
             vac.process()
             self.plots.append(magdif_poloidal_plots(
-                    self.config['n'], self.psi_norm, self.q, self.resonance,
+                    self.config, self.data, fslabel.psi_norm,
                     r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx',
                     pert, vac
             ))
@@ -469,7 +421,7 @@ class magdif:
                                 fslabel.psi_norm, 'initial perturbation')
             pert.process()
             self.plots.append(magdif_poloidal_plots(
-                    self.config['n'], self.psi_norm, self.q, self.resonance,
+                    self.config, self.data, fslabel.psi_norm,
                     r'$\left\vert J_{mn \theta}^{(0)} \right\vert$'
                     + r' / statA cm\textsuperscript{-1}', pert
             ))
@@ -484,10 +436,9 @@ class magdif:
                                fslabel.r, 'vacuum perturbation')
             vac.process()
             self.plots.append(magdif_poloidal_plots(
-                    self.config['n'], self.psi_norm, self.q
-                    * kilca_scale_factor, self.resonance,
+                    self.config, self.data, fslabel.r,
                     r'$\left\vert B_{mn}^{r} \right\vert$ / G',
-                    pert, vac, self.r_interp
+                    pert, vac
             ))
 
     def dump_plots(self):
@@ -505,8 +456,7 @@ class magdif:
 if __name__ == '__main__':
     testcase = magdif(argv[1], argv[2], argv[3])
     testcase.read_configfile()
-    testcase.read_fluxvar()
-    testcase.calc_resonances()
-    testcase.load_mesh()
+    testcase.read_datafile()
     testcase.generate_default_plots()
-    testcase.dump_plots_parallel()
+    # TODO: parallel – h5py objects cannot be pickled?
+    testcase.dump_plots()

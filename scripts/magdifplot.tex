@@ -1,0 +1,17 @@
+\usepackage{xparse}
+\usepackage{mathtools}
+\NewDocumentCommand\subscript{mm}{\csname magdif_subscript:nnn\endcsname{#1}{#2}{_}}
+\ExplSyntaxOn
+\cs_new_protected:Npn \magdif_subscript:nnn #1 #2 #3 {
+  \tl_set:Nn \l_tmpa_tl { #1 }
+  \tl_if_in:NnTF \l_tmpa_tl { #3 } {
+    \tl_replace_all:Nnn \l_tmpa_tl { #3 } { \magdif_mergesub:nn { #2 } }
+  } {
+    \tl_put_right:Nn \l_tmpa_tl { \sb { #2 } }
+  }
+  \tl_use:N \l_tmpa_tl
+}
+\cs_new_protected:Npn \magdif_mergesub:nn #1 #2 {
+  \sb { #2 #1 }
+}
+\ExplSyntaxOff

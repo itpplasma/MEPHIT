@@ -229,6 +229,7 @@ contains
        end if
 
        call unpack_dof(Bn_diff, packed_Bn - packed_Bn_prev)
+       call compute_L2int(Bn_diff, L2int(kiter))
        if (kiter <= 1) then
           call L1_write(pn, datafile, 'iter/pn' // postfix, &
                'pressure (after iteration)', 'dyn cm^-2')

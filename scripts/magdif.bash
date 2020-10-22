@@ -196,14 +196,12 @@ magdif_run() {
 
 magdif_plot() {
     config=magdif.inp
+    data=magdif.h5
     log=magdif.log
-    # implement mesh file options when geomint_mesh.f90 is complete
-    mesh=inputformaxwell.msh
-    extended=inputformaxwell_ext.msh
 
     for workdir; do
         pushd "$workdir"
-        python3 "$scriptdir/magdifplot.py" . "$config" "$mesh" 2>&1 | tee -a "$log"
+        python3 "$scriptdir/magdifplot.py" $(absolutize .) "$config" "$data"
         popd
     done
 }
