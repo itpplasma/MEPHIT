@@ -33,16 +33,12 @@ matplotlib.use('Agg')
 # pgf_config = {
 #     'pgf.texsystem': 'lualatex',
 #     'pgf.rcfonts': False,
-#     'pgf.preamble': [
-#         r'\usepackage{amsmath}',
-#         r'\usepackage[math-style=ISO, bold-style=ISO]{unicode-math}'
-#         r'\usepackage{siunitx}',
-#     ]
+#     'pgf.preamble': fr"\input{{{latex_preamble}}}"
 # }
-# matplotlib.use('pgf')
+# from matplotlib.backends.backend_pgf import FigureCanvasPgf
+# matplotlib.backend_bases.register_backend('pdf', FigureCanvasPgf)
 # matplotlib.rcParams.update(pgf_config)
 # =============================================================================
-
 
 class magdif_2d_triplot:
     scifmt = matplotlib.ticker.ScalarFormatter()
@@ -118,12 +114,12 @@ class magdif_conv_plot:
         plt.figure(figsize=(3.2, 3.2))
         plt.semilogy(
                 kiter, L2int_Bnvac * sup_eigval ** kiter, 'r-',
-                label=r'$\vert \lambda_{\mathrm{max}} \vert^{k} \Vert'
-                + r' \mathbf{B}_{n}^{(0)} \Vert_{2}$'
+                label=r'$\lvert \lambda_{\text{max}} \rvert^{k}'
+                + r' \lVert \mathbf{B}_{n}^{(0)} \rVert_{2}$'
         )
         plt.semilogy(
                 kiter, L2int_Bn_diff, 'xk',
-                label=r'$\Vert \delta \mathbf{B}_{n}^{(k)} \Vert_{2}$'
+                label=r'$\lVert \delta \mathbf{B}_{n}^{(k)} \rVert_{2}$'
         )
         if self.xlim is not None:
             plt.xlim(self.xlim)
@@ -132,7 +128,7 @@ class magdif_conv_plot:
         plt.gca().legend(loc='upper right')
         plt.xticks(kiter)
         plt.xlabel('iteration step $k$')
-        plt.ylabel(r'$\Vert \mathbf{B} \Vert_{2}$ / G cm')
+        plt.ylabel(r'$\lVert \mathbf{B} \rVert_{2}$ / \si{\gauss\centi\meter}')
         if self.title is not None:
             plt.title(self.title)
         else:
@@ -145,7 +141,7 @@ class magdif_conv_plot:
 
 class fslabel(Enum):
     psi_norm = r'$\hat{\psi}$'
-    r = r'$r$ / cm'
+    r = r'$r$ / \si{\centi\meter}'
 
 
 class magdif_mnDat:
@@ -304,7 +300,7 @@ class magdif_poloidal_plots:
         ax.set_ylabel(self.ylabel)
         ax = plt.subplot(vert_plot, horz_plot, 2)
         for res in resonance.values():
-            ax.axvline(res, color='b', alpha=0.5)
+            ax.axvline(np.abs(res), color='b', alpha=0.5)
         ax.plot(rho, self.data['/cache/fs/q'], 'k-')
         ax.set_xlabel(xlabel)
         ax.set_ylabel(r'$q$')
@@ -312,7 +308,8 @@ class magdif_poloidal_plots:
         plt.savefig(fmt.format(0))
         plt.close()
 
-
+unit_J = r'\statampere\per\centi\meter\squared'
+unit_p = r'\dyne\per\centi\meter\squared'
 RT0_comp = {'/comp_R': {'file': '_R', 'math': lambda vec: fr"{vec}^{{R}}"},
             '/comp_Z': {'file': '_Z', 'math': lambda vec: fr"{vec}^{{Z}}"},
             '/RT0_comp_phi': {'file': '_phi', 'math': lambda vec: fr"R {vec}^{{\varphi}}"},
@@ -340,63 +337,72 @@ class magdif:
         print(f"reading contents of {self.datafile}")
         self.data = h5py.File(path.join(self.datadir, self.datafile), 'r')
 
-    def generate_RT0_triplots(self, grp, label, filename):
+    def generate_RT0_triplots(self, grp, label, unit, filename):
         for dataset, decorator in RT0_comp.items():
             nameparts = path.splitext(filename)
             self.plots.append(magdif_2d_triplot(
                 mesh=self.data['/mesh'],
                 data=self.data[grp + dataset][()].imag,
-                label=r'$\mathrm{Re} \, ' + decorator['math'](label) + r'$',
+                label=fr"$\Real {decorator['math'](label)}$ / \si{{{unit}}}",
                 filename=path.join(self.datadir, nameparts[0] +
                                    decorator['file'] + '_Re' + nameparts[1])))
             self.plots.append(magdif_2d_triplot(
                 mesh=self.data['/mesh'],
                 data=self.data[grp + dataset][()].imag,
-                label=r'$\mathrm{Im} \, ' + decorator['math'](label) + r'$',
+                label=fr"$\Imag {decorator['math'](label)}$ / \si{{{unit}}}",
                 filename=path.join(self.datadir, nameparts[0] +
                                    decorator['file'] + '_Im' + nameparts[1])))
 
-    def generate_L1_triplots(self, grp, label, filename):
+    def generate_L1_triplots(self, grp, label, unit, filename):
         nameparts = path.splitext(filename)
         self.plots.append(magdif_2d_triplot(
             mesh=self.data['/mesh'],
             data=self.data[grp + '/L1_DOF'][()].real,
-            label=r'$\mathrm{Re} \, ' + label + r'$',
+            label=fr"$\Real {label}$ / \si{{{unit}}}",
             filename=path.join(self.datadir, nameparts[0] +
                                '_Re' + nameparts[1])))
         self.plots.append(magdif_2d_triplot(
             mesh=self.data['/mesh'],
             data=self.data[grp + '/L1_DOF'][()].imag,
-            label=r'$\mathrm{Im} \, ' + label + r'$',
+            label=fr"$\Imag {label}$ / \si{{{unit}}}",
             filename=path.join(self.datadir, nameparts[0] +
                                '_Im' + nameparts[1])))
 
     def generate_default_plots(self):
         self.plots.append(magdif_1d_cutplot(
-                self.data['/cache/fs/rad'], r'$r$ / cm',
-                self.data['/cache/fs/psi'], r'$\psi$ / Mx',
+                self.data['/cache/fs/rad'], r'$r$ / \si{\centi\meter}',
+                self.data['/cache/fs/psi'], r'$\psi$ / \si{\maxwell}',
                 'disc poloidal flux', path.join(self.datadir, 'plot_psi.pdf')
         ))
         self.plots.append(magdif_1d_cutplot(
-                self.data['/cache/fs/rad'], r'$r$ / cm',
+                self.data['/cache/fs/rad'], r'$r$ / \si{\centi\meter}',
                 self.data['/cache/fs/q'], r'$q$',
                 'safety factor', path.join(self.datadir, 'plot_q.pdf')
         ))
         self.plots.append(magdif_1d_cutplot(
-                self.data['/cache/fs/rad'], r'$r$ / cm',
-                self.data['/cache/fs/p'], r'$p_{0}$ / dyn cm\textsuperscript{-2}',
+                self.data['/cache/fs/rad'], r'$r$ / \si{\centi\meter}',
+                self.data['/cache/fs/p'],
+                r'$p_{0}$ / \si{\dyne\per\centi\meter\squared}',
                 'pressure', path.join(self.datadir, 'plot_p0.pdf')
         ))
         # TODO: j0phi edge plot
-        self.generate_RT0_triplots('/iter/Bn', r'B_{n}', 'plot_Bn.pdf')
-        self.generate_RT0_triplots('/iter/Bn_000', r'B_{n}', 'plot_Bn_000.pdf')
-        self.generate_RT0_triplots('/iter/Bn_001', r'B_{n}', 'plot_Bn_001.pdf')
-        self.generate_RT0_triplots('/iter/jn', r'J_{n}', 'plot_Jn.pdf')
-        self.generate_RT0_triplots('/iter/jn_000', r'J_{n}', 'plot_Jn_000.pdf')
-        self.generate_RT0_triplots('/iter/jn_001', r'J_{n}', 'plot_Jn_001.pdf')
-        self.generate_L1_triplots('/iter/pn', r'p_{n}', 'plot_pn.pdf')
-        self.generate_L1_triplots('/iter/pn_000', r'p_{n}', 'plot_pn_000.pdf')
-        self.generate_L1_triplots('/iter/pn_001', r'p_{n}', 'plot_pn_001.pdf')
+        self.generate_RT0_triplots('/iter/Bn', r'B_{n}', r'\gauss',
+                                   'plot_Bn.pdf')
+        self.generate_RT0_triplots('/iter/Bn_000', r'B_{n}', r'\gauss',
+                                   'plot_Bn_000.pdf')
+        self.generate_RT0_triplots('/iter/Bn_001', r'B_{n}', r'\gauss',
+                                   'plot_Bn_001.pdf')
+        self.generate_RT0_triplots('/iter/jn', r'J_{n}', unit_J,
+                                   'plot_Jn.pdf')
+        self.generate_RT0_triplots('/iter/jn_000', r'J_{n}', unit_J,
+                                   'plot_Jn_000.pdf')
+        self.generate_RT0_triplots('/iter/jn_001', r'J_{n}', unit_J,
+                                   'plot_Jn_001.pdf')
+        self.generate_L1_triplots('/iter/pn', r'p_{n}', unit_p, 'plot_pn.pdf')
+        self.generate_L1_triplots('/iter/pn_000', r'p_{n}', unit_p,
+                                  'plot_pn_000.pdf')
+        self.generate_L1_triplots('/iter/pn_001', r'p_{n}', unit_p,
+                                  'plot_pn_001.pdf')
 
         self.plots.append(magdif_conv_plot(
             self.config, self.data, path.join(self.datadir, 'convergence.pdf'))
@@ -415,7 +421,7 @@ class magdif:
             vac.process()
             self.plots.append(magdif_poloidal_plots(
                     self.config, self.data, fslabel.psi_norm,
-                    r'$\left\vert \sqrt{g} B_{mn}^{\psi} \right\vert$ / Mx',
+                    r'$\lvert \sqrt{g} B_{mn}^{\psi} \rvert$ / \si{\maxwell}',
                     pert, vac
             ))
             pert = magdif_mnDat(self.datadir, 'currmn_000_theta.dat', 0,
@@ -423,8 +429,8 @@ class magdif:
             pert.process()
             self.plots.append(magdif_poloidal_plots(
                     self.config, self.data, fslabel.psi_norm,
-                    r'$\left\vert J_{mn \theta}^{(0)} \right\vert$'
-                    + r' / statA cm\textsuperscript{-1}', pert
+                    r'$\lvert J_{mn \theta}^{(0)} \rvert$'
+                    + r' / \si{\statampere\per\centi\meter}', pert
             ))
 
         else:
@@ -438,7 +444,7 @@ class magdif:
             vac.process()
             self.plots.append(magdif_poloidal_plots(
                     self.config, self.data, fslabel.r,
-                    r'$\left\vert B_{mn}^{r} \right\vert$ / G',
+                    r'$\lvert B_{mn}^{r} \rvert$ / \si{\gauss}',
                     pert, vac
             ))
 

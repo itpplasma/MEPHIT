@@ -1,5 +1,13 @@
 \usepackage{xparse}
+\usepackage{siunitx}
+\usepackage{amsmath}
 \usepackage{mathtools}
+\usepackage{iftex}
+\ifLuaTeX
+  \usepackage[math-style=ISO, bold-style=ISO]{unicode-math}
+\else
+  \usepackage{fixmath}
+\fi
 \NewDocumentCommand\subscript{mm}{\csname magdif_subscript:nnn\endcsname{#1}{#2}{_}}
 \ExplSyntaxOn
 \cs_new_protected:Npn \magdif_subscript:nnn #1 #2 #3 {
@@ -15,3 +23,9 @@
   \sb { #2 #1 }
 }
 \ExplSyntaxOff
+\DeclareMathOperator\Real{Re}
+\DeclareMathOperator\Imag{Im}
+\DeclareSIUnit\gauss{G}
+\DeclareSIUnit\maxwell{Mx}
+\DeclareSIUnit\dyne{dyn}
+\DeclareSIUnit\statampere{statA}
