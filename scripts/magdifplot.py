@@ -10,7 +10,8 @@ from sys import argv
 from os import path, cpu_count
 from enum import Enum
 from netCDF4 import Dataset
-import h5py
+from h5py import get_config as h5py_hack
+import h5pickle as h5py
 import f90nml.parser
 import matplotlib
 import matplotlib.pyplot as plt
@@ -20,7 +21,7 @@ from scipy import interpolate
 from multiprocessing import Pool
 
 # complex values are stored as compound types in libneo/hdf5tools
-h5py.get_config().complex_names = ('real', 'imag')
+h5py_hack().complex_names = ('real', 'imag')
 matplotlib.rcParams['text.usetex'] = True
 matplotlib.rcParams['font.family'] = 'serif'
 matplotlib.rcParams['mathtext.fontset'] = 'cm'
@@ -63,7 +64,7 @@ class magdif_2d_triplot:
         plt.figure(figsize=(3.3, 4.4))
         plt.tripcolor(
                 self.mesh['node_R'], self.mesh['node_Z'],
-                np.array(self.mesh['tri_node'], dtype=int) - 1, self.data,
+                self.mesh['tri_node'][()] - 1, self.data,
                 cmap=colorcet.cm.coolwarm
         )
         plt.gca().set_aspect('equal')
@@ -458,5 +459,4 @@ if __name__ == '__main__':
     testcase.read_configfile()
     testcase.read_datafile()
     testcase.generate_default_plots()
-    # TODO: parallel – h5py objects cannot be pickled?
-    testcase.dump_plots()
+    testcase.dump_plots_parallel()
