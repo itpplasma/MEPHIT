@@ -6,9 +6,9 @@ module magdif
 
   private
 
-  public :: magdif_init, magdif_cleanup, magdif_iterate, magdif_postprocess
+  public :: magdif_init, magdif_cleanup, magdif_iterate, magdif_postprocess, freefem_pipe
 
-  character(len = *), parameter :: freefem_pipe = 'maxwell.dat'
+  character(len = 1024) :: freefem_pipe = 'maxwell.dat'
 
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   type(L1_t) :: pn

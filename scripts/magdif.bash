@@ -164,15 +164,21 @@ magdif_run() {
 
     for workdir; do
         pushd "$workdir"
-        rm -f "$log" convergence.dat maxwell.dat
-        mkfifo maxwell.dat
+        rm -f "$log"
+        pipe=$tmpdir$PWD
+        if [ -p "$pipe" ]; then
+            rm -f "$pipe"
+        else
+            mkdir -p $(dirname "$pipe")
+        fi
+        mkfifo "$pipe"
         (
             # send SIGTERM to all processes in subshell when receiving SIGINT, i.e., Ctrl-C
             trap 'kill -- -$BASHPID' INT
             # start FreeFem++ in background, waiting for data in the named pipe maxwell.dat
-            FreeFem++-mpi -nw "$scriptdir/maxwell_daemon.edp" 1>> freefem.out 2>&1 & freefem_pid=$!
+            FreeFem++-mpi -nw "$scriptdir/maxwell_daemon.edp" -P "$pipe" 1>> freefem.out 2>&1 & freefem_pid=$!
             # start magdif in background
-            "$bindir/magdif_test.x" "$config" 1>> "$log" 2>&1 & magdif_pid=$!
+            "$bindir/magdif_test.x" "$config" "$pipe" 1>> "$log" 2>&1 & magdif_pid=$!
             # continuously print contents of logfile until magdif is finished
             tail --pid=$magdif_pid -F -s 0.1 "$log" 2> /dev/null &
             # wait for magdif or FreeFem++ to finish (whichever is first)
@@ -190,6 +196,7 @@ magdif_run() {
                 echo "$scriptname: magdif/FreeFem++ exited with code $lasterr during run in $workdir" >&2
             fi
         )
+        rm -f "$pipe"
         popd
     done
 }
@@ -227,6 +234,11 @@ magdif_help() {
 bindir=$(realpath $(dirname $0))
 scriptdir=$(realpath -m "$bindir/../../scripts")
 datadir=$(realpath -m "$bindir/../../data")
+if [ -n "$XDG_RUNTIME_DIR" ]; then
+    tmpdir=$XDG_RUNTIME_DIR
+else
+    tmpdir=/tmp/runtime-$USER
+fi
 
 set -m
 set -o pipefail
