@@ -22,7 +22,7 @@ module magdif_mesh
 
   !> Structure containing flux functions evaluated at a specific flux surface, indicated
   !> by a common array index. For details see flux_func_cache_init().
-  type, public :: flux_func_cache
+  type :: flux_func_cache
      private
      integer :: nflux
 

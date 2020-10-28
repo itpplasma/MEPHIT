@@ -8,9 +8,6 @@ enable_language(Fortran)
 
 ### Define paths to external libraries (load external file)
 include(${CMAKE_SOURCE_DIR}/ProjectConfig.cmake.in)
-set(HDF5_tools_include_dir ${CMAKE_SOURCE_DIR}/../libneo/build)
-# should be changed to a less confusing path name...
-set(HDF5_tools_lib_dir ${CMAKE_SOURCE_DIR}/../libneo/build/src/hdf5_tools)
 
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
@@ -19,22 +16,22 @@ set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
 ### dependencies in standard directories
 find_package(SuiteSparse REQUIRED)
 find_package(SuperLU REQUIRED)
+cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 
 ### External source files
 include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
 
-### internal dependencies
-find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
-include_directories(${HDF5_tools_include_dir})
-
 ### Set compiler flags
-# gfortran configuration
-set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fno-realloc-lhs -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow")
-set(WARNING_FLAGS "-Wall -Wextra")
-# ifort configuration
-# set(CMAKE_Fortran_FLAGS "-O2 -fpp -g -check all")
-# set(WARNING_FLAGS "-warn all")
+if ("$ENV{FC}" MATCHES "ifort")
+  # ifort configuration
+  set(CMAKE_Fortran_FLAGS "-fpp -g -assume norealloc_lhs -traceback -check all -fpe-all=0")
+  set(WARNING_FLAGS "-warn all")
+else ()
+  # gfortran configuration
+  set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fno-realloc-lhs -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow")
+  set(WARNING_FLAGS "-Wall -Wextra")
+endif ()
 
 ### Define libraries
 add_library(magdif SHARED
@@ -68,6 +65,9 @@ add_library(magdif SHARED
   ${SUPERLU_SRC_FILES}
 )
 
+# hdf5_tools
+find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
+
 # GSL
 find_library(gsl_lib gsl ${GSL_LIB})
 
@@ -81,6 +81,7 @@ set(FGSL_FLAGS "-I${FGSL_INC}")
 configure_file(scripts/magdif.bash bin/magdif COPYONLY)
 
 ### Define executables
+target_include_directories(magdif PUBLIC ${HDF5_tools_include_dir})
 add_executable(magdif_test.x src/magdif_test.f90)
 add_executable(standardise_equilibrium.x src/standardise_equilibrium.f90)
 add_executable(magdif_mesher.x src/magdif_mesher.f90)
