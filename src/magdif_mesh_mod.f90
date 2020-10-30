@@ -745,7 +745,7 @@ contains
   end subroutine common_triangles
 
   subroutine connect_mesh_points
-    integer :: kf, kp, kt, ktri, ktri_adj, common_tri(2)
+    integer :: kf, kp, kt, ktri, ktri_adj, common_tri(2), kedge, ke, ke_adj
 
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
@@ -832,6 +832,44 @@ contains
           mesh%adj_tri(1, ktri) = ktri_adj
           mesh%adj_edge(1, ktri) = 2
        end if
+    end do
+    ! define edges
+    allocate(mesh%li(2, mesh%ntri))
+    allocate(mesh%lo(2, mesh%ntri))
+    allocate(mesh%lf(2, mesh%ntri))
+    allocate(mesh%ei(mesh%ntri))
+    allocate(mesh%eo(mesh%ntri))
+    allocate(mesh%ef(mesh%ntri))
+    allocate(mesh%orient(mesh%ntri))
+    mesh%nedge = (3 * mesh%kt_low(mesh%nflux + 1) + mesh%kp_max(mesh%nflux)) / 2
+    allocate(mesh%edge_map2global(3, mesh%ntri))
+    allocate(mesh%edge_map2ktri(2, mesh%nedge))
+    allocate(mesh%edge_map2ke(2, mesh%nedge))
+    mesh%edge_map2global = 0
+    mesh%edge_map2ktri = 0
+    mesh%edge_map2ke = 0
+    kedge = 1
+    do ktri = 1, mesh%ntri
+       call get_labeled_edges(ktri, mesh%li(:, ktri), mesh%lo(:, ktri), mesh%lf(:, ktri), &
+            mesh%ei(ktri), mesh%eo(ktri), mesh%ef(ktri), mesh%orient(ktri))
+       do ke = 1, 3
+          if (mesh%edge_map2global(ke, ktri) == 0) then
+             ktri_adj = mesh%adj_tri(ke, ktri)
+             ke_adj = mesh%adj_edge(ke, ktri)
+             if (ktri_adj > mesh%ntri) then
+                mesh%edge_map2global(ke, ktri) = kedge
+                mesh%edge_map2ktri(:, kedge) = [ktri, -1]
+                mesh%edge_map2ke(:, kedge) = [ke, -1]
+                kedge = kedge + 1
+             else
+                mesh%edge_map2global(ke, ktri) = kedge
+                mesh%edge_map2global(ke_adj, ktri_adj) = kedge
+                mesh%edge_map2ktri(:, kedge) = [ktri, ktri_adj]
+                mesh%edge_map2ke(:, kedge) = [ke, ke_adj]
+                kedge = kedge + 1
+             end if
+          end if
+       end do
     end do
   end subroutine connect_mesh_points
 
@@ -971,49 +1009,12 @@ contains
   end subroutine ring_centered_avg_coord
 
   subroutine cache_mesh_data
-    integer :: ktri, kedge, ke, ke_adj, ktri_adj
+    integer :: ktri
 
-    allocate(mesh%li(2, mesh%ntri))
-    allocate(mesh%lo(2, mesh%ntri))
-    allocate(mesh%lf(2, mesh%ntri))
-    allocate(mesh%ei(mesh%ntri))
-    allocate(mesh%eo(mesh%ntri))
-    allocate(mesh%ef(mesh%ntri))
-    allocate(mesh%orient(mesh%ntri))
     allocate(mesh%R_Omega(mesh%ntri))
     allocate(mesh%Z_Omega(mesh%ntri))
-    mesh%nedge = (3 * mesh%kt_low(mesh%nflux + 1) + mesh%kp_max(mesh%nflux)) / 2
-    allocate(mesh%edge_map2global(3, mesh%ntri))
-    allocate(mesh%edge_map2ktri(2, mesh%nedge))
-    allocate(mesh%edge_map2ke(2, mesh%nedge))
-    mesh%edge_map2global = 0
-    mesh%edge_map2ktri = 0
-    mesh%edge_map2ke = 0
-    kedge = 1
-
     do ktri = 1, mesh%ntri
-       call get_labeled_edges(ktri, mesh%li(:, ktri), mesh%lo(:, ktri), mesh%lf(:, ktri), &
-            mesh%ei(ktri), mesh%eo(ktri), mesh%ef(ktri), mesh%orient(ktri))
        call ring_centered_avg_coord(ktri, mesh%R_Omega(ktri), mesh%Z_Omega(ktri))
-
-       do ke = 1, 3
-          if (mesh%edge_map2global(ke, ktri) == 0) then
-             ktri_adj = mesh%adj_tri(ke, ktri)
-             ke_adj = mesh%adj_edge(ke, ktri)
-             if (ktri_adj > mesh%ntri) then
-                mesh%edge_map2global(ke, ktri) = kedge
-                mesh%edge_map2ktri(:, kedge) = [ktri, -1]
-                mesh%edge_map2ke(:, kedge) = [ke, -1]
-                kedge = kedge + 1
-             else
-                mesh%edge_map2global(ke, ktri) = kedge
-                mesh%edge_map2global(ke_adj, ktri_adj) = kedge
-                mesh%edge_map2ktri(:, kedge) = [ktri, ktri_adj]
-                mesh%edge_map2ke(:, kedge) = [ke, ke_adj]
-                kedge = kedge + 1
-             end if
-          end if
-       end do
     end do
   end subroutine cache_mesh_data
 
@@ -1219,11 +1220,11 @@ contains
          lbound(mesh%edge_map2ke), ubound(mesh%edge_map2ke), &
          comment = 'mapping of global edge index to local edge index')
     call h5_add(h5id_mesh, 'R_Omega', mesh%R_Omega, lbound(mesh%R_Omega), ubound(mesh%R_Omega), &
-         'R coordinate of triangle ''centroid''', unit = 'cm')
+         comment = 'R coordinate of triangle ''centroid''', unit = 'cm')
     call h5_add(h5id_mesh, 'Z_Omega', mesh%Z_Omega, lbound(mesh%Z_Omega), ubound(mesh%Z_Omega), &
-         'Z coordinate of triangle ''centroid''', unit = 'cm')
+         comment = 'Z coordinate of triangle ''centroid''', unit = 'cm')
     call h5_add(h5id_mesh, 'area', mesh%area, lbound(mesh%area), ubound(mesh%area), &
-         comment = 'triangle area')
+         comment = 'triangle area', unit = 'cm^2')
     call h5_close_group(h5id_mesh)
     call h5_define_group(h5id_magdif, 'cache', h5id_cache)
     call h5_define_group(h5id_cache, 'fs', h5id_fs)
@@ -1431,8 +1432,8 @@ contains
     if (allocated(this%refinement)) deallocate(this%refinement)
     if (allocated(this%m_res)) deallocate(this%m_res)
     if (allocated(this%res_ind)) deallocate(this%res_ind)
-    if (allocated(mesh%psi_res)) deallocate(mesh%psi_res)
-    if (allocated(mesh%rad_norm_res)) deallocate(mesh%rad_norm_res)
+    if (allocated(this%psi_res)) deallocate(this%psi_res)
+    if (allocated(this%rad_norm_res)) deallocate(this%rad_norm_res)
     if (allocated(this%kp_max)) deallocate(this%kp_max)
     if (allocated(this%kt_max)) deallocate(this%kt_max)
     if (allocated(this%kp_low)) deallocate(this%kp_low)
@@ -1441,21 +1442,21 @@ contains
     if (allocated(this%node_Z)) deallocate(this%node_Z)
     if (allocated(this%tri_node)) deallocate(this%tri_node)
     if (allocated(this%tri_node_F)) deallocate(this%tri_node_F)
-    if (allocated(mesh%li)) deallocate(mesh%li)
-    if (allocated(mesh%lo)) deallocate(mesh%lo)
-    if (allocated(mesh%lf)) deallocate(mesh%lf)
-    if (allocated(mesh%ei)) deallocate(mesh%ei)
-    if (allocated(mesh%eo)) deallocate(mesh%eo)
-    if (allocated(mesh%ef)) deallocate(mesh%ef)
-    if (allocated(mesh%orient)) deallocate(mesh%orient)
-    if (allocated(mesh%adj_tri)) deallocate(mesh%adj_tri)
-    if (allocated(mesh%adj_edge)) deallocate(mesh%adj_edge)
-    if (allocated(mesh%edge_map2global)) deallocate(mesh%edge_map2global)
-    if (allocated(mesh%edge_map2ktri)) deallocate(mesh%edge_map2ktri)
-    if (allocated(mesh%edge_map2ke)) deallocate(mesh%edge_map2ke)
-    if (allocated(mesh%area)) deallocate(mesh%area)
-    if (allocated(mesh%R_Omega)) deallocate(mesh%R_Omega)
-    if (allocated(mesh%Z_Omega)) deallocate(mesh%Z_Omega)
+    if (allocated(this%li)) deallocate(this%li)
+    if (allocated(this%lo)) deallocate(this%lo)
+    if (allocated(this%lf)) deallocate(this%lf)
+    if (allocated(this%ei)) deallocate(this%ei)
+    if (allocated(this%eo)) deallocate(this%eo)
+    if (allocated(this%ef)) deallocate(this%ef)
+    if (allocated(this%orient)) deallocate(this%orient)
+    if (allocated(this%adj_tri)) deallocate(this%adj_tri)
+    if (allocated(this%adj_edge)) deallocate(this%adj_edge)
+    if (allocated(this%edge_map2global)) deallocate(this%edge_map2global)
+    if (allocated(this%edge_map2ktri)) deallocate(this%edge_map2ktri)
+    if (allocated(this%edge_map2ke)) deallocate(this%edge_map2ke)
+    if (allocated(this%area)) deallocate(this%area)
+    if (allocated(this%R_Omega)) deallocate(this%R_Omega)
+    if (allocated(this%Z_Omega)) deallocate(this%Z_Omega)
   end subroutine magdif_mesh_destructor
 
   subroutine init_flux_variables
