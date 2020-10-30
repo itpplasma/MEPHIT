@@ -112,6 +112,7 @@ magdif_prepare() {
 
     for workdir; do
         pushd "$workdir"
+        rm -f "l$og"
         cp field_divB0_unprocessed.inp field_divB0.inp
         unprocessed=$(read_first_in_line field_divB0_unprocessed.inp 7)
         replace_first_in_line field_divB0.inp 7 "'\1_processed'"  # gfile
@@ -161,10 +162,30 @@ magdif_prepare() {
 magdif_run() {
     config=magdif.inp
     log=magdif.log
+    batchmode=false
+    TEMP=$(getopt -o 'b' --long 'batchmode' -n "$scriptname" -- "$@")
+    eval set -- "$TEMP"
+    unset TEMP
+    while true; do
+        case "$1" in
+            '-b'|'--batchmode')
+                batchmode=true
+                shift
+                continue
+                ;;
+            '--')
+                shift
+                break
+                ;;
+            *)
+                echo "$scriptname: unrecognized option '$1'" >&2
+                exit 1
+                ;;
+        esac
+    done
 
     for workdir; do
         pushd "$workdir"
-        rm -f "$log"
         pipe=$tmpdir$PWD
         if [ -p "$pipe" ]; then
             rm -f "$pipe"
@@ -179,8 +200,10 @@ magdif_run() {
             FreeFem++-mpi -nw "$scriptdir/maxwell_daemon.edp" -P "$pipe" 1>> freefem.out 2>&1 & freefem_pid=$!
             # start magdif in background
             "$bindir/magdif_test.x" "$config" "$pipe" 1>> "$log" 2>&1 & magdif_pid=$!
-            # continuously print contents of logfile until magdif is finished
-            tail --pid=$magdif_pid -F -s 0.1 "$log" 2> /dev/null &
+            if [ "$batchmode" = false ]; then
+                # continuously print contents of logfile until magdif is finished
+                tail --pid=$magdif_pid -F -s 0.1 "$log" 2> /dev/null &
+            fi
             # wait for magdif or FreeFem++ to finish (whichever is first)
             # and send SIGTERM to all processes in subshell when it has a non-zero exit code
             wait -fn $freefem_pid $magdif_pid
@@ -188,14 +211,20 @@ magdif_run() {
             if [ "$lasterr" -ne 0 ]; then
                 echo "$scriptname: magdif/FreeFem++ exited with code $lasterr during run in $workdir" >&2
                 # send SIGTERM to remaining processes in subshell
-                kill -- -$BASHPID
+                kill %+ %-
+                exit $lasterr
             fi
             wait -fn $freefem_pid $magdif_pid
             lasterr=$?
             if [ "$lasterr" -ne 0 ]; then
                 echo "$scriptname: magdif/FreeFem++ exited with code $lasterr during run in $workdir" >&2
+                exit $lasterr
             fi
         )
+        lasterr=$?
+        if [ "$lasterr" -ne 0 ]; then
+            anyerr=$lasterr
+        fi
         rm -f "$pipe"
         popd
     done
