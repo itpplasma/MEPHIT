@@ -131,6 +131,7 @@ contains
     call RT0_init(Bn_diff, mesh%ntri)
     ! pass effective toroidal mode number to FreeFem++
     call send_flag_to_freefem(mesh%n, freefem_pipe)
+    call receive_flag_from_freefem(info, freefem_pipe)
     ! clean datafile
     call h5_open_rw(datafile, h5id_root)
     call h5_delete(h5id_root, 'iter')
@@ -341,6 +342,20 @@ contains
     close(fid)
   end subroutine send_flag_to_freefem
 
+  subroutine receive_flag_from_freefem(flag, namedpipe)
+    use iso_c_binding, only: c_long
+    integer, intent(out) :: flag
+    character(len = *), intent(in) :: namedpipe
+    integer(c_long) :: long_flag
+    integer :: fid
+
+    open(newunit = fid, file = namedpipe, status = 'old', access = 'stream', &
+         form = 'unformatted', action = 'read')
+    read (fid) long_flag
+    close(fid)
+    flag = long_flag
+  end subroutine receive_flag_from_freefem
+
   subroutine send_RT0_to_freefem(elem, outfile)
     use iso_c_binding, only: c_long
     use magdif_mesh, only: mesh
@@ -397,8 +412,10 @@ contains
     use magdif_conf, only: conf, decorate_filename
     use magdif_mesh, only: mesh
     use magdif_pert, only: RT0_check_redundant_edges, RT0_check_div_free
+    integer :: dummy
 
     call send_flag_to_freefem(-1, freefem_pipe)
+    call receive_flag_from_freefem(dummy, freefem_pipe)
     call send_RT0_to_freefem(jn, freefem_pipe)
     call receive_RT0_from_freefem(Bn, freefem_pipe)
     call RT0_check_redundant_edges(Bn, 'Bn')
@@ -411,9 +428,10 @@ contains
     type(RT0_t), intent(in) :: elem
     real(dp), intent(out) :: integral
     integer(c_long) :: length
-    integer :: fid
+    integer :: fid, dummy
 
     call send_flag_to_freefem(-2, freefem_pipe)
+    call receive_flag_from_freefem(dummy, freefem_pipe)
     call send_RT0_to_freefem(elem, freefem_pipe)
     open(newunit = fid, file = freefem_pipe, access = 'stream', status = 'old', &
          action = 'read', form = 'unformatted')

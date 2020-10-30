@@ -99,6 +99,7 @@ for (int k = 0; k < ntri; k++) {
 real[int] integral(1);  // for SaveVec
 int nmode = 2;
 LoadFlag(nmode, datapipe);
+flag(nmode, datapipe);
 problem Ampere([ax, ay], [wx, wy], solver = sparsesolver) = // defines the PDE
   int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(ay) - dy(ax)))
   + int2d(Th)(nmode^2 / x * (wx * ax + wy * ay))
@@ -107,6 +108,7 @@ problem Ampere([ax, ay], [wx, wy], solver = sparsesolver) = // defines the PDE
 int state = 0;
 while (state != -3) {
   LoadFlag(state, datapipe);
+  flag(state, datapipe);
   if (state == -1) {
     // Ampere solver
     LoadVec(fluxdata, datapipe);
