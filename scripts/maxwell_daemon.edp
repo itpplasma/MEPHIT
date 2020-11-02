@@ -139,8 +139,7 @@ while (state != -3) {
     LoadVec(fluxdata, datapipe);
     [Br, Bz] = [NaN() + 1.0i * NaN(), NaN() + 1.0i * NaN()];
     deserializeDoFs(Br, Bphi);
-    integral[0] = sqrt(real(int2d(Th)(Br * conj(Br) / x + Bz * conj(Bz) / x +
-                                      Bphi * conj(Bphi) * x)));
+    integral[0] = sqrt(real(int2d(Th)(Br * conj(Br) + Bz * conj(Bz))));
     SaveVec(integral, datapipe);
   }
 }

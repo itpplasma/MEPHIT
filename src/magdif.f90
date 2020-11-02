@@ -261,6 +261,7 @@ contains
     if (allocated(L2int)) deallocate(L2int)
     ! tell FreeFem++ to stop processing
     call send_flag_to_freefem(-3, freefem_pipe)
+    call receive_flag_from_freefem(info, freefem_pipe)
 
   contains
 

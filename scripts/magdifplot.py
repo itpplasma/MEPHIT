@@ -111,7 +111,7 @@ class magdif_conv_plot:
         L2int_Bnvac = self.data['/iter/L2int_Bnvac']
         L2int_Bn_diff = self.data['/iter/L2int_Bn_diff']
         kiter = np.arange(0, len(L2int_Bn_diff))
-        plt.figure(figsize=(3.2, 3.2))
+        plt.figure(figsize=(6.6, 3.6))
         plt.semilogy(
                 kiter, L2int_Bnvac * sup_eigval ** kiter, 'r-',
                 label=r'$\lvert \lambda_{\text{max}} \rvert^{k}'
@@ -128,7 +128,7 @@ class magdif_conv_plot:
         plt.gca().legend(loc='upper right')
         plt.xticks(kiter)
         plt.xlabel('iteration step $k$')
-        plt.ylabel(r'$\lVert \mathbf{B} \rVert_{2}$ / \si{\gauss\centi\meter}')
+        plt.ylabel(r'$\lVert R \mathbf{B}^{\text{pol}} \rVert_{2}$ / \si{\maxwell}')
         if self.title is not None:
             plt.title(self.title)
         else:
