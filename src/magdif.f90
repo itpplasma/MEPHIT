@@ -112,7 +112,8 @@ contains
          h5_close
     use magdif_mesh, only: mesh
     use magdif_pert, only: RT0_init, RT0_deinit, RT0_write, L1_write, &
-         RT0_check_div_free, RT0_check_redundant_edges
+         RT0_check_div_free, RT0_check_redundant_edges, vec_polmodes_t, vec_polmodes_init, &
+         vec_polmodes_deinit, vec_polmodes_write, RT0_poloidal_modes
     use magdif_conf, only: conf, log, runmode_precon, runmode_single, datafile, cmplx_fmt, &
          decorate_filename
 
@@ -127,6 +128,8 @@ contains
     integer, allocatable :: ipiv(:)
     character(len = 4) :: postfix
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
+    integer, parameter :: m_max = 24
+    type(vec_polmodes_t) :: jmn
 
     call RT0_init(Bn_diff, mesh%ntri)
     ! pass effective toroidal mode number to FreeFem++
@@ -201,6 +204,7 @@ contains
        end if
     end if
 
+    call vec_polmodes_init(jmn, m_max, mesh%nflux)
     allocate(L2int(0:niter))
     call compute_L2int(Bnvac, L2int(0))
     call h5_open_rw(datafile, h5id_root)
@@ -240,7 +244,9 @@ contains
                'magnetic field (after iteration)', 'G', 1)
           call RT0_write(Bn_diff, datafile, 'iter/Bn_diff' // postfix, &
                'magnetic field (difference between iterations)', 'G', 1)
-          call write_poloidal_modes(jn, decorate_filename('currmn.dat', '', postfix))
+          call RT0_poloidal_modes(jn, jmn)
+          call vec_polmodes_write(jmn, datafile, '/postprocess/jmn' // postfix, &
+               'current density (after iteration)', 'statA cm^-2')
        end if
 
        call pack_dof(Bn, packed_Bn_prev)
@@ -257,6 +263,7 @@ contains
          'current density (full perturbation)', 'statA cm^-2', 1)
 
     call RT0_deinit(Bn_diff)
+    call vec_polmodes_deinit(jmn)
     if (allocated(Lr)) deallocate(Lr)
     if (allocated(L2int)) deallocate(L2int)
     ! tell FreeFem++ to stop processing
@@ -734,126 +741,74 @@ contains
   end subroutine add_sheet_current
 
   subroutine magdif_postprocess
-    use magdif_conf, only: conf
-    use magdif_pert, only: RT0_init, RT0_deinit
+    use magdif_conf, only: conf, datafile
+    use magdif_mesh, only: mesh
+    use magdif_pert, only: RT0_t, RT0_init, RT0_deinit, vec_polmodes_t, vec_polmodes_init, &
+         vec_polmodes_deinit, vec_polmodes_write, RT0_poloidal_modes
+    character(len = *), parameter :: grp = '/postprocess'
+    integer, parameter :: m_max = 24
     type(RT0_t) :: Bnplas
+    type(vec_polmodes_t) :: vec_polmodes
 
-    call write_poloidal_modes(Bn, 'Bmn.dat')
-    call write_poloidal_modes(Bnvac, 'Bmn_vac.dat')
+    ! poloidal modes
+    call vec_polmodes_init(vec_polmodes, m_max, mesh%nflux)
+    call RT0_poloidal_modes(Bn, vec_polmodes)
+    call vec_polmodes_write(vec_polmodes, datafile, grp // '/Bmn', &
+         'poloidal modes of magnetic field (full perturbation)', 'G')
+    call RT0_poloidal_modes(Bnvac, vec_polmodes)
+    call vec_polmodes_write(vec_polmodes, datafile, grp // '/Bmn_vac', &
+         'poloidal modes of magnetic field (vacuum perturbation)', 'G')
     call RT0_init(Bnplas, Bn%ntri)
     Bnplas%DOF(:, :) = Bn%DOF - Bnvac%DOF
     Bnplas%comp_phi(:) = Bn%comp_phi - Bnvac%comp_phi
-    call write_poloidal_modes(Bnplas, 'Bmn_plas.dat')
+    call RT0_poloidal_modes(Bnplas, vec_polmodes)
     call RT0_deinit(Bnplas)
-    call write_poloidal_modes(jn, 'currmn.dat')
+    call vec_polmodes_write(vec_polmodes, datafile, grp // '/Bmn_plas', &
+         'poloidal modes of magnetic field (plasma response)', 'G')
+    if (conf%kilca_scale_factor /= 0) then
+    else
+       call check_furth(jn, vec_polmodes)
+    end if
+    call RT0_poloidal_modes(jn, vec_polmodes)
+    call vec_polmodes_write(vec_polmodes, datafile, grp // '/jmn', &
+         'poloidal modes of current density perturbation', 'statA cm^-2')
+    call vec_polmodes_deinit(vec_polmodes)
+    ! parallel currents
     call write_Ipar_symfluxcoord(2048)
     if (conf%kilca_scale_factor /= 0) then
        call write_Ipar(2048)
     end if
   end subroutine magdif_postprocess
 
-  subroutine write_poloidal_modes(elem, outfile)
-    use constants, only: pi  ! orbit_mod.f90
-    use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
-    use magdif_conf, only: conf, longlines, decorate_filename
-    use magdif_util, only: imun, clight, bent_cyl2straight_cyl
-    use magdif_mesh, only: equil, fs, fs_half, mesh, point_location
-    use magdif_pert, only: RT0_interp
-    type(RT0_t), intent(in) :: elem
-    character(len = *), intent(in) :: outfile
+  subroutine check_furth(jn, Bmn_plas)
+    use magdif_conf, only: conf, longlines
+    use magdif_util, only: imun, clight
+    use magdif_mesh, only: equil, fs_half, mesh, sample_polmodes
+    use magdif_pert, only: RT0_t, vec_polmodes_t
+    type(RT0_t), intent(in) :: jn
+    type(vec_polmodes_t), intent(in) :: Bmn_plas
+    integer :: kf, kt, ktri, ktri_eff, kilca_m_res, fid_furth
+    complex(dp) :: sheet_flux
+    real(dp) :: k_z, k_theta
 
-    integer, parameter :: mmax = 24
-    character(len = 20) :: fmt
-    complex(dp), dimension(-mmax:mmax) :: coeff_rad, coeff_pol, coeff_tor, fourier_basis
-    integer :: kf, kt, ktri, m, fid_rad, fid_pol, fid_tor
-    integer :: kilca_m_res, fid_furth  ! only KiLCA geometry
-    complex(dp) :: comp_R, comp_Z, comp_rad, comp_pol, comp_tor
-    complex(dp) :: sheet_flux  ! only KiLCA geometry
-    real(dp) :: R, Z, theta, B0_R, B0_Z, dum
-    real(dp) :: k_z, k_theta  ! only KiLCA geometry
-    real(dp) :: sqrt_g, dR_dtheta, dZ_dtheta, q, q_sum  ! only ASDEX geometry
-
-    write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(es23.15e3, 1x))'
-    if (conf%kilca_scale_factor /= 0) then
-       kilca_m_res = -equil%cocos%sgn_q * abs(conf%kilca_pol_mode)
-       k_z = mesh%n / mesh%R_O
-       open(newunit = fid_rad, recl = 3 * longlines, status = 'replace', &
-            file = decorate_filename(outfile, '', '_r'))
-       open(newunit = fid_pol, recl = 3 * longlines, status = 'replace', &
-            file = decorate_filename(outfile, '', '_theta'))
-       open(newunit = fid_tor, recl = 3 * longlines, status = 'replace', &
-            file = decorate_filename(outfile, '', '_z'))
-       open(newunit = fid_furth, recl = longlines, status = 'replace', &
-            file = decorate_filename(outfile, 'furth_', ''))
-    else
-       kilca_m_res = 0  ! to suppress compiler warning
-       open(newunit = fid_rad, recl = 3 * longlines, status = 'replace', &
-            file = decorate_filename(outfile, '', '_psi'))
-       open(newunit = fid_pol, recl = 3 * longlines, status = 'replace', &
-            file = decorate_filename(outfile, '', '_theta'))
-       open(newunit = fid_tor, recl = 3 * longlines, status = 'replace', &
-            file = decorate_filename(outfile, '', '_phi'))
-    end if
+    kilca_m_res = -equil%cocos%sgn_q * abs(conf%kilca_pol_mode)
+    k_z = mesh%n / mesh%R_O
+    open(newunit = fid_furth, file = 'check_furth.dat', recl = longlines, status = 'replace')
     do kf = 1, mesh%nflux
-       coeff_rad = 0d0
-       coeff_pol = 0d0
-       coeff_tor = 0d0
-       q_sum = 0d0
        sheet_flux = 0d0
        do kt = 1, mesh%kt_max(kf)
-          theta = (dble(kt) - conf%debug_pol_offset) / dble(mesh%kt_max(kf)) * 2d0 * pi
-          fourier_basis = [(exp(-imun * m * theta), m = -mmax, mmax)]
-          if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
-             R = mesh%R_O + fs_half%rad(kf) * cos(theta)
-             Z = mesh%Z_O + fs_half%rad(kf) * sin(theta)
-          else
-             ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
-             call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), &
-                  theta, q, dum, sqrt_g, dum, dum, R, dum, dR_dtheta, Z, dum, dZ_dtheta)
-          end if
-          call field(R, 0d0, Z, B0_R, dum, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
-               dum, dum)
-          ktri = point_location(R, Z)
-          call RT0_interp(ktri, elem, R, Z, comp_R, comp_Z)
-          if (conf%kilca_scale_factor /= 0) then
-             call bent_cyl2straight_cyl(comp_R, elem%comp_phi(ktri), comp_Z, theta, &
-                  comp_rad, comp_pol, comp_tor)
-             sheet_flux = sheet_flux + mesh%area(ktri) * comp_tor * fourier_basis(kilca_m_res)
-          else
-             comp_rad = (comp_R * B0_Z - comp_Z * B0_R) * R * sqrt_g * q
-             comp_pol = comp_R * dR_dtheta + comp_Z * dZ_dtheta
-             comp_tor = elem%comp_phi(ktri)
-          end if
-          coeff_rad = coeff_rad + comp_rad * fourier_basis
-          coeff_pol = coeff_pol + comp_pol * fourier_basis
-          coeff_tor = coeff_tor + comp_tor * fourier_basis
-          q_sum = q_sum + q
+          ktri = mesh%kt_low(kf) + kt
+          ktri_eff = sample_polmodes%ktri(ktri)
+          sheet_flux = sheet_flux + mesh%area(ktri_eff) * jn%comp_phi(ktri_eff) * &
+               exp(-imun * kilca_m_res * sample_polmodes%theta(ktri))
        end do
-       coeff_rad = coeff_rad / mesh%kt_max(kf)
-       coeff_pol = coeff_pol / mesh%kt_max(kf)
-       coeff_tor = coeff_tor / mesh%kt_max(kf)
-       q = q_sum / mesh%kt_max(kf)
-       if (conf%kilca_scale_factor /= 0) then
-          write (fid_rad, fmt) fs_half%rad(kf), q, real(coeff_rad), aimag(coeff_rad)
-          write (fid_pol, fmt) fs_half%rad(kf), q, real(coeff_pol), aimag(coeff_pol)
-          write (fid_tor, fmt) fs_half%rad(kf), q, real(coeff_tor), aimag(coeff_tor)
-          k_theta = kilca_m_res / fs_half%rad(kf)
-          sheet_flux = -2d0 * imun / clight / k_theta * sheet_flux
-          write (fid_furth, '(7(1x, es24.16e3))') fs_half%rad(kf), k_z, k_theta, &
-               coeff_rad(-kilca_m_res), sheet_flux
-       else
-          write (fid_rad, fmt) fs_half%psi(kf), q, real(coeff_rad), aimag(coeff_rad)
-          write (fid_pol, fmt) fs_half%psi(kf), q, real(coeff_pol), aimag(coeff_pol)
-          write (fid_tor, fmt) fs_half%psi(kf), q, real(coeff_tor), aimag(coeff_tor)
-       end if
+       k_theta = kilca_m_res / fs_half%rad(kf)
+       sheet_flux = -2d0 * imun / clight / k_theta * sheet_flux
+       write (fid_furth, '(7(1x, es24.16e3))') fs_half%rad(kf), k_z, k_theta, &
+            Bmn_plas%coeff_rad(-kilca_m_res, kf), sheet_flux
     end do
-    close(fid_rad)
-    close(fid_pol)
-    close(fid_tor)
-    if (conf%kilca_pol_mode /= 0) then
-       close(fid_furth)
-    end if
-  end subroutine write_poloidal_modes
+    close(fid_furth)
+  end subroutine check_furth
 
 
   !> calculate parallel current (density) on a finer grid

@@ -8,9 +8,10 @@ module magdif_pert
 
   public :: L1_init, L1_deinit, L1_read, L1_write, RT0_init, RT0_deinit, RT0_read, &
        RT0_write, RT0_interp, RT0_check_div_free, RT0_check_redundant_edges, RT0_triplot, &
-       RT0_rectplot, compute_Bn_nonres, avg_flux_on_quad, compute_kilca_vacuum, &
-       kilca_vacuum, compute_kilca_vac_coeff, kilca_vacuum_fourier, check_kilca_vacuum, &
-       check_RT0
+       RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
+       vec_polmodes_read, vec_polmodes_write, compute_Bn_nonres, avg_flux_on_quad, &
+       compute_kilca_vacuum, kilca_vacuum, compute_kilca_vac_coeff, kilca_vacuum_fourier, &
+       check_kilca_vacuum, check_RT0
 
   type, public :: L1_t
      !> Number of points on which the L1 are defined
@@ -36,6 +37,31 @@ module magdif_pert
      !> Values are taken at each triangle.
      complex(dp), allocatable :: comp_phi(:)
   end type RT0_t
+
+  type, public :: vec_polmodes_t
+     !> Highest absolute poloidal mode number.
+     integer :: m_max
+
+     !> Number of flux surfaces, i.e., radial divisions.
+     integer :: nflux
+
+     !> Component in radial direction, indexed by poloidal mode number and flux surface.
+     !>
+     !> For tokamak geometry, this is the contravariant density psi component; for KiLCA
+     !> geometry, this is the r component.
+     complex(dp), allocatable :: coeff_rad(:, :)
+
+     !> Component in poloidal direction, indexed by poloidal mode number and flux surface.
+     !>
+     !> For tokamak geometry, this is the covariant theta component; for KiLCA geometry,
+     !> this is the physical theta component.
+     complex(dp), allocatable :: coeff_pol(:, :)
+
+     !> Component in radial direction, indexed by poloidal mode number and flux surface.
+     !>
+     !> For tokamak and KiLCA geometry, this is the physical phi component.
+     complex(dp), allocatable :: coeff_tor(:, :)
+  end type vec_polmodes_t
 
 contains
 
@@ -276,7 +302,7 @@ contains
          unit = trim(adjustl(unit)) // ' cm^2')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/RT0_comp_phi', &
          elem%comp_phi, lbound(elem%comp_phi), ubound(elem%comp_phi), &
-         comment = 'phi component of ' // trim(adjustl(comment)), &
+         comment = 'physical phi component of ' // trim(adjustl(comment)), &
          unit = trim(adjustl(unit)))
     if (plots >= 1) then
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/comp_R', &
@@ -289,12 +315,12 @@ contains
             unit = trim(adjustl(unit)))
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/comp_psi_contravar_dens', &
             comp_psi_contravar_dens, lbound(comp_psi_contravar_dens), ubound(comp_psi_contravar_dens), &
-            comment = 'contravariant density psi component of ' // trim(adjustl(comment)) // ' at centroid')
-            ! unit = trim(adjustl(unit)))
+            comment = 'contravariant density psi component of ' // trim(adjustl(comment)) // ' at centroid', &
+            unit = trim(adjustl(unit)) // ' cm^2')
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/comp_theta_covar', &
             comp_theta_covar, lbound(comp_theta_covar), ubound(comp_theta_covar), &
-            comment = 'covariant theta component of ' // trim(adjustl(comment)) // ' at centroid')
-            ! unit = trim(adjustl(unit)))
+            comment = 'covariant theta component of ' // trim(adjustl(comment)) // ' at centroid', &
+            unit = trim(adjustl(unit)) // ' cm')
     end if
     if (plots >= 2) then
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/rect_comp_R', &
@@ -303,7 +329,7 @@ contains
             unit = trim(adjustl(unit)))
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/rect_comp_phi', &
             rect_comp_phi, lbound(rect_comp_phi), ubound(rect_comp_phi), &
-            comment = 'phi component of ' // trim(adjustl(comment)) // ' on GEQSDK grid', &
+            comment = 'physical phi component of ' // trim(adjustl(comment)) // ' on GEQSDK grid', &
             unit = trim(adjustl(unit)))
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/rect_comp_Z', &
             rect_comp_Z, lbound(rect_comp_Z), ubound(rect_comp_Z), &
@@ -374,6 +400,122 @@ contains
        end do
     end do
   end subroutine RT0_rectplot
+
+  subroutine vec_polmodes_init(this, m_max, nflux)
+    type(vec_polmodes_t), intent(inout) :: this
+    integer, intent(in) :: m_max
+    integer, intent(in) :: nflux
+
+    call vec_polmodes_deinit(this)
+    this%m_max = abs(m_max)
+    this%nflux = nflux
+    allocate(this%coeff_rad(-this%m_max:this%m_max, 1:nflux))
+    allocate(this%coeff_pol(-this%m_max:this%m_max, 1:nflux))
+    allocate(this%coeff_tor(-this%m_max:this%m_max, 1:nflux))
+  end subroutine vec_polmodes_init
+
+  subroutine vec_polmodes_deinit(this)
+    type(vec_polmodes_t), intent(inout) :: this
+
+    this%m_max = 0
+    this%nflux = 0
+    if (allocated(this%coeff_rad)) deallocate(this%coeff_rad)
+    if (allocated(this%coeff_pol)) deallocate(this%coeff_pol)
+    if (allocated(this%coeff_tor)) deallocate(this%coeff_tor)
+  end subroutine vec_polmodes_deinit
+
+  subroutine vec_polmodes_read(vec_polmodes, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    type(vec_polmodes_t), intent(inout) :: vec_polmodes
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
+
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_rad', vec_polmodes%coeff_rad)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_pol', vec_polmodes%coeff_pol)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_tor', vec_polmodes%coeff_tor)
+    call h5_close(h5id_root)
+  end subroutine vec_polmodes_read
+
+  subroutine vec_polmodes_write(vec_polmodes, file, dataset, comment, unit)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use magdif_conf, only: conf
+    type(vec_polmodes_t), intent(in) :: vec_polmodes
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    character(len = *), intent(in) :: comment
+    character(len = *), intent(in) :: unit
+    integer(HID_T) :: h5id_root
+
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/m_max')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_max', vec_polmodes%m_max, &
+         'maximal absolute poloidal mode number')
+    if (conf%kilca_pol_mode /= 0) then
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_rad', &
+            vec_polmodes%coeff_rad, lbound(vec_polmodes%coeff_rad), ubound(vec_polmodes%coeff_rad), &
+            comment = 'contravariant density psi component of ' // trim(adjustl(comment)), &
+            unit = trim(adjustl(unit)) // ' cm^2')
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_pol', &
+            vec_polmodes%coeff_pol, lbound(vec_polmodes%coeff_pol), ubound(vec_polmodes%coeff_pol), &
+            comment = 'covariant theta component of  ' // trim(adjustl(comment)), &
+            unit = trim(adjustl(unit)) // ' cm')
+    else
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_rad', &
+            vec_polmodes%coeff_rad, lbound(vec_polmodes%coeff_rad), ubound(vec_polmodes%coeff_rad), &
+            comment = 'r component of ' // trim(adjustl(comment)), &
+            unit = trim(adjustl(unit)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_pol', &
+            vec_polmodes%coeff_pol, lbound(vec_polmodes%coeff_pol), ubound(vec_polmodes%coeff_pol), &
+            comment = 'physical theta component of  ' // trim(adjustl(comment)), &
+            unit = trim(adjustl(unit)))
+    end if
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_tor', &
+         vec_polmodes%coeff_tor, lbound(vec_polmodes%coeff_tor), ubound(vec_polmodes%coeff_tor), &
+         comment = 'physical phi component of ' // trim(adjustl(comment)), &
+         unit = trim(adjustl(unit)))
+    call h5_close(h5id_root)
+  end subroutine vec_polmodes_write
+
+  subroutine RT0_poloidal_modes(elem, vec_polmodes)
+    use magdif_conf, only: conf
+    use magdif_util, only: imun, bent_cyl2straight_cyl
+    use magdif_mesh, only: mesh, sample_polmodes
+    type(RT0_t), intent(in) :: elem
+    type(vec_polmodes_t), intent(inout) :: vec_polmodes
+    integer :: kf, kt, ktri, m
+    complex(dp) :: fourier_basis(-vec_polmodes%m_max:vec_polmodes%m_max)
+    complex(dp) :: comp_R, comp_Z, comp_rad, comp_pol, comp_tor
+
+    vec_polmodes%coeff_rad(:, :) = (0d0, 0d0)
+    vec_polmodes%coeff_pol(:, :) = (0d0, 0d0)
+    vec_polmodes%coeff_tor(:, :) = (0d0, 0d0)
+    associate (s => sample_polmodes, v => vec_polmodes)
+      do kf = 1, mesh%nflux
+         do kt = 1, mesh%kt_max(kf)
+            ktri = mesh%kt_low(kf) + kt
+            fourier_basis = [(exp(-imun * m * s%theta(ktri)), m = -v%m_max, v%m_max)]
+            call RT0_interp(s%ktri(ktri), elem, s%R(ktri), s%Z(ktri), comp_R, comp_Z)
+            if (conf%kilca_scale_factor /= 0) then
+               call bent_cyl2straight_cyl(comp_R, elem%comp_phi(ktri), comp_Z, &
+                    s%theta(ktri), comp_rad, comp_pol, comp_tor)
+            else
+               comp_rad = s%sqrt_g(ktri) * (comp_R * s%B0_Z(ktri) - &
+                    comp_Z * s%B0_R(ktri)) * s%R(ktri)
+               comp_pol = comp_R * s%dR_dtheta(ktri) + comp_Z * s%dZ_dtheta(ktri)
+               comp_tor = elem%comp_phi(ktri)
+            end if
+            v%coeff_rad(:, kf) = v%coeff_rad(:, kf) + comp_rad * fourier_basis
+            v%coeff_pol(:, kf) = v%coeff_pol(:, kf) + comp_pol * fourier_basis
+            v%coeff_tor(:, kf) = v%coeff_tor(:, kf) + comp_tor * fourier_basis
+         end do
+         v%coeff_rad(:, kf) = v%coeff_rad(:, kf) / mesh%kt_max(kf)
+         v%coeff_pol(:, kf) = v%coeff_pol(:, kf) / mesh%kt_max(kf)
+         v%coeff_tor(:, kf) = v%coeff_tor(:, kf) / mesh%kt_max(kf)
+      end do
+    end associate
+  end subroutine RT0_poloidal_modes
 
   subroutine compute_Bn_nonres(Bn)
     use magdif_conf, only: conf

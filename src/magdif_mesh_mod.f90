@@ -8,7 +8,7 @@ module magdif_mesh
   private
 
   public :: equil, fluxvar, flux_func_cache, fs, fs_half, mesh_t, mesh, &
-       B0r, B0phi, B0z, B0r_Omega, B0phi_Omega, B0z_Omega, B0flux, j0phi, &
+       B0r, B0phi, B0z, B0r_Omega, B0phi_Omega, B0z_Omega, B0flux, j0phi, coord_cache, sample_polmodes, &
        flux_func_cache_init, flux_func_cache_check, flux_func_cache_destructor, generate_mesh, &
        refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile, &
        create_mesh_points, init_indices, common_triangles, &
@@ -250,6 +250,15 @@ module magdif_mesh
   !> by get_labeled_edges().
   real(dp), allocatable :: j0phi(:,:)
 
+  type :: coord_cache
+     integer :: n
+     integer, allocatable, dimension(:) :: ktri
+     real(dp), allocatable, dimension(:) :: R, Z, psi, theta, sqrt_g, B0_R, B0_Z, &
+          dR_dtheta, dZ_dtheta
+  end type coord_cache
+
+  type(coord_cache) :: sample_polmodes
+
 contains
 
   !> Set up arrays of cached values of flux functions.
@@ -307,6 +316,40 @@ contains
     if (allocated(this%dp_dpsi)) deallocate(this%dp_dpsi)
     if (allocated(this%q)) deallocate(this%q)
   end subroutine flux_func_cache_destructor
+
+  subroutine coord_cache_init(this, n)
+    type(coord_cache), intent(inout) :: this
+    integer, intent(in) :: n
+
+    call coord_cache_deinit(this)
+    this%n = n
+    allocate(this%ktri(this%n))
+    allocate(this%R(this%n))
+    allocate(this%Z(this%n))
+    allocate(this%psi(this%n))
+    allocate(this%theta(this%n))
+    allocate(this%sqrt_g(this%n))
+    allocate(this%B0_R(this%n))
+    allocate(this%B0_Z(this%n))
+    allocate(this%dR_dtheta(this%n))
+    allocate(this%dZ_dtheta(this%n))
+  end subroutine coord_cache_init
+
+  subroutine coord_cache_deinit(this)
+    type(coord_cache), intent(inout) :: this
+
+    this%n = 0
+    if (allocated(this%ktri)) deallocate(this%ktri)
+    if (allocated(this%R)) deallocate(this%R)
+    if (allocated(this%Z)) deallocate(this%Z)
+    if (allocated(this%psi)) deallocate(this%psi)
+    if (allocated(this%theta)) deallocate(this%theta)
+    if (allocated(this%sqrt_g)) deallocate(this%sqrt_g)
+    if (allocated(this%B0_R)) deallocate(this%B0_R)
+    if (allocated(this%B0_Z)) deallocate(this%B0_Z)
+    if (allocated(this%dR_dtheta)) deallocate(this%dR_dtheta)
+    if (allocated(this%dZ_dtheta)) deallocate(this%dZ_dtheta)
+  end subroutine coord_cache_deinit
 
   subroutine generate_mesh(unprocessed_geqdsk)
     use magdif_conf, only: conf, log
@@ -1009,12 +1052,45 @@ contains
   end subroutine ring_centered_avg_coord
 
   subroutine cache_mesh_data
-    integer :: ktri
+    use constants, only: pi  ! orbit_mod.f90
+    use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
+    use magdif_conf, only: conf
+    use magdif_util, only: interp_psi_pol
+    integer :: ktri, kf, kt
+    real(dp) :: dum, q, sqrt_g
 
     allocate(mesh%R_Omega(mesh%ntri))
     allocate(mesh%Z_Omega(mesh%ntri))
     do ktri = 1, mesh%ntri
        call ring_centered_avg_coord(ktri, mesh%R_Omega(ktri), mesh%Z_Omega(ktri))
+    end do
+    call coord_cache_init(sample_polmodes, mesh%ntri)
+    do kf = 1, mesh%nflux
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          sample_polmodes%theta(ktri) = 2d0 * pi * (dble(kt) - conf%debug_pol_offset) / &
+               dble(mesh%kt_max(kf))
+          if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
+             sample_polmodes%R(ktri) = mesh%R_O + fs_half%rad(kf) * &
+                  cos(sample_polmodes%theta(ktri))
+             sample_polmodes%Z(ktri) = mesh%Z_O + fs_half%rad(kf) * &
+                  sin(sample_polmodes%theta(ktri))
+             sample_polmodes%psi(ktri) = interp_psi_pol(sample_polmodes%R(ktri), &
+                  sample_polmodes%Z(ktri))
+          else
+             ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
+             sample_polmodes%psi(ktri) = fs_half%psi(kf) - fs%psi(0)
+             call magdata_in_symfluxcoord_ext(2, dum, sample_polmodes%psi(ktri), &
+                  sample_polmodes%theta(ktri), q, dum, sqrt_g, dum, dum, &
+                  sample_polmodes%R(ktri), dum, sample_polmodes%dR_dtheta(ktri), &
+                  sample_polmodes%Z(ktri), dum, sample_polmodes%dZ_dtheta(ktri))
+          end if
+          call field(sample_polmodes%R(ktri), 0d0, sample_polmodes%Z(ktri), &
+               sample_polmodes%B0_R(ktri), dum, sample_polmodes%B0_Z(ktri), &
+               dum, dum, dum, dum, dum, dum, dum, dum, dum)
+          sample_polmodes%ktri(ktri) = point_location(sample_polmodes%R(ktri), &
+               sample_polmodes%Z(ktri))
+       end do
     end do
   end subroutine cache_mesh_data
 
@@ -1129,7 +1205,8 @@ contains
     use hdf5_tools, only: HID_T, h5_create, h5_define_group, h5_close_group, h5_add, &
          h5_close
 
-    integer(HID_T) :: h5id_magdif, h5id_mesh, h5id_cache, h5id_fs, h5id_fs_half
+    integer(HID_T) :: h5id_magdif, h5id_mesh, h5id_cache, h5id_fs, h5id_fs_half, &
+         h5id_sample_polmodes
     integer :: orient(mesh%ntri)
     integer :: fid, kpoi, ktri, kp
 
@@ -1276,6 +1353,38 @@ contains
          comment = 'Z component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
     call h5_add(h5id_cache, 'j0phi_edge', j0phi, lbound(j0phi), ubound(j0phi), &
          comment = 'phi component of equilibrium current density on triangle edge', unit = 'statA cm^-2')
+    call h5_define_group(h5id_cache, 'sample_polmodes', h5id_sample_polmodes)
+    call h5_add(h5id_sample_polmodes, 'ktri', sample_polmodes%ktri, &
+         lbound(sample_polmodes%ktri), ubound(sample_polmodes%ktri), &
+         comment = 'triangle index of poloidal mode sampling point')
+    call h5_add(h5id_sample_polmodes, 'R', sample_polmodes%R, &
+         lbound(sample_polmodes%R), ubound(sample_polmodes%R), &
+         comment = 'R coordinate of poloidal mode sampling point', unit = 'cm')
+    call h5_add(h5id_sample_polmodes, 'Z', sample_polmodes%Z, &
+         lbound(sample_polmodes%Z), ubound(sample_polmodes%Z), &
+         comment = 'Z coordinate of poloidal mode sampling point', unit = 'cm')
+    call h5_add(h5id_sample_polmodes, 'psi', sample_polmodes%theta, &
+         lbound(sample_polmodes%psi), ubound(sample_polmodes%psi), &
+         comment = 'poloidal flux at poloidal mode sampling point', unit = 'Mx')
+    call h5_add(h5id_sample_polmodes, 'theta', sample_polmodes%theta, &
+         lbound(sample_polmodes%theta), ubound(sample_polmodes%theta), &
+         comment = 'flux poloidal angle at poloidal mode sampling point', unit = 'rad')
+    call h5_add(h5id_sample_polmodes, 'sqrt_g', sample_polmodes%sqrt_g, &
+         lbound(sample_polmodes%sqrt_g), ubound(sample_polmodes%sqrt_g), &
+         comment = 'Jacobian at poloidal mode sampling point', unit = 'cm G^-1')
+    call h5_add(h5id_sample_polmodes, 'B0_R', sample_polmodes%B0_R, &
+         lbound(sample_polmodes%B0_R), ubound(sample_polmodes%B0_R), &
+         comment = 'R component of equilibrium magnetic field at poloidal mode sampling point', unit = 'G')
+    call h5_add(h5id_sample_polmodes, 'B0_Z', sample_polmodes%B0_Z, &
+         lbound(sample_polmodes%B0_Z), ubound(sample_polmodes%B0_Z), &
+         comment = 'Z component of equilibrium magnetic field at poloidal mode sampling point', unit = 'G')
+    call h5_add(h5id_sample_polmodes, 'dR_dtheta', sample_polmodes%dR_dtheta, &
+         lbound(sample_polmodes%dR_dtheta), ubound(sample_polmodes%dR_dtheta), &
+         comment = 'R''(theta) at poloidal mode sampling point', unit = 'cm rad^-1')
+    call h5_add(h5id_sample_polmodes, 'dZ_dtheta', sample_polmodes%dZ_dtheta, &
+         lbound(sample_polmodes%dZ_dtheta), ubound(sample_polmodes%dZ_dtheta), &
+         comment = 'Z''(theta) at poloidal mode sampling point', unit = 'cm rad^-1')
+    call h5_close_group(h5id_sample_polmodes)
     call h5_close_group(h5id_cache)
     call h5_close(h5id_magdif)
 
@@ -1323,6 +1432,7 @@ contains
     if (log%info) call log%write
     call fs%init(mesh%nflux, .false.)
     call fs_half%init(mesh%nflux, .true.)
+    call coord_cache_init(sample_polmodes, mesh%ntri)
     ! TODO: allocate deferred-shape arrays in hdf5_tools and skip allocation here
     allocate(mesh%deletions(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%additions(mesh%m_res_min:mesh%m_res_max))
@@ -1416,6 +1526,16 @@ contains
     call h5_get(h5id_magdif, 'cache/B0phi_centr', B0phi_Omega)
     call h5_get(h5id_magdif, 'cache/B0Z_centr', B0Z_Omega)
     call h5_get(h5id_magdif, 'cache/j0phi_edge', j0phi)
+    call h5_get(h5id_magdif, 'cache/sample_polmodes/ktri', sample_polmodes%ktri)
+    call h5_get(h5id_magdif, 'cache/sample_polmodes/R', sample_polmodes%R)
+    call h5_get(h5id_magdif, 'cache/sample_polmodes/Z', sample_polmodes%Z)
+    call h5_get(h5id_magdif, 'cache/sample_polmodes/psi', sample_polmodes%theta)
+    call h5_get(h5id_magdif, 'cache/sample_polmodes/theta', sample_polmodes%theta)
+    call h5_get(h5id_magdif, 'cache/sample_polmodes/sqrt_g', sample_polmodes%sqrt_g)
+    call h5_get(h5id_magdif, 'cache/sample_polmodes/B0_R', sample_polmodes%B0_R)
+    call h5_get(h5id_magdif, 'cache/sample_polmodes/B0_Z', sample_polmodes%B0_Z)
+    call h5_get(h5id_magdif, 'cache/sample_polmodes/dR_dtheta', sample_polmodes%dR_dtheta)
+    call h5_get(h5id_magdif, 'cache/sample_polmodes/dZ_dtheta', sample_polmodes%dZ_dtheta)
     call h5_close(h5id_magdif)
     where (orient == 1)
        mesh%orient = .true.
