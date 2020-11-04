@@ -26,6 +26,7 @@ contains
 
   !> Initialize magdif module
   subroutine magdif_init
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_close
     use input_files, only: gfile
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use magdif_conf, only: conf, log, magdif_log, datafile
@@ -34,6 +35,7 @@ contains
          check_curr0, check_safety_factor
     use magdif_pert, only: check_RT0, RT0_check_div_free, RT0_check_redundant_edges, &
          RT0_init, RT0_read, L1_init
+    integer(HID_T) :: h5id_root
 
     log = magdif_log('-', conf%log_level, conf%quiet)
 
@@ -71,6 +73,13 @@ contains
     if (conf%kilca_scale_factor /= 0) then
        call check_RT0(Bnvac)
     end if
+
+    ! prepare datafile
+    call h5_open_rw(datafile, h5id_root)
+    call h5_delete(h5id_root, 'iter')
+    call h5_delete(h5id_root, 'postprocess')
+    call h5_close(h5id_root)
+
     log%msg = 'magdif initialized'
     if (log%info) call log%write
   end subroutine magdif_init
@@ -135,10 +144,6 @@ contains
     ! pass effective toroidal mode number to FreeFem++
     call send_flag_to_freefem(mesh%n, freefem_pipe)
     call receive_flag_from_freefem(info, freefem_pipe)
-    ! clean datafile
-    call h5_open_rw(datafile, h5id_root)
-    call h5_delete(h5id_root, 'iter')
-    call h5_close(h5id_root)
 
     ! system dimension: number of non-redundant edges in core plasma
     ndim = mesh%nedge
@@ -155,6 +160,7 @@ contains
        ieigen = 1
        call arnoldi(ndim, conf%nritz, eigvals, next_iteration_arnoldi)
        call h5_open_rw(datafile, h5id_root)
+       ! call h5_delete(h5id_root, 'iter/eigvals')
        call h5_create_parent_groups(h5id_root, 'iter/eigvals')
        call h5_add(h5id_root, 'iter/eigvals', eigvals, lbound(eigvals), ubound(eigvals), &
          comment = 'iteration eigenvalues')
@@ -208,9 +214,10 @@ contains
     allocate(L2int(0:niter))
     call compute_L2int(Bnvac, L2int(0))
     call h5_open_rw(datafile, h5id_root)
+    call h5_delete(h5id_root, 'iter/L2int_Bnvac')
     call h5_create_parent_groups(h5id_root, 'iter/L2int_Bnvac')
     call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int(0), &
-         comment = 'L2 integral of magnetic field (vacuum)')
+         comment = 'L2 integral of magnetic field (vacuum)', unit = 'Mx')
     call h5_close(h5id_root)
     Bn%DOF(:, :) = Bnvac%DOF
     Bn%comp_phi(:) = Bnvac%comp_phi
@@ -252,8 +259,9 @@ contains
        call pack_dof(Bn, packed_Bn_prev)
     end do
     call h5_open_rw(datafile, h5id_root)
+    call h5_delete(h5id_root, 'iter/L2int_Bn_diff')
     call h5_add(h5id_root, 'iter/L2int_Bn_diff', L2int, lbound(L2int), ubound(L2int), &
-         comment = 'L2 integral of magnetic field (difference between iterations)')
+         comment = 'L2 integral of magnetic field (difference between iterations)', unit = 'Mx')
     call h5_close(h5id_root)
     call L1_write(pn, datafile, 'iter/pn', &
          'pressure (full perturbation)', 'dyn cm^-2')
@@ -765,7 +773,6 @@ contains
     call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn_plas', &
          'poloidal modes of magnetic field (plasma response)', 'G')
     if (conf%kilca_scale_factor /= 0) then
-    else
        call check_furth(jn, vec_polmodes)
     end if
     call RT0_poloidal_modes(jn, vec_polmodes)

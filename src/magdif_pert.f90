@@ -86,7 +86,9 @@ contains
   !> to \p outfile (e.g. #magdif_conf::presn_file), where line number corresponds to the
   !> knot index in #mesh_mod::mesh_point.
   subroutine L1_write(elem, file, dataset, comment, unit)
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
+         h5_close
+
     type(L1_t), intent(in) :: elem
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
@@ -95,6 +97,7 @@ contains
     integer(HID_T) :: h5id_root
 
     call h5_open_rw(file, h5id_root)
+    call h5_delete(h5id_root, trim(adjustl(dataset)))
     call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/L1_DOF')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/L1_DOF', &
          elem%DOF, lbound(elem%DOF), ubound(elem%DOF), &
@@ -277,7 +280,8 @@ contains
   end function jacobian
 
   subroutine RT0_write(elem, file, dataset, comment, unit, plots)
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
+         h5_close
     type(RT0_t), intent(in) :: elem
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
@@ -295,6 +299,7 @@ contains
        call RT0_rectplot(elem, rect_comp_R, rect_comp_phi, rect_comp_Z)
     end if
     call h5_open_rw(file, h5id_root)
+    call h5_delete(h5id_root, trim(adjustl(dataset)))
     call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/RT0_DOF')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/RT0_DOF', &
          elem%DOF, lbound(elem%DOF), ubound(elem%DOF), &
@@ -439,7 +444,8 @@ contains
   end subroutine vec_polmodes_read
 
   subroutine vec_polmodes_write(vec_polmodes, file, dataset, comment, unit)
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
+         h5_close
     use magdif_conf, only: conf
     type(vec_polmodes_t), intent(in) :: vec_polmodes
     character(len = *), intent(in) :: file
@@ -449,6 +455,7 @@ contains
     integer(HID_T) :: h5id_root
 
     call h5_open_rw(file, h5id_root)
+    call h5_delete(h5id_root, trim(adjustl(dataset)))
     call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/m_max')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_max', vec_polmodes%m_max, &
          'maximal absolute poloidal mode number')
