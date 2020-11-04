@@ -245,7 +245,7 @@ contains
           call RT0_write(Bn_diff, datafile, 'iter/Bn_diff' // postfix, &
                'magnetic field (difference between iterations)', 'G', 1)
           call RT0_poloidal_modes(jn, jmn)
-          call vec_polmodes_write(jmn, datafile, '/postprocess/jmn' // postfix, &
+          call vec_polmodes_write(jmn, datafile, 'postprocess/jmn' // postfix, &
                'current density (after iteration)', 'statA cm^-2')
        end if
 
@@ -745,7 +745,6 @@ contains
     use magdif_mesh, only: mesh
     use magdif_pert, only: RT0_t, RT0_init, RT0_deinit, vec_polmodes_t, vec_polmodes_init, &
          vec_polmodes_deinit, vec_polmodes_write, RT0_poloidal_modes
-    character(len = *), parameter :: grp = '/postprocess'
     integer, parameter :: m_max = 24
     type(RT0_t) :: Bnplas
     type(vec_polmodes_t) :: vec_polmodes
@@ -753,24 +752,24 @@ contains
     ! poloidal modes
     call vec_polmodes_init(vec_polmodes, m_max, mesh%nflux)
     call RT0_poloidal_modes(Bn, vec_polmodes)
-    call vec_polmodes_write(vec_polmodes, datafile, grp // '/Bmn', &
+    call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn', &
          'poloidal modes of magnetic field (full perturbation)', 'G')
     call RT0_poloidal_modes(Bnvac, vec_polmodes)
-    call vec_polmodes_write(vec_polmodes, datafile, grp // '/Bmn_vac', &
+    call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn_vac', &
          'poloidal modes of magnetic field (vacuum perturbation)', 'G')
     call RT0_init(Bnplas, Bn%ntri)
     Bnplas%DOF(:, :) = Bn%DOF - Bnvac%DOF
     Bnplas%comp_phi(:) = Bn%comp_phi - Bnvac%comp_phi
     call RT0_poloidal_modes(Bnplas, vec_polmodes)
     call RT0_deinit(Bnplas)
-    call vec_polmodes_write(vec_polmodes, datafile, grp // '/Bmn_plas', &
+    call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn_plas', &
          'poloidal modes of magnetic field (plasma response)', 'G')
     if (conf%kilca_scale_factor /= 0) then
     else
        call check_furth(jn, vec_polmodes)
     end if
     call RT0_poloidal_modes(jn, vec_polmodes)
-    call vec_polmodes_write(vec_polmodes, datafile, grp // '/jmn', &
+    call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/jmn', &
          'poloidal modes of current density perturbation', 'statA cm^-2')
     call vec_polmodes_deinit(vec_polmodes)
     ! parallel currents

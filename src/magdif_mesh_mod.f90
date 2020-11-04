@@ -1068,28 +1068,33 @@ contains
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          sample_polmodes%theta(ktri) = 2d0 * pi * (dble(kt) - conf%debug_pol_offset) / &
-               dble(mesh%kt_max(kf))
-          if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
-             sample_polmodes%R(ktri) = mesh%R_O + fs_half%rad(kf) * &
-                  cos(sample_polmodes%theta(ktri))
-             sample_polmodes%Z(ktri) = mesh%Z_O + fs_half%rad(kf) * &
-                  sin(sample_polmodes%theta(ktri))
-             sample_polmodes%psi(ktri) = interp_psi_pol(sample_polmodes%R(ktri), &
-                  sample_polmodes%Z(ktri))
-          else
-             ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
-             sample_polmodes%psi(ktri) = fs_half%psi(kf) - fs%psi(0)
-             call magdata_in_symfluxcoord_ext(2, dum, sample_polmodes%psi(ktri), &
-                  sample_polmodes%theta(ktri), q, dum, sqrt_g, dum, dum, &
-                  sample_polmodes%R(ktri), dum, sample_polmodes%dR_dtheta(ktri), &
-                  sample_polmodes%Z(ktri), dum, sample_polmodes%dZ_dtheta(ktri))
-          end if
-          call field(sample_polmodes%R(ktri), 0d0, sample_polmodes%Z(ktri), &
-               sample_polmodes%B0_R(ktri), dum, sample_polmodes%B0_Z(ktri), &
-               dum, dum, dum, dum, dum, dum, dum, dum, dum)
-          sample_polmodes%ktri(ktri) = point_location(sample_polmodes%R(ktri), &
-               sample_polmodes%Z(ktri))
+          associate (s => sample_polmodes)
+            s%theta(ktri) = 2d0 * pi * (dble(kt) - conf%debug_pol_offset) / &
+                 dble(mesh%kt_max(kf))
+            if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
+               s%R(ktri) = mesh%R_O + fs_half%rad(kf) * cos(s%theta(ktri))
+               s%Z(ktri) = mesh%Z_O + fs_half%rad(kf) * sin(s%theta(ktri))
+               s%psi(ktri) = interp_psi_pol(s%R(ktri), s%Z(ktri))
+               s%dR_dtheta(ktri) = -fs_half%rad(kf) * sin(s%theta(ktri))
+               s%dZ_dtheta(ktri) =  fs_half%rad(kf) * cos(s%theta(ktri))
+            else
+               ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
+               s%psi(ktri) = fs_half%psi(kf) - fs%psi(0)
+               call magdata_in_symfluxcoord_ext(2, dum, s%psi(ktri), s%theta(ktri), q, &
+                    dum, sqrt_g, dum, dum, s%R(ktri), dum, s%dR_dtheta(ktri), &
+                    s%Z(ktri), dum, s%dZ_dtheta(ktri))
+               ! sqrt_g misses a factor of q and the signs of dpsi_drad and B0_phi
+               ! taken together, these three always yield a positive sign in COCOS 3
+               s%sqrt_g(ktri) = sqrt_g * abs(q)
+            end if
+            s%ktri(ktri) = point_location(s%R(ktri), s%Z(ktri))
+            call field(s%R(ktri), 0d0, s%Z(ktri), s%B0_R(ktri), dum, s%B0_Z(ktri), &
+                 dum, dum, dum, dum, dum, dum, dum, dum, dum)
+            if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
+               s%sqrt_g(ktri) = equil%cocos%sgn_dpsi * fs_half%rad(kf) / &
+                    (-s%B0_R(ktri) * sin(s%theta(ktri)) + s%B0_Z(ktri) * cos(s%theta(ktri)))
+            end if
+          end associate
        end do
     end do
   end subroutine cache_mesh_data
