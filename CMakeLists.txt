@@ -27,10 +27,12 @@ if ("$ENV{FC}" MATCHES "ifort")
   # ifort configuration
   set(CMAKE_Fortran_FLAGS "-fpp -g -assume norealloc_lhs -traceback -check all -fpe-all=0")
   set(WARNING_FLAGS "-warn all")
+  set(LEGACY_FLAGS "-check noarg_temp_created")
 else ()
   # gfortran configuration
   set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fno-realloc-lhs -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow")
   set(WARNING_FLAGS "-Wall -Wextra")
+  set(LEGACY_FLAGS "-fcheck=no-array-temps")
 endif ()
 
 ### Define libraries
@@ -98,6 +100,7 @@ set_source_files_properties(src/magdif_pert.f90 PROPERTIES COMPILE_FLAGS "${WARN
 set_source_files_properties(src/magdif_test.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
 set_source_files_properties(src/vacfield.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
 set_source_files_properties(src/standardise_equilibrium.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
+set_source_files_properties(src/field_divB0.f90 PROPERTIES COMPILE_FLAGS "${LEGACY_FLAGS}")
 
 ### Linking
 set(MAGDIF_LIBS
