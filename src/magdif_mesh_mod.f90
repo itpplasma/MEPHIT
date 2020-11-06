@@ -10,9 +10,9 @@ module magdif_mesh
   public :: equil, fluxvar, flux_func_cache, fs, fs_half, mesh_t, mesh, &
        B0r, B0phi, B0z, B0r_Omega, B0phi_Omega, B0z_Omega, B0flux, j0phi, coord_cache, sample_polmodes, &
        flux_func_cache_init, flux_func_cache_check, flux_func_cache_destructor, generate_mesh, &
-       refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile, &
+       refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile,  &
        create_mesh_points, init_indices, common_triangles, &
-       connect_mesh_points, get_labeled_edges, cache_mesh_data, write_mesh_data, read_mesh, &
+       connect_mesh_points, get_labeled_edges, cache_mesh_data, write_mesh_cache, read_mesh_cache, &
        magdif_mesh_destructor, init_flux_variables, compute_pres_prof_eps, compute_pres_prof_par, &
        compute_pres_prof_geqdsk, compute_safety_factor_flux, compute_safety_factor_rot, &
        compute_safety_factor_geqdsk, check_safety_factor, cache_equilibrium_field, &
@@ -317,6 +317,60 @@ contains
     if (allocated(this%q)) deallocate(this%q)
   end subroutine flux_func_cache_destructor
 
+  subroutine flux_func_cache_write(cache, file, dataset, comment)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
+         h5_close
+    type(flux_func_cache), intent(in) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    character(len = *), intent(in) :: comment
+    integer(HID_T) :: h5id_root
+
+    call h5_open_rw(file, h5id_root)
+    call h5_delete(h5id_root, trim(adjustl(dataset)))
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/nflux')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', &
+         cache%psi, lbound(cache%psi), ubound(cache%psi), unit = 'Mx', &
+         comment = 'poloidal flux ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad', &
+         cache%rad, lbound(cache%rad), ubound(cache%rad), unit = 'cm', &
+         comment = 'radial position on OX line ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/F', &
+         cache%F, lbound(cache%F), ubound(cache%F), unit = 'G cm', &
+         comment = 'covariant toroidal equilibrium field ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/p', &
+         cache%p, lbound(cache%p), ubound(cache%p), unit = 'dyn cm^-2', &
+         comment = 'equilibrium pressure ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/FdF_dpsi', &
+         cache%FdF_dpsi, lbound(cache%FdF_dpsi), ubound(cache%FdF_dpsi), unit = 'G', &
+         comment = 'FF''(psi) ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/dp_dpsi', &
+         cache%dp_dpsi, lbound(cache%dp_dpsi), ubound(cache%dp_dpsi), &
+         comment = 'p''(psi) ' // trim(adjustl(comment)), unit = 'dyn cm^-2 Mx^-1')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/q', &
+         cache%q, lbound(cache%q), ubound(cache%q), unit = '1', &
+         comment = 'safety factor ' // trim(adjustl(comment)))
+    call h5_close(h5id_root)
+  end subroutine flux_func_cache_write
+
+  subroutine flux_func_cache_read(cache, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    type(flux_func_cache), intent(inout) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
+
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache%psi)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rad', cache%rad)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/F', cache%F)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/p', cache%p)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/FdF_dpsi', cache%FdF_dpsi)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/dp_dpsi', cache%dp_dpsi)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/q', cache%q)
+    call h5_close(h5id_root)
+  end subroutine flux_func_cache_read
+
   subroutine coord_cache_init(this, n)
     type(coord_cache), intent(inout) :: this
     integer, intent(in) :: n
@@ -351,6 +405,72 @@ contains
     if (allocated(this%dZ_dtheta)) deallocate(this%dZ_dtheta)
   end subroutine coord_cache_deinit
 
+  subroutine coord_cache_write(cache, file, dataset, comment)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
+         h5_close
+    type(coord_cache), intent(in) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    character(len = *), intent(in) :: comment
+    integer(HID_T) :: h5id_root
+
+    call h5_open_rw(file, h5id_root)
+    call h5_delete(h5id_root, trim(adjustl(dataset)))
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/n')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ktri', cache%ktri, &
+         lbound(cache%ktri), ubound(cache%ktri), &
+         comment = 'triangle index of ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/R', cache%R, &
+         lbound(cache%R), ubound(cache%R), unit = 'cm', &
+         comment = 'R coordinate of ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z', cache%Z, &
+         lbound(cache%Z), ubound(cache%Z), unit = 'cm', &
+         comment = 'Z coordinate of ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache%theta, &
+         lbound(cache%psi), ubound(cache%psi), unit = 'Mx', &
+         comment = 'poloidal flux at ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta', cache%theta, &
+         lbound(cache%theta), ubound(cache%theta), unit = 'rad', &
+         comment = 'flux poloidal angle at ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/sqrt_g', cache%sqrt_g, &
+         lbound(cache%sqrt_g), ubound(cache%sqrt_g), unit = 'cm G^-1', &
+         comment = 'Jacobian at ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache%B0_R, &
+         lbound(cache%B0_R), ubound(cache%B0_R), unit = 'G', &
+         comment = 'R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache%B0_Z, &
+         lbound(cache%B0_Z), ubound(cache%B0_Z), unit = 'G', &
+         comment = 'Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/dR_dtheta', cache%dR_dtheta, &
+         lbound(cache%dR_dtheta), ubound(cache%dR_dtheta), unit = 'cm rad^-1', &
+         comment = 'R''(theta) at ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/dZ_dtheta', cache%dZ_dtheta, &
+         lbound(cache%dZ_dtheta), ubound(cache%dZ_dtheta), unit = 'cm rad^-1', &
+         comment = 'Z''(theta) at ' // trim(adjustl(comment)))
+    call h5_close(h5id_root)
+  end subroutine coord_cache_write
+
+  subroutine coord_cache_read(cache, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    type(coord_cache), intent(inout) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
+
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/ktri', cache%ktri)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/R', cache%R)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z', cache%Z)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache%theta)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/theta', cache%theta)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/sqrt_g', cache%sqrt_g)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache%B0_R)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache%B0_Z)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/dR_dtheta', cache%dR_dtheta)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/dZ_dtheta', cache%dZ_dtheta)
+    call h5_close(h5id_root)
+  end subroutine coord_cache_read
+
   subroutine generate_mesh(unprocessed_geqdsk)
     use magdif_conf, only: conf, log
     use magdif_util, only: get_equil_filenames, initialize_globals
@@ -379,13 +499,87 @@ contains
     end if
     call create_mesh_points(convexfile)
     call connect_mesh_points
+    call write_meshfile_for_freefem
     call cache_mesh_data
     call cache_equilibrium_field
     call init_flux_variables
     call cache_resonance_positions
     call compute_j0phi
-    call write_mesh_data
   end subroutine generate_mesh
+
+  subroutine write_mesh_cache
+    use hdf5_tools, only: HID_T, h5_create, h5_delete, h5_define_group, h5_close_group, &
+         h5_close, h5_open_rw, h5_add
+    use magdif_conf, only: datafile
+    integer(HID_T) :: h5id_root, h5id_grp
+
+    call h5_create(datafile, h5id_root)
+    call h5_delete(h5id_root, 'mesh')
+    call h5_delete(h5id_root, 'cache')
+    call h5_define_group(h5id_root, 'mesh', h5id_grp)
+    call h5_close_group(h5id_grp)
+    call h5_define_group(h5id_root, 'cache', h5id_grp)
+    call h5_close_group(h5id_grp)
+    call h5_close(h5id_root)
+    call mesh_write(mesh, datafile, 'mesh')
+    call flux_func_cache_write(fs, datafile, 'cache/fs', 'on flux surfaces')
+    call flux_func_cache_write(fs_half, datafile, 'cache/fs_half', 'between flux surfaces')
+    call coord_cache_write(sample_polmodes, datafile, 'cache/sample_polmodes', &
+         'poloidal mode sampling points')
+    ! TODO: put in separate subroutine for edge_cache_type
+    call h5_open_rw(datafile, h5id_root)
+    ! TODO: revise naming and indexing when edge_cache type is working for GL quadrature in compute_currn
+    call h5_add(h5id_root, 'cache/B0R_edge', B0R, lbound(B0R), ubound(B0R), &
+         comment = 'R component of equilibrium magnetic field on triangle edge', unit = 'G')
+    call h5_add(h5id_root, 'cache/B0phi_edge', B0phi, lbound(B0phi), ubound(B0phi), &
+         comment = 'phi component of equilibrium magnetic field on triangle edge', unit = 'G')
+    call h5_add(h5id_root, 'cache/B0Z_edge', B0Z, lbound(B0Z), ubound(B0Z), &
+         comment = 'Z component of equilibrium magnetic field on triangle edge', unit = 'G')
+    call h5_add(h5id_root, 'cache/B0_flux', B0flux, lbound(B0flux), ubound(B0flux), &
+         comment = 'Equilibrium magnetic flux through triangle edge', unit = 'G cm^2')
+    call h5_add(h5id_root, 'cache/B0R_centr', B0R_Omega, lbound(B0R_Omega), ubound(B0R_Omega), &
+         comment = 'R component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
+    call h5_add(h5id_root, 'cache/B0phi_centr', B0phi_Omega, lbound(B0phi_Omega), ubound(B0phi_Omega), &
+         comment = 'phi component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
+    call h5_add(h5id_root, 'cache/B0Z_centr', B0Z_Omega, lbound(B0Z_Omega), ubound(B0Z_Omega), &
+         comment = 'Z component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
+    call h5_add(h5id_root, 'cache/j0phi_edge', j0phi, lbound(j0phi), ubound(j0phi), &
+         comment = 'phi component of equilibrium current density on triangle edge', unit = 'statA cm^-2')
+    call h5_close(h5id_root)
+  end subroutine write_mesh_cache
+
+  subroutine read_mesh_cache
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    use magdif_conf, only: datafile
+    integer(HID_T) :: h5id_root
+
+    call mesh_read(mesh, datafile, 'mesh')
+    call flux_func_cache_init(fs, mesh%nflux, .false.)
+    call flux_func_cache_init(fs_half, mesh%nflux, .true.)
+    call coord_cache_init(sample_polmodes, mesh%ntri)
+    call flux_func_cache_read(fs, datafile, 'cache/fs')
+    call flux_func_cache_read(fs_half, datafile, 'cache/fs_half')
+    call coord_cache_read(sample_polmodes, datafile, 'cache/sample_polmodes')
+    ! TODO: revise naming and indexing when edge_cache type is working for GL quadrature in compute_currn
+    allocate(B0R(3, mesh%ntri))
+    allocate(B0phi(3, mesh%ntri))
+    allocate(B0Z(3, mesh%ntri))
+    allocate(B0R_Omega(mesh%ntri))
+    allocate(B0phi_Omega(mesh%ntri))
+    allocate(B0Z_Omega(mesh%ntri))
+    allocate(B0flux(3, mesh%ntri))
+    allocate(j0phi(3, mesh%ntri))
+    call h5_open(datafile, h5id_root)
+    call h5_get(h5id_root, 'cache/B0R_edge', B0R)
+    call h5_get(h5id_root, 'cache/B0phi_edge', B0phi)
+    call h5_get(h5id_root, 'cache/B0Z_edge', B0Z)
+    call h5_get(h5id_root, 'cache/B0_flux', B0flux)
+    call h5_get(h5id_root, 'cache/B0R_centr', B0R_Omega)
+    call h5_get(h5id_root, 'cache/B0phi_centr', B0phi_Omega)
+    call h5_get(h5id_root, 'cache/B0Z_centr', B0Z_Omega)
+    call h5_get(h5id_root, 'cache/j0phi_edge', j0phi)
+    call h5_close(h5id_root)
+  end subroutine read_mesh_cache
 
   subroutine refine_eqd_partition(nref, deletions, additions, refinement, res, refined, &
        ref_ind)
@@ -1205,193 +1399,143 @@ contains
     probably = any(dist_2 < thickness ** 2)
   end function point_in_triangle
 
-  subroutine write_mesh_data
-    use magdif_conf, only: datafile
-    use hdf5_tools, only: HID_T, h5_create, h5_define_group, h5_close_group, h5_add, &
+  subroutine mesh_write(mesh, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
          h5_close
-
-    integer(HID_T) :: h5id_magdif, h5id_mesh, h5id_cache, h5id_fs, h5id_fs_half, &
-         h5id_sample_polmodes
+    type(mesh_t), intent(in) :: mesh
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
     integer :: orient(mesh%ntri)
-    integer :: fid, kpoi, ktri, kp
 
-    call flux_func_cache_check
     where (mesh%orient)
        orient = 1
     elsewhere
        orient = 0
     end where
-    call h5_create(datafile, h5id_magdif)
-    call h5_define_group(h5id_magdif, 'mesh', h5id_mesh)
-    call h5_add(h5id_mesh, 'R_O', mesh%R_O, &
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/nflux')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_O', mesh%R_O, &
          comment = 'R coordinate of O point', unit = 'cm')
-    call h5_add(h5id_mesh, 'Z_O', mesh%Z_O, &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_O', mesh%Z_O, &
          comment = 'Z coordinate of O point', unit = 'cm')
-    call h5_add(h5id_mesh, 'R_min', mesh%R_min, &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_min', mesh%R_min, &
          comment = 'minimal R coordinate of computational grid', unit = 'cm')
-    call h5_add(h5id_mesh, 'Z_min', mesh%Z_min, &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_min', mesh%Z_min, &
          comment = 'minimal Z coordinate of computational grid', unit = 'cm')
-    call h5_add(h5id_mesh, 'R_max', mesh%R_max, &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_max', mesh%R_max, &
          comment = 'maximal R coordinate of computational grid', unit = 'cm')
-    call h5_add(h5id_mesh, 'Z_max', mesh%Z_max, &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_max', mesh%Z_max, &
          comment = 'maximal Z coordinate of computational grid', unit = 'cm')
-    call h5_add(h5id_mesh, 'nflux', mesh%nflux, comment = 'number of flux surfaces')
-    call h5_add(h5id_mesh, 'npoint', mesh%npoint, comment = 'number of points')
-    call h5_add(h5id_mesh, 'ntri', mesh%ntri, comment = 'number of triangles')
-    call h5_add(h5id_mesh, 'nedge', mesh%nedge, comment = 'number of edges')
-    call h5_add(h5id_mesh, 'n', mesh%n, comment = 'toroidal mode number')
-    call h5_add(h5id_mesh, 'm_res_min', mesh%m_res_min, &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nflux', mesh%nflux, &
+         comment = 'number of flux surfaces')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/npoint', mesh%npoint, &
+         comment = 'number of points')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ntri', mesh%ntri, &
+         comment = 'number of triangles')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nedge', mesh%nedge, &
+         comment = 'number of edges')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/n', mesh%n, &
+         comment = 'toroidal mode number')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_res_min', mesh%m_res_min, &
          comment = 'minimal absolute poloidal mode number')
-    call h5_add(h5id_mesh, 'm_res_max', mesh%m_res_max, &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_res_max', mesh%m_res_max, &
          comment = 'maximal absolute poloidal mode number')
-    call h5_add(h5id_mesh, 'deletions', mesh%deletions, lbound(mesh%deletions), ubound(mesh%deletions), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/deletions', mesh%deletions, &
+         lbound(mesh%deletions), ubound(mesh%deletions), &
          comment = 'number of unrefined flux surfaces to be replaced by refined ones')
-    call h5_add(h5id_mesh, 'additions', mesh%additions, lbound(mesh%additions), ubound(mesh%additions), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/additions', mesh%additions, &
+         lbound(mesh%additions), ubound(mesh%additions), &
          comment = 'number of refined flux surfaces')
-    call h5_add(h5id_mesh, 'refinement', mesh%refinement, lbound(mesh%refinement), ubound(mesh%refinement), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/refinement', mesh%refinement, &
+         lbound(mesh%refinement), ubound(mesh%refinement), &
          comment = 'relative size of most refined flux surface')
-    call h5_add(h5id_mesh, 'm_res', mesh%m_res, lbound(mesh%m_res), ubound(mesh%m_res), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_res', mesh%m_res, &
+         lbound(mesh%m_res), ubound(mesh%m_res), &
          comment = 'poloidal mode number m in resonance at given flux surface')
-    call h5_add(h5id_mesh, 'res_ind', mesh%res_ind, lbound(mesh%res_ind), ubound(mesh%res_ind), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/res_ind', mesh%res_ind, &
+         lbound(mesh%res_ind), ubound(mesh%res_ind), &
          comment = 'flux surface index in resonance with given poloidal mode number')
-    call h5_add(h5id_mesh, 'psi_res', mesh%psi_res, lbound(mesh%psi_res), ubound(mesh%psi_res), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi_res', mesh%psi_res, &
+         lbound(mesh%psi_res), ubound(mesh%psi_res), &
          comment = 'poloidal flux in resonance with given poloidal mode number', unit = 'Mx')
-    call h5_add(h5id_mesh, 'rad_norm_res', mesh%rad_norm_res, lbound(mesh%rad_norm_res), ubound(mesh%rad_norm_res), &
-         comment = 'normalized minor radius (along X-O line) in resonance with given poloidal mode number', unit = '1')
-    call h5_add(h5id_mesh, 'kp_max', mesh%kp_max, lbound(mesh%kp_max), ubound(mesh%kp_max), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad_norm_res', mesh%rad_norm_res, &
+         lbound(mesh%rad_norm_res), ubound(mesh%rad_norm_res), unit = '1', &
+         comment = 'normalized minor radius (along X-O line) in resonance with given poloidal mode number')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kp_max', mesh%kp_max, &
+         lbound(mesh%kp_max), ubound(mesh%kp_max), &
          comment = 'number of nodes on flux surface')
-    call h5_add(h5id_mesh, 'kp_low', mesh%kp_low, lbound(mesh%kp_low), ubound(mesh%kp_low), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kp_low', mesh%kp_low, &
+         lbound(mesh%kp_low), ubound(mesh%kp_low), &
          comment = 'index of last node on previous flux surface')
-    call h5_add(h5id_mesh, 'kt_max', mesh%kt_max, lbound(mesh%kt_max), ubound(mesh%kt_max), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kt_max', mesh%kt_max, &
+         lbound(mesh%kt_max), ubound(mesh%kt_max), &
          comment = 'number of triangles on flux surface')
-    call h5_add(h5id_mesh, 'kt_low', mesh%kt_low, lbound(mesh%kt_low), ubound(mesh%kt_low), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kt_low', mesh%kt_low, &
+         lbound(mesh%kt_low), ubound(mesh%kt_low), &
          comment = 'index of last triangle on previous flux surface')
-    call h5_add(h5id_mesh, 'node_R', mesh%node_R, lbound(mesh%node_R), ubound(mesh%node_R), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/node_R', mesh%node_R, &
+         lbound(mesh%node_R), ubound(mesh%node_R), &
          comment = 'R coordinates of mesh points', unit = 'cm')
-    call h5_add(h5id_mesh, 'node_Z', mesh%node_Z, lbound(mesh%node_Z), ubound(mesh%node_Z), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/node_Z', mesh%node_Z, &
+         lbound(mesh%node_Z), ubound(mesh%node_Z), &
          comment = 'Z coordinates of mesh points', unit = 'cm')
-    call h5_add(h5id_mesh, 'tri_node', mesh%tri_node, lbound(mesh%tri_node), ubound(mesh%tri_node), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/tri_node', mesh%tri_node, &
+         lbound(mesh%tri_node), ubound(mesh%tri_node), &
          comment = 'triangle node indices')
-    call h5_add(h5id_mesh, 'tri_node_F', mesh%tri_node_F, lbound(mesh%tri_node_F), ubound(mesh%tri_node_F), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/tri_node_F', mesh%tri_node_F, &
+         lbound(mesh%tri_node_F), ubound(mesh%tri_node_F), &
          comment = 'local node index of node F')
-    call h5_add(h5id_mesh, 'li', mesh%li, lbound(mesh%li), ubound(mesh%li), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/li', mesh%li, &
+         lbound(mesh%li), ubound(mesh%li), &
          comment = 'local node indices of edge i, counter-clockwise')
-    call h5_add(h5id_mesh, 'lo', mesh%lo, lbound(mesh%lo), ubound(mesh%lo), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/lo', mesh%lo, &
+         lbound(mesh%lo), ubound(mesh%lo), &
          comment = 'local node indices of edge o, counter-clockwise')
-    call h5_add(h5id_mesh, 'lf', mesh%lf, lbound(mesh%lf), ubound(mesh%lf), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/lf', mesh%lf, &
+         lbound(mesh%lf), ubound(mesh%lf), &
          comment = 'local node indices of edge f, counter-clockwise')
-    call h5_add(h5id_mesh, 'ei', mesh%ei, lbound(mesh%ei), ubound(mesh%ei), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ei', mesh%ei, &
+         lbound(mesh%ei), ubound(mesh%ei), &
          comment = 'local edge index of edge i')
-    call h5_add(h5id_mesh, 'eo', mesh%eo, lbound(mesh%eo), ubound(mesh%eo), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/eo', mesh%eo, &
+         lbound(mesh%eo), ubound(mesh%eo), &
          comment = 'local edge index of edge o')
-    call h5_add(h5id_mesh, 'ef', mesh%ef, lbound(mesh%ef), ubound(mesh%ef), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ef', mesh%ef, &
+         lbound(mesh%ef), ubound(mesh%ef), &
          comment = 'local edge index of edge f')
-    call h5_add(h5id_mesh, 'orient', orient, lbound(orient), ubound(orient), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/orient', orient, &
+         lbound(orient), ubound(orient), &
          comment = 'triangle orientation: true (1) if edge f lies on outer flux surface')
-    call h5_add(h5id_mesh, 'adj_tri', mesh%adj_tri, lbound(mesh%adj_tri), ubound(mesh%adj_tri), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/adj_tri', mesh%adj_tri, &
+         lbound(mesh%adj_tri), ubound(mesh%adj_tri), &
          comment = 'adjacent triangle indices')
-    call h5_add(h5id_mesh, 'adj_edge', mesh%adj_edge, lbound(mesh%adj_edge), ubound(mesh%adj_edge), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/adj_edge', mesh%adj_edge, &
+         lbound(mesh%adj_edge), ubound(mesh%adj_edge), &
          comment = 'adjacent triangle edge indices')
-    call h5_add(h5id_mesh, 'edge_map2kedge', mesh%edge_map2global, &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_map2kedge', mesh%edge_map2global, &
          lbound(mesh%edge_map2global), ubound(mesh%edge_map2global), &
          comment = 'mapping of triangle & local edge index to global edge index')
-    call h5_add(h5id_mesh, 'edge_map2ktri', mesh%edge_map2ktri, &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_map2ktri', mesh%edge_map2ktri, &
          lbound(mesh%edge_map2ktri), ubound(mesh%edge_map2ktri), &
          comment = 'mapping of global edge index to triangle index')
-    call h5_add(h5id_mesh, 'edge_map2ke', mesh%edge_map2ke, &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_map2ke', mesh%edge_map2ke, &
          lbound(mesh%edge_map2ke), ubound(mesh%edge_map2ke), &
          comment = 'mapping of global edge index to local edge index')
-    call h5_add(h5id_mesh, 'R_Omega', mesh%R_Omega, lbound(mesh%R_Omega), ubound(mesh%R_Omega), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega, &
+         lbound(mesh%R_Omega), ubound(mesh%R_Omega), &
          comment = 'R coordinate of triangle ''centroid''', unit = 'cm')
-    call h5_add(h5id_mesh, 'Z_Omega', mesh%Z_Omega, lbound(mesh%Z_Omega), ubound(mesh%Z_Omega), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_Omega', mesh%Z_Omega, &
+         lbound(mesh%Z_Omega), ubound(mesh%Z_Omega), &
          comment = 'Z coordinate of triangle ''centroid''', unit = 'cm')
-    call h5_add(h5id_mesh, 'area', mesh%area, lbound(mesh%area), ubound(mesh%area), &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area, &
+         lbound(mesh%area), ubound(mesh%area), &
          comment = 'triangle area', unit = 'cm^2')
-    call h5_close_group(h5id_mesh)
-    call h5_define_group(h5id_magdif, 'cache', h5id_cache)
-    call h5_define_group(h5id_cache, 'fs', h5id_fs)
-    call h5_add(h5id_fs, 'psi', fs%psi, lbound(fs%psi), ubound(fs%psi), &
-         comment = 'poloidal flux on flux surfaces', unit = 'Mx')
-    call h5_add(h5id_fs, 'rad', fs%rad, lbound(fs%rad), ubound(fs%rad), &
-         comment = 'radial position on OX line on flux surfaces', unit = 'cm')
-    call h5_add(h5id_fs, 'F', fs%F, lbound(fs%F), ubound(fs%F), &
-         comment = 'covariant toroidal equilibrium field on flux surfaces', unit = 'G cm')
-    call h5_add(h5id_fs, 'p', fs%p, lbound(fs%p), ubound(fs%p), &
-         comment = 'equilibrium pressure on flux surfaces', unit = 'dyn cm^-2')
-    call h5_add(h5id_fs, 'FdF_dpsi', fs%FdF_dpsi, lbound(fs%FdF_dpsi), ubound(fs%FdF_dpsi), &
-         comment = 'FF''(psi) on flux surfaces', unit = 'G')
-    call h5_add(h5id_fs, 'dp_dpsi', fs%dp_dpsi, lbound(fs%dp_dpsi), ubound(fs%dp_dpsi), &
-         comment = 'p''(psi) on flux surfaces', unit = 'dyn cm^-2 Mx^-1')
-    call h5_add(h5id_fs, 'q', fs%q, lbound(fs%q), ubound(fs%q), &
-         comment = 'safety factor on flux surfaces', unit = '1')
-    call h5_close_group(h5id_fs)
-    call h5_define_group(h5id_cache, 'fs_half', h5id_fs_half)
-    call h5_add(h5id_fs_half, 'psi', fs_half%psi, lbound(fs_half%psi), ubound(fs_half%psi), &
-         comment = 'poloidal flux between flux surfaces', unit = 'Mx')
-    call h5_add(h5id_fs_half, 'rad', fs_half%rad, lbound(fs_half%rad), ubound(fs_half%rad), &
-         comment = 'radial position on OX line between flux surfaces', unit = 'cm')
-    call h5_add(h5id_fs_half, 'F', fs_half%F, lbound(fs_half%F), ubound(fs_half%F), &
-         comment = 'covariant toroidal equilibrium field between flux surfaces', unit = 'G cm')
-    call h5_add(h5id_fs_half, 'p', fs_half%p, lbound(fs_half%p), ubound(fs_half%p), &
-         comment = 'equilibrium pressure between flux surfaces', unit = 'dyn cm^-2')
-    call h5_add(h5id_fs_half, 'FdF_dpsi', fs_half%FdF_dpsi, lbound(fs_half%FdF_dpsi), ubound(fs_half%FdF_dpsi), &
-         comment = 'FF''(psi) between flux surfaces', unit = 'G')
-    call h5_add(h5id_fs_half, 'dp_dpsi', fs_half%dp_dpsi, lbound(fs_half%dp_dpsi), ubound(fs_half%dp_dpsi), &
-         comment = 'p''(psi) between flux surfaces', unit = 'dyn cm^-2 Mx^-1')
-    call h5_add(h5id_fs_half, 'q', fs_half%q, lbound(fs_half%q), ubound(fs_half%q), &
-         comment = 'safety factor between flux surfaces', unit = '1')
-    call h5_close_group(h5id_fs_half)
-    ! TODO: revise naming and indexing when edge_cache type is working for GL quadrature in compute_currn
-    call h5_add(h5id_cache, 'B0R_edge', B0R, lbound(B0R), ubound(B0R), &
-         comment = 'R component of equilibrium magnetic field on triangle edge', unit = 'G')
-    call h5_add(h5id_cache, 'B0phi_edge', B0phi, lbound(B0phi), ubound(B0phi), &
-         comment = 'phi component of equilibrium magnetic field on triangle edge', unit = 'G')
-    call h5_add(h5id_cache, 'B0Z_edge', B0Z, lbound(B0Z), ubound(B0Z), &
-         comment = 'Z component of equilibrium magnetic field on triangle edge', unit = 'G')
-    call h5_add(h5id_cache, 'B0_flux', B0flux, lbound(B0flux), ubound(B0flux), &
-         comment = 'Equilibrium magnetic flux through triangle edge', unit = 'G cm^2')
-    call h5_add(h5id_cache, 'B0R_centr', B0R_Omega, lbound(B0R_Omega), ubound(B0R_Omega), &
-         comment = 'R component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
-    call h5_add(h5id_cache, 'B0phi_centr', B0phi_Omega, lbound(B0phi_Omega), ubound(B0phi_Omega), &
-         comment = 'phi component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
-    call h5_add(h5id_cache, 'B0Z_centr', B0Z_Omega, lbound(B0Z_Omega), ubound(B0Z_Omega), &
-         comment = 'Z component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
-    call h5_add(h5id_cache, 'j0phi_edge', j0phi, lbound(j0phi), ubound(j0phi), &
-         comment = 'phi component of equilibrium current density on triangle edge', unit = 'statA cm^-2')
-    call h5_define_group(h5id_cache, 'sample_polmodes', h5id_sample_polmodes)
-    call h5_add(h5id_sample_polmodes, 'ktri', sample_polmodes%ktri, &
-         lbound(sample_polmodes%ktri), ubound(sample_polmodes%ktri), &
-         comment = 'triangle index of poloidal mode sampling point')
-    call h5_add(h5id_sample_polmodes, 'R', sample_polmodes%R, &
-         lbound(sample_polmodes%R), ubound(sample_polmodes%R), &
-         comment = 'R coordinate of poloidal mode sampling point', unit = 'cm')
-    call h5_add(h5id_sample_polmodes, 'Z', sample_polmodes%Z, &
-         lbound(sample_polmodes%Z), ubound(sample_polmodes%Z), &
-         comment = 'Z coordinate of poloidal mode sampling point', unit = 'cm')
-    call h5_add(h5id_sample_polmodes, 'psi', sample_polmodes%theta, &
-         lbound(sample_polmodes%psi), ubound(sample_polmodes%psi), &
-         comment = 'poloidal flux at poloidal mode sampling point', unit = 'Mx')
-    call h5_add(h5id_sample_polmodes, 'theta', sample_polmodes%theta, &
-         lbound(sample_polmodes%theta), ubound(sample_polmodes%theta), &
-         comment = 'flux poloidal angle at poloidal mode sampling point', unit = 'rad')
-    call h5_add(h5id_sample_polmodes, 'sqrt_g', sample_polmodes%sqrt_g, &
-         lbound(sample_polmodes%sqrt_g), ubound(sample_polmodes%sqrt_g), &
-         comment = 'Jacobian at poloidal mode sampling point', unit = 'cm G^-1')
-    call h5_add(h5id_sample_polmodes, 'B0_R', sample_polmodes%B0_R, &
-         lbound(sample_polmodes%B0_R), ubound(sample_polmodes%B0_R), &
-         comment = 'R component of equilibrium magnetic field at poloidal mode sampling point', unit = 'G')
-    call h5_add(h5id_sample_polmodes, 'B0_Z', sample_polmodes%B0_Z, &
-         lbound(sample_polmodes%B0_Z), ubound(sample_polmodes%B0_Z), &
-         comment = 'Z component of equilibrium magnetic field at poloidal mode sampling point', unit = 'G')
-    call h5_add(h5id_sample_polmodes, 'dR_dtheta', sample_polmodes%dR_dtheta, &
-         lbound(sample_polmodes%dR_dtheta), ubound(sample_polmodes%dR_dtheta), &
-         comment = 'R''(theta) at poloidal mode sampling point', unit = 'cm rad^-1')
-    call h5_add(h5id_sample_polmodes, 'dZ_dtheta', sample_polmodes%dZ_dtheta, &
-         lbound(sample_polmodes%dZ_dtheta), ubound(sample_polmodes%dZ_dtheta), &
-         comment = 'Z''(theta) at poloidal mode sampling point', unit = 'cm rad^-1')
-    call h5_close_group(h5id_sample_polmodes)
-    call h5_close_group(h5id_cache)
-    call h5_close(h5id_magdif)
+    call h5_close(h5id_root)
+  end subroutine mesh_write
+
+  subroutine write_meshfile_for_freefem
+    integer :: fid, kpoi, ktri, kp
 
     open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace')
     write (fid, '(3(1x, i0))') mesh%npoint, mesh%ntri, mesh%kp_max(mesh%nflux) - 1
@@ -1410,34 +1554,31 @@ contains
        write (fid, '(4(1x, i0))') mesh%kp_low(mesh%nflux) + kp, mesh%kp_low(mesh%nflux) + kp + 1, 1
     end do
     close(fid)
-  end subroutine write_mesh_data
+  end subroutine write_meshfile_for_freefem
 
-  subroutine read_mesh
-    use magdif_conf, only: log, datafile
+  subroutine mesh_read(mesh, file, dataset)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
-    integer(HID_T) :: h5id_magdif
+    type(mesh_t), intent(inout) :: mesh
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
     integer, allocatable :: orient(:)
 
-    call h5_open(datafile, h5id_magdif)
-    call h5_get(h5id_magdif, 'mesh/R_O', mesh%R_O)
-    call h5_get(h5id_magdif, 'mesh/Z_O', mesh%Z_O)
-    call h5_get(h5id_magdif, 'mesh/R_min', mesh%R_min)
-    call h5_get(h5id_magdif, 'mesh/Z_min', mesh%Z_min)
-    call h5_get(h5id_magdif, 'mesh/R_max', mesh%R_max)
-    call h5_get(h5id_magdif, 'mesh/Z_max', mesh%Z_max)
-    call h5_get(h5id_magdif, 'mesh/nflux', mesh%nflux)
-    call h5_get(h5id_magdif, 'mesh/npoint', mesh%npoint)
-    call h5_get(h5id_magdif, 'mesh/ntri', mesh%ntri)
-    call h5_get(h5id_magdif, 'mesh/nedge', mesh%nedge)
-    call h5_get(h5id_magdif, 'mesh/n', mesh%n)
-    call h5_get(h5id_magdif, 'mesh/m_res_min', mesh%m_res_min)
-    call h5_get(h5id_magdif, 'mesh/m_res_max', mesh%m_res_max)
-    write (log%msg, '("nflux = ", i0, ", npoint = ", i0, ", ntri = ", i0)') &
-         mesh%nflux, mesh%npoint, mesh%ntri
-    if (log%info) call log%write
-    call fs%init(mesh%nflux, .false.)
-    call fs_half%init(mesh%nflux, .true.)
-    call coord_cache_init(sample_polmodes, mesh%ntri)
+    call magdif_mesh_destructor(mesh)
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_O', mesh%R_O)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_O', mesh%Z_O)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_min', mesh%R_min)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_min', mesh%Z_min)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_max', mesh%R_max)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_max', mesh%Z_max)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/nflux', mesh%nflux)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/npoint', mesh%npoint)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/ntri', mesh%ntri)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/nedge', mesh%nedge)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/n', mesh%n)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_res_min', mesh%m_res_min)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_res_max', mesh%m_res_max)
     ! TODO: allocate deferred-shape arrays in hdf5_tools and skip allocation here
     allocate(mesh%deletions(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%additions(mesh%m_res_min:mesh%m_res_max))
@@ -1470,85 +1611,44 @@ contains
     allocate(mesh%area(mesh%ntri))
     allocate(mesh%R_Omega(mesh%ntri))
     allocate(mesh%Z_Omega(mesh%ntri))
-    allocate(B0R(3, mesh%ntri))
-    allocate(B0phi(3, mesh%ntri))
-    allocate(B0Z(3, mesh%ntri))
-    allocate(B0R_Omega(mesh%ntri))
-    allocate(B0phi_Omega(mesh%ntri))
-    allocate(B0Z_Omega(mesh%ntri))
-    allocate(B0flux(3, mesh%ntri))
-    allocate(j0phi(3, mesh%ntri))
-    call h5_get(h5id_magdif, 'mesh/deletions', mesh%deletions)
-    call h5_get(h5id_magdif, 'mesh/additions', mesh%additions)
-    call h5_get(h5id_magdif, 'mesh/refinement', mesh%refinement)
-    call h5_get(h5id_magdif, 'mesh/m_res', mesh%m_res)
-    call h5_get(h5id_magdif, 'mesh/res_ind', mesh%res_ind)
-    call h5_get(h5id_magdif, 'mesh/psi_res', mesh%psi_res)
-    call h5_get(h5id_magdif, 'mesh/rad_norm_res', mesh%rad_norm_res)
-    call h5_get(h5id_magdif, 'mesh/kp_max', mesh%kp_max)
-    call h5_get(h5id_magdif, 'mesh/kp_low', mesh%kp_low)
-    call h5_get(h5id_magdif, 'mesh/kt_max', mesh%kt_max)
-    call h5_get(h5id_magdif, 'mesh/kt_low', mesh%kt_low)
-    call h5_get(h5id_magdif, 'mesh/node_R', mesh%node_R)
-    call h5_get(h5id_magdif, 'mesh/node_Z', mesh%node_Z)
-    call h5_get(h5id_magdif, 'mesh/tri_node', mesh%tri_node)
-    call h5_get(h5id_magdif, 'mesh/tri_node_F', mesh%tri_node_F)
-    call h5_get(h5id_magdif, 'mesh/li', mesh%li)
-    call h5_get(h5id_magdif, 'mesh/lo', mesh%lo)
-    call h5_get(h5id_magdif, 'mesh/lf', mesh%lf)
-    call h5_get(h5id_magdif, 'mesh/ei', mesh%ei)
-    call h5_get(h5id_magdif, 'mesh/eo', mesh%eo)
-    call h5_get(h5id_magdif, 'mesh/ef', mesh%ef)
-    call h5_get(h5id_magdif, 'mesh/orient', orient)
-    call h5_get(h5id_magdif, 'mesh/adj_tri', mesh%adj_tri)
-    call h5_get(h5id_magdif, 'mesh/adj_edge', mesh%adj_edge)
-    call h5_get(h5id_magdif, 'mesh/edge_map2kedge', mesh%edge_map2global)
-    call h5_get(h5id_magdif, 'mesh/edge_map2ktri', mesh%edge_map2ktri)
-    call h5_get(h5id_magdif, 'mesh/edge_map2ke', mesh%edge_map2ke)
-    call h5_get(h5id_magdif, 'mesh/R_Omega', mesh%R_Omega)
-    call h5_get(h5id_magdif, 'mesh/Z_Omega', mesh%Z_Omega)
-    call h5_get(h5id_magdif, 'mesh/area', mesh%area)
-    call h5_get(h5id_magdif, 'cache/fs/psi', fs%psi)
-    call h5_get(h5id_magdif, 'cache/fs/rad', fs%rad)
-    call h5_get(h5id_magdif, 'cache/fs/F', fs%F)
-    call h5_get(h5id_magdif, 'cache/fs/p', fs%p)
-    call h5_get(h5id_magdif, 'cache/fs/FdF_dpsi', fs%FdF_dpsi)
-    call h5_get(h5id_magdif, 'cache/fs/dp_dpsi', fs%dp_dpsi)
-    call h5_get(h5id_magdif, 'cache/fs/q', fs%q)
-    call h5_get(h5id_magdif, 'cache/fs_half/psi', fs_half%psi)
-    call h5_get(h5id_magdif, 'cache/fs_half/rad', fs_half%rad)
-    call h5_get(h5id_magdif, 'cache/fs_half/F', fs_half%F)
-    call h5_get(h5id_magdif, 'cache/fs_half/p', fs_half%p)
-    call h5_get(h5id_magdif, 'cache/fs_half/FdF_dpsi', fs_half%FdF_dpsi)
-    call h5_get(h5id_magdif, 'cache/fs_half/dp_dpsi', fs_half%dp_dpsi)
-    call h5_get(h5id_magdif, 'cache/fs_half/q', fs_half%q)
-    ! TODO: revise naming and indexing when edge_cache type is working for GL quadrature in compute_currn
-    call h5_get(h5id_magdif, 'cache/B0R_edge', B0R)
-    call h5_get(h5id_magdif, 'cache/B0phi_edge', B0phi)
-    call h5_get(h5id_magdif, 'cache/B0Z_edge', B0Z)
-    call h5_get(h5id_magdif, 'cache/B0_flux', B0flux)
-    call h5_get(h5id_magdif, 'cache/B0R_centr', B0R_Omega)
-    call h5_get(h5id_magdif, 'cache/B0phi_centr', B0phi_Omega)
-    call h5_get(h5id_magdif, 'cache/B0Z_centr', B0Z_Omega)
-    call h5_get(h5id_magdif, 'cache/j0phi_edge', j0phi)
-    call h5_get(h5id_magdif, 'cache/sample_polmodes/ktri', sample_polmodes%ktri)
-    call h5_get(h5id_magdif, 'cache/sample_polmodes/R', sample_polmodes%R)
-    call h5_get(h5id_magdif, 'cache/sample_polmodes/Z', sample_polmodes%Z)
-    call h5_get(h5id_magdif, 'cache/sample_polmodes/psi', sample_polmodes%theta)
-    call h5_get(h5id_magdif, 'cache/sample_polmodes/theta', sample_polmodes%theta)
-    call h5_get(h5id_magdif, 'cache/sample_polmodes/sqrt_g', sample_polmodes%sqrt_g)
-    call h5_get(h5id_magdif, 'cache/sample_polmodes/B0_R', sample_polmodes%B0_R)
-    call h5_get(h5id_magdif, 'cache/sample_polmodes/B0_Z', sample_polmodes%B0_Z)
-    call h5_get(h5id_magdif, 'cache/sample_polmodes/dR_dtheta', sample_polmodes%dR_dtheta)
-    call h5_get(h5id_magdif, 'cache/sample_polmodes/dZ_dtheta', sample_polmodes%dZ_dtheta)
-    call h5_close(h5id_magdif)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/deletions', mesh%deletions)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/additions', mesh%additions)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', mesh%refinement)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_res', mesh%m_res)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/res_ind', mesh%res_ind)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi_res', mesh%psi_res)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rad_norm_res', mesh%rad_norm_res)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/kp_max', mesh%kp_max)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/kp_low', mesh%kp_low)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/kt_max', mesh%kt_max)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/kt_low', mesh%kt_low)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/node_R', mesh%node_R)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/node_Z', mesh%node_Z)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_node', mesh%tri_node)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_node_F', mesh%tri_node_F)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/li', mesh%li)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/lo', mesh%lo)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/lf', mesh%lf)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/ei', mesh%ei)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/eo', mesh%eo)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/ef', mesh%ef)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/orient', orient)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/adj_tri', mesh%adj_tri)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/adj_edge', mesh%adj_edge)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_map2kedge', mesh%edge_map2global)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_map2ktri', mesh%edge_map2ktri)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_map2ke', mesh%edge_map2ke)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_Omega', mesh%Z_Omega)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area)
+    call h5_close(h5id_root)
     where (orient == 1)
        mesh%orient = .true.
     elsewhere
        mesh%orient = .false.
     end where
     deallocate(orient)
-  end subroutine read_mesh
+  end subroutine mesh_read
 
   subroutine magdif_mesh_destructor(this)
     type(mesh_t), intent(inout) :: this

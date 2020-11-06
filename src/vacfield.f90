@@ -3,7 +3,7 @@ program vacfield
   use iso_fortran_env, only: dp => real64
   use hdf5_tools, only: h5_init, h5_deinit
   use magdif_conf, only: conf, conf_arr, magdif_config_read, log, magdif_log, datafile
-  use magdif_mesh, only: mesh, read_mesh
+  use magdif_mesh, only: mesh, read_mesh_cache
   use magdif_util, only: initialize_globals
   use magdif_pert, only: compute_Bn_nonres, compute_kilca_vac_coeff, compute_kilca_vacuum, &
        check_kilca_vacuum, RT0_check_redundant_edges, RT0_check_div_free, RT0_t, RT0_init, &
@@ -24,7 +24,7 @@ program vacfield
   log = magdif_log('-', conf%log_level, conf%quiet)
 
   call h5_init
-  call read_mesh
+  call read_mesh_cache
   call RT0_init(Bn, mesh%ntri)
   if (conf%kilca_scale_factor /= 0) then
      call compute_kilca_vac_coeff

@@ -31,7 +31,7 @@ contains
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use magdif_conf, only: conf, log, magdif_log, datafile
     use magdif_util, only: initialize_globals
-    use magdif_mesh, only: equil, mesh, read_mesh, fluxvar, flux_func_cache_check, &
+    use magdif_mesh, only: equil, mesh, read_mesh_cache, fluxvar, flux_func_cache_check, &
          check_curr0, check_safety_factor
     use magdif_pert, only: check_RT0, RT0_check_div_free, RT0_check_redundant_edges, &
          RT0_init, RT0_read, L1_init
@@ -50,7 +50,7 @@ contains
     end if
 
     ! read in preprocessed data
-    call read_mesh
+    call read_mesh_cache
     call load_magdata_in_symfluxcoord
     ! TODO: cache Lagrange polynomials instead
     call fluxvar%init(4, equil%psi_eqd)
