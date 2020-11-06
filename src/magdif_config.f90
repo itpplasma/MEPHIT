@@ -93,6 +93,10 @@ module magdif_conf
      !> Number of flux surfaces before refinement. Defaults to 100.
      integer :: nflux_unref = 100
 
+     !> Number of radial divisions in radially refined regions for parallel current
+     !> computations. Defaults to 2048.
+     integer :: nrad_Ipar = 2048
+
      !> Minimum temperature. Does not apply when #pres_prof equals #pres_prof_geqdsk.
      !> Defaults to 20 eV.
      real(dp) :: temp_min = 2d1
