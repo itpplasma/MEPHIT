@@ -263,9 +263,11 @@ magdif_help() {
 bindir=$(realpath $(dirname $0))
 scriptdir=$(realpath -m "$bindir/../../scripts")
 datadir=$(realpath -m "$bindir/../../data")
-if [ -n "$XDG_RUNTIME_DIR" ]; then
-    tmpdir=$XDG_RUNTIME_DIR
+if [[ "$OSTYPE" == "darwin"* ]]; then
+    tmpdir=$TMPDIR
 else
+    # $XDG_RUNTIME_DIR is not set when logged in via SSH
+    # and the directory is not accessible when using HTCondor
     tmpdir=/tmp/runtime-$USER
 fi
 
