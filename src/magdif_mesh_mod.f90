@@ -850,7 +850,7 @@ contains
     psi_min = minval(psi_sample)
     psi_max = maxval(psi_sample)
     call psi_eqd%init(4, psi_sample)
-    mesh%m_res_min = ceiling(minval(abs(q_sample)) * dble(mesh%n))
+    mesh%m_res_min = max(ceiling(minval(abs(q_sample)) * dble(mesh%n)), conf%n + 1)
     mesh%m_res_max = floor(maxval(abs(q_sample)) * dble(mesh%n))
     if (conf_arr%m_min < mesh%m_res_min) then
        write (log%msg, '("Ignoring configuration values for ", i0, " <= m < ", i0, ".")') &
@@ -1458,15 +1458,16 @@ contains
   subroutine compute_sample_Ipar(sample_Ipar, m)
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: psipol_max, magdata_in_symfluxcoord_ext
-    use field_line_integration_mod, only: theta_axis
     use magdif_conf, only: conf
     use magdif_util, only: linspace, interp_psi_pol
     type(coord_cache_ext), intent(inout) :: sample_Ipar
     integer, intent(in) :: m
     integer :: kf_min, kf_max, krad, kpol, k
-    real(dp) :: theta(sample_Ipar%npol), rad_eqd(equil%nw), drad_dpsi, dum
+    real(dp) :: theta_axis(2), theta(sample_Ipar%npol), rad_eqd(equil%nw), drad_dpsi, dum
     real(dp), dimension(sample_Ipar%nrad) :: rad, psi
 
+    theta_axis = [mesh%R_X - mesh%R_O, mesh%Z_X - mesh%Z_O]
+    theta_axis = theta_axis / hypot(theta_axis(1), theta_axis(2))
     sample_Ipar%m = m
     rad_eqd(:) = linspace(fs%rad(0), fs%rad(mesh%nflux), equil%nw, 0, 0)
     kf_min = mesh%res_ind(m) - mesh%additions(m) - mesh%deletions(m)
