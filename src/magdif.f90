@@ -36,6 +36,7 @@ contains
     use magdif_pert, only: check_RT0, RT0_check_div_free, RT0_check_redundant_edges, &
          RT0_init, RT0_read, L1_init
     integer(HID_T) :: h5id_root
+    integer :: dum
 
     log = magdif_log('-', conf%log_level, conf%quiet)
 
@@ -74,6 +75,10 @@ contains
        call check_RT0(Bnvac)
     end if
 
+    ! pass effective toroidal mode number to FreeFem++
+    call send_flag_to_freefem(mesh%n, freefem_pipe)
+    call receive_flag_from_freefem(dum, freefem_pipe)
+
     ! prepare datafile
     call h5_open_rw(datafile, h5id_root)
     call h5_delete(h5id_root, 'iter')
@@ -90,6 +95,11 @@ contains
     use magdif_mesh, only: B0R, B0phi, B0Z, B0R_Omega, B0phi_Omega, B0Z_Omega, B0flux, &
          j0phi
     use magdif_pert, only: L1_deinit, RT0_deinit
+    integer :: dum
+
+    ! tell FreeFem++ to stop processing
+    call send_flag_to_freefem(-3, freefem_pipe)
+    call receive_flag_from_freefem(dum, freefem_pipe)
     if (allocated(B0r)) deallocate(B0r)
     if (allocated(B0phi)) deallocate(B0phi)
     if (allocated(B0z)) deallocate(B0z)
@@ -139,11 +149,6 @@ contains
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
     integer, parameter :: m_max = 24
     type(vec_polmodes_t) :: jmn
-
-    call RT0_init(Bn_diff, mesh%ntri)
-    ! pass effective toroidal mode number to FreeFem++
-    call send_flag_to_freefem(mesh%n, freefem_pipe)
-    call receive_flag_from_freefem(info, freefem_pipe)
 
     ! system dimension: number of non-redundant edges in core plasma
     ndim = mesh%nedge
@@ -211,6 +216,7 @@ contains
     end if
 
     call vec_polmodes_init(jmn, m_max, mesh%nflux)
+    call RT0_init(Bn_diff, mesh%ntri)
     allocate(L2int(0:niter))
     call compute_L2int(Bnvac, L2int(0))
     call h5_open_rw(datafile, h5id_root)
@@ -274,9 +280,6 @@ contains
     call vec_polmodes_deinit(jmn)
     if (allocated(Lr)) deallocate(Lr)
     if (allocated(L2int)) deallocate(L2int)
-    ! tell FreeFem++ to stop processing
-    call send_flag_to_freefem(-3, freefem_pipe)
-    call receive_flag_from_freefem(info, freefem_pipe)
 
   contains
 
