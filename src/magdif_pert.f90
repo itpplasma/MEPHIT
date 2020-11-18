@@ -138,16 +138,37 @@ contains
     if (allocated(this%comp_phi)) deallocate(this%comp_phi)
   end subroutine RT0_deinit
 
-  subroutine RT0_interp(ktri, elem, R, Z, comp_R, comp_Z, &
+  subroutine RT0_interp(ktri, elem, R, Z, comp_R, comp_Z, comp_phi, &
        comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ)
+    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use magdif_mesh, only: mesh
     integer, intent(in) :: ktri
     type(RT0_t), intent(in) :: elem
     real(dp), intent(in) :: r, z
     complex(dp), intent(out) :: comp_R, comp_Z
-    complex(dp), intent(out), optional :: comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ
+    complex(dp), intent(out), optional :: comp_phi, comp_R_dR, comp_R_dZ, &
+         comp_Z_dR, comp_Z_dZ
     integer :: nodes(3)
+    real(dp) :: nan
 
+    if (ktri <= 0) then
+       nan = ieee_value(1d0, ieee_quiet_nan)
+       comp_R = cmplx(nan, nan, dp)
+       comp_Z = cmplx(nan, nan, dp)
+       if (present(comp_phi)) then
+          comp_phi = cmplx(nan, nan, dp)
+       end if
+       if (present(comp_R_dZ)) then
+          comp_R_dZ = (0d0, 0d0)
+       end if
+       if (present(comp_Z_dR)) then
+          comp_Z_dR = cmplx(nan, nan, dp)
+       end if
+       if (present(comp_Z_dZ)) then
+          comp_Z_dZ = cmplx(nan, nan, dp)
+       end if
+       return
+    end if
     nodes = mesh%tri_node(:, ktri)
     ! edge 1 lies opposite to knot 3, etc.
     comp_R = 0.5d0 / mesh%area(ktri) / R * ( &
@@ -158,6 +179,9 @@ contains
          elem%DOF(1, ktri) * (Z - mesh%node_Z(nodes(3))) + &
          elem%DOF(2, ktri) * (Z - mesh%node_Z(nodes(1))) + &
          elem%DOF(3, ktri) * (Z - mesh%node_Z(nodes(2))))
+    if (present(comp_phi)) then
+       comp_phi = elem%comp_phi(ktri)
+    end if
     if (present(comp_R_dR)) then
        comp_R_dR = 0.5d0 / mesh%area(ktri) / R ** 2 * ( &
             elem%DOF(1, ktri) * mesh%node_R(nodes(3)) + &
@@ -395,8 +419,7 @@ contains
           Z = equil%Z_eqd(kh)
           ktri = point_location(R, Z)
           if (ktri > mesh%kt_low(1) .and. ktri <= mesh%ntri) then
-             call RT0_interp(ktri, elem, R, Z, comp_R(kw, kh), comp_Z(kw, kh))
-             comp_phi(kw, kh) = elem%comp_phi(ktri)
+             call RT0_interp(ktri, elem, R, Z, comp_R(kw, kh), comp_Z(kw, kh), comp_phi(kw, kh))
           else
              comp_R(kw, kh) = (0d0, 0d0)
              comp_phi(kw, kh) = (0d0, 0d0)
@@ -493,7 +516,7 @@ contains
     type(vec_polmodes_t), intent(inout) :: vec_polmodes
     integer :: kf, kt, ktri, m
     complex(dp) :: fourier_basis(-vec_polmodes%m_max:vec_polmodes%m_max)
-    complex(dp) :: comp_R, comp_Z, comp_rad, comp_pol, comp_tor
+    complex(dp) :: comp_R, comp_Z, comp_phi, comp_rad, comp_pol, comp_tor
 
     vec_polmodes%coeff_rad(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_pol(:, :) = (0d0, 0d0)
@@ -503,15 +526,15 @@ contains
          do kt = 1, mesh%kt_max(kf)
             ktri = mesh%kt_low(kf) + kt
             fourier_basis = [(exp(-imun * m * s%theta(ktri)), m = -v%m_max, v%m_max)]
-            call RT0_interp(s%ktri(ktri), elem, s%R(ktri), s%Z(ktri), comp_R, comp_Z)
+            call RT0_interp(s%ktri(ktri), elem, s%R(ktri), s%Z(ktri), comp_R, comp_Z, comp_phi)
             if (conf%kilca_scale_factor /= 0) then
-               call bent_cyl2straight_cyl(comp_R, elem%comp_phi(ktri), comp_Z, &
+               call bent_cyl2straight_cyl(comp_R, comp_phi, comp_Z, &
                     s%theta(ktri), comp_rad, comp_pol, comp_tor)
             else
                comp_rad = s%sqrt_g(ktri) * (comp_R * s%B0_Z(ktri) - &
                     comp_Z * s%B0_R(ktri)) * s%R(ktri)
                comp_pol = comp_R * s%dR_dtheta(ktri) + comp_Z * s%dZ_dtheta(ktri)
-               comp_tor = elem%comp_phi(ktri)
+               comp_tor = comp_phi
             end if
             v%coeff_rad(:, kf) = v%coeff_rad(:, kf) + comp_rad * fourier_basis
             v%coeff_pol(:, kf) = v%coeff_pol(:, kf) + comp_pol * fourier_basis
@@ -761,8 +784,7 @@ contains
           R = mesh%R_O + rad * cos(theta)
           Z = mesh%Z_O + rad * sin(theta)
           ktri = point_location(R, Z)
-          call RT0_interp(ktri, Bn, R, Z, B_R_interp, B_Z_interp)
-          B_phi_interp = Bn%comp_phi(ktri)
+          call RT0_interp(ktri, Bn, R, Z, B_R_interp, B_Z_interp, B_phi_interp)
           write (fid, '(14(1x, es23.15e3))') rad, theta, B_R, B_phi, B_Z, &
                B_R_interp, B_phi_interp, B_Z_interp
        end do
