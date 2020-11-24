@@ -164,7 +164,7 @@ class magdif_vec_polmodes:
         self.offset = self.m_max
         self.abs = np.absolute(self.data[self.variable])
         self.arg = np.angle(self.data[self.variable])
-        self.ymax = np.amax(self.abs, axis=0)
+        self.ymax = np.nanmax(self.abs, axis=0)
         self.ymax = np.fmax(self.ymax[self.offset:-1],
                             self.ymax[self.offset:0:-1])
 
@@ -178,15 +178,18 @@ class magdif_KiLCA_Bmn_r:
     def process(self):
         print(f"reading poloidal modes from {self.datafile}")
         data = h5py.File(path.join(self.datadir, self.datafile), 'r')
+        self.rad_coord = fslabel.r
         self.rho = {}
         self.abs = {}
         self.arg = {}
         self.ymax = {}
+        self.m_max = 0
         for name, grp in data['/output'].items():
             if 'postprocessor' not in name:
                 continue
             m = int(grp['mode'][0, 0])
-            self.rho[m] = grp['r'][()]
+            self.m_max = max(self.m_max, m)
+            self.rho[m] = grp['r'][0, :]
             if grp['Br'].shape[0] == 2:
                 self.abs[m] = np.hypot(grp['Br'][0, ...], grp['Br'][1, ...])
                 self.arg[m] = np.arctan2(grp['Br'][1, ...], grp['Br'][0, ...])
@@ -206,6 +209,7 @@ class magdif_GPEC_bnormal:
     def process(self):
         print(f"reading poloidal modes from {self.datafile}")
         rootgrp = netCDF4.Dataset(path.join(self.datadir, self.datafile), 'r')
+        self.rad_coord = fslabel.psi_norm
         self.rho = np.array(rootgrp.variables['psi_n'])
         m = np.array(rootgrp.variables['m_out'])
         self.range = np.size(m)
@@ -216,6 +220,8 @@ class magdif_GPEC_bnormal:
         self.ymax = np.amax(self.abs, axis=0)
         self.ymax = np.fmax(self.ymax[self.offset:self.offset + self.m_max],
                             self.ymax[self.offset:self.offset - self.m_max:-1])
+        if rootgrp.getncattr('helicity') < 0.0:
+            self.abs = np.flip(self.abs)
         rootgrp.close()
 
 
@@ -279,7 +285,8 @@ class magdif_poloidal_plots:
                 ax = plt.subplot(vert_plot, horz_plot, k+1)
                 m = (2 * k - 1) * m_abs
                 if m in resonance:
-                    ax.axvline(resonance[m], color='b', alpha=0.5)
+                    ax.axvline(resonance[m], color='b', alpha=0.5,
+                               label='resonance position')
                 if self.refdata is not None and m_abs <= self.refdata.m_max:
                     ax.plot(self.interp_rho(self.refdata),
                             self.refdata.abs[:, self.refdata.offset + m],
@@ -290,7 +297,8 @@ class magdif_poloidal_plots:
                 ax.legend()
                 ax.ticklabel_format(style='sci', scilimits=(-3, 4))
                 ax.set_ylim(0.0, ymax)
-                ax.set_title('$m = {}$'.format(m))
+                ax.set_title(('resonant ' if m in resonance else 'non-resonant ')
+                             + fr"$m = {m}$")
                 ax.set_ylabel(self.ylabel)
                 ax.set_xlabel(xlabel)
             plt.tight_layout()
