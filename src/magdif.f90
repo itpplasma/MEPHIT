@@ -19,6 +19,9 @@ module magdif
   !> Vacuum perturbation field in units of Gauss.
   type(RT0_t) :: Bnvac
 
+  !> Plasma perturbation field in units of Gauss.
+  type(RT0_t) :: Bnplas
+
   !> Current density perturbation in units of statampere cm^-2.
   type(RT0_t) :: jn
 
@@ -65,6 +68,7 @@ contains
     call L1_init(pn, mesh%npoint)
     call RT0_init(Bn, mesh%ntri)
     call RT0_init(Bnvac, mesh%ntri)
+    call RT0_init(Bnplas, Bn%ntri)
     call RT0_init(jn, mesh%ntri)
 
     call RT0_read(Bnvac, datafile, 'Bnvac')
@@ -111,6 +115,7 @@ contains
     call L1_deinit(pn)
     call RT0_deinit(Bn)
     call RT0_deinit(Bnvac)
+    call RT0_deinit(Bnplas)
     call RT0_deinit(jn)
     log%msg = 'magdif cleanup finished'
     if (log%info) call log%write
@@ -264,6 +269,8 @@ contains
 
        call pack_dof(Bn, packed_Bn_prev)
     end do
+    Bnplas%DOF(:, :) = Bn%DOF - Bnvac%DOF
+    Bnplas%comp_phi(:) = Bn%comp_phi - Bnvac%comp_phi
     call h5_open_rw(datafile, h5id_root)
     call h5_delete(h5id_root, 'iter/L2int_Bn_diff')
     call h5_add(h5id_root, 'iter/L2int_Bn_diff', L2int, lbound(L2int), ubound(L2int), &
@@ -273,6 +280,8 @@ contains
          'pressure (full perturbation)', 'dyn cm^-2')
     call RT0_write(Bn, datafile, 'iter/Bn', &
          'magnetic field (full perturbation)', 'G', 2)
+    call RT0_write(Bnplas, datafile, 'iter/Bnplas', &
+         'magnetic field (plasma response)', 'G', 2)
     call RT0_write(jn, datafile, 'iter/jn', &
          'current density (full perturbation)', 'statA cm^-2', 1)
 
@@ -756,11 +765,10 @@ contains
     use magdif_conf, only: conf, datafile
     use magdif_mesh, only: mesh, coord_cache_ext, coord_cache_ext_init, coord_cache_ext_deinit, &
          compute_sample_Ipar
-    use magdif_pert, only: RT0_t, RT0_init, RT0_deinit, vec_polmodes_t, vec_polmodes_init, &
-         vec_polmodes_deinit, vec_polmodes_write, RT0_poloidal_modes
+    use magdif_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
+         vec_polmodes_write, RT0_poloidal_modes
     integer, parameter :: m_max = 24
     integer :: k
-    type(RT0_t) :: Bnplas
     type(vec_polmodes_t) :: vec_polmodes
     type(coord_cache_ext) :: sample_Ipar
 
@@ -772,11 +780,7 @@ contains
     call RT0_poloidal_modes(Bnvac, vec_polmodes)
     call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn_vac', &
          'poloidal modes of magnetic field (vacuum perturbation)', 'G')
-    call RT0_init(Bnplas, Bn%ntri)
-    Bnplas%DOF(:, :) = Bn%DOF - Bnvac%DOF
-    Bnplas%comp_phi(:) = Bn%comp_phi - Bnvac%comp_phi
     call RT0_poloidal_modes(Bnplas, vec_polmodes)
-    call RT0_deinit(Bnplas)
     call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn_plas', &
          'poloidal modes of magnetic field (plasma response)', 'G')
     if (conf%kilca_scale_factor /= 0) then
