@@ -53,7 +53,7 @@ class magdif_2d_triplot:
         if clim_scale is not None:
             self.clim_scale = clim_scale
         else:
-            self.clim_scale = 1.0
+            self.clim_scale = (1.0, 1.0)
 
     def dump_plot(self):
         print(f"plotting {self.filename}")
@@ -66,8 +66,8 @@ class magdif_2d_triplot:
         plt.gca().set_aspect('equal')
         cbar = plt.colorbar(format=self.__class__.scifmt)
         cbar.set_label(self.label, rotation=90)
-        plt.clim([-max(abs(self.data)) * self.clim_scale,
-                  max(abs(self.data)) * self.clim_scale])
+        plt.clim([-max(abs(self.data)) * self.clim_scale[0],
+                  max(abs(self.data)) * self.clim_scale[1]])
         plt.xlabel(r'$R$ / cm')
         plt.ylabel(r'$Z$ / cm')
         if self.title is not None:
@@ -368,7 +368,7 @@ class magdif:
             nameparts = path.splitext(filename)
             self.plots.append(magdif_2d_triplot(
                 mesh=self.data['/mesh'],
-                data=self.data[grp + dataset][()].imag,
+                data=self.data[grp + dataset][()].real,
                 label=fr"$\Real {decorator['math'](label)}$ / \si{{{unit}}}",
                 filename=path.join(self.datadir, nameparts[0] +
                                    decorator['file'] + '_Re' + nameparts[1])))
@@ -378,6 +378,18 @@ class magdif:
                 label=fr"$\Imag {decorator['math'](label)}$ / \si{{{unit}}}",
                 filename=path.join(self.datadir, nameparts[0] +
                                    decorator['file'] + '_Im' + nameparts[1])))
+            self.plots.append(magdif_2d_triplot(
+                mesh=self.data['/mesh'], clim_scale = (0.0, 1.0),
+                data=np.abs(self.data[grp + dataset][()]),
+                label=fr"$\Real {decorator['math'](label)}$ / \si{{{unit}}}",
+                filename=path.join(self.datadir, nameparts[0] +
+                                   decorator['file'] + '_abs' + nameparts[1])))
+            self.plots.append(magdif_2d_triplot(
+                mesh=self.data['/mesh'],
+                data=np.angle(self.data[grp + dataset][()]),
+                label=fr"$\Imag {decorator['math'](label)}$ / \si{{{unit}}}",
+                filename=path.join(self.datadir, nameparts[0] +
+                                   decorator['file'] + '_arg' + nameparts[1])))
 
     def generate_L1_triplots(self, grp, label, unit, filename):
         nameparts = path.splitext(filename)
@@ -393,6 +405,18 @@ class magdif:
             label=fr"$\Imag {label}$ / \si{{{unit}}}",
             filename=path.join(self.datadir, nameparts[0] +
                                '_Im' + nameparts[1])))
+        self.plots.append(magdif_2d_triplot(
+            mesh=self.data['/mesh'], clim_scale = (0.0, 1.0),
+            data=np.absolute(self.data[grp + '/L1_DOF'][()]),
+            label=fr"$\Real {label}$ / \si{{{unit}}}",
+            filename=path.join(self.datadir, nameparts[0] +
+                               '_abs' + nameparts[1])))
+        self.plots.append(magdif_2d_triplot(
+            mesh=self.data['/mesh'],
+            data=np.angle(self.data[grp + '/L1_DOF'][()]),
+            label=fr"$\Imag {label}$ / \si{{{unit}}}",
+            filename=path.join(self.datadir, nameparts[0] +
+                               '_arg' + nameparts[1])))
 
     def generate_default_plots(self):
         self.plots.append(magdif_1d_cutplot(
@@ -412,6 +436,10 @@ class magdif:
                 'pressure', path.join(self.datadir, 'plot_p0.pdf')
         ))
         # TODO: j0phi edge plot
+        self.generate_RT0_triplots('/Bnvac', r'B_{n}', r'\gauss',
+                                   'plot_Bnvac.png')
+        self.generate_RT0_triplots('/iter/Bnplas', r'B_{n}', r'\gauss',
+                                   'plot_Bnplas.png')
         self.generate_RT0_triplots('/iter/Bn', r'B_{n}', r'\gauss',
                                    'plot_Bn.pdf')
         self.generate_RT0_triplots('/iter/Bn_000', r'B_{n}', r'\gauss',
