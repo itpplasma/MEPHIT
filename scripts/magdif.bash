@@ -116,8 +116,6 @@ magdif_prepare() {
         cp field_divB0_unprocessed.inp field_divB0.inp
         unprocessed=$(read_first_in_line field_divB0_unprocessed.inp 7)
         replace_first_in_line field_divB0.inp 7 "'\1_processed'"  # gfile
-        replace_first_in_line field_divB0.inp 1 0  # ipert
-        replace_first_in_line field_divB0.inp 2 1  # iequil
         "$bindir/magdif_mesher.x" "$config" "$unprocessed" 2>&1 | tee "$log"
         lasterr=$?
         if [ $lasterr -ne 0 ]; then
@@ -140,15 +138,11 @@ magdif_prepare() {
             anyerr=$lasterr
             continue
         fi
-        replace_first_in_line field_divB0.inp 1 1  # ipert
-        # replace_first_in_line field_divB0.inp 2 0  # iequil
         ## uncomment to use at most half of available RAM and go to swap instead
         ## MemFree=$(sed -ne '/MemFree/ s/MemFree: *\([0-9]*\) kB/\1/gp' /proc/meminfo)
         ## systemd-run --scope --user -p MemoryHigh=$((MemFree / 2048))M \
         "$bindir/vacfield.x" "$config" 2>&1 | tee -a "$log"
         lasterr=$?
-        replace_first_in_line field_divB0.inp 1 0  # ipert
-        # replace_first_in_line field_divB0.inp 2 1  # iequil
         if [ $lasterr -ne 0 ]; then
             echo "$scriptname: error $lasterr during mesh generation in $workdir" | tee -a "$log" >&2
             popd

@@ -628,12 +628,12 @@ contains
 
   subroutine generate_mesh(unprocessed_geqdsk)
     use magdif_conf, only: conf, log
-    use magdif_util, only: get_equil_filenames, initialize_globals
+    use magdif_util, only: get_field_filenames, init_field
 
     character(len = *), intent(in) :: unprocessed_geqdsk
-    character(len = 1024) :: gfile, convexfile
+    character(len = 1024) :: gfile, pfile, convexfile
 
-    call get_equil_filenames(gfile, convexfile)
+    call get_field_filenames(gfile, pfile, convexfile)
     log%msg = 'attempting to read unprocessed G EQDSK file ' // trim(unprocessed_geqdsk)
     if (log%info) call log%write
     call equil%read(trim(unprocessed_geqdsk))
@@ -645,7 +645,7 @@ contains
     log%msg = 'attempting to write processed G EQDSK file ' // trim(gfile)
     if (log%info) call log%write
     call equil%write(trim(gfile))
-    call initialize_globals(equil%rmaxis, equil%zmaxis)
+    call init_field(gfile, pfile, convexfile)
 
     if (conf%kilca_scale_factor /= 0) then
        mesh%n = conf%n * conf%kilca_scale_factor

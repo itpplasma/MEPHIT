@@ -6,7 +6,7 @@ module magdif_util
 
   private
 
-  public :: clight, imun, initialize_globals, get_equil_filenames, interp_psi_pol, &
+  public :: clight, imun, get_field_filenames, init_field, interp_psi_pol, &
        linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, binsearch, interleave, &
        gauss_legendre_unit_interval, heapsort_complex, complex_abs_asc
 
@@ -84,8 +84,8 @@ module magdif_util
 contains
 
   ! better future solution: put this in a separate subroutine in field_divB0.f90
-  subroutine get_equil_filenames(gfile, convexfile)
-    character(len = *), intent(out) :: gfile, convexfile
+  subroutine get_field_filenames(gfile, pfile, convexfile)
+    character(len = *), intent(out) :: gfile, pfile, convexfile
     integer :: fid
     open(newunit = fid, file = 'field_divB0.inp', status = 'old')
     read (fid, *)
@@ -95,17 +95,38 @@ contains
     read (fid, *)
     read (fid, *)
     read (fid, *) gfile        ! equilibrium file
-    read (fid, *)
+    read (fid, *) pfile        ! coil file
     read (fid, *) convexfile   ! convex file for stretchcoords
     close(fid)
-  end subroutine get_equil_filenames
+  end subroutine get_field_filenames
 
-  subroutine initialize_globals(r, z)
-    real(dp), intent(in) :: r, z
+  !> Set module variables for initialization of subroutine field
+  subroutine init_field(geqdsk, coil, convex)
+    use input_files, only: gfile, pfile, convexfile
+    use field_mod, only: icall, ipert, iequil
+    use field_eq_mod, only: icall_eq, nwindow_r, nwindow_z
+    use field_c_mod, only: icftype, ntor
+    character(len = *), intent(in) :: geqdsk, coil, convex
     real(dp) :: dum
 
-    call field(r, 0d0, z, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
-  end subroutine initialize_globals
+    ! use supplied files
+    pfile = coil
+    gfile = geqdsk
+    convexfile = convex
+    icftype = 4
+    ! compute equiibrium field
+    ipert = 0
+    iequil = 1
+    ! default values - TODO: options in magdif_conf
+    ntor = 81
+    nwindow_r = 0
+    nwindow_z = 0
+    ! don't let subroutine field read from input file
+    icall = 1
+    ! let subroutine field_eq do only initialization
+    icall_eq = -1
+    call field_eq(0d0, 0d0, 0d0, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+  end subroutine init_field
 
   function interp_psi_pol(r, z) result(psi_pol)
     use field_eq_mod, only: psif, psib

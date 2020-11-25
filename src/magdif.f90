@@ -30,21 +30,20 @@ contains
   !> Initialize magdif module
   subroutine magdif_init
     use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_close
-    use input_files, only: gfile
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use magdif_conf, only: conf, log, magdif_log, datafile
-    use magdif_util, only: initialize_globals
+    use magdif_util, only: get_field_filenames, init_field
     use magdif_mesh, only: equil, mesh, read_mesh_cache, fluxvar, flux_func_cache_check, &
          check_curr0, check_safety_factor
-    use magdif_pert, only: check_RT0, RT0_check_div_free, RT0_check_redundant_edges, &
+    use magdif_pert, only: RT0_check_div_free, RT0_check_redundant_edges, &
          RT0_init, RT0_read, L1_init
     integer(HID_T) :: h5id_root
+    character(len = 1024) :: gfile, pfile, convexfile
     integer :: dum
 
     log = magdif_log('-', conf%log_level, conf%quiet)
 
-    ! needs initialized field_eq
-    call initialize_globals(mesh%R_O, mesh%Z_O)
+    call get_field_filenames(gfile, pfile, convexfile)
     call equil%read(gfile)
     call equil%classify
     if (equil%cocos%index /= 3) then
@@ -52,6 +51,7 @@ contains
        if (log%err) call log%write
        error stop
     end if
+    call init_field(gfile, pfile, convexfile)
 
     ! read in preprocessed data
     call read_mesh_cache
@@ -74,10 +74,6 @@ contains
     call RT0_read(Bnvac, datafile, 'Bnvac')
     call RT0_check_redundant_edges(Bnvac, 'Bnvac')
     call RT0_check_div_free(Bnvac, mesh%n, conf%rel_err_Bn, 'Bnvac')
-    ! needs field_eq which is not accessible in magdif_prepare
-    if (conf%kilca_scale_factor /= 0) then
-       call check_RT0(Bnvac)
-    end if
 
     ! pass effective toroidal mode number to FreeFem++
     call send_flag_to_freefem(mesh%n, freefem_pipe)
