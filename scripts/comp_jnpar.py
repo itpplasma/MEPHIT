@@ -31,7 +31,7 @@ c1_statA_per_cm2_to_A_per_m2 = c1_statA_to_A / cm_to_m ** 2
 statA_to_A = c1_statA_to_A / c_cgs
 statA_per_cm2_to_A_per_m2 = c1_statA_per_cm2_to_A_per_m2 / c_cgs
 
-test_dir = '/home/patrick/itp-temp/NEO-EQ/run'
+test_dir = '/home/patrick/itp-temp/git/NEO-EQ/run'
 work_dir = '/home/patrick/git/NEO-EQ/run/geomint_TCFP'
 rad_resolution = 2048
 m_min = 3
@@ -143,19 +143,19 @@ ax.get_yaxis().set_major_formatter(scifmt)
 plt.legend(loc='upper right')
 plt.xlim(full_r_range)
 c = plt.rcParams['axes.prop_cycle'].by_key()['color']
-ax_ins_1 = ax.inset_axes([3.0, 0.6e+05, 10.0, 0.8e+05], transform=ax.transData)
+ax_ins_1 = ax.inset_axes([3.0, 2.5e+03, 10.0, 3.5e+03], transform=ax.transData)
 ax_ins_1.plot(fluxcoor_r[3], np.abs(fluxcoor_jnpar[3]) * statA_per_cm2_to_A_per_m2,
               '-', lw=thin, c=c[0])
 ax_ins_1.get_yaxis().set_major_formatter(copy.copy(scifmt))
 ax_ins_1.set_xlim(kilca_rres[3] - 0.5, kilca_rres[3] + 0.5)
-ax_ins_1.set_ylim(0.0, 0.8e+04)
+ax_ins_1.set_ylim(0.0, 3.5e+02)
 ax.indicate_inset_zoom(ax_ins_1)
-ax_ins_2 = ax.inset_axes([19.0, 0.6e+05, 10.0, 0.8e+05], transform=ax.transData)
+ax_ins_2 = ax.inset_axes([19.0, 2.5e+03, 10.0, 3.5e+03], transform=ax.transData)
 ax_ins_2.plot(fluxcoor_r[9], np.abs(fluxcoor_jnpar[9]) * statA_per_cm2_to_A_per_m2,
               '-', lw=thin, c=c[6])
 ax_ins_2.get_yaxis().set_major_formatter(copy.copy(scifmt))
 ax_ins_2.set_xlim(kilca_rres[9] - 0.5, kilca_rres[9] + 0.5)
-ax_ins_2.set_ylim(0.0, 0.8e+04)
+ax_ins_2.set_ylim(0.0, 3.5e+02)
 ax.indicate_inset_zoom(ax_ins_2)
 plt.xlabel(r'$r$ / cm')
 plt.ylabel(r'$|J_{m n}^{\parallel}|$ / A m\textsuperscript{-2}')
@@ -262,25 +262,29 @@ for m in range(m_min, m_max + 1):
     plt.axvline(kilca_d[m], lw=0.25 * thin, color='k')
     plt.axhline(np.abs(kilca_Imnpar[m]), lw=0.25 * thin, color='k')
     plt.plot(kilca_width, np.abs(kilca_intJ), '-k', lw=thin, label='KiLCA')
-    plt.plot(magdif_width, np.abs(magdif_intJ), '-r', lw=thin,
+    plt.plot(magdif_width, np.abs(magdif_intJ), '--r', lw=thin,
              label='J, cylcoord.')
-    plt.plot(magdif_width, np.abs(magdif_intB + magdif_bndryB), '-m', lw=thin,
+    plt.plot(magdif_width, np.abs(magdif_intB + magdif_bndryB), '-.m', lw=thin,
              label='B, cylcoord.')
     plt.plot(magdif_width, np.abs(magdif_intB), '--m', lw=thin,
              label='B, cylcoord., part.int.')
     plt.plot(magdif_width, np.abs(magdif_bndryB), ':m', lw=thin,
              label='B, cylcoord, bndry.')
-    plt.plot(magdif_width, np.abs(fluxcoor_intJ), '-b', lw=thin,
+    plt.plot(magdif_width, 2.0 * np.pi * np.abs(fluxcoor_intJ), '--b', lw=thin,
              label='J, symfluxcoord.')
-    plt.plot(magdif_width, np.abs(fluxcoor_intB + fluxcoor_bndryB), '-c', lw=thin,
-             label='B, symfluxcoord.')
-    plt.plot(magdif_width, np.abs(fluxcoor_intB), '--c', lw=thin,
-             label='B, symfluxcoord., part.int.')
+# =============================================================================
+#     plt.plot(magdif_width, np.abs(fluxcoor_intB + fluxcoor_bndryB), '-.c', lw=thin,
+#              label='B, symfluxcoord.')
+#     plt.plot(magdif_width, np.abs(fluxcoor_intB), '--c', lw=thin,
+#              label='B, symfluxcoord., part.int.')
+# =============================================================================
     plt.plot(magdif_width, np.abs(fluxcoor_bndryB), ':c', lw=thin,
              label='B, symfluxcoord, bndry.')
-    plt.plot(magdif_width, np.abs(fluxcoor_GPEC), '-g', lw=thin,
-             label=r'$\Delta_{mn}$')
-    plt.gca().legend(loc='lower right')
+# =============================================================================
+#     plt.plot(magdif_width, np.abs(fluxcoor_GPEC), '--g', lw=thin,
+#              label=r'$\Delta_{mn}$')
+# =============================================================================
+    plt.gca().legend(loc='lower right', fontsize='x-small')
     plt.xlabel(r'$d$ / cm')
     plt.ylabel(r'$\vert I_{m n}^{\parallel} \vert$ / A')
     plt.title(f"Parallel current depending on assumed layer width (m = {m})")
