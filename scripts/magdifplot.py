@@ -44,8 +44,9 @@ class magdif_2d_triplot:
     scifmt = matplotlib.ticker.ScalarFormatter()
     scifmt.set_powerlimits((-3, 4))
 
-    def __init__(self, mesh, data, label, filename, title=None, clim_scale=None):
-        self.mesh = mesh
+    def __init__(self, triangulation, data, label, filename, title=None,
+                 clim_scale=None):
+        self.triangulation = triangulation
         self.data = data
         self.label = label
         self.title = title
@@ -58,11 +59,7 @@ class magdif_2d_triplot:
     def dump_plot(self):
         print(f"plotting {self.filename}")
         plt.figure(figsize=(3.3, 4.4))
-        plt.tripcolor(
-                self.mesh['node_R'], self.mesh['node_Z'],
-                self.mesh['tri_node'][()] - 1, self.data,
-                cmap=colorcet.cm.coolwarm
-        )
+        plt.tripcolor(self.triangulation, self.data, cmap=colorcet.cm.coolwarm)
         plt.gca().set_aspect('equal')
         cbar = plt.colorbar(format=self.__class__.scifmt)
         cbar.set_label(self.label, rotation=90)
@@ -362,59 +359,62 @@ class magdif:
     def read_datafile(self):
         print(f"reading contents of {self.datafile}")
         self.data = h5py.File(path.join(self.datadir, self.datafile), 'r')
+        self.triangulation = matplotlib.tri.Triangulation(
+            self.data['/mesh/node_R'], self.data['/mesh/node_Z'],
+            self.data['/mesh/tri_node'][()] - 1)
 
     def generate_RT0_triplots(self, grp, label, unit, filename):
         for dataset, decorator in RT0_comp.items():
             nameparts = path.splitext(filename)
             self.plots.append(magdif_2d_triplot(
-                mesh=self.data['/mesh'],
+                triangulation=self.triangulation,
                 data=self.data[grp + dataset][()].real,
                 label=fr"$\Real {decorator['math'](label)}$ / \si{{{unit}}}",
                 filename=path.join(self.datadir, nameparts[0] +
                                    decorator['file'] + '_Re' + nameparts[1])))
             self.plots.append(magdif_2d_triplot(
-                mesh=self.data['/mesh'],
+                triangulation=self.triangulation,
                 data=self.data[grp + dataset][()].imag,
                 label=fr"$\Imag {decorator['math'](label)}$ / \si{{{unit}}}",
                 filename=path.join(self.datadir, nameparts[0] +
                                    decorator['file'] + '_Im' + nameparts[1])))
             self.plots.append(magdif_2d_triplot(
-                mesh=self.data['/mesh'], clim_scale = (0.0, 1.0),
+                triangulation=self.triangulation, clim_scale = (0.0, 1.0),
                 data=np.abs(self.data[grp + dataset][()]),
-                label=fr"$\Real {decorator['math'](label)}$ / \si{{{unit}}}",
+                label=fr"$\lvert {decorator['math'](label)} \rvert$ / \si{{{unit}}}",
                 filename=path.join(self.datadir, nameparts[0] +
                                    decorator['file'] + '_abs' + nameparts[1])))
             self.plots.append(magdif_2d_triplot(
-                mesh=self.data['/mesh'],
+                triangulation=self.triangulation,
                 data=np.angle(self.data[grp + dataset][()]),
-                label=fr"$\Imag {decorator['math'](label)}$ / \si{{{unit}}}",
+                label=fr"$\arg {decorator['math'](label)}$",
                 filename=path.join(self.datadir, nameparts[0] +
                                    decorator['file'] + '_arg' + nameparts[1])))
 
     def generate_L1_triplots(self, grp, label, unit, filename):
         nameparts = path.splitext(filename)
         self.plots.append(magdif_2d_triplot(
-            mesh=self.data['/mesh'],
+            triangulation=self.triangulation,
             data=self.data[grp + '/L1_DOF'][()].real,
             label=fr"$\Real {label}$ / \si{{{unit}}}",
             filename=path.join(self.datadir, nameparts[0] +
                                '_Re' + nameparts[1])))
         self.plots.append(magdif_2d_triplot(
-            mesh=self.data['/mesh'],
+            triangulation=self.triangulation,
             data=self.data[grp + '/L1_DOF'][()].imag,
             label=fr"$\Imag {label}$ / \si{{{unit}}}",
             filename=path.join(self.datadir, nameparts[0] +
                                '_Im' + nameparts[1])))
         self.plots.append(magdif_2d_triplot(
-            mesh=self.data['/mesh'], clim_scale = (0.0, 1.0),
+            triangulation=self.triangulation, clim_scale = (0.0, 1.0),
             data=np.absolute(self.data[grp + '/L1_DOF'][()]),
-            label=fr"$\Real {label}$ / \si{{{unit}}}",
+            label=fr"$\lvert {label} \rvert$ / \si{{{unit}}}",
             filename=path.join(self.datadir, nameparts[0] +
                                '_abs' + nameparts[1])))
         self.plots.append(magdif_2d_triplot(
-            mesh=self.data['/mesh'],
+            triangulation=self.triangulation,
             data=np.angle(self.data[grp + '/L1_DOF'][()]),
-            label=fr"$\Imag {label}$ / \si{{{unit}}}",
+            label=fr"$\arg {label}$ / \si{{{unit}}}",
             filename=path.join(self.datadir, nameparts[0] +
                                '_arg' + nameparts[1])))
 
@@ -441,22 +441,22 @@ class magdif:
         self.generate_RT0_triplots('/iter/Bnplas', r'B_{n}', r'\gauss',
                                    'plot_Bnplas.png')
         self.generate_RT0_triplots('/iter/Bn', r'B_{n}', r'\gauss',
-                                   'plot_Bn.pdf')
+                                   'plot_Bn.png')
         self.generate_RT0_triplots('/iter/Bn_000', r'B_{n}', r'\gauss',
-                                   'plot_Bn_000.pdf')
+                                   'plot_Bn_000.png')
         self.generate_RT0_triplots('/iter/Bn_001', r'B_{n}', r'\gauss',
-                                   'plot_Bn_001.pdf')
+                                   'plot_Bn_001.png')
         self.generate_RT0_triplots('/iter/jn', r'J_{n}', unit_J,
-                                   'plot_Jn.pdf')
+                                   'plot_Jn.png')
         self.generate_RT0_triplots('/iter/jn_000', r'J_{n}', unit_J,
-                                   'plot_Jn_000.pdf')
+                                   'plot_Jn_000.png')
         self.generate_RT0_triplots('/iter/jn_001', r'J_{n}', unit_J,
-                                   'plot_Jn_001.pdf')
+                                   'plot_Jn_001.png')
         self.generate_L1_triplots('/iter/pn', r'p_{n}', unit_p, 'plot_pn.pdf')
         self.generate_L1_triplots('/iter/pn_000', r'p_{n}', unit_p,
-                                  'plot_pn_000.pdf')
+                                  'plot_pn_000.png')
         self.generate_L1_triplots('/iter/pn_001', r'p_{n}', unit_p,
-                                  'plot_pn_001.pdf')
+                                  'plot_pn_001.png')
 
         self.plots.append(magdif_conv_plot(
             self.config, self.data, path.join(self.datadir, 'convergence.pdf'))
