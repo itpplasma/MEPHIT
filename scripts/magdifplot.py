@@ -138,101 +138,79 @@ class magdif_conv_plot:
 
 
 class fslabel(Enum):
-    psi_norm = r'$\hat{\psi}$'
-    r = r'$r$ / \si{\centi\meter}'
+    psi_norm = r'normalized poloidal flux $\hat{\psi}$'
+    r = r'minor radius $r$ / \si{\centi\meter}'
 
-
-class magdif_vec_polmodes:
-    def __init__(self, data, variable, rad_coord, label):
-        self.data = data
-        self.variable = variable
-        self.rad_coord = rad_coord
+class polmodes:
+    def __init__(self, label, fmt):
         self.label = label
-
-    def process(self):
-        if self.rad_coord == fslabel.psi_norm:
-            self.rho = self.data['/cache/fs_half/psi'][()]
-            # normalize psi
-            self.rho = (self.rho - self.rho[0]) / (self.rho[-1] - self.rho[0])
-        else:
-            self.rho = self.data['/cache/fs_half/rad'][()]
-        self.range = self.data[self.variable].shape[1]
-        self.m_max = (self.range - 1) // 2
-        self.offset = self.m_max
-        self.abs = np.absolute(self.data[self.variable])
-        self.arg = np.angle(self.data[self.variable])
-        self.ymax = np.nanmax(self.abs, axis=0)
-        self.ymax = np.fmax(self.ymax[self.offset:-1],
-                            self.ymax[self.offset:0:-1])
-
-
-class magdif_KiLCA_Bmn_r:
-    def __init__(self, datadir, datafile, label):
-        self.datadir = datadir
-        self.datafile = datafile
-        self.label = label
-
-    def process(self):
-        print(f"reading poloidal modes from {self.datafile}")
-        data = h5py.File(path.join(self.datadir, self.datafile), 'r')
-        self.rad_coord = fslabel.r
+        self.fmt = fmt
+        self.var = {}
         self.rho = {}
-        self.abs = {}
-        self.arg = {}
-        self.ymax = {}
+
+    def read_magdif(self, data, rad_coord, var_name='/postprocess/Bmn/coeff_rad'):
+        self.type = 'MEPHIT'
+        self.rad_coord = rad_coord
+        if self.rad_coord == fslabel.psi_norm:
+            rho = data['/cache/fs_half/psi'][()]
+            # normalize psi
+            rho = (rho - rho[0]) / (rho[-1] - rho[0])
+        else:
+            rho = data['/cache/fs_half/rad'][()]
+        self.m_max = (data[var_name].shape[1] - 1) // 2
+        for m in range(-self.m_max, self.m_max + 1):
+            self.rho[m] = rho
+            self.var[m] = np.array(data[var_name][:, m + self.m_max], dtype='D')
+
+    def read_KiLCA(self, datafile, var_name='Br'):
+        self.type = 'KiLCA'
+        self.rad_coord = fslabel.r
         self.m_max = 0
+        data = h5py.File(datafile, 'r')
+        sgn_q = int(np.sign(data['/output/background/profiles/q_i'][0, -1]))
         for name, grp in data['/output'].items():
             if 'postprocessor' not in name:
                 continue
-            m = int(grp['mode'][0, 0])
-            self.m_max = max(self.m_max, m)
-            self.rho[m] = grp['r'][0, :]
+            m = int(grp['mode'][0, 0]) * sgn_q
+            self.m_max = max(self.m_max, abs(m))
+            self.rho[m] = np.array(grp['r'][0, :], dtype='d')
+            self.var[m] = np.zeros(self.rho[m].shape, dtype='D')
+            self.var[m].real = grp[var_name][0, :]
             if grp['Br'].shape[0] == 2:
-                self.abs[m] = np.hypot(grp['Br'][0, ...], grp['Br'][1, ...])
-                self.arg[m] = np.arctan2(grp['Br'][1, ...], grp['Br'][0, ...])
-            else:
-                self.abs[m] = np.fabs(grp['Br'][0, ...])
-                self.arg[m] = np.where(grp['Br'][0, ...] < 0.0, np.pi, 0.0)
-            self.ymax[m] = np.amax(self.abs[m])
+                self.var[m].imag = grp[var_name][1, :]
+        data.close()
 
-
-class magdif_GPEC_bnormal:
-    def __init__(self, datadir, datafile, variable, label):
-        self.datadir = datadir
-        self.datafile = datafile
-        self.variable = variable
-        self.label = label
-
-    def process(self):
-        print(f"reading poloidal modes from {self.datafile}")
-        rootgrp = netCDF4.Dataset(path.join(self.datadir, self.datafile), 'r')
+    def read_GPEC(self, datafile, var_name='b_n'):
+        self.type = 'GPEC'
         self.rad_coord = fslabel.psi_norm
-        self.rho = np.array(rootgrp.variables['psi_n'])
-        m = np.array(rootgrp.variables['m_out'])
-        self.range = np.size(m)
-        self.offset = -m[0]
-        self.m_max = np.min([-m[0], m[-1]])
-        data = np.array(rootgrp.variables[self.variable])
-        self.abs = 1e8 * np.transpose(np.hypot(data[0, :, :], data[1, :, :]))
-        self.ymax = np.amax(self.abs, axis=0)
-        self.ymax = np.fmax(self.ymax[self.offset:self.offset + self.m_max],
-                            self.ymax[self.offset:self.offset - self.m_max:-1])
-        if rootgrp.getncattr('helicity') < 0.0:
-            self.abs = np.flip(self.abs)
+        self.m_max = 0
+        rootgrp = netCDF4.Dataset(datafile, 'r')
+        rho = np.array(rootgrp.variables['psi_n'])
+        sgn = int(rootgrp.getncattr('helicity'))
+        for k, m_out in enumerate(rootgrp.variables['m_out'][:]):
+            m = m_out * sgn
+            self.m_max = max(self.m_max, abs(m))
+            self.rho[m] = rho
+            self.var[m] = np.empty(rho.shape, dtype='D')
+            self.var[m].real = rootgrp.variables[var_name][0, k, :]
+            self.var[m].imag = rootgrp.variables[var_name][1, k, :]
+            # convert weber to maxwell
+            self.var[m] *= 1e8
         rootgrp.close()
 
 
 class magdif_poloidal_plots:
-    def __init__(self, datadir, filename, config, data, xlabel, ylabel,
-                 poldata, refdata=None):
+    def __init__(self, datadir, filename, config, data, rad_coord, ylabel,
+                 comp, *poldata):
         self.datadir = datadir
         self.filename = filename
         self.config = config
         self.data = data
-        self.xlabel = xlabel
+        self.rad_coord = rad_coord
+        self.xlabel = self.rad_coord.value
         self.ylabel = ylabel
+        self.comp = comp
         self.poldata = poldata
-        self.refdata = refdata
 
         psi_norm = self.data['/cache/fs/psi']
         psi_norm = (psi_norm - psi_norm[0]) / (psi_norm[-1] - psi_norm[0])
@@ -240,20 +218,19 @@ class magdif_poloidal_plots:
         self.psi2rad = interpolate.interp1d(psi_norm, rad, kind='cubic')
         self.rad2psi = interpolate.interp1d(rad, psi_norm, kind='cubic')
 
-    def interp_rho(self, data):
-        if self.xlabel is fslabel.psi_norm and data.rad_coord is fslabel.r:
-            return self.rad2psi(data.rho)
-        elif self.xlabel is fslabel.r and data.rad_coord is fslabel.psi_norm:
-            return self.psi2rad(data.rho)
+    def interp_rho(self, data, m):
+        if self.rad_coord is fslabel.psi_norm and data.rad_coord is fslabel.r:
+            return self.rad2psi(data.rho[m])
+        elif self.rad_coord is fslabel.r and data.rad_coord is fslabel.psi_norm:
+            return self.psi2rad(data.rho[m])
         else:
-            return data.rho
+            return data.rho[m]
 
     def dump_plot(self):
-        print(f"plotting {self.filename}")
         sgn_m_res = -np.sign(self.data['/cache/fs/q'][-1])
         m_res = range(self.data['/mesh/m_res_min'][()],
                       self.data['/mesh/m_res_max'][()] + 1) * sgn_m_res
-        if self.xlabel is fslabel.psi_norm:
+        if self.rad_coord is fslabel.psi_norm:
             rho = self.data['/cache/fs/psi']
             resonance = dict(zip(m_res, (self.data['/mesh/psi_res'] - rho[0]) /
                                  (rho[-1] - rho[0])))
@@ -263,72 +240,66 @@ class magdif_poloidal_plots:
             rho = self.data['/cache/fs/rad'][()]
             resonance = dict(zip(m_res, self.data['/mesh/rad_norm_res'] *
                                  rho[-1]))
-        xlabel = self.xlabel.value
 
-        # plot non-symmetric modes
-        fmt = path.join(self.datadir, path.basename(
-                        path.splitext(self.filename)[0] + '_{}' +
-                        path.splitext(self.filename)[1]))
+        fmt = path.basename(path.splitext(self.filename)[0] + '_{}' +
+                            path.splitext(self.filename)[1])
         horz_plot = 2
         vert_plot = 1
         two_squares = (6.6, 3.3)
-        for m_abs in range(1, self.poldata.m_max):
-            if self.refdata is not None and m_abs <= self.refdata.m_max:
-                ymax = max(self.poldata.ymax[m_abs], self.refdata.ymax[m_abs])
-            else:
-                ymax = self.poldata.ymax[m_abs]
-            plt.figure(figsize=two_squares)
+        # plot non-symmetric modes
+        m_max = min(map(lambda d: d.m_max, self.poldata))
+        for m_abs in range(1, m_max):
+            filename = fmt.format(m_abs)
+            print(f"plotting {filename}")
+            fig, axs = plt.subplots(vert_plot, horz_plot, sharex=True,
+                                    sharey=True, figsize=two_squares)
             for k in range(horz_plot):
-                ax = plt.subplot(vert_plot, horz_plot, k+1)
                 m = (2 * k - 1) * m_abs
                 if m in resonance:
-                    ax.axvline(resonance[m], color='b', alpha=0.5,
-                               label='resonance position')
-                if self.refdata is not None and m_abs <= self.refdata.m_max:
-                    ax.plot(self.interp_rho(self.refdata),
-                            self.refdata.abs[:, self.refdata.offset + m],
-                            'r--', label=self.refdata.label)
-                ax.plot(self.interp_rho(self.poldata),
-                        self.poldata.abs[:, self.poldata.offset + m],
-                        'k-', label=self.poldata.label)
-                ax.legend()
-                ax.ticklabel_format(style='sci', scilimits=(-3, 4))
-                ax.set_ylim(0.0, ymax)
-                ax.set_title(('resonant ' if m in resonance else 'non-resonant ')
-                             + fr"$m = {m}$")
-                ax.set_ylabel(self.ylabel)
-                ax.set_xlabel(xlabel)
+                    axs[k].axvline(resonance[m], color='b', alpha=0.5,
+                                   label='resonance position', lw=0.5)
+                for data in self.poldata:
+                    if m in data.var:
+                        axs[k].plot(self.interp_rho(data, m),
+                                    self.comp(data.var[m]),
+                                    data.fmt, label=data.label, lw=0.5)
+                axs[k].legend(loc='upper left', fontsize='x-small')
+                axs[k].ticklabel_format(style='sci', scilimits=(-3, 4))
+                axs[k].set_title(('resonant ' if m in resonance else
+                                  'non-resonant ') + fr"$m = {m}$")
+                axs[k].set_ylabel(self.ylabel)
+                axs[k].set_xlabel(self.xlabel)
             plt.tight_layout()
-            plt.savefig(fmt.format(m))
+            plt.savefig(path.join(self.datadir, filename))
             plt.close()
         # plot symmetric mode and safety factor
+        m = 0
+        filename = fmt.format(m)
+        print(f"plotting {filename}")
         plt.figure(figsize=two_squares)
         ax = plt.subplot(vert_plot, horz_plot, 1)
-        if self.refdata is not None:
-            ax.plot(self.interp_rho(self.refdata),
-                    self.refdata.abs[:, self.refdata.offset],
-                    'r--', label=self.refdata.label)
-        ax.plot(self.interp_rho(self.poldata),
-                self.poldata.abs[:, self.poldata.offset],
-                'k-', label=self.poldata.label)
-        ax.legend()
+        for data in self.poldata:
+            if m in data.var:
+                ax.plot(self.interp_rho(data, m), self.comp(data.var[m]),
+                        data.fmt, label=data.label, lw=0.5)
+        ax.legend(loc='upper left', fontsize='x-small')
         ax.ticklabel_format(style='sci', scilimits=(-3, 4))
-        ax.set_title('$m = 0$')
-        ax.set_xlabel(xlabel)
+        ax.set_title(f"$m = {m}$")
+        ax.set_xlabel(self.xlabel)
         ax.set_ylabel(self.ylabel)
         ax = plt.subplot(vert_plot, horz_plot, 2)
         for res in resonance.values():
-            ax.axvline(np.abs(res), color='b', alpha=0.5)
+            ax.axvline(np.abs(res), color='b', alpha=0.5, lw=0.5)
         q = self.data['/cache/fs/q'][()]
         ax.plot(rho, q, 'k-')
         if (np.any(q > 0.0)):
             ax.set_ylim(bottom=0.0)
         else:
             ax.set_ylim(top=0.0)
-        ax.set_xlabel(xlabel)
+        ax.set_xlabel(self.xlabel)
         ax.set_ylabel(r'$q$')
         plt.tight_layout()
-        plt.savefig(fmt.format(0))
+        plt.savefig(path.join(self.datadir, filename))
         plt.close()
 
 unit_J = r'\statampere\per\centi\meter\squared'
@@ -468,37 +439,32 @@ class magdif:
             kilca_scale_factor = 0
         grp = '/postprocess'
         if kilca_scale_factor == 0:
-            pert = magdif_vec_polmodes(self.data, grp + '/Bmn/coeff_rad',
-                                       fslabel.psi_norm, 'full perturbation')
-            pert.process()
-            vac = magdif_vec_polmodes(self.data, grp + '/Bmn_vac/coeff_rad',
-                                      fslabel.psi_norm, 'vacuum perturbation')
-            vac.process()
+            pert = polmodes('full perturbation', 'k-')
+            pert.read_magdif(self.data, fslabel.psi_norm, grp + '/Bmn/coeff_rad')
+            vac = polmodes('vacuum perturbation', 'r--')
+            vac.read_magdif(self.data, fslabel.psi_norm, grp + '/Bmn_vac/coeff_rad')
             self.plots.append(magdif_poloidal_plots(self.datadir,
                     'Bmn_psi.pdf', self.config, self.data, fslabel.psi_norm,
                     r'$\lvert \sqrt{g} B_{mn}^{\psi} \rvert$ / \si{\maxwell}',
-                    pert, vac
+                    np.abs, pert, vac
             ))
-            pert = magdif_vec_polmodes(self.data, grp + '/jmn_000/coeff_pol',
-                                       fslabel.psi_norm, 'initial perturbation')
-            pert.process()
+            pert = polmodes('initial perturbation', 'k-')
+            pert.read_magdif(self.data, fslabel.psi_norm, grp + '/jmn_000/coeff_pol')
             self.plots.append(magdif_poloidal_plots(self.datadir,
                     'jmn_000_theta.pdf', self.config, self.data, fslabel.psi_norm,
                     r'$\lvert J_{mn \theta}^{(0)} \rvert$'
-                    + r' / \si{\statampere\per\centi\meter}', pert
+                    + r' / \si{\statampere\per\centi\meter}', np.abs, pert
             ))
 
         else:
-            pert = magdif_vec_polmodes(self.data, grp + '/Bmn/coeff_rad',
-                                       fslabel.r, 'full perturbation')
-            pert.process()
-            vac = magdif_vec_polmodes(self.data, grp + '/Bmn_vac/coeff_rad',
-                                      fslabel.r, 'vacuum perturbation')
-            vac.process()
+            pert = polmodes('full perturbation', 'k-')
+            pert.read_magdif(self.data, fslabel.r, grp + '/Bmn/coeff_rad')
+            vac = polmodes('vacuum perturbation', 'r--')
+            vac.read_magdif(self.data, fslabel.r, grp + '/Bmn_vac/coeff_rad')
             self.plots.append(magdif_poloidal_plots(self.datadir, 'Bmn_r.pdf',
                     self.config, self.data, fslabel.r,
                     r'$\lvert B_{mn}^{r} \rvert$ / \si{\gauss}',
-                    pert, vac
+                    np.abs, pert, vac
             ))
 
     def dump_plots(self):
