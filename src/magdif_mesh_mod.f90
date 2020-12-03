@@ -1470,8 +1470,10 @@ contains
     theta_axis = theta_axis / hypot(theta_axis(1), theta_axis(2))
     sample_Ipar%m = m
     rad_eqd(:) = linspace(fs%rad(0), fs%rad(mesh%nflux), equil%nw, 0, 0)
-    kf_min = mesh%res_ind(m) - mesh%additions(m) - mesh%deletions(m)
-    if (kf_min < 1) kf_min = 1
+    ! res_ind is half-grid, but evaluation limits refer to full-grid indices
+    ! deletions is used to estimate the doubled width of the refined interval
+    kf_min = mesh%res_ind(m) - mesh%additions(m) - mesh%deletions(m) - 1
+    if (kf_min < 0) kf_min = 0
     kf_max = mesh%res_ind(m) + mesh%additions(m) + mesh%deletions(m)
     if (kf_max > mesh%nflux) kf_max = mesh%nflux
     rad(:) = linspace(fs%rad(kf_min), fs%rad(kf_max), sample_Ipar%nrad, 0, 0)

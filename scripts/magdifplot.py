@@ -40,10 +40,19 @@ matplotlib.use('Agg')
 # matplotlib.rcParams.update(pgf_config)
 # =============================================================================
 
-class magdif_2d_triplot:
-    scifmt = matplotlib.ticker.ScalarFormatter()
-    scifmt.set_powerlimits((-3, 4))
+c_cgs = 2.9979246e+10
+cm_to_m = 1.0e-02
+c1_statA_to_A = 1.0e+01
+c1_statA_per_cm2_to_A_per_m2 = c1_statA_to_A / cm_to_m ** 2
+statA_to_A = c1_statA_to_A / c_cgs
+statA_per_cm2_to_A_per_m2 = c1_statA_per_cm2_to_A_per_m2 / c_cgs
 
+def scifmt():
+    fmt = matplotlib.ticker.ScalarFormatter()
+    fmt.set_powerlimits((-3, 4))
+    return fmt
+
+class magdif_2d_triplot:
     def __init__(self, triangulation, data, label, filename, title=None,
                  clim_scale=None):
         self.triangulation = triangulation
@@ -61,7 +70,7 @@ class magdif_2d_triplot:
         plt.figure(figsize=(3.3, 4.4))
         plt.tripcolor(self.triangulation, self.data, cmap=colorcet.cm.coolwarm)
         plt.gca().set_aspect('equal')
-        cbar = plt.colorbar(format=self.__class__.scifmt)
+        cbar = plt.colorbar(format=scifmt())
         cbar.set_label(self.label, rotation=90)
         plt.clim([-max(abs(self.data)) * self.clim_scale[0],
                   max(abs(self.data)) * self.clim_scale[1]])
@@ -176,7 +185,7 @@ class polmodes:
             self.rho[m] = np.array(grp['r'][0, :], dtype='d')
             self.var[m] = np.zeros(self.rho[m].shape, dtype='D')
             self.var[m].real = grp[var_name][0, :]
-            if grp['Br'].shape[0] == 2:
+            if grp[var_name].shape[0] == 2:
                 self.var[m].imag = grp[var_name][1, :]
         data.close()
 
@@ -255,6 +264,7 @@ class magdif_poloidal_plots:
                                     sharey=True, figsize=two_squares)
             for k in range(horz_plot):
                 m = (2 * k - 1) * m_abs
+                axs[k].axhline(0.0, color='k', alpha=0.5, lw=0.5)
                 if m in resonance:
                     axs[k].axvline(resonance[m], color='b', alpha=0.5,
                                    label='resonance position', lw=0.5)
@@ -267,8 +277,8 @@ class magdif_poloidal_plots:
                 axs[k].ticklabel_format(style='sci', scilimits=(-3, 4))
                 axs[k].set_title(('resonant ' if m in resonance else
                                   'non-resonant ') + fr"$m = {m}$")
-                axs[k].set_ylabel(self.ylabel)
                 axs[k].set_xlabel(self.xlabel)
+            axs[0].set_ylabel(self.ylabel)
             plt.tight_layout()
             plt.savefig(path.join(self.datadir, filename))
             plt.close()
@@ -301,6 +311,146 @@ class magdif_poloidal_plots:
         plt.tight_layout()
         plt.savefig(path.join(self.datadir, filename))
         plt.close()
+
+
+class parcurr:
+    def __init__(self):
+        pass
+
+    def process_magdif(self, datafile_func, m_range, nrad, rres, symfluxcoord=True):
+        self.rad = {}
+        self.jnpar = {}
+        self.rres = rres
+        self.part_int = {}
+        self.bndry = {}
+        if symfluxcoord:
+            self.psi = {}
+            self.Ichar = {}
+            self.Delta = {}
+        for m in m_range:
+            data = np.loadtxt(datafile_func(m))
+            self.rad[m] = data[:, 1].copy()
+            self.jnpar[m] = np.empty((nrad), dtype='D')
+            self.jnpar[m].real = data[:, 2].copy()
+            self.jnpar[m].imag = data[:, 3].copy()
+            self.part_int[m] = np.empty((nrad), dtype='D')
+            self.part_int[m].real = data[:, 6].copy()
+            self.part_int[m].imag = data[:, 7].copy()
+            self.bndry[m] = np.empty((nrad), dtype='D')
+            self.bndry[m].real = data[:, 10].copy()
+            self.bndry[m].imag = data[:, 11].copy()
+            if symfluxcoord:
+                self.psi[m] = data[:, 0].copy()
+                self.Ichar[m] = data[:, 14].copy()
+                self.Delta[m] = np.empty((nrad), dtype='D')
+                self.Delta[m].real = data[:, 15].copy()
+                self.Delta[m].imag = data[:, 16].copy()
+        const = 2.0 * np.pi * statA_to_A
+        self.width = {}
+        self.intJ = {}
+        self.intB = {}
+        self.bndryB = {}
+        if symfluxcoord:
+            self.GPEC = {}
+        for m in m_range:
+            mid = np.searchsorted(self.rad[m], self.rres[m])
+            half = max(0, min(nrad - mid - 1, mid - 1))
+            self.width[m] = np.empty(half)
+            self.intJ[m] = np.empty(half, dtype='D')
+            self.intB[m] = np.empty(half, dtype='D')
+            self.bndryB[m] = np.empty(half, dtype='D')
+            if symfluxcoord:
+                self.GPEC[m] = np.empty(half, dtype='D')
+                integrand = self.jnpar[m]
+                diff = self.psi[m]
+            else:
+                integrand = self.jnpar[m] * self.rad[m]
+                diff = self.rad[m]
+            for w in range(0, half):
+                lo = mid - 1 - w
+                hi = mid + w
+                self.width[m][w] = self.rad[m][hi] - self.rad[m][lo]
+                self.intJ[m][w] = np.trapz(integrand[lo:hi], diff[lo:hi]) * const
+                self.intB[m][w] = np.trapz(self.part_int[m][lo:hi], diff[lo:hi]) * const
+                self.bndryB[m][w] = (self.bndry[m][hi] - self.bndry[m][lo]) * const
+                if symfluxcoord:
+                    self.GPEC[m][w] = -1j / m * self.Ichar[m][mid] * (
+                            self.Delta[m][hi] - self.Delta[m][lo]) * statA_to_A
+
+
+    def process_KiLCA(self, datafile, nrad):
+        self.rad = {}
+        self.jnpar = {}
+        self.rres = {}
+        self.d = {}
+        self.jnpar_int = {}
+        self.Ipar = {}
+        data = h5py.File(datafile, 'r')
+        self.m_max = 0
+        ### sgn_q = int(np.sign(data['/output/background/profiles/q_i'][0, -1]))
+        for name, grp in data['/output'].items():
+            if 'postprocessor' not in name:
+                continue
+            m = int(grp['mode'][0, 0]) # * sgn_q
+            self.m_max = max(self.m_max, abs(m))
+            self.rad[m] = np.array(grp['r'][0, :], dtype='d')
+            self.jnpar[m] = np.zeros(self.rad[m].shape, dtype='D')
+            self.jnpar[m].real = grp['Jpar'][0, :]
+            if grp['Jpar'].shape[0] == 2:
+                self.jnpar[m].imag = grp['Jpar'][1, :]
+            self.jnpar_int[m] = interpolate.interp1d(
+                self.rad[m], self.jnpar[m], kind='cubic',
+                fill_value='extrapolate', assume_sorted=True
+            )
+            self.rres[m] = grp['rres'][0, 0].copy()
+            self.d[m] = grp['d'][0, 0].copy()
+            self.Ipar[m] = grp['Ipar'][0, 0].copy()
+        self.hz = (data['/output/background/b0z'][0, :] /
+                   data['/output/background/b0'][0, :])
+        self.rad[0] = data['/output/background/R'][0, :].copy()
+        self.hz_int = interpolate.interp1d(
+            self.rad[0], self.hz, kind='cubic',
+            fill_value='extrapolate', assume_sorted=True
+        )
+        data.close()
+        const = 2.0 * np.pi * c1_statA_to_A
+        mid = nrad // 2
+        half = nrad // 2 - 1
+        self.width = {}
+        self.intJ = {}
+        self.Imnpar = {}
+        for m in self.jnpar.keys():
+            interval = np.linspace(self.rres[m] - 1.5 * self.d[m],
+                                   self.rres[m] + 1.5 * self.d[m], nrad)
+            self.intJ[m] = np.empty(half, dtype='D')
+            # kilca_intB = np.empty(half, dtype='D')
+            # kilca_bndryB = np.empty(half, dtype='D')
+            self.width[m] = np.empty(half)
+            for w in range(0, half):
+                lo = mid - 1 - w
+                hi = mid + w
+                self.width[m][w] = interval[hi] - interval[lo]
+                self.intJ[m][w] = np.trapz(self.jnpar_int[m](interval[lo:hi]) *
+                                           interval[lo:hi] * self.hz_int(interval[lo:hi]),
+                                           interval[lo:hi]) * const
+            interval = np.linspace(self.rres[m] - 0.5 * self.d[m],
+                                   self.rres[m] + 0.5 * self.d[m], nrad // 2)
+            self.Imnpar[m] = np.trapz(self.jnpar_int[m](interval) * interval *
+                                      self.hz_int(interval), interval) * const
+
+    def process_GPEC(self, datafile):
+        rootgrp = netCDF4.Dataset(datafile, 'r')
+        n = int(rootgrp.getncattr('n'))
+        q = np.array(rootgrp.variables['q_rational'][:])
+        m_min = int(np.rint(n * np.amin(np.abs(q))))
+        m_max = int(np.rint(n * np.amax(np.abs(q))))
+        self.I_res = {}
+        self.w_isl = {}
+        for k, m in enumerate(range(m_min, m_max + 1)):
+            self.I_res[m] = np.complex(rootgrp.variables['I_res'][0, k],
+                                       rootgrp.variables['I_res'][1, k])
+            self.w_isl[m] = rootgrp.variables['w_isl'][k]
+
 
 unit_J = r'\statampere\per\centi\meter\squared'
 unit_p = r'\dyne\per\centi\meter\squared'
