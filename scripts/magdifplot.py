@@ -171,6 +171,16 @@ class polmodes:
             self.rho[m] = rho
             self.var[m] = np.array(data[var_name][:, m + self.m_max], dtype='D')
 
+    def read_fouriermodes(self, data):
+        self.type = 'amn.dat'
+        self.rad_coord = fslabel.psi_norm
+        rho = data['/Bmnvac/psi_n'][()]
+        var_name = '/Bmnvac/comp_contradenspsi'
+        self.m_max = (data[var_name].shape[1] - 1) // 2
+        for m in range(-self.m_max, self.m_max + 1):
+            self.rho[m] = rho
+            self.var[m] = np.array(data[var_name][:, m + self.m_max], dtype='D')
+
     def read_KiLCA(self, datafile, var_name='Br'):
         self.type = 'KiLCA'
         self.rad_coord = fslabel.r

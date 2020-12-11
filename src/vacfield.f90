@@ -7,7 +7,7 @@ program vacfield
   use magdif_util, only: get_field_filenames, init_field
   use magdif_pert, only: compute_Bn_nonres, compute_kilca_vac_coeff, compute_kilca_vacuum, &
        check_kilca_vacuum, RT0_check_redundant_edges, RT0_check_div_free, RT0_t, RT0_init, &
-       RT0_deinit, RT0_write, check_RT0
+       RT0_deinit, RT0_write, check_RT0, debug_fouriermodes
 
   implicit none
 
@@ -32,6 +32,7 @@ program vacfield
      call check_kilca_vacuum
      call check_RT0(Bn)
   else
+     call debug_fouriermodes
      if (conf%nonres) then
         call compute_Bn_nonres(Bn)
      else

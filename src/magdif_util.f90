@@ -118,7 +118,7 @@ contains
     ipert = 0
     iequil = 1
     ! default values - TODO: options in magdif_conf
-    ntor = 81
+    ntor = 2
     nwindow_r = 0
     nwindow_z = 0
     ! don't let subroutine field read from input file

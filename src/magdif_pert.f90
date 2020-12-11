@@ -11,7 +11,7 @@ module magdif_pert
        RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
        vec_polmodes_read, vec_polmodes_write, compute_Bn_nonres, avg_flux_on_quad, &
        compute_kilca_vacuum, kilca_vacuum, compute_kilca_vac_coeff, kilca_vacuum_fourier, &
-       check_kilca_vacuum, check_RT0
+       check_kilca_vacuum, check_RT0, debug_fouriermodes
 
   type, public :: L1_t
      !> Number of points on which the L1 are defined
@@ -485,21 +485,21 @@ contains
     if (conf%kilca_pol_mode /= 0) then
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_rad', &
             vec_polmodes%coeff_rad, lbound(vec_polmodes%coeff_rad), ubound(vec_polmodes%coeff_rad), &
-            comment = 'contravariant density psi component of ' // trim(adjustl(comment)), &
-            unit = trim(adjustl(unit)) // ' cm^2')
-       call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_pol', &
-            vec_polmodes%coeff_pol, lbound(vec_polmodes%coeff_pol), ubound(vec_polmodes%coeff_pol), &
-            comment = 'covariant theta component of  ' // trim(adjustl(comment)), &
-            unit = trim(adjustl(unit)) // ' cm')
-    else
-       call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_rad', &
-            vec_polmodes%coeff_rad, lbound(vec_polmodes%coeff_rad), ubound(vec_polmodes%coeff_rad), &
             comment = 'r component of ' // trim(adjustl(comment)), &
             unit = trim(adjustl(unit)))
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_pol', &
             vec_polmodes%coeff_pol, lbound(vec_polmodes%coeff_pol), ubound(vec_polmodes%coeff_pol), &
             comment = 'physical theta component of  ' // trim(adjustl(comment)), &
             unit = trim(adjustl(unit)))
+    else
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_rad', &
+            vec_polmodes%coeff_rad, lbound(vec_polmodes%coeff_rad), ubound(vec_polmodes%coeff_rad), &
+            comment = 'contravariant density psi component of ' // trim(adjustl(comment)), &
+            unit = trim(adjustl(unit)) // ' cm^2')
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_pol', &
+            vec_polmodes%coeff_pol, lbound(vec_polmodes%coeff_pol), ubound(vec_polmodes%coeff_pol), &
+            comment = 'covariant theta component of  ' // trim(adjustl(comment)), &
+            unit = trim(adjustl(unit)) // ' cm')
     end if
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_tor', &
          vec_polmodes%coeff_tor, lbound(vec_polmodes%coeff_tor), ubound(vec_polmodes%coeff_tor), &
@@ -791,5 +791,85 @@ contains
     end do
     close(fid)
   end subroutine check_RT0
+
+  subroutine debug_fouriermodes
+    use magdif_conf, only: conf, datafile, log
+    use magdif_util, only: flux_func, linspace, imun
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
+         h5_close
+    logical :: file_exists
+    integer :: fid, ntor, mpol, nlabel, idum, nsqpsi, k
+    integer(HID_T) :: h5id_root
+    real(dp) :: flabel_min, flabel_max, ddum, psimax
+    real(dp), allocatable :: qsaf(:), rsmall(:), psisurf(:), rq_eqd(:), psi_n(:)
+    complex(dp), allocatable :: z3dum(:, :, :), Amn_theta(:, :, :), Bmn_contradenspsi(:, :)
+    character(len = *), parameter :: ptrn_nsqpsi = 'nrad = ', ptrn_psimax = 'psimax', &
+         dataset = 'Bmnvac'
+    character(len = 1024) :: sdum
+    type(flux_func) :: rq_interpolator
+
+    inquire(file = 'amn.dat', exist = file_exists)
+    if (.not. file_exists) then
+       log%msg = 'File amn.dat not found, cannot perform Fourier mode comparison.'
+       if (log%info) call log%write
+       return
+    end if
+    inquire(file = 'equil_r_q_psi.dat', exist = file_exists)
+    if (.not. file_exists) then
+       log%msg = 'File equil_r_q_psi.dat not found, cannot perform Fourier mode comparison.'
+       if (log%info) call log%write
+       return
+    end if
+    open(newunit = fid, form = 'unformatted', file = 'amn.dat')
+    read (fid) ntor, mpol, nlabel, flabel_min, flabel_max
+    allocate(z3dum(-mpol:mpol, ntor, nlabel))
+    allocate(Amn_theta(-mpol:mpol, ntor, nlabel))
+    read (fid) z3dum, Amn_theta
+    close(fid)
+    open(newunit = fid, form = 'formatted', file = 'equil_r_q_psi.dat')
+    read (fid, '(a)') sdum
+    idum = index(sdum, ptrn_nsqpsi) + len(ptrn_nsqpsi) - 1
+    sdum(:idum) = ' '
+    sdum = adjustl(sdum)
+    read (sdum, *) nsqpsi
+    read (fid, '(a)') sdum
+    idum = index(sdum, ptrn_psimax) + len(ptrn_psimax) - 1
+    sdum(:idum) = ' '
+    sdum = adjustl(sdum)
+    read (sdum, *) psimax
+    read (fid, *)
+    allocate(qsaf(nsqpsi))
+    allocate(psisurf(nsqpsi))
+    allocate(rsmall(nsqpsi))
+    do k = 1, nsqpsi
+       read (fid, *) ddum, qsaf(k), psisurf(k), ddum, ddum, rsmall(k)
+    end do
+    close(fid)
+    call rq_interpolator%init(4, rsmall * abs(qsaf))
+    allocate(rq_eqd(nlabel))
+    rq_eqd(:) = linspace(abs(flabel_min), abs(flabel_max), nlabel, 0, 0)
+    allocate(psi_n(nlabel))
+    psi_n(:) = [(rq_interpolator%interp(psisurf / psimax, rq_eqd(k)), k = 1, nlabel)]
+    allocate(Bmn_contradenspsi(-mpol:mpol, nlabel))
+    Bmn_contradenspsi(:, :) = imun * conf%n * Amn_theta(:, conf%n, :)
+    call h5_open_rw(datafile, h5id_root)
+    call h5_delete(h5id_root, dataset)
+    call h5_create_parent_groups(h5id_root, dataset // '/m_max')
+    call h5_add(h5id_root, dataset // '/m_max', mpol, 'maximal absolute poloidal mode number')
+    call h5_add(h5id_root, dataset // '/psi_n', psi_n, lbound(psi_n), ubound(psi_n), &
+         comment = 'normalized poloidal flux of interpolation points', unit = '1')
+    call h5_add(h5id_root, dataset // '/comp_contradenspsi', Bmn_contradenspsi, &
+         lbound(Bmn_contradenspsi), ubound(Bmn_contradenspsi), unit = 'Mx', &
+         comment = 'normalized poloidal flux of interpolation points')
+    call h5_close(h5id_root)
+    if (allocated(z3dum)) deallocate(z3dum)
+    if (allocated(Amn_theta)) deallocate(Amn_theta)
+    if (allocated(qsaf)) deallocate(qsaf)
+    if (allocated(psisurf)) deallocate(psisurf)
+    if (allocated(rsmall)) deallocate(rsmall)
+    if (allocated(rq_eqd)) deallocate(rq_eqd)
+    if (allocated(psi_n)) deallocate(psi_n)
+    if (allocated(Bmn_contradenspsi)) deallocate(Bmn_contradenspsi)
+  end subroutine debug_fouriermodes
 
 end module magdif_pert
