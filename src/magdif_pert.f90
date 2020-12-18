@@ -798,14 +798,14 @@ contains
     use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
          h5_close
     logical :: file_exists
-    integer :: fid, ntor, mpol, nlabel, idum, nsqpsi, k
+    integer :: fid, ntor, mpol, nlabel, nsqpsi, k
     integer(HID_T) :: h5id_root
-    real(dp) :: flabel_min, flabel_max, ddum, psimax
+    real(dp) :: flabel_min, flabel_max, ddum, psimax, phimax, sgn_dpsi
     real(dp), allocatable :: qsaf(:), rsmall(:), psisurf(:), rq_eqd(:), psi_n(:)
     complex(dp), allocatable :: z3dum(:, :, :), Amn_theta(:, :, :), Bmn_contradenspsi(:, :)
     character(len = *), parameter :: ptrn_nsqpsi = 'nrad = ', ptrn_psimax = 'psimax', &
-         dataset = 'Bmnvac'
-    character(len = 1024) :: sdum
+         ptrn_phimax = 'phimax', dataset = 'Bmnvac'
+    character(len = 1024) :: line
     type(flux_func) :: rq_interpolator
 
     inquire(file = 'amn.dat', exist = file_exists)
@@ -827,16 +827,14 @@ contains
     read (fid) z3dum, Amn_theta
     close(fid)
     open(newunit = fid, form = 'formatted', file = 'equil_r_q_psi.dat')
-    read (fid, '(a)') sdum
-    idum = index(sdum, ptrn_nsqpsi) + len(ptrn_nsqpsi) - 1
-    sdum(:idum) = ' '
-    sdum = adjustl(sdum)
-    read (sdum, *) nsqpsi
-    read (fid, '(a)') sdum
-    idum = index(sdum, ptrn_psimax) + len(ptrn_psimax) - 1
-    sdum(:idum) = ' '
-    sdum = adjustl(sdum)
-    read (sdum, *) psimax
+    read (fid, '(a)') line
+    call extract(line, ptrn_nsqpsi)
+    read (line, *) nsqpsi
+    read (fid, '(a)') line
+    call extract(line, ptrn_psimax)
+    read (line, *) psimax
+    call extract(line, ptrn_phimax)
+    read (line, *) phimax
     read (fid, *)
     allocate(qsaf(nsqpsi))
     allocate(psisurf(nsqpsi))
@@ -845,13 +843,20 @@ contains
        read (fid, *) ddum, qsaf(k), psisurf(k), ddum, ddum, rsmall(k)
     end do
     close(fid)
+    sgn_dpsi = sign(1d0, psimax)
     call rq_interpolator%init(4, rsmall * abs(qsaf))
     allocate(rq_eqd(nlabel))
     rq_eqd(:) = linspace(abs(flabel_min), abs(flabel_max), nlabel, 0, 0)
     allocate(psi_n(nlabel))
     psi_n(:) = [(rq_interpolator%interp(psisurf / psimax, rq_eqd(k)), k = 1, nlabel)]
     allocate(Bmn_contradenspsi(-mpol:mpol, nlabel))
-    Bmn_contradenspsi(:, :) = imun * conf%n * Amn_theta(:, conf%n, :)
+    ! if qsaf does not have the expected sign, theta points in the wrong direction,
+    ! and we have to reverse the index m
+    if (phimax / psimax / qsaf(nsqpsi) < 0d0) then
+       Bmn_contradenspsi(:, :) = imun * conf%n * sgn_dpsi * Amn_theta(mpol:-mpol:-1, conf%n, :)
+    else
+       Bmn_contradenspsi(:, :) = imun * conf%n * sgn_dpsi * Amn_theta(:, conf%n, :)
+    end if
     call h5_open_rw(datafile, h5id_root)
     call h5_delete(h5id_root, dataset)
     call h5_create_parent_groups(h5id_root, dataset // '/m_max')
@@ -870,6 +875,16 @@ contains
     if (allocated(rq_eqd)) deallocate(rq_eqd)
     if (allocated(psi_n)) deallocate(psi_n)
     if (allocated(Bmn_contradenspsi)) deallocate(Bmn_contradenspsi)
+
+  contains
+    subroutine extract(string, preceding)
+      character(len = *), intent(inout) :: string
+      character(len = *), intent(in) :: preceding
+      integer :: i
+      i = index(string, preceding) + len(preceding) - 1
+      string(:i) = ' '
+      string = adjustl(string)
+    end subroutine extract
   end subroutine debug_fouriermodes
 
 end module magdif_pert

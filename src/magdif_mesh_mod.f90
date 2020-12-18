@@ -72,6 +72,12 @@ module magdif_mesh
      !> Z coordinate of the X point in cm.
      real(dp) :: Z_X
 
+     !> Geometric poloidal angle where symmetry flux poloidal angle is zero.
+     !>
+     !> When theta0_at_xpoint is true, this is atan2(Z_X - Z_O, R_X - R_O);
+     !> otherwise, this is zero.
+     real(dp) :: theta0
+
      !> Minimal R value on computational grid in cm.
      real(dp) :: R_min
 
@@ -171,8 +177,13 @@ module magdif_mesh
      !> closed flux surface.
      integer, allocatable :: kt_low(:)
 
+     !> Symmetry flux poloidal angle where geometric poloidal angle is zero.
+     real(dp), allocatable :: theta_offset(:)
+
      real(dp), allocatable :: node_R(:)
      real(dp), allocatable :: node_Z(:)
+     real(dp), allocatable :: node_theta_flux(:)
+     real(dp), allocatable :: node_theta_geom(:)
 
      integer, allocatable :: tri_node(:, :)
      integer, allocatable :: tri_node_F(:)
@@ -653,6 +664,7 @@ contains
        mesh%n = conf%n
     end if
     call create_mesh_points(convexfile)
+    call compute_theta_offset
     call connect_mesh_points
     call write_meshfile_for_freefem
     call compute_sample_polmodes
@@ -663,12 +675,12 @@ contains
   end subroutine generate_mesh
 
   subroutine write_mesh_cache
-    use hdf5_tools, only: HID_T, h5_create, h5_delete, h5_define_group, h5_close_group, &
-         h5_close, h5_open_rw, h5_add
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_define_group, h5_close_group, &
+         h5_close, h5_add
     use magdif_conf, only: datafile
     integer(HID_T) :: h5id_root, h5id_grp
 
-    call h5_create(datafile, h5id_root)
+    call h5_open_rw(datafile, h5id_root)
     call h5_delete(h5id_root, 'mesh')
     call h5_delete(h5id_root, 'cache')
     call h5_define_group(h5id_root, 'mesh', h5id_grp)
@@ -956,7 +968,7 @@ contains
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
          raxis, zaxis, load_magdata_in_symfluxcoord
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
-         theta0_at_xpoint, theta_axis
+         theta0_at_xpoint, theta_axis, theta0
     use points_2d, only: s_min, create_points_2d
 
     character(len = *), intent(in) :: convexfile
@@ -988,6 +1000,7 @@ contains
     mesh%Z_O = zaxis
     mesh%R_X = X_point(1)
     mesh%Z_X = X_point(2)
+    mesh%theta0 = theta0
     ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
     ! load_magdata_in_symfluxcoord_ext divides by psipol_max
     psi_axis = interp_psi_pol(raxis, zaxis)
@@ -1024,6 +1037,8 @@ contains
     mesh%npoint = mesh%kp_low(mesh%nflux + 1)
     allocate(mesh%node_R(mesh%npoint))
     allocate(mesh%node_Z(mesh%npoint))
+    allocate(mesh%node_theta_flux(mesh%npoint))
+    allocate(mesh%node_theta_geom(mesh%npoint))
 
     allocate(n_theta(mesh%nflux))
     allocate(points(3, mesh%npoint))
@@ -1034,9 +1049,13 @@ contains
     ! psi is not normalized by psipol_max, but shifted by -psi_axis
     call create_points_2d(2, n_theta, points, points_s_theta_phi, r_scaling_func = psi_ref)
     mesh%node_R(1) = mesh%R_O
-    mesh%node_Z(1) = mesh%Z_O
     mesh%node_R(2:) = points(1, 2:)
+    mesh%node_Z(1) = mesh%Z_O
     mesh%node_Z(2:) = points(3, 2:)
+    mesh%node_theta_flux(1) = 0d0
+    mesh%node_theta_flux(2:) = points_s_theta_phi(2, 2:)
+    mesh%node_theta_geom(1) = 0d0
+    mesh%node_theta_geom(2:) = atan2(mesh%node_Z(2:) - mesh%Z_O, mesh%node_R(2:) - mesh%R_O)
     mesh%R_min = minval(mesh%node_R)
     mesh%R_max = maxval(mesh%node_R)
     mesh%Z_min = minval(mesh%node_Z)
@@ -1068,6 +1087,27 @@ contains
            zaxis + rho_norm_ref(kf) * theta_axis(2)) - psi_axis, kf = 1, mesh%nflux)]
     end function psi_ref
   end subroutine create_mesh_points
+
+  subroutine compute_theta_offset
+    integer, parameter :: n_lag = 4
+    integer :: kf, kpoi, kpoi_lo, kpoi_hi
+    logical :: mask(mesh%npoint)
+    real(dp) :: lag_coeff(1, n_lag), theta_offset_full(0:mesh%nflux)
+
+    allocate(mesh%theta_offset(mesh%nflux))
+    theta_offset_full = 0d0
+    do kf = 1, mesh%nflux
+       mask = .false.
+       mask(mesh%kp_low(kf)+1:mesh%kp_low(kf)+mesh%kp_max(kf)) = .true.
+       kpoi = findloc(mesh%node_theta_geom > 0d0, .true., 1, mask)
+       kpoi_lo = kpoi - n_lag / 2
+       kpoi_hi = kpoi + n_lag / 2 - 1
+       call plag_coeff(n_lag, 0, 0d0, mesh%node_theta_geom(kpoi_lo:kpoi_hi), lag_coeff)
+       theta_offset_full(kf) = sum(mesh%node_theta_flux(kpoi_lo:kpoi_hi) * lag_coeff(1, :))
+    end do
+    theta_offset_full(0) = theta_offset_full(1)
+    mesh%theta_offset(:) = (theta_offset_full(:mesh%nflux-1) + theta_offset_full(1:)) * 0.5d0
+  end subroutine compute_theta_offset
 
   !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
   !> of #magdif_config::nflux and #magdif_config::nkpol. Deallocation is done in
@@ -1425,8 +1465,8 @@ contains
           ktri = mesh%kt_low(kf) + kt
           associate (s => sample_polmodes)
             s%psi(ktri) = fs_half%psi(kf)
-            s%theta(ktri) = 2d0 * pi * (dble(kt) - conf%debug_pol_offset) / &
-                 dble(mesh%kt_max(kf))
+            s%theta(ktri) = modulo(2d0 * pi * dble(kt - 1) / dble(mesh%kt_max(kf)) + &
+                 mesh%theta_offset(kf), 2d0 * pi)
             if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
                s%R(ktri) = mesh%R_O + fs_half%rad(kf) * cos(s%theta(ktri))
                s%Z(ktri) = mesh%Z_O + fs_half%rad(kf) * sin(s%theta(ktri))
@@ -1463,11 +1503,9 @@ contains
     type(coord_cache_ext), intent(inout) :: sample_Ipar
     integer, intent(in) :: m
     integer :: kf_min, kf_max, krad, kpol, k
-    real(dp) :: theta_axis(2), theta(sample_Ipar%npol), rad_eqd(equil%nw), drad_dpsi, dum
+    real(dp) :: theta(sample_Ipar%npol), rad_eqd(equil%nw), drad_dpsi, dum
     real(dp), dimension(sample_Ipar%nrad) :: rad, psi
 
-    theta_axis = [mesh%R_X - mesh%R_O, mesh%Z_X - mesh%Z_O]
-    theta_axis = theta_axis / hypot(theta_axis(1), theta_axis(2))
     sample_Ipar%m = m
     rad_eqd(:) = linspace(fs%rad(0), fs%rad(mesh%nflux), equil%nw, 0, 0)
     ! res_ind is half-grid, but evaluation limits refer to full-grid indices
@@ -1481,8 +1519,8 @@ contains
     if (conf%kilca_scale_factor /= 0) then
        psi(:) = [(interp_psi_pol(mesh%R_O, mesh%Z_O + rad(krad)), krad = 1, sample_Ipar%nrad)]
     else
-       psi(:) = [(interp_psi_pol(mesh%R_O + rad(krad) * theta_axis(1), &
-            mesh%Z_O + rad(krad) * theta_axis(2)), krad = 1, sample_Ipar%nrad)]
+       psi(:) = [(interp_psi_pol(mesh%R_O + rad(krad) * cos(mesh%theta0), &
+            mesh%Z_O + rad(krad) * sin(mesh%theta0)), krad = 1, sample_Ipar%nrad)]
     end if
     theta(:) = 2d0 * pi * [(dble(kpol) - 0.5d0, kpol = 1, sample_Ipar%npol)] / dble(sample_Ipar%npol)
     do krad = 1, sample_Ipar%nrad
@@ -1661,6 +1699,12 @@ contains
          comment = 'R coordinate of O point', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_O', mesh%Z_O, &
          comment = 'Z coordinate of O point', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_X', mesh%R_X, &
+         comment = 'R coordinate of X point', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_X', mesh%Z_X, &
+         comment = 'Z coordinate of X point', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta0', mesh%theta0, unit = 'rad', &
+         comment = 'geometric poloidal angle of symmetry flux poloidal angle origin')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_min', mesh%R_min, &
          comment = 'minimal R coordinate of computational grid', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_min', mesh%Z_min, &
@@ -1719,12 +1763,21 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/kt_low', mesh%kt_low, &
          lbound(mesh%kt_low), ubound(mesh%kt_low), &
          comment = 'index of last triangle on previous flux surface')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta_offset', mesh%theta_offset, &
+         lbound(mesh%theta_offset), ubound(mesh%theta_offset), unit = 'rad', &
+         comment = 'flux poloidal angle at zero geometric poloidal angle between flux surfaces')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/node_R', mesh%node_R, &
          lbound(mesh%node_R), ubound(mesh%node_R), &
          comment = 'R coordinates of mesh points', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/node_Z', mesh%node_Z, &
          lbound(mesh%node_Z), ubound(mesh%node_Z), &
          comment = 'Z coordinates of mesh points', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/node_theta_flux', mesh%node_theta_flux, &
+         lbound(mesh%node_theta_flux), ubound(mesh%node_theta_flux), &
+         comment = 'flux poloidal angles of mesh points', unit = 'rad')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/node_theta_geom', mesh%node_theta_geom, &
+         lbound(mesh%node_theta_geom), ubound(mesh%node_theta_geom), &
+         comment = 'geometric poloidal angles of mesh points', unit = 'rad')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/tri_node', mesh%tri_node, &
          lbound(mesh%tri_node), ubound(mesh%tri_node), &
          comment = 'triangle node indices')
@@ -1814,6 +1867,9 @@ contains
     call h5_open(file, h5id_root)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_O', mesh%R_O)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_O', mesh%Z_O)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_X', mesh%R_X)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_X', mesh%Z_X)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/theta0', mesh%theta0)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_min', mesh%R_min)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_min', mesh%Z_min)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_max', mesh%R_max)
@@ -1842,8 +1898,11 @@ contains
     allocate(mesh%kt_max(mesh%nflux))
     allocate(mesh%kp_low(mesh%nflux + 1))
     allocate(mesh%kt_low(mesh%nflux + 1))
+    allocate(mesh%theta_offset(mesh%nflux))
     allocate(mesh%node_R(mesh%npoint))
     allocate(mesh%node_Z(mesh%npoint))
+    allocate(mesh%node_theta_flux(mesh%npoint))
+    allocate(mesh%node_theta_geom(mesh%npoint))
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
     allocate(mesh%li(2, mesh%ntri))
@@ -1874,8 +1933,11 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/kp_low', mesh%kp_low)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/kt_max', mesh%kt_max)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/kt_low', mesh%kt_low)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/theta_offset', mesh%theta_offset)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/node_R', mesh%node_R)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/node_Z', mesh%node_Z)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/node_theta_flux', mesh%node_theta_flux)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/node_theta_geom', mesh%node_theta_geom)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_node', mesh%tri_node)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_node_F', mesh%tri_node_F)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/li', mesh%li)
@@ -1916,8 +1978,11 @@ contains
     if (allocated(this%kt_max)) deallocate(this%kt_max)
     if (allocated(this%kp_low)) deallocate(this%kp_low)
     if (allocated(this%kt_low)) deallocate(this%kt_low)
+    if (allocated(this%theta_offset)) deallocate(this%theta_offset)
     if (allocated(this%node_R)) deallocate(this%node_R)
     if (allocated(this%node_Z)) deallocate(this%node_Z)
+    if (allocated(this%node_theta_flux)) deallocate(this%node_theta_flux)
+    if (allocated(this%node_theta_geom)) deallocate(this%node_theta_geom)
     if (allocated(this%tri_node)) deallocate(this%tri_node)
     if (allocated(this%tri_node_F)) deallocate(this%tri_node_F)
     if (allocated(this%li)) deallocate(this%li)

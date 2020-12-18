@@ -288,7 +288,8 @@ class magdif_poloidal_plots:
                 axs[k].set_title(('resonant ' if m in resonance else
                                   'non-resonant ') + fr"$m = {m}$")
                 axs[k].set_xlabel(self.xlabel)
-            axs[0].set_ylabel(self.ylabel)
+                axs[k].set_ylabel(self.ylabel)
+            axs[1].yaxis.set_tick_params(labelleft=True)
             plt.tight_layout()
             plt.savefig(path.join(self.datadir, filename))
             plt.close()
