@@ -9,9 +9,9 @@ module magdif_pert
   public :: L1_init, L1_deinit, L1_read, L1_write, RT0_init, RT0_deinit, RT0_read, &
        RT0_write, RT0_interp, RT0_check_div_free, RT0_check_redundant_edges, RT0_triplot, &
        RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
-       vec_polmodes_read, vec_polmodes_write, compute_Bn_nonres, avg_flux_on_quad, &
+       vec_polmodes_read, vec_polmodes_write, compute_Bnvac, compute_Bn_nonres, avg_flux_on_quad, &
        compute_kilca_vacuum, kilca_vacuum, compute_kilca_vac_coeff, kilca_vacuum_fourier, &
-       check_kilca_vacuum, check_RT0, debug_fouriermodes
+       check_kilca_vacuum, check_RT0, debug_fouriermodes, debug_Bnvac_rectplot
 
   type, public :: L1_t
      !> Number of points on which the L1 are defined
@@ -313,6 +313,7 @@ contains
     character(len = *), intent(in) :: unit
     integer, intent(in) :: plots
     integer(HID_T) :: h5id_root
+    real(dp), allocatable :: rect_R(:), rect_Z(:)
     complex(dp), allocatable :: comp_R(:), comp_Z(:), comp_psi_contravar_dens(:), &
          comp_theta_covar(:), rect_comp_R(:, :), rect_comp_phi(:, :), rect_comp_Z(:, :)
 
@@ -320,7 +321,7 @@ contains
        call RT0_triplot(elem, comp_R, comp_Z, comp_psi_contravar_dens, comp_theta_covar)
     end if
     if (plots >= 2) then
-       call RT0_rectplot(elem, rect_comp_R, rect_comp_phi, rect_comp_Z)
+       call RT0_rectplot(elem, rect_R, rect_Z, rect_comp_R, rect_comp_phi, rect_comp_Z)
     end if
     call h5_open_rw(file, h5id_root)
     call h5_delete(h5id_root, trim(adjustl(dataset)))
@@ -352,6 +353,10 @@ contains
             unit = trim(adjustl(unit)) // ' cm')
     end if
     if (plots >= 2) then
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/rect_R', rect_R, &
+            lbound(rect_R), ubound(rect_R), comment = 'R coordinate of rectangular grid', unit = 'cm')
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/rect_Z', rect_Z, &
+            lbound(rect_Z), ubound(rect_Z), comment = 'Z coordinate of rectangular grid', unit = 'cm')
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/rect_comp_R', &
             rect_comp_R, lbound(rect_comp_R), ubound(rect_comp_R), &
             comment = 'R component of ' // trim(adjustl(comment)) // ' on GEQSDK grid', &
@@ -370,6 +375,8 @@ contains
     if (allocated(comp_Z)) deallocate(comp_Z)
     if (allocated(comp_psi_contravar_dens)) deallocate(comp_psi_contravar_dens)
     if (allocated(comp_theta_covar)) deallocate(comp_theta_covar)
+    if (allocated(rect_R)) deallocate(rect_R)
+    if (allocated(rect_Z)) deallocate(rect_Z)
     if (allocated(rect_comp_R)) deallocate(rect_comp_R)
     if (allocated(rect_comp_phi)) deallocate(rect_comp_phi)
     if (allocated(rect_comp_Z)) deallocate(rect_comp_Z)
@@ -403,23 +410,26 @@ contains
     end do
   end subroutine RT0_triplot
 
-  subroutine RT0_rectplot(elem, comp_R, comp_phi, comp_Z)
+  subroutine RT0_rectplot(elem, rect_R, rect_Z, comp_R, comp_phi, comp_Z)
     use magdif_mesh, only: equil, mesh, point_location
     type(RT0_t), intent(in) :: elem
+    real(dp), intent(out), dimension(:), allocatable :: rect_R, rect_Z
     complex(dp), intent(out), dimension(:, :), allocatable :: comp_R, comp_phi, comp_Z
     integer :: kw, kh, ktri
-    real(dp) :: R, Z
 
+    allocate(rect_R(equil%nw))
+    allocate(rect_Z(equil%nh))
+    rect_R(:) = equil%R_eqd
+    rect_Z(:) = equil%Z_eqd
     allocate(comp_R(equil%nw, equil%nh))
     allocate(comp_phi(equil%nw, equil%nh))
     allocate(comp_Z(equil%nw, equil%nh))
     do kw = 1, equil%nw
        do kh = 1, equil%nh
-          R = equil%R_eqd(kw)
-          Z = equil%Z_eqd(kh)
-          ktri = point_location(R, Z)
+          ktri = point_location(rect_R(kw), rect_Z(kh))
           if (ktri > mesh%kt_low(1) .and. ktri <= mesh%ntri) then
-             call RT0_interp(ktri, elem, R, Z, comp_R(kw, kh), comp_Z(kw, kh), comp_phi(kw, kh))
+             call RT0_interp(ktri, elem, rect_R(kw), rect_Z(kh), &
+                  comp_R(kw, kh), comp_Z(kw, kh), comp_phi(kw, kh))
           else
              comp_R(kw, kh) = (0d0, 0d0)
              comp_phi(kw, kh) = (0d0, 0d0)
@@ -546,6 +556,104 @@ contains
       end do
     end associate
   end subroutine RT0_poloidal_modes
+
+  subroutine compute_Bnvac(Bn)
+    use iso_c_binding, only: c_long
+    use field_mod, only: ipert, iequil
+    use field_c_mod, only: icall_c
+    use magdif_conf, only: conf
+    use magdif_util, only: gauss_legendre_unit_interval, imun
+    use magdif_mesh, only: mesh
+    type(RT0_t), intent(inout) :: Bn
+    integer, parameter :: order = 2
+    integer :: ktri, ke, k
+    real(dp) :: dum, R, Z, edge_R, edge_Z, node_R(4), node_Z(4)
+    real(dp), dimension(order) :: points, weights
+    complex(dp) :: B_R, B_phi, B_Z
+
+    call gauss_legendre_unit_interval(order, points, weights)
+    ! initialize vacuum field
+    ipert = 1
+    iequil = 0
+    icall_c = -1
+    call field_c(0d0, 0d0, 0d0, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+    do ktri = 1, mesh%ntri
+       node_R = mesh%node_R([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
+       node_Z = mesh%node_Z([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
+       do ke = 1, 3
+          edge_R = node_R(ke + 1) - node_R(ke)
+          edge_Z = node_Z(ke + 1) - node_Z(ke)
+          do k = 1, order
+             R = node_R(ke) * points(k) + node_R(ke + 1) * points(order - k + 1)
+             Z = node_Z(ke) * points(k) + node_Z(ke + 1) * points(order - k + 1)
+             call spline_bn(conf%n, R, Z, B_R, B_phi, B_Z)
+             Bn%DOF(ke, ktri) = Bn%DOF(ke, ktri) + &
+                  weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
+          end do
+       end do
+       ! toroidal flux via zero divergence
+       Bn%comp_phi(ktri) = imun / mesh%n * sum(Bn%DOF(:, ktri)) / mesh%area(ktri)
+    end do
+    ! reset to equilibrium field
+    ipert = 0
+    iequil = 1
+  end subroutine compute_Bnvac
+
+  subroutine debug_Bnvac_rectplot
+    use iso_c_binding, only: c_long
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
+         h5_close
+    use field_mod, only: ipert, iequil
+    use field_c_mod, only: nr, nz, rmin, rmax, zmin, zmax
+    use magdif_conf, only: conf, datafile
+    use magdif_util, only: linspace
+    character(len=*), parameter :: dataset = 'Bnvac'
+    integer :: kR, kZ
+    integer(HID_T) :: h5id_root
+    real(dp), allocatable, dimension(:) :: R_eqd, Z_eqd
+    complex(dp), allocatable, dimension(:, :) :: Bn_R, Bn_phi, Bn_Z
+
+    ! use vacuum field
+    ipert = 1
+    iequil = 0
+    allocate(R_eqd(nr))
+    allocate(Z_eqd(nz))
+    allocate(Bn_R(nr, nz))
+    allocate(Bn_phi(nr, nz))
+    allocate(Bn_Z(nr, nz))
+    R_eqd(:) = linspace(rmin, rmax, nr, 0, 0)
+    Z_eqd(:) = linspace(zmin, zmax, nz, 0, 0)
+    do kZ = 1, nz
+       do kR = 1, nr
+          call spline_bn(conf%n, R_eqd(kR), Z_eqd(kZ), Bn_R(kR, kZ), Bn_phi(kR, kZ), Bn_Z(kR, kZ))
+       end do
+    end do
+    call h5_open_rw(datafile, h5id_root)
+    call h5_delete(h5id_root, dataset)
+    call h5_create_parent_groups(h5id_root, dataset // '/rect_comp')
+    call h5_add(h5id_root, dataset // '/rect_R', R_eqd, lbound(R_eqd), ubound(R_eqd), &
+         comment = 'R coordinate of rectangular grid', unit = 'cm')
+    call h5_add(h5id_root, dataset // '/rect_Z', Z_eqd, lbound(Z_eqd), ubound(Z_eqd), &
+         comment = 'Z coordinate of rectangular grid', unit = 'cm')
+    call h5_add(h5id_root, dataset // '/rect_comp_R', Bn_R, &
+         lbound(Bn_R), ubound(Bn_R), unit = 'Mx', &
+         comment = 'R component of magnetic field (vacuum) on rectangular grid')
+    call h5_add(h5id_root, dataset // '/rect_comp_phi', Bn_phi, &
+         lbound(Bn_phi), ubound(Bn_phi), unit = 'Mx', &
+         comment = 'physical phi component of magnetic field (vacuum) on rectangular grid')
+    call h5_add(h5id_root, dataset // '/rect_comp_Z', Bn_Z, &
+         lbound(Bn_Z), ubound(Bn_Z), unit = 'Mx', &
+         comment = 'Z component of magnetic field (vacuum) on rectangular grid')
+    call h5_close(h5id_root)
+    if (allocated(R_eqd)) deallocate(R_eqd)
+    if (allocated(Z_eqd)) deallocate(Z_eqd)
+    if (allocated(Bn_R)) deallocate(Bn_R)
+    if (allocated(Bn_phi)) deallocate(Bn_phi)
+    if (allocated(Bn_Z)) deallocate(Bn_Z)
+    ! reset to equilibrium field
+    ipert = 0
+    iequil = 1
+  end subroutine debug_Bnvac_rectplot
 
   subroutine compute_Bn_nonres(Bn)
     use magdif_conf, only: conf
@@ -863,7 +971,7 @@ contains
     call h5_add(h5id_root, dataset // '/m_max', mpol, 'maximal absolute poloidal mode number')
     call h5_add(h5id_root, dataset // '/psi_n', psi_n, lbound(psi_n), ubound(psi_n), &
          comment = 'normalized poloidal flux of interpolation points', unit = '1')
-    call h5_add(h5id_root, dataset // '/comp_contradenspsi', Bmn_contradenspsi, &
+    call h5_add(h5id_root, dataset // '/comp_psi_contravar_dens', Bmn_contradenspsi, &
          lbound(Bmn_contradenspsi), ubound(Bmn_contradenspsi), unit = 'Mx', &
          comment = 'normalized poloidal flux of interpolation points')
     call h5_close(h5id_root)
