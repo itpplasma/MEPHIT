@@ -180,46 +180,19 @@ magdif_run() {
 
     for workdir; do
         pushd "$workdir"
-        pipe=$tmpdir$PWD
-        if [ -p "$pipe" ]; then
-            rm -f "$pipe"
-        else
-            mkdir -p $(dirname "$pipe")
-        fi
-        mkfifo "$pipe"
-        (
-            # send SIGTERM to all processes in subshell when receiving SIGINT, i.e., Ctrl-C
-            trap 'kill -- -$BASHPID' INT
-            # start FreeFem++ in background, waiting for data in the named pipe maxwell.dat
-            FreeFem++-mpi -nw "$scriptdir/maxwell_daemon.edp" -P "$pipe" 1>> freefem.out 2>&1 & freefem_pid=$!
-            # start magdif in background
-            "$bindir/magdif_test.x" "$config" "$pipe" 1>> "$log" 2>&1 & magdif_pid=$!
-            if [ "$batchmode" = false ]; then
-                # continuously print contents of logfile until magdif is finished
-                tail --pid=$magdif_pid -F -s 0.1 "$log" 2> /dev/null &
-            fi
-            # wait for magdif or FreeFem++ to finish (whichever is first)
-            # and send SIGTERM to all processes in subshell when it has a non-zero exit code
-            wait -fn $freefem_pid $magdif_pid
-            lasterr=$?
-            if [ "$lasterr" -ne 0 ]; then
-                echo "$scriptname: magdif/FreeFem++ exited with code $lasterr during run in $workdir" >&2
-                # send SIGTERM to remaining processes in subshell
-                kill %+ %-
-                exit $lasterr
-            fi
-            wait -fn $freefem_pid $magdif_pid
-            lasterr=$?
-            if [ "$lasterr" -ne 0 ]; then
-                echo "$scriptname: magdif/FreeFem++ exited with code $lasterr during run in $workdir" >&2
-                exit $lasterr
-            fi
-        )
+        "$bindir/magdif_run.x" \
+            "$bindir/magdif_test.x" \
+            "$config" \
+            "$tmpdir" \
+            "$scriptdir/maxwell_daemon.edp" \
+            2>&1 | tee -a "$log"
         lasterr=$?
         if [ "$lasterr" -ne 0 ]; then
+            echo "$scriptname: magdif_run.x exited with code $lasterr during run in $workdir" | tee -a "$log" >&2
+            popd
             anyerr=$lasterr
+            continue
         fi
-        rm -f "$pipe"
         popd
     done
 }
@@ -257,12 +230,10 @@ magdif_help() {
 bindir=$(realpath $(dirname $0))
 scriptdir=$(realpath -m "$bindir/../../scripts")
 datadir=$(realpath -m "$bindir/../../data")
-if [[ "$OSTYPE" == "darwin"* ]]; then
-    tmpdir=$TMPDIR
+if [ -d "@tmpdir@" ]; then
+    tmpdir=@tmpdir@
 else
-    # $XDG_RUNTIME_DIR is not set when logged in via SSH
-    # and the directory is not accessible when using HTCondor
-    tmpdir=/tmp/runtime-$USER
+    tmpdir=/tmp
 fi
 
 set -m

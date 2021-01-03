@@ -1,3 +1,8 @@
+### Temporary directory
+# $XDG_RUNTIME_DIR is not set when logged in via SSH
+# and the directory is not accessible when using HTCondor
+set(tmpdir /tmp/runtime-$USER)
+
 ### Installation directory
 set (CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
 

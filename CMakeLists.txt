@@ -1,26 +1,13 @@
 ### Basic settings
-cmake_minimum_required (VERSION 2.8.9)
+cmake_minimum_required(VERSION 3.13.4)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR})
 
 ### Define the project
-project(NEO-EQ)
-enable_language(Fortran)
-
-### Define paths to external libraries (load external file)
-include(${CMAKE_SOURCE_DIR}/ProjectConfig.cmake.in)
+project(NEO-EQ LANGUAGES Fortran C CXX)
 
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
-
-### dependencies in standard directories
-find_package(SuiteSparse REQUIRED)
-find_package(SuperLU REQUIRED)
-cmake_policy(SET CMP0074 NEW)
-find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
-
-### External source files
-include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
 
 ### Set compiler flags
 if ("$ENV{FC}" MATCHES "ifort")
@@ -35,8 +22,31 @@ else ()
   set(LEGACY_FLAGS "-fcheck=no-array-temps")
 endif ()
 
-### Define libraries
-add_library(magdif SHARED
+### Define external paths
+include(${CMAKE_SOURCE_DIR}/ProjectConfig.cmake.in)
+
+### Find dependencies in standard directories
+find_package(SuiteSparse REQUIRED)
+find_package(SuperLU REQUIRED)
+cmake_policy(SET CMP0074 NEW)
+find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
+
+# GSL
+find_library(gsl_lib gsl ${GSL_LIB})
+
+# FGSL
+set(FGSL_LIB ${FGSL_PATH}/lib/ CACHE STRING "FGSL lib")
+set(FGSL_INC ${FGSL_PATH}/include/fgsl/ CACHE STRING "FGSL include")
+find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
+
+# hdf5_tools
+find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
+
+### External source files
+include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
+
+### Project source files
+set(COMMON_FORTRAN_SRC_FILES
   src/bdivfree.f90
   src/binsrc.f90
   src/field_divB0.f90
@@ -58,51 +68,35 @@ add_library(magdif SHARED
   src/external/d1mach.f
   src/arnoldi.f90
   src/sparse_mod.f90
+)
+set(MAGDIF_FORTRAN_SRC_FILES
   src/magdif.f90
   src/magdif_config.f90
   src/magdif_util.f90
   src/magdif_mesh_mod.f90
   src/magdif_pert.f90
-  ${SUITESPARSE_SRC_FILES}
-  ${SUPERLU_SRC_FILES}
 )
 
-# hdf5_tools
-find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
+### Set compiler flags
+set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
+  PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
+set_source_files_properties(${MAGDIF_FORTRAN_SRC_FILES}
+  src/magdif_mesher.f90
+  src/magdif_test.f90
+  src/vacfield.f90
+  src/standardise_equilibrium.f90
+  PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS}")
+set_source_files_properties(src/magdif_run.c src/magdif_util.c
+  PROPERTIES COMPILE_FLAGS "-O2 -g ${WARNING_FLAGS}")
 
-# GSL
-find_library(gsl_lib gsl ${GSL_LIB})
-
-# FGSL
-set(FGSL_LIB ${FGSL_PATH}/lib/ CACHE STRING "FGSL lib")
-set(FGSL_INC ${FGSL_PATH}/include/fgsl/ CACHE STRING "FGSL include")
-find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
-set(FGSL_FLAGS "-I${FGSL_INC}")
-
-### Add helper script to binaries
-configure_file(scripts/magdif.bash bin/magdif COPYONLY)
-
-### Define executables
-target_include_directories(magdif PUBLIC ${HDF5_tools_include_dir})
-add_executable(magdif_test.x src/magdif_test.f90)
-add_executable(standardise_equilibrium.x src/standardise_equilibrium.f90)
-add_executable(magdif_mesher.x src/magdif_mesher.f90)
-add_executable(vacfield.x src/vacfield.f90)
-
-### Add compiler flags
-set_target_properties(magdif PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${FGSL_FLAGS}")
-set_source_files_properties(src/magdif.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
-set_source_files_properties(src/magdif_config.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
-set_source_files_properties(src/magdif_util.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
-set_source_files_properties(src/magdif_mesh_mod.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
-set_source_files_properties(src/magdif_mesher.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
-set_source_files_properties(src/magdif_pert.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
-set_source_files_properties(src/magdif_test.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
-set_source_files_properties(src/vacfield.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
-set_source_files_properties(src/standardise_equilibrium.f90 PROPERTIES COMPILE_FLAGS "${WARNING_FLAGS}")
-set_source_files_properties(src/field_divB0.f90 PROPERTIES COMPILE_FLAGS "${LEGACY_FLAGS}")
-
-### Linking
+### Define library
+add_library(magdif SHARED
+  ${SUITESPARSE_SRC_FILES}
+  ${SUPERLU_SRC_FILES}
+  ${COMMON_FORTRAN_SRC_FILES}
+  ${MAGDIF_FORTRAN_SRC_FILES}
+)
+target_include_directories(magdif PUBLIC ${HDF5_tools_include_dir} ${FGSL_INC})
 set(MAGDIF_LIBS
   ${SUPERLU_LIBRARIES}
   ${SUITESPARSE_LIBRARIES}
@@ -117,7 +111,17 @@ set(MAGDIF_LIBS
   lapack
 )
 target_link_libraries(magdif ${MAGDIF_LIBS})
+
+### Define executables
+add_executable(magdif_run.x src/magdif_run.c src/magdif_util.c)
+add_executable(magdif_test.x src/magdif_test.f90)
+add_executable(standardise_equilibrium.x src/standardise_equilibrium.f90)
+add_executable(magdif_mesher.x src/magdif_mesher.f90)
+add_executable(vacfield.x src/vacfield.f90)
 target_link_libraries(magdif_test.x magdif)
 target_link_libraries(standardise_equilibrium.x magdif)
 target_link_libraries(magdif_mesher.x magdif)
 target_link_libraries(vacfield.x magdif)
+
+### Add helper script to binaries
+configure_file(scripts/magdif.bash ${EXECUTABLE_OUTPUT_PATH}/magdif @ONLY)
