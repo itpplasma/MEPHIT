@@ -1,7 +1,7 @@
 program vacfield
 
   use iso_fortran_env, only: dp => real64
-  use hdf5_tools, only: h5_init, h5_deinit
+  use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
   use magdif_conf, only: conf, conf_arr, magdif_config_read, log, magdif_log, datafile
   use magdif_mesh, only: mesh, read_mesh_cache
   use magdif_util, only: get_field_filenames, init_field
@@ -24,6 +24,7 @@ program vacfield
   log = magdif_log('-', conf%log_level, conf%quiet)
 
   call h5_init
+  h5overwrite = .true.
   call read_mesh_cache
   call RT0_init(Bn, mesh%ntri)
   if (conf%kilca_scale_factor /= 0) then

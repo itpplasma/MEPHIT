@@ -1,6 +1,6 @@
 program magdif_preprocess
 
-  use hdf5_tools, only: h5_init, h5_deinit
+  use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
   use magdif_conf, only: conf, magdif_config_read, conf_arr, log, magdif_log
   use magdif_mesh, only: generate_mesh, write_mesh_cache
 
@@ -20,6 +20,7 @@ program magdif_preprocess
   endif
 
   call h5_init
+  h5overwrite = .true.
   call magdif_config_read(conf, config_file)
   call conf_arr%read(config_file, conf%m_min, conf%m_max)
   log = magdif_log('-', conf%log_level, conf%quiet)

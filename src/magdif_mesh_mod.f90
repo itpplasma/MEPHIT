@@ -341,8 +341,7 @@ contains
   end subroutine flux_func_cache_destructor
 
   subroutine flux_func_cache_write(cache, file, dataset, comment)
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
-         h5_close
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(flux_func_cache), intent(in) :: cache
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
@@ -350,8 +349,7 @@ contains
     integer(HID_T) :: h5id_root
 
     call h5_open_rw(file, h5id_root)
-    call h5_delete(h5id_root, trim(adjustl(dataset)))
-    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/nflux')
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', &
          cache%psi, lbound(cache%psi), ubound(cache%psi), unit = 'Mx', &
          comment = 'poloidal flux ' // trim(adjustl(comment)))
@@ -429,8 +427,7 @@ contains
   end subroutine coord_cache_deinit
 
   subroutine coord_cache_write(cache, file, dataset, comment)
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
-         h5_close
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     class(coord_cache), intent(in) :: cache
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
@@ -438,8 +435,7 @@ contains
     integer(HID_T) :: h5id_root
 
     call h5_open_rw(file, h5id_root)
-    call h5_delete(h5id_root, trim(adjustl(dataset)))
-    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/n')
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/ktri', cache%ktri, &
          lbound(cache%ktri), ubound(cache%ktri), &
          comment = 'triangle index of ' // trim(adjustl(comment)))
@@ -545,7 +541,7 @@ contains
   end subroutine coord_cache_ext_deinit
 
   subroutine coord_cache_ext_write(cache, file, dataset, comment)
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_add, h5_close
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
     type(coord_cache_ext), intent(in) :: cache
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
@@ -675,19 +671,10 @@ contains
   end subroutine generate_mesh
 
   subroutine write_mesh_cache
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_define_group, h5_close_group, &
-         h5_close, h5_add
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
     use magdif_conf, only: datafile
-    integer(HID_T) :: h5id_root, h5id_grp
+    integer(HID_T) :: h5id_root
 
-    call h5_open_rw(datafile, h5id_root)
-    call h5_delete(h5id_root, 'mesh')
-    call h5_delete(h5id_root, 'cache')
-    call h5_define_group(h5id_root, 'mesh', h5id_grp)
-    call h5_close_group(h5id_grp)
-    call h5_define_group(h5id_root, 'cache', h5id_grp)
-    call h5_close_group(h5id_grp)
-    call h5_close(h5id_root)
     call mesh_write(mesh, datafile, 'mesh')
     call flux_func_cache_write(fs, datafile, 'cache/fs', 'on flux surfaces')
     call flux_func_cache_write(fs_half, datafile, 'cache/fs_half', 'between flux surfaces')
@@ -1680,8 +1667,7 @@ contains
   end function point_in_triangle
 
   subroutine mesh_write(mesh, file, dataset)
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
-         h5_close
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(mesh_t), intent(in) :: mesh
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
@@ -1694,7 +1680,7 @@ contains
        orient = 0
     end where
     call h5_open_rw(file, h5id_root)
-    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/nflux')
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_O', mesh%R_O, &
          comment = 'R coordinate of O point', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_O', mesh%Z_O, &

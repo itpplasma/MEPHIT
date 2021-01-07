@@ -86,8 +86,7 @@ contains
   !> to \p outfile (e.g. #magdif_conf::presn_file), where line number corresponds to the
   !> knot index in #mesh_mod::mesh_point.
   subroutine L1_write(elem, file, dataset, comment, unit)
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
-         h5_close
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
 
     type(L1_t), intent(in) :: elem
     character(len = *), intent(in) :: file
@@ -97,8 +96,7 @@ contains
     integer(HID_T) :: h5id_root
 
     call h5_open_rw(file, h5id_root)
-    call h5_delete(h5id_root, trim(adjustl(dataset)))
-    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/L1_DOF')
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/L1_DOF', &
          elem%DOF, lbound(elem%DOF), ubound(elem%DOF), &
          comment = 'degrees of freedom of ' // trim(adjustl(comment)), &
@@ -304,8 +302,7 @@ contains
   end function jacobian
 
   subroutine RT0_write(elem, file, dataset, comment, unit, plots)
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
-         h5_close
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(RT0_t), intent(in) :: elem
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
@@ -324,8 +321,7 @@ contains
        call RT0_rectplot(elem, rect_R, rect_Z, rect_comp_R, rect_comp_phi, rect_comp_Z)
     end if
     call h5_open_rw(file, h5id_root)
-    call h5_delete(h5id_root, trim(adjustl(dataset)))
-    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/RT0_DOF')
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/RT0_DOF', &
          elem%DOF, lbound(elem%DOF), ubound(elem%DOF), &
          comment = 'degrees of freedom of ' // trim(adjustl(comment)), &
@@ -477,8 +473,7 @@ contains
   end subroutine vec_polmodes_read
 
   subroutine vec_polmodes_write(vec_polmodes, file, dataset, comment, unit)
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
-         h5_close
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use magdif_conf, only: conf
     type(vec_polmodes_t), intent(in) :: vec_polmodes
     character(len = *), intent(in) :: file
@@ -488,8 +483,7 @@ contains
     integer(HID_T) :: h5id_root
 
     call h5_open_rw(file, h5id_root)
-    call h5_delete(h5id_root, trim(adjustl(dataset)))
-    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/m_max')
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_max', vec_polmodes%m_max, &
          'maximal absolute poloidal mode number')
     if (conf%kilca_pol_mode /= 0) then
@@ -601,8 +595,7 @@ contains
 
   subroutine debug_Bnvac_rectplot
     use iso_c_binding, only: c_long
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
-         h5_close
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use field_mod, only: ipert, iequil
     use field_c_mod, only: nr, nz, rmin, rmax, zmin, zmax
     use magdif_conf, only: conf, datafile
@@ -629,8 +622,7 @@ contains
        end do
     end do
     call h5_open_rw(datafile, h5id_root)
-    call h5_delete(h5id_root, dataset)
-    call h5_create_parent_groups(h5id_root, dataset // '/rect_comp')
+    call h5_create_parent_groups(h5id_root, dataset // '/')
     call h5_add(h5id_root, dataset // '/rect_R', R_eqd, lbound(R_eqd), ubound(R_eqd), &
          comment = 'R coordinate of rectangular grid', unit = 'cm')
     call h5_add(h5id_root, dataset // '/rect_Z', Z_eqd, lbound(Z_eqd), ubound(Z_eqd), &
@@ -903,8 +895,7 @@ contains
   subroutine debug_fouriermodes
     use magdif_conf, only: conf, datafile, log
     use magdif_util, only: flux_func, linspace, imun
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_delete, h5_create_parent_groups, h5_add, &
-         h5_close
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     logical :: file_exists
     integer :: fid, ntor, mpol, nlabel, nsqpsi, k
     integer(HID_T) :: h5id_root
@@ -966,8 +957,7 @@ contains
        Bmn_contradenspsi(:, :) = imun * conf%n * sgn_dpsi * Amn_theta(:, conf%n, :)
     end if
     call h5_open_rw(datafile, h5id_root)
-    call h5_delete(h5id_root, dataset)
-    call h5_create_parent_groups(h5id_root, dataset // '/m_max')
+    call h5_create_parent_groups(h5id_root, dataset // '/')
     call h5_add(h5id_root, dataset // '/m_max', mpol, 'maximal absolute poloidal mode number')
     call h5_add(h5id_root, dataset // '/psi_n', psi_n, lbound(psi_n), ubound(psi_n), &
          comment = 'normalized poloidal flux of interpolation points', unit = '1')

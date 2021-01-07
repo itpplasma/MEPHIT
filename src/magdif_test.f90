@@ -2,7 +2,7 @@ program magdif_test
   use magdif_conf, only: conf, magdif_config_read, conf_arr
   use magdif, only: magdif_init, magdif_cleanup, magdif_iterate, magdif_postprocess, &
        freefem_pipe
-  use hdf5_tools, only: h5_init, h5_deinit
+  use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
 
   implicit none
 
@@ -20,6 +20,7 @@ program magdif_test
   endif
 
   call h5_init
+  h5overwrite = .true.
   call magdif_config_read(conf, config_file)
   call conf_arr%read(config_file, conf%m_min, conf%m_max)
   call magdif_init
