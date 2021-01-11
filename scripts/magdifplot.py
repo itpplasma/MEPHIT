@@ -82,6 +82,47 @@ class magdif_2d_triplot:
         plt.close()
 
 
+class magdif_2d_rectplots:
+    def __init__(self, R, Z, data, label, filename, title=None, clim_scale=None):
+        self.R = R
+        self.Z = Z
+        self.data = data
+        self.label = label
+        self.title = title
+        self.filename = filename
+        if clim_scale is None:
+            self.clim_scale = (1.0, 1.0)
+        else:
+            self.clim_scale = clim_scale
+
+    def dump_plot(self):
+        print(f"plotting {self.filename}")
+        xlim = (min(R[0] for R in self.R), max(R[-1] for R in self.R))
+        ylim = (min(Z[0] for Z in self.Z), max(Z[-1] for Z in self.Z))
+        fig, axs = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(8.0, 5.0))
+        images = []
+        for k in range(2):
+            images.append(axs[k].imshow(self.data[k], cmap=colorcet.cm.coolwarm, interpolation='gaussian',
+                                        extent=[self.R[k][0], self.R[k][-1], self.Z[k][0], self.Z[k][-1]]))
+            axs[k].set_aspect('equal')
+            axs[k].set_xlabel(r'$R$ / cm')
+            axs[k].set_ylabel(r'$Z$ / cm')
+            axs[k].set_xlim(xlim)
+            axs[k].set_ylim(ylim)
+            if self.title is not None:
+                axs[k].set_title(self.title[k])
+        axs[1].yaxis.set_tick_params(labelleft=True)
+        clim = (-max(np.amax(np.abs(image.get_array())) for image in images) * self.clim_scale[0],
+                max(np.amax(np.abs(image.get_array())) for image in images) * self.clim_scale[1])
+        norm = matplotlib.colors.Normalize(vmin=clim[0], vmax=clim[1])
+        for im in images:
+            im.set_norm(norm)
+        cbar = fig.colorbar(images[0], ax=axs, format=scifmt())
+        cbar.set_label(self.label, rotation=90)
+        plt.savefig(self.filename, dpi=300)
+        plt.close()
+
+
 class magdif_1d_cutplot:
     def __init__(self, x, xlabel, y, ylabel, title, filename):
         self.x = x
@@ -175,7 +216,7 @@ class polmodes:
         self.type = 'amn.dat'
         self.rad_coord = fslabel.psi_norm
         rho = data['/Bmnvac/psi_n'][()]
-        var_name = '/Bmnvac/comp_contradenspsi'
+        var_name = '/Bmnvac/comp_psi_contravar_dens'
         self.m_max = (data[var_name].shape[1] - 1) // 2
         for m in range(-self.m_max, self.m_max + 1):
             self.rho[m] = rho
@@ -192,14 +233,14 @@ class polmodes:
                 continue
             m = int(grp['mode'][0, 0]) * sgn_q
             self.m_max = max(self.m_max, abs(m))
-            self.rho[m] = np.array(grp['r'][0, :], dtype='d')
+            self.rho[m] = np.array(grp['r'][0, :], dtype='Bnvac_R_Im')
             self.var[m] = np.zeros(self.rho[m].shape, dtype='D')
             self.var[m].real = grp[var_name][0, :]
             if grp[var_name].shape[0] == 2:
                 self.var[m].imag = grp[var_name][1, :]
         data.close()
 
-    def read_GPEC(self, datafile, var_name='b_n'):
+    def read_GPEC(self, datafile, var_name='Jbgradpsi'):
         self.type = 'GPEC'
         self.rad_coord = fslabel.psi_norm
         self.m_max = 0
@@ -282,7 +323,7 @@ class magdif_poloidal_plots:
                     if m in data.var:
                         axs[k].plot(self.interp_rho(data, m),
                                     self.comp(data.var[m]),
-                                    data.fmt, label=data.label, lw=0.5)
+                                    data.fmt, label=data.label_Im, lw=0.5)
                 axs[k].legend(loc='upper left', fontsize='x-small')
                 axs[k].ticklabel_format(style='sci', scilimits=(-3, 4))
                 axs[k].set_title(('resonant ' if m in resonance else
@@ -302,7 +343,7 @@ class magdif_poloidal_plots:
         for data in self.poldata:
             if m in data.var:
                 ax.plot(self.interp_rho(data, m), self.comp(data.var[m]),
-                        data.fmt, label=data.label, lw=0.5)
+                        data.fmt, label=data.label_Im, lw=0.5)
         ax.legend(loc='upper left', fontsize='x-small')
         ax.ticklabel_format(style='sci', scilimits=(-3, 4))
         ax.set_title(f"$m = {m}$")
@@ -404,7 +445,7 @@ class parcurr:
                 continue
             m = int(grp['mode'][0, 0]) # * sgn_q
             self.m_max = max(self.m_max, abs(m))
-            self.rad[m] = np.array(grp['r'][0, :], dtype='d')
+            self.rad[m] = np.array(grp['r'][0, :], dtype='Bnvac_R_Im')
             self.jnpar[m] = np.zeros(self.rad[m].shape, dtype='D')
             self.jnpar[m].real = grp['Jpar'][0, :]
             if grp['Jpar'].shape[0] == 2:
@@ -414,7 +455,7 @@ class parcurr:
                 fill_value='extrapolate', assume_sorted=True
             )
             self.rres[m] = grp['rres'][0, 0].copy()
-            self.d[m] = grp['d'][0, 0].copy()
+            self.d[m] = grp['Bnvac_R_Im'][0, 0].copy()
             self.Ipar[m] = grp['Ipar'][0, 0].copy()
         self.hz = (data['/output/background/b0z'][0, :] /
                    data['/output/background/b0'][0, :])
