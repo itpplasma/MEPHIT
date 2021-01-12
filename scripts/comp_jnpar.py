@@ -108,9 +108,9 @@ plt.close()
 plt.figure(figsize=canvas)
 for m in range(m_min, m_max + 1):
     plt.axvline(kilca_hic.rres[m], lw=0.25 * thin, color='k')
-    plt.axvline(kilca_hic.rres[m] - 0.5 * kilca_hic.Bnvac_R_Im[m],
+    plt.axvline(kilca_hic.rres[m] - 0.5 * kilca_hic.d[m],
                 lw=0.25 * thin, color='k', ls='--')
-    plt.axvline(kilca_hic.rres[m] + 0.5 * kilca_hic.Bnvac_R_Im[m],
+    plt.axvline(kilca_hic.rres[m] + 0.5 * kilca_hic.d[m],
                 lw=0.25 * thin, color='k', ls='--')
     plt.plot(kilca_hic.rad[m], np.abs(kilca_hic.jnpar[m]) * c1_statA_per_cm2_to_A_per_m2,
              '-', lw=thin, label=f"m = {m}")
@@ -125,9 +125,9 @@ plt.close()
 plt.figure(figsize=canvas)
 for m in range(m_min, m_max + 1):
     plt.axvline(kilca_loc.rres[m], lw=0.25 * thin, color='k')
-    plt.axvline(kilca_loc.rres[m] - 0.5 * kilca_loc.Bnvac_R_Im[m],
+    plt.axvline(kilca_loc.rres[m] - 0.5 * kilca_loc.d[m],
                 lw=0.25 * thin, color='k', ls='--')
-    plt.axvline(kilca_loc.rres[m] + 0.5 * kilca_loc.Bnvac_R_Im[m],
+    plt.axvline(kilca_loc.rres[m] + 0.5 * kilca_loc.d[m],
                 lw=0.25 * thin, color='k', ls='--')
     plt.plot(kilca_loc.rad[m], np.abs(kilca_loc.jnpar[m]) * c1_statA_per_cm2_to_A_per_m2,
              '-', lw=thin, label=f"m = {m}")
@@ -143,27 +143,27 @@ plt.close()
 for m in range(m_min, m_max + 1):
     # plot: compare KiLCA collisionality
     plt.figure(figsize=canvas)
-    plt.axvline(kilca_mec.Bnvac_R_Im[m], lw=thin, color='k', ls='-')
+    plt.axvline(kilca_mec.d[m], lw=thin, color='k', ls='-')
     plt.axhline(np.abs(kilca_mec.Imnpar[m]), lw=thin, color='k', ls='-')
     plt.plot(kilca_mec.width[m], np.abs(kilca_mec.intJ[m]), '-k', lw=thin,
              label='KiLCA ($c = 1$)')
-    plt.axvline(kilca_hic.Bnvac_R_Im[m], lw=thin, color='b', ls='--')
+    plt.axvline(kilca_hic.d[m], lw=thin, color='b', ls='--')
     plt.axhline(np.abs(kilca_hic.Imnpar[m]), lw=thin, color='b', ls='--')
     plt.plot(kilca_hic.width[m], np.abs(kilca_hic.intJ[m]), '--b', lw=thin,
              label='KiLCA ($c = 100$)')
-    plt.axvline(kilca_loc.Bnvac_R_Im[m], lw=thin, color='r', ls='--')
+    plt.axvline(kilca_loc.d[m], lw=thin, color='r', ls='--')
     plt.axhline(np.abs(kilca_loc.Imnpar[m]), lw=thin, color='r', ls='--')
     plt.plot(kilca_loc.width[m], np.abs(kilca_loc.intJ[m]), '--r', lw=thin,
              label='KiLCA ($c = 0.01$)')
     plt.gca().legend(loc='lower right', fontsize='x-small')
-    plt.xlabel(r'layer width $Bnvac_R_Im$ / cm')
+    plt.xlabel(r'layer width $d$ / cm')
     plt.ylabel(r'parallel current $\vert I_{m n}^{\parallel} \vert$ / A')
     plt.title(f"Comparison: different collisionalities for KiLCA (m = {m})")
     plt.savefig(path.join(work_dir, f"cmp_KiLCA_{m}.png"), dpi=res)
     plt.close()
     # plot: compare KiLCA and MEPHIT
     plt.figure(figsize=canvas)
-    plt.axvline(kilca_mec.Bnvac_R_Im[m], lw=0.25 * thin, color='k')
+    plt.axvline(kilca_mec.d[m], lw=0.25 * thin, color='k')
     plt.axhline(np.abs(kilca_mec.Imnpar[m]), lw=0.25 * thin, color='k', ls='-')
     plt.plot(kilca_mec.width[m], np.abs(kilca_mec.intJ[m]), '-k', lw=thin,
              label='KiLCA')
@@ -190,7 +190,7 @@ for m in range(m_min, m_max + 1):
 #              label=r'$\Delta_{mn}$')
 # =============================================================================
     plt.gca().legend(loc='lower right', fontsize='x-small')
-    plt.xlabel(r'layer width $Bnvac_R_Im$ / \si{\centi\meter}')
+    plt.xlabel(r'layer width $d$ / \si{\centi\meter}')
     plt.ylabel(r'parallel current $\lvert I_{m n}^{\parallel} \rvert$ / \si{\ampere}')
     plt.title(f"Comparison: KiLCA and MEPHIT (m = {m})")
     plt.savefig(path.join(work_dir, f"cmp_Imnpar_{m}.png"), dpi=res)

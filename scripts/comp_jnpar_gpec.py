@@ -52,7 +52,7 @@ for m in range(m_min, m_max + 1):
 #              label=r'$\Delta_{mn}$')
 # =============================================================================
     plt.gca().legend(loc='lower left', fontsize='x-small')
-    plt.xlabel(r'layer width $Bnvac_R_Im$ / \si{\centi\meter}')
+    plt.xlabel(r'layer width $d$ / \si{\centi\meter}')
     plt.ylabel(r'parallel current $\lvert I_{m n}^{\parallel} \rvert$ / \si{\ampere}')
     plt.title(f"Comparison: GPEC and MEPHIT (m = {m})")
     plt.savefig(path.join(work_dir, f"cmp_Imnpar_{m}.png"), dpi=res)

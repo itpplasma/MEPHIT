@@ -233,7 +233,7 @@ class polmodes:
                 continue
             m = int(grp['mode'][0, 0]) * sgn_q
             self.m_max = max(self.m_max, abs(m))
-            self.rho[m] = np.array(grp['r'][0, :], dtype='Bnvac_R_Im')
+            self.rho[m] = np.array(grp['r'][0, :], dtype='d')
             self.var[m] = np.zeros(self.rho[m].shape, dtype='D')
             self.var[m].real = grp[var_name][0, :]
             if grp[var_name].shape[0] == 2:
@@ -323,7 +323,7 @@ class magdif_poloidal_plots:
                     if m in data.var:
                         axs[k].plot(self.interp_rho(data, m),
                                     self.comp(data.var[m]),
-                                    data.fmt, label=data.label_Im, lw=0.5)
+                                    data.fmt, label=data.label, lw=0.5)
                 axs[k].legend(loc='upper left', fontsize='x-small')
                 axs[k].ticklabel_format(style='sci', scilimits=(-3, 4))
                 axs[k].set_title(('resonant ' if m in resonance else
@@ -343,7 +343,7 @@ class magdif_poloidal_plots:
         for data in self.poldata:
             if m in data.var:
                 ax.plot(self.interp_rho(data, m), self.comp(data.var[m]),
-                        data.fmt, label=data.label_Im, lw=0.5)
+                        data.fmt, label=data.label, lw=0.5)
         ax.legend(loc='upper left', fontsize='x-small')
         ax.ticklabel_format(style='sci', scilimits=(-3, 4))
         ax.set_title(f"$m = {m}$")
@@ -445,7 +445,7 @@ class parcurr:
                 continue
             m = int(grp['mode'][0, 0]) # * sgn_q
             self.m_max = max(self.m_max, abs(m))
-            self.rad[m] = np.array(grp['r'][0, :], dtype='Bnvac_R_Im')
+            self.rad[m] = np.array(grp['r'][0, :], dtype='d')
             self.jnpar[m] = np.zeros(self.rad[m].shape, dtype='D')
             self.jnpar[m].real = grp['Jpar'][0, :]
             if grp['Jpar'].shape[0] == 2:
@@ -455,7 +455,7 @@ class parcurr:
                 fill_value='extrapolate', assume_sorted=True
             )
             self.rres[m] = grp['rres'][0, 0].copy()
-            self.d[m] = grp['Bnvac_R_Im'][0, 0].copy()
+            self.d[m] = grp['d'][0, 0].copy()
             self.Ipar[m] = grp['Ipar'][0, 0].copy()
         self.hz = (data['/output/background/b0z'][0, :] /
                    data['/output/background/b0'][0, :])
