@@ -240,7 +240,7 @@ class polmodes:
                 self.var[m].imag = grp[var_name][1, :]
         data.close()
 
-    def read_GPEC(self, datafile, var_name='Jbgradpsi'):
+    def read_GPEC(self, datafile, sgn_Itor, var_name='Jbgradpsi'):
         self.type = 'GPEC'
         self.rad_coord = fslabel.psi_norm
         self.m_max = 0
@@ -252,8 +252,11 @@ class polmodes:
             self.m_max = max(self.m_max, abs(m))
             self.rho[m] = rho
             self.var[m] = np.empty(rho.shape, dtype='D')
-            self.var[m].real = rootgrp.variables[var_name][0, k, :]
-            self.var[m].imag = rootgrp.variables[var_name][1, k, :]
+            # sgn_Itor accounts for sgn_dpsi and ... sgn_Bpol in DCON?
+            self.var[m].real = rootgrp.variables[var_name][0, k, :] * sgn_Itor
+            # GPEC uses clockwise toroidal angle for positive helicity
+            # and expands Fourier series in negative toroidal angle
+            self.var[m].imag = rootgrp.variables[var_name][1, k, :] * sgn_Itor * sgn
             # convert weber to maxwell
             self.var[m] *= 1e8
         rootgrp.close()

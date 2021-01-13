@@ -20,11 +20,13 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_*'):
     testcase = magdif(workdir)
     testcase.read_configfile()
     testcase.read_datafile()
+    sgn_Itor = -np.sign(testcase.data['/cache/fs/psi'][-1] -
+                        testcase.data['/cache/fs/psi'][0])
 
     vac = polmodes('vacuum perturbation (GPEC)', 'r--')
-    vac.read_GPEC(path.join(workdir, 'gpec_profile_output_n2.nc'), 'Jbgradpsi_x')
+    vac.read_GPEC(path.join(workdir, 'gpec_profile_output_n2.nc'), sgn_Itor, 'Jbgradpsi_x')
     pert = polmodes('full perturbation (GPEC)', 'k--')
-    pert.read_GPEC(path.join(workdir, 'gpec_profile_output_n2.nc'), 'Jbgradpsi')
+    pert.read_GPEC(path.join(workdir, 'gpec_profile_output_n2.nc'), sgn_Itor, 'Jbgradpsi')
     mephit_vac = polmodes('vacuum perturbation (MEPHIT)', 'b--')
     mephit_vac.read_magdif(testcase.data, fslabel.psi_norm,
                            '/Bmnvac/comp_psi_contravar_dens')

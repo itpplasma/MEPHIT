@@ -949,17 +949,11 @@ contains
     type(flux_func) :: rq_interpolator
 
     inquire(file = 'amn.dat', exist = file_exists)
-    if (.not. file_exists) then
-       log%msg = 'File amn.dat not found, cannot perform Fourier mode comparison.'
-       if (log%info) call log%write
-       return
-    end if
+    if (.not. file_exists) return
     inquire(file = 'equil_r_q_psi.dat', exist = file_exists)
-    if (.not. file_exists) then
-       log%msg = 'File equil_r_q_psi.dat not found, cannot perform Fourier mode comparison.'
-       if (log%info) call log%write
-       return
-    end if
+    if (.not. file_exists) return
+    log%msg = 'Files amn.dat and equil_r_q_psi.dat found, performing Fourier mode comparison.'
+    if (log%info) call log%write
     open(newunit = fid, form = 'unformatted', file = 'amn.dat')
     read (fid) ntor, mpol, nlabel, flabel_min, flabel_max
     allocate(z3dum(-mpol:mpol, ntor, nlabel))
@@ -991,9 +985,9 @@ contains
     psi_n(:) = [(rq_interpolator%interp(psisurf / psimax, rq_eqd(k)), k = 1, nlabel)]
     allocate(Bmn_contradenspsi(-mpol:mpol, nlabel))
     ! if qsaf does not have the expected sign, theta points in the wrong direction,
-    ! and we have to reverse the index m
-    if (phimax / psimax / qsaf(nsqpsi) < 0d0) then
-       Bmn_contradenspsi(:, :) = imun * conf%n * sgn_dpsi * Amn_theta(mpol:-mpol:-1, conf%n, :)
+    ! and we have to reverse the index m and the overall sign
+    if (equil%cocos%sgn_q * qsaf(nsqpsi) < 0d0) then
+       Bmn_contradenspsi(:, :) = -imun * conf%n * sgn_dpsi * Amn_theta(mpol:-mpol:-1, conf%n, :)
     else
        Bmn_contradenspsi(:, :) = imun * conf%n * sgn_dpsi * Amn_theta(:, conf%n, :)
     end if

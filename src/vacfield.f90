@@ -3,7 +3,7 @@ program vacfield
   use iso_fortran_env, only: dp => real64
   use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
   use magdif_conf, only: conf, conf_arr, magdif_config_read, log, magdif_log, datafile
-  use magdif_mesh, only: mesh, read_mesh_cache
+  use magdif_mesh, only: mesh, read_mesh_cache, equil
   use magdif_util, only: get_field_filenames, init_field
   use magdif_pert, only: compute_Bn_nonres, compute_kilca_vac_coeff, compute_kilca_vacuum, &
        check_kilca_vacuum, RT0_check_redundant_edges, RT0_check_div_free, RT0_t, RT0_init, &
@@ -39,6 +39,8 @@ program vacfield
      else
         call get_field_filenames(gfile, pfile, convexfile)
         call init_field(gfile, pfile, convexfile)
+        call equil%read(trim(gfile))
+        call equil%classify
         call compute_Bnvac(Bn)
         call debug_Bnvac_rectplot
         call debug_Bmnvac
