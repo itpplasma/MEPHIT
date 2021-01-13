@@ -7,7 +7,8 @@ program vacfield
   use magdif_util, only: get_field_filenames, init_field
   use magdif_pert, only: compute_Bn_nonres, compute_kilca_vac_coeff, compute_kilca_vacuum, &
        check_kilca_vacuum, RT0_check_redundant_edges, RT0_check_div_free, RT0_t, RT0_init, &
-       RT0_deinit, RT0_write, check_RT0, debug_fouriermodes, debug_Bnvac_rectplot, compute_Bnvac
+       RT0_deinit, RT0_write, check_RT0, debug_fouriermodes, debug_Bnvac_rectplot, &
+       debug_Bmnvac, compute_Bnvac
 
   implicit none
 
@@ -40,6 +41,7 @@ program vacfield
         call init_field(gfile, pfile, convexfile)
         call compute_Bnvac(Bn)
         call debug_Bnvac_rectplot
+        call debug_Bmnvac
         call debug_fouriermodes
      end if
   end if

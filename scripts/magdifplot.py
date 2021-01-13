@@ -215,8 +215,8 @@ class polmodes:
     def read_fouriermodes(self, data):
         self.type = 'amn.dat'
         self.rad_coord = fslabel.psi_norm
-        rho = data['/Bmnvac/psi_n'][()]
-        var_name = '/Bmnvac/comp_psi_contravar_dens'
+        rho = data['/debug_fouriermodes/psi_n'][()]
+        var_name = '/debug_fouriermodes/comp_psi_contravar_dens'
         self.m_max = (data[var_name].shape[1] - 1) // 2
         for m in range(-self.m_max, self.m_max + 1):
             self.rho[m] = rho

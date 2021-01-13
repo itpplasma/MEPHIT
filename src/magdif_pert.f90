@@ -11,7 +11,7 @@ module magdif_pert
        RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
        vec_polmodes_read, vec_polmodes_write, compute_Bnvac, compute_Bn_nonres, avg_flux_on_quad, &
        compute_kilca_vacuum, kilca_vacuum, compute_kilca_vac_coeff, kilca_vacuum_fourier, &
-       check_kilca_vacuum, check_RT0, debug_fouriermodes, debug_Bnvac_rectplot
+       check_kilca_vacuum, check_RT0, debug_fouriermodes, debug_Bnvac_rectplot, debug_Bmnvac
 
   type, public :: L1_t
      !> Number of points on which the L1 are defined
@@ -594,7 +594,6 @@ contains
   end subroutine compute_Bnvac
 
   subroutine debug_Bnvac_rectplot
-    use iso_c_binding, only: c_long
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use field_mod, only: ipert, iequil
     use field_c_mod, only: nr, nz, rmin, rmax, zmin, zmax
@@ -646,6 +645,47 @@ contains
     ipert = 0
     iequil = 1
   end subroutine debug_Bnvac_rectplot
+
+  subroutine debug_Bmnvac
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use field_mod, only: ipert, iequil
+    use magdif_conf, only: conf, datafile
+    use magdif_util, only: imun
+    use magdif_mesh, only: mesh, sample_polmodes
+    character(len=*), parameter :: dataset = 'Bmnvac'
+    integer, parameter :: m_max = 24
+    integer :: kf, kt, ktri, m
+    integer(HID_T) :: h5id_root
+    complex(dp) :: Bn_R, Bn_Z, Bn_phi, Bn_contradenspsi
+    complex(dp) :: fourier_basis(-m_max:m_max), Bmn_contradenspsi(-m_max:m_max, mesh%nflux)
+
+    ! use vacuum field
+    ipert = 1
+    iequil = 0
+    Bmn_contradenspsi(:, :) = (0d0, 0d0)
+    associate (s => sample_polmodes)
+      do kf = 1, mesh%nflux
+         do kt = 1, mesh%kt_max(kf)
+            ktri = mesh%kt_low(kf) + kt
+            fourier_basis = [(exp(-imun * m * s%theta(ktri)), m = -m_max, m_max)]
+            call spline_bn(conf%n, s%R(ktri), s%Z(ktri), Bn_R, Bn_phi, Bn_Z)
+            Bn_contradenspsi = s%sqrt_g(ktri) * (Bn_R * s%B0_Z(ktri) - &
+                 Bn_Z * s%B0_R(ktri)) * s%R(ktri)
+            Bmn_contradenspsi(:, kf) = Bmn_contradenspsi(:, kf) + Bn_contradenspsi * fourier_basis
+         end do
+         Bmn_contradenspsi(:, kf) = Bmn_contradenspsi(:, kf) / mesh%kt_max(kf)
+      end do
+    end associate
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, dataset // '/')
+    call h5_add(h5id_root, dataset // '/comp_psi_contravar_dens', Bmn_contradenspsi, &
+         lbound(Bmn_contradenspsi), ubound(Bmn_contradenspsi), unit = 'Mx', &
+         comment = 'normalized poloidal flux of interpolation points')
+    call h5_close(h5id_root)
+    ! reset to equilibrium field
+    ipert = 0
+    iequil = 1
+  end subroutine debug_Bmnvac
 
   subroutine compute_Bn_nonres(Bn)
     use magdif_conf, only: conf
@@ -895,6 +935,7 @@ contains
   subroutine debug_fouriermodes
     use magdif_conf, only: conf, datafile, log
     use magdif_util, only: flux_func, linspace, imun
+    use magdif_mesh, only: equil
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     logical :: file_exists
     integer :: fid, ntor, mpol, nlabel, nsqpsi, k
@@ -903,7 +944,7 @@ contains
     real(dp), allocatable :: qsaf(:), rsmall(:), psisurf(:), rq_eqd(:), psi_n(:)
     complex(dp), allocatable :: z3dum(:, :, :), Amn_theta(:, :, :), Bmn_contradenspsi(:, :)
     character(len = *), parameter :: ptrn_nsqpsi = 'nrad = ', ptrn_psimax = 'psimax', &
-         ptrn_phimax = 'phimax', dataset = 'Bmnvac'
+         ptrn_phimax = 'phimax', dataset = 'debug_fouriermodes'
     character(len = 1024) :: line
     type(flux_func) :: rq_interpolator
 

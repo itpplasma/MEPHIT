@@ -27,7 +27,7 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_*'):
     pert.read_GPEC(path.join(workdir, 'gpec_profile_output_n2.nc'), 'Jbgradpsi')
     mephit_vac = polmodes('vacuum perturbation (MEPHIT)', 'b--')
     mephit_vac.read_magdif(testcase.data, fslabel.psi_norm,
-                           '/postprocess/Bmn_vac/coeff_rad')
+                           '/Bmnvac/comp_psi_contravar_dens')
     mephit_pert = polmodes('full perturbation (MEPHIT)', 'g--')
     mephit_pert.read_magdif(testcase.data, fslabel.psi_norm,
                             '/postprocess/Bmn/coeff_rad')
