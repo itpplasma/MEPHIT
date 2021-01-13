@@ -27,7 +27,7 @@ include(${CMAKE_SOURCE_DIR}/ProjectConfig.cmake.in)
 
 ### Find dependencies in standard directories
 find_package(SuiteSparse REQUIRED)
-find_package(SuperLU REQUIRED)
+find_package(SuperLU)
 cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 
@@ -92,13 +92,13 @@ set_source_files_properties(src/magdif_run.c src/magdif_util.c
 ### Define library
 add_library(magdif SHARED
   ${SUITESPARSE_SRC_FILES}
-  ${SUPERLU_SRC_FILES}
+  # ${SUPERLU_SRC_FILES}
   ${COMMON_FORTRAN_SRC_FILES}
   ${MAGDIF_FORTRAN_SRC_FILES}
 )
 target_include_directories(magdif PUBLIC ${HDF5_tools_include_dir} ${FGSL_INC})
 set(MAGDIF_LIBS
-  ${SUPERLU_LIBRARIES}
+  # ${SUPERLU_LIBRARIES}
   ${SUITESPARSE_LIBRARIES}
   ${HDF5_tools_lib}
   ${HDF5_Fortran_HL_LIBRARIES}

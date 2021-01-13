@@ -65,8 +65,6 @@
    ! error threshold for current perturbation
    rel_err_currn = 1d-8
 
-   ! integration constant in resonant vacuum perturbation
-   kilca_vac_coeff = (1d-3, 0d0)
    ! single poloidal mode number used with KiLCA
    kilca_pol_mode = 4
    ! scaling factor used in EQDSK rmaxis from KiLCA
