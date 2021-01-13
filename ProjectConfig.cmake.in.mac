@@ -5,5 +5,11 @@ set(tmpdir $TMPDIR)
 set (CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
 
 ### Path to the external libraries
-set(FGSL_PATH /usr/local)
+set(HDF5_tools_include_dir ${CMAKE_SOURCE_DIR}/../libneo/build)
+# should be changed to a less confusing path name...
+set(HDF5_tools_lib_dir ${CMAKE_SOURCE_DIR}/../libneo/build/src/hdf5_tools)
 
+# set(SUPERLU_INCLUDES ${CMAKE_SOURCE_DIR}/../libs/superlu-5.2.2/SRC)
+# set(SUPERLU_LIBRARIES ${CMAKE_SOURCE_DIR}/../libs/superlu-5.2.2)
+
+set(FGSL_PATH /usr/local)
