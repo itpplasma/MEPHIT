@@ -42,6 +42,8 @@ matplotlib.use('Agg')
 
 c_cgs = 2.9979246e+10
 cm_to_m = 1.0e-02
+G_to_T = 1.0e-04
+Mx_to_Wb = 1.0e-08
 c1_statA_to_A = 1.0e+01
 c1_statA_per_cm2_to_A_per_m2 = c1_statA_to_A / cm_to_m ** 2
 statA_to_A = c1_statA_to_A / c_cgs
@@ -99,7 +101,7 @@ class magdif_2d_rectplots:
         print(f"plotting {self.filename}")
         xlim = (min(R[0] for R in self.R), max(R[-1] for R in self.R))
         ylim = (min(Z[0] for Z in self.Z), max(Z[-1] for Z in self.Z))
-        fig, axs = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(8.0, 5.0))
+        fig, axs = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(10.0, 5.0))
         images = []
         for k in range(2):
             images.append(axs[k].imshow(self.data[k], cmap=colorcet.cm.coolwarm, interpolation='gaussian',
@@ -117,6 +119,9 @@ class magdif_2d_rectplots:
         norm = matplotlib.colors.Normalize(vmin=clim[0], vmax=clim[1])
         for im in images:
             im.set_norm(norm)
+        for k in range(2):
+            axs[k].contour(self.R[k], self.Z[k], self.data[k], np.linspace(clim[0], clim[1], 10),
+                           colors='k', linewidths=0.1)
         cbar = fig.colorbar(images[0], ax=axs, format=scifmt())
         cbar.set_label(self.label, rotation=90)
         plt.savefig(self.filename, dpi=300)
@@ -210,7 +215,7 @@ class polmodes:
         self.m_max = (data[var_name].shape[1] - 1) // 2
         for m in range(-self.m_max, self.m_max + 1):
             self.rho[m] = rho
-            self.var[m] = np.array(data[var_name][:, m + self.m_max], dtype='D')
+            self.var[m] = np.array(data[var_name][:, m + self.m_max], dtype='D') * Mx_to_Wb
 
     def read_fouriermodes(self, data):
         self.type = 'amn.dat'
@@ -220,7 +225,7 @@ class polmodes:
         self.m_max = (data[var_name].shape[1] - 1) // 2
         for m in range(-self.m_max, self.m_max + 1):
             self.rho[m] = rho
-            self.var[m] = np.array(data[var_name][:, m + self.m_max], dtype='D')
+            self.var[m] = np.array(data[var_name][:, m + self.m_max], dtype='D') * Mx_to_Wb
 
     def read_KiLCA(self, datafile, var_name='Br'):
         self.type = 'KiLCA'
@@ -235,30 +240,27 @@ class polmodes:
             self.m_max = max(self.m_max, abs(m))
             self.rho[m] = np.array(grp['r'][0, :], dtype='d')
             self.var[m] = np.zeros(self.rho[m].shape, dtype='D')
-            self.var[m].real = grp[var_name][0, :]
+            self.var[m].real = grp[var_name][0, :] * Mx_to_Wb
             if grp[var_name].shape[0] == 2:
-                self.var[m].imag = grp[var_name][1, :]
+                self.var[m].imag = grp[var_name][1, :] * Mx_to_Wb
         data.close()
 
-    def read_GPEC(self, datafile, sgn_Itor, var_name='Jbgradpsi'):
+    def read_GPEC(self, datafile, sgn_dpsi, var_name='Jbgradpsi'):
         self.type = 'GPEC'
         self.rad_coord = fslabel.psi_norm
         self.m_max = 0
         rootgrp = netCDF4.Dataset(datafile, 'r')
         rho = np.array(rootgrp.variables['psi_n'])
-        sgn = int(rootgrp.getncattr('helicity'))
+        helicity = int(rootgrp.getncattr('helicity'))
         for k, m_out in enumerate(rootgrp.variables['m_out'][:]):
-            m = m_out * sgn
+            m = m_out * helicity
             self.m_max = max(self.m_max, abs(m))
             self.rho[m] = rho
             self.var[m] = np.empty(rho.shape, dtype='D')
-            # sgn_Itor accounts for sgn_dpsi and ... sgn_Bpol in DCON?
-            self.var[m].real = rootgrp.variables[var_name][0, k, :] * sgn_Itor
+            self.var[m].real = rootgrp.variables[var_name][0, k, :] * sgn_dpsi
             # GPEC uses clockwise toroidal angle for positive helicity
             # and expands Fourier series in negative toroidal angle
-            self.var[m].imag = rootgrp.variables[var_name][1, k, :] * sgn_Itor * sgn
-            # convert weber to maxwell
-            self.var[m] *= 1e8
+            self.var[m].imag = rootgrp.variables[var_name][1, k, :] * sgn_dpsi * helicity
         rootgrp.close()
 
 
@@ -327,7 +329,7 @@ class magdif_poloidal_plots:
                         axs[k].plot(self.interp_rho(data, m),
                                     self.comp(data.var[m]),
                                     data.fmt, label=data.label, lw=0.5)
-                axs[k].legend(loc='upper left', fontsize='x-small')
+                axs[k].legend(fontsize='x-small')
                 axs[k].ticklabel_format(style='sci', scilimits=(-3, 4))
                 axs[k].set_title(('resonant ' if m in resonance else
                                   'non-resonant ') + fr"$m = {m}$")
@@ -347,7 +349,7 @@ class magdif_poloidal_plots:
             if m in data.var:
                 ax.plot(self.interp_rho(data, m), self.comp(data.var[m]),
                         data.fmt, label=data.label, lw=0.5)
-        ax.legend(loc='upper left', fontsize='x-small')
+        ax.legend(fontsize='x-small')
         ax.ticklabel_format(style='sci', scilimits=(-3, 4))
         ax.set_title(f"$m = {m}$")
         ax.set_xlabel(self.xlabel)
