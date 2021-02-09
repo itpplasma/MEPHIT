@@ -660,7 +660,6 @@ contains
        mesh%n = conf%n
     end if
     call create_mesh_points(convexfile)
-    call compute_theta_offset
     call compare_gpec_coordinates
     call connect_mesh_points
     call write_meshfile_for_freefem
@@ -1010,6 +1009,10 @@ contains
     fs%rad = fs%rad * hypot(theta_axis(1), theta_axis(2))
     fs_half%rad = fs_half%rad * hypot(theta_axis(1), theta_axis(2))
     call flux_func_cache_check
+    allocate(mesh%theta_offset(mesh%nflux))
+    do kf = 1, mesh%nflux
+       mesh%theta_offset(kf) = theta_offset(fs_half%psi(kf))
+    end do
     ! dump presumedly optimal values for poloidal resolution
     open(newunit = fid, file = 'optpolres.dat', status = 'replace')
     do kf = 1, mesh%nflux - 1
@@ -1076,26 +1079,24 @@ contains
     end function psi_ref
   end subroutine create_mesh_points
 
-  subroutine compute_theta_offset
-    integer, parameter :: n_lag = 4
-    integer :: kf, kpoi, kpoi_lo, kpoi_hi
-    logical :: mask(mesh%npoint)
-    real(dp) :: lag_coeff(1, n_lag), theta_offset_full(0:mesh%nflux)
+  function theta_offset(psi)
+    use netlib_mod, only: zeroin
+    use constants, only: pi  ! orbit_mod.f90
+    real(dp), intent(in) :: psi
+    real(dp) :: theta_offset
 
-    allocate(mesh%theta_offset(mesh%nflux))
-    theta_offset_full = 0d0
-    do kf = 1, mesh%nflux
-       mask = .false.
-       mask(mesh%kp_low(kf)+1:mesh%kp_low(kf)+mesh%kp_max(kf)) = .true.
-       kpoi = findloc(mesh%node_theta_geom > 0d0, .true., 1, mask)
-       kpoi_lo = kpoi - n_lag / 2
-       kpoi_hi = kpoi + n_lag / 2 - 1
-       call plag_coeff(n_lag, 0, 0d0, mesh%node_theta_geom(kpoi_lo:kpoi_hi), lag_coeff)
-       theta_offset_full(kf) = sum(mesh%node_theta_flux(kpoi_lo:kpoi_hi) * lag_coeff(1, :))
-    end do
-    theta_offset_full(0) = theta_offset_full(1)
-    mesh%theta_offset(:) = (theta_offset_full(:mesh%nflux-1) + theta_offset_full(1:)) * 0.5d0
-  end subroutine compute_theta_offset
+    theta_offset = zeroin(0d0, pi, Z_offset, 1d-9)
+  contains
+    function Z_offset(theta)
+      use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
+      real(dp), intent(in) :: theta
+      real(dp) :: Z_offset
+      real(dp) :: dum
+      call magdata_in_symfluxcoord_ext(2, dum, psi - fs%psi(0), theta, dum, dum, &
+           dum, dum, dum, dum, dum, dum, Z_offset, dum, dum)
+      Z_offset = Z_offset - mesh%Z_O
+    end function Z_offset
+  end function theta_offset
 
   !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
   !> of #magdif_config::nflux and #magdif_config::nkpol. Deallocation is done in
@@ -2000,7 +2001,7 @@ contains
     integer(HID_T) :: h5id_root
     integer :: ncid_file, ncid, nrad, npol, krad, kpol
     real(dp) :: dum
-    real(dp), allocatable :: psi(:), theta(:), R(:, :), Z(:, :)
+    real(dp), allocatable :: psi(:), theta(:), R(:, :), Z(:, :), theta_shift(:)
 
     write (filename, '("gpec_profile_output_n", i0, ".nc")') conf%n
     call check_error("nf90_open", nf90_open(filename, nf90_nowrite, ncid_file))
@@ -2027,20 +2028,24 @@ contains
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, dataset // '/')
     call h5_add(h5id_root, dataset // '/psi', psi, lbound(psi), ubound(psi), &
-         unit = 'Mx', comment = 'poloidal flux')
+         unit = 'Mx', comment = 'poloidal flux (shifted to zero at axis)')
     call h5_add(h5id_root, dataset // '/theta', theta, lbound(theta), ubound(theta), &
          unit = 'rad', comment = 'flux poloidal angle')
     call h5_add(h5id_root, dataset // '/R_GPEC', R, lbound(R), ubound(R), &
          unit = 'cm', comment = 'R(psi, theta) from GPEC')
     call h5_add(h5id_root, dataset // '/Z_GPEC', Z, lbound(Z), ubound(Z), &
          unit = 'cm', comment = 'Z(psi, theta) from GPEC')
+    allocate(theta_shift(nrad))
+    do krad = 1, nrad
+       theta_shift(krad) = theta_offset(psi(krad) + fs%psi(0))
+    end do
     do kpol = 1, npol
        do krad = 1, nrad
-          ! TODO: interpolate theta0 offset or set theta0_at_xpoint = .false.
-          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol), dum, dum, &
-               dum, dum, dum, R(krad, kpol), dum, dum, Z(krad, kpol), dum, dum)
+          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol) + theta_shift(krad), &
+               dum, dum, dum, dum, dum, R(krad, kpol), dum, dum, Z(krad, kpol), dum, dum)
        end do
     end do
+    if (allocated(theta_shift)) deallocate(theta_shift)
     call h5_add(h5id_root, dataset // '/R', R, lbound(R), ubound(R), &
          unit = 'cm', comment = 'R(psi, theta)')
     call h5_add(h5id_root, dataset // '/Z', Z, lbound(Z), ubound(Z), &
