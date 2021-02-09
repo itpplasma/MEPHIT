@@ -30,6 +30,8 @@ find_package(SuiteSparse REQUIRED)
 find_package(SuperLU)
 cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
+set (NETCDF_F90 "YES")
+find_package (NetCDF REQUIRED)
 
 # GSL
 find_library(gsl_lib gsl ${GSL_LIB})
@@ -96,7 +98,7 @@ add_library(magdif SHARED
   ${COMMON_FORTRAN_SRC_FILES}
   ${MAGDIF_FORTRAN_SRC_FILES}
 )
-target_include_directories(magdif PUBLIC ${HDF5_tools_include_dir} ${FGSL_INC})
+target_include_directories(magdif PUBLIC ${HDF5_tools_include_dir} ${FGSL_INC} ${NETCDF_INCLUDES})
 set(MAGDIF_LIBS
   # ${SUPERLU_LIBRARIES}
   ${SUITESPARSE_LIBRARIES}
@@ -105,6 +107,7 @@ set(MAGDIF_LIBS
   ${HDF5_HL_LIBRARIES}
   ${HDF5_Fortran_LIBRARIES}
   ${HDF5_LIBRARIES}
+  ${NETCDF_LIBRARIES}
   ${gsl_lib}
   ${fgsl_lib}
   blas

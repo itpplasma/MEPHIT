@@ -661,6 +661,7 @@ contains
     end if
     call create_mesh_points(convexfile)
     call compute_theta_offset
+    call compare_gpec_coordinates
     call connect_mesh_points
     call write_meshfile_for_freefem
     call compute_sample_polmodes
@@ -1986,6 +1987,81 @@ contains
     if (allocated(this%R_Omega)) deallocate(this%R_Omega)
     if (allocated(this%Z_Omega)) deallocate(this%Z_Omega)
   end subroutine magdif_mesh_destructor
+
+  subroutine compare_gpec_coordinates
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use netcdf, only: nf90_open, nf90_nowrite, nf90_noerr, nf90_inq_dimid, nf90_inq_varid, &
+         nf90_inquire_dimension, nf90_get_var, nf90_close
+    use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext, psipol_max
+    use constants, only: pi  ! orbit_mod.f90
+    use magdif_conf, only: conf, log, datafile
+    character(len = *), parameter :: dataset = 'debug_coordinates'
+    character(len = 1024) :: filename
+    integer(HID_T) :: h5id_root
+    integer :: ncid_file, ncid, nrad, npol, krad, kpol
+    real(dp) :: dum
+    real(dp), allocatable :: psi(:), theta(:), R(:, :), Z(:, :)
+
+    write (filename, '("gpec_profile_output_n", i0, ".nc")') conf%n
+    call check_error("nf90_open", nf90_open(filename, nf90_nowrite, ncid_file))
+    call check_error("nf90_inq_dimid", nf90_inq_dimid(ncid_file, "psi_n", ncid))
+    call check_error("nf90_inquire_dimension", &
+         nf90_inquire_dimension(ncid_file, ncid, len = nrad))
+    call check_error("nf90_inq_dimid", nf90_inq_dimid(ncid_file, "theta_dcon", ncid))
+    call check_error("nf90_inquire_dimension", &
+         nf90_inquire_dimension(ncid_file, ncid, len = npol))
+    allocate(psi(nrad), theta(npol), R(nrad, npol), Z(nrad, npol))
+    call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "psi_n", ncid))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, psi))
+    call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "theta_dcon", ncid))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, theta))
+    call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "R", ncid))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, R))
+    call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "z", ncid))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, Z))
+    call check_error("nf90_close", nf90_close(ncid_file))
+    psi(:) = psipol_max * psi
+    theta(:) = 2d0 * pi * theta
+    R(:, :) = R * 1d2
+    Z(:, :) = Z * 1d2
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, dataset // '/')
+    call h5_add(h5id_root, dataset // '/psi', psi, lbound(psi), ubound(psi), &
+         unit = 'Mx', comment = 'poloidal flux')
+    call h5_add(h5id_root, dataset // '/theta', theta, lbound(theta), ubound(theta), &
+         unit = 'rad', comment = 'flux poloidal angle')
+    call h5_add(h5id_root, dataset // '/R_GPEC', R, lbound(R), ubound(R), &
+         unit = 'cm', comment = 'R(psi, theta) from GPEC')
+    call h5_add(h5id_root, dataset // '/Z_GPEC', Z, lbound(Z), ubound(Z), &
+         unit = 'cm', comment = 'Z(psi, theta) from GPEC')
+    do kpol = 1, npol
+       do krad = 1, nrad
+          ! TODO: interpolate theta0 offset or set theta0_at_xpoint = .false.
+          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol), dum, dum, &
+               dum, dum, dum, R(krad, kpol), dum, dum, Z(krad, kpol), dum, dum)
+       end do
+    end do
+    call h5_add(h5id_root, dataset // '/R', R, lbound(R), ubound(R), &
+         unit = 'cm', comment = 'R(psi, theta)')
+    call h5_add(h5id_root, dataset // '/Z', Z, lbound(Z), ubound(Z), &
+         unit = 'cm', comment = 'Z(psi, theta)')
+    call h5_close(h5id_root)
+    if (allocated(psi)) deallocate(psi)
+    if (allocated(theta)) deallocate(theta)
+    if (allocated(R)) deallocate(R)
+    if (allocated(Z)) deallocate(Z)
+
+  contains
+    subroutine check_error(funcname, status)
+      character(len = *), intent(in) :: funcname
+      integer, intent(in) :: status
+      if (status /= nf90_noerr) then
+         write (log%msg, '(a, " returned error ", i0)') funcname, status
+         if (log%err) call log%write
+         error stop
+      end if
+    end subroutine check_error
+  end subroutine compare_gpec_coordinates
 
   subroutine init_flux_variables
     use magdif_conf, only: conf, log, pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
