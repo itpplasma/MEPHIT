@@ -661,6 +661,7 @@ contains
     end if
     call create_mesh_points(convexfile)
     call compare_gpec_coordinates
+    call write_illustration_data(5, 8, 256, 256)
     call connect_mesh_points
     call write_meshfile_for_freefem
     call compute_sample_polmodes
@@ -1998,6 +1999,7 @@ contains
     use magdif_conf, only: conf, log, datafile
     character(len = *), parameter :: dataset = 'debug_coordinates'
     character(len = 1024) :: filename
+    logical :: file_exists
     integer(HID_T) :: h5id_root
     integer :: ncid_file, ncid, nrad, npol, krad, kpol
     real(dp) :: dum, B0_R, B0_Z, unit_normal(0:1)
@@ -2006,6 +2008,11 @@ contains
     complex(dp), allocatable :: xi_n_R(:), xi_n_Z(:)
 
     write (filename, '("gpec_profile_output_n", i0, ".nc")') conf%n
+    inquire(file = filename, exist = file_exists)
+    if (.not. file_exists) return
+    write (log%msg, '("File ", a, " found, performing GPEC coordinate comparison.")'), &
+         trim(filename)
+    if (log%info) call log%write
     call check_error("nf90_open", nf90_open(filename, nf90_nowrite, ncid_file))
     call check_error("nf90_inq_dimid", nf90_inq_dimid(ncid_file, "psi_n", ncid))
     call check_error("nf90_inquire_dimension", &
@@ -2088,6 +2095,63 @@ contains
       end if
     end subroutine check_error
   end subroutine compare_gpec_coordinates
+
+  subroutine write_illustration_data(npsi, ntheta, nrad, npol)
+    use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext, psipol_max
+    use constants, only: pi  ! orbit_mod.f90
+    use magdif_util, only: linspace
+    integer, intent(in) :: npsi, ntheta, nrad, npol
+    integer :: fid, krad, kpol
+    real(dp) :: dum
+    real(dp), allocatable :: psi(:), theta(:), theta_shift(:), R(:, :), Z(:, :)
+
+    open(newunit = fid, file = 'illustration.asc', status = 'replace', form = 'formatted')
+    write (fid, '(6(1x, i0))') npsi, ntheta, nrad, npol, equil%nbbbs, equil%limitr
+    allocate(psi(npsi), theta(npol), theta_shift(npsi), R(npol, npsi), Z(npol, npsi))
+    psi(:) = linspace(0d0, psipol_max, npsi, 1, 1)
+    theta(:) = linspace(0d0, 2d0 * pi, npol, 0, 1)
+    do krad = 1, npsi
+       theta_shift(krad) = theta_offset(psi(krad) + fs%psi(0))
+    end do
+    do krad = 1, npsi
+       do kpol = 1, npol
+          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol) + theta_shift(krad), &
+               dum, dum, dum, dum, dum, R(kpol, krad), dum, dum, Z(kpol, krad), dum, dum)
+       end do
+    end do
+    do krad = 1, npsi
+       do kpol = 1, npol
+          write (fid, '(es24.16e3, 1x, es24.16e3)') R(kpol, krad), Z(kpol, krad)
+       end do
+    end do
+    deallocate(psi, theta, theta_shift, R, Z)
+    allocate(psi(nrad), theta(ntheta), theta_shift(nrad), R(nrad, ntheta), Z(nrad, ntheta))
+    psi(:) = linspace(0d0, psipol_max, nrad, 0, 0)
+    theta(:) = linspace(0d0, 2d0 * pi, ntheta, 0, 1)
+    do krad = 1, nrad
+       theta_shift(krad) = theta_offset(psi(krad) + fs%psi(0))
+    end do
+    do kpol = 1, ntheta
+       do krad = 2, nrad
+          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol) + theta_shift(krad), &
+               dum, dum, dum, dum, dum, R(krad, kpol), dum, dum, Z(krad, kpol), dum, dum)
+       end do
+    end do
+    do kpol = 1, ntheta
+       write (fid, '(es24.16e3, 1x, es24.16e3)') mesh%R_O, mesh%Z_O
+       do krad = 2, nrad
+          write (fid, '(es24.16e3, 1x, es24.16e3)') R(krad, kpol), Z(krad, kpol)
+       end do
+    end do
+    deallocate(psi, theta, theta_shift, R, Z)
+    do kpol = 1, equil%nbbbs
+       write (fid, '(es24.16e3, 1x, es24.16e3)') equil%rbbbs(kpol), equil%zbbbs(kpol)
+    end do
+    do kpol = 1, equil%limitr
+       write (fid, '(es24.16e3, 1x, es24.16e3)') equil%rlim(kpol), equil%zlim(kpol)
+    end do
+    close(fid)
+  end subroutine write_illustration_data
 
   subroutine init_flux_variables
     use magdif_conf, only: conf, log, pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
