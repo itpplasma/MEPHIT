@@ -2000,8 +2000,10 @@ contains
     character(len = 1024) :: filename
     integer(HID_T) :: h5id_root
     integer :: ncid_file, ncid, nrad, npol, krad, kpol
-    real(dp) :: dum
-    real(dp), allocatable :: psi(:), theta(:), R(:, :), Z(:, :), theta_shift(:)
+    real(dp) :: dum, B0_R, B0_Z, unit_normal(0:1)
+    real(dp), allocatable :: psi(:), theta(:), R(:, :), Z(:, :), theta_shift(:), &
+         xi_n(:, :, :)
+    complex(dp), allocatable :: xi_n_R(:), xi_n_Z(:)
 
     write (filename, '("gpec_profile_output_n", i0, ".nc")') conf%n
     call check_error("nf90_open", nf90_open(filename, nf90_nowrite, ncid_file))
@@ -2011,7 +2013,7 @@ contains
     call check_error("nf90_inq_dimid", nf90_inq_dimid(ncid_file, "theta_dcon", ncid))
     call check_error("nf90_inquire_dimension", &
          nf90_inquire_dimension(ncid_file, ncid, len = npol))
-    allocate(psi(nrad), theta(npol), R(nrad, npol), Z(nrad, npol))
+    allocate(psi(nrad), theta(npol), R(nrad, npol), Z(nrad, npol), xi_n(nrad, npol, 0:1))
     call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "psi_n", ncid))
     call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, psi))
     call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "theta_dcon", ncid))
@@ -2020,6 +2022,8 @@ contains
     call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, R))
     call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "z", ncid))
     call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, Z))
+    call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "xi_n_fun", ncid))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, xi_n))
     call check_error("nf90_close", nf90_close(ncid_file))
     psi(:) = psipol_max * psi
     theta(:) = 2d0 * pi * theta
@@ -2045,16 +2049,33 @@ contains
                dum, dum, dum, dum, dum, R(krad, kpol), dum, dum, Z(krad, kpol), dum, dum)
        end do
     end do
+    allocate(xi_n_R(npol), xi_n_Z(npol))
+    krad = nrad
+    do kpol = 1, npol
+       call field(R(krad, kpol), 0d0, Z(krad, kpol), B0_R, dum, B0_Z, &
+            dum, dum, dum, dum, dum, dum, dum, dum, dum)
+       unit_normal = [R(krad, kpol) * B0_Z, -R(krad, kpol) * B0_R] * equil%cocos%sgn_dpsi
+       unit_normal = unit_normal / norm2(unit_normal)
+       xi_n_R(kpol) = unit_normal(0) * 1d2 * cmplx(xi_n(krad, kpol, 0), xi_n(krad, kpol, 1), dp)
+       xi_n_Z(kpol) = unit_normal(1) * 1d2 * cmplx(xi_n(krad, kpol, 0), xi_n(krad, kpol, 1), dp)
+    end do
     if (allocated(theta_shift)) deallocate(theta_shift)
     call h5_add(h5id_root, dataset // '/R', R, lbound(R), ubound(R), &
          unit = 'cm', comment = 'R(psi, theta)')
     call h5_add(h5id_root, dataset // '/Z', Z, lbound(Z), ubound(Z), &
          unit = 'cm', comment = 'Z(psi, theta)')
+    call h5_add(h5id_root, dataset // '/xi_n_R', xi_n_R, lbound(xi_n_R), ubound(xi_n_R), &
+         unit = 'cm', comment = 'Radial component of normal displacement xi_n(theta) at last flux surface')
+    call h5_add(h5id_root, dataset // '/xi_n_Z', xi_n_Z, lbound(xi_n_Z), ubound(xi_n_Z), &
+         unit = 'cm', comment = 'Axial component of normal displacement xi_n(theta) at last flux surface')
     call h5_close(h5id_root)
     if (allocated(psi)) deallocate(psi)
     if (allocated(theta)) deallocate(theta)
     if (allocated(R)) deallocate(R)
     if (allocated(Z)) deallocate(Z)
+    if (allocated(xi_n)) deallocate(xi_n)
+    if (allocated(xi_n_R)) deallocate(xi_n_R)
+    if (allocated(xi_n_Z)) deallocate(xi_n_Z)
 
   contains
     subroutine check_error(funcname, status)
