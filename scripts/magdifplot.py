@@ -278,6 +278,7 @@ class magdif_poloidal_plots:
         self.xlabel = self.rad_coord.value
         self.ylabel = ylabel
         self.comp = comp
+        self.omit_res = False  # omit resonance position indicator when zooming in
         self.poldata = poldata
 
         psi_norm = self.data['/cache/fs/psi']
@@ -324,7 +325,7 @@ class magdif_poloidal_plots:
             for k in range(horz_plot):
                 m = (2 * k - 1) * m_abs
                 axs[k].axhline(0.0, color='k', alpha=0.5, lw=0.5)
-                if m in resonance:
+                if m in resonance and not self.omit_res:
                     axs[k].axvline(resonance[m], color='b', alpha=0.5,
                                    label='resonance position', lw=0.5)
                 for data in self.poldata:
