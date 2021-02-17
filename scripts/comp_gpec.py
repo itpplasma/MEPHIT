@@ -69,7 +69,7 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_*'):
         Bnvac['Im'] = [testcase.data['/Bnvac/rect_comp_' + coord][()].imag * G_to_T,
                        np.array(rootgrp[dataset][1, :, :] - rootgrp[dataset + '_plasma'][1, :, :]) * -helicity]
         for part in latex_cmplx.keys():
-            label = '$' + latex_cmplx[part] + r' \mathcal{B}_{n \mathrm{v}}^{' + latex_coord[coord] + r'}$ / \si{\gauss}'
+            label = '$' + latex_cmplx[part] + r' \mathcal{B}_{n \mathrm{v}}^{' + latex_coord[coord] + r'}$ / \si{\tesla}'
             title = [f"Vacuum field from MEPHIT\n({name_cmplx[part]} {name_coord[coord]} component)",
                      f"Vacuum field from GPEC\n({name_cmplx[part]} {name_coord[coord]} component)"]
             testcase.plots.append(magdif_2d_rectplots(R, Z, Bnvac[part], label, title=title, clim_scale=scaling[coord],

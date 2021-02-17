@@ -105,10 +105,11 @@ class magdif_2d_rectplots:
         images = []
         for k in range(2):
             images.append(axs[k].imshow(self.data[k], cmap=colorcet.cm.coolwarm, interpolation='gaussian',
-                                        extent=[self.R[k][0], self.R[k][-1], self.Z[k][0], self.Z[k][-1]]))
+                                        extent=[self.R[k][0], self.R[k][-1], self.Z[k][0], self.Z[k][-1]],
+                                        origin='lower'))
             axs[k].set_aspect('equal')
-            axs[k].set_xlabel(r'$R$ / cm')
-            axs[k].set_ylabel(r'$Z$ / cm')
+            axs[k].set_xlabel(r'$R$ / m')
+            axs[k].set_ylabel(r'$Z$ / m')
             axs[k].set_xlim(xlim)
             axs[k].set_ylim(ylim)
             if self.title is not None:
@@ -206,7 +207,7 @@ class polmodes:
     def read_magdif(self, data, rad_coord, var_name='/postprocess/Bmn/coeff_rad'):
         self.type = 'MEPHIT'
         self.rad_coord = rad_coord
-        if self.rad_coord == fslabel.psi_norm:
+        if self.rad_coord is fslabel.psi_norm:
             rho = data['/cache/fs_half/psi'][()]
             # normalize psi
             rho = (rho - rho[0]) / (rho[-1] - rho[0])
@@ -257,10 +258,12 @@ class polmodes:
             self.m_max = max(self.m_max, abs(m))
             self.rho[m] = rho
             self.var[m] = np.empty(rho.shape, dtype='D')
-            self.var[m].real = rootgrp.variables[var_name][0, k, :] * sgn_dpsi
+            # GPEC always uses normal vectors pointing outwards
+            # and includes the factor 2 for Fourier series of a real function in the coefficient
+            self.var[m].real = rootgrp.variables[var_name][0, k, :] * 0.5 * sgn_dpsi
             # GPEC uses clockwise toroidal angle for positive helicity
             # and expands Fourier series in negative toroidal angle
-            self.var[m].imag = rootgrp.variables[var_name][1, k, :] * sgn_dpsi * helicity
+            self.var[m].imag = rootgrp.variables[var_name][1, k, :] * 0.5 * sgn_dpsi * helicity
         rootgrp.close()
 
 
@@ -313,7 +316,7 @@ class magdif_poloidal_plots:
         two_squares = (6.6, 3.3)
         # plot non-symmetric modes
         m_max = min(map(lambda d: d.m_max, self.poldata))
-        for m_abs in range(1, m_max):
+        for m_abs in range(1, m_max + 1):
             filename = fmt.format(m_abs)
             print(f"plotting {filename}")
             fig, axs = plt.subplots(vert_plot, horz_plot, sharex=True,
