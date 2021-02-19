@@ -51,6 +51,12 @@ module magdif_pert
      !> geometry, this is the r component.
      complex(dp), allocatable :: coeff_rad(:, :)
 
+     !> Component normal to flux surface, indexed by poloidal mode number and flux surface.
+     !>
+     !> For tokamak and KiLCA geometry, this is the physical component perpendicular to the
+     !> flux surface.
+     complex(dp), allocatable :: coeff_n(:, :)
+
      !> Component in poloidal direction, indexed by poloidal mode number and flux surface.
      !>
      !> For tokamak geometry, this is the covariant theta component; for KiLCA geometry,
@@ -444,6 +450,7 @@ contains
     this%m_max = abs(m_max)
     this%nflux = nflux
     allocate(this%coeff_rad(-this%m_max:this%m_max, 1:nflux))
+    allocate(this%coeff_n(-this%m_max:this%m_max, 1:nflux))
     allocate(this%coeff_pol(-this%m_max:this%m_max, 1:nflux))
     allocate(this%coeff_tor(-this%m_max:this%m_max, 1:nflux))
   end subroutine vec_polmodes_init
@@ -454,6 +461,7 @@ contains
     this%m_max = 0
     this%nflux = 0
     if (allocated(this%coeff_rad)) deallocate(this%coeff_rad)
+    if (allocated(this%coeff_n)) deallocate(this%coeff_n)
     if (allocated(this%coeff_pol)) deallocate(this%coeff_pol)
     if (allocated(this%coeff_tor)) deallocate(this%coeff_tor)
   end subroutine vec_polmodes_deinit
@@ -467,6 +475,7 @@ contains
 
     call h5_open(file, h5id_root)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_rad', vec_polmodes%coeff_rad)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_n', vec_polmodes%coeff_n)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_pol', vec_polmodes%coeff_pol)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_tor', vec_polmodes%coeff_tor)
     call h5_close(h5id_root)
@@ -502,9 +511,13 @@ contains
             unit = trim(adjustl(unit)) // ' cm^2')
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_pol', &
             vec_polmodes%coeff_pol, lbound(vec_polmodes%coeff_pol), ubound(vec_polmodes%coeff_pol), &
-            comment = 'covariant theta component of  ' // trim(adjustl(comment)), &
+            comment = 'covariant theta component of ' // trim(adjustl(comment)), &
             unit = trim(adjustl(unit)) // ' cm')
     end if
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_n', &
+         vec_polmodes%coeff_n, lbound(vec_polmodes%coeff_n), ubound(vec_polmodes%coeff_n), &
+         comment = 'physical component perpendicular to flux surface of ' // trim(adjustl(comment)), &
+         unit = trim(adjustl(unit)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_tor', &
          vec_polmodes%coeff_tor, lbound(vec_polmodes%coeff_tor), ubound(vec_polmodes%coeff_tor), &
          comment = 'physical phi component of ' // trim(adjustl(comment)), &
@@ -515,14 +528,15 @@ contains
   subroutine RT0_poloidal_modes(elem, vec_polmodes)
     use magdif_conf, only: conf
     use magdif_util, only: imun, bent_cyl2straight_cyl
-    use magdif_mesh, only: mesh, sample_polmodes
+    use magdif_mesh, only: equil, mesh, sample_polmodes
     type(RT0_t), intent(in) :: elem
     type(vec_polmodes_t), intent(inout) :: vec_polmodes
     integer :: kf, kt, ktri, m
     complex(dp) :: fourier_basis(-vec_polmodes%m_max:vec_polmodes%m_max)
-    complex(dp) :: comp_R, comp_Z, comp_phi, comp_rad, comp_pol, comp_tor
+    complex(dp) :: comp_R, comp_Z, comp_phi, comp_rad, comp_n, comp_pol, comp_tor
 
     vec_polmodes%coeff_rad(:, :) = (0d0, 0d0)
+    vec_polmodes%coeff_n(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_pol(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_tor(:, :) = (0d0, 0d0)
     associate (s => sample_polmodes, v => vec_polmodes)
@@ -534,17 +548,22 @@ contains
             if (conf%kilca_scale_factor /= 0) then
                call bent_cyl2straight_cyl(comp_R, comp_phi, comp_Z, &
                     s%theta(ktri), comp_rad, comp_pol, comp_tor)
+               comp_n = comp_rad
             else
                comp_rad = s%sqrt_g(ktri) * (comp_R * s%B0_Z(ktri) - &
                     comp_Z * s%B0_R(ktri)) * s%R(ktri)
+               comp_n = (comp_R * s%B0_Z(ktri) - comp_Z * s%B0_R(ktri)) &
+                    / hypot(s%B0_R(ktri), s%B0_Z(ktri))
                comp_pol = comp_R * s%dR_dtheta(ktri) + comp_Z * s%dZ_dtheta(ktri)
                comp_tor = comp_phi
             end if
             v%coeff_rad(:, kf) = v%coeff_rad(:, kf) + comp_rad * fourier_basis
+            v%coeff_n(:, kf) = v%coeff_n(:, kf) + comp_n * fourier_basis
             v%coeff_pol(:, kf) = v%coeff_pol(:, kf) + comp_pol * fourier_basis
             v%coeff_tor(:, kf) = v%coeff_tor(:, kf) + comp_tor * fourier_basis
          end do
          v%coeff_rad(:, kf) = v%coeff_rad(:, kf) / mesh%kt_max(kf)
+         v%coeff_n(:, kf) = equil%cocos%sgn_dpsi * v%coeff_n(:, kf) / mesh%kt_max(kf)
          v%coeff_pol(:, kf) = v%coeff_pol(:, kf) / mesh%kt_max(kf)
          v%coeff_tor(:, kf) = v%coeff_tor(:, kf) / mesh%kt_max(kf)
       end do
@@ -651,18 +670,20 @@ contains
     use field_mod, only: ipert, iequil
     use magdif_conf, only: conf, datafile
     use magdif_util, only: imun
-    use magdif_mesh, only: mesh, sample_polmodes
+    use magdif_mesh, only: equil, mesh, sample_polmodes
     character(len=*), parameter :: dataset = 'Bmnvac'
     integer, parameter :: m_max = 24
     integer :: kf, kt, ktri, m
     integer(HID_T) :: h5id_root
-    complex(dp) :: Bn_R, Bn_Z, Bn_phi, Bn_contradenspsi
-    complex(dp) :: fourier_basis(-m_max:m_max), Bmn_contradenspsi(-m_max:m_max, mesh%nflux)
+    complex(dp) :: Bn_R, Bn_Z, Bn_phi, Bn_contradenspsi, Bn_n
+    complex(dp) :: fourier_basis(-m_max:m_max), Bmn_contradenspsi(-m_max:m_max, mesh%nflux), &
+         Bmn_n(-m_max:m_max, mesh%nflux)
 
     ! use vacuum field
     ipert = 1
     iequil = 0
     Bmn_contradenspsi(:, :) = (0d0, 0d0)
+    Bmn_n(:, :) = (0d0, 0d0)
     associate (s => sample_polmodes)
       do kf = 1, mesh%nflux
          do kt = 1, mesh%kt_max(kf)
@@ -671,16 +692,22 @@ contains
             call spline_bn(conf%n, s%R(ktri), s%Z(ktri), Bn_R, Bn_phi, Bn_Z)
             Bn_contradenspsi = s%sqrt_g(ktri) * (Bn_R * s%B0_Z(ktri) - &
                  Bn_Z * s%B0_R(ktri)) * s%R(ktri)
+            Bn_n = (Bn_R * s%B0_Z(ktri) - Bn_Z * s%B0_R(ktri)) / hypot(s%B0_R(ktri), s%B0_Z(ktri))
             Bmn_contradenspsi(:, kf) = Bmn_contradenspsi(:, kf) + Bn_contradenspsi * fourier_basis
+            Bmn_n(:, kf) = Bmn_n(:, kf) + Bn_n * fourier_basis
          end do
          Bmn_contradenspsi(:, kf) = Bmn_contradenspsi(:, kf) / mesh%kt_max(kf)
+         Bmn_n(:, kf) = equil%cocos%sgn_dpsi * Bmn_n(:, kf) / mesh%kt_max(kf)
       end do
     end associate
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, dataset // '/')
     call h5_add(h5id_root, dataset // '/comp_psi_contravar_dens', Bmn_contradenspsi, &
          lbound(Bmn_contradenspsi), ubound(Bmn_contradenspsi), unit = 'Mx', &
-         comment = 'normalized poloidal flux of interpolation points')
+         comment = 'poloidal modes of contravariant density component of vacuum perturbation')
+    call h5_add(h5id_root, dataset // '/comp_n', Bmn_n, &
+         lbound(Bmn_n), ubound(Bmn_n), unit = 'G', &
+         comment = 'poloidal modes of perpendicular component of vacuum perturbation')
     call h5_close(h5id_root)
     ! reset to equilibrium field
     ipert = 0

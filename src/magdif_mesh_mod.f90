@@ -1997,7 +1997,7 @@ contains
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext, psipol_max
     use constants, only: pi  ! orbit_mod.f90
     use magdif_conf, only: conf, log, datafile
-    character(len = *), parameter :: dataset = 'debug_coordinates'
+    character(len = *), parameter :: dataset = 'debug_GPEC'
     character(len = 1024) :: filename
     logical :: file_exists
     integer(HID_T) :: h5id_root
@@ -2010,7 +2010,7 @@ contains
     write (filename, '("gpec_profile_output_n", i0, ".nc")') conf%n
     inquire(file = filename, exist = file_exists)
     if (.not. file_exists) return
-    write (log%msg, '("File ", a, " found, performing GPEC coordinate comparison.")'), &
+    write (log%msg, '("File ", a, " found, performing GPEC coordinate comparison.")') &
          trim(filename)
     if (log%info) call log%write
     call check_error("nf90_open", nf90_open(filename, nf90_nowrite, ncid_file))
