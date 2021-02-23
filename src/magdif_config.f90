@@ -8,8 +8,8 @@ module magdif_conf
   public :: magdif_config, magdif_config_read, magdif_config_delayed, magdif_log, conf, &
        conf_arr, log, runmode_single, runmode_direct, runmode_precon, pres_prof_eps, &
        pres_prof_par, pres_prof_geqdsk, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
-       q_prof_flux, q_prof_rot, q_prof_geqdsk, decorate_filename, longlines, cmplx_fmt, &
-       nl_fmt, datafile
+       q_prof_flux, q_prof_rot, q_prof_geqdsk, vac_src_nemov, vac_src_gpec, &
+       decorate_filename, longlines, cmplx_fmt, nl_fmt, datafile
 
   character(len = *), parameter :: cmplx_fmt = 'es24.16e3, 1x, sp, es24.16e3, s, " i"'
   character(len = *), parameter :: nl_fmt = '"' // new_line('A') // '"'
@@ -32,6 +32,9 @@ module magdif_conf
   integer, parameter :: q_prof_flux = 0   !< q profile from flux between flux surfaces
   integer, parameter :: q_prof_rot = 1    !< q profile from rotational transform
   integer, parameter :: q_prof_geqdsk = 2 !< q profile from G EQDSK file
+
+  integer, parameter :: vac_src_nemov = 0 !< vacuum field perturbation from Viktor Nemov's code
+  integer, parameter :: vac_src_gpec = 1  !< vacuum field perturbation from GPEC
 
   type :: magdif_config
 
@@ -57,6 +60,10 @@ module magdif_conf
      !> Source of safety factor profile. Possivle values are #q_prof_flux, #q_prof_rot
      !> (default), and #q_prof_geqdsk
      integer :: q_prof = q_prof_rot
+
+     !> Source of vacuum field perturbation. Possible values are #vac_src_nemov (default)
+     !> and #vac_src_gpec.
+     integer :: vac_src = vac_src_nemov
 
      !> Generate non-resonant vacuum perturbation for testing. Defaults to false.
      logical :: nonres = .false.

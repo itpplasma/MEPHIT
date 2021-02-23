@@ -570,26 +570,151 @@ contains
     end associate
   end subroutine RT0_poloidal_modes
 
+  subroutine vector_potential_single_mode(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
+    use bdivfree_mod, only: nR_mod => nr, nZ_mod => nz, Rmin_mod => rmin, Zmin_mod => zmin, &
+         ntor, icp, ipoint, hr, hz, rpoi, zpoi, aznre, aznim, arnre, arnim
+    use magdif_util, only: imun, linspace
+    use magdif_conf, only: conf
+    integer, intent(in) :: nR, nZ
+    real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
+    complex(dp), intent(in) :: Bn_R(:, :), Bn_Z(:, :)
+    integer :: iz, imi(nz), ima(nz), jmi(nr), jma(nr)
+    complex(dp) :: An_R(size(Bn_Z, 1), size(Bn_Z, 2)), An_Z(size(Bn_R, 1), size(Bn_R, 2))
+
+    nR_mod = nR
+    nZ_mod = nZ
+    ntor = conf%n
+    icp = nr * nz
+    Rmin_mod = Rmin
+    Zmin_mod = Zmin
+    hr = (Rmax - Rmin) / dble(nR - 1)
+    hz = (Zmax - Zmin) / dble(nZ - 1)
+    allocate(rpoi(nR), zpoi(nZ), ipoint(nR, nZ))
+    rpoi(:) = linspace(Rmin, Rmax, nR, 0, 0)
+    zpoi(:) = linspace(Zmin, Zmax, nZ, 0, 0)
+    do iZ = 1, nZ
+       ! TODO: check signs - vector_potentials uses opposite
+       An_Z(:, iZ) = imun * Bn_R(:, iZ) * rpoi(:) / dble(ntor)
+       An_R(:, iZ) = -imun * Bn_Z(:, iZ) * rpoi(:) / dble(ntor)
+    end do
+    allocate(aznre(6, 6, icp, ntor), aznim(6, 6, icp, ntor))
+    allocate(arnre(6, 6, icp, ntor), arnim(6, 6, icp, ntor))
+    aznre(:, :, :, :ntor-1) = (0d0, 0d0)
+    aznim(:, :, :, :ntor-1) = (0d0, 0d0)
+    arnre(:, :, :, :ntor-1) = (0d0, 0d0)
+    arnim(:, :, :, :ntor-1) = (0d0, 0d0)
+    imi(:) = 1
+    ima(:) = nR
+    jmi(:) = 1
+    jma(:) = nZ
+    call s2dcut(nr, nz, hr, hz, An_Z%re, imi, ima, jmi, jma, icp, aznre(:, :, :, ntor), ipoint)
+    call s2dcut(nr, nz, hr, hz, An_Z%im, imi, ima, jmi, jma, icp, aznim(:, :, :, ntor), ipoint)
+    call s2dcut(nr, nz, hr, hz, An_R%re, imi, ima, jmi, jma, icp, arnre(:, :, :, ntor), ipoint)
+    call s2dcut(nr, nz, hr, hz, An_R%im, imi, ima, jmi, jma, icp, arnim(:, :, :, ntor), ipoint)
+  end subroutine vector_potential_single_mode
+
+  subroutine read_Bnvac_GPEC(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bnvac_R, Bnvac_Z)
+    use netcdf, only: nf90_open, nf90_nowrite, nf90_noerr, nf90_inq_dimid, nf90_inq_varid, &
+         nf90_inquire_dimension, nf90_get_var, nf90_close
+    use magdif_conf, only: conf, log
+    use magdif_mesh, only: equil
+    integer, intent(out) :: nR, nZ
+    real(dp), intent(out) :: Rmin, Rmax, Zmin, Zmax
+    complex(dp), intent(out), dimension(:, :), allocatable :: Bnvac_R, Bnvac_Z
+    character(len = 1024) :: filename
+    logical :: file_exists
+    integer :: ncid_file, ncid
+    real(dp), dimension(:), allocatable :: R, Z
+    real(dp), dimension(:, :, :), allocatable :: Bn_R, Bn_Z, Bnplas_R, Bnplas_Z
+
+    write (filename, '("gpec_cylindrical_output_n", i0, ".nc")') conf%n
+    inquire(file = filename, exist = file_exists)
+    if (.not. file_exists) then
+       write (log%msg, '("File ", a, " not found, cannot read vacuum perturbation field.")') &
+         trim(filename)
+       if (log%err) call log%write
+       error stop
+    end if
+    call check_error("nf90_open", nf90_open(filename, nf90_nowrite, ncid_file))
+    call check_error("nf90_inq_dimid", nf90_inq_dimid(ncid_file, "R", ncid))
+    call check_error("nf90_inquire_dimension", &
+         nf90_inquire_dimension(ncid_file, ncid, len = nR))
+    call check_error("nf90_inq_dimid", nf90_inq_dimid(ncid_file, "z", ncid))
+    call check_error("nf90_inquire_dimension", &
+         nf90_inquire_dimension(ncid_file, ncid, len = nZ))
+    allocate(R(nR), Z(nZ), &
+         Bn_R(nR, nZ, 0:1), Bn_Z(nR, nZ, 0:1), Bnplas_R(nR, nZ, 0:1), Bnplas_Z(nR, nZ, 0:1))
+    call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "R", ncid))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, R))
+    call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "z", ncid))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, Z))
+    call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "b_r", ncid))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, Bn_R))
+    call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "b_z", ncid))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, Bn_Z))
+    call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "b_r_plasma", ncid))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, Bnplas_R))
+    call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "b_z_plasma", ncid))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, Bnplas_Z))
+    call check_error("nf90_close", nf90_close(ncid_file))
+    ! m to cm
+    Rmin = 1d2 * R(1)
+    Rmax = 1d2 * R(nR)
+    Zmin = 1d2 * Z(1)
+    Zmax = 1d2 * Z(nZ)
+    allocate(Bnvac_R(nR, nZ), Bnvac_Z(nR, nZ))
+    ! T to G, factor 1/2 from Fourier series
+    ! TODO: check signs - plotting conjugates for positive helicity
+    Bnvac_R(:, :) = 0.5d4 * equil%cocos%sgn_dpsi * cmplx(Bn_R(:, :, 0) - Bnplas_R(:, :, 0), &
+         -equil%cocos%sgn_q * (Bn_R(:, :, 1)) - Bnplas_R(:, :, 1), dp)
+    Bnvac_Z(:, :) = 0.5d4 * equil%cocos%sgn_dpsi * cmplx(Bn_Z(:, :, 0) - Bnplas_Z(:, :, 0), &
+         -equil%cocos%sgn_q * (Bn_Z(:, :, 1)) - Bnplas_Z(:, :, 1), dp)
+    deallocate(R, Z, Bn_R, Bn_Z, Bnplas_R, Bnplas_Z)
+
+  contains
+    subroutine check_error(funcname, status)
+      character(len = *), intent(in) :: funcname
+      integer, intent(in) :: status
+      if (status /= nf90_noerr) then
+         write (log%msg, '(a, " returned error ", i0)') funcname, status
+         if (log%err) call log%write
+         error stop
+      end if
+    end subroutine check_error
+  end subroutine read_Bnvac_GPEC
+
   subroutine compute_Bnvac(Bn)
-    use iso_c_binding, only: c_long
     use field_mod, only: ipert, iequil
     use field_c_mod, only: icall_c
-    use magdif_conf, only: conf
+    use magdif_conf, only: conf, log, vac_src_nemov, vac_src_gpec
     use magdif_util, only: gauss_legendre_unit_interval, imun
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
     integer, parameter :: order = 2
-    integer :: ktri, ke, k
-    real(dp) :: dum, R, Z, edge_R, edge_Z, node_R(4), node_Z(4)
+    integer :: nR, nZ, ktri, ke, k
+    real(dp) :: dum, Rmin, Rmax, Zmin, Zmax, R, Z, edge_R, edge_Z, node_R(4), node_Z(4)
     real(dp), dimension(order) :: points, weights
     complex(dp) :: B_R, B_phi, B_Z
+    complex(dp), dimension(:, :), allocatable :: Bn_R, Bn_Z
+
+    ! initialize vacuum field
+    select case (conf%vac_src)
+    case (vac_src_nemov)
+       ipert = 1
+       iequil = 0
+       icall_c = -1
+       call field_c(0d0, 0d0, 0d0, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+    case (vac_src_gpec)
+       call read_Bnvac_GPEC(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
+       call vector_potential_single_mode(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
+       deallocate(Bn_R, Bn_Z)
+    case default
+       write (log%msg, '("unknown vacuum field source selection", i0)') conf%pres_prof
+       if (log%err) call log%write
+       error stop
+    end select
 
     call gauss_legendre_unit_interval(order, points, weights)
-    ! initialize vacuum field
-    ipert = 1
-    iequil = 0
-    icall_c = -1
-    call field_c(0d0, 0d0, 0d0, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
     do ktri = 1, mesh%ntri
        node_R = mesh%node_R([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
        node_Z = mesh%node_Z([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
