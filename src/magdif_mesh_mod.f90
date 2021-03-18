@@ -203,6 +203,8 @@ module magdif_mesh
      integer, allocatable :: edge_map2ktri(:, :)
      integer, allocatable :: edge_map2ke(:, :)
 
+     !> Surface integral Jacobian used for normalization of poloidal modes in GPEC
+     real(dp), allocatable :: gpec_jarea(:)
      real(dp), allocatable :: area(:)
      real(dp), allocatable :: R_Omega(:)
      real(dp), allocatable :: Z_Omega(:)
@@ -665,6 +667,7 @@ contains
     call connect_mesh_points
     call write_meshfile_for_freefem
     call compute_sample_polmodes
+    call compute_gpec_jarea
     call cache_equilibrium_field
     call init_flux_variables
     call compute_j0phi
@@ -1441,6 +1444,23 @@ contains
     Z = sum(mesh%node_Z(nodes)) * 0.25d0
   end subroutine ring_centered_avg_coord
 
+  subroutine compute_gpec_jarea
+    integer :: kf, kt, ktri
+
+    allocate(mesh%gpec_jarea(mesh%nflux))
+    mesh%gpec_jarea(:) = 0d0
+    do kf = 1, mesh%nflux
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          associate (s => sample_polmodes)
+            mesh%gpec_jarea(kf) = mesh%gpec_jarea(kf) + s%sqrt_g(ktri) * &
+                 s%R(ktri) * hypot(s%B0_Z(ktri), -s%B0_Z(ktri))
+          end associate
+       end do
+       mesh%gpec_jarea(kf) = mesh%gpec_jarea(kf) / mesh%kt_max(kf)
+    end do
+  end subroutine compute_gpec_jarea
+
   !> Compute coarse grid for poloidal mode sampling points - one point per triangle.
   subroutine compute_sample_polmodes
     use constants, only: pi  ! orbit_mod.f90
@@ -1817,6 +1837,9 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area, &
          lbound(mesh%area), ubound(mesh%area), &
          comment = 'triangle area', unit = 'cm^2')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/gpec_jarea', mesh%gpec_jarea, &
+         lbound(mesh%gpec_jarea), ubound(mesh%gpec_jarea), unit = 'cm^3 Mx^-1', &
+         comment = 'Jacobian surface integral (used for normalization in GPEC) between flux surfaces')
     call h5_close(h5id_root)
   end subroutine mesh_write
 
@@ -1906,6 +1929,7 @@ contains
     allocate(mesh%edge_map2global(3, mesh%ntri))
     allocate(mesh%edge_map2ktri(2, mesh%nedge))
     allocate(mesh%edge_map2ke(2, mesh%nedge))
+    allocate(mesh%gpec_jarea(mesh%nflux))
     allocate(mesh%area(mesh%ntri))
     allocate(mesh%R_Omega(mesh%ntri))
     allocate(mesh%Z_Omega(mesh%ntri))
@@ -1943,6 +1967,7 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_Omega', mesh%Z_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/gpec_jarea', mesh%gpec_jarea)
     call h5_close(h5id_root)
     where (orient == 1)
        mesh%orient = .true.
@@ -1985,6 +2010,7 @@ contains
     if (allocated(this%edge_map2global)) deallocate(this%edge_map2global)
     if (allocated(this%edge_map2ktri)) deallocate(this%edge_map2ktri)
     if (allocated(this%edge_map2ke)) deallocate(this%edge_map2ke)
+    if (allocated(this%gpec_jarea)) deallocate(this%gpec_jarea)
     if (allocated(this%area)) deallocate(this%area)
     if (allocated(this%R_Omega)) deallocate(this%R_Omega)
     if (allocated(this%Z_Omega)) deallocate(this%Z_Omega)
