@@ -20,13 +20,15 @@ import numpy as np
 from scipy import interpolate
 from multiprocessing import Pool
 
+# supply path to scripts directory
+scripts_dir = path.dirname(path.realpath(__file__))
+
 # complex values are stored as compound types in libneo/hdf5tools
 h5py_hack().complex_names = ('real', 'imag')
 matplotlib.rcParams['text.usetex'] = True
 matplotlib.rcParams['font.family'] = 'serif'
 matplotlib.rcParams['mathtext.fontset'] = 'cm'
-latex_preamble = path.join(path.dirname(path.realpath(__file__)),
-                           'magdifplot.tex')
+latex_preamble = path.join(scripts_dir, 'magdifplot.tex')
 matplotlib.rcParams['text.latex.preamble'] = fr"\input{{{latex_preamble}}}"
 matplotlib.use('Agg')
 # =============================================================================
@@ -544,6 +546,10 @@ class magdif:
         self.triangulation = matplotlib.tri.Triangulation(
             self.data['/mesh/node_R'], self.data['/mesh/node_Z'],
             self.data['/mesh/tri_node'][()] - 1)
+
+    def read_convexwall(self, file=scripts_dir+'/../data/convexwall.asdex'):
+        print(f"reading contents of {file}")
+        self.convexwall = np.loadtxt(file)
 
     def generate_RT0_triplots(self, grp, label, unit, filename):
         for dataset, decorator in RT0_comp.items():

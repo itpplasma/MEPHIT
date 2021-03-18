@@ -12,6 +12,7 @@ import numpy as np
 from copy import deepcopy
 from functools import partial
 from magdifplot import magdif, fslabel, polmodes, magdif_poloidal_plots, magdif_2d_rectplots, cm_to_m, G_to_T
+from matplotlib.path import Path as Polygon
 import netCDF4
 
 # ylabel_abs = r'$\lvert \mathcal{B}_{mn}^{\psi} \rvert$ / \si{\weber}'
@@ -26,6 +27,7 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     testcase = magdif(workdir)
     testcase.read_configfile()
     testcase.read_datafile()
+    testcase.read_convexwall()
     sgn_dpsi = np.sign(testcase.data['/cache/fs/psi'][-1] -
                        testcase.data['/cache/fs/psi'][0])
     helicity = -np.sign(testcase.data['/cache/fs/q'][-1])
@@ -93,22 +95,34 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     R = [testcase.data['/Bnvac/rect_R'][()] * cm_to_m, np.array(rootgrp['R'])]
     Z = [testcase.data['/Bnvac/rect_Z'][()] * cm_to_m, np.array(rootgrp['z'])]
     gpec_dataset = {'R': 'b_r', 'Z': 'b_z', 'phi': 'b_t'}
-    latex_coord = {'R': 'R', 'Z': 'Z', 'phi': r'\varphi'}
+    latex_coord = {'R': 'R', 'Z': 'Z', 'phi': r'(\varphi)'}
     latex_cmplx = {'Re': r'\Real', 'Im': r'\Imag'}
     name_coord = {'R': 'radial', 'Z': 'axial', 'phi': 'azimuthal'}
     name_cmplx = {'Re': 'real', 'Im': 'imaginary'}
     scaling = {'R': (0.1, 0.1), 'Z': (0.1, 0.1), 'phi': (0.001, 0.001)}
+    convexwall = Polygon(cm_to_m * testcase.convexwall)
+    RR, ZZ = np.meshgrid(R[0], Z[0])
+    nan_mask = np.logical_not(convexwall.contains_points(np.column_stack((RR.ravel(), ZZ.ravel())))).reshape(RR.shape)
     Bnvac = {}
     for coord, dataset in gpec_dataset.items():
         Bnvac['Re'] = [testcase.data['/Bnvac/rect_comp_' + coord][()].real * G_to_T,
-                       np.array(rootgrp[dataset][0, :, :] - rootgrp[dataset + '_plasma'][0, :, :])]
+                       np.array(rootgrp[dataset][0, :, :] - rootgrp[dataset + '_plasma'][0, :, :]) * 0.5]
         Bnvac['Im'] = [testcase.data['/Bnvac/rect_comp_' + coord][()].imag * G_to_T,
-                       np.array(rootgrp[dataset][1, :, :] - rootgrp[dataset + '_plasma'][1, :, :]) * -helicity]
+                       np.array(rootgrp[dataset][1, :, :] - rootgrp[dataset + '_plasma'][1, :, :]) * 0.5 * -helicity]
         for part in latex_cmplx.keys():
-            label = '$' + latex_cmplx[part] + r' \mathcal{B}_{n \mathrm{v}}^{' + latex_coord[coord] + r'}$ / \si{\tesla}'
+            Bnvac[part][0][nan_mask] = np.nan
+            Bnvac[part][1][nan_mask] = np.nan
+            label = '$' + latex_cmplx[part] + r' B_{n \mathrm{v}}^{' + latex_coord[coord] + r'}$ / \si{\tesla}'
             title = [f"Vacuum field from MEPHIT\n({name_cmplx[part]} {name_coord[coord]} component)",
                      f"Vacuum field from GPEC\n({name_cmplx[part]} {name_coord[coord]} component)"]
             testcase.plots.append(magdif_2d_rectplots(R, Z, Bnvac[part], label, title=title, clim_scale=scaling[coord],
                                                       filename=path.join(workdir, f'debug_Bnvac_{coord}_{part}.pdf')))
+
+        Bnvac_diff = [Bnvac['Re'][1] - Bnvac['Re'][0], Bnvac['Im'][1] - Bnvac['Im'][0]]
+        label = (r'$\Delta B_{n \mathrm{v}}^{' + latex_coord[coord] + r'}$ / \si{\tesla}')
+        title = [f"Vacuum field: MEPHIT - GPEC\n(real {name_coord[coord]} component)",
+                 f"Vacuum field: MEPHIT - GPEC\n(imaginary {name_coord[coord]} component)"]
+        testcase.plots.append(magdif_2d_rectplots(R, Z, Bnvac_diff, label, title=title, clim_scale=(1.5e-04, 1.5e-04),
+                                                  filename=path.join(workdir, f'debug_Bnvac_{coord}_absdiff.pdf')))
 
     testcase.dump_plots()
