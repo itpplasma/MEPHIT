@@ -613,6 +613,44 @@ contains
     call s2dcut(nr, nz, hr, hz, An_R%im, imi, ima, jmi, jma, icp, arnim(:, :, :, ntor), ipoint)
   end subroutine vector_potential_single_mode
 
+  subroutine read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bnvac_R, Bnvac_Z)
+    use input_files, only: pfile
+    use magdif_conf, only: conf
+    use magdif_util, only: imun, linspace
+    use constants, only: pi  ! orbit_mod.f90
+    integer, intent(out) :: nR, nZ
+    real(dp), intent(out) :: Rmin, Rmax, Zmin, Zmax
+    complex(dp), intent(out), dimension(:, :), allocatable :: Bnvac_R, Bnvac_Z
+    integer :: fid, nphi, idum, kR, kphi, kZ
+    real(dp) :: B_R, B_phi, B_Z
+    complex(dp), allocatable :: fourier_basis(:)
+
+    open(newunit = fid, file = pfile, status = 'old', action = 'read', form = 'formatted')
+    read (fid, *) nR, nphi, nZ, idum
+    read (fid, *) Rmin, Rmax
+    read (fid, *) ! phimin, phimax
+    read (fid, *) Zmin, Zmax
+    allocate(fourier_basis(nphi - 1))
+    fourier_basis(:) = exp(-imun * conf%n * linspace(0d0, 2d0 * pi, nphi - 1, 0, 1)) &
+         / dble(nphi - 1)
+    allocate(Bnvac_R(nR, nZ), Bnvac_Z(nR, nZ))
+    Bnvac_R = (0d0, 0d0)
+    Bnvac_Z = (0d0, 0d0)
+    do kR = 1, nR
+       do kphi = 1, nphi
+          do kZ = 1, nZ
+             read (fid, *) B_R, B_phi, B_Z
+             if (kphi /= nphi) then
+                Bnvac_R(kR, kZ) = Bnvac_R(kR, kZ) + fourier_basis(kphi) * B_R
+                Bnvac_Z(kR, kZ) = Bnvac_Z(kR, kZ) + fourier_basis(kphi) * B_Z
+             end if
+          end do
+       end do
+    end do
+    close(fid)
+    deallocate(fourier_basis)
+  end subroutine read_Bnvac_Nemov
+
   subroutine read_Bnvac_GPEC(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bnvac_R, Bnvac_Z)
     use netcdf, only: nf90_open, nf90_nowrite, nf90_noerr, nf90_inq_dimid, nf90_inq_varid, &
          nf90_inquire_dimension, nf90_get_var, nf90_close
@@ -684,15 +722,13 @@ contains
   end subroutine read_Bnvac_GPEC
 
   subroutine compute_Bnvac(Bn)
-    use field_mod, only: ipert, iequil
-    use field_c_mod, only: icall_c
     use magdif_conf, only: conf, log, vac_src_nemov, vac_src_gpec
     use magdif_util, only: gauss_legendre_unit_interval, imun
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
     integer, parameter :: order = 2
     integer :: nR, nZ, ktri, ke, k
-    real(dp) :: dum, Rmin, Rmax, Zmin, Zmax, R, Z, edge_R, edge_Z, node_R(4), node_Z(4)
+    real(dp) :: Rmin, Rmax, Zmin, Zmax, R, Z, edge_R, edge_Z, node_R(4), node_Z(4)
     real(dp), dimension(order) :: points, weights
     complex(dp) :: B_R, B_phi, B_Z
     complex(dp), dimension(:, :), allocatable :: Bn_R, Bn_Z
@@ -700,20 +736,17 @@ contains
     ! initialize vacuum field
     select case (conf%vac_src)
     case (vac_src_nemov)
-       ipert = 1
-       iequil = 0
-       icall_c = -1
-       call field_c(0d0, 0d0, 0d0, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+       call read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
     case (vac_src_gpec)
        call read_Bnvac_GPEC(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
-       call vector_potential_single_mode(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
-       deallocate(Bn_R, Bn_Z)
     case default
        write (log%msg, '("unknown vacuum field source selection", i0)') conf%pres_prof
        if (log%err) call log%write
        error stop
     end select
-
+    call vector_potential_single_mode(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
+    deallocate(Bn_R, Bn_Z)
+    ! project to finite elements
     call gauss_legendre_unit_interval(order, points, weights)
     do ktri = 1, mesh%ntri
        node_R = mesh%node_R([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
@@ -732,43 +765,27 @@ contains
        ! toroidal flux via zero divergence
        Bn%comp_phi(ktri) = imun / mesh%n * sum(Bn%DOF(:, ktri)) / mesh%area(ktri)
     end do
-    ! reset to equilibrium field
-    ipert = 0
-    iequil = 1
   end subroutine compute_Bnvac
 
   subroutine debug_Bnvac_rectplot
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use field_mod, only: ipert, iequil
-    use field_c_mod, only: nr, nz, rmin, rmax, zmin, zmax
+    use bdivfree_mod, only: nR, nZ, Rpoi, Zpoi
     use magdif_conf, only: conf, datafile
-    use magdif_util, only: linspace
     character(len=*), parameter :: dataset = 'Bnvac'
     integer :: kR, kZ
     integer(HID_T) :: h5id_root
-    real(dp), allocatable, dimension(:) :: R_eqd, Z_eqd
-    complex(dp), allocatable, dimension(:, :) :: Bn_R, Bn_phi, Bn_Z
+    complex(dp), dimension(nR, nZ) :: Bn_R, Bn_phi, Bn_Z
 
-    ! use vacuum field
-    ipert = 1
-    iequil = 0
-    allocate(R_eqd(nr))
-    allocate(Z_eqd(nz))
-    allocate(Bn_R(nr, nz))
-    allocate(Bn_phi(nr, nz))
-    allocate(Bn_Z(nr, nz))
-    R_eqd(:) = linspace(rmin, rmax, nr, 0, 0)
-    Z_eqd(:) = linspace(zmin, zmax, nz, 0, 0)
-    do kZ = 1, nz
-       do kR = 1, nr
-          call spline_bn(conf%n, R_eqd(kR), Z_eqd(kZ), Bn_R(kR, kZ), Bn_phi(kR, kZ), Bn_Z(kR, kZ))
+    do kZ = 1, nZ
+       do kR = 1, nR
+          call spline_bn(conf%n, Rpoi(kR), Zpoi(kZ), Bn_R(kR, kZ), Bn_phi(kR, kZ), Bn_Z(kR, kZ))
        end do
     end do
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, dataset // '/')
-    call h5_add(h5id_root, dataset // '/rect_R', R_eqd, lbound(R_eqd), ubound(R_eqd), &
+    call h5_add(h5id_root, dataset // '/rect_R', Rpoi, lbound(Rpoi), ubound(Rpoi), &
          comment = 'R coordinate of rectangular grid', unit = 'cm')
-    call h5_add(h5id_root, dataset // '/rect_Z', Z_eqd, lbound(Z_eqd), ubound(Z_eqd), &
+    call h5_add(h5id_root, dataset // '/rect_Z', Zpoi, lbound(Zpoi), ubound(Zpoi), &
          comment = 'Z coordinate of rectangular grid', unit = 'cm')
     call h5_add(h5id_root, dataset // '/rect_comp_R', Bn_R, &
          lbound(Bn_R), ubound(Bn_R), unit = 'Mx', &
@@ -780,19 +797,10 @@ contains
          lbound(Bn_Z), ubound(Bn_Z), unit = 'Mx', &
          comment = 'Z component of magnetic field (vacuum) on rectangular grid')
     call h5_close(h5id_root)
-    if (allocated(R_eqd)) deallocate(R_eqd)
-    if (allocated(Z_eqd)) deallocate(Z_eqd)
-    if (allocated(Bn_R)) deallocate(Bn_R)
-    if (allocated(Bn_phi)) deallocate(Bn_phi)
-    if (allocated(Bn_Z)) deallocate(Bn_Z)
-    ! reset to equilibrium field
-    ipert = 0
-    iequil = 1
   end subroutine debug_Bnvac_rectplot
 
   subroutine debug_Bmnvac
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use field_mod, only: ipert, iequil
     use magdif_conf, only: conf, datafile
     use magdif_util, only: imun
     use magdif_mesh, only: equil, mesh, sample_polmodes
@@ -804,9 +812,6 @@ contains
     complex(dp) :: fourier_basis(-m_max:m_max), Bmn_contradenspsi(-m_max:m_max, mesh%nflux), &
          Bmn_n(-m_max:m_max, mesh%nflux)
 
-    ! use vacuum field
-    ipert = 1
-    iequil = 0
     Bmn_contradenspsi(:, :) = (0d0, 0d0)
     Bmn_n(:, :) = (0d0, 0d0)
     associate (s => sample_polmodes)
@@ -834,9 +839,6 @@ contains
          lbound(Bmn_n), ubound(Bmn_n), unit = 'G', &
          comment = 'poloidal modes of perpendicular component of vacuum perturbation')
     call h5_close(h5id_root)
-    ! reset to equilibrium field
-    ipert = 0
-    iequil = 1
   end subroutine debug_Bmnvac
 
   subroutine compute_Bn_nonres(Bn)
