@@ -593,9 +593,8 @@ contains
     rpoi(:) = linspace(Rmin, Rmax, nR, 0, 0)
     zpoi(:) = linspace(Zmin, Zmax, nZ, 0, 0)
     do iZ = 1, nZ
-       ! TODO: check signs - vector_potentials uses opposite
-       An_Z(:, iZ) = imun * Bn_R(:, iZ) * rpoi(:) / dble(ntor)
-       An_R(:, iZ) = -imun * Bn_Z(:, iZ) * rpoi(:) / dble(ntor)
+       An_Z(:, iZ) = -imun * Bn_R(:, iZ) * rpoi(:) / dble(ntor)
+       An_R(:, iZ) = imun * Bn_Z(:, iZ) * rpoi(:) / dble(ntor)
     end do
     allocate(aznre(6, 6, icp, ntor), aznim(6, 6, icp, ntor))
     allocate(arnre(6, 6, icp, ntor), arnim(6, 6, icp, ntor))
@@ -655,7 +654,6 @@ contains
     use netcdf, only: nf90_open, nf90_nowrite, nf90_noerr, nf90_inq_dimid, nf90_inq_varid, &
          nf90_inquire_dimension, nf90_get_var, nf90_close
     use magdif_conf, only: conf, log
-    use magdif_mesh, only: equil
     integer, intent(out) :: nR, nZ
     real(dp), intent(out) :: Rmin, Rmax, Zmin, Zmax
     complex(dp), intent(out), dimension(:, :), allocatable :: Bnvac_R, Bnvac_Z
@@ -701,12 +699,11 @@ contains
     Zmin = 1d2 * Z(1)
     Zmax = 1d2 * Z(nZ)
     allocate(Bnvac_R(nR, nZ), Bnvac_Z(nR, nZ))
-    ! T to G, factor 1/2 from Fourier series
-    ! TODO: check signs - plotting conjugates for positive helicity
-    Bnvac_R(:, :) = 0.5d4 * equil%cocos%sgn_dpsi * cmplx(Bn_R(:, :, 0) - Bnplas_R(:, :, 0), &
-         -equil%cocos%sgn_q * (Bn_R(:, :, 1)) - Bnplas_R(:, :, 1), dp)
-    Bnvac_Z(:, :) = 0.5d4 * equil%cocos%sgn_dpsi * cmplx(Bn_Z(:, :, 0) - Bnplas_Z(:, :, 0), &
-         -equil%cocos%sgn_q * (Bn_Z(:, :, 1)) - Bnplas_Z(:, :, 1), dp)
+    ! T to G, factor 1/2 from Fourier series, complex conjugate
+    Bnvac_R(:, :) = 0.5d4 * cmplx(Bn_R(:, :, 0) - Bnplas_R(:, :, 0), &
+         -(Bn_R(:, :, 1) - Bnplas_R(:, :, 1)), dp)
+    Bnvac_Z(:, :) = 0.5d4 * cmplx(Bn_Z(:, :, 0) - Bnplas_Z(:, :, 0), &
+         -(Bn_Z(:, :, 1) - Bnplas_Z(:, :, 1)), dp)
     deallocate(R, Z, Bn_R, Bn_Z, Bnplas_R, Bnplas_Z)
 
   contains

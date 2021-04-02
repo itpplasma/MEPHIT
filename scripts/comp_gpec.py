@@ -108,7 +108,7 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
         Bnvac['Re'] = [testcase.data['/Bnvac/rect_comp_' + coord][()].real * G_to_T,
                        np.array(rootgrp[dataset][0, :, :] - rootgrp[dataset + '_plasma'][0, :, :]) * 0.5]
         Bnvac['Im'] = [testcase.data['/Bnvac/rect_comp_' + coord][()].imag * G_to_T,
-                       np.array(rootgrp[dataset][1, :, :] - rootgrp[dataset + '_plasma'][1, :, :]) * 0.5 * -helicity]
+                       np.array(rootgrp[dataset][1, :, :] - rootgrp[dataset + '_plasma'][1, :, :]) * -0.5]
         for part in latex_cmplx.keys():
             Bnvac[part][0][nan_mask] = np.nan
             Bnvac[part][1][nan_mask] = np.nan
