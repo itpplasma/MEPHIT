@@ -9,7 +9,9 @@ module magdif_pert
   public :: L1_init, L1_deinit, L1_read, L1_write, RT0_init, RT0_deinit, RT0_read, &
        RT0_write, RT0_interp, RT0_check_div_free, RT0_check_redundant_edges, RT0_triplot, &
        RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
-       vec_polmodes_read, vec_polmodes_write, compute_Bnvac, compute_Bn_nonres, avg_flux_on_quad, &
+       vec_polmodes_read, vec_polmodes_write, AUG_coils_read, AUG_coils_write_Nemov, &
+       AUG_coils_read_Nemov, AUG_coils_write_GPEC, AUG_coils_read_GPEC, generate_vacfield, &
+       compute_Bnvac, compute_Bn_nonres, avg_flux_on_quad, &
        compute_kilca_vacuum, kilca_vacuum, compute_kilca_vac_coeff, kilca_vacuum_fourier, &
        check_kilca_vacuum, check_RT0, debug_fouriermodes, debug_Bnvac_rectplot, debug_Bmnvac
 
@@ -570,6 +572,206 @@ contains
     end associate
   end subroutine RT0_poloidal_modes
 
+  subroutine AUG_coils_read(directory, ncoil, nseg, nwind, XYZ)
+    character(len = *), intent(in) :: directory
+    integer, intent(out) :: ncoil, nseg, nwind
+    real(dp), intent(out), dimension(:, :, :), allocatable :: XYZ
+    character(len = 8) :: filename
+    integer :: fid, status, kc, ks
+    real(dp), dimension(:, :), allocatable :: R_Z_phi
+
+    ncoil = 8
+    nwind = 5
+    ! count number of lines = number of coil segments
+    filename = 'Bu1n.asc'
+    open(newunit = fid, file = directory // '/' // filename, status = 'old', &
+         action = 'read', form = 'formatted')
+    nseg = 0
+    do
+       read(fid, *, iostat = status)
+       if (status /= 0) exit
+       nseg = nseg + 1
+    end do
+    close(fid)
+    ! allocate coordinates and read all coil data, starting with upper B coil set
+    allocate(R_Z_phi(nseg, 3))
+    allocate(XYZ(3, nseg, 2 * ncoil))
+    do kc = 1, ncoil
+       write (filename, '("Bu", i1, "n.asc")') kc
+       open(newunit = fid, file = directory // '/' // filename, status = 'old', &
+            action = 'read', form = 'formatted')
+       do ks = 1, nseg
+          read (fid, '(f8.6, 1x, f8.5, 1x, f8.5)') R_Z_phi(ks, 1), R_Z_phi(ks, 2), R_Z_phi(ks, 3)
+       end do
+       close(fid)
+       XYZ(1, :, kc) = 1d2 * R_Z_phi(:, 1) * cos(R_Z_phi(:, 3))
+       XYZ(2, :, kc) = 1d2 * R_Z_phi(:, 1) * sin(R_Z_phi(:, 3))
+       XYZ(3, :, kc) = 1d2 * R_Z_phi(:, 2)
+    end do
+    do kc = 1, ncoil
+       write (filename, '("Bl", i1, "n.asc")') kc
+       open(newunit = fid, file = directory // '/' // filename, status = 'old', &
+            action = 'read', form = 'formatted')
+       do ks = 1, nseg
+          read (fid, '(f8.6, 1x, f8.5, 1x, f8.5)') R_Z_phi(ks, 1), R_Z_phi(ks, 2), R_Z_phi(ks, 3)
+       end do
+       close(fid)
+       XYZ(1, :, kc + ncoil) = 1d2 * R_Z_phi(:, 1) * cos(R_Z_phi(:, 3))
+       XYZ(2, :, kc + ncoil) = 1d2 * R_Z_phi(:, 1) * sin(R_Z_phi(:, 3))
+       XYZ(3, :, kc + ncoil) = 1d2 * R_Z_phi(:, 2)
+    end do
+    if (allocated(R_Z_phi)) deallocate(R_Z_phi)
+  end subroutine AUG_coils_read
+
+  subroutine AUG_coils_write_Nemov(directory, ncoil, nseg, XYZ)
+    use magdif_conf, only: log
+    character(len = *), intent(in) :: directory
+    integer, intent(in) :: ncoil, nseg
+    real(dp), intent(in), dimension(:, :, :) :: XYZ
+    integer :: fid, kc, ks
+
+    if (3 /= size(XYZ, 1)) then
+       call log%msg_arg_size('AUG_coils_write_Nemov', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (nseg /= size(XYZ, 2)) then
+       call log%msg_arg_size('AUG_coils_write_Nemov', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (2 * ncoil /= size(XYZ, 3)) then
+       call log%msg_arg_size('AUG_coils_write_Nemov', '2 * ncoil', 'size(XYZ, 3)', &
+            2 * ncoil, size(XYZ, 3))
+       if (log%err) call log%write
+       error stop
+    end if
+    open(newunit = fid, file = directory // '/co_asd.dd', status = 'replace', &
+         action = 'write', form = 'formatted')
+    write (fid, '(1x, i6)') 2 * ncoil * (nseg + 1)
+    do kc = 1, 2 * ncoil
+       do ks = 1, nseg
+          write (fid, '(3(1x, es17.9e2), 1x, es12.4e2, 1x, i3)') &
+               XYZ(1, ks, kc), XYZ(2, ks, kc), XYZ(3, ks, kc), 1.0, kc
+       end do
+       write (fid, '(3(1x, es17.9e2), 1x, es12.4e2, 1x, i3)') &
+            XYZ(1, 1, kc), XYZ(2, 1, kc), XYZ(3, 1, kc), 0.0, kc
+    end do
+    close(fid)
+  end subroutine AUG_coils_write_Nemov
+
+  subroutine AUG_coils_read_Nemov(directory, ncoil, nseg, nwind, XYZ)
+    use magdif_conf, only: log
+    character(len = *), intent(in) :: directory
+    integer, intent(out) :: ncoil, nseg, nwind
+    real(dp), intent(out), allocatable, dimension(:, :, :) :: XYZ
+    integer :: fid, kc, ks, temp
+    real(dp) :: rdum
+
+    ncoil = 8
+    nwind = 5
+    open(newunit = fid, file = directory // '/co_asd.dd', status = 'old', &
+         action = 'read', form = 'formatted')
+    read (fid, *) temp
+    nseg = temp / (2 * ncoil) - 1
+    allocate(XYZ(3, nseg, 2 * ncoil))
+    do kc = 1, 2 * ncoil
+       do ks = 1, nseg
+          read (fid, *) XYZ(1, ks, kc), XYZ(2, ks, kc), XYZ(3, ks, kc), rdum, temp
+          if (temp /= kc) then
+             write (log%msg, '("Expected coil index ", i0, " in co_asd.dd at line ", ' // &
+                  'i0, ", but got ", i0)') kc, (kc - 1) * (nseg + 1) + ks + 1, temp
+             if (log%err) call log%write
+             error stop
+          end if
+       end do
+       read (fid, *)
+    end do
+    close(fid)
+  end subroutine AUG_coils_read_Nemov
+
+  subroutine AUG_coils_write_GPEC(directory, ncoil, nseg, nwind, XYZ)
+    use magdif_conf, only: log
+    character(len = *), intent(in) :: directory
+    integer, intent(in) :: ncoil, nseg, nwind
+    real(dp), intent(in), dimension(:, :, :) :: XYZ
+    integer :: fid, kc, ks
+
+    if (3 /= size(XYZ, 1)) then
+       call log%msg_arg_size('AUG_coils_write_GPEC', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (nseg /= size(XYZ, 2)) then
+       call log%msg_arg_size('AUG_coils_write_GPEC', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (2 * ncoil /= size(XYZ, 3)) then
+       call log%msg_arg_size('AUG_coils_write_GPEC', '2 * ncoil', 'size(XYZ, 3)', &
+            2 * ncoil, size(XYZ, 3))
+       if (log%err) call log%write
+       error stop
+    end if
+    open(newunit = fid, file = directory // '/aug_bu.dat', status = 'replace', &
+         action = 'write', form = 'formatted')
+    write (fid, '(3(1x, i4), 1x, f7.2)') ncoil, 1, nseg + 1, dble(nwind)
+    do kc = 1, ncoil
+       do ks = 1, nseg
+          write (fid, '(3(1x, es12.4e2))') &
+               1d-2 * XYZ(1, ks, kc), 1d-2 * XYZ(2, ks, kc), 1d-2 * XYZ(3, ks, kc)
+       end do
+       write (fid, '(3(1x, es12.4e2))') &
+            1d-2 * XYZ(1, 1, kc), 1d-2 * XYZ(2, 1, kc), 1d-2 * XYZ(3, 1, kc)
+    end do
+    close(fid)
+    open(newunit = fid, file = directory // '/aug_bl.dat', status = 'replace', &
+         action = 'write', form = 'formatted')
+    write (fid, '(3(1x, i4), 1x, f7.2)') ncoil, 1, nseg + 1, dble(nwind)
+    do kc = ncoil + 1, 2 * ncoil
+       do ks = 1, nseg
+          write (fid, '(3(1x, es12.4e2))') &
+               1d-2 * XYZ(1, ks, kc), 1d-2 * XYZ(2, ks, kc), 1d-2 * XYZ(3, ks, kc)
+       end do
+       write (fid, '(3(1x, es12.4e2))') &
+            1d-2 * XYZ(1, 1, kc), 1d-2 * XYZ(2, 1, kc), 1d-2 * XYZ(3, 1, kc)
+    end do
+    close(fid)
+  end subroutine AUG_coils_write_GPEC
+
+  subroutine AUG_coils_read_GPEC(directory, ncoil, nseg, nwind, XYZ)
+    character(len = *), intent(in) :: directory
+    integer, intent(out) :: ncoil, nseg, nwind
+    real(dp), intent(out), allocatable, dimension(:, :, :) :: XYZ
+    integer :: fid, kc, ks, idum
+    real(dp) :: ddum
+
+    open(newunit = fid, file = directory // '/aug_bu.dat', status = 'old', &
+         action = 'read', form = 'formatted')
+    read (fid, '(3(1x, i4), 1x, f7.2)') ncoil, idum, nseg, ddum
+    nseg = nseg - 1
+    nwind = int(ddum)
+    allocate(XYZ(3, nseg, 2 * ncoil))
+    do kc = 1, ncoil
+       do ks = 1, nseg
+          read (fid, '(3(1x, es12.4e2))') XYZ(1, ks, kc), XYZ(2, ks, kc), XYZ(3, ks, kc)
+       end do
+       read (fid, *)
+    end do
+    close(fid)
+    open(newunit = fid, file = directory // '/aug_bl.dat', status = 'old', &
+         action = 'read', form = 'formatted')
+    read (fid, *)
+    do kc = ncoil + 1, 2 * ncoil
+       do ks = 1, nseg
+          read (fid, '(3(1x, es12.4e2))') XYZ(1, ks, kc), XYZ(2, ks, kc), XYZ(3, ks, kc)
+       end do
+       read (fid, *)
+    end do
+    close(fid)
+    XYZ(:, :, :) = 1d2 * XYZ
+  end subroutine AUG_coils_read_GPEC
+
   subroutine vector_potential_single_mode(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
     use bdivfree_mod, only: nR_mod => nr, nZ_mod => nz, Rmin_mod => rmin, Zmin_mod => zmin, &
          ntor, icp, ipoint, hr, hz, rpoi, zpoi, aznre, aznim, arnre, arnim
@@ -763,6 +965,33 @@ contains
        Bn%comp_phi(ktri) = imun / mesh%n * sum(Bn%DOF(:, ktri)) / mesh%area(ktri)
     end do
   end subroutine compute_Bnvac
+
+  subroutine generate_vacfield
+    use magdif_conf, only: conf, datafile
+    use magdif_mesh, only: mesh
+    type(RT0_t) :: Bn
+
+    call RT0_init(Bn, mesh%ntri)
+    if (conf%kilca_scale_factor /= 0) then
+       call compute_kilca_vac_coeff
+       call compute_kilca_vacuum(Bn)
+       call check_kilca_vacuum
+       call check_RT0(Bn)
+    else
+       if (conf%nonres) then
+          call compute_Bn_nonres(Bn)
+       else
+          call compute_Bnvac(Bn)
+          call debug_Bnvac_rectplot
+          call debug_Bmnvac
+          call debug_fouriermodes
+       end if
+    end if
+    call RT0_check_redundant_edges(Bn, 'Bnvac')
+    call RT0_check_div_free(Bn, mesh%n, 1d-9, 'Bnvac')
+    call RT0_write(Bn, datafile, 'Bnvac', 'magnetic field (vacuum)', 'G', 1)
+    call RT0_deinit(Bn)
+  end subroutine generate_vacfield
 
   subroutine debug_Bnvac_rectplot
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close

@@ -3,6 +3,7 @@ program magdif_preprocess
   use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
   use magdif_conf, only: conf, magdif_config_read, conf_arr, log, magdif_log
   use magdif_mesh, only: generate_mesh, write_mesh_cache
+  use magdif_pert, only: generate_vacfield
 
   implicit none
 
@@ -26,5 +27,6 @@ program magdif_preprocess
   log = magdif_log('-', conf%log_level, conf%quiet)
   call generate_mesh(unprocessed_geqdsk)
   call write_mesh_cache
+  call generate_vacfield
   call h5_deinit
 end program magdif_preprocess
