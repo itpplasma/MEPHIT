@@ -87,7 +87,7 @@ class magdif_2d_triplot:
 
 
 class magdif_2d_rectplots:
-    def __init__(self, R, Z, data, label, filename, title=None, clim_scale=None):
+    def __init__(self, R, Z, data, label, filename, title=None, clim_scale=None, centered=True):
         self.R = R
         self.Z = Z
         self.data = data
@@ -98,6 +98,7 @@ class magdif_2d_rectplots:
             self.clim_scale = (1.0, 1.0)
         else:
             self.clim_scale = clim_scale
+        self.centered = centered
 
     def dump_plot(self):
         print(f"plotting {self.filename}")
@@ -117,8 +118,12 @@ class magdif_2d_rectplots:
             if self.title is not None:
                 axs[k].set_title(self.title[k])
         axs[1].yaxis.set_tick_params(labelleft=True)
-        clim = (-max(np.amax(np.abs(image.get_array())) for image in images) * self.clim_scale[0],
-                max(np.amax(np.abs(image.get_array())) for image in images) * self.clim_scale[1])
+        if self.centered:
+            clim = (-max(np.amax(np.abs(image.get_array())) for image in images) * self.clim_scale[0],
+                    max(np.amax(np.abs(image.get_array())) for image in images) * self.clim_scale[1])
+        else:
+            clim = (min(np.amin(image.get_array()) for image in images) * self.clim_scale[0],
+                    max(np.amax(image.get_array()) for image in images) * self.clim_scale[1])
         norm = matplotlib.colors.Normalize(vmin=clim[0], vmax=clim[1])
         for im in images:
             im.set_norm(norm)

@@ -856,6 +856,7 @@ contains
     use netcdf, only: nf90_open, nf90_nowrite, nf90_noerr, nf90_inq_dimid, nf90_inq_varid, &
          nf90_inquire_dimension, nf90_get_var, nf90_close
     use magdif_conf, only: conf, log
+    use magdif_mesh, only: equil
     integer, intent(out) :: nR, nZ
     real(dp), intent(out) :: Rmin, Rmax, Zmin, Zmax
     complex(dp), intent(out), dimension(:, :), allocatable :: Bnvac_R, Bnvac_Z
@@ -898,8 +899,9 @@ contains
     ! m to cm
     Rmin = 1d2 * R(1)
     Rmax = 1d2 * R(nR)
-    Zmin = 1d2 * Z(1)
-    Zmax = 1d2 * Z(nZ)
+    ! GPEC omits offset
+    Zmin = 1d2 * Z(1) + equil%zmid
+    Zmax = 1d2 * Z(nZ) + equil%zmid
     allocate(Bnvac_R(nR, nZ), Bnvac_Z(nR, nZ))
     ! T to G, factor 1/2 from Fourier series, complex conjugate
     Bnvac_R(:, :) = 0.5d4 * cmplx(Bn_R(:, :, 0) - Bnplas_R(:, :, 0), &
@@ -983,6 +985,7 @@ contains
        else
           call compute_Bnvac(Bn)
           call debug_Bnvac_rectplot
+          call debug_B0_rectplot
           call debug_Bmnvac
           call debug_fouriermodes
        end if
@@ -1024,6 +1027,40 @@ contains
          comment = 'Z component of magnetic field (vacuum) on rectangular grid')
     call h5_close(h5id_root)
   end subroutine debug_Bnvac_rectplot
+
+  subroutine debug_B0_rectplot
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use bdivfree_mod, only: nR, nZ, Rpoi, Zpoi
+    use magdif_conf, only: datafile
+    character(len = *), parameter :: dataset = 'equil'
+    integer :: kR, kZ
+    integer(HID_T) :: h5id_root
+    real(dp) :: dum
+    real(dp), dimension(nR, nZ) :: B0_R, B0_phi, B0_Z
+
+    do kZ = 1, nZ
+       do kR = 1, nR
+          call field(Rpoi(kR), 0d0, Zpoi(kZ), B0_R(kR, kZ), B0_phi(kR, kZ), B0_Z(kR, kZ), &
+               dum, dum, dum, dum, dum, dum, dum, dum, dum)
+       end do
+    end do
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, dataset // '/')
+    call h5_add(h5id_root, dataset // '/rect_R', Rpoi, lbound(Rpoi), ubound(Rpoi), &
+         comment = 'R coordinate of rectangular grid', unit = 'cm')
+    call h5_add(h5id_root, dataset // '/rect_Z', Zpoi, lbound(Zpoi), ubound(Zpoi), &
+         comment = 'Z coordinate of rectangular grid', unit = 'cm')
+    call h5_add(h5id_root, dataset // '/B0_R', B0_R, &
+         lbound(B0_R), ubound(B0_R), unit = 'Mx', &
+         comment = 'R component of magnetic field (equilibrium) on rectangular grid')
+    call h5_add(h5id_root, dataset // '/B0_phi', B0_phi, &
+         lbound(B0_phi), ubound(B0_phi), unit = 'Mx', &
+         comment = 'physical phi component of magnetic field (equilibrium) on rectangular grid')
+    call h5_add(h5id_root, dataset // '/B0_Z', B0_Z, &
+         lbound(B0_Z), ubound(B0_Z), unit = 'Mx', &
+         comment = 'Z component of magnetic field (equilibrium) on rectangular grid')
+    call h5_close(h5id_root)
+  end subroutine debug_B0_rectplot
 
   subroutine debug_Bmnvac
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
