@@ -347,7 +347,7 @@ contains
     integer(c_long) :: long_flag
     integer :: fid
 
-    long_flag = flag
+    long_flag = int(flag, c_long)
     open(newunit = fid, file = namedpipe, status = 'old', access = 'stream', &
          form = 'unformatted', action = 'write')
     write (fid) long_flag
@@ -365,7 +365,7 @@ contains
          form = 'unformatted', action = 'read')
     read (fid) long_flag
     close(fid)
-    flag = long_flag
+    flag = int(long_flag)
   end subroutine receive_flag_from_freefem
 
   subroutine send_RT0_to_freefem(elem, outfile)

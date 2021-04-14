@@ -10,6 +10,7 @@ module magdif_mesh
   public :: equil, fluxvar, flux_func_cache, fs, fs_half, mesh_t, mesh, B0r, B0phi, B0z, &
        B0r_Omega, B0phi_Omega, B0z_Omega, B0flux, j0phi, coord_cache, sample_polmodes, &
        coord_cache_ext, coord_cache_ext_init, compute_sample_Ipar, coord_cache_ext_deinit, &
+       coord_cache_ext_write, coord_cache_ext_read, &
        flux_func_cache_init, flux_func_cache_check, flux_func_cache_destructor, generate_mesh, &
        refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile,  &
        create_mesh_points, init_indices, common_triangles, &

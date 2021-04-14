@@ -841,11 +841,12 @@ contains
 
   subroutine Biot_Savart_Fourier(ncoil, nseg, nwind, XYZ, &
        Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ, Bn)
-    use iso_c_binding
+    use iso_c_binding, only: c_ptr, c_double, c_double_complex, c_size_t, c_f_pointer
+    use FFTW3, only: fftw_alloc_real, fftw_alloc_complex, fftw_plan_dft_r2c_1d, FFTW_PATIENT, &
+         FFTW_DESTROY_INPUT, fftw_execute_dft_r2c, fftw_destroy_plan, fftw_free
     use constants, only: pi  ! orbit_mod.f90
     use magdif_conf, only: log
     use magdif_util, only: linspace
-    include 'fftw3.f03'
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
     real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
