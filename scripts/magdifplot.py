@@ -104,7 +104,7 @@ class magdif_2d_rectplots:
         print(f"plotting {self.filename}")
         xlim = (min(R[0] for R in self.R), max(R[-1] for R in self.R))
         ylim = (min(Z[0] for Z in self.Z), max(Z[-1] for Z in self.Z))
-        fig = Figure(figsize=(10.0, 5.0))
+        fig = Figure(figsize=(8.0, 5.0))
         axs = fig.subplots(1, 2, sharex='all', sharey='all')
         images = []
         for k in range(2):

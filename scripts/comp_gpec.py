@@ -12,6 +12,8 @@ import numpy as np
 from copy import deepcopy
 from functools import partial
 from magdifplot import magdif, fslabel, polmodes, magdif_poloidal_plots, magdif_2d_rectplots, cm_to_m, G_to_T
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.path import Path as Polygon
 import netCDF4
 
@@ -27,7 +29,6 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     testcase = magdif(workdir)
     testcase.read_configfile()
     testcase.read_datafile()
-    testcase.read_convexwall()
     sgn_dpsi = np.sign(testcase.data['/cache/fs/psi'][-1] -
                        testcase.data['/cache/fs/psi'][0])
     helicity = -np.sign(testcase.data['/cache/fs/q'][-1])
@@ -99,12 +100,15 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     latex_cmplx = {'Re': r'\Real', 'Im': r'\Imag'}
     name_coord = {'R': 'radial', 'Z': 'axial', 'phi': 'azimuthal'}
     name_cmplx = {'Re': 'real', 'Im': 'imaginary'}
-    scaling = {'R': (0.1, 0.1), 'Z': (0.1, 0.1), 'phi': (0.001, 0.001)}
-    convexwall = Polygon(cm_to_m * testcase.convexwall)
+    kp_max_lcfs = testcase.data['/mesh/kp_max'][-1]
+    separatrix = Polygon(cm_to_m * np.column_stack((testcase.data['/mesh/node_R'][-kp_max_lcfs:],
+                                                    testcase.data['/mesh/node_Z'][-kp_max_lcfs:])))
     RR, ZZ = np.meshgrid(R[0], Z[0])
-    nan_mask = np.logical_not(convexwall.contains_points(np.column_stack((RR.ravel(), ZZ.ravel())))).reshape(RR.shape)
+    nan_mask = np.logical_not(separatrix.contains_points(np.column_stack((RR.ravel(), ZZ.ravel())))).reshape(RR.shape)
     RR[nan_mask] = np.nan
     ZZ[nan_mask] = np.nan
+    kR = 83
+    kZ = 150
     Bnvac = {}
     for coord, dataset in gpec_dataset.items():
         covar = np.ones(RR.shape) if coord != 'phi' else RR
@@ -119,7 +123,7 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
             label = '$' + latex_cmplx[part] + r' B_{n \mathrm{v} ' + latex_coord[coord] + r'}$ / \si{\tesla}'
             title = [f"Vacuum field from MEPHIT\n({name_cmplx[part]} {name_coord[coord]} component)",
                      f"Vacuum field from GPEC\n({name_cmplx[part]} {name_coord[coord]} component)"]
-            testcase.plots.append(magdif_2d_rectplots(R, Z, Bnvac[part], label, title=title, clim_scale=scaling[coord],
+            testcase.plots.append(magdif_2d_rectplots(R, Z, Bnvac[part], label, title=title,
                                                       filename=path.join(workdir, f'debug_Bnvac_{coord}_{part}.pdf')))
         B0[0][nan_mask] = np.nan
         B0[1][nan_mask] = np.nan
@@ -134,13 +138,59 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
         label = (r'$\Delta B_{n \mathrm{v} ' + latex_coord[coord] + r'}$ / \si{\tesla}')
         title = [f"Vacuum field: GPEC - MEPHIT\n(real {name_coord[coord]} component)",
                  f"Vacuum field: GPEC - MEPHIT\n(imaginary {name_coord[coord]} component)"]
-        testcase.plots.append(magdif_2d_rectplots(R, Z, Bnvac_diff, label, title=title, clim_scale=(1.5e-04, 1.5e-04),
+        testcase.plots.append(magdif_2d_rectplots(R, Z, Bnvac_diff, label, title=title,
                                                   filename=path.join(workdir, f'debug_Bnvac_{coord}_absdiff.pdf')))
         B0_diff = [B0[1] - B0[0], B0[1] - B0[0]]
         label = (r'$\Delta B_{0 ' + latex_coord[coord] + r'}$ / \si{\tesla}')
         title = [f"Equilibrium field: GPEC - MEPHIT\n({name_coord[coord]} component)",
                  f"Equilibrium field: GPEC - MEPHIT\n({name_coord[coord]} component)"]
-        testcase.plots.append(magdif_2d_rectplots(R, Z, B0_diff, label, title=title, clim_scale=(1.0e-03, 1.0e-03),
+        testcase.plots.append(magdif_2d_rectplots(R, Z, B0_diff, label, title=title,
                                                   filename=path.join(workdir, f'debug_B0_{coord}_absdiff.pdf')))
+
+        fig = Figure()
+        axs = fig.subplots(1, 2, sharex='all', sharey='all')
+        axs[0].plot(Z[1], Bnvac['Re'][1][:, kR], '-k', label='GPEC')
+        axs[0].plot(Z[0], Bnvac['Re'][0][:, kR], '--r', label='MEPHIT')
+        axs[0].legend()
+        axs[0].set_xlabel(r"$Z$ / \si{\meter}")
+        axs[0].set_ylabel(r'$\Real B_{n \mathrm{v}}^{' + latex_coord[coord] + r'}$ / \si{\tesla}')
+        axs[1].plot(Z[1], Bnvac['Im'][1][:, kR], '-k', label='GPEC')
+        axs[1].plot(Z[0], Bnvac['Im'][0][:, kR], '--r', label='MEPHIT')
+        axs[1].legend()
+        axs[1].set_xlabel(r"$Z$ / \si{\meter}")
+        axs[1].set_ylabel(r'$\Imag B_{n \mathrm{v}}^{' + latex_coord[coord] + r'}$ / \si{\tesla}')
+        canvas = FigureCanvas(fig)
+        fig.savefig(path.join(workdir, f"cut_Z_Bnvac_{coord}.pdf"))
+        fig = Figure()
+        axs = fig.subplots(1, 2, sharex='all', sharey='all')
+        axs[0].plot(R[1], Bnvac['Re'][1][kZ, :], '-k', label='GPEC')
+        axs[0].plot(R[0], Bnvac['Re'][0][kZ, :], '--r', label='MEPHIT')
+        axs[0].legend()
+        axs[0].set_xlabel(r"$R$ / \si{\meter}")
+        axs[0].set_ylabel(r'$\Real B_{n \mathrm{v}}^{' + latex_coord[coord] + r'}$ / \si{\tesla}')
+        axs[1].plot(R[1], Bnvac['Im'][1][kZ, :], '-k', label='GPEC')
+        axs[1].plot(R[0], Bnvac['Im'][0][kZ, :], '--r', label='MEPHIT')
+        axs[1].legend()
+        axs[1].set_xlabel(r"$R$ / \si{\meter}")
+        axs[1].set_ylabel(r'$\Imag B_{n \mathrm{v}}^{' + latex_coord[coord] + r'}$ / \si{\tesla}')
+        canvas = FigureCanvas(fig)
+        fig.savefig(path.join(workdir, f"cut_R_Bnvac_{coord}.pdf"))
+
+        B0[0][nan_mask] = np.nan
+        B0[1][nan_mask] = np.nan
+        fig = Figure()
+        axs = fig.subplots(1, 2)
+        axs[0].plot(Z[1], B0[1][:, kR], '-k', label='GPEC')
+        axs[0].plot(Z[0], B0[0][:, kR], '--r', label='MEPHIT')
+        axs[0].legend()
+        axs[0].set_xlabel(r"$Z$ / \si{\meter}")
+        axs[0].set_ylabel(r'$B_{0}^{' + latex_coord[coord] + r'}$ / \si{\tesla}')
+        axs[1].plot(R[1], B0[1][kZ, :] * R[1], '-k', label='GPEC')
+        axs[1].plot(R[0], B0[0][kZ, :] * R[0], '--r', label='MEPHIT')
+        axs[1].legend()
+        axs[1].set_xlabel(r"$R$ / \si{\meter}")
+        axs[1].set_ylabel(r'$B_{0}^{' + latex_coord[coord] + r'}$ / \si{\tesla}')
+        canvas = FigureCanvas(fig)
+        fig.savefig(path.join(workdir, f"cut_B0_{coord}.pdf"))
 
     testcase.dump_plots()
