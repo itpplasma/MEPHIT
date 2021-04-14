@@ -772,13 +772,14 @@ contains
     XYZ(:, :, :) = 1d2 * XYZ
   end subroutine AUG_coils_read_GPEC
 
-  subroutine AUG_coils_write_Fourier(directory, ncoil, nseg, nwind, XYZ, &
+  subroutine AUG_coils_write_Fourier(directory, ncoil, nseg, nwind, XYZ, nmax, &
        Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use magdif_conf, only: log
     character(len = *), intent(in) :: directory
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
+    integer, intent(in) :: nmax
     real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
     integer, intent(in) :: nR, nphi, nZ
     complex(dp), dimension(:, :, :, :, :), allocatable :: Bn
@@ -803,11 +804,17 @@ contains
        if (log%err) call log%write
        error stop
     end if
-    call Biot_Savart_Fourier(ncoil, nseg, nwind, XYZ, &
+    if (nmax > nphi / 4) then
+       write (log%msg, '("Requested nmax = ", i0, ", but only ", i0, " modes available.")') &
+            nmax, nphi / 4
+       if (log%err) call log%write
+       error stop
+    end if
+    call Biot_Savart_Fourier(ncoil, nseg, nwind, XYZ, nmax, &
          Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ, Bn)
     filename = directory // '/AUG_B_coils.h5'
     call h5_open_rw(trim(filename), h5id_root)
-    do ntor = 0, nphi / 4
+    do ntor = 0, nmax
        write (modename, '("ntor_", i2.2)') ntor
        call h5_create_parent_groups(h5id_root, modename // '/')
        call h5_add(h5id_root, modename // '/R_min', Rmin, &
@@ -839,7 +846,7 @@ contains
     if (allocated(Bn)) deallocate(Bn)
   end subroutine AUG_coils_write_Fourier
 
-  subroutine Biot_Savart_Fourier(ncoil, nseg, nwind, XYZ, &
+  subroutine Biot_Savart_Fourier(ncoil, nseg, nwind, XYZ, nmax, &
        Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ, Bn)
     use iso_c_binding, only: c_ptr, c_double, c_double_complex, c_size_t, c_f_pointer
     use FFTW3, only: fftw_alloc_real, fftw_alloc_complex, fftw_plan_dft_r2c_1d, FFTW_PATIENT, &
@@ -849,10 +856,11 @@ contains
     use magdif_util, only: linspace
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
+    integer, intent(in) :: nmax
     real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
     integer, intent(in) :: nR, nphi, nZ
     complex(dp), intent(out), dimension(:, :, :, :, :), allocatable :: Bn
-    integer :: nmax, nfft, kc, ks, kR, kphi, kZ
+    integer :: nfft, kc, ks, kR, kphi, kZ
     real(dp), dimension(nphi) :: phi, cosphi, sinphi
     real(dp) :: R(nR), Z(nZ), rXYZ(3), crXYZ(3), BXYZ(3)
     real(dp), dimension(size(XYZ, 1), size(XYZ, 2), size(XYZ, 3)) :: cXYZ, dXYZ
@@ -860,7 +868,6 @@ contains
     real(c_double), dimension(:), pointer :: BR, Bphi, BZ
     complex(c_double_complex), dimension(:), pointer :: BnR, Bnphi, BnZ
 
-    nmax = nphi / 4
     nfft = nphi / 2 + 1
     R(:) = linspace(Rmin, Rmax, nR, 0, 0)
     phi(:) = linspace(0d0, 2d0 * pi, nphi, 0, 0)
@@ -880,6 +887,12 @@ contains
     if (2 * ncoil /= size(XYZ, 3)) then
        call log%msg_arg_size('Biot_Savart_Fourier', '2 * ncoil', 'size(XYZ, 3)', &
             2 * ncoil, size(XYZ, 3))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (nmax > nphi / 4) then
+       write (log%msg, '("Requested nmax = ", i0, ", but only ", i0, " modes available.")') &
+            nmax, nphi / 4
        if (log%err) call log%write
        error stop
     end if

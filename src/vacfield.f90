@@ -39,7 +39,7 @@ program vacfield
   if (out_type == 'Fourier') then
      ! use default values for now
      call AUG_coils_write_Fourier(trim(out_dir), ncoil, nseg, nwind, XYZ, &
-          75.0d0, 267.0d0, -154.0d0, 150.4d0, 150, 256, 300)
+          64, 75.0d0, 267.0d0, -154.0d0, 150.4d0, 150, 512, 300)
   else if (out_type == 'GPEC') then
      call AUG_coils_write_GPEC(trim(out_dir), ncoil, nseg, nwind, XYZ)
   else if (out_type == 'Nemov') then
