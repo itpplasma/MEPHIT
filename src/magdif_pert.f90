@@ -10,8 +10,8 @@ module magdif_pert
        RT0_write, RT0_interp, RT0_check_div_free, RT0_check_redundant_edges, RT0_triplot, &
        RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
        vec_polmodes_read, vec_polmodes_write, AUG_coils_read, AUG_coils_write_Nemov, &
-       AUG_coils_read_Nemov, AUG_coils_write_GPEC, AUG_coils_read_GPEC, generate_vacfield, &
-       compute_Bnvac, compute_Bn_nonres, avg_flux_on_quad, &
+       AUG_coils_read_Nemov, AUG_coils_write_GPEC, AUG_coils_read_GPEC, AUG_coils_write_Fourier, &
+       generate_vacfield, compute_Bnvac, compute_Bn_nonres, avg_flux_on_quad, &
        compute_kilca_vacuum, kilca_vacuum, compute_kilca_vac_coeff, kilca_vacuum_fourier, &
        check_kilca_vacuum, check_RT0, debug_fouriermodes, debug_Bnvac_rectplot, debug_Bmnvac
 
@@ -772,6 +772,179 @@ contains
     XYZ(:, :, :) = 1d2 * XYZ
   end subroutine AUG_coils_read_GPEC
 
+  subroutine AUG_coils_write_Fourier(directory, ncoil, nseg, nwind, XYZ, &
+       Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use magdif_conf, only: log
+    character(len = *), intent(in) :: directory
+    integer, intent(in) :: ncoil, nseg, nwind
+    real(dp), intent(in), dimension(:, :, :) :: XYZ
+    real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
+    integer, intent(in) :: nR, nphi, nZ
+    complex(dp), dimension(:, :, :, :, :), allocatable :: Bn
+    character(len = 1024) :: filename
+    integer :: ntor, kc
+    integer(HID_T) :: h5id_root
+    character(len = 7) :: modename, coilname
+
+    if (3 /= size(XYZ, 1)) then
+       call log%msg_arg_size('AUG_coils_write_GPEC', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (nseg /= size(XYZ, 2)) then
+       call log%msg_arg_size('AUG_coils_write_GPEC', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (2 * ncoil /= size(XYZ, 3)) then
+       call log%msg_arg_size('AUG_coils_write_GPEC', '2 * ncoil', 'size(XYZ, 3)', &
+            2 * ncoil, size(XYZ, 3))
+       if (log%err) call log%write
+       error stop
+    end if
+    call Biot_Savart_Fourier(ncoil, nseg, nwind, XYZ, &
+         Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ, Bn)
+    filename = directory // '/AUG_B_coils.h5'
+    call h5_open_rw(trim(filename), h5id_root)
+    do ntor = 0, nphi / 4
+       write (modename, '("ntor_", i2.2)') ntor
+       call h5_create_parent_groups(h5id_root, modename // '/')
+       call h5_add(h5id_root, modename // '/R_min', Rmin, &
+            unit = 'cm', comment = 'minimal R coordinate of computational grid')
+       call h5_add(h5id_root, modename // '/R_max', Rmax, &
+            unit = 'cm', comment = 'maximal R coordinate of computational grid')
+       call h5_add(h5id_root, modename // '/Z_min', Zmin, &
+            unit = 'cm', comment = 'minimal Z coordinate of computational grid')
+       call h5_add(h5id_root, modename // '/Z_max', Zmax, &
+            unit = 'cm', comment = 'maximal Z coordinate of computational grid')
+       call h5_add(h5id_root, modename // '/nR', nR, 'number of grid points in R direction')
+       call h5_add(h5id_root, modename // '/nZ', nZ, 'number of grid points in Z direction')
+       call h5_add(h5id_root, modename // '/ncoil', ncoil, 'number of upper and lower B coils')
+       do kc = 1, 2 * ncoil
+          write (coilname, '("coil_", i2.2)') kc
+          call h5_create_parent_groups(h5id_root, modename // '/' // coilname // '/')
+          call h5_add(h5id_root, modename // '/' // coilname // '/Bn_R', &
+               Bn(ntor, 1, :, :, kc), [1, 1], [nR, nZ], &
+               unit = 'G', comment = 'R component of coil field for I_c = 0.1 A')
+          call h5_add(h5id_root, modename // '/' // coilname // '/Bn_phi', &
+               Bn(ntor, 2, :, :, kc), [1, 1], [nR, nZ], &
+               unit = 'G', comment = 'physical phi component of coil field for I_c = 0.1 A')
+          call h5_add(h5id_root, modename // '/' // coilname // '/Bn_Z', &
+               Bn(ntor, 3, :, :, kc), [1, 1], [nR, nZ], &
+               unit = 'G', comment = 'Z component of coil field for I_c = 0.1 A')
+       end do
+    end do
+    call h5_close(h5id_root)
+    if (allocated(Bn)) deallocate(Bn)
+  end subroutine AUG_coils_write_Fourier
+
+  subroutine Biot_Savart_Fourier(ncoil, nseg, nwind, XYZ, &
+       Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ, Bn)
+    use iso_c_binding
+    use constants, only: pi  ! orbit_mod.f90
+    use magdif_conf, only: log
+    use magdif_util, only: linspace
+    include 'fftw3.f03'
+    integer, intent(in) :: ncoil, nseg, nwind
+    real(dp), intent(in), dimension(:, :, :) :: XYZ
+    real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
+    integer, intent(in) :: nR, nphi, nZ
+    complex(dp), intent(out), dimension(:, :, :, :, :), allocatable :: Bn
+    integer :: nmax, nfft, kc, ks, kR, kphi, kZ
+    real(dp), dimension(nphi) :: phi, cosphi, sinphi
+    real(dp) :: R(nR), Z(nZ), rXYZ(3), crXYZ(3), BXYZ(3)
+    real(dp), dimension(size(XYZ, 1), size(XYZ, 2), size(XYZ, 3)) :: cXYZ, dXYZ
+    type(c_ptr) :: plan_R, plan_phi, plan_Z, p_BR, p_Bphi, p_BZ, p_BnR, p_Bnphi, p_BnZ
+    real(c_double), dimension(:), pointer :: BR, Bphi, BZ
+    complex(c_double_complex), dimension(:), pointer :: BnR, Bnphi, BnZ
+
+    nmax = nphi / 4
+    nfft = nphi / 2 + 1
+    R(:) = linspace(Rmin, Rmax, nR, 0, 0)
+    phi(:) = linspace(0d0, 2d0 * pi, nphi, 0, 0)
+    cosphi(:) = cos(phi)
+    sinphi(:) = sin(phi)
+    Z(:) = linspace(Zmin, Zmax, nZ, 0, 0)
+    if (3 /= size(XYZ, 1)) then
+       call log%msg_arg_size('Biot_Savart_Fourier', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (nseg /= size(XYZ, 2)) then
+       call log%msg_arg_size('Biot_Savart_Fourier', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (2 * ncoil /= size(XYZ, 3)) then
+       call log%msg_arg_size('Biot_Savart_Fourier', '2 * ncoil', 'size(XYZ, 3)', &
+            2 * ncoil, size(XYZ, 3))
+       if (log%err) call log%write
+       error stop
+    end if
+    cXYZ(:, :nseg-1, :) = 0.5d0 * (XYZ(:, 2:, :) + XYZ(:, :nseg-1, :))
+    cXYZ(:, nseg, :) = 0.5d0 * (XYZ(:, 1, :) + XYZ(:, nseg, :))
+    dXYZ(:, :nseg-1, :) = XYZ(:, 2:, :) - XYZ(:, :nseg-1, :)
+    dXYZ(:, nseg, :) = XYZ(:, 1, :) - XYZ(:, nseg, :)
+    allocate(Bn(0:nmax, 3, nR, nZ, 2 * ncoil))
+    ! prepare FFTW
+    p_BR = fftw_alloc_real(int(nphi, c_size_t))
+    call c_f_pointer(p_BR, BR, [nphi])
+    p_Bphi = fftw_alloc_real(int(nphi, c_size_t))
+    call c_f_pointer(p_Bphi, Bphi, [nphi])
+    p_BZ = fftw_alloc_real(int(nphi, c_size_t))
+    call c_f_pointer(p_BZ, BZ, [nphi])
+    p_BnR = fftw_alloc_complex(int(nfft, c_size_t))
+    call c_f_pointer(p_BnR, BnR, [nfft])
+    p_Bnphi = fftw_alloc_complex(int(nfft, c_size_t))
+    call c_f_pointer(p_Bnphi, Bnphi, [nfft])
+    p_BnZ = fftw_alloc_complex(int(nfft, c_size_t))
+    call c_f_pointer(p_BnZ, BnZ, [nfft])
+    plan_R = fftw_plan_dft_r2c_1d(nphi, BR, BnR, ior(FFTW_PATIENT, FFTW_DESTROY_INPUT))
+    plan_phi = fftw_plan_dft_r2c_1d(nphi, Bphi, Bnphi, ior(FFTW_PATIENT, FFTW_DESTROY_INPUT))
+    plan_Z = fftw_plan_dft_r2c_1d(nphi, BZ, BnZ, ior(FFTW_PATIENT, FFTW_DESTROY_INPUT))
+    do kc = 1, 2 * ncoil
+       do kZ = 1, nZ
+          do kR = 1, nR
+             ! sample points toroidally
+             do kphi = 1, nphi
+                rXYZ(:) = [R(kR) * cosphi(kphi), R(kR) * sinphi(kphi), Z(kZ)]
+                BR(kphi) = 0d0
+                Bphi(kphi) = 0d0
+                BZ(kphi) = 0d0
+                ! Biot-Savart integral over coil segments
+                do ks = 1, nseg
+                   crXYZ(:) = rXYZ(:) - cXYZ(:, ks, kc)
+                   BXYZ(:) = nwind / sqrt(sum(crXYZ ** 2)) ** 3 * &
+                        [dXYZ(2, ks, kc) * crXYZ(3) - dXYZ(3, ks, kc) * crXYZ(2), &
+                        dXYZ(3, ks, kc) * crXYZ(1) - dXYZ(1, ks, kc) * crXYZ(3), &
+                        dXYZ(1, ks, kc) * crXYZ(2) - dXYZ(2, ks, kc) * crXYZ(1)]
+                   BR(kphi) = BR(kphi) + BXYZ(2) * sinphi(kphi) + BXYZ(1) * cosphi(kphi)
+                   Bphi(kphi) = Bphi(kphi) + BXYZ(2) * cosphi(kphi) - BXYZ(1) * sinphi(kphi)
+                   BZ(kphi) = BZ(kphi) + BXYZ(3)
+                end do
+             end do
+             call fftw_execute_dft_r2c(plan_R, BR, BnR)
+             call fftw_execute_dft_r2c(plan_phi, Bphi, Bnphi)
+             call fftw_execute_dft_r2c(plan_Z, BZ, BnZ)
+             Bn(0:nmax, 1, kR, kZ, kc) = BnR(1:nmax+1) / dble(nphi)
+             Bn(0:nmax, 2, kR, kZ, kc) = Bnphi(1:nmax+1) / dble(nphi)
+             Bn(0:nmax, 3, kR, kZ, kc) = BnZ(1:nmax+1) / dble(nphi)
+          end do
+       end do
+    end do
+    call fftw_destroy_plan(plan_R)
+    call fftw_destroy_plan(plan_phi)
+    call fftw_destroy_plan(plan_Z)
+    call fftw_free(p_BR)
+    call fftw_free(p_Bphi)
+    call fftw_free(p_BZ)
+    call fftw_free(p_BnR)
+    call fftw_free(p_Bnphi)
+    call fftw_free(p_BnZ)
+    ! nullify pointers past this point
+  end subroutine Biot_Savart_Fourier
+
   subroutine vector_potential_single_mode(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
     use bdivfree_mod, only: nR_mod => nr, nZ_mod => nz, Rmin_mod => rmin, Zmin_mod => zmin, &
          ntor, icp, ipoint, hr, hz, rpoi, zpoi, aznre, aznim, arnre, arnim
@@ -922,8 +1095,60 @@ contains
     end subroutine check_error
   end subroutine read_Bnvac_GPEC
 
+  subroutine read_Bnvac_Fourier(directory, ntor, Ic, nR, nZ, Rmin, Rmax, Zmin, Zmax, &
+       Bnvac_R, Bnvac_Z)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    use magdif_conf, only: log
+    character(len = *), intent(in) :: directory
+    integer, intent(in) :: ntor
+    real(dp), intent(in), dimension(:) :: Ic
+    integer, intent(out) :: nR, nZ
+    real(dp), intent(out) :: Rmin, Rmax, Zmin, Zmax
+    complex(dp), intent(out), dimension(:, :), allocatable :: Bnvac_R, Bnvac_Z
+    character(len = 1024) :: filename
+    logical :: file_exists
+    integer :: kc, ncoil
+    integer(HID_T) :: h5id_root
+    character(len = 7) :: modename, coilname
+    complex(dp), dimension(:, :), allocatable :: Bn
+
+    filename = trim(adjustl(directory)) // '/AUG_B_coils.h5'
+    inquire(file = filename, exist = file_exists)
+    if (.not. file_exists) then
+       write (log%msg, '("File ", a, " not found, cannot read vacuum perturbation field.")') &
+         trim(filename)
+       if (log%err) call log%write
+       error stop
+    end if
+    call h5_open(filename, h5id_root)
+    write (modename, '("ntor_", i2.2)') ntor
+    call h5_get(h5id_root, modename // '/R_min', Rmin)
+    call h5_get(h5id_root, modename // '/R_max', Rmax)
+    call h5_get(h5id_root, modename // '/Z_min', Zmin)
+    call h5_get(h5id_root, modename // '/Z_max', Zmax)
+    call h5_get(h5id_root, modename // '/nR', nR)
+    call h5_get(h5id_root, modename // '/nZ', nZ)
+    call h5_get(h5id_root, modename // '/ncoil', ncoil)
+    if (2 * ncoil /= size(Ic)) then
+       call log%msg_arg_size('read_Bnvac_Fourier', '2 * ncoil', 'size(Ic)', &
+            2 * ncoil, size(Ic))
+       if (log%err) call log%write
+       error stop
+    end if
+    allocate(Bnvac_R(nR, nZ), Bnvac_Z(nR, nZ), Bn(nR, nZ))
+    do kc = 1, 2 * ncoil
+       write (coilname, '("coil_", i2.2)') kc
+       call h5_get(h5id_root, modename // '/' // coilname // '/Bn_R', Bn)
+       Bnvac_R(:, :) = Bnvac_R + Ic(kc) * Bn
+       call h5_get(h5id_root, modename // '/' // coilname // '/Bn_Z', Bn)
+       Bnvac_Z(:, :) = Bnvac_Z + Ic(kc) * Bn
+    end do
+    call h5_close(h5id_root)
+    if (allocated(Bn)) deallocate(Bn)
+  end subroutine read_Bnvac_Fourier
+
   subroutine compute_Bnvac(Bn)
-    use magdif_conf, only: conf, log, vac_src_nemov, vac_src_gpec
+    use magdif_conf, only: conf, log, vac_src_nemov, vac_src_gpec, vac_src_fourier
     use magdif_util, only: gauss_legendre_unit_interval, imun
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
@@ -940,8 +1165,11 @@ contains
        call read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
     case (vac_src_gpec)
        call read_Bnvac_GPEC(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
+    case (vac_src_fourier)
+       call read_Bnvac_Fourier('.', conf%n, conf%Ic, &
+            nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
     case default
-       write (log%msg, '("unknown vacuum field source selection", i0)') conf%pres_prof
+       write (log%msg, '("unknown vacuum field source selection", i0)') conf%vac_src
        if (log%err) call log%write
        error stop
     end select

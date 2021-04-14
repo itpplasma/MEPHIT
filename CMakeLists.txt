@@ -112,6 +112,7 @@ set(MAGDIF_LIBS
   ${fgsl_lib}
   blas
   lapack
+  fftw3
 )
 target_link_libraries(magdif ${MAGDIF_LIBS})
 

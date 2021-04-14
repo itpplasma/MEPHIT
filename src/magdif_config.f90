@@ -8,7 +8,7 @@ module magdif_conf
   public :: magdif_config, magdif_config_read, magdif_config_delayed, magdif_log, conf, &
        conf_arr, log, runmode_single, runmode_direct, runmode_precon, pres_prof_eps, &
        pres_prof_par, pres_prof_geqdsk, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
-       q_prof_flux, q_prof_rot, q_prof_geqdsk, vac_src_nemov, vac_src_gpec, &
+       q_prof_flux, q_prof_rot, q_prof_geqdsk, vac_src_nemov, vac_src_gpec, vac_src_fourier, &
        decorate_filename, longlines, cmplx_fmt, nl_fmt, datafile
 
   character(len = *), parameter :: cmplx_fmt = 'es24.16e3, 1x, sp, es24.16e3, s, " i"'
@@ -33,8 +33,9 @@ module magdif_conf
   integer, parameter :: q_prof_rot = 1    !< q profile from rotational transform
   integer, parameter :: q_prof_geqdsk = 2 !< q profile from G EQDSK file
 
-  integer, parameter :: vac_src_nemov = 0 !< vacuum field perturbation from Viktor Nemov's code
-  integer, parameter :: vac_src_gpec = 1  !< vacuum field perturbation from GPEC
+  integer, parameter :: vac_src_nemov = 0   !< vacuum field perturbation from Viktor Nemov's code
+  integer, parameter :: vac_src_gpec = 1    !< vacuum field perturbation from GPEC
+  integer, parameter :: vac_src_fourier = 2 !< vacuum field perturbation from precomputed Fourier modes
 
   type :: magdif_config
 
@@ -70,6 +71,9 @@ module magdif_conf
 
      !> Average over quadrilaterals for non-resonant test case. Defaults to true.
      logical :: quad_avg = .true.
+
+     !> Coil currents for AUG B coils; upper coils come first
+     real(dp), dimension(16) :: Ic = 0d0
 
      !> Number of iterations. Does not apply when #runmode equals #runmode_single.
      !> Defaults to 20.

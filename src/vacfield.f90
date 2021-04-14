@@ -1,58 +1,55 @@
 program vacfield
 
   use iso_fortran_env, only: dp => real64
+  use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
   use magdif_conf, only: log, magdif_log
   use magdif_pert, only: AUG_coils_read, AUG_coils_write_Nemov, AUG_coils_read_Nemov, &
-       AUG_coils_write_GPEC, AUG_coils_read_GPEC
+       AUG_coils_write_GPEC, AUG_coils_read_GPEC, AUG_coils_write_Fourier
 
   implicit none
 
-  integer :: argc, nseg, ncoil, nwind, ind
-  character(len = 1024) :: executable, operation, input, output
+  integer :: argc, nseg, ncoil, nwind
+  character(len = 1024) :: in_type, out_type, in_dir, out_dir
   real(dp), allocatable :: XYZ(:, :, :)
 
   argc = command_argument_count()
-  if (argc >= 2) then
-     call get_command_argument(1, operation)
-     call get_command_argument(2, input)
-     if (argc >= 3) then
-        call get_command_argument(3, output)
-     else
-        output = input
-     end if
+  if (argc >= 4) then
+     call get_command_argument(1, in_type)
+     call get_command_argument(2, out_type)
+     call get_command_argument(3, in_dir)
+     call get_command_argument(4, out_dir)
   else
-     call get_command_argument(0, executable)
-     print '("Convert RMP coil geometry file formats.")'
-     print '("Syntax: ", a, " operation source-directory [target-directory]")', trim(executable)
-     print '("where operation is one of: AUG2GPEC, AUG2Nemov, GPEC2Nemov, Nemov2GPEC")'
-     print '("When target-directory is omitted, it is assumed to be the same as source-directory.")'
-     error stop 'Not enough command line arguments'
+     error stop 'Expected 4 command line arguments, see documentation'
   endif
   log = magdif_log('-', 4, .false.)
 
-  input = adjustl(input)
-  ind = len_trim(input)
-  if (input(ind:ind) == '/') input(ind:ind) = ' '
-  ind = len_trim(output)
-  output = adjustl(output)
-  if (output(ind:ind) == '/') output(ind:ind) = ' '
-  if (operation == 'AUG2GPEC') then
-     call AUG_coils_read(trim(input), ncoil, nseg, nwind, XYZ)
-     call AUG_coils_write_GPEC(trim(output), ncoil, nseg, nwind, XYZ)
-  else if (operation == 'AUG2Nemov') then
-     call AUG_coils_read(trim(input), ncoil, nseg, nwind, XYZ)
-     call AUG_coils_write_Nemov(trim(output), ncoil, nseg, XYZ)
-  else if (operation == 'GPEC2Nemov') then
-     call AUG_coils_read_GPEC(trim(input), ncoil, nseg, nwind, XYZ)
-     call AUG_coils_write_Nemov(trim(output), ncoil, nseg, XYZ)
-  else if (operation == 'Nemov2GPEC') then
-     call AUG_coils_read_Nemov(trim(input), ncoil, nseg, nwind, XYZ)
-     call AUG_coils_write_GPEC(trim(output), ncoil, nseg, nwind, XYZ)
+  call h5_init
+  h5overwrite = .true.
+  if (in_type == 'AUG') then
+     call AUG_coils_read(trim(in_dir), ncoil, nseg, nwind, XYZ)
+  else if (in_type == 'GPEC') then
+     call AUG_coils_read_GPEC(trim(in_dir), ncoil, nseg, nwind, XYZ)
+  else if (in_type == 'Nemov') then
+     call AUG_coils_read_Nemov(trim(in_dir), ncoil, nseg, nwind, XYZ)
   else
-     write (log%msg, '("unknown operation ", a)') trim(operation)
+     write (log%msg, '("unknown input type ", a)') trim(in_type)
+     if (log%err) call log%write
+     error stop
+  end if
+  if (out_type == 'Fourier') then
+     ! use default values for now
+     call AUG_coils_write_Fourier(trim(out_dir), ncoil, nseg, nwind, XYZ, &
+          75.0d0, 267.0d0, -154.0d0, 150.4d0, 150, 256, 300)
+  else if (out_type == 'GPEC') then
+     call AUG_coils_write_GPEC(trim(out_dir), ncoil, nseg, nwind, XYZ)
+  else if (out_type == 'Nemov') then
+     call AUG_coils_write_Nemov(trim(out_dir), ncoil, nseg, XYZ)
+  else
+     write (log%msg, '("unknown output type ", a)') trim(out_type)
      if (log%err) call log%write
      error stop
   end if
   if (allocated(XYZ)) deallocate(XYZ)
+  call h5_deinit
 
 end program vacfield
