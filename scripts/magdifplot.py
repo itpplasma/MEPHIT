@@ -13,8 +13,12 @@ import netCDF4
 from h5py import get_config as h5py_hack
 import h5pickle as h5py
 import f90nml.parser
-import matplotlib
-import matplotlib.pyplot as plt
+from cycler import cycler
+from matplotlib import rcParams
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.tri import Triangulation
+from matplotlib.colors import Normalize
 import colorcet
 import numpy as np
 from scipy import interpolate
@@ -25,22 +29,22 @@ scripts_dir = path.dirname(path.realpath(__file__))
 
 # complex values are stored as compound types in libneo/hdf5tools
 h5py_hack().complex_names = ('real', 'imag')
-matplotlib.rcParams['text.usetex'] = True
-matplotlib.rcParams['font.family'] = 'serif'
-matplotlib.rcParams['mathtext.fontset'] = 'cm'
+
+# matplotlib default configuration
+rcParams['text.usetex'] = True
+rcParams['font.family'] = 'serif'
+rcParams['mathtext.fontset'] = 'cm'
+rcParams['figure.constrained_layout.use'] = True
+rcParams['xtick.direction'] = 'in'
+rcParams['xtick.top'] = True
+rcParams['ytick.direction'] = 'in'
+rcParams['ytick.right'] = True
+rcParams['lines.linewidth'] = 0.75
+rcParams['axes.formatter.limits'] = (-3, 4)
+rcParams['axes.prop_cycle'] = (cycler('color', ['k', 'tab:orange', 'tab:purple', 'tab:olive', 'tab:cyan']) +
+                               cycler('ls', ['-', '--', ':', '-.', (0, (5, 1.2, 1, 1.2, 1, 1.2))]))
 latex_preamble = path.join(scripts_dir, 'magdifplot.tex')
-matplotlib.rcParams['text.latex.preamble'] = fr"\input{{{latex_preamble}}}"
-matplotlib.use('Agg')
-# =============================================================================
-# pgf_config = {
-#     'pgf.texsystem': 'lualatex',
-#     'pgf.rcfonts': False,
-#     'pgf.preamble': fr"\input{{{latex_preamble}}}"
-# }
-# from matplotlib.backends.backend_pgf import FigureCanvasPgf
-# matplotlib.backend_bases.register_backend('pdf', FigureCanvasPgf)
-# matplotlib.rcParams.update(pgf_config)
-# =============================================================================
+rcParams['text.latex.preamble'] = fr"\input{{{latex_preamble}}}"
 
 c_cgs = 2.9979246e+10
 cm_to_m = 1.0e-02
@@ -51,10 +55,6 @@ c1_statA_per_cm2_to_A_per_m2 = c1_statA_to_A / cm_to_m ** 2
 statA_to_A = c1_statA_to_A / c_cgs
 statA_per_cm2_to_A_per_m2 = c1_statA_per_cm2_to_A_per_m2 / c_cgs
 
-def scifmt():
-    fmt = matplotlib.ticker.ScalarFormatter()
-    fmt.set_powerlimits((-3, 4))
-    return fmt
 
 class magdif_2d_triplot:
     def __init__(self, triangulation, data, label, filename, title=None,
@@ -71,19 +71,19 @@ class magdif_2d_triplot:
 
     def dump_plot(self):
         print(f"plotting {self.filename}")
-        plt.figure(figsize=(3.3, 4.4))
-        plt.tripcolor(self.triangulation, self.data, cmap=colorcet.cm.coolwarm)
-        plt.gca().set_aspect('equal')
-        cbar = plt.colorbar(format=scifmt())
+        fig = Figure(figsize=(3.3, 4.4))
+        ax = fig.subplots()
+        im = ax.tripcolor(self.triangulation, self.data, cmap=colorcet.cm.coolwarm)
+        ax.set_aspect('equal')
+        cbar = fig.colorbar(im)
         cbar.set_label(self.label, rotation=90)
-        plt.clim([-max(abs(self.data)) * self.clim_scale[0],
-                  max(abs(self.data)) * self.clim_scale[1]])
-        plt.xlabel(r'$R$ / cm')
-        plt.ylabel(r'$Z$ / cm')
+        im.set_clim([-max(abs(self.data)) * self.clim_scale[0], max(abs(self.data)) * self.clim_scale[1]])
+        ax.set_xlabel(r'$R$ / cm')
+        ax.set_ylabel(r'$Z$ / cm')
         if self.title is not None:
-            plt.title(self.title)
-        plt.savefig(self.filename, dpi=300)
-        plt.close()
+            ax.set_title(self.title)
+        canvas = FigureCanvas(fig)
+        fig.savefig(self.filename, dpi=300)
 
 
 class magdif_2d_rectplots:
@@ -104,7 +104,8 @@ class magdif_2d_rectplots:
         print(f"plotting {self.filename}")
         xlim = (min(R[0] for R in self.R), max(R[-1] for R in self.R))
         ylim = (min(Z[0] for Z in self.Z), max(Z[-1] for Z in self.Z))
-        fig, axs = plt.subplots(1, 2, sharex=True, sharey=True, figsize=(10.0, 5.0))
+        fig = Figure(figsize=(10.0, 5.0))
+        axs = fig.subplots(1, 2, sharex='all', sharey='all')
         images = []
         for k in range(2):
             images.append(axs[k].imshow(self.data[k], cmap=colorcet.cm.coolwarm, interpolation='gaussian',
@@ -124,16 +125,16 @@ class magdif_2d_rectplots:
         else:
             clim = (min(np.amin(image.get_array()) for image in images) * self.clim_scale[0],
                     max(np.amax(image.get_array()) for image in images) * self.clim_scale[1])
-        norm = matplotlib.colors.Normalize(vmin=clim[0], vmax=clim[1])
+        norm = Normalize(vmin=clim[0], vmax=clim[1])
         for im in images:
             im.set_norm(norm)
         for k in range(2):
             axs[k].contour(self.R[k], self.Z[k], self.data[k], np.linspace(clim[0], clim[1], 10),
                            colors='k', linewidths=0.1)
-        cbar = fig.colorbar(images[0], ax=axs, format=scifmt())
+        cbar = fig.colorbar(images[0], ax=axs)
         cbar.set_label(self.label, rotation=90)
-        plt.savefig(self.filename, dpi=300)
-        plt.close()
+        canvas = FigureCanvas(fig)
+        fig.savefig(self.filename, dpi=300)
 
 
 class magdif_1d_cutplot:
@@ -147,14 +148,14 @@ class magdif_1d_cutplot:
 
     def dump_plot(self):
         print(f"plotting {self.filename}")
-        plt.figure(figsize=(6.6, 3.6))
-        plt.plot(self.x, self.y, '-k')
-        plt.ticklabel_format(style='sci', scilimits=(-3, 4))
-        plt.xlabel(self.xlabel)
-        plt.ylabel(self.ylabel)
-        plt.title(self.title)
-        plt.savefig(self.filename)
-        plt.close()
+        fig = Figure(figsize=(6.6, 3.6))
+        ax = fig.subplots()
+        ax.plot(self.x, self.y, '-k')
+        ax.set_xlabel(self.xlabel)
+        ax.set_ylabel(self.ylabel)
+        ax.set_title(self.title)
+        canvas = FigureCanvas(fig)
+        fig.savefig(self.filename)
 
 
 class magdif_conv_plot:
@@ -172,37 +173,31 @@ class magdif_conv_plot:
         L2int_Bnvac = self.data['/iter/L2int_Bnvac'][()]
         L2int_Bn_diff = self.data['/iter/L2int_Bn_diff'][()]
         kiter = np.arange(0, len(L2int_Bn_diff))
-        plt.figure(figsize=(6.6, 3.6))
-        plt.semilogy(
-                kiter, L2int_Bnvac * sup_eigval ** kiter, 'r-',
-                label=r'$\lvert \lambda_{\text{max}} \rvert^{k}'
-                + r' \lVert \mathbf{B}_{n}^{(0)} \rVert_{2}$'
-        )
-        plt.semilogy(
-                kiter, L2int_Bn_diff, 'xk',
-                label=r'$\lVert \delta \mathbf{B}_{n}^{(k)} \rVert_{2}$'
-        )
+        fig = Figure(figsize=(6.6, 3.6))
+        ax = fig.subplots()
+        ax.semilogy(kiter, L2int_Bnvac * sup_eigval ** kiter, 'r-',
+                    label=r'$\lvert \lambda_{\text{max}} \rvert^{k} \lVert \mathbf{B}_{n}^{(0)} \rVert_{2}$')
+        ax.semilogy(kiter, L2int_Bn_diff, 'xk', label=r'$\lVert \delta \mathbf{B}_{n}^{(k)} \rVert_{2}$')
         if self.xlim is not None:
-            plt.xlim(self.xlim)
+            ax.set_xlim(self.xlim)
         if self.ylim is not None:
-            plt.ylim(self.ylim)
-        plt.gca().legend(loc='upper right')
-        plt.xticks(kiter)
-        plt.xlabel('iteration step $k$')
-        plt.ylabel(r'$\lVert R \mathbf{B}^{\text{pol}} \rVert_{2}$ / \si{\maxwell}')
+            ax.set_ylim(self.ylim)
+        ax.legend(loc='upper right')
+        ax.set_xticks(kiter)
+        ax.set_xlabel('iteration step $k$')
+        ax.set_ylabel(r'$\lVert R \mathbf{B}^{\text{pol}} \rVert_{2}$ / \si{\maxwell}')
         if self.title is not None:
-            plt.title(self.title)
+            ax.set_title(self.title)
         else:
-            plt.title('estimation of convergence')
-
-        plt.tight_layout()
-        plt.savefig(self.filename)
-        plt.close()
+            ax.set_title('estimation of convergence')
+        canvas = FigureCanvas(fig)
+        fig.savefig(self.filename)
 
 
 class fslabel(Enum):
     psi_norm = r'normalized poloidal flux $\hat{\psi}$'
     r = r'minor radius $r$ / \si{\centi\meter}'
+
 
 class polmodes:
     def __init__(self, label, fmt):
@@ -275,8 +270,7 @@ class polmodes:
 
 
 class magdif_poloidal_plots:
-    def __init__(self, datadir, filename, config, data, rad_coord, ylabel,
-                 comp, *poldata):
+    def __init__(self, datadir, filename, config, data, rad_coord, ylabel, comp, *poldata):
         self.datadir = datadir
         self.filename = filename
         self.config = config
@@ -304,21 +298,18 @@ class magdif_poloidal_plots:
 
     def dump_plot(self):
         sgn_m_res = -np.sign(self.data['/cache/fs/q'][-1])
-        m_res = range(self.data['/mesh/m_res_min'][()],
-                      self.data['/mesh/m_res_max'][()] + 1) * sgn_m_res
+        m_res = np.arange(self.data['/mesh/m_res_min'][()],
+                          self.data['/mesh/m_res_max'][()] + 1) * sgn_m_res
         if self.rad_coord is fslabel.psi_norm:
             rho = self.data['/cache/fs/psi']
-            resonance = dict(zip(m_res, (self.data['/mesh/psi_res'] - rho[0]) /
-                                 (rho[-1] - rho[0])))
+            resonance = dict(zip(m_res, (self.data['/mesh/psi_res'] - rho[0]) / (rho[-1] - rho[0])))
             # normalize psi
             rho = (rho - rho[0]) / (rho[-1] - rho[0])
         else:
             rho = self.data['/cache/fs/rad'][()]
-            resonance = dict(zip(m_res, self.data['/mesh/rad_norm_res'] *
-                                 rho[-1]))
+            resonance = dict(zip(m_res, self.data['/mesh/rad_norm_res'] * rho[-1]))
 
-        fmt = path.basename(path.splitext(self.filename)[0] + '_{}' +
-                            path.splitext(self.filename)[1])
+        fmt = path.basename(path.splitext(self.filename)[0] + '_{}' + path.splitext(self.filename)[1])
         horz_plot = 2
         vert_plot = 1
         two_squares = (6.6, 3.3)
@@ -327,58 +318,48 @@ class magdif_poloidal_plots:
         for m_abs in range(1, m_max + 1):
             filename = fmt.format(m_abs)
             print(f"plotting {filename}")
-            fig, axs = plt.subplots(vert_plot, horz_plot, sharex=True,
-                                    sharey=True, figsize=two_squares)
+            fig = Figure(figsize=two_squares)
+            axs = fig.subplots(vert_plot, horz_plot, sharex='all', sharey='all')
             for k in range(horz_plot):
                 m = (2 * k - 1) * m_abs
                 axs[k].axhline(0.0, color='k', alpha=0.5, lw=0.5)
                 if m in resonance and not self.omit_res:
-                    axs[k].axvline(resonance[m], color='b', alpha=0.5,
-                                   label='resonance position', lw=0.5)
+                    axs[k].axvline(resonance[m], color='b', alpha=0.5, lw=0.5, label='resonance position')
                 for data in self.poldata:
                     if m in data.var:
-                        axs[k].plot(self.interp_rho(data, m),
-                                    self.comp(data.var[m]),
-                                    data.fmt, label=data.label, lw=0.5)
+                        axs[k].plot(self.interp_rho(data, m), self.comp(data.var[m]), data.fmt, label=data.label)
                 axs[k].legend(fontsize='x-small')
-                axs[k].ticklabel_format(style='sci', scilimits=(-3, 4))
-                axs[k].set_title(('resonant ' if m in resonance else
-                                  'non-resonant ') + fr"$m = {m}$")
+                axs[k].set_title(('resonant ' if m in resonance else 'non-resonant ') + fr"$m = {m}$")
                 axs[k].set_xlabel(self.xlabel)
                 axs[k].set_ylabel(self.ylabel)
             axs[1].yaxis.set_tick_params(labelleft=True)
-            plt.tight_layout()
-            plt.savefig(path.join(self.datadir, filename))
-            plt.close()
+            canvas = FigureCanvas(fig)
+            fig.savefig(path.join(self.datadir, filename))
         # plot symmetric mode and safety factor
         m = 0
         filename = fmt.format(m)
         print(f"plotting {filename}")
-        plt.figure(figsize=two_squares)
-        ax = plt.subplot(vert_plot, horz_plot, 1)
+        fig = Figure(figsize=two_squares)
+        axs = fig.subplots(vert_plot, horz_plot)
         for data in self.poldata:
             if m in data.var:
-                ax.plot(self.interp_rho(data, m), self.comp(data.var[m]),
-                        data.fmt, label=data.label, lw=0.5)
-        ax.legend(fontsize='x-small')
-        ax.ticklabel_format(style='sci', scilimits=(-3, 4))
-        ax.set_title(f"$m = {m}$")
-        ax.set_xlabel(self.xlabel)
-        ax.set_ylabel(self.ylabel)
-        ax = plt.subplot(vert_plot, horz_plot, 2)
+                axs[0].plot(self.interp_rho(data, m), self.comp(data.var[m]), data.fmt, label=data.label)
+        axs[0].legend(fontsize='x-small')
+        axs[0].set_title(f"$m = {m}$")
+        axs[0].set_xlabel(self.xlabel)
+        axs[0].set_ylabel(self.ylabel)
         for res in resonance.values():
-            ax.axvline(np.abs(res), color='b', alpha=0.5, lw=0.5)
+            axs[1].axvline(np.abs(res), color='b', alpha=0.5, lw=0.5)
         q = self.data['/cache/fs/q'][()]
-        ax.plot(rho, q, 'k-')
-        if (np.any(q > 0.0)):
-            ax.set_ylim(bottom=0.0)
+        axs[1].plot(rho, q, 'k-')
+        if np.any(q > 0.0):
+            axs[1].set_ylim(bottom=0.0)
         else:
-            ax.set_ylim(top=0.0)
-        ax.set_xlabel(self.xlabel)
-        ax.set_ylabel(r'$q$')
-        plt.tight_layout()
-        plt.savefig(path.join(self.datadir, filename))
-        plt.close()
+            axs[1].set_ylim(top=0.0)
+        axs[1].set_xlabel(self.xlabel)
+        axs[1].set_ylabel(r'$q$')
+        canvas = FigureCanvas(fig)
+        fig.savefig(path.join(self.datadir, filename))
 
 
 class parcurr:
@@ -444,7 +425,6 @@ class parcurr:
                 if symfluxcoord:
                     self.GPEC[m][w] = -1j / m * self.Ichar[m][mid] * (
                             self.Delta[m][hi] - self.Delta[m][lo]) * statA_to_A
-
 
     def process_KiLCA(self, datafile, nrad):
         self.rad = {}
@@ -515,7 +495,7 @@ class parcurr:
         self.I_res = {}
         self.w_isl = {}
         for k, m in enumerate(range(m_min, m_max + 1)):
-            self.I_res[m] = np.complex(rootgrp.variables['I_res'][0, k],
+            self.I_res[m] = np.cdouble(rootgrp.variables['I_res'][0, k],
                                        rootgrp.variables['I_res'][1, k])
             self.w_isl[m] = rootgrp.variables['w_isl'][k]
 
@@ -548,9 +528,8 @@ class magdif:
     def read_datafile(self):
         print(f"reading contents of {self.datafile}")
         self.data = h5py.File(path.join(self.datadir, self.datafile), 'r')
-        self.triangulation = matplotlib.tri.Triangulation(
-            self.data['/mesh/node_R'], self.data['/mesh/node_Z'],
-            self.data['/mesh/tri_node'][()] - 1)
+        self.triangulation = Triangulation(self.data['/mesh/node_R'], self.data['/mesh/node_Z'],
+                                           self.data['/mesh/tri_node'][()] - 1)
 
     def read_convexwall(self, file=scripts_dir+'/../data/convexwall.asdex'):
         print(f"reading contents of {file}")

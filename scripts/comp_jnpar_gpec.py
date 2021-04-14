@@ -9,7 +9,8 @@ Created on Mon Nov 16 10:19:58 2020
 from magdifplot import parcurr
 import numpy as np
 import h5py
-from matplotlib import pyplot as plt
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from os import path
 
 canvas = (6.6, 3.6)
@@ -35,25 +36,21 @@ gpec.process_GPEC(path.join(work_dir, 'gpec_profile_output_n2.nc'))
 
 for m in range(m_min, m_max + 1):
     # plots
-    plt.figure(figsize=canvas)
-    plt.axhline(np.abs(gpec.I_res[m]), lw=0.25 * thin, color='k', label='GPEC')
-    plt.plot(mephit.width[m], np.abs(mephit.intJ[m]), '--b', lw=thin,
-             label='J, symfluxcoord.')
+    fig = Figure(figsize=canvas)
+    ax = fig.subplots()
+    ax.axhline(np.abs(gpec.I_res[m]), lw=0.25 * thin, color='k', label='GPEC')
+    ax.plot(mephit.width[m], np.abs(mephit.intJ[m]), '--b', lw=thin, label='J, symfluxcoord.')
 # =============================================================================
-#     plt.plot(mephit.width[m], np.abs(mephit.intB[m] + mephit.bndryB[m]), '-.c', lw=thin,
-#              label='B, symfluxcoord.')
-#     plt.plot(mephit.width[m], np.abs(mephit.intB[m]), '--c', lw=thin,
-#              label='B, symfluxcoord., part.int.')
+#     ax.plot(mephit.width[m], np.abs(mephit.intB[m] + mephit.bndryB[m]), '-.c', lw=thin, label='B, symfluxcoord.')
+#     ac.plot(mephit.width[m], np.abs(mephit.intB[m]), '--c', lw=thin, label='B, symfluxcoord., part.int.')
 # =============================================================================
-    plt.plot(mephit.width[m], np.abs(mephit.bndryB[m]), ':c', lw=thin,
-             label='B, symfluxcoord, bndry.')
+    ax.plot(mephit.width[m], np.abs(mephit.bndryB[m]), ':c', lw=thin, label='B, symfluxcoord, bndry.')
 # =============================================================================
-#     plt.plot(mephit.width[m], np.abs(mephit.GPEC[m]), '--g', lw=thin,
-#              label=r'$\Delta_{mn}$')
+#     ac.plot(mephit.width[m], np.abs(mephit.GPEC[m]), '--g', lw=thin, label=r'$\Delta_{mn}$')
 # =============================================================================
-    plt.gca().legend(loc='lower left', fontsize='x-small')
-    plt.xlabel(r'layer width $d$ / \si{\centi\meter}')
-    plt.ylabel(r'parallel current $\lvert I_{m n}^{\parallel} \rvert$ / \si{\ampere}')
-    plt.title(f"Comparison: GPEC and MEPHIT (m = {m})")
-    plt.savefig(path.join(work_dir, f"cmp_Imnpar_{m}.png"), dpi=res)
-    plt.close()
+    ax.legend(loc='lower left', fontsize='x-small')
+    ax.set_xlabel(r'layer width $d$ / \si{\centi\meter}')
+    ax.set_ylabel(r'parallel current $\lvert I_{m n}^{\parallel} \rvert$ / \si{\ampere}')
+    ax.set_title(f"Comparison: GPEC and MEPHIT (m = {m})")
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(work_dir, f"cmp_Imnpar_{m}.png"), dpi=res)
