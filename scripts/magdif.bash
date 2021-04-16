@@ -103,6 +103,38 @@ magdif_init() {
     done
 }
 
+magdif_convert() {
+    in_type=$1
+    out_type=$2
+    in_dir=$3
+    out_dir=$4
+    if [ -z "$in_dir" ]; then
+        echo "$scriptname: expected directory at third position after convert"
+        anyerr=1
+        return
+    fi
+    if [ ! -d "$in_dir" ]; then
+        echo "$scriptname: directory $in_dir does not exist"
+        anyerr=1
+        return
+    fi
+    in_dir=$(absolutize "$in_dir")
+    if [ -n "$out_dir" ]; then
+        if [ ! -d "$out_dir" ]; then
+            mkdir -p "$out_dir"
+        fi
+        out_dir=$(absolutize "$out_dir")
+    else
+        out_dir=$in_dir
+    fi
+    "$bindir/vacfield.x" "$in_type" "$out_type" "$in_dir" "$out_dir"
+    lasterr=$?
+    if [ $lasterr -ne 0 ]; then
+        echo "$scriptname: error $lasterr during coil geometry / vacuum field conversion"
+        anyerr=$lasterr
+    fi
+}
+
 magdif_prepare() {
     config=magdif.inp
     log=magdif.log
@@ -112,11 +144,10 @@ magdif_prepare() {
 
     for workdir; do
         pushd "$workdir"
+        rm -f "$log"
         cp field_divB0_unprocessed.inp field_divB0.inp
         unprocessed=$(read_first_in_line field_divB0_unprocessed.inp 7)
         replace_first_in_line field_divB0.inp 7 "'\1_processed'"  # gfile
-        replace_first_in_line field_divB0.inp 1 0  # ipert
-        replace_first_in_line field_divB0.inp 2 1  # iequil
         "$bindir/magdif_mesher.x" "$config" "$unprocessed" 2>&1 | tee "$log"
         lasterr=$?
         if [ $lasterr -ne 0 ]; then
@@ -139,27 +170,6 @@ magdif_prepare() {
             anyerr=$lasterr
             continue
         fi
-        kilca_scale_factor=$(nml_read_integer "$config" config%kilca_scale_factor)
-        if [ -z "$kilca_scale_factor" ]; then
-            kilca_scale_factor=0
-        fi
-        if [ "$kilca_scale_factor" -eq 0 ]; then
-            replace_first_in_line field_divB0.inp 1 1  # ipert
-            # replace_first_in_line field_divB0.inp 2 0  # iequil
-            ## uncomment to use at most half of available RAM and go to swap instead
-            ## MemFree=$(sed -ne '/MemFree/ s/MemFree: *\([0-9]*\) kB/\1/gp' /proc/meminfo)
-            ## systemd-run --scope --user -p MemoryHigh=$((MemFree / 2048))M \
-            "$bindir/vacfield.x" "$config" 2>&1 | tee -a "$log"
-            lasterr=$?
-            replace_first_in_line field_divB0.inp 1 0  # ipert
-            # replace_first_in_line field_divB0.inp 2 1  # iequil
-            if [ $lasterr -ne 0 ]; then
-                echo "$scriptname: error $lasterr during mesh generation in $workdir" | tee -a "$log" >&2
-                popd
-                anyerr=$lasterr
-                continue
-            fi
-        fi
         popd
     done
 }
@@ -167,14 +177,39 @@ magdif_prepare() {
 magdif_run() {
     config=magdif.inp
     log=magdif.log
+    batchmode=false
+    TEMP=$(getopt -o 'b' --long 'batchmode' -n "$scriptname" -- "$@")
+    eval set -- "$TEMP"
+    unset TEMP
+    while true; do
+        case "$1" in
+            '-b'|'--batchmode')
+                batchmode=true
+                shift
+                continue
+                ;;
+            '--')
+                shift
+                break
+                ;;
+            *)
+                echo "$scriptname: unrecognized option '$1'" >&2
+                exit 1
+                ;;
+        esac
+    done
 
     for workdir; do
         pushd "$workdir"
-        rm -f magdif.log convergence.dat
-        "$bindir/magdif_test.x" "$config" "$scriptdir" 2>&1 | tee -a "$log"
+        "$bindir/magdif_run.x" \
+            "$bindir/magdif_test.x" \
+            "$config" \
+            "$tmpdir" \
+            "$scriptdir/maxwell_daemon.edp" \
+            2>&1 | tee -a "$log"
         lasterr=$?
-        if [ $lasterr -ne 0 ]; then
-            echo "$scriptname: error $lasterr during run in $workdir" | tee -a "$log" >&2
+        if [ "$lasterr" -ne 0 ]; then
+            echo "$scriptname: magdif_run.x exited with code $lasterr during run in $workdir" | tee -a "$log" >&2
             popd
             anyerr=$lasterr
             continue
@@ -185,14 +220,12 @@ magdif_run() {
 
 magdif_plot() {
     config=magdif.inp
+    data=magdif.h5
     log=magdif.log
-    # implement mesh file options when geomint_mesh.f90 is complete
-    mesh=inputformaxwell.msh
-    extended=inputformaxwell_ext.msh
 
     for workdir; do
         pushd "$workdir"
-        python3 "$scriptdir/magdifplot.py" . "$config" "$mesh" 2>&1 | tee -a "$log"
+        python3 "$scriptdir/magdifplot.py" $(absolutize .) "$config" "$data"
         popd
     done
 }
@@ -201,9 +234,9 @@ magdif_clean() {
     for workdir; do
         pushd "$workdir"
         # files from magdif_prepare
-        rm -f fort.* Bn_flux.dat inputformaxwell_ext.msh inputformaxwell.msh points.fmt mesh.dat mesh_new.asc box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat
+        rm -f fort.* magdif.h5 inputformaxwell_ext.msh inputformaxwell.msh box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat optpolres.dat j0_gs.dat j0_amp.dat cmp_prof.dat check_q_step.dat check_q_cont.dat cmp_vac.dat cmp_RT0.dat
         # files from magdif_run
-        rm -f fort.* plot*.dat fluxvar.dat j0phi.dat j0_gs.dat j0_amp.dat cmp_prof.dat Bn*.dat eigvec*.dat presn*.dat currn*.dat freefem.out convergence.dat rect*.dat *.log Bmn*.dat currmn*.dat
+        rm -f fort.* magdif.h5 freefem.out magdif.log Bmn*.dat currmn*.dat currn_par*.dat
         # files from magdif_plot
         rm -f plot*.pdf convergence.pdf Bmn*.pdf currmn*.pdf
         popd
@@ -218,12 +251,18 @@ magdif_help() {
 bindir=$(realpath $(dirname $0))
 scriptdir=$(realpath -m "$bindir/../../scripts")
 datadir=$(realpath -m "$bindir/../../data")
+if [ -d "@tmpdir@" ]; then
+    tmpdir=@tmpdir@
+else
+    tmpdir=/tmp
+fi
 
+set -m
 set -o pipefail
 scriptname=$0
 anyerr=0
 case "$1" in
-    init|prepare|run|plot|clean)
+    init|convert|prepare|run|plot|clean)
         mode=$1
         shift
         magdif_$mode "$@"

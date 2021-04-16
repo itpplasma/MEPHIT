@@ -40,27 +40,6 @@
    config%dens_min = 2d11
    ! damping factor for resonances
    config%damp = 0d0
-   ! meshdata file
-   config%meshdata_file = 'mesh.dat'
-   ! vacuum perturbation field
-   config%Bn_vac_file = 'Bn_flux.dat'
-
-   ! output vacuum perturbation field
-   config%Bn_vacout_file = 'Bn_vac.dat'
-   ! accumulated perturbation field from FEM
-   config%Bn_file = 'Bn.dat'
-   ! perturbation field from iterations
-   config%Bn_diff_file = 'Bn_diff.dat'
-   ! output file for flux variables
-   config%fluxvar_file = 'fluxvar.dat'
-   ! output file for equilibrium current
-   config%j0phi_file = 'j0phi.dat'
-   ! output file for pressure perturbation
-   config%presn_file = 'presn.dat'
-   ! output file for current perturbation
-   config%currn_file = 'currn.dat'
-   ! output file for eigenvectors
-   config%eigvec_file = 'eigvec.dat'
    ! maximal number of eigenvectors to be saved
    config%max_eig_out = 10
 

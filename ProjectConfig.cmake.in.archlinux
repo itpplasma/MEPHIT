@@ -1,16 +1,11 @@
+### Temporary directory
+set(tmpdir $XDG_RUNTIME_DIR)
+
 ### Installation directory
 set (CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
 
 ### Path to the external libraries
-set(PROJLIBS /proj/plasma/Libs)
-
+set(HDF5_tools_include_dir ${CMAKE_SOURCE_DIR}/../libneo/build)
+# should be changed to a less confusing path name...
+set(HDF5_tools_lib_dir ${CMAKE_SOURCE_DIR}/../libneo/build/src/hdf5_tools)
 set(FGSL_PATH /usr)
-
-set(SUPERLU_DIR ${PROJLIBS}/SuperLU_5.2.1/)
-set(SUPERLU_HDR ${SUPERLU_DIR}/SRC/)
-set(SUPERLU_F90 ${SUPERLU_DIR}/FORTRAN/)
-
-set(SUITESPARSE_DIR ${PROJLIBS}/SuiteSparse-4.5.5/)
-set(SUITESPARSE_LIB ${SUITESPARSE_DIR}/lib/)
-set(SUITESPARSE_HDR ${SUITESPARSE_DIR}/include/)
-set(SUITESPARSE_F90 ${SUITESPARSE_DIR}/UMFPACK/Demo/)

@@ -17,6 +17,7 @@ module field_c_mod
   integer :: ntor=16
   integer :: nr,np,nz
   integer :: icftype
+  double precision :: rmin,pmin,zmin,rmax,pmax,zmax
 end module field_c_mod
 !
 module field_eq_mod
@@ -612,7 +613,7 @@ subroutine field_c(rrr,ppp,zzz,Brad,Bphi,Bzet,dBrdR,dBrdp,dBrdZ  &
 !
   double precision :: rrr,ppp,zzz,Brad,Bphi,Bzet,dBrdR,dBrdp,dBrdZ  &
                      ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
-  double precision :: rmin,pmin,zmin,rmax,pmax,zmax,hrm1,hpm1,hzm1
+  double precision :: hrm1,hpm1,hzm1
   double precision, dimension(:,:,:), allocatable :: Br,Bp,Bz
 !
 !-------first call: read data from disk-------------------------------

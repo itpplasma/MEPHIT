@@ -1,3 +1,4 @@
+load "BinaryIO"
 include "getARGV.idp"
 int ktlownfluxp1 = getARGV("-N", 0);
 string meshfile = getARGV("-M", "inputformaxwell_ext.msh");
@@ -6,17 +7,6 @@ string convfile = getARGV("-C", "convergence.dat");
 bool doplot = false;
 
 mesh Th = readmesh(meshfile);
-fespace Vh0(Th, P0);
-fespace Hdiv(Th, RT0);
-
-// use NaN to signify an unset value
-Hdiv <complex> [Br, Bz] = [NaN() + 1.0i * NaN(), NaN() + 1.0i * NaN()];
-Vh0 <complex> Bphi;
-
-real BfluxRe, BfluxIm;
-complex redundancy;
-int DoF;
-
 // count triangles in internal region 0
 int ntri = 0;
 for (int k = 0; k < Th.nt; k++) {
@@ -26,24 +16,31 @@ for (int k = 0; k < Th.nt; k++) {
 if (ktlownfluxp1 <= 0) {
   ktlownfluxp1 = ntri;
 }
-
 cout << "Number of triangles in internal region: " << ntri << endl;
 
-int inconsistent;
+fespace Vh0(Th, P0);
+fespace Hdiv(Th, RT0);
+// use NaN to signify an unset value
+Hdiv <complex> [Br, Bz] = [NaN() + 1.0i * NaN(), NaN() + 1.0i * NaN()];
+Vh0 <complex> Bphi;
+Bphi = 0.0;
+real[int] fluxdata(8 * ktlownfluxp1); // (Re, Im) of RT0 DoFs + toroidal component
+
+LoadVec(fluxdata, Bndifffile);
+complex redundancy;
+int DoF, inconsistent;
 real small = 2.2250738585072014e-308, epsilon = 2.2204460492503131e-16; // taken from Fortran
 cerr.scientific.precision(15);
-ifstream ifile(Bndifffile);
 for (int k = 0; k < ktlownfluxp1; k++) {
   for (int j = 0; j < 3; j++) {
     DoF = Hdiv(k, (j+2) % 3);
     redundancy = Br[][DoF];
-    ifile >> BfluxRe >> BfluxIm;
     // check orientation of edges and assign
     // normal flux coordinate accordingly
     if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
-      Br[][DoF] = BfluxRe + 1.0i * BfluxIm;
+      Br[][DoF] = fluxdata[8*k + 2*j] + 1.0i * fluxdata[8*k + 2*j + 1];
     } else {
-      Br[][DoF] = -BfluxRe - 1.0i * BfluxIm;
+      Br[][DoF] = -fluxdata[8*k + 2*j] - 1.0i * fluxdata[8*k + 2*j + 1];
     }
     inconsistent = 0;
     // ordered comparisons with NaN always return false, so unset values are never inconsistent
@@ -64,8 +61,7 @@ for (int k = 0; k < ktlownfluxp1; k++) {
       exit(1);
     }
   }
-  ifile >> BfluxRe >> BfluxIm;
-  Bphi[][k] = (BfluxRe + 1.0i * BfluxIm) / Th[k].area;
+  Bphi[][k] = (fluxdata[8*k + 6] + 1.0i * fluxdata[8*k + 7]) / Th[k].area;
 }
 // set NaN values on the extended mesh to zero
 for (int k = ktlownfluxp1; k < Th.nt; k++) {
@@ -80,6 +76,6 @@ for (int k = ktlownfluxp1; k < Th.nt; k++) {
 {
   ofstream cfile(convfile, append);
   cfile.scientific.precision(15);
-  cfile << sqrt(real(int2d(Th)(Br * conj(Br) * x + Bz * conj(Bz) * x +
-    Bphi * conj(Bphi) / x))) << endl;
+  cfile << sqrt(real(int2d(Th)(Br * conj(Br) / x + Bz * conj(Bz) / x +
+    Bphi * conj(Bphi) * x))) << endl;
 }

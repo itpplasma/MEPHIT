@@ -1,5 +1,17 @@
+### Temporary directory
+# $XDG_RUNTIME_DIR is not set when logged in via SSH
+# and the directory is not accessible when using HTCondor
+set(tmpdir /tmp/runtime-$USER)
+
 ### Installation directory
 set (CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
 
 ### Path to the external libraries
-set(FGSL_PATH /temp/lainer_p/fgsl-1.2.0/LIB)
+set(HDF5_tools_include_dir /temp/lainer_p/git/libneo/build)
+# should be changed to a less confusing path name...
+set(HDF5_tools_lib_dir /temp/lainer_p/git/libneo/build/src/hdf5_tools)
+if ("$ENV{FC}" MATCHES "ifort")
+  set(FGSL_PATH /temp/lainer_p/fgsl-1.2.0_ifort/LIB)
+else ()
+  set(FGSL_PATH /temp/lainer_p/fgsl-1.2.0/LIB)
+endif ()
