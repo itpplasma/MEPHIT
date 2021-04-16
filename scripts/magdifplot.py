@@ -119,6 +119,7 @@ class magdif_2d_rectplots:
             if self.title is not None:
                 axs[k].set_title(self.title[k])
         axs[1].yaxis.set_tick_params(labelleft=True)
+        axs[1].yaxis.offsetText.set_visible(True)
         if self.centered:
             clim = (-max(np.amax(np.abs(image.get_array())) for image in images) * self.clim_scale[0],
                     max(np.amax(np.abs(image.get_array())) for image in images) * self.clim_scale[1])
