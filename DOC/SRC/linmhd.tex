@@ -23,7 +23,7 @@ with
 \begin{align}
   a_{k} &= \vec{B}_{0}^{\pol} (\Gamma_{\fs}^{(k)}) \cdot \frac{\hat{\vec{l}}_{\fs}^{(k)}}{l_{\fs}^{(k)}}, \\
   b_{k} &= \frac{\im n B_{0}^{\phi} (\Gamma_{\fs}^{(k)})}{2}, \\
-  s_{k} &= -\td[p_{0}]{\psi} (\Gamma_{\fs}^{(k)}) B_{n}^{\psi} (\Gamma_{\fs}^{(k)}).
+  s_{k} &= -\td[p_{0}]{\psi} (\Gamma_{\fs}^{(k)}) B_{n}^{\psi} (\Gamma_{\fs}^{(k)}) \overset{\eqref{eq:Bnpsi}}{=} -\td[p_{0}]{\psi} (\Gamma_{\fs}^{(k)}) \Psi_{\fs}^{(k)} \frac{a_{k}}{l_{\fs}^{(k)}}.
 \end{align}
 In matrix form this scheme is written as
 \begin{gather}
@@ -109,9 +109,9 @@ On edges \inw\ and \out\ where $\vec{B}_{0}^{\pol} \cdot \vec{n} \neq 0$, we can
 \begin{gather}
   R J_{n}^{\phi} = J_{n (\phi)} = R B_{0}^{\phi} \frac{\vec{J}_{n}^{\pol} \cdot \vec{n}}{\vec{B}_{0}^{\pol} \cdot \vec{n}} + \frac{c}{\vec{B}_{0}^{\pol} \cdot \vec{n}} \left ( \frac{B_{n \phi}}{B_{0 \phi}} \grad p_{0} - \grad p_{n} \right ) \cdot \vec{l} + R J_{0}^{\phi} \left ( \frac{B_{n \phi}}{B_{0 \phi}} - \frac{\vec{B}_{n}^{\pol} \cdot \vec{n}}{\vec{B}_{0}^{\pol} \cdot \vec{n}} \right ). \label{eq:jnphi}
 \end{gather}
-On edge \fs, $\vec{B}_{0}^{\pol} \cdot \vec{n} = 0$ and $\grad p_{0} \cdot \vec{l} = 0$ (compare \cref{eq:l_grad_psi}), thus from \cref{eq:jnphi-jnpol}, no connection between $J_{n}^{\phi}$ and $\vec{J}_{n}^{\pol} \cdot \vec{n}$ can be made, but the latter expression can be given in terms of already known quantities:
+On edge \fs, $\vec{B}_{0}^{\pol} \cdot \vec{n}_{\fs} = 0$ and $\grad p_{0} \cdot \vec{l}_{\fs} = 0$ (compare \cref{eq:l_grad_psi}), thus from \cref{eq:jnphi-jnpol}, no connection between $J_{n}^{\phi}$ and $\vec{J}_{n}^{\pol} \cdot \vec{n}_{\fs}$ can be made, but the latter expression can be given in terms of already known quantities:
 \begin{gather}
-  R \vec{J}_{n}^{\pol} \cdot \vec{n} = \frac{c \grad p_{n} \cdot \vec{l}}{B_{0}^{\phi}} + R \frac{J_{0}^{\phi}}{B_{0}^{\phi}} \vec{B}_{n}^{\pol} \cdot \vec{n}. \label{eq:If}
+  R \vec{J}_{n}^{\pol} \cdot \vec{n}_{\fs} = \frac{c \grad p_{n} \cdot \vec{l}_{\fs}}{B_{0}^{\phi}} + R \frac{J_{0}^{\phi}}{B_{0}^{\phi}} \vec{B}_{n}^{\pol} \cdot \vec{n}_{\fs}. \label{eq:If}
 \end{gather}
 With these relations established, we now consider the divergence of the perturbation current from \cref{eq:divfree-phi}. In cylindrical coordinates it reads, after multiplication by $R$,
 \begin{gather}
@@ -123,7 +123,7 @@ Using the divergence theorem this can also be written in integral form in a spec
 \end{gather}
 Here the first integral is performed over the 1-dimensional element boundary $\partial \Omega^{(k)} = \Gamma^{(k)}$. The first term is split into three contributions,
 \begin{gather}
-  \oint_{\partial \Omega^{(k)}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l = \int_{\Gamma_{\inw}^{(k)}, \Gamma_{\out}^{(k)}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l + \int_{\Gamma_{\fs}^{(k)}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff lx,
+  \oint_{\partial \Omega^{(k)}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l = \int_{\Gamma_{\inw}^{(k)}, \Gamma_{\out}^{(k)}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l + \int_{\Gamma_{\fs}^{(k)}} R \vec{J}_{n}^{\pol} \cdot \hat{\vec{n}} \, \diff l,
 \end{gather}
 where edge \fs\ is tangential to an adjacent flux surface and edges \inw\ and \out\ are not. Using the notation for currents established in \cref{eq:I_k}, we have
 \begin{gather}
@@ -141,7 +141,7 @@ Now, we deviate from \cref{eq:I_phi} and use a different approximation for the r
 \begin{gather}
   \im n I_{\phi} = \im n \int_{\Omega} R J_{n}^{\phi} \, \diff S \approx \im n S_{\Omega} \frac{R (\Gamma_{\inw}) J_{n}^{\phi} (\Gamma_{\inw}) + R (\Gamma_{\out}) J_{n}^{\phi} (\Gamma_{\out})}{2}.
 \end{gather}
-In this approximation, a term $R (\Gamma_{\fs}) J_{n}^{\phi} (\Gamma_{\fs})$ is neglected because within one strip of triangles, edge \fs\ alternates between the inner and outer flux surface and this \enquote{oscillation} of sample points would carry over to the approximation values, which is similar to the argument regarding the shifted centroid in \cref{sec:dofs}. Furthermore, $J_{n}^{\phi} (\Gamma_{\fs}) \cdot \vec{n}$ can't be reformulated in terms of $\vec{J}_{n}^{\pol} (\Gamma_{\fs})$ via \cref{eq:jnphi}, which would introduce the former as another unknown and lead to an overdetermined set of equations, possibly violating divergence-freeness. So instead, $I_{\phi}$ on each triangle is given by
+In this approximation, a term $R (\Gamma_{\fs}) J_{n}^{\phi} (\Gamma_{\fs})$ is neglected because within one strip of triangles, edge \fs\ alternates between the inner and outer flux surface and this \enquote{oscillation} of sample points would carry over to the approximation values, which is similar to the argument regarding the shifted centroid in \cref{sec:dofs}. Furthermore, $J_{n}^{\phi} (\Gamma_{\fs})$ can't be reformulated in terms of $\vec{J}_{n}^{\pol} (\Gamma_{\fs}) \cdot \vec{n}_{\fs}$ via \cref{eq:jnphi}, which would introduce the former as another unknown and lead to an overdetermined set of equations, possibly violating divergence-freeness. So instead, $I_{\phi}$ on each triangle is given by
 \begin{gather}
   \im n I_{\phi} = \im n \int_{\Omega} R J_{n}^{\phi} \, \diff S \approx \frac{\im n S_{\Omega}}{2} \left ( \frac{B_{0}^{\phi} (\Gamma_{\inw})}{\vec{B}_{0}^{\pol} (\Gamma_{\inw}) \cdot \vec{n}_{\inw}} I_{\inw} + \frac{B_{0}^{\phi} (\Gamma_{\out})}{\vec{B}_{0}^{\pol} (\Gamma_{\out}) \cdot \vec{n}_{\out}} I_{\out} + \dotsb \right ),
 \end{gather}

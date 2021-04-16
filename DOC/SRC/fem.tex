@@ -164,13 +164,13 @@ Now the \textsc{Sobolev} space $H^{1} (\Omega)$ consists of functions whose firs
 \begin{gather}
   H^{1} (\Omega) = \{ w \in L^{2} (\Omega) \; \vert \; \pd{u^{k}} w \in L^{2} (\Omega) \}.
 \end{gather}
-This is the appropriate function space for scalar functions whose gradient appears in the weak formulation. They are approximated by \textsc{Lagrange} elements whose degrees of freedom of lowest order are the values on nodes of the finite elements. An example would be the pressure $p$, if it were to appear in the weak formulation. Another important \textsc{Sobolev} space $H (\Divg, \Omega)$ which is defined for vector-valued functions $\vec{w}$ as
+This is the appropriate function space for scalar functions whose gradient appears in the weak formulation. They are approximated by \textsc{Lagrange} elements whose degrees of freedom of lowest order are the values on nodes of the finite elements. An example would be the pressure $p$, if it were to appear in the weak formulation. Another important \textsc{Sobolev} space is $H (\Divg, \Omega)$ which is defined for vector-valued functions $\vec{w}$ as
 \begin{gather}
   H (\Divg, \Omega) = \{ w_{i} \in L^{2} (\Omega) \; \vert \; \divg \vec{w} \in L^2 (\Omega) \}.
 \end{gather}
 Whenever we need the divergence of a vector field, e.g., for $\vec{J}$ and $\vec{B}$, this is the appropriate function space to consider. It is approximated by \textsc{Raviart}--\textsc{Thomas} elements with vector-valued basis functions and the perpendicular component of edges as degrees of freedom for lowest-order elements. This means that the perpendicular component is continuous across edges, which is important for the application of the divergence theorem. On the other hand, the parallel component on edges might be discontinuous across elements. While we have introduced these two function spaces and basis functions already in \cref{sec:grid}, we still need a function space for $\vec{A}$ with a well-defined curl. $H (\Curl, \Omega)$ is defined accordingly:
 \begin{gather}
-  H (\Curl, \Omega) = \{ w_{i} \in L^{2} (\Omega) \; \vert \; (\curl w)^{u_{k}} \in L^2 (\Omega) \}.
+  H (\Curl, \Omega) = \{ w_{i} \in L^{2} (\Omega) \; \vert \; (\curl \vec{w})^{u_{k}} \in L^2 (\Omega) \}.
 \end{gather}
 The associated basis functions are the \textsc{Nédélec} elements. Like the \textsc{Raviart}--\textsc{Thomas} elements, they use vectorial basis function, but the degrees of freedom are the parallel components along edges, which is necessary for the application of \textsc{Stokes}' theorem. The continuity conditions are also reversed compared to \textsc{Raviart}--\textsc{Thomas} elements, i.e., parallel components are continuous across edges, but the perpendicular components might be discontinuous. Finally, another useful property of these function spaces is the \textsc{de Rham} complex, which shows the relation between these function spaces and the differential operators mediating between them. We can write it concisely as
 \begin{gather}

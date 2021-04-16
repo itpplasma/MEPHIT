@@ -244,7 +244,7 @@
 !
     rbeg(isurf) = hypot(rrr - raxis, zzz - zaxis)
     rsmall(isurf)=sqrt(abs(ymet(3))/pi)
-    qsaf(isurf)=1.d0/aiota
+    qsaf(isurf) = sigma / aiota
     psisurf(isurf)=psif-psi_axis
     phitor(isurf)=ymet(4)/(2.d0*pi)
   enddo
@@ -257,7 +257,7 @@
 !
   do isurf=1,nlabel
     phi = 0.d0
-    phiout = 2.d0*pi*qsaf(isurf)/ntheta * sigma
+    phiout = 2.d0*pi*qsaf(isurf)/ntheta
 !
     ymet(1:2)=[raxis, zaxis] + theta_axis * (isurf * 1.d0) / nlabel
     ymet(3) = 0.d0

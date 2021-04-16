@@ -36,8 +36,8 @@ xrad = 0.5 * (xmax - xmin);
 ymid = 0.5 * (ymax + ymin);
 yrad = 0.5 * (ymax - ymin);
 border outer(t = 0.0, 2.0 * pi) {
-  x = xmid + 2.0 * xrad * cos(t);
-  y = ymid + 2.0 * yrad * sin(t);
+  x = xmid + outerboxscale * xrad * cos(t);
+  y = ymid + outerboxscale * yrad * sin(t);
   label = 1;
 }
 
@@ -48,10 +48,9 @@ Thouter = change(Thouter, region = regionmap);
 
 mesh Th = Thinner + Thouter;
 savemesh(Th, extendedmesh);
-plot(Th);
-
 if (Thinner.nv + Thouter.nv - Th.nv != nbe) {
   cerr << "Error: expected " << nbe << " border points to be merged, but got "
        << Thinner.nv + Thouter.nv - Th.nv << ".\n";
   exit(1);
 }
+plot(Th);

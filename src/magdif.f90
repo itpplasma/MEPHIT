@@ -1,225 +1,97 @@
 module magdif
   use iso_fortran_env, only: dp => real64
-  use magdif_util, only: g_eqdsk, flux_func, flux_func_cache
+  use magdif_pert, only: L1_t, RT0_t
 
   implicit none
 
   private
 
-  public :: equil, fluxvar, fs, fs_half, m_res_min, m_res_max, kp_low, kp_max, kt_low, kt_max, &
-       B0flux, Bnflux, Bnphi, init_indices, cache_mesh_data, check_redundant_edges, &
-       check_div_free, point_location, interp_RT0, write_vector_dof, magdif_init, &
-       magdif_cleanup, magdif_single, magdif_iterated
+  public :: magdif_init, magdif_cleanup, magdif_iterate, magdif_postprocess, freefem_pipe
 
-  type(g_eqdsk) :: equil
-  type(flux_func) :: fluxvar
-  type(flux_func_cache) :: fs
-  type(flux_func_cache) :: fs_half
-
-  integer :: m_res_min, m_res_max
-  real(dp) :: r_o, z_o, r_min, r_max, z_min, z_max  ! TODO: mesh_global_props type
-
-  !> Poloidal mode number \f$ m \f$ (dimensionless) in resonance at given flux surface.
-  !>
-  !> Indexing is the same as for #q, on which the values depend. If no resonances are
-  !> expected at a given index, #m_res is 0.
-  integer, allocatable :: m_res(:)
-
-  !> \f$ R \f$ component of equilibrium magnetic field \f$ B_{0} \f$.
-  !>
-  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
-  !> refers to the triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
-  !> by get_labeled_edges().
-  real(dp), allocatable :: B0r(:,:)
-
-  !> \f$ \phi \f$ component of equilibrium magnetic field \f$ B_{0} \f$.
-  !>
-  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
-  !> refers to the triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
-  !> by get_labeled_edges().
-  real(dp), allocatable :: B0phi(:,:)
-
-  !> \f$ Z \f$ component of equilibrium magnetic field \f$ B_{0} \f$.
-  !>
-  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
-  !> refers to the triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
-  !> by get_labeled_edges().
-  real(dp), allocatable :: B0z(:,:)
-
-  !> \f$ \phi \f$ component of equilibrium magnetic field \f$ B_{0} (\Omega) \f$.
-  !>
-  !> Values are stored seprately for each triangle and the indexing scheme is the same as
-  !> for #mesh_mod::mesh_element.
-  real(dp), allocatable :: B0r_Omega(:)
-
-  !> \f$ Z \f$ component of equilibrium magnetic field \f$ B_{0} (\Omega) \f$.
-  !>
-  !> Values are stored seprately for each triangle and the indexing scheme is the same as
-  !> for #mesh_mod::mesh_element.
-  real(dp), allocatable :: B0phi_Omega(:)
-
-  !> \f$ R \f$ component of equilibrium magnetic field \f$ B_{0} (\Omega) \f$.
-  !>
-  !> Values are stored seprately for each triangle and the indexing scheme is the same as
-  !> for #mesh_mod::mesh_element.
-  real(dp), allocatable :: B0z_Omega(:)
-
-  real(dp), allocatable :: B0flux(:,:)
+  character(len = 1024) :: freefem_pipe = 'maxwell.dat'
 
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
-  !>
-  !> Values are taken at each mesh point and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_point.
-  complex(dp), allocatable :: presn(:)
+  type(L1_t) :: pn
 
-  !> Edge fluxes \f$ R \vec{B}_{n} \cdot \vec{n} \f$ in G cm^2.
-  !>
-  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
-  !> refers to the triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
-  !> by get_labeled_edges().
-  complex(dp), allocatable :: Bnflux(:,:)
+  !> Perturbation field in units of Gauss.
+  type(RT0_t) :: Bn
 
-  !> Physical toroidal component of magnetic perturbation \f$ B_{n (\phi)} \f$ in G.
-  !>
-  !> Values are taken at each triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element.
-  complex(dp), allocatable :: Bnphi(:)
+  !> Vacuum perturbation field in units of Gauss.
+  type(RT0_t) :: Bnvac
 
-  !> Vacuum perturbation edge fluxes \f$ R \vec{B}_{n} \cdot \vec{n} \f$ in G cm^2.
-  !>
-  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
-  !> refers to the triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
-  !> by get_labeled_edges().
-  complex(dp), allocatable :: Bnflux_vac(:,:)
+  !> Plasma perturbation field in units of Gauss.
+  type(RT0_t) :: Bnplas
 
-  !> Physical toroidal component of vacuum magnetic perturbation \f$ B_{n(\phi)} \f$ in G.
-  !>
-  !> Values are taken at each triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element.
-  complex(dp), allocatable :: Bnphi_vac(:)
-
-  !> Edge currents \f$ R \vec{j}_{n} \cdot \vec{n} \f$ in statampere.
-  !>
-  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
-  !> refers to the triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
-  !> by get_labeled_edges().
-  complex(dp), allocatable :: jnflux(:,:)
-
-  !> Physical toroidal component of current perturbation \f$ j_{n (\phi)} \f$ in
-  !> statampere cm^-2.
-  !>
-  !> Values are taken at each triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element.
-  complex(dp), allocatable :: jnphi(:)
-
-  !> Physical toroidal component of equilibrium current \f$ j_{0 (\phi)} \f$ in
-  !> statampere cm^-2.
-  !>
-  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
-  !> refers to the triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
-  !> by get_labeled_edges().
-  real(dp), allocatable :: j0phi(:,:)
-
-  !> Number of knots on the flux surface given by the array index.
-  !>
-  !> The array index ranges from 1 for the innermost flux surface to
-  !> #magdif_config::nflux+2 for consistency with #kp_low.
-  integer, allocatable :: kp_max(:)
-
-  !> Number of triangles inside the flux surface given by the array index.
-  !>
-  !> The array index ranges from 1 for the innermost flux surface to
-  !> #magdif_config::nflux+1 for consistency with #kt_low.
-  integer, allocatable :: kt_max(:)
-
-  !> Global index of the last knot of the previous flux surface given by the array index.
-  !>
-  !> The global index of knots in #mesh_mod::mesh_point on the flux surface kf runs from
-  !> #kp_low (kf)+1 to #kp_low (kf)+#kp_max (kf), so #kp_low is determined by cumulatively
-  !> adding consecutive values of #kp_max. The array index ranges from 1, giving the
-  !> global index of the knot on the magnetic axis (which has to be 1), to
-  !> #magdif_config::nflux+1, giving the last knot on the flux surface just outside the
-  !> last closed flux surface. The latter is needed for some interpolations.
-  integer, allocatable :: kp_low(:)
-
-  !> Global index of the last triangle of the previous flux surface given by the array
-  !> index.
-  !>
-  !> The global index of triangles in #mesh_mod::mesh_element inside the flux surface kf
-  !> runs from #kt_low (kf)+1 to #kt_low (kf)+#kt_max (kf), so #kt_low is determined by
-  !> cumulatively adding consecutive values of #kt_max. The array index ranges from 1,
-  !> giving the global index of the non-existent triangle on the magnetic axis (which is
-  !> therefore 0), to #magdif_config::nflux+1, giving the last triangle just outside the
-  !> last closed flux surface. The latter is needed for some interpolations.
-  integer, allocatable :: kt_low(:)
-
-  integer :: nedge
-  integer, allocatable :: edge_map2global(:, :)
-  integer, allocatable :: edge_map2ktri(:, :)
-  integer, allocatable :: edge_map2ke(:, :)
+  !> Current density perturbation in units of statampere cm^-2.
+  type(RT0_t) :: jn
 
 contains
 
   !> Initialize magdif module
   subroutine magdif_init
-    use input_files, only: gfile
-    use magdif_config, only: nonres, Bn_vac_file, Bn_vacout_file, log_msg, log_info, &
-         log_err, log_open, log_write, decorate_filename
+    use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
+    use magdif_conf, only: conf, log, magdif_log, datafile
+    use magdif_util, only: get_field_filenames, init_field
+    use magdif_mesh, only: equil, mesh, read_mesh_cache, fluxvar, flux_func_cache_check, &
+         check_curr0, check_safety_factor
+    use magdif_pert, only: RT0_check_div_free, RT0_check_redundant_edges, &
+         RT0_init, RT0_read, L1_init
+    character(len = 1024) :: gfile, pfile, convexfile
+    integer :: dum
 
-    call log_open
+    log = magdif_log('-', conf%log_level, conf%quiet)
 
-    ! only depends on config variables
-    call read_mesh
-    call load_magdata_in_symfluxcoord
-
-    ! depends on mesh data
-    call init_indices
-    call cache_mesh_data
-    call cache_equilibrium_field
-
-    ! needs initialized field_eq
+    call get_field_filenames(gfile, pfile, convexfile)
     call equil%read(gfile)
     call equil%classify
     if (equil%cocos%index /= 3) then
-       write (log_msg, '("GEQDSK file ", a, " is not conforming to COCOS 3")') trim(gfile)
-       if (log_err) call log_write
+       write (log%msg, '("GEQDSK file ", a, " is not conforming to COCOS 3")') trim(gfile)
+       if (log%err) call log%write
        error stop
     end if
+    call init_field(gfile, pfile, convexfile)
 
-    ! depends on mesh data, equilibrium field and G EQDSK profiles
-    call init_flux_variables
+    ! read in preprocessed data
+    call read_mesh_cache
+    call load_magdata_in_symfluxcoord
+    ! TODO: cache Lagrange polynomials instead
+    call fluxvar%init(4, equil%psi_eqd)
 
-    ! depends on flux variables
-    call compute_j0phi
+    ! check preprocessed data
+    call flux_func_cache_check
     call check_curr0
+    call check_safety_factor
 
-    if (nonres) then
-       call compute_Bn_nonres
-    else
-       call read_Bn(Bn_vac_file)
-    end if
-    Bnflux_vac = Bnflux
-    Bnphi_vac = Bnphi
-    call write_vector_dof(Bnflux_vac, Bnphi_vac, Bn_vacout_file)
-    call write_vector_plot(Bnflux_vac, Bnphi_vac, &
-         decorate_filename(Bn_vacout_file, 'plot_', ''))
-    log_msg = 'magdif initialized'
-    if (log_info) call log_write
+    ! initialize perturbation
+    call L1_init(pn, mesh%npoint)
+    call RT0_init(Bn, mesh%ntri)
+    call RT0_init(Bnvac, mesh%ntri)
+    call RT0_init(Bnplas, Bn%ntri)
+    call RT0_init(jn, mesh%ntri)
+
+    call RT0_read(Bnvac, datafile, 'Bnvac')
+    call RT0_check_redundant_edges(Bnvac, 'Bnvac')
+    call RT0_check_div_free(Bnvac, mesh%n, conf%rel_err_Bn, 'Bnvac')
+
+    ! pass effective toroidal mode number to FreeFem++
+    call send_flag_to_freefem(mesh%n, freefem_pipe)
+    call receive_flag_from_freefem(dum, freefem_pipe)
+
+    log%msg = 'magdif initialized'
+    if (log%info) call log%write
   end subroutine magdif_init
 
   !> Deallocates all previously allocated variables.
   subroutine magdif_cleanup
-    use mesh_mod, only: mesh_point, mesh_element, mesh_element_rmp
-    use magdif_config, only: sheet_current_factor, log_msg, log_info, log_write, log_close
-    if (allocated(m_res)) deallocate(m_res)
-    if (allocated(sheet_current_factor)) deallocate(sheet_current_factor)
+    use magdif_conf, only: log
+    use magdif_mesh, only: B0R, B0phi, B0Z, B0R_Omega, B0phi_Omega, B0Z_Omega, B0flux, &
+         j0phi
+    use magdif_pert, only: L1_deinit, RT0_deinit
+    integer :: dum
+
+    ! tell FreeFem++ to stop processing
+    call send_flag_to_freefem(-3, freefem_pipe)
+    call receive_flag_from_freefem(dum, freefem_pipe)
     if (allocated(B0r)) deallocate(B0r)
     if (allocated(B0phi)) deallocate(B0phi)
     if (allocated(B0z)) deallocate(B0z)
@@ -227,77 +99,83 @@ contains
     if (allocated(B0phi_Omega)) deallocate(B0phi_Omega)
     if (allocated(B0z_Omega)) deallocate(B0z_Omega)
     if (allocated(B0flux)) deallocate(B0flux)
-    if (allocated(presn)) deallocate(presn)
-    if (allocated(jnflux)) deallocate(jnflux)
-    if (allocated(Bnflux)) deallocate(Bnflux)
-    if (allocated(Bnphi)) deallocate(Bnphi)
-    if (allocated(Bnflux_vac)) deallocate(Bnflux_vac)
-    if (allocated(Bnphi_vac)) deallocate(Bnphi_vac)
-    if (allocated(jnphi)) deallocate(jnphi)
     if (allocated(j0phi)) deallocate(j0phi)
-    if (allocated(mesh_point)) deallocate(mesh_point)
-    if (allocated(mesh_element)) deallocate(mesh_element)
-    if (allocated(mesh_element_rmp)) deallocate(mesh_element_rmp)
-    if (allocated(kp_max)) deallocate(kp_max)
-    if (allocated(kt_max)) deallocate(kt_max)
-    if (allocated(kp_low)) deallocate(kp_low)
-    if (allocated(kt_low)) deallocate(kt_low)
-    log_msg = 'magdif cleanup finished'
-    if (log_info) call log_write
-    call log_close
+    call L1_deinit(pn)
+    call RT0_deinit(Bn)
+    call RT0_deinit(Bnvac)
+    call RT0_deinit(Bnplas)
+    call RT0_deinit(jn)
+    log%msg = 'magdif cleanup finished'
+    if (log%info) call log%write
   end subroutine magdif_cleanup
 
   subroutine magdif_single
-    use magdif_config, only: Bn_file, decorate_filename
-    call compute_presn     ! compute pressure based on previous perturbation field
-    call compute_currn     ! compute currents based on previous perturbation field
-    call compute_Bn        ! use field code to generate new field from currents
-    call read_Bn(Bn_file)  ! read new bnflux from field code
-    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_', ''))
+    ! compute pressure based on previous perturbation field
+    call compute_presn
+    ! compute currents based on previous perturbation field
+    call compute_currn
+    ! use field code to generate new field from currents
+    call compute_Bn
   end subroutine magdif_single
 
-  subroutine magdif_iterated
-    use arnoldi_mod, only: ieigen, ngrow, tol, eigvecs
-    use mesh_mod, only: ntri
-    use magdif_config, only: n, runmode, runmode_precon, nritz, niter, max_eig_out, &
-         rel_err_Bn, log_msg, log_info, log_err, log_write, presn_file, currn_file, &
-         Bn_file, Bn_diff_file, eigvec_file, decorate_filename, cmplx_fmt
+  subroutine magdif_iterate
+    use arnoldi_mod, only: ieigen, ngrow, tol, eigvecs  ! arnoldi.f90
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use magdif_mesh, only: mesh
+    use magdif_pert, only: RT0_init, RT0_deinit, RT0_write, L1_write, &
+         RT0_check_div_free, RT0_check_redundant_edges, vec_polmodes_t, vec_polmodes_init, &
+         vec_polmodes_deinit, vec_polmodes_write, RT0_poloidal_modes
+    use magdif_conf, only: conf, log, runmode_precon, runmode_single, datafile, cmplx_fmt, &
+         decorate_filename
 
     logical :: preconditioned
-    integer :: kiter, ndim, i, j, info
-    complex(dp) :: Bnflux_diff(ntri, 3)
-    complex(dp) :: Bnphi_diff(ntri)
-    complex(dp) :: Bn(nedge), Bn_prev(nedge)
-    complex(dp) :: eigvals(nritz)
+    integer :: kiter, niter, ndim, i, j, info
+    integer(HID_T) :: h5id_root
+    real(dp), allocatable :: L2int(:)
+    type(RT0_t) :: Bn_diff
+    complex(dp) :: packed_Bn(mesh%nedge), packed_Bn_prev(mesh%nedge)
+    complex(dp) :: eigvals(conf%nritz)
     complex(dp), allocatable :: Lr(:,:), Yr(:,:)
     integer, allocatable :: ipiv(:)
     character(len = 4) :: postfix
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
+    integer, parameter :: m_max = 24
+    type(vec_polmodes_t) :: jmn
 
     ! system dimension: number of non-redundant edges in core plasma
-    ndim = nedge
-    preconditioned = runmode_precon == runmode
+    ndim = mesh%nedge
+    ! runmodes
+    preconditioned = runmode_precon == conf%runmode
+    if (runmode_single == conf%runmode) then
+       niter = 0
+    else
+       niter = conf%niter
+    end if
     if (preconditioned) then
+       tol = conf%ritz_threshold
        ! calculate eigenvectors
        ieigen = 1
-       call arnoldi(ndim, nritz, eigvals, next_iteration_arnoldi)
-       if (log_info) then
-          write (log_msg, '("Arnoldi method yields ", i0, " Ritz eigenvalues > ", f0.2)') &
+       call arnoldi(ndim, conf%nritz, eigvals, next_iteration_arnoldi)
+       call h5_open_rw(datafile, h5id_root)
+       call h5_create_parent_groups(h5id_root, 'iter/')
+       call h5_add(h5id_root, 'iter/eigvals', eigvals, lbound(eigvals), ubound(eigvals), &
+         comment = 'iteration eigenvalues')
+       call h5_close(h5id_root)
+       if (log%info) then
+          write (log%msg, '("Arnoldi method yields ", i0, " Ritz eigenvalues > ", f0.2)') &
                ngrow, tol
-          call log_write
+          call log%write
           do i = 1, ngrow
-             write (log_msg, '("lambda ", i0, ": ", ' // cmplx_fmt // ')') i, eigvals(i)
-             call log_write
+             write (log%msg, '("lambda ", i0, ": ", ' // cmplx_fmt // ')') i, eigvals(i)
+             call log%write
           end do
        end if
        if (ngrow > 0) then
-          do i = 1, min(ngrow, max_eig_out)
+          do i = 1, min(ngrow, conf%max_eig_out)
              write (postfix, postfix_fmt) i
-             call unpack_dof(Bnflux, Bnphi, eigvecs(:, i))
-             call write_vector_dof(Bnflux, Bnphi, &
-                  decorate_filename(eigvec_file, '', postfix))
-             call write_vector_plot(Bnflux, Bnphi, &
-                  decorate_filename(eigvec_file, 'plot_', postfix))
+             call unpack_dof(Bn, eigvecs(:, i))
+             call RT0_write(Bn, datafile, 'iter/eigvec' // postfix, &
+                  'iteration eigenvector', 'G', 1)
           end do
           allocate(Lr(ngrow, ngrow), Yr(ngrow, ngrow))
           Yr = (0d0, 0d0)
@@ -311,12 +189,12 @@ contains
           call zgesv(ngrow, ngrow, Lr, ngrow, ipiv, Yr, ngrow, info)
           if (allocated(ipiv)) deallocate(ipiv)
           if (info == 0) then
-             log_msg = 'Successfully inverted matrix for preconditioner'
-             if (log_info) call log_write
+             log%msg = 'Successfully inverted matrix for preconditioner'
+             if (log%info) call log%write
           else
-             write (log_msg, '("Matrix inversion for preconditioner failed: ' // &
+             write (log%msg, '("Matrix inversion for preconditioner failed: ' // &
                   'zgesv returns error ", i0)') info
-             if (log_err) call log_write
+             if (log%err) call log%write
              error stop
           end if
           do i = 1, ngrow
@@ -328,255 +206,212 @@ contains
        end if
     end if
 
-    call write_vector_dof(Bnflux_vac, Bnphi_vac, Bn_diff_file)
-    call compute_L2int
-    call pack_dof(Bnflux_vac, Bn_prev)
+    call vec_polmodes_init(jmn, m_max, mesh%nflux)
+    call RT0_init(Bn_diff, mesh%ntri)
+    allocate(L2int(0:niter))
+    call compute_L2int(Bnvac, L2int(0))
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, 'iter/')
+    call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int(0), &
+         comment = 'L2 integral of magnetic field (vacuum)', unit = 'Mx')
+    call h5_close(h5id_root)
+    Bn%DOF(:, :) = Bnvac%DOF
+    Bn%comp_phi(:) = Bnvac%comp_phi
+    call pack_dof(Bnvac, packed_Bn_prev)
     if (preconditioned) then
-       Bn_prev = Bn_prev - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
-            matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn_prev)))
+       packed_Bn_prev(:) = packed_Bn_prev - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
+            matmul(transpose(conjg(eigvecs(:, 1:ngrow))), packed_Bn_prev)))
     end if
-    do kiter = 0, niter-1
-       write (log_msg, '("Iteration ", i2, " of ", i2)') kiter, niter - 1
-       if (log_info) call log_write
+    do kiter = 0, niter
+       write (log%msg, '("Iteration ", i2, " of ", i2)') kiter, niter
+       if (log%info) call log%write
        write (postfix, postfix_fmt) kiter
 
-       call next_iteration(ndim, Bn_prev, Bn)
+       call next_iteration(ndim, packed_Bn_prev, packed_Bn)
        if (preconditioned) then
-          Bn = Bn - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
-               matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn - Bn_prev)))
-          call unpack_dof(Bnflux, Bnphi, Bn)
-          call check_redundant_edges(Bnflux, .false., 'B_n')
-          call check_div_free(Bnflux, Bnphi, n, rel_err_Bn, 'B_n')
+          packed_Bn(:) = packed_Bn - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
+               matmul(transpose(conjg(eigvecs(:, 1:ngrow))), packed_Bn - packed_Bn_prev)))
+          call unpack_dof(Bn, packed_Bn)
+          call RT0_check_redundant_edges(Bn, 'Bn')
+          call RT0_check_div_free(Bn, mesh%n, conf%rel_err_Bn, 'Bn')
        end if
 
-       call unpack_dof(Bnflux_diff, Bnphi_diff, Bn - Bn_prev)
-       call write_vector_dof(Bnflux_diff, Bnphi_diff, Bn_diff_file)
-       call compute_L2int
-       call write_vector_dof(Bnflux, Bnphi, &
-            decorate_filename(Bn_file, '', postfix))
+       call unpack_dof(Bn_diff, packed_Bn - packed_Bn_prev)
+       call compute_L2int(Bn_diff, L2int(kiter))
        if (kiter <= 1) then
-          call write_vector_plot(Bnflux_diff, Bnphi_diff, &
-               decorate_filename(Bn_diff_file, 'plot_', postfix))
-          call write_vector_plot(Bnflux, Bnphi, &
-               decorate_filename(Bn_file, 'plot_', postfix))
-          call write_vector_plot(jnflux, jnphi, &
-               decorate_filename(currn_file, 'plot_', postfix))
-          call write_poloidal_modes(jnflux, jnphi, &
-               decorate_filename('currmn.dat', '', postfix))
-          call write_scalar_dof(presn, decorate_filename(presn_file, '', postfix))
+          call L1_write(pn, datafile, 'iter/pn' // postfix, &
+               'pressure (after iteration)', 'dyn cm^-2')
+          call RT0_write(jn, datafile, 'iter/jn' // postfix, &
+               'current density (after iteration)', 'statA cm^-2', 1)
+          call RT0_write(Bn, datafile, 'iter/Bn' // postfix, &
+               'magnetic field (after iteration)', 'G', 1)
+          call RT0_write(Bn_diff, datafile, 'iter/Bn_diff' // postfix, &
+               'magnetic field (difference between iterations)', 'G', 1)
+          call RT0_poloidal_modes(jn, jmn)
+          call vec_polmodes_write(jmn, datafile, 'postprocess/jmn' // postfix, &
+               'current density (after iteration)', 'statA cm^-2')
        end if
 
-       call pack_dof(Bnflux, Bn_prev)
+       call pack_dof(Bn, packed_Bn_prev)
     end do
-    call write_vector_dof(Bnflux, Bnphi, Bn_file)
-    call write_vector_plot(Bnflux, Bnphi, decorate_filename(Bn_file, 'plot_', ''))
-    call write_vector_plot_rect(Bnflux, Bnphi, decorate_filename(Bn_file, 'rect_', ''))
-    call write_poloidal_modes(Bnflux, Bnphi, 'Bmn.dat', .true.)
-    call write_poloidal_modes(Bnflux_vac, Bnphi_vac, 'Bmn_vac.dat')
-    call write_poloidal_modes(Bnflux - Bnflux_vac, Bnphi - Bnphi_vac, 'Bmn_plas.dat')
-    call write_poloidal_modes(jnflux, jnphi, 'currmn.dat', .true.)
+    Bnplas%DOF(:, :) = Bn%DOF - Bnvac%DOF
+    Bnplas%comp_phi(:) = Bn%comp_phi - Bnvac%comp_phi
+    call h5_open_rw(datafile, h5id_root)
+    call h5_add(h5id_root, 'iter/L2int_Bn_diff', L2int, lbound(L2int), ubound(L2int), &
+         comment = 'L2 integral of magnetic field (difference between iterations)', unit = 'Mx')
+    call h5_close(h5id_root)
+    call L1_write(pn, datafile, 'iter/pn', &
+         'pressure (full perturbation)', 'dyn cm^-2')
+    call RT0_write(Bn, datafile, 'iter/Bn', &
+         'magnetic field (full perturbation)', 'G', 2)
+    call RT0_write(Bnplas, datafile, 'iter/Bnplas', &
+         'magnetic field (plasma response)', 'G', 2)
+    call RT0_write(jn, datafile, 'iter/jn', &
+         'current density (full perturbation)', 'statA cm^-2', 1)
 
+    call RT0_deinit(Bn_diff)
+    call vec_polmodes_deinit(jmn)
     if (allocated(Lr)) deallocate(Lr)
+    if (allocated(L2int)) deallocate(L2int)
 
   contains
 
-    pure subroutine pack_dof(pol_flux, packed)
-      complex(dp), intent(in) :: pol_flux(ntri, 3)
-      complex(dp), intent(out) :: packed(nedge)
+    pure subroutine pack_dof(elem, packed)
+      type(RT0_t), intent(in) :: elem
+      complex(dp), intent(out) :: packed(mesh%nedge)
       integer :: kedge
-      do kedge = 1, nedge
-         packed(kedge) = pol_flux(edge_map2ktri(kedge, 1), edge_map2ke(kedge, 1))
+      do kedge = 1, mesh%nedge
+         packed(kedge) = elem%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_map2ktri(1, kedge))
       end do
     end subroutine pack_dof
 
-    pure subroutine unpack_dof(pol_flux, tor_comp, packed)
-      use magdif_config, only: nflux
+    pure subroutine unpack_dof(elem, packed)
       use magdif_util, only: imun
-      use mesh_mod, only: mesh_element_rmp
-      complex(dp), intent(out) :: pol_flux(ntri, 3), tor_comp(ntri)
-      complex(dp), intent(in) :: packed(nedge)
+      type(RT0_t), intent(inout) :: elem
+      complex(dp), intent(in) :: packed(mesh%nedge)
       integer :: kedge, ktri
-      do kedge = 1, nedge
-         pol_flux(edge_map2ktri(kedge, 1), edge_map2ke(kedge, 1)) = packed(kedge)
-         if (edge_map2ktri(kedge, 2) > 0) then
-            pol_flux(edge_map2ktri(kedge, 2), edge_map2ke(kedge, 2)) = -packed(kedge)
+      do kedge = 1, mesh%nedge
+         elem%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_map2ktri(1, kedge)) = &
+              packed(kedge)
+         if (mesh%edge_map2ktri(2, kedge) > 0) then
+            elem%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_map2ktri(2, kedge)) = &
+                 -packed(kedge)
          end if
       end do
-      do ktri = 1, kt_low(nflux + 1)
-         tor_comp(ktri) = sum(pol_flux(ktri, :)) * imun / n / mesh_element_rmp(ktri)%area
+      do ktri = 1, mesh%ntri
+         elem%comp_phi(ktri) = sum(elem%DOF(:, ktri)) * imun / mesh%n / mesh%area(ktri)
       end do
     end subroutine unpack_dof
 
+    ! computes B_(n+1) = K*B_n + B_vac ... different from kin2d.f90
     subroutine next_iteration(n, xold, xnew)
-      ! computes B_(n+1) = K*B_n + B_vac ... different from kin2d.f90
       integer, intent(in) :: n
-      complex(dp), intent(in) :: xold(n)
-      complex(dp), intent(out) :: xnew(n)
-      call unpack_dof(Bnflux, Bnphi, xold)
+      complex(dp), intent(in) :: xold(:)
+      complex(dp), intent(out) :: xnew(:)
+      if (n /= size(xold)) then
+         call log%msg_arg_size('next_iteration', 'n', 'size(xold)', n, size(xold))
+         if (log%err) call log%write
+         error stop
+      end if
+      if (n /= size(xnew)) then
+         call log%msg_arg_size('next_iteration', 'n', 'size(xnew)', n, size(xnew))
+         if (log%err) call log%write
+         error stop
+      end if
+      call unpack_dof(Bn, xold)
       call magdif_single
-      Bnflux = Bnflux + Bnflux_vac
-      Bnphi = Bnphi + Bnphi_vac
-      call pack_dof(Bnflux, xnew)
+      Bn%DOF(:, :) = Bn%DOF + Bnvac%DOF
+      Bn%comp_phi(:) = Bn%comp_phi + Bnvac%comp_phi
+      call pack_dof(Bn, xnew)
     end subroutine next_iteration
 
+    ! computes B_(n+1) = K*(B_n + B_vac) ... as in kin2d.f90
+    ! next_iteration in arnoldi_mod is still declared external and has no interface,
+    ! so we use explicit-shape arrays here
     subroutine next_iteration_arnoldi(n, xold, xnew)
-      ! computes B_(n+1) = K*(B_n + B_vac) ... as in kin2d.f90
       integer, intent(in) :: n
       complex(dp), intent(in) :: xold(n)
       complex(dp), intent(out) :: xnew(n)
-      call unpack_dof(Bnflux, Bnphi, xold)
-      Bnflux = Bnflux + Bnflux_vac
-      Bnphi = Bnphi + Bnphi_vac
+      call unpack_dof(Bn, xold)
+      Bn%DOF(:, :) = Bn%DOF + Bnvac%DOF
+      Bn%comp_phi(:) = Bn%comp_phi + Bnvac%comp_phi
       call magdif_single
-      call pack_dof(Bnflux, xnew)
+      call pack_dof(Bn, xnew)
     end subroutine next_iteration_arnoldi
-  end subroutine magdif_iterated
+  end subroutine magdif_iterate
 
-  !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
-  !> of #magdif_config::nflux and #magdif_config::nkpol. Deallocation is done in
-  !> magdif_cleanup().
-  subroutine init_indices
-    use magdif_config, only: nflux, nkpol, log_msg, log_info, log_write, nl_fmt
-    integer :: kf
-
-    allocate (kp_max(nflux+1))
-    allocate (kt_max(nflux+1))
-    allocate (kp_low(nflux+1))
-    allocate (kt_low(nflux+1))
-
-    kp_max = nkpol
-    kt_max = 2 * nkpol
-    kt_max(1) = nkpol
-
-    kp_low(1) = 1
-    do kf = 2, nflux+1
-       kp_low(kf) = kp_low(kf-1) + kp_max(kf-1)
-    end do
-    kt_low(1) = 0
-    do kf = 2, nflux+1
-       kt_low(kf) = kt_low(kf-1) + kt_max(kf-1)
-    end do
-
-    write (log_msg, '("Number of points up to LCFS: ", i0, ' // nl_fmt // &
-         ', "Number of triangles up to LCFS: ", i0)') kp_low(nflux+1), kt_low(nflux+1)
-    if (log_info) call log_write
-  end subroutine init_indices
-
-  !> Reads mesh points and triangles.
-  !>
-  !> #mesh_mod::npoint and #mesh_mod::mesh_point are read directly from an unformatted
-  !> #magdif_config::point_file, while #mesh_mod::ntri and #mesh_mod::mesh_element are
-  !> read directly from an unformatted #magdif_config::tri_file. #presn, #bnflux, #bnphi,
-  !> #bnflux_vac, #bnphi_vac, #j0phi, #jnphi and #jnflux are allocated and initialized to
-  !> zero. Deallocation is done in magdif_cleanup().
-  subroutine read_mesh
-    use magdif_config, only: nflux, meshdata_file, log_msg, log_info, log_write
-    use mesh_mod, only: npoint, ntri, mesh_point, mesh_element, mesh_element_rmp
+  subroutine send_flag_to_freefem(flag, namedpipe)
+    use iso_c_binding, only: c_long
+    integer, intent(in) :: flag
+    character(len = *), intent(in) :: namedpipe
+    integer(c_long) :: long_flag
     integer :: fid
 
-    open(newunit = fid, file = meshdata_file, form = 'unformatted', status = 'old')
-    read (fid) nflux, npoint, ntri, m_res_min, m_res_max
-    write (log_msg, '("nflux = ", i0, ", npoint = ", i0, ", ntri = ", i0)') &
-         nflux, npoint, ntri
-    if (log_info) call log_write
-
-    call fs%init(nflux, .false.)
-    call fs_half%init(nflux, .true.)
-    read (fid) fs%psi, fs%rad
-    read (fid) fs_half%psi, fs_half%rad
-    allocate(mesh_point(npoint))
-    read (fid) mesh_point
-    allocate(mesh_element(ntri))
-    read (fid) mesh_element
+    long_flag = int(flag, c_long)
+    open(newunit = fid, file = namedpipe, status = 'old', access = 'stream', &
+         form = 'unformatted', action = 'write')
+    write (fid) long_flag
     close(fid)
+  end subroutine send_flag_to_freefem
 
-    allocate(mesh_element_rmp(ntri))
+  subroutine receive_flag_from_freefem(flag, namedpipe)
+    use iso_c_binding, only: c_long
+    integer, intent(out) :: flag
+    character(len = *), intent(in) :: namedpipe
+    integer(c_long) :: long_flag
+    integer :: fid
 
-    allocate(B0r(ntri, 3))
-    allocate(B0phi(ntri, 3))
-    allocate(B0z(ntri, 3))
-    allocate(B0r_Omega(ntri))
-    allocate(B0phi_Omega(ntri))
-    allocate(B0z_Omega(ntri))
-    allocate(B0flux(ntri, 3))
-    allocate(presn(npoint))
-    allocate(Bnflux(ntri, 3))
-    allocate(Bnphi(ntri))
-    allocate(Bnflux_vac(ntri, 3))
-    allocate(Bnphi_vac(ntri))
-    allocate(jnphi(ntri))
-    allocate(j0phi(ntri, 3))
-    allocate(jnflux(ntri, 3))
+    open(newunit = fid, file = namedpipe, status = 'old', access = 'stream', &
+         form = 'unformatted', action = 'read')
+    read (fid) long_flag
+    close(fid)
+    flag = int(long_flag)
+  end subroutine receive_flag_from_freefem
 
-    B0r = 0d0
-    B0phi = 0d0
-    B0z = 0d0
-    B0r_Omega = 0d0
-    B0phi_Omega = 0d0
-    B0z_Omega = 0d0
-    B0flux = 0d0
-    presn = 0d0
-    Bnflux = 0d0
-    Bnphi = 0d0
-    Bnflux_vac = 0d0
-    Bnphi_vac = 0d0
-    jnphi = 0d0
-    j0phi = 0d0
-    jnflux = 0d0
-  end subroutine read_mesh
+  subroutine send_RT0_to_freefem(elem, outfile)
+    use iso_c_binding, only: c_long
+    use magdif_mesh, only: mesh
+    type(RT0_t), intent(in) :: elem
+    character(len = *), intent(in) :: outfile
+    integer(c_long) :: length
+    integer :: ktri, fid
 
-  subroutine cache_mesh_data
-    use mesh_mod, only: triangle, triangle_rmp, mesh_element, mesh_element_rmp, mesh_point
-    use magdif_config, only: nflux
-    use magdif_util, only: ring_centered_avg_coord
-    integer :: ktri, kedge, ke, ke_adj, ktri_adj
-    type(triangle) :: elem
-    type(triangle_rmp) :: tri
-
-    r_o = mesh_point(1)%rcoord
-    z_o = mesh_point(1)%zcoord
-    r_min = minval(mesh_point(:kp_low(nflux+1))%rcoord)
-    r_max = maxval(mesh_point(:kp_low(nflux+1))%rcoord)
-    z_min = minval(mesh_point(:kp_low(nflux+1))%zcoord)
-    z_max = maxval(mesh_point(:kp_low(nflux+1))%zcoord)
-
-    nedge = (3 * kt_low(nflux + 1) + kp_max(nflux)) / 2
-    allocate(edge_map2global(kt_low(nflux + 1), 3))
-    allocate(edge_map2ktri(nedge, 2))
-    allocate(edge_map2ke(nedge, 2))
-    edge_map2global = 0
-    edge_map2ktri = 0
-    edge_map2ke = 0
-    kedge = 1
-
-    do ktri = 1, kt_low(nflux + 1)
-       elem = mesh_element(ktri)
-       tri%area = 0.5d0 * elem%det_3
-       call get_labeled_edges(elem, tri%li, tri%lo, tri%lf, tri%ei, tri%eo, tri%ef, &
-            tri%orient)
-       call ring_centered_avg_coord(elem, tri%R_Omega, tri%Z_Omega)
-       mesh_element_rmp(ktri) = tri
-
-       do ke = 1, 3
-          if (edge_map2global(ktri, ke) == 0) then
-             ktri_adj = elem%neighbour(ke)
-             ke_adj = elem%neighbour_edge(ke)
-             if (ktri_adj > kt_low(nflux + 1)) then
-                edge_map2global(ktri, ke) = kedge
-                edge_map2ktri(kedge, :) = [ktri, -1]
-                edge_map2ke(kedge, :) = [ke, -1]
-                kedge = kedge + 1
-             else
-                edge_map2global(ktri, ke) = kedge
-                edge_map2global(ktri_adj, ke_adj) = kedge
-                edge_map2ktri(kedge, :) = [ktri, ktri_adj]
-                edge_map2ke(kedge, :) = [ke, ke_adj]
-                kedge = kedge + 1
-             end if
-          end if
-       end do
+    length = 8 * mesh%ntri  ! (Re, Im) of RT0 DoFs + toroidal component
+    ! status = 'old' for writing to named pipe
+    open(newunit = fid, file = outfile, access = 'stream', status = 'old', &
+         action = 'write', form = 'unformatted')
+    write (fid) length
+    do ktri = 1, mesh%ntri
+       write (fid) elem%DOF(:, ktri), elem%comp_phi(ktri) * mesh%area(ktri)
     end do
-  end subroutine cache_mesh_data
+    close(fid)
+  end subroutine send_RT0_to_freefem
+
+  subroutine receive_RT0_from_freefem(elem, infile)
+    use iso_c_binding, only: c_long
+    use magdif_conf, only: log
+    use magdif_mesh, only: mesh
+    type(RT0_t), intent(inout) :: elem
+    character(len = *), intent(in) :: infile
+    integer(c_long) :: length
+    integer :: ktri, fid
+
+    open(newunit = fid, file = infile, access = 'stream', status = 'old', &
+         action = 'read', form = 'unformatted')
+    read (fid) length
+    if (length < 8 * mesh%ntri) then
+       ! (Re, Im) of RT0 DoFs + toroidal component
+       write (log%msg, '("Pipe ", a, " only contains ", i0, " real values, ' // &
+            'expected ", i0, ".")') infile, length, 8 * mesh%ntri
+       if (log%err) call log%write
+       error stop
+    end if
+    do ktri = 1, mesh%ntri
+       read (fid) elem%DOF(:, ktri), elem%comp_phi(ktri)
+    end do
+    elem%comp_phi = elem%comp_phi / mesh%area
+    close(fid)
+  end subroutine receive_RT0_from_freefem
 
   !> Computes #bnflux and #bnphi from #jnflux and #jnphi via an external program. No data
   !> is read yet; this is done by read_bn().
@@ -585,586 +420,165 @@ contains
   !> directory and handles the exit code. For further information see maxwell.sh and the
   !> script called therein.
   subroutine compute_Bn
-    use magdif_config, only: bin_dir, n, nflux, currn_file, Bn_file, log_msg, log_err, &
-         log_write
-    integer :: stat = 0, dummy = 0
-    character(len = 1024) :: fem_cmd
-    write (fem_cmd, '(a, "/maxwell.sh -n ", i0, " -N ", i0, " -J ", a, " -B ", a)') &
-         trim(bin_dir), n, kt_low(nflux + 1), trim(currn_file), trim(Bn_file)
-    call execute_command_line(fem_cmd, exitstat = stat, cmdstat = dummy)
-    if (stat /= 0) then
-       write (log_msg, '("FreeFem++ failed with exit code ", i0)') stat
-       if (log_err) call log_write
-       error stop
-    end if
+    use iso_c_binding, only: c_long
+    use magdif_conf, only: conf, decorate_filename
+    use magdif_mesh, only: mesh
+    use magdif_pert, only: RT0_check_redundant_edges, RT0_check_div_free
+    integer :: dummy
+
+    call send_flag_to_freefem(-1, freefem_pipe)
+    call receive_flag_from_freefem(dummy, freefem_pipe)
+    call send_RT0_to_freefem(jn, freefem_pipe)
+    call receive_RT0_from_freefem(Bn, freefem_pipe)
+    call RT0_check_redundant_edges(Bn, 'Bn')
+    call RT0_check_div_free(Bn, mesh%n, conf%rel_err_Bn, 'Bn')
   end subroutine compute_Bn
 
-  subroutine compute_L2int
-    use magdif_config, only: bin_dir, nflux, Bn_diff_file, conv_file, log_msg, log_err, &
-         log_write
-    integer :: stat = 0, dummy = 0
-    character(len = 1024) :: L2int_cmd
-    write (L2int_cmd, '(a, "/L2int.sh -N ", i0, " -B ", a, " -C ", a)') &
-         trim(bin_dir), kt_low(nflux + 1), trim(Bn_diff_file), trim(conv_file)
-    call execute_command_line(L2int_cmd, exitstat = stat, cmdstat = dummy)
-    if (stat /= 0) then
-       write (log_msg, '("FreeFem++ failed with exit code ", i0)') stat
-       if (log_err) call log_write
+  subroutine compute_L2int(elem, integral)
+    use iso_c_binding, only: c_long
+    use magdif_conf, only: log
+    type(RT0_t), intent(in) :: elem
+    real(dp), intent(out) :: integral
+    integer(c_long) :: length
+    integer :: fid, dummy
+
+    call send_flag_to_freefem(-2, freefem_pipe)
+    call receive_flag_from_freefem(dummy, freefem_pipe)
+    call send_RT0_to_freefem(elem, freefem_pipe)
+    open(newunit = fid, file = freefem_pipe, access = 'stream', status = 'old', &
+         action = 'read', form = 'unformatted')
+    read (fid) length
+    if (length /= 1) then
+       close(fid)
+       write (log%msg, '("Expected 1 double value from FreeFem++, but got ", i0)') length
+       if (log%err) call log%write
        error stop
     end if
+    read (fid) integral
+    close(fid)
   end subroutine compute_L2int
 
-  !> Checks if divergence-freeness of the given vector field is fulfilled on each
-  !> triangle, otherwise halts the program.
+  !> Assembles a sparse matrix in coordinate list (COO) representation for use with
+  !> sparse_mod::sparse_solve().
   !>
-  !> @param pol_flux poloidal flux components, e.g. #jnflux - first index refers to the
-  !> triangle, second index refers to the edge on that triangle, as per
-  !> #mesh_mod::mesh_element
-  !> @param tor_comp toroidal field components, e.g. #jnphi - index refers to the triangle
-  !> @param rel_err relative error threshold, i.e. maximum acceptable value for divergence
-  !> after division by absolute flux through the triangle
-  !> @param field_name name given to the vector field in the error message
+  !> @param nrow number \f$ n \f$ of rows in the matrix
+  !> @param d \f$ n \f$ diagnonal elements of stiffness matrix \f$ A \f$
+  !> @param du \f$ n-1 \f$ superdiagonal elements of stiffness matrix \f$ A \f$ and
+  !> \f$ A_{n, 1} \f$ (lower left corner)
+  !> @param nz number of non-zero entries (2*nrow)
+  !> @param irow nz row indices of non-zero entries
+  !> @param icol nz column indices of non-zero entries
+  !> @param aval nz values of non-zero entries
   !>
-  !> This subroutine calculates the divergence via the divergence theorem, i.e. by adding
-  !> up the fluxes of the vector field through triangle edges. If this sum, divided by the
-  !> absolute flux, is higher than \p rel_err on any triangle, it halts the program.
-  subroutine check_div_free(pol_flux, tor_comp, n, rel_err, field_name)
-    use magdif_config, only: log_msg, log_err, log_write
-    use magdif_util, only: imun
-    use mesh_mod, only: ntri, mesh_element_rmp
-    complex(dp), intent(in) :: pol_flux(:,:)
-    complex(dp), intent(in) :: tor_comp(:)
-    integer, intent(in) :: n
-    real(dp), intent(in) :: rel_err
-    character(len = *), intent(in) :: field_name
+  !> The input is a stiffness matrix \f$ K \f$ with non-zero entries on the main diagonal,
+  !> the upper diagonal and, due to periodicity, in the lower left corner. This shape
+  !> results from the problems in compute_presn() and compute_currn().
+  subroutine assemble_sparse(nrow, d, du, nz, irow, icol, aval)
+    use magdif_conf, only: log
+    integer, intent(in)  :: nrow
+    complex(dp), intent(in)  :: d(1:)  !nrow
+    complex(dp), intent(in)  :: du(1:)  !nrow
+    integer, intent(out) :: nz
+    integer, intent(out) :: irow(1:), icol(1:)  !2*nrow
+    complex(dp), intent(out) :: aval(1:)  !2*nrow
 
-    integer :: ktri
-    real(dp) :: div, abs_flux
+    integer :: k
 
-    do ktri = 1, ntri
-       abs_flux = sum(abs(pol_flux(ktri,:))) + abs(imun * n * tor_comp(ktri) * &
-            mesh_element_rmp(ktri)%area)
-       if (abs_flux > 0d0) then
-          div = abs((sum(pol_flux(ktri,:)) + imun * n * tor_comp(ktri) * &
-               mesh_element_rmp(ktri)%area)) / abs_flux
-          if (div > rel_err) then
-             write (log_msg, '("divergence of ", a, ' // &
-                  '" above threshold in triangle ", i0, ": ", es23.16)') &
-                  trim(field_name), ktri, div
-              if (log_err) call log_write
-              error stop
-          end if
-       end if
-    end do
-  end subroutine check_div_free
+    nz = 2*nrow
 
-  subroutine check_redundant_edges(pol_quant, same_sign, name)
-    use magdif_config, only: cmplx_fmt, log_msg, log_err, log_write
-    complex(dp), intent(in) :: pol_quant(:,:)
-    logical, intent(in) :: same_sign
-    character(len = *), intent(in) :: name
-    integer :: kedge, ktri, ktri_adj, ke, ke_adj
-    logical :: inconsistent
-    real(dp), parameter :: eps = epsilon(1d0), small = tiny(0d0)
-
-    do kedge = 1, nedge
-       ktri = edge_map2ktri(kedge, 1)
-       ktri_adj = edge_map2ktri(kedge, 2)
-       ke = edge_map2ke(kedge, 1)
-       ke_adj = edge_map2ke(kedge, 2)
-       if (ktri_adj <= 0) cycle
-       inconsistent = .false.
-       if (abs(real(pol_quant(ktri, ke))) < small) then
-          inconsistent = inconsistent .or. abs(real(pol_quant(ktri_adj, ke_adj))) >= small
-       else
-          if (same_sign) then
-             inconsistent = inconsistent .or. eps < abs(1d0 - &
-                  real(pol_quant(ktri_adj, ke_adj)) / real(pol_quant(ktri, ke)))
-          else
-             inconsistent = inconsistent .or. eps < abs(1d0 + &
-                  real(pol_quant(ktri_adj, ke_adj)) / real(pol_quant(ktri, ke)))
-          end if
-       end if
-       if (abs(aimag(pol_quant(ktri, ke))) < small) then
-          inconsistent = inconsistent .or. abs(aimag(pol_quant(ktri_adj, ke_adj))) >= small
-       else
-          if (same_sign) then
-             inconsistent = inconsistent .or. eps < abs(1d0 - &
-                  aimag(pol_quant(ktri_adj, ke_adj)) / aimag(pol_quant(ktri, ke)))
-          else
-             inconsistent = inconsistent .or. eps < abs(1d0 + &
-                  aimag(pol_quant(ktri_adj, ke_adj)) / aimag(pol_quant(ktri, ke)))
-          end if
-       end if
-       if (inconsistent) then
-          write (log_msg, '("inconsistent redundant edges: ", ' // &
-               'a, "(", i0, ", ", i0, ") = ", ' // cmplx_fmt // ', ", ", ' // &
-               'a, "(", i0, ", ", i0, ") = ", ' // cmplx_fmt // ')') &
-               trim(name), ktri, ke, pol_quant(ktri, ke), &
-               trim(name), ktri_adj, ke_adj, pol_quant(ktri_adj, ke_adj)
-          if (log_err) call log_write
-          error stop
-       end if
-    end do
-  end subroutine check_redundant_edges
-
-  !> Reads fluxes of perturbation field and checks divergence-freeness.
-  !>
-  !> @param filename name of the formatted file containing the data
-  !>
-  !> Line numbers in the given file correspond to the global triangle index of
-  !> #mesh_mod::mesh_element. The content of each line is read into #bnflux and #bnphi
-  !> with numbering of edges in #bnflux as in #mesh_mod::mesh_element and the imaginary
-  !> part of each value immediately following the real part.
-  subroutine read_Bn(filename)
-    use magdif_config, only: n, rel_err_Bn, longlines
-    use mesh_mod, only: ntri, mesh_element_rmp
-    character(len = 1024) :: filename
-    integer :: ktri, fid
-    real(dp) :: dummy8(8)
-
-    open(newunit = fid, file = filename, recl = longlines, status = 'old')
-    do ktri = 1, ntri
-       read (fid, *) dummy8
-       Bnflux(ktri,1) = cmplx(dummy8(1), dummy8(2), dp)
-       Bnflux(ktri,2) = cmplx(dummy8(3), dummy8(4), dp)
-       Bnflux(ktri,3) = cmplx(dummy8(5), dummy8(6), dp)
-       Bnphi(ktri) = cmplx(dummy8(7), dummy8(8), dp) / mesh_element_rmp(ktri)%area
-    end do
-    close(fid)
-
-    call check_redundant_edges(Bnflux, .false., 'B_n')
-    call check_div_free(Bnflux, Bnphi, n, rel_err_Bn, 'B_n')
-  end subroutine read_Bn
-
-  !> Allocates and computes the safety factor #q and #m_res.
-  !>
-  !> Also allocates #magdif_config::sheet_current_factor, to be read in via
-  !> magdif_config::read_delayed_config() in magdif_init(). All deallocation is done in
-  !> magdif_cleanup().
-  subroutine compute_safety_factor
-    use constants, only: pi  ! orbit_mod.f90
-    use magdif_config, only: cmplx_fmt, n, nflux, q_prof, q_prof_flux, q_prof_rot, &
-         q_prof_geqdsk, sheet_current_factor, read_delayed_config, log_msg, &
-         log_debug, log_info, log_err, log_write
-    use magdif_util, only: flux_func
-    use magdata_in_symfluxcoor_mod, only: psipol_max, psisurf, qsaf
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp
-    integer :: kf, kt, ktri, m, kf_res
-    type(triangle_rmp) :: tri
-    type(flux_func) :: psi_interpolator
-    real(dp), dimension(nflux) :: abs_err
-
-    select case (q_prof)
-    case (q_prof_flux)
-       fs_half%q = 0d0
-       do kf = 1, nflux
-          do kt = 1, kt_max(kf)
-             ktri = kt_low(kf) + kt
-             tri = mesh_element_rmp(ktri)
-             fs_half%q(kf) = fs_half%q(kf) + B0phi_Omega(ktri) * tri%area
-          end do
-          fs_half%q(kf) = fs_half%q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
-       end do
-       call psi_interpolator%init(4, fs_half%psi)
-       ! Lagrange polynomial extrapolation for values at separatrix and magnetic axis
-       fs%q = [(psi_interpolator%interp(fs_half%q, fs%psi(kf)), kf = 0, nflux)]
-    case (q_prof_rot)
-       ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
-       ! load_magdata_in_symfluxcoord_ext divides by psipol_max
-       call psi_interpolator%init(4, psisurf(1:) * psipol_max + fs%psi(0))
-       ! Lagrange polynomial extrapolation for value at magnetic axis
-       fs%q = [(psi_interpolator%interp(qsaf, fs%psi(kf)), kf = 0, nflux)]
-       fs_half%q = [(psi_interpolator%interp(qsaf, fs_half%psi(kf)), kf = 1, nflux)]
-    case (q_prof_geqdsk)
-       fs%q = [(fluxvar%interp(equil%qpsi, fs%psi(kf)), kf = 0, nflux)]
-       fs_half%q = [(fluxvar%interp(equil%qpsi, fs_half%psi(kf)), kf = 1, nflux)]
-    case default
-       write (log_msg, '("unknown q profile selection: ", i0)') q_prof
-       if (log_err) call log_write
+    if (nrow /= size(d)) then
+       call log%msg_arg_size('assemble_sparse', 'nrow', 'size(d)', nrow, size(d))
+       if (log%err) call log%write
        error stop
-    end select
-
-    allocate(m_res(nflux))
-    m_res = 0
-    log_msg = 'resonance positions:'
-    if (log_debug) call log_write
-    do m = m_res_max, m_res_min, -1
-       abs_err = [(abs(abs(fs_half%q(kf)) - dble(m) / dble(n)), kf = 1, nflux)]
-       kf_res = minloc(abs_err, 1)
-       m_res(kf_res) = m
-       write (log_msg, '("m = ", i0, ", kf_res = ", i0, ' // &
-            '", rho: ", f19.16, 2(" < ", f19.16))') m, kf_res, &
-            [fs%rad(kf_res - 1), fs_half%rad(kf_res), fs%rad(kf_res)] / fs%rad(nflux)
-       if (log_debug) call log_write
-    end do
-
-    call read_delayed_config(m_res_min, m_res_max)
-    if (log_info) then
-       log_msg = 'absolute poloidal mode number, sheet current factor'
-       call log_write
-       do m = lbound(sheet_current_factor, 1), ubound(sheet_current_factor, 1)
-          write (log_msg, '(i2, 1x, ' // cmplx_fmt // ')') m, sheet_current_factor(m)
-          call log_write
-       end do
     end if
-  end subroutine compute_safety_factor
-
-  !> Initializes quantities that are constant on each flux surface. The safety factor #q
-  !> is initialized separately in compute_safety_factor().
-  !>
-  !> #psimin, #psimax and #psi are initialized from #mesh_mod::mesh_point::psi_pol.
-  !> #pres0, #dpres0_dpsi, #dens and #temp are given an assumed profile based on #psimin,
-  !> #psimax, #psi, #magdif_conf::di0, #magdif_conf::d_min, #magdif_conf::ti0 and
-  !> #magdif_conf::t_min.
-  subroutine init_flux_variables
-    use magdif_config, only: nflux
-    integer :: kf, kw
-
-    ! initialize fluxvar with equidistant psi values
-    call fluxvar%init(4, fs%psi(0) + [(dble(kw - 1) / dble(equil%nw - 1) * &
-         (fs%psi(nflux) - fs%psi(0)), kw = 1, equil%nw)])
-
-    call compute_pres_prof
-    call compute_safety_factor
-    fs%F = [(fluxvar%interp(equil%fpol, fs%psi(kf)), kf = 0, nflux)]
-    fs%FdF_dpsi = [(fluxvar%interp(equil%ffprim, fs%psi(kf)), kf = 0, nflux)]
-    fs_half%F = [(fluxvar%interp(equil%fpol, fs_half%psi(kf)), kf = 1, nflux)]
-    fs_half%FdF_dpsi = [(fluxvar%interp(equil%ffprim, fs_half%psi(kf)), kf = 1, nflux)]
-    call write_fluxvar
-  end subroutine init_flux_variables
-
-  subroutine compute_pres_prof
-    use for_macrostep, only: t_min, d_min  ! orbit_mod.f90
-    use constants, only: ev2erg            ! orbit_mod.f90
-    use magdif_config, only: nflux, di0, ti0, pres_prof, pres_prof_eps, pres_prof_par, &
-         pres_prof_geqdsk, log_msg, log_info, log_err, log_write
-    integer :: kf
-    real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
-
-    !> Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
-    real(dp) :: dens(0:nflux)
-
-    !> Temperature \f$ T \f$ on flux surface with \f$ k_{\mathrm{B}} T \f$ in eV.
-    real(dp) :: temp(0:nflux)
-
-    dens = 0d0
-    temp = 0d0
-    if (equil%cocos%sgn_dpsi == -1) then
-       psi_ext = minval(equil%psirz)
-       psi_int = maxval(equil%psirz)
-    else
-       psi_ext = maxval(equil%psirz)
-       psi_int = minval(equil%psirz)
-    end if
-    select case (pres_prof)
-    case (pres_prof_eps)
-       ddens_dpsi = di0 / psi_int
-       dtemp_dpsi = ti0 / psi_int
-       dens = (fs%psi - psi_ext) / psi_int * di0 + d_min
-       temp = (fs%psi - psi_ext) / psi_int * ti0 + t_min
-       write (log_msg, '("temp@axis: ", es23.16, ", dens@axis: ", es23.16)') temp(0), dens(0)
-       if (log_info) call log_write
-       fs%p = dens * temp * ev2erg
-       fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
-       dens(1:) = (fs_half%psi - psi_ext) / psi_int * di0 + d_min
-       temp(1:) = (fs_half%psi - psi_ext) / psi_int * ti0 + t_min
-       fs_half%p = dens(1:) * temp(1:) * ev2erg
-       fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
-    case (pres_prof_par)
-       ddens_dpsi = (di0 - d_min) / (psi_int - psi_ext)
-       dtemp_dpsi = (ti0 - t_min) / (psi_int - psi_ext)
-       dens = (fs%psi - psi_ext) / (psi_int - psi_ext) * (di0 - d_min) + d_min
-       temp = (fs%psi - psi_ext) / (psi_int - psi_ext) * (ti0 - t_min) + t_min
-       fs%p = dens * temp * ev2erg
-       fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
-       dens(1:) = (fs_half%psi - psi_ext) / (psi_int - psi_ext) * (di0 - d_min) + d_min
-       temp(1:) = (fs_half%psi - psi_ext) / (psi_int - psi_ext) * (ti0 - t_min) + t_min
-       fs_half%p = dens(1:) * temp(1:) * ev2erg
-       fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
-    case (pres_prof_geqdsk)
-       fs%p = [(fluxvar%interp(equil%pres, fs%psi(kf)), kf = 0, nflux)]
-       fs%dp_dpsi = [(fluxvar%interp(equil%pprime, fs%psi(kf)), kf = 0, nflux)]
-       fs_half%p = [(fluxvar%interp(equil%pres, fs_half%psi(kf)), kf = 1, nflux)]
-       fs_half%dp_dpsi = [(fluxvar%interp(equil%pprime, fs_half%psi(kf)), kf = 1, nflux)]
-    case default
-       write (log_msg, '("unknown pressure profile selection", i0)') pres_prof
-       if (log_err) call log_write
+    if (nrow /= size(du)) then
+       call log%msg_arg_size('assemble_sparse', 'nrow', 'size(du)', nrow, size(du))
+       if (log%err) call log%write
        error stop
-    end select
-  end subroutine compute_pres_prof
+    end if
+    if (nz /= size(irow)) then
+       call log%msg_arg_size('assemble_sparse', 'nz', 'size(irow)', nz, size(irow))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (nz /= size(icol)) then
+       call log%msg_arg_size('assemble_sparse', 'nz', 'size(icol)', nz, size(icol))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (nz /= size(aval)) then
+       call log%msg_arg_size('assemble_sparse', 'nz', 'size(aval)', nz, size(aval))
+       if (log%err) call log%write
+       error stop
+    end if
 
+    irow(1) = 1
+    icol(1) = 1
+    aval(1) = d(1)
 
-  subroutine cache_equilibrium_field
-    use mesh_mod, only: knot, triangle, mesh_point, mesh_element
-    use magdif_config, only: longlines, nflux
-    use magdif_util, only: ring_centered_avg_coord
-    real(dp) :: r, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-    integer :: kf, kt, ktri, ke, fid
-    type(triangle) :: elem
-    type(knot) :: base, tip
-    real(dp) :: n_r, n_z
+    irow(2) = nrow
+    icol(2) = 1
+    aval(2) = du(nrow)
 
-    open(newunit = fid, file = 'plot_B0.dat', recl = longlines, status = 'replace')
-    do kf = 1, nflux
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
-          elem = mesh_element(ktri)
-          do ke = 1, 3
-             base = mesh_point(elem%i_knot(ke))
-             tip = mesh_point(elem%i_knot(mod(ke, 3) + 1))
-             r = (base%rcoord + tip%rcoord) * 0.5d0
-             z = (base%zcoord + tip%zcoord) * 0.5d0
-             call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-                  dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-             B0r(ktri, ke) = Br
-             B0phi(ktri, ke) = Bp
-             B0z(ktri, ke) = Bz
-             n_r = tip%zcoord - base%zcoord
-             n_z = base%rcoord - tip%rcoord
-             B0flux(ktri, ke) = r * (Br * n_r + Bz * n_z)
-          end do
-          call ring_centered_avg_coord(elem, r, z)
-          call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          B0r_Omega(ktri) = Br
-          B0phi_Omega(ktri) = Bp
-          B0z_Omega(ktri) = Bz
-          write (fid, '(5(1x, es23.16))') r, z, Br, Bz, Bp
-       end do
+    do k = 2, nrow
+       ! off-diagonal
+       irow(2*k-1) = k-1
+       icol(2*k-1) = k
+       aval(2*k-1) = du(k-1)
+
+       ! diagonal
+       irow(2*k) = k
+       icol(2*k) = k
+       aval(2*k) = d(k)
     end do
-    close(fid)
-  end subroutine cache_equilibrium_field
-
-  !> Computes equilibrium current density #j0phi from given equilibrium magnetic field and
-  !> assumed equilibrium pressure #pres0.
-  !>
-  !> This step is necessary because equilibrium pressure is not given experimentally as is
-  !> \f$ \vec{B}_{0} \f$; arbitrary values are assumed. Consistency of MHD equilibrium is
-  !> necessary in the derivation, while Ampere's equation is not used.
-  subroutine compute_j0phi
-    use constants, only: pi  ! orbit_mod.f90
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
-    use magdif_config, only: nflux, curr_prof, curr_prof_ps, curr_prof_rot, &
-         curr_prof_geqdsk, longlines, j0phi_file
-    use magdif_util, only: clight
-    integer :: kf, kt, ktri, fid
-    real(dp) :: r, z
-    real(dp) :: Btor2
-    real(dp), dimension(nflux) :: B2avg, B2avg_half
-    real(dp) :: plot_j0phi
-    type(triangle_rmp) :: tri
-
-    open(newunit = fid, file = j0phi_file, recl = longlines, status = 'replace')
-    B2avg = 0d0
-    B2avg_half = 0d0
-    do kf = 1, nflux
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
-          tri = mesh_element_rmp(ktri)
-          r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
-          B2avg(kf) = B2avg(kf) + B0r(ktri, tri%ef) ** 2 + &
-               B0phi(ktri, tri%ef) ** 2 + B0z(ktri, tri%ef) ** 2
-          r = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
-          B2avg_half(kf) = B2avg_half(kf) + B0r(ktri, tri%ei) ** 2 + &
-               B0phi(ktri, tri%ei) ** 2 + B0z(ktri, tri%ei) ** 2
-       end do
-       B2avg(kf) = B2avg(kf) / kt_max(kf)
-       B2avg_half(kf) = B2avg_half(kf) / kt_max(kf)
-
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
-          tri = mesh_element_rmp(ktri)
-
-          r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
-          select case (curr_prof)
-          case (curr_prof_geqdsk)
-             if (tri%orient) then
-                j0phi(ktri, tri%ef) = clight * (fs%dp_dpsi(kf) * r + &
-                     0.25d0 / pi * fs%FdF_dpsi(kf) / r)
-             else
-                j0phi(ktri, tri%ef) = clight * (fs%dp_dpsi(kf-1) * r + &
-                     0.25d0 / pi * fs%FdF_dpsi(kf-1) / r)
-             end if
-          case (curr_prof_rot)
-             z = sum(mesh_point(tri%lf(:))%zcoord) * 0.5d0
-             j0phi(ktri, tri%ef) = j0phi_ampere(r, z)
-          case (curr_prof_ps)
-             Btor2 = B0phi(ktri, tri%ef) ** 2
-             if (kf > 1 .and. .not. tri%orient) then
-                j0phi(ktri, tri%ef) = clight * r * fs%dp_dpsi(kf-1) * (1d0 - &
-                     Btor2 / B2avg(kf-1))
-             else
-                j0phi(ktri, tri%ef) = clight * r * fs%dp_dpsi(kf) * (1d0 - &
-                     Btor2 / B2avg(kf))
-             end if
-          end select
-
-          r = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
-          select case (curr_prof)
-          case (curr_prof_geqdsk)
-             j0phi(ktri, tri%ei) = clight * (fs_half%dp_dpsi(kf) * r + &
-                  0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
-          case (curr_prof_rot)
-             z = sum(mesh_point(tri%li(:))%zcoord) * 0.5d0
-             j0phi(ktri, tri%ei) = j0phi_ampere(r, z)
-          case (curr_prof_ps)
-             Btor2 = B0phi(ktri, tri%ei) ** 2
-             j0phi(ktri, tri%ei) = clight * r * fs_half%dp_dpsi(kf) * (1d0 - &
-                  Btor2 / B2avg_half(kf))
-          end select
-
-          r = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
-          select case (curr_prof)
-          case (curr_prof_geqdsk)
-             j0phi(ktri, tri%eo) = clight * (fs_half%dp_dpsi(kf) * r + &
-                  0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
-          case (curr_prof_rot)
-             z = sum(mesh_point(tri%lo(:))%zcoord) * 0.5d0
-             j0phi(ktri, tri%eo) = j0phi_ampere(r, z)
-          case (curr_prof_ps)
-             Btor2 = B0phi(ktri, tri%eo) ** 2
-             j0phi(ktri, tri%eo) = clight * r * fs_half%dp_dpsi(kf) * (1d0 - &
-                  Btor2 / B2avg_half(kf))
-          end select
-
-          select case (curr_prof)
-          case (curr_prof_geqdsk)
-             plot_j0phi = clight * (fs_half%dp_dpsi(kf) * tri%r_Omega + &
-                  0.25d0 / pi * fs_half%FdF_dpsi(kf) / tri%r_Omega)
-          case (curr_prof_rot)
-             plot_j0phi = j0phi_ampere(tri%r_Omega, tri%z_Omega)
-          case (curr_prof_ps)
-             Btor2 = B0phi_Omega(ktri) ** 2
-             plot_j0phi = clight * tri%r_Omega * fs_half%dp_dpsi(kf) * (1d0 - &
-                  Btor2 / B2avg_half(kf))
-          end select
-
-          write (fid, '(4(1x, es23.16))') &
-               j0phi(ktri, 1), j0phi(ktri, 2), j0phi(ktri, 3), plot_j0phi
-       end do
-    end do
-    close(fid)
-
-    call check_redundant_edges(cmplx(j0phi, 0d0, dp), .true., 'j0phi')
-
-  contains
-    function j0phi_ampere(r, z) result (rotB_phi)
-      real(dp), intent(in) :: r, z
-      real(dp) :: rotB_phi
-      real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-      call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-           dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-      rotB_phi = 0.25d0 / pi * clight * (dBrdZ - dBzdR)
-    end function j0phi_ampere
-
-  end subroutine compute_j0phi
-
-
-  subroutine check_curr0
-    use constants, only: pi  ! orbit_mod.f90
-    use magdif_config, only: nflux, longlines
-    use magdif_util, only: clight
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp
-    integer :: kf, kt, ktri, fid_amp, fid_gs, fid_prof
-    real(dp) :: r, z, n_r, n_z, cmp_amp, cmp_gs, Jr, Jp, Jz
-    real(dp) :: Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-         dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ
-    type(triangle_rmp) :: tri
-
-    open(newunit = fid_prof, file = 'cmp_prof.dat', recl = longlines, status = 'replace')
-    open(newunit = fid_amp, file = 'j0_amp.dat', recl = longlines, status = 'replace')
-    open(newunit = fid_gs, file = 'j0_gs.dat', recl = longlines, status = 'replace')
-    do kf = 1, nflux
-       cmp_amp = 0d0
-       cmp_gs = 0d0
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
-          tri = mesh_element_rmp(ktri)
-          call radially_outward_normal(ktri, n_r, n_z)
-          r = tri%r_Omega
-          z = tri%z_Omega
-          call field(r, 0d0, z, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ, &
-               dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-          dBpdR = dBpdR + fs_half%FdF_dpsi(kf) / fs_half%F(kf) * Bz
-          dBpdZ = -fs_half%FdF_dpsi(kf) / fs_half%F(kf) * Br
-          Jr = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * &
-               B0r_Omega(ktri)
-          Jz = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * &
-               B0z_Omega(ktri)
-          Jp = clight * (fs_half%dp_dpsi(kf) * r + 0.25d0 / pi * fs_half%FdF_dpsi(kf) / r)
-          write (fid_gs, '(3(1x, es23.16))') Jr, Jp, Jz
-          cmp_gs = cmp_gs + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
-               (n_r**2 + n_z**2) / (fs%psi(kf) - fs%psi(kf-1)) * 2d0 * tri%area / clight
-          Jr = 0.25d0 / pi * clight * (-dBpdZ)
-          Jp = 0.25d0 / pi * clight * (dBrdZ - dBzdR)
-          Jz = 0.25d0 / pi * clight * (dBpdR + Bp / r)
-          write (fid_amp, '(3(1x, es23.16))') Jr, Jp, Jz
-          cmp_amp = cmp_amp + ((Jp * Bz - Jz * Bp) * n_r + (Jr * Bp - Jp * Br) * n_z) / &
-               (n_r**2 + n_z**2) / (fs%psi(kf) - fs%psi(kf-1)) * 2d0 * tri%area / clight
-       end do
-       cmp_amp = cmp_amp / kt_max(kf)
-       cmp_gs = cmp_gs / kt_max(kf)
-       write (fid_prof, '(2(1x, es23.16))') cmp_amp, cmp_gs
-    end do
-    close(fid_prof)
-    close(fid_amp)
-    close(fid_gs)
-  end subroutine check_curr0
+  end subroutine assemble_sparse
 
   !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
   subroutine compute_presn
     use sparse_mod, only: sparse_solve, sparse_matmul
-    use magdif_config, only: n, nflux, nkpol, damp, presn_file, log_msg, log_debug, &
-         log_write
-    use magdif_util, only: assemble_sparse, imun
-    use mesh_mod, only: knot, triangle_rmp, mesh_point, mesh_element_rmp
+    use magdif_conf, only: conf, log
+    use magdif_util, only: imun
+    use magdif_mesh, only: fs, mesh, B0R, B0phi, B0Z
     real(dp) :: r
     real(dp) :: lr, lz  ! edge vector components
-    complex(dp), dimension(nkpol) :: a, b, x, d, du, inhom
+    complex(dp), dimension(conf%nkpol) :: a, b, x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
-    real(dp), dimension(nkpol) :: rel_err
+    real(dp), dimension(conf%nkpol) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
     integer :: kf, kt, ktri, kp
     integer :: nz
-    integer, dimension(2*nkpol) :: irow, icol
-    complex(dp), dimension(2*nkpol) :: aval
-    type(triangle_rmp) :: tri
-    type(knot) :: base, tip
+    integer, dimension(2 * conf%nkpol) :: irow, icol
+    complex(dp), dimension(2 * conf%nkpol) :: aval
+    integer :: base, tip
     real(dp), parameter :: small = tiny(0d0)
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
-    do kf = 1, nflux
-       inner: do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
-          tri = mesh_element_rmp(ktri)
-          if (.not. tri%orient) cycle inner
+    do kf = 1, mesh%nflux
+       inner: do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          if (.not. mesh%orient(ktri)) cycle inner
           ! use midpoint of edge f
-          base = mesh_point(tri%lf(1))
-          tip = mesh_point(tri%lf(2))
-          r = (base%rcoord + tip%rcoord) * 0.5d0
-          lr = tip%rcoord - base%rcoord
-          lz = tip%zcoord - base%zcoord
+          base = mesh%lf(1, ktri)
+          tip = mesh%lf(2, ktri)
+          R = (mesh%node_R(base) + mesh%node_R(tip)) * 0.5d0
+          lR = mesh%node_R(tip) - mesh%node_R(base)
+          lZ = mesh%node_Z(tip) - mesh%node_Z(base)
 
-          kp = tri%lf(1) - kp_low(kf)
-
-          a(kp) = (B0r(ktri, tri%ef) * lr + B0z(ktri, tri%ef) * lz) / (lr ** 2 + lz ** 2)
-
-          x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bnflux(ktri, tri%ef)
-
-          b(kp) = imun * (n + imun * damp) * B0phi(ktri, tri%ef) / r
+          kp = base - mesh%kp_low(kf)
+          a(kp) = (B0R(mesh%ef(ktri), ktri) * lR + B0Z(mesh%ef(ktri), ktri) * lZ) / &
+               (lR ** 2 + lZ ** 2)
+          x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bn%DOF(mesh%ef(ktri), ktri)
+          b(kp) = imun * (mesh%n + imun * conf%damp) * B0phi(mesh%ef(ktri), ktri) / R
        end do inner
 
        ! solve linear system
        d = -a + b * 0.5d0
        du = a + b * 0.5d0
-       call assemble_sparse(nkpol, d, du, nz, irow, icol, aval)
+       call assemble_sparse(conf%nkpol, d, du, nz, irow, icol, aval)
        inhom = x  ! remember inhomogeneity before x is overwritten with the solution
-       call sparse_solve(nkpol, nkpol, nz, irow, icol, aval, x)
-       call sparse_matmul(nkpol, nkpol, irow, icol, aval, x, resid)
+       call sparse_solve(conf%nkpol, conf%nkpol, nz, irow, icol, aval, x)
+       call sparse_matmul(conf%nkpol, conf%nkpol, irow, icol, aval, x, resid)
        resid = resid - inhom
        where (abs(inhom) >= small)
           rel_err = abs(resid) / abs(inhom)
@@ -1175,117 +589,19 @@ contains
        avg_rel_err = avg_rel_err + sum(rel_err)
 
        if (kf == 1) then ! first point on axis - average over enclosing flux surface
-          presn(1) = sum(x) / size(x)
+          pn%DOF(1) = sum(x) / size(x)
        end if
-       do kp = 1, kp_max(kf)
-          presn(kp_low(kf) + kp) = x(kp)
+       do kp = 1, mesh%kp_max(kf)
+          pn%DOF(mesh%kp_low(kf) + kp) = x(kp)
        end do
     end do
 
-    avg_rel_err = avg_rel_err / sum(kp_max(1:nflux))
-    write (log_msg, '("compute_presn: diagonalization max_rel_err = ", ' // &
-         'es23.16, ", avg_rel_err = ", es23.16)') max_rel_err, avg_rel_err
-    if (log_debug) call log_write
+    avg_rel_err = avg_rel_err / sum(mesh%kp_max(1:mesh%nflux))
+    write (log%msg, '("compute_presn: diagonalization max_rel_err = ", ' // &
+         'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
+    if (log%debug) call log%write
     if (allocated(resid)) deallocate(resid)
-
-    call write_scalar_dof(presn, presn_file)
   end subroutine compute_presn
-
-  !> Map edge symbols to integer indices.
-  !>
-  !> @param elem the triangle for which indices are to be obtained
-  !> @param li knot indices for base (1) and tip (2) of edge i
-  !> @param lo knot indices for base (1) and tip (2) of edge o
-  !> @param lf knot indices for base (1) and tip (2) of edge f
-  !> @param ei index of edge i, e.g. for #bnflux
-  !> @param eo index of edge o, e.g. for #bnflux
-  !> @param ef index of edge f, e.g. for #bnflux
-  !> @param orient true if edge f lies on the outer flux surface, false otherwise
-  !>
-  !> It is assumed that the knots are globally numbered in ascending order starting from
-  !> the magnetic axis and going counter-clockwise around each flux surface. Furthermore
-  !> it is assumed that edge 1 goes from knot 1 to knot 2, edge 2 from knot 2 to knot 3
-  !> and edge 3 from knot 3 to knot 1. It is not assumed that knots are orderd
-  !> counter-clockwise locally.
-
-  subroutine get_labeled_edges(elem, li, lo, lf, ei, eo, ef, orient)
-    use mesh_mod, only: triangle
-    use magdif_config, only: log_msg, log_err, log_write
-    type(triangle), intent(in) :: elem
-    integer, dimension(2), intent(out) :: li, lo, lf
-    integer, intent(out) :: ei, eo, ef
-    logical, intent(out) :: orient
-    integer, dimension(3) :: i_knot_diff
-    integer :: knot_i, knot_o, knot_f
-    integer :: i1, i2
-    logical :: closing_loop
-
-    log_msg = 'cannot find correct label for triangle edges'
-
-    ! initialize to suppress compiler warnings
-    i1 = 0
-    i2 = 0
-    knot_f = elem%knot_h
-    select case (knot_f)
-    case (1)
-       i1 = 2
-       i2 = 3
-    case (2)
-       i1 = 3
-       i2 = 1
-    case (3)
-       i1 = 1
-       i2 = 2
-    end select
-    if (elem%i_knot(i1) == elem%i_knot(i2)) then
-       if (log_err) call log_write
-       error stop
-    end if
-    ! last triangle in strip if indices not next to each other
-    closing_loop = abs(elem%i_knot(i1) - elem%i_knot(i2)) /= 1
-    i_knot_diff = elem%i_knot - elem%i_knot(knot_f)
-    if (all(i_knot_diff >= 0)) then
-       ! knot_f lies on inner surface
-       orient = .true.
-       if ((elem%i_knot(i1) < elem%i_knot(i2)) .neqv. closing_loop) then
-          ! i1 is next after knot_f counter-clockwise
-          knot_o = i1
-          knot_i = i2
-       else
-          ! i2 is next after knot_f counter-clockwise
-          knot_o = i2
-          knot_i = i1
-       end if
-       ei = knot_f
-       eo = knot_i
-       ef = knot_o
-       li = [elem%i_knot(knot_f), elem%i_knot(knot_o)]
-       lo = [elem%i_knot(knot_i), elem%i_knot(knot_f)]
-       lf = [elem%i_knot(knot_o), elem%i_knot(knot_i)]
-    else if (all(i_knot_diff <= 0)) then
-       ! knot_f lies on outer surface
-       orient = .false.
-       if ((elem%i_knot(i1) > elem%i_knot(i2)) .neqv. closing_loop) then
-          ! i1 is next after knot_f counter-clockwise
-          knot_i = i1
-          knot_o = i2
-       else
-          ! i2 is next after knot_f counter-clockwise
-          knot_i = i2
-          knot_o = i1
-       end if
-       ei = knot_o
-       eo = knot_f
-       ef = knot_i
-       li = [elem%i_knot(knot_o), elem%i_knot(knot_f)]
-       lo = [elem%i_knot(knot_f), elem%i_knot(knot_i)]
-       lf = [elem%i_knot(knot_i), elem%i_knot(knot_o)]
-    else
-       if (log_err) call log_write
-       error stop
-    end if
-  end subroutine get_labeled_edges
-
 
   !> Computes current perturbation #jnflux and #jnphi from equilibrium quantities,
   !> #presn, #bnflux and #bnphi.
@@ -1294,634 +610,419 @@ contains
   !> surface. The result is written to #magdif_conf::currn_file.
   subroutine compute_currn
     use sparse_mod, only: sparse_solve, sparse_matmul
-    use mesh_mod, only: triangle, triangle_rmp, mesh_element, mesh_element_rmp, mesh_point
-    use magdif_config, only: n, nflux, nkpol, damp, rel_err_currn, currn_file, &
-         decorate_filename, log_msg, log_debug, log_write
-    use magdif_util, only: imun, clight, assemble_sparse
-    complex(dp), dimension(2 * nkpol) :: x, d, du, inhom
+    use magdif_conf, only: conf, log, decorate_filename
+    use magdif_mesh, only: fs, mesh, B0phi, B0flux, j0phi
+    use magdif_pert, only: RT0_check_div_free, RT0_check_redundant_edges
+    use magdif_util, only: imun, clight
+    complex(dp), dimension(2 * conf%nkpol) :: x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
-    real(dp), dimension(2 * nkpol) :: rel_err
+    real(dp), dimension(2 * conf%nkpol) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kt, ktri
+    integer :: kf, kt, ktri, ke
     integer :: nz
-    integer, dimension(4 * nkpol) :: irow, icol
-    complex(dp), dimension(4 * nkpol) :: aval
-    type(triangle) :: elem
-    type(triangle_rmp) :: tri
+    integer, dimension(4 * conf%nkpol) :: irow, icol
+    complex(dp), dimension(4 * conf%nkpol) :: aval
     complex(dp) :: Bnphi_Gamma
-    real(dp) :: r
+    real(dp) :: R, area
     real(dp), parameter :: small = tiny(0d0)
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
-    do kf = 1, nflux ! loop through flux surfaces
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
-          elem = mesh_element(ktri)
-          tri = mesh_element_rmp(ktri)
+    do kf = 1, mesh%nflux ! loop through flux surfaces
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          area = mesh%area(ktri)
           ! first term on source side: flux through edge f
-          r = sum(mesh_point(tri%lf(:))%rcoord) * 0.5d0
-          jnflux(ktri, tri%ef) = j0phi(ktri, tri%ef) / B0phi(ktri, tri%ef) * &
-               Bnflux(ktri, tri%ef) + &
-               clight * r / B0phi(ktri, tri%ef) * (presn(tri%lf(2)) - presn(tri%lf(1)))
-          x(kt) = -jnflux(ktri, tri%ef)
+          ke = mesh%ef(ktri)
+          R = sum(mesh%node_R(mesh%lf(:, ktri))) * 0.5d0
+          jn%DOF(ke, ktri) = j0phi(ke, ktri) / B0phi(ke, ktri) * Bn%DOF(ke, ktri) + &
+               clight * R / B0phi(ke, ktri) * (pn%DOF(mesh%lf(2, ktri)) - pn%DOF(mesh%lf(1, ktri)))
+          x(kt) = -jn%DOF(ke, ktri)
           ! diagonal matrix element - edge i
-          d(kt) = -1d0 - imun * (n + imun * damp) * tri%area * 0.5d0 * &
-               B0phi(ktri, tri%ei) / B0flux(ktri, tri%ei)
+          ke = mesh%ei(ktri)
+          d(kt) = -1d0 - imun * (mesh%n + imun * conf%damp) * area * 0.5d0 * &
+               B0phi(ke, ktri) / B0flux(ke, ktri)
           ! additional term from edge i on source side
-          r = sum(mesh_point(tri%li(:))%rcoord) * 0.5d0
-          Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(tri%ei)))
-          x(kt) = x(kt) - imun * n * tri%area * 0.5d0 * (clight * r / B0flux(ktri, tri%ei) * &
-               (Bnphi_Gamma / B0phi(ktri, tri%ei) * (fs%p(kf) - fs%p(kf-1)) - &
-               (presn(tri%li(2)) - presn(tri%li(1)))) + j0phi(ktri, tri%ei) * &
-               (Bnphi_Gamma / B0phi(ktri, tri%ei) - Bnflux(ktri, tri%ei) / B0flux(ktri, tri%ei)))
+          R = sum(mesh%node_R(mesh%li(:, ktri))) * 0.5d0
+          Bnphi_Gamma = 0.5d0 * (Bn%comp_phi(ktri) + Bn%comp_phi(mesh%adj_tri(ke, ktri)))
+          x(kt) = x(kt) - imun * mesh%n * area * 0.5d0 * (clight * R / B0flux(ke, ktri) * &
+               (Bnphi_Gamma / B0phi(ke, ktri) * (fs%p(kf) - fs%p(kf-1)) - &
+               (pn%DOF(mesh%li(2, ktri)) - pn%DOF(mesh%li(1, ktri)))) + j0phi(ke, ktri) * &
+               (Bnphi_Gamma / B0phi(ke, ktri) - Bn%DOF(ke, ktri) / B0flux(ke, ktri)))
           ! superdiagonal matrix element - edge o
-          du(kt) = 1d0 + imun * (n + imun * damp) * tri%area * 0.5d0 * &
-               B0phi(ktri, tri%eo) / B0flux(ktri, tri%eo)
+          ke = mesh%eo(ktri)
+          du(kt) = 1d0 + imun * (mesh%n + imun * conf%damp) * area * 0.5d0 * &
+               B0phi(ke, ktri) / B0flux(ke, ktri)
           ! additional term from edge o on source side
-          r = sum(mesh_point(tri%lo(:))%rcoord) * 0.5d0
-          Bnphi_Gamma = 0.5d0 * (Bnphi(ktri) + Bnphi(elem%neighbour(tri%eo)))
-          x(kt) = x(kt) - imun * n * tri%area * 0.5d0 * (clight * r / B0flux(ktri, tri%eo) * &
-               (Bnphi_Gamma / B0phi(ktri, tri%eo) * (fs%p(kf-1) - fs%p(kf)) - &
-               (presn(tri%lo(2)) - presn(tri%lo(1)))) + j0phi(ktri, tri%eo) * &
-               (Bnphi_Gamma / B0phi(ktri, tri%eo) - Bnflux(ktri, tri%eo) / B0flux(ktri, tri%eo)))
+          R = sum(mesh%node_R(mesh%lo(:, ktri))) * 0.5d0
+          Bnphi_Gamma = 0.5d0 * (Bn%comp_phi(ktri) + Bn%comp_phi(mesh%adj_tri(ke, ktri)))
+          x(kt) = x(kt) - imun * mesh%n * area * 0.5d0 * (clight * r / B0flux(ke, ktri) * &
+               (Bnphi_Gamma / B0phi(ke, ktri) * (fs%p(kf-1) - fs%p(kf)) - &
+               (pn%DOF(mesh%lo(2, ktri)) - pn%DOF(mesh%lo(1, ktri)))) + j0phi(ke, ktri) * &
+               (Bnphi_Gamma / B0phi(ke, ktri) - Bn%DOF(ke, ktri) / B0flux(ke, ktri)))
        end do
-       call assemble_sparse(kt_max(kf), d(:kt_max(kf)), du(:kt_max(kf)), nz, &
-            irow(:(2*kt_max(kf))), icol(:(2*kt_max(kf))), aval(:(2*kt_max(kf))))
-       inhom = x  ! remember inhomogeneity before x is overwritten with the solution
-       call sparse_solve(kt_max(kf), kt_max(kf), nz, irow(:nz), icol(:nz), aval(:nz), &
-            x(:kt_max(kf)))
-       call sparse_matmul(kt_max(kf), kt_max(kf), irow(:nz), icol(:nz), aval(:nz), &
-            x(:kt_max(kf)), resid)
-       resid = resid - inhom(:kt_max(kf))
-       where (abs(inhom(:kt_max(kf))) >= small)
-          rel_err(:kt_max(kf)) = abs(resid(:kt_max(kf))) / abs(inhom(:kt_max(kf)))
-       elsewhere
-          rel_err(:kt_max(kf)) = 0d0
-       end where
-       max_rel_err = max(max_rel_err, maxval(rel_err(:kt_max(kf))))
-       avg_rel_err = avg_rel_err + sum(rel_err(:kt_max(kf)))
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
-          tri = mesh_element_rmp(ktri)
-          jnflux(ktri, tri%ei) = -x(kt)
-          jnflux(ktri, tri%eo) = x(mod(kt, kt_max(kf)) + 1)
-          jnphi(ktri) = sum(jnflux(ktri, :)) * imun / n / tri%area
+       associate (ndim => mesh%kt_max(kf))
+         call assemble_sparse(ndim, d(:ndim), du(:ndim), nz, &
+              irow(:2*ndim), icol(:2*ndim), aval(:2*ndim))
+         inhom = x  ! remember inhomogeneity before x is overwritten with the solution
+         call sparse_solve(ndim, ndim, nz, irow(:nz), icol(:nz), aval(:nz), x(:ndim))
+         call sparse_matmul(ndim, ndim, irow(:nz), icol(:nz), aval(:nz), x(:ndim), resid)
+         resid = resid - inhom(:ndim)
+         where (abs(inhom(:ndim)) >= small)
+            rel_err(:ndim) = abs(resid(:ndim)) / abs(inhom(:ndim))
+         elsewhere
+            rel_err(:ndim) = 0d0
+         end where
+         max_rel_err = max(max_rel_err, maxval(rel_err(:ndim)))
+         avg_rel_err = avg_rel_err + sum(rel_err(:ndim))
+       end associate
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          jn%DOF(mesh%ei(ktri), ktri) = -x(kt)
+          jn%DOF(mesh%eo(ktri), ktri) = x(mod(kt, mesh%kt_max(kf)) + 1)
+          jn%comp_phi(ktri) = sum(jn%DOF(:, ktri)) * imun / mesh%n / mesh%area(ktri)
        end do
     end do
-    avg_rel_err = avg_rel_err / sum(kt_max(1:nflux))
-    write (log_msg, '("compute_currn: diagonalization max_rel_err = ", ' // &
-         'es23.16, ", avg_rel_err = ", es23.16)') max_rel_err, avg_rel_err
-    if (log_debug) call log_write
+    avg_rel_err = avg_rel_err / sum(mesh%kt_max(1:mesh%nflux))
+    write (log%msg, '("compute_currn: diagonalization max_rel_err = ", ' // &
+         'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
+    if (log%debug) call log%write
     if (allocated(resid)) deallocate(resid)
 
     call add_sheet_current
-    call check_redundant_edges(jnflux, .false., 'jnflux')
-    call check_div_free(jnflux, jnphi, n, rel_err_currn, 'jnflux')
-    call write_vector_dof(jnflux, jnphi, currn_file)
-    call write_vector_plot(jnflux, jnphi, decorate_filename(currn_file, 'plot_', ''))
+    call RT0_check_redundant_edges(jn, 'jn')
+    call RT0_check_div_free(jn, mesh%n, conf%rel_err_currn, 'jn')
   end subroutine compute_currn
 
   subroutine add_sheet_current
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_element
-    use magdif_config, only: n, nflux, sheet_current_factor
+    use magdif_conf, only: conf_arr
     use magdif_util, only: imun
-    integer :: kf, kt, ktri
-    type(triangle_rmp) :: tri, tri_adj
-    complex(dp) :: presn_half
+    use magdif_mesh, only: mesh, B0flux
+    integer :: kf, kt, ktri, ktri_adj
+    complex(dp) :: pn_half
 
-    do kf = 1, nflux
-       if (m_res(kf) > 0) then
-          if (abs(sheet_current_factor(m_res(kf))) > 0d0) then
-             do kt = 1, kt_max(kf)
-                ktri = kt_low(kf) + kt
-                tri = mesh_element_rmp(ktri)
+    do kf = 1, mesh%nflux
+       if (mesh%m_res(kf) > 0) then
+          if (abs(conf_arr%sheet_current_factor(mesh%m_res(kf))) > 0d0) then
+             do kt = 1, mesh%kt_max(kf)
+                ktri = mesh%kt_low(kf) + kt
                 ! add sheet current on edge i
                 if (mod(kt, 2) == 0) then
                    ! edge i is diagonal
-                   if (tri%orient) then
-                      presn_half = 0.5d0 * sum(presn(tri%lf(:)))
+                   if (mesh%orient(ktri)) then
+                      pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri)))
                    else
-                      tri_adj = mesh_element_rmp(mesh_element(ktri)%neighbour(tri%ei))
-                      presn_half = 0.5d0 * sum(presn(tri_adj%lf(:)))
+                      ktri_adj = mesh%adj_tri(mesh%ei(ktri), ktri)
+                      pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri_adj)))
                    end if
                 else
-                   presn_half = presn(tri%li(2))
+                   pn_half = pn%DOF(mesh%li(2, ktri))
                 end if
-                jnflux(ktri, tri%ei) = jnflux(ktri, tri%ei) + &
-                     sheet_current_factor(m_res(kf)) * B0flux(ktri, tri%ei) * presn_half
+                jn%DOF(mesh%ei(ktri), ktri) = jn%DOF(mesh%ei(ktri), ktri) + &
+                     conf_arr%sheet_current_factor(mesh%m_res(kf)) * &
+                     B0flux(mesh%ei(ktri), ktri) * pn_half
                 ! add sheet current on edge o
                 if (mod(kt, 2) == 1) then
                    ! edge o is diagonal
-                   if (tri%orient) then
-                      presn_half = 0.5d0 * sum(presn(tri%lf(:)))
+                   if (mesh%orient(ktri)) then
+                      pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri)))
                    else
-                      tri_adj = mesh_element_rmp(mesh_element(ktri)%neighbour(tri%eo))
-                      presn_half = 0.5d0 * sum(presn(tri_adj%lf(:)))
+                      ktri_adj = mesh%adj_tri(mesh%eo(ktri), ktri)
+                      pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri_adj)))
                    end if
                 else
-                   presn_half = presn(tri%lo(1))
+                   pn_half = pn%DOF(mesh%lo(1, ktri))
                 end if
-                jnflux(ktri, tri%eo) = jnflux(ktri, tri%eo) + &
-                     sheet_current_factor(m_res(kf)) * B0flux(ktri, tri%eo) * presn_half
+                jn%DOF(mesh%eo(ktri), ktri) = jn%DOF(mesh%eo(ktri), ktri) + &
+                     conf_arr%sheet_current_factor(mesh%m_res(kf)) * &
+                     B0flux(mesh%eo(ktri), ktri) * pn_half
                 ! adjust toroidal current density
-                jnphi(ktri) = sum(jnflux(ktri, :)) * imun / n / tri%area
+                jn%comp_phi(ktri) = sum(jn%DOF(:, ktri)) * imun / mesh%n / mesh%area(ktri)
              end do
           end if
        end if
     end do
   end subroutine add_sheet_current
 
-  subroutine avg_flux_on_quad(pol_flux, tor_comp)
-    use magdif_config, only: n, nflux
-    use magdif_util, only: imun
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp
-    complex(dp), intent(inout) :: pol_flux(:,:)
-    complex(dp), intent(inout) :: tor_comp(:)
+  subroutine magdif_postprocess
+    use magdata_in_symfluxcoor_mod, only: ntheta
+    use magdif_conf, only: conf, datafile
+    use magdif_mesh, only: mesh, coord_cache_ext, coord_cache_ext_init, coord_cache_ext_deinit, &
+         compute_sample_Ipar
+    use magdif_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
+         vec_polmodes_write, RT0_poloidal_modes
+    integer, parameter :: m_max = 24
+    integer :: k
+    type(vec_polmodes_t) :: vec_polmodes
+    type(coord_cache_ext) :: sample_Ipar
 
-    integer :: kf, kt, ktri1, ktri2
-    complex(dp) :: tor_flux_avg, tor_flux_diff
-    type(triangle_rmp) :: tri1, tri2
-
-    do kf = 2, nflux
-       do kt = 1, kt_max(kf), 2
-          ktri1 = kt_low(kf) + kt
-          ktri2 = kt_low(kf) + kt + 1
-          tri1 = mesh_element_rmp(ktri1)
-          tri2 = mesh_element_rmp(ktri2)
-          tor_flux_avg = 0.5d0 * (tor_comp(ktri2) * tri2%area + &
-               tor_comp(ktri1) * tri1%area)
-          tor_flux_diff = 0.5d0 * (tor_comp(ktri2) * tri2%area - &
-               tor_comp(ktri1) * tri1%area)
-          tor_comp(ktri1) = tor_flux_avg / tri1%area
-          pol_flux(ktri1, tri1%eo) = pol_flux(ktri1, tri1%eo) - imun * n * tor_flux_diff
-          tor_comp(ktri2) = tor_flux_avg / tri2%area
-          pol_flux(ktri2, tri2%ei) = pol_flux(ktri2, tri2%ei) + imun * n * tor_flux_diff
-       end do
-    end do
-  end subroutine avg_flux_on_quad
-
-  subroutine compute_Bn_nonres
-    use mesh_mod, only: knot, triangle_rmp, mesh_point, mesh_element_rmp
-    use magdif_config, only: n, nflux, quad_avg, rel_err_Bn
-    use magdif_util, only: imun
-    integer :: kf, kt, ktri
-    type(triangle_rmp) :: tri
-    type(knot) :: base, tip
-    real(dp) :: r, lr, lz
-    complex(dp) :: Bnpsi
-
-    do kf = 1, nflux ! loop through flux surfaces
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
-          tri = mesh_element_rmp(ktri)
-          ! use midpoint of edge f
-          base = mesh_point(tri%lf(1))
-          tip = mesh_point(tri%lf(2))
-          r = (base%rcoord + tip%rcoord) * 0.5d0
-          lr = tip%rcoord - base%rcoord
-          lz = tip%zcoord - base%zcoord
-          Bnpsi = -equil%rcentr * B0phi(ktri, tri%ef) / r
-          Bnflux(ktri, tri%ef) = Bnpsi * (lr ** 2 + lz ** 2) / &
-               (B0r(ktri, tri%ef) * lr + B0z(ktri, tri%ef) * lz)
-          Bnphi(ktri) = imun / n * Bnflux(ktri, tri%ef) / tri%area
-          Bnflux(ktri, tri%ei) = (0d0, 0d0)
-          Bnflux(ktri, tri%eo) = (0d0, 0d0)
-       end do
-    end do
-    if (quad_avg) call avg_flux_on_quad(Bnflux, Bnphi)
-    call check_div_free(Bnflux, Bnphi, n, rel_err_Bn, 'non-resonant B_n')
-    call check_redundant_edges(Bnflux, .false., 'non-resonant B_n')
-  end subroutine compute_Bn_nonres
-
-  subroutine interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)
-    use mesh_mod, only: knot, triangle, mesh_point, mesh_element
-    integer, intent(in) :: ktri
-    complex(dp), intent(in) :: pol_flux(:,:)
-    real(dp), intent(in) :: r, z
-    complex(dp), intent(out) :: pol_comp_r, pol_comp_z
-    type(triangle) :: elem
-    type(knot) :: node(3)
-
-    elem = mesh_element(ktri)
-    node = mesh_point(elem%i_knot(:))
-    ! edge 1 lies opposite to knot 3, etc.
-    pol_comp_r = 1d0 / elem%det_3 / r * ( &
-         pol_flux(ktri, 1) * (r - node(3)%rcoord) + &
-         pol_flux(ktri, 2) * (r - node(1)%rcoord) + &
-         pol_flux(ktri, 3) * (r - node(2)%rcoord))
-    pol_comp_z = 1d0 / elem%det_3 / r * ( &
-         pol_flux(ktri, 1) * (z - node(3)%zcoord) + &
-         pol_flux(ktri, 2) * (z - node(1)%zcoord) + &
-         pol_flux(ktri, 3) * (z - node(2)%zcoord))
-  end subroutine interp_RT0
-
-  pure function jacobian(kf, kt, r) result(metric_det)
-    integer, intent(in) :: kf, kt
-    real(dp), intent(in) :: r
-    real(dp) :: metric_det
-    metric_det = equil%cocos%sgn_dpsi * fs_half%q(kf) * r / B0phi_Omega(kt_low(kf) + kt)
-  end function jacobian
-
-  subroutine radially_outward_normal(ktri, n_r, n_z)
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp, mesh_point
-    integer, intent(in) :: ktri
-    real(dp), intent(out) :: n_r
-    real(dp), intent(out) :: n_z
-    type(triangle_rmp) :: tri
-
-    tri = mesh_element_rmp(ktri)
-    if (tri%orient) then
-       n_r = mesh_point(tri%lf(2))%zcoord - mesh_point(tri%lf(1))%zcoord
-       n_z = mesh_point(tri%lf(1))%rcoord - mesh_point(tri%lf(2))%rcoord
-    else
-       n_r = mesh_point(tri%lf(1))%zcoord - mesh_point(tri%lf(2))%zcoord
-       n_z = mesh_point(tri%lf(2))%rcoord - mesh_point(tri%lf(1))%rcoord
+    ! poloidal modes
+    call vec_polmodes_init(vec_polmodes, m_max, mesh%nflux)
+    call RT0_poloidal_modes(Bn, vec_polmodes)
+    call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn', &
+         'poloidal modes of magnetic field (full perturbation)', 'G')
+    call RT0_poloidal_modes(Bnvac, vec_polmodes)
+    call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn_vac', &
+         'poloidal modes of magnetic field (vacuum perturbation)', 'G')
+    call RT0_poloidal_modes(Bnplas, vec_polmodes)
+    call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn_plas', &
+         'poloidal modes of magnetic field (plasma response)', 'G')
+    if (conf%kilca_scale_factor /= 0) then
+       call check_furth(jn, vec_polmodes)
     end if
-  end subroutine radially_outward_normal
-
-  subroutine write_vector_plot(pol_flux, tor_comp, outfile)
-    use magdif_config, only: nflux, nonres, longlines
-    use mesh_mod, only: ntri, triangle_rmp, mesh_element_rmp
-    complex(dp), intent(in) :: pol_flux(:,:)
-    complex(dp), intent(in) :: tor_comp(:)
-    character(len = *), intent(in) :: outfile
-
-    integer :: k, kf, kt, ktri, n_cutoff, fid
-    type(triangle_rmp) :: tri
-    complex(dp) :: pol_comp_r, pol_comp_z, dens_psi_contravar, proj_theta_covar
-    real(dp) :: r, z
-
-    open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
-    if (nonres) then
-       n_cutoff = nflux - 1
-    else
-       n_cutoff = nflux
-    end if
-    do kf = 1, n_cutoff
-       do kt = 1, kt_max(kf)
-          ktri = kt_low(kf) + kt
-          tri = mesh_element_rmp(ktri)
-          r = tri%R_Omega
-          z = tri%Z_Omega
-          call interp_RT0(ktri, pol_flux, r, z, pol_comp_r, pol_comp_z)
-          ! projection to contravariant psi component
-          dens_psi_contravar = (pol_comp_r * B0z_Omega(ktri) - &
-               pol_comp_z * B0r_Omega(ktri)) * r * jacobian(kf, kt, r)
-          ! projection to covariant theta component
-          proj_theta_covar = equil%cocos%sgn_dpsi * (pol_comp_r * B0r_Omega(ktri) + &
-               pol_comp_z * B0z_Omega(ktri)) * jacobian(kf, kt, r)
-          write (fid, '(12(1x, es23.16))') r, z, real(pol_comp_r), aimag(pol_comp_r), &
-               real(pol_comp_z), aimag(pol_comp_z), &
-               real(tor_comp(ktri)), aimag(tor_comp(ktri)), &
-               real(dens_psi_contravar), aimag(dens_psi_contravar), &
-               real(proj_theta_covar), aimag(proj_theta_covar)
-       end do
-    end do
-    r = equil%rmaxis
-    z = equil%zmaxis
-    do ktri = kt_low(n_cutoff+1) + 1, ntri
-       write (fid, '(12(1x, es23.16))') r, z, (0d0, k = 1, 10)
-    end do
-    close(fid)
-  end subroutine write_vector_plot
-
-  ! based on http://totologic.blogspot.com/2014/01/accurate-point-in-triangle-test.html
-  function point_in_triangle(ktri, R, Z, thickness) result(probably)
-    use mesh_mod, only: triangle, mesh_element, mesh_point
-    integer, intent(in) :: ktri
-    real(dp), intent(in) :: R, Z
-    real(dp), intent(in), optional :: thickness
-    logical :: probably
-    real(dp), dimension(1:4) :: node_R, node_Z, dist_R, dist_Z
-    real(dp), dimension(1:3) :: edge_R, edge_Z, edge_2, dist_2, dotprod
-    type(triangle) :: elem
-
-    probably = .false.
-    if (ktri <= 0) return
-    elem = mesh_element(ktri)
-    node_R = mesh_point([elem%i_knot, elem%i_knot(1)])%rcoord
-    node_Z = mesh_point([elem%i_knot, elem%i_knot(1)])%zcoord
-    dist_R = R - node_R
-    dist_Z = Z - node_Z
-    edge_R = node_R(2:4) - node_R(1:3)
-    edge_Z = node_Z(2:4) - node_Z(1:3)
-    edge_2 = edge_R ** 2 + edge_Z ** 2
-    ! perp_R = edge_Z, perp_Z = -edge_R
-    dotprod = edge_Z * dist_R(1:3) - edge_R * dist_Z(1:3)
-    probably = all(dotprod <= 0d0)
-    if (probably .or. .not. present(thickness)) return
-    ! reuse dotprod as parameter of edge vector in linear equation
-    dotprod = edge_R * dist_R(1:3) + edge_Z * dist_Z(1:3)
-    where (dotprod < 0d0)
-       dist_2 = dist_R(1:3) ** 2 + dist_Z(1:3) ** 2
-    elsewhere (dotprod > edge_2)
-       dist_2 = dist_R(2:4) ** 2 + dist_Z(2:4) ** 2
-    elsewhere
-       dist_2 = dist_R(1:3) ** 2 + dist_Z(1:3) ** 2 - dotprod ** 2 / edge_2
-    end where
-    probably = any(dist_2 < thickness ** 2)
-  end function point_in_triangle
-
-  function point_location(r, z) result(location)
-    use constants, only: pi  ! orbit_mod.f90
-    use magdif_config, only: nflux, nkpol
-    use magdif_util, only: interp_psi_pol
-    use mesh_mod, only: mesh_point
-    real(dp), intent(in) :: r, z
-    integer :: location
-
-    integer :: ub, lb, kf, kq, k, k_max, ktri, candidates(6)
-    real(dp) :: psi, pol_frac, pol_offset, pol_interval(nkpol + 1), thickness
-
-    location = -1
-    if (r < r_min .or. r > r_max .or. z < z_min .or. z > z_max) return
-    location = -2
-    psi = interp_psi_pol(r, z)
-    if (equil%cocos%sgn_dpsi == +1) then
-       if (psi > fs%psi(nflux)) return
-       lb = lbound(fs%psi, 1)
-       ub = ubound(fs%psi, 1)
-       call binsrc(fs%psi, 0, ub - lb, psi, kf)
-       kf = lb + kf
-    else
-       if (psi < fs%psi(nflux)) return
-       ! binsrc expects strictly monotonically increasing arrays, so we reverse fs%psi
-       lb = lbound(fs%psi, 1)
-       ub = ubound(fs%psi, 1)
-       call binsrc(fs%psi(ub:lb:-1), 0, ub - lb, psi, kf)
-       kf = ub - (kf - 1)
-    end if
-    location = -3
-
-    pol_interval = 0d0
-    pol_interval(1:kp_max(kf)) = 0.5d0 / pi * atan2( &
-         mesh_point((kp_low(kf) + 1):(kp_low(kf) + kp_max(kf)))%zcoord - z_o, &
-         mesh_point((kp_low(kf) + 1):(kp_low(kf) + kp_max(kf)))%rcoord - r_o)
-    pol_offset = pol_interval(1)
-    pol_interval = pol_interval - pol_offset
-    pol_interval(kp_max(kf) + 1) = 1d0
-    where (pol_interval < 0d0) pol_interval = pol_interval + 1d0
-    where (pol_interval > 1d0) pol_interval = pol_interval - 1d0
-    pol_frac = 0.5d0 / pi * atan2(z - z_o, r - r_o) - pol_offset
-    if (pol_frac < 0d0) pol_frac = pol_frac + 1d0
-    if (pol_frac > 1d0) pol_frac = pol_frac - 1d0
-    call binsrc(pol_interval, 0, kp_max(kf), pol_frac, kq)
-
-    ! fs%psi is averaged from interpolated values and triangle edges do not lie exactly
-    ! on flux surfaces, so we include the two adjacent triangle strips in the search
-    if (kf == 1) then
-       k_max = 3
-       candidates = [kt_low(kf) + kq, &                               ! best guess
-            kt_low(kf + 1) + 2 * kq - 1, kt_low(kf + 1) + 2 * kq, &   ! outer loop
-            -1, -1, -1]                                               ! filler
-    elseif (kf == 2) then
-       k_max = 5
-       candidates = [kt_low(kf) + 2 * kq - 1, kt_low(kf) + 2 * kq, &  ! best guesses
-            kt_low(kf + 1) + 2 * kq - 1, kt_low(kf + 1) + 2 * kq, &   ! outer loop
-            kt_low(kf - 1) + kq, -1]                                  ! inner loop, filler
-    elseif (kf == nflux) then
-       k_max = 4
-       candidates = [kt_low(kf) + 2 * kq - 1, kt_low(kf) + 2 * kq, &  ! best guesses
-            kt_low(kf - 1) + 2 * kq - 1, kt_low(kf - 1) + 2 * kq, &   ! inner loop
-            -1, -1]                                                   ! filler
-    else
-       k_max = 6
-       candidates = [kt_low(kf) + 2 * kq - 1, kt_low(kf) + 2 * kq, &  ! best guesses
-            kt_low(kf + 1) + 2 * kq - 1, kt_low(kf + 1) + 2 * kq, &   ! outer loop
-            kt_low(kf - 1) + 2 * kq - 1, kt_low(kf - 1) + 2 * kq]     ! inner loop
-    end if
-
-    thickness = fs%rad(nflux) * sqrt(epsilon(1d0)) * 8d0
-    do k = 1, k_max
-       ktri = candidates(k)
-       if (point_in_triangle(ktri, R, Z, thickness)) then
-          location = ktri
-          exit
+    call RT0_poloidal_modes(jn, vec_polmodes)
+    call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/jmn', &
+         'poloidal modes of current density perturbation', 'statA cm^-2')
+    call vec_polmodes_deinit(vec_polmodes)
+    ! parallel currents
+    call coord_cache_ext_init(sample_Ipar, conf%nrad_Ipar, ntheta)
+    do k = lbound(mesh%res_modes, 1), ubound(mesh%res_modes, 1)
+       call compute_sample_Ipar(sample_Ipar, mesh%res_modes(k))
+       call write_Ipar_symfluxcoord(sample_Ipar)
+       if (conf%kilca_scale_factor /= 0) then
+          call write_Ipar(sample_Ipar)
        end if
     end do
-  end function point_location
+    call coord_cache_ext_deinit(sample_Ipar)
+  end subroutine magdif_postprocess
 
-  subroutine write_vector_plot_rect(pol_flux, tor_comp, outfile)
-    use magdif_config, only: nflux, longlines
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp
-    complex(dp), intent(in) :: pol_flux(:,:)
-    complex(dp), intent(in) :: tor_comp(:)
-    character(len = *), intent(in) :: outfile
+  subroutine check_furth(jn, Bmn_plas)
+    use magdif_conf, only: conf, longlines
+    use magdif_util, only: imun, clight
+    use magdif_mesh, only: equil, fs_half, mesh, sample_polmodes
+    use magdif_pert, only: RT0_t, vec_polmodes_t
+    type(RT0_t), intent(in) :: jn
+    type(vec_polmodes_t), intent(in) :: Bmn_plas
+    integer :: kf, kt, ktri, ktri_eff, kilca_m_res, fid_furth
+    complex(dp) :: sheet_flux
+    real(dp) :: k_z, k_theta
 
-    integer :: kw, kh, ktri, fid
-    type(triangle_rmp) :: tri
-    complex(dp) :: comp_r, comp_z, comp_phi
-    real(dp) :: r, z
-
-    open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
-    do kw = 1, equil%nw
-       do kh = 1, equil%nh
-          r = equil%rleft + dble(kw - 1) / dble(equil%nw - 1) * equil%rdim
-          z = equil%zmid + (kh - 0.5d0 * (equil%nw + 1)) / dble(equil%nh - 1) * equil%zdim
-          ktri = point_location(r, z)
-          if (ktri > kt_low(1) .and. ktri <= kt_low(nflux + 1)) then
-             tri = mesh_element_rmp(ktri)
-             call interp_RT0(ktri, pol_flux, r, z, comp_r, comp_z)
-             comp_phi = tor_comp(ktri)
-          else
-             comp_r = 0d0
-             comp_z = 0d0
-             comp_phi = 0d0
-          end if
-          write (fid, '(i6, 12(1x, es23.16))') ktri, r, z, real(comp_r), aimag(comp_r), &
-               real(comp_z), aimag(comp_z), real(comp_phi), aimag(comp_phi)
-       end do
-    end do
-    close(fid)
-  end subroutine write_vector_plot_rect
-
-  subroutine write_vector_dof(pol_flux, tor_comp, outfile)
-    use magdif_config, only: nflux, longlines
-    use mesh_mod, only: mesh_element_rmp
-    complex(dp), intent(in) :: pol_flux(:,:)
-    complex(dp), intent(in) :: tor_comp(:)
-    character(len = *), intent(in) :: outfile
-
-    integer :: ktri, fid
-
-    open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
-    do ktri = 1, kt_low(nflux+1)
-       write (fid, '(8(1x, es23.16))') &
-            real(pol_flux(ktri, 1)), aimag(pol_flux(ktri, 1)), &
-            real(pol_flux(ktri, 2)), aimag(pol_flux(ktri, 2)), &
-            real(pol_flux(ktri, 3)), aimag(pol_flux(ktri, 3)), &
-            real(tor_comp(ktri) * mesh_element_rmp(ktri)%area), &
-            aimag(tor_comp(ktri) * mesh_element_rmp(ktri)%area)
-    end do
-    close(fid)
-  end subroutine write_vector_dof
-
-  !> Real and imaginary part of \p scalar_dof (e.g. #presn) are written, in that order,
-  !> to \p outfile (e.g. #magdif_conf::presn_file), where line number corresponds to the
-  !> knot index in #mesh_mod::mesh_point.
-  subroutine write_scalar_dof(scalar_dof, outfile)
-    use magdif_config, only: nflux, longlines
-    complex(dp), intent(in) :: scalar_dof(:)
-    character(len = *), intent(in) :: outfile
-
-    integer :: kpoint, fid
-
-    open(newunit = fid, file = outfile, recl = longlines, status = 'replace')
-    do kpoint = 1, kp_low(nflux+1)
-       write (fid, '(2(1x, es23.16))') real(scalar_dof(kpoint)), aimag(scalar_dof(kpoint))
-    end do
-    close(fid)
-  end subroutine write_scalar_dof
-
-  subroutine write_fluxvar
-    use magdif_config, only: nflux, fluxvar_file, longlines
-    use mesh_mod, only: mesh_point
-    integer :: kf, fid
-    real(dp) :: rho_r, rho_z
-
-    open(newunit = fid, file = fluxvar_file, recl = longlines, status = 'replace')
-    write (fid, '(5(1x, es23.16))') 0d0, fs%psi(0), fs%q(0), fs%p(0), fs%dp_dpsi(0)
-    do kf = 1, nflux
-       rho_r = mesh_point(kp_low(kf) + 1)%rcoord - mesh_point(1)%rcoord
-       rho_z = mesh_point(kp_low(kf) + 1)%zcoord - mesh_point(1)%zcoord
-       write (fid, '(5(1x, es23.16))') &
-            hypot(rho_r, rho_z), fs%psi(kf), fs%q(kf), fs%p(kf), fs%dp_dpsi(kf)
-    end do
-    close(fid)
-  end subroutine write_fluxvar
-
-  subroutine write_poloidal_modes(pol_flux, tor_comp, outfile, calc_par)
-    use constants, only: pi  ! orbit_mod.f90
-    use magdata_in_symfluxcoor_mod, only: nlabel, ntheta
-    use magdif_config, only: n, nflux, kilca_scale_factor, kilca_pol_mode, longlines, &
-         decorate_filename, debug_pol_offset, debug_kilca_geom_theta
-    use magdif_util, only: imun, clight, bent_cyl2straight_cyl
-    use mesh_mod, only: triangle_rmp, mesh_element_rmp
-    complex(dp), intent(in) :: pol_flux(:,:)
-    complex(dp), intent(in) :: tor_comp(:)
-    character(len = *), intent(in) :: outfile
-    logical, intent(in), optional :: calc_par
-
-    integer, parameter :: mmax = 24
-    character(len = 20) :: fmt
-    complex(dp), dimension(-mmax:mmax) :: coeff_rad, coeff_pol, coeff_tor, fourier_basis
-    integer :: kf, kt, ktri, m, fid_rad, fid_pol, fid_tor
-    integer :: kilca_m_res, fid_furth, fid_par  ! only KiLCA geometry
-    type(triangle_rmp) :: tri
-    complex(dp) :: comp_R, comp_Z, comp_rad, comp_pol, comp_tor
-    complex(dp) :: comp_par, comp_par_neg, comp_par_pos, sheet_flux  ! only KiLCA geometry
-    real(dp) :: R, Z, theta, B0_R, B0_Z, dum
-    real(dp) :: k_z, k_theta, rad, B0_phi, B0  ! only KiLCA geometry
-    real(dp) :: sqrt_g, dR_dtheta, dZ_dtheta, q, q_sum  ! only ASDEX geometry
-
-    write (fmt, '(a, i3, a)') '(', 4 * mmax + 2 + 2, '(es23.15e3, 1x))'
-    if (kilca_scale_factor /= 0) then
-       kilca_m_res = -equil%cocos%sgn_q * abs(kilca_pol_mode)
-       k_z = n / equil%rcentr
-       open(newunit = fid_rad, recl = 3 * longlines, status = 'replace', &
-            file = decorate_filename(outfile, '', '_r'))
-       open(newunit = fid_pol, recl = 3 * longlines, status = 'replace', &
-            file = decorate_filename(outfile, '', '_theta'))
-       open(newunit = fid_tor, recl = 3 * longlines, status = 'replace', &
-            file = decorate_filename(outfile, '', '_z'))
-       open(newunit = fid_furth, recl = longlines, status = 'replace', &
-            file = decorate_filename(outfile, 'furth_', ''))
-    else
-       kilca_m_res = 0  ! to suppress compiler warning
-       open(newunit = fid_rad, recl = 3 * longlines, status = 'replace', &
-            file = decorate_filename(outfile, '', '_psi'))
-       open(newunit = fid_pol, recl = 3 * longlines, status = 'replace', &
-            file = decorate_filename(outfile, '', '_theta'))
-       open(newunit = fid_tor, recl = 3 * longlines, status = 'replace', &
-            file = decorate_filename(outfile, '', '_phi'))
-    end if
-    do kf = 1, nflux
-       coeff_rad = 0d0
-       coeff_pol = 0d0
-       coeff_tor = 0d0
-       q_sum = 0d0
+    kilca_m_res = -equil%cocos%sgn_q * abs(conf%kilca_pol_mode)
+    k_z = mesh%n / mesh%R_O
+    open(newunit = fid_furth, file = 'check_furth.dat', recl = longlines, status = 'replace')
+    do kf = 1, mesh%nflux
        sheet_flux = 0d0
-       do kt = 1, kt_max(kf)
-          theta = (dble(kt) - debug_pol_offset) / dble(kt_max(kf)) * 2d0 * pi
-          fourier_basis = [(exp(-imun * m * theta), m = -mmax, mmax)]
-          if (kilca_pol_mode /= 0 .and. debug_kilca_geom_theta) then
-             R = equil%rmaxis + fs_half%rad(kf) * cos(theta)
-             Z = equil%zmaxis + fs_half%rad(kf) * sin(theta)
-          else
-             ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
-             call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), &
-                  theta, q, dum, sqrt_g, dum, dum, R, dum, dR_dtheta, Z, dum, dZ_dtheta)
-          end if
-          call field(R, 0d0, Z, B0_R, dum, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
-               dum, dum)
-          ktri = point_location(R, Z)
-          tri = mesh_element_rmp(ktri)
-          call interp_RT0(ktri, pol_flux, R, Z, comp_R, comp_Z)
-          if (kilca_scale_factor /= 0) then
-             call bent_cyl2straight_cyl(comp_R, tor_comp(ktri), comp_Z, theta, &
-                  comp_rad, comp_pol, comp_tor)
-             sheet_flux = sheet_flux + tri%area * comp_tor * fourier_basis(kilca_m_res)
-          else
-             comp_rad = (comp_R * B0_Z - comp_Z * B0_R) * R * sqrt_g * q
-             comp_pol = comp_R * dR_dtheta + comp_Z * dZ_dtheta
-             comp_tor = tor_comp(ktri)
-          end if
-          coeff_rad = coeff_rad + comp_rad * fourier_basis
-          coeff_pol = coeff_pol + comp_pol * fourier_basis
-          coeff_tor = coeff_tor + comp_tor * fourier_basis
-          q_sum = q_sum + q
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          ktri_eff = sample_polmodes%ktri(ktri)
+          sheet_flux = sheet_flux + mesh%area(ktri_eff) * jn%comp_phi(ktri_eff) * &
+               exp(-imun * kilca_m_res * sample_polmodes%theta(ktri))
        end do
-       coeff_rad = coeff_rad / kt_max(kf)
-       coeff_pol = coeff_pol / kt_max(kf)
-       coeff_tor = coeff_tor / kt_max(kf)
-       q = q_sum / kt_max(kf)
-       if (kilca_scale_factor /= 0) then
-          write (fid_rad, fmt) fs_half%rad(kf), q, real(coeff_rad), aimag(coeff_rad)
-          write (fid_pol, fmt) fs_half%rad(kf), q, real(coeff_pol), aimag(coeff_pol)
-          write (fid_tor, fmt) fs_half%rad(kf), q, real(coeff_tor), aimag(coeff_tor)
-          k_theta = kilca_m_res / fs_half%rad(kf)
-          sheet_flux = -2d0 * imun / clight / k_theta * sheet_flux
-          write (fid_furth, '(7(1x, es23.16))') fs_half%rad(kf), k_z, k_theta, &
-               coeff_rad(-kilca_m_res), sheet_flux
-       else
-          write (fid_rad, fmt) fs_half%psi(kf), q, real(coeff_rad), aimag(coeff_rad)
-          write (fid_pol, fmt) fs_half%psi(kf), q, real(coeff_pol), aimag(coeff_pol)
-          write (fid_tor, fmt) fs_half%psi(kf), q, real(coeff_tor), aimag(coeff_tor)
-       end if
+       k_theta = kilca_m_res / fs_half%rad(kf)
+       sheet_flux = -2d0 * imun / clight / k_theta * sheet_flux
+       write (fid_furth, '(7(1x, es24.16e3))') fs_half%rad(kf), k_z, k_theta, &
+            Bmn_plas%coeff_rad(-kilca_m_res, kf), sheet_flux
     end do
-    close(fid_rad)
-    close(fid_pol)
-    close(fid_tor)
-    if (kilca_pol_mode /= 0) then
-       close(fid_furth)
-    end if
-    ! calculate parallel current (density) on a finer grid
-    if (present(calc_par) .and. kilca_pol_mode /= 0) then
-       open(newunit = fid_par, status = 'replace', recl = longlines, &
-            file = decorate_filename(outfile, '', '_par'))
-       do kf = 1, nlabel
-          rad = fs%rad(nflux) * (dble(kf) - 0.5d0) / dble(nlabel)
-          comp_par_neg = 0d0
-          comp_par_pos = 0d0
-          do kt = 1, ntheta
-             theta = 2d0 * pi * (dble(kt) - 0.5d0) / dble(ntheta)
-             R = equil%rmaxis + rad * cos(theta)
-             Z = equil%zmaxis + rad * sin(theta)
-             call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dum, dum, dum, dum, dum, &
-                  dum, dum)
-             ktri = point_location(R, Z)
-             call interp_RT0(ktri, pol_flux, R, Z, comp_R, comp_Z)
-             B0 = sqrt(B0_R * B0_R + B0_Z * B0_Z + B0_phi * B0_phi)
-             comp_par = (comp_R * B0_R + comp_Z * B0_Z + tor_comp(ktri) * B0_phi) / B0
-             comp_par_neg = comp_par_neg + comp_par * exp(imun * abs(kilca_m_res) * theta)
-             comp_par_pos = comp_par_pos + comp_par * exp(-imun * abs(kilca_m_res) * theta)
-          end do
-          comp_par_neg = comp_par_neg / dble(ntheta)
-          comp_par_pos = comp_par_pos / dble(ntheta)
-          write (fid_par, '(6(1x, es23.16))') rad, B0_phi / B0, comp_par_neg, comp_par_pos
+    close(fid_furth)
+  end subroutine check_furth
+
+
+  !> calculate parallel current (density) on a finer grid
+  subroutine write_Ipar_symfluxcoord(s)
+    use constants, only: pi  ! orbit_mod.f90
+    use magdif_conf, only: conf, longlines
+    use magdif_util, only: imun, clight
+    use magdif_mesh, only: coord_cache_ext
+    use magdif_pert, only: RT0_interp
+    type(coord_cache_ext), intent(in) :: s  ! shorten names
+    character(len = *), parameter :: fname_fmt = '("currn_par_", i0, ".dat")'
+    character(len = 1024) :: fname
+    integer :: krad, kpol, k, fid_jpar
+    real(dp) :: B0_psi, dB0R_dpsi, dB0phi_dpsi, dB0Z_dpsi, &
+         B0_dB0_dpsi, dhphi2_dpsi, B0_theta, dB0R_dtheta, dB0phi_dtheta, dB0Z_dtheta, &
+         B0_dB0_dtheta, dhphi2_dtheta, common_term, dB0theta_dpsi, dB0psi_dtheta, &
+         dhphihtheta_dpsi, dhphihpsi_dtheta
+    complex(dp) :: jn_R, jn_Z, jn_phi, jn_par, Bn_R, Bn_Z, Bn_phi, &
+         dBnR_dR, dBnR_dZ, dBnZ_dR, dBnZ_dZ, &
+         Bn_psi, dBnpsi_dpsi, Bn_theta, Delta_mn, part_int, bndry
+    real(dp), dimension(s%nrad) :: rad, psi, I_char
+    complex(dp), dimension(s%nrad) :: jmn_par_neg, jmn_par_pos, &
+         part_int_neg, part_int_pos, bndry_neg, bndry_pos, Delta_mn_neg, Delta_mn_pos
+
+    psi(:) = s%psi(::s%npol)
+    rad(:) = s%rad(::s%npol)
+    jmn_par_neg = (0d0, 0d0)
+    jmn_par_pos = (0d0, 0d0)
+    part_int_neg = (0d0, 0d0)
+    part_int_pos = (0d0, 0d0)
+    bndry_neg = (0d0, 0d0)
+    bndry_pos = (0d0, 0d0)
+    I_char = 0d0
+    Delta_mn_neg = (0d0, 0d0)
+    Delta_mn_pos = (0d0, 0d0)
+    write (fname, fname_fmt) s%m
+    open(newunit = fid_jpar, file = fname, status = 'replace', recl = longlines)
+    do krad = 1, s%nrad
+       do kpol = 1, s%npol
+          k = (krad - 1) * s%npol + kpol
+          associate (ktri => s%ktri(k), R => s%R(k), Z => s%Z(k), theta => s%theta(k), m => s%m, &
+               sqrt_g => s%sqrt_g(k), q => s%q(k), dq_dpsi => s%dq_dpsi(k), B0_2 => s%B0_2(k), &
+               B0_R => s%B0_R(k),  dB0R_dR => s%dB0R_dR(k), dB0R_dZ => s%dB0R_dZ(k), &
+               B0_phi => s%B0_phi(k), dB0phi_dR => s%dB0phi_dR(k), dB0phi_dZ => s%dB0phi_dZ(k), &
+               B0_Z => s%B0_Z(k), dB0Z_dR => s%dB0Z_dR(k), dB0Z_dZ => s%dB0Z_dZ(k), &
+               dR_dtheta => s%dR_dtheta(k), dR_dpsi => s%dR_dpsi(k), d2R_dpsi_dtheta => s%d2R_dpsi_dtheta(k), &
+               dZ_dtheta => s%dZ_dtheta(k), dZ_dpsi => s%dZ_dpsi(k), d2Z_dpsi_dtheta => s%d2Z_dpsi_dtheta(k))
+            call RT0_interp(ktri, jn, R, Z, jn_R, jn_Z, jn_phi)
+            ! include h^phi in current density
+            jn_par = (jn_R * B0_R + jn_Z * B0_Z + jn_phi * B0_phi) * &
+                 B0_phi / B0_2 * sqrt_g / R
+            jmn_par_neg(krad) = jmn_par_neg(krad) + jn_par * exp(imun * abs(m) * theta)
+            jmn_par_pos(krad) = jmn_par_pos(krad) + jn_par * exp(-imun * abs(m) * theta)
+            ! comparison with indirect calculation (Boozer and Nuehrenberg 2006)
+            call RT0_interp(ktri, Bn, R, Z, Bn_R, Bn_Z, Bn_phi, &
+                 dBnR_dR, dBnR_dZ, dBnZ_dR, dBnZ_dZ)
+            dB0phi_dpsi = (dB0phi_dR * dR_dpsi + dB0phi_dZ * dZ_dpsi) / R - &
+                 B0_phi * dR_dpsi / R ** 2
+            Bn_psi = R * (Bn_R * B0_Z - Bn_Z * B0_R)
+            dBnpsi_dpsi = dR_dpsi * (Bn_R * B0_Z - Bn_Z * B0_R) + R * ( &
+                 Bn_R * (dB0Z_dR * dR_dpsi + dB0Z_dZ * dZ_dpsi) - &
+                 Bn_Z * (dB0R_dR * dR_dpsi + dB0R_dZ * dZ_dpsi) + &
+                 (dBnR_dR * dR_dpsi + dBnR_dZ * dZ_dpsi) * B0_Z - &
+                 (dBnZ_dR * dR_dpsi + dBnZ_dZ * dZ_dpsi) * B0_R)
+            Delta_mn = dq_dpsi / q * ((Bn_psi + dBnpsi_dpsi) / B0_phi * R - &
+                 Bn_psi * dB0phi_dpsi / B0_phi ** 2 * R ** 2)
+            Delta_mn_neg(krad) = Delta_mn_neg(krad) + Delta_mn * exp(imun * abs(m) * theta)
+            Delta_mn_pos(krad) = Delta_mn_pos(krad) + Delta_mn * exp(-imun * abs(m) * theta)
+            I_char(krad) = I_char(krad) + B0_2 / &
+                 ((B0_R ** 2 + B0_Z ** 2) * q * q * R * B0_phi)
+            ! comparison with indirect calculation (Ampere's law and integration by parts)
+            B0_psi = B0_R * dR_dpsi + B0_Z * dZ_dpsi  ! covariant component
+            dB0R_dpsi = dB0R_dR * dR_dpsi + dB0R_dZ * dZ_dpsi
+            dB0phi_dpsi = dB0phi_dR * dR_dpsi + dB0phi_dZ * dZ_dpsi
+            dB0Z_dpsi = dB0Z_dR * dR_dpsi + dB0Z_dZ * dZ_dpsi
+            B0_dB0_dpsi = B0_R * dB0R_dpsi + B0_phi * dB0phi_dpsi + B0_Z * dB0Z_dpsi
+            dhphi2_dpsi = 2d0 * B0_phi * (dB0phi_dpsi / B0_2 - &
+                 B0_phi * B0_dB0_dpsi / B0_2 ** 2)
+            B0_theta = B0_R * dR_dtheta + B0_Z * dZ_dtheta  ! covariant component
+            dB0R_dtheta = dB0R_dR * dR_dtheta + dB0R_dZ * dZ_dtheta
+            dB0phi_dtheta = dB0phi_dR * dR_dtheta + dB0phi_dZ * dZ_dtheta
+            dB0Z_dtheta = dB0Z_dR * dR_dtheta + dB0Z_dZ * dZ_dtheta
+            B0_dB0_dtheta = B0_R * dB0R_dtheta + B0_phi * dB0phi_dtheta + B0_Z * dB0Z_dtheta
+            dhphi2_dtheta = 2d0 * B0_phi * (dB0phi_dtheta / B0_2 - &
+                 B0_phi * B0_dB0_dtheta / B0_2 ** 2)
+            common_term = B0_R * d2R_dpsi_dtheta + B0_Z * d2Z_dpsi_dtheta + &
+                 dB0R_dR * dR_dpsi * dR_dtheta + dB0Z_dZ * dZ_dpsi * dZ_dtheta
+            dB0theta_dpsi = common_term + &
+                 dB0R_dZ * dZ_dpsi * dR_dtheta + dB0Z_dR * dR_dpsi * dZ_dtheta
+            dB0psi_dtheta = common_term + &
+                 dB0R_dZ * dZ_dtheta * dR_dpsi + dB0Z_dR * dR_dtheta * dZ_dpsi
+            dhphihtheta_dpsi = ((dB0phi_dpsi / R - B0_phi * dR_dpsi / R ** 2) * B0_theta + &
+                 B0_phi / R * dB0theta_dpsi) / B0_2 - 2d0 * B0_phi / R * B0_theta * &
+                 B0_dB0_dpsi / B0_2 ** 2
+            dhphihpsi_dtheta = ((dB0phi_dtheta / R - B0_phi * dR_dtheta / R ** 2) * B0_psi + &
+                 B0_phi / R * dB0psi_dtheta) / B0_2 - 2d0 * B0_phi / R * B0_psi * &
+                 B0_dB0_dtheta / B0_2 ** 2
+            Bn_psi = Bn_R * dR_dpsi + Bn_Z * dZ_dpsi
+            Bn_theta = Bn_R * dR_dtheta + Bn_Z * dZ_dtheta
+            part_int = dhphi2_dpsi * Bn_theta - dhphi2_dtheta * Bn_psi + Bn_phi / R * &
+                 (dhphihtheta_dpsi - dhphihpsi_dtheta) + imun * conf%n * B0_phi / R * &
+                 (B0_psi * Bn_theta - B0_theta * Bn_psi) / B0_2
+            part_int_neg(krad) = part_int_neg(krad) + (part_int - imun * abs(m) * &
+                 B0_phi * (B0_phi * Bn_psi - B0_psi * Bn_phi)) * &
+                 exp(imun * abs(m) * theta)
+            part_int_pos(krad) = part_int_pos(krad) + (part_int + imun * abs(m) * &
+                 B0_phi * (B0_phi * Bn_psi - B0_psi * Bn_phi)) * &
+                 exp(-imun * abs(m) * theta)
+            bndry = B0_phi * (Bn_phi * B0_theta - Bn_theta * B0_phi) / B0_2
+            bndry_neg(krad) = bndry_neg(krad) + bndry * exp(imun * abs(m) * theta)
+            bndry_pos(krad) = bndry_pos(krad) + bndry * exp(-imun * abs(m) * theta)
+          end associate
        end do
-       close(fid_par)
-    end if
-  end subroutine write_poloidal_modes
+       jmn_par_neg(krad) = jmn_par_neg(krad) / dble(s%npol)
+       jmn_par_pos(krad) = jmn_par_pos(krad) / dble(s%npol)
+       part_int_neg(krad) = part_int_neg(krad) / dble(s%npol) * 0.25d0 * clight / pi
+       part_int_pos(krad) = part_int_pos(krad) / dble(s%npol) * 0.25d0 * clight / pi
+       bndry_neg(krad) = bndry_neg(krad) / dble(s%npol) * 0.25d0 * clight / pi
+       bndry_pos(krad) = bndry_pos(krad) / dble(s%npol) * 0.25d0 * clight / pi
+       Delta_mn_neg(krad) = Delta_mn_neg(krad) / dble(s%npol)
+       Delta_mn_pos(krad) = Delta_mn_pos(krad) / dble(s%npol)
+       I_char(krad) = dble(s%npol) * 0.5d0 * clight / I_char(krad)
+       write (fid_jpar, '(19(1x, es24.16e3))') psi(krad), rad(krad), &
+            jmn_par_neg(krad), jmn_par_pos(krad), &
+            part_int_neg(krad), part_int_pos(krad), bndry_neg(krad), bndry_pos(krad), &
+            I_char(krad), Delta_mn_neg(krad), Delta_mn_pos(krad)
+    end do
+    close(fid_jpar)
+  end subroutine write_Ipar_symfluxcoord
+
+
+  !> calculate parallel current (density) on a finer grid
+  subroutine write_Ipar(s)
+    use constants, only: pi  ! orbit_mod.f90
+    use magdif_conf, only: longlines, decorate_filename
+    use magdif_util, only: imun, clight, bent_cyl2straight_cyl
+    use magdif_mesh, only: mesh, coord_cache_ext
+    use magdif_pert, only: RT0_interp
+    type(coord_cache_ext), intent(in) :: s  ! shorten names
+    integer :: krad, kpol, k, fid_jpar
+    real(dp) :: dB0R_drad, dB0phi_drad, dB0Z_drad, B0_dB0_drad, &
+         B0_theta, dB0theta_drad, dhz2_drad, dradhthetahz_drad
+    complex(dp) :: jn_R, jn_Z, jn_phi, jn_par, Bn_R, Bn_Z, Bn_phi, &
+         Bn_rad, Bn_pol, Bn_tor, part_int, bndry
+    real(dp), dimension(s%nrad) :: rad, psi
+    complex(dp), dimension(s%nrad) :: jmn_par_neg, jmn_par_pos, &
+         part_int_neg, part_int_pos, bndry_neg, bndry_pos
+
+    psi(:) = s%psi(::s%npol)
+    rad(:) = s%rad(::s%npol)
+    jmn_par_neg = (0d0, 0d0)
+    jmn_par_pos = (0d0, 0d0)
+    part_int_neg = (0d0, 0d0)
+    part_int_pos = (0d0, 0d0)
+    bndry_neg = (0d0, 0d0)
+    bndry_pos = (0d0, 0d0)
+    open(newunit = fid_jpar, status = 'replace', recl = longlines, file = 'currn_par.dat')
+    do krad = 1, s%nrad
+       do kpol = 1, s%npol
+          k = (krad - 1) * s%npol + kpol
+          associate (ktri => s%ktri(k), R => s%R(k), Z => s%Z(k), &
+               theta => s%theta(k), m => s%m, B0_2 => s%B0_2(k), &
+               B0_R => s%B0_R(k), dB0R_dR => s%dB0R_dR(k), dB0R_dZ => s%dB0R_dZ(k), &
+               B0_phi => s%B0_phi(k), dB0phi_dR => s%dB0phi_dR(k), dB0phi_dZ => s%dB0phi_dZ(k), &
+               B0_Z => s%B0_Z(k), dB0Z_dR => s%dB0Z_dR(k), dB0Z_dZ => s%dB0Z_dZ(k))
+            call RT0_interp(ktri, jn, R, Z, jn_R, jn_Z, jn_phi)
+            ! include h^z in current density
+            jn_par = (jn_R * B0_R + jn_Z * B0_Z + jn_phi * B0_phi) * B0_phi / B0_2
+            jmn_par_neg(krad) = jmn_par_neg(krad) + jn_par * exp(imun * abs(m) * theta)
+            jmn_par_pos(krad) = jmn_par_pos(krad) + jn_par * exp(-imun * abs(m) * theta)
+            ! comparison with indirect calculation (Ampere's law and integration by parts)
+            dB0R_drad = dB0R_dR * cos(theta) + dB0R_dZ * sin(theta)
+            dB0phi_drad = dB0phi_dR * cos(theta) + dB0phi_dZ * sin(theta)
+            dB0Z_drad = dB0Z_dR * cos(theta) + dB0Z_dZ * sin(theta)
+            B0_dB0_drad = B0_R * dB0R_drad + B0_phi * dB0phi_drad + B0_Z * dB0Z_drad
+            B0_theta = B0_Z * cos(theta) - B0_R * sin(theta)
+            dB0theta_drad = dB0Z_dR * cos(theta) ** 2 - dB0R_dZ * sin(theta) ** 2 + &
+                 (dB0Z_dZ - dB0R_dR) * sin(theta) * cos(theta)
+            dhz2_drad = 2d0 * B0_phi * (B0_2 * dB0phi_drad - B0_phi * B0_dB0_drad) / &
+                 B0_2 ** 2
+            dradhthetahz_drad = B0_theta * B0_phi / B0_2 + rad(krad) * &
+                 ((B0_theta * dB0phi_drad + dB0theta_drad * B0_phi) / B0_2 - &
+                 2d0 * B0_theta * B0_phi * B0_dB0_drad / B0_2 ** 2)
+            call RT0_interp(ktri, Bn, R, Z, Bn_R, Bn_Z, Bn_phi)
+            call bent_cyl2straight_cyl(Bn_R, Bn_phi, Bn_Z, theta, &
+                 Bn_rad, Bn_pol, Bn_tor)
+            part_int = -rad(krad) * Bn_pol * dhz2_drad + Bn_tor * dradhthetahz_drad
+            part_int_neg(krad) = part_int_neg(krad) + (part_int + imun * B0_phi * &
+                 (dble(mesh%n) / mesh%R_O * rad(krad) * B0_theta + &
+                 abs(m) * B0_phi) * Bn_rad / B0_2) * exp(imun * abs(m) * theta)
+            part_int_pos(krad) = part_int_pos(krad) + (part_int + imun * B0_phi * &
+                 (dble(mesh%n) / mesh%R_O * rad(krad) * B0_theta - &
+                 abs(m) * B0_phi) * Bn_rad / B0_2) * exp(-imun * abs(m) * theta)
+            bndry = B0_phi * rad(krad) * (B0_phi * Bn_pol - B0_theta * Bn_tor) / B0_2
+            bndry_neg(krad) = bndry_neg(krad) + bndry * exp(imun * abs(m) * theta)
+            bndry_pos(krad) = bndry_pos(krad) + bndry * exp(-imun * abs(m) * theta)
+          end associate
+       end do
+       jmn_par_neg(krad) = jmn_par_neg(krad) / dble(s%npol)
+       jmn_par_pos(krad) = jmn_par_pos(krad) / dble(s%npol)
+       part_int_neg(krad) = part_int_neg(krad) / dble(s%npol) * 0.25d0 * clight / pi
+       part_int_pos(krad) = part_int_pos(krad) / dble(s%npol) * 0.25d0 * clight / pi
+       bndry_neg(krad) = bndry_neg(krad) / dble(s%npol) * 0.25d0 * clight / pi
+       bndry_pos(krad) = bndry_pos(krad) / dble(s%npol) * 0.25d0 * clight / pi
+       write (fid_jpar, '(14(1x, es24.16e3))') psi(krad), rad(krad), &
+            jmn_par_neg(krad), jmn_par_pos(krad), &
+            part_int_neg(krad), part_int_pos(krad), bndry_neg(krad), bndry_pos(krad)
+    end do
+    close(fid_jpar)
+  end subroutine write_Ipar
 end module magdif

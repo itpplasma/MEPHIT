@@ -1,6 +1,8 @@
 ProjectConfig.cmake.in
 .vscode
+.idea
 build/
+run/
 \#*\#
 *~
 *.mod

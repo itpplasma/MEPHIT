@@ -1,71 +1,54 @@
-&settings
+&scalars
    ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
-   log_level = 4
+   config%log_level = 4
    ! 0: single iteration, 1: direct iterations, 2: preconditioned iterations
-   runmode = 2
+   config%runmode = 2
    ! use non-resonant test case
-   nonres = .false.
+   config%nonres = .false.
    ! average over quadrilaterals for non-resonant test case
-   quad_avg = .true.
+   config%quad_avg = .true.
    ! 0: EPS paper profile, 1: parabolic profile, 2: EQDSK profile
-   pres_prof = 2
+   config%pres_prof = 2
    ! 0: only PS current, 1: rot B_0, 2: EQDSK profile
-   curr_prof = 2
+   config%curr_prof = 2
    ! 0: surface integral, 1: field line integral, 2: EQDSK profile
-   q_prof = 2
+   config%q_prof = 1
 
-   ! harmonic index of perturbation
-   n = 2
+   ! toroidal mode number of perturbation
+   config%n = 2
+   ! minimal absolute poloidal mode number
+   config%m_min = 3
+   ! maximal absolute poloidal mode number
+   config%m_max = 11
    ! number of iteration steps
-   niter = 20
+   config%niter = 20
    ! number of Ritz eigenvalues
-   nritz = 30
+   config%nritz = 30
    ! threshold for eigenvalues in preconditioner
-   tol = 5d-1
+   config%ritz_threshold = 0.5d0
    ! number of knots per poloidal loop
-   nkpol = 200
+   config%nkpol = 200
    ! number of flux surfaces up to and counting LCFS (before refinement)
-   nflux_unref = 100
+   config%nflux_unref = 100
    ! temperature on magnetic axis
-   ti0 = 3.d3
+   config%temp_max = 3.d3
    ! minimum temperature
-   t_min = 2d1
+   config%temp_min = 2d1
    ! density on magnetic axis
-   di0 = 5.d13
+   config%dens_max = 5.d13
    ! minimum density
-   d_min = 2d11
+   config%dens_min = 2d11
    ! damping factor for resonances
-   damp = 0d0
-   ! meshdata file
-   meshdata_file = 'mesh.dat'
-   ! vacuum perturbation field
-   Bn_vac_file = 'Bn_flux.dat'
-
-   ! output vacuum perturbation field
-   Bn_vacout_file = 'Bn_vac.dat'
-   ! accumulated perturbation field from FEM
-   Bn_file = 'Bn.dat'
-   ! perturbation field from iterations
-   Bn_diff_file = 'Bn_diff.dat'
-   ! output file for flux variables
-   fluxvar_file = 'fluxvar.dat'
-   ! output file for equilibrium current
-   j0phi_file = 'j0phi.dat'
-   ! output file for pressure perturbation
-   presn_file = 'presn.dat'
-   ! output file for current perturbation
-   currn_file = 'currn.dat'
-   ! output file for eigenvectors
-   eigvec_file = 'eigvec.dat'
+   config%damp = 0d0
    ! maximal number of eigenvectors to be saved
-   max_eig_out = 10
+   config%max_eig_out = 10
 
    ! error threshold for magnetic field perturbation
-   rel_err_Bn = 1d-7
+   config%rel_err_Bn = 1d-7
    ! error threshold for current perturbation
-   rel_err_currn = 1d-8
+   config%rel_err_currn = 1d-8
 /
-&delayed
+&arrays
    ! coefficients for sheet currents
    sheet_current_factor(3) = (-1d3, 0d0)
    sheet_current_factor(4) = (3d2, -3d2)
