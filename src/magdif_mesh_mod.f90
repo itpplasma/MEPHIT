@@ -12,7 +12,7 @@ module magdif_mesh
        coord_cache_ext, coord_cache_ext_init, compute_sample_Ipar, coord_cache_ext_deinit, &
        coord_cache_ext_write, coord_cache_ext_read, &
        flux_func_cache_init, flux_func_cache_check, flux_func_cache_destructor, generate_mesh, &
-       refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile,  &
+       compute_resonance_positions, refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile, &
        create_mesh_points, init_indices, common_triangles, &
        connect_mesh_points, get_labeled_edges, write_mesh_cache, read_mesh_cache, &
        magdif_mesh_destructor, init_flux_variables, compute_pres_prof_eps, compute_pres_prof_par, &
@@ -672,7 +672,7 @@ contains
     call cache_equilibrium_field
     call init_flux_variables
     call compute_j0phi
-    call cache_resonance_positions
+    call check_resonance_positions
   end subroutine generate_mesh
 
   subroutine write_mesh_cache
@@ -739,6 +739,64 @@ contains
     call h5_get(h5id_root, 'cache/j0phi_edge', j0phi)
     call h5_close(h5id_root)
   end subroutine read_mesh_cache
+
+  subroutine compute_resonance_positions(psi_sample, q_sample, psi2rho_norm)
+    use magdif_conf, only: conf, log
+    use magdif_util, only: flux_func
+    use netlib_mod, only: zeroin
+    real(dp), dimension(:), intent(in) :: psi_sample
+    real(dp), dimension(:), intent(in) :: q_sample
+    interface
+       function psi2rho_norm(psi)
+         import :: dp
+         real(dp), intent(in) :: psi
+         real(dp) :: psi2rho_norm
+       end function psi2rho_norm
+    end interface
+    real(dp) :: psi_min, psi_max
+    integer :: m
+    type(flux_func) :: psi_eqd
+
+    if (size(psi_sample) /= size(q_sample)) then
+       call log%msg_arg_size('refine_resonant_surfaces', 'size(psi_sample)', &
+            'size(q_sample)', size(psi_sample), size(q_sample))
+       if (log%err) call log%write
+       error stop
+    end if
+    psi_min = minval(psi_sample)
+    psi_max = maxval(psi_sample)
+    call psi_eqd%init(4, psi_sample)
+    mesh%m_res_min = max(ceiling(minval(abs(q_sample)) * dble(mesh%n)), conf%n + 1)
+    mesh%m_res_max = floor(maxval(abs(q_sample)) * dble(mesh%n))
+    if (allocated(mesh%res_modes)) deallocate(mesh%res_modes)
+    if (conf%kilca_scale_factor /= 0) then
+       allocate(mesh%res_modes(1))
+       mesh%res_modes(:) = [conf%kilca_pol_mode]
+    else
+       allocate(mesh%res_modes(1:mesh%m_res_max-mesh%m_res_min))
+       mesh%res_modes(:) = [(m, m = mesh%m_res_min, mesh%m_res_max)]
+    end if
+    if (allocated(mesh%psi_res)) deallocate(mesh%psi_res)
+    if (allocated(mesh%rad_norm_res)) deallocate(mesh%rad_norm_res)
+    allocate(mesh%psi_res(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%rad_norm_res(mesh%m_res_min:mesh%m_res_max))
+    log%msg = 'resonance positions:'
+    if (log%debug) call log%write
+    do m = mesh%m_res_min, mesh%m_res_max
+       mesh%psi_res(m) = zeroin(psi_min, psi_max, q_interp_resonant, 1d-9)
+       mesh%rad_norm_res(m) = psi2rho_norm(mesh%psi_res(m))
+       write (log%msg, '("m = ", i2, ", psi_m = ", es24.16e3, ", rho_m = ", f19.16)') &
+            m, mesh%psi_res(m), mesh%rad_norm_res(m)
+       if (log%debug) call log%write
+    end do
+
+  contains
+    function q_interp_resonant(psi)
+      real(dp), intent(in) :: psi
+      real(dp) :: q_interp_resonant
+      q_interp_resonant = psi_eqd%interp(abs(q_sample), psi) - dble(m) / dble(mesh%n)
+    end function q_interp_resonant
+  end subroutine compute_resonance_positions
 
   subroutine refine_eqd_partition(nref, deletions, additions, refinement, res, refined, &
        ref_ind)
@@ -825,93 +883,28 @@ contains
          mesh%nflux - fine_hi(nref), 1, 0)
   end subroutine refine_eqd_partition
 
-  subroutine refine_resonant_surfaces(psi_sample, q_sample, psi2rho_norm, rho_norm_ref)
-    use magdif_conf, only: conf, conf_arr, log
-    use magdif_util, only: flux_func
-    use netlib_mod, only: zeroin
-    real(dp), dimension(:), intent(in) :: psi_sample
-    real(dp), dimension(:), intent(in) :: q_sample
-    interface
-       function psi2rho_norm(psi)
-         import :: dp
-         real(dp), intent(in) :: psi
-         real(dp) :: psi2rho_norm
-       end function psi2rho_norm
-    end interface
+  subroutine refine_resonant_surfaces(rho_norm_ref)
+    use magdif_conf, only: conf_arr, log
     real(dp), dimension(:), allocatable, intent(out) :: rho_norm_ref
-    real(dp) :: psi_min, psi_max
-    integer :: m, kref, m_lo, m_hi
-    type(flux_func) :: psi_eqd
+    integer :: m, kref
     integer, dimension(:), allocatable :: ref_ind
     logical, dimension(:), allocatable :: mask
 
-    if (size(psi_sample) /= size(q_sample)) then
-       call log%msg_arg_size('refine_resonant_surfaces', 'size(psi_sample)', &
-            'size(q_sample)', size(psi_sample), size(q_sample))
-       if (log%err) call log%write
-       error stop
-    end if
-    psi_min = minval(psi_sample)
-    psi_max = maxval(psi_sample)
-    call psi_eqd%init(4, psi_sample)
-    mesh%m_res_min = max(ceiling(minval(abs(q_sample)) * dble(mesh%n)), conf%n + 1)
-    mesh%m_res_max = floor(maxval(abs(q_sample)) * dble(mesh%n))
-    if (conf_arr%m_min < mesh%m_res_min) then
-       write (log%msg, '("Ignoring configuration values for ", i0, " <= m < ", i0, ".")') &
-            conf_arr%m_min, mesh%m_res_min
-       if (log%warn) call log%write
-       m_lo = mesh%m_res_min
-    else
-       m_lo = conf_arr%m_min
-    end if
-    if (conf_arr%m_max > mesh%m_res_max) then
-       write (log%msg, '("Ignoring configuration values for ", i0, " < m <= ", i0, ".")') &
-            mesh%m_res_max, conf_arr%m_max
-       if (log%warn) call log%write
-       m_hi = mesh%m_res_max
-    else
-       m_hi = conf_arr%m_max
-    end if
-    if (allocated(mesh%res_modes)) deallocate(mesh%res_modes)
-    if (conf%kilca_scale_factor /= 0) then
-       allocate(mesh%res_modes(1))
-       mesh%res_modes(:) = [conf%kilca_pol_mode]
-    else
-       allocate(mesh%res_modes(1:mesh%m_res_max-mesh%m_res_min))
-       mesh%res_modes(:) = [(m, m = mesh%m_res_min, mesh%m_res_max)]
-    end if
     if (allocated(mesh%refinement)) deallocate(mesh%refinement)
     if (allocated(mesh%deletions)) deallocate(mesh%deletions)
     if (allocated(mesh%additions)) deallocate(mesh%additions)
     allocate(mesh%refinement(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%deletions(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%additions(mesh%m_res_min:mesh%m_res_max))
-    mesh%refinement = 0d0
-    mesh%deletions = 0
-    mesh%additions = 0
-    mesh%refinement(m_lo:m_hi) = conf_arr%refinement(m_lo:m_hi)
-    mesh%deletions(m_lo:m_hi) = conf_arr%deletions(m_lo:m_hi)
-    mesh%additions(m_lo:m_hi) = conf_arr%additions(m_lo:m_hi)
-    if (allocated(mesh%psi_res)) deallocate(mesh%psi_res)
-    if (allocated(mesh%rad_norm_res)) deallocate(mesh%rad_norm_res)
-    allocate(mesh%psi_res(mesh%m_res_min:mesh%m_res_max))
-    allocate(mesh%rad_norm_res(mesh%m_res_min:mesh%m_res_max))
-    log%msg = 'resonance positions:'
-    if (log%debug) call log%write
-    do m = mesh%m_res_min, mesh%m_res_max
-       mesh%psi_res(m) = zeroin(psi_min, psi_max, q_interp_resonant, 1d-9)
-       mesh%rad_norm_res(m) = psi2rho_norm(mesh%psi_res(m))
-       write (log%msg, '("m = ", i2, ", psi_m = ", es24.16e3, ", rho_m = ", f19.16)') &
-            m, mesh%psi_res(m), mesh%rad_norm_res(m)
-       if (log%debug) call log%write
-    end do
+    mesh%refinement(:) = conf_arr%refinement
+    mesh%deletions(:) = conf_arr%deletions
+    mesh%additions(:) = conf_arr%additions
     allocate(mask(mesh%m_res_min:mesh%m_res_max))
     mask = 0d0 < mesh%refinement .and. mesh%refinement < 1d0
     allocate(ref_ind(count(mask)))
     call refine_eqd_partition(count(mask), pack(mesh%deletions, mask), &
          pack(mesh%additions, mask), pack(mesh%refinement, mask), &
          pack(mesh%rad_norm_res, mask), rho_norm_ref, ref_ind)
-
     log%msg = 'refinement positions:'
     if (log%debug) call log%write
     kref = 0
@@ -923,17 +916,32 @@ contains
             rho_norm_ref(ref_ind(kref) - 1), mesh%rad_norm_res(m), rho_norm_ref(ref_ind(kref))
        if (log%debug) call log%write
     end do
-
     if (allocated(ref_ind)) deallocate(ref_ind)
     if (allocated(mask)) deallocate(mask)
-
-  contains
-    function q_interp_resonant(psi)
-      real(dp), intent(in) :: psi
-      real(dp) :: q_interp_resonant
-      q_interp_resonant = psi_eqd%interp(abs(q_sample), psi) - dble(m) / dble(mesh%n)
-    end function q_interp_resonant
   end subroutine refine_resonant_surfaces
+
+  subroutine cache_resonance_positions
+    use magdif_conf, only: log
+    integer :: m, kf_res
+
+    log%msg = 'resonance positions:'
+    if (log%debug) call log%write
+    allocate(mesh%m_res(mesh%nflux))
+    allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
+    mesh%m_res = 0
+    mesh%res_ind = 0
+    ! if more two or more resonance positions are within the same flux surface,
+    ! assign the lowest mode number
+    do m = mesh%m_res_max, mesh%m_res_min, -1
+       kf_res = minloc(abs(fs_half%psi - mesh%psi_res(m)), 1)
+       mesh%res_ind(m) = kf_res
+       mesh%m_res(kf_res) = m
+       write (log%msg, '("m = ", i2, ", kf = ", i3, ", rho: ", f19.16, 2(" < ", f19.16))') &
+            m, kf_res, fs%rad(kf_res - 1) / fs%rad(mesh%nflux), mesh%rad_norm_res(m), &
+            fs%rad(kf_res) / fs%rad(mesh%nflux)
+       if (log%debug) call log%write
+    end do
+  end subroutine cache_resonance_positions
 
   subroutine write_kilca_convexfile(rho_max, convexfile)
     use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
@@ -955,7 +963,7 @@ contains
 
   subroutine create_mesh_points(convexfile)
     use constants, only: pi
-    use magdif_conf, only: conf, log
+    use magdif_conf, only: conf, conf_arr, log
     use magdif_util, only: interp_psi_pol, flux_func
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
          raxis, zaxis, load_magdata_in_symfluxcoord
@@ -1001,8 +1009,9 @@ contains
     allocate(rho_norm_eqd(nlabel))
     rho_norm_eqd = rbeg / hypot(theta_axis(1), theta_axis(2))
 
-    call refine_resonant_surfaces(psisurf(1:) * psipol_max + psi_axis, qsaf, &
-         psi2rho_norm, rho_norm_ref)
+    call compute_resonance_positions(psisurf(1:) * psipol_max + psi_axis, qsaf, psi2rho_norm)
+    call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
+    call refine_resonant_surfaces(rho_norm_ref)
     call fs%init(mesh%nflux, .false.)
     call fs_half%init(mesh%nflux, .true.)
     fs%rad = rho_norm_ref
@@ -1014,6 +1023,7 @@ contains
     fs%rad = fs%rad * hypot(theta_axis(1), theta_axis(2))
     fs_half%rad = fs_half%rad * hypot(theta_axis(1), theta_axis(2))
     call flux_func_cache_check
+    call cache_resonance_positions
     allocate(mesh%theta_offset(mesh%nflux))
     do kf = 1, mesh%nflux
        mesh%theta_offset(kf) = theta_offset(fs_half%psi(kf))
@@ -2340,38 +2350,21 @@ contains
     fs_half%q = [(fluxvar%interp(equil%qpsi, fs_half%psi(kf)), kf = 1, mesh%nflux)]
   end subroutine compute_safety_factor_geqdsk
 
-  subroutine cache_resonance_positions
-    use magdif_conf, only: conf, conf_arr, log, cmplx_fmt
-    integer :: kf, m, kf_res
+  subroutine check_resonance_positions
+    use magdif_conf, only: log
+    integer :: m, kf
     real(dp), dimension(mesh%nflux) :: abs_err
 
-    allocate(mesh%m_res(mesh%nflux))
-    mesh%m_res = 0
-    allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
-    mesh%res_ind = 0
-    log%msg = 'resonance positions:'
-    if (log%debug) call log%write
     do m = mesh%m_res_max, mesh%m_res_min, -1
        abs_err = [(abs(abs(fs_half%q(kf)) - dble(m) / dble(mesh%n)), kf = 1, mesh%nflux)]
-       kf_res = minloc(abs_err, 1)
-       mesh%res_ind(m) = kf_res
-       mesh%m_res(kf_res) = m
-       write (log%msg, '("m = ", i0, ", kf_res = ", i0, ' // &
-            '", rho: ", f19.16, 2(" < ", f19.16))') m, kf_res, &
-            [fs%rad(kf_res - 1), fs_half%rad(kf_res), fs%rad(kf_res)] / fs%rad(mesh%nflux)
-       if (log%debug) call log%write
+       kf = minloc(abs_err, 1)
+       if (kf /= mesh%res_ind(m)) then
+          write (log%msg, '("m = ", i0, ": q is resonant at index ", i0, ' // &
+               '", but psi is resonant at index ", i0)') m, kf, mesh%res_ind(m)
+          if (log%warn) call log%write
+       end if
     end do
-
-    if (log%info) then
-       log%msg = 'absolute poloidal mode number, sheet current factor'
-       call log%write
-       do m = conf%m_min, conf%m_max
-          write (log%msg, '(i2, 1x, ' // cmplx_fmt // ')') m, &
-               conf_arr%sheet_current_factor(m)
-          call log%write
-       end do
-    end if
-  end subroutine cache_resonance_positions
+  end subroutine check_resonance_positions
 
   subroutine check_safety_factor
     use constants, only: pi  ! orbit_mod.f90

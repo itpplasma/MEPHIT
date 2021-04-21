@@ -30,7 +30,7 @@ contains
   !> Initialize magdif module
   subroutine magdif_init
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
-    use magdif_conf, only: conf, log, magdif_log, datafile
+    use magdif_conf, only: conf, conf_arr, log, magdif_log, datafile
     use magdif_util, only: get_field_filenames, init_field
     use magdif_mesh, only: equil, mesh, read_mesh_cache, fluxvar, flux_func_cache_check, &
          check_curr0, check_safety_factor
@@ -54,6 +54,8 @@ contains
     ! read in preprocessed data
     call read_mesh_cache
     call load_magdata_in_symfluxcoord
+    ! TODO: save previously processed config parameters to HDF5 and load here
+    call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
     ! TODO: cache Lagrange polynomials instead
     call fluxvar%init(4, equil%psi_eqd)
 

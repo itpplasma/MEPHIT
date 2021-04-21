@@ -39,6 +39,9 @@ module magdif_conf
 
   type :: magdif_config
 
+     !> Name of the file the configuration is read from.
+     character(len = 1024) :: config_file
+
      !> Verbosity of logging. Possible values are 0 (none), 1 (errors), 2 (warnings),
      !> 3 (info), and 4 (debug, default).
      integer :: log_level = 4
@@ -89,14 +92,6 @@ module magdif_conf
 
      !> Index of toroidal harmonics of perturbation. Defaults to 2.
      integer :: n = 2
-
-     !> Minimum poloidal mode number considered. Corresponds to lower bound of arrays in
-     !> #magdif_config_delayed.
-     integer :: m_min = 0
-
-     !> Maximum poloidal mode number considered. Corresponds to upper bound of arrays in
-     !> #magdif_config_delayed.
-     integer :: m_max = 0
 
      !> Number of knots per poloidal loop. Defaults to 300.
      integer :: nkpol = 300
@@ -215,6 +210,8 @@ contains
     open(newunit = fid, file = filename)
     read(fid, nml = scalars)
     close(fid)
+    ! override if erroneously set in namelist
+    config%config_file = trim(filename)
   end subroutine magdif_config_read
 
   !> Read dynamic configuration from configuration file for magdif.
