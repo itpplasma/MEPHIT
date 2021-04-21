@@ -2367,38 +2367,44 @@ contains
   end subroutine check_resonance_positions
 
   subroutine check_safety_factor
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use constants, only: pi  ! orbit_mod.f90
-    use magdata_in_symfluxcoor_mod, only: nlabel, psipol_max, psisurf, rbeg, qsaf
-    integer :: kf, kt, ktri, fid
-    real(dp), allocatable :: q(:)
+    use magdata_in_symfluxcoor_mod, only: psisurf, qsaf
+    use magdif_conf, only: datafile
+    character(len = *), parameter :: grp = 'debug_q'
+    integer(HID_T) :: h5id_root
 
-    allocate(q(mesh%nflux))
-    q = 0d0
+    integer :: kf, kt, ktri
+    real(dp) :: step_q(mesh%nflux), step_psi_norm(mesh%nflux), eqd_psi_norm(equil%nw)
+
+    step_q(:) = 0d0
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          q(kf) = q(kf) + B0phi_Omega(ktri) * mesh%area(ktri)
+          step_q(kf) = step_q(kf) + B0phi_Omega(ktri) * mesh%area(ktri)
        end do
-       q(kf) = q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
+       step_q(kf) = step_q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
     end do
-    open(newunit = fid, file = 'check_q_step.dat', status = 'replace')
-    do kf = 1, mesh%nflux
-       write (fid, '(3(1x, es24.16e3))') (fs_half%psi(kf) - fs%psi(0)) / &
-            (fs%psi(mesh%nflux) - fs%psi(0)), fs_half%rad(kf), q(kf)
-    end do
-    close(fid)
-    deallocate(q)
-    allocate(q(nlabel))
-    ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
-    ! load_magdata_in_symfluxcoord_ext divides by psipol_max
-    q = [(fluxvar%interp(equil%qpsi, psisurf(kf) * psipol_max + fs%psi(0)), &
-         kf = 1, nlabel)]
-    open(newunit = fid, file = 'check_q_cont.dat', status = 'replace')
-    do kf = 1, nlabel
-       write (fid, '(4(1x, es24.16e3))') psisurf(kf), rbeg(kf), qsaf(kf), q(kf)
-    end do
-    close(fid)
-    deallocate(q)
+    step_psi_norm(:) = (fs_half%psi - fs%psi(0)) / (fs%psi(mesh%nflux) - fs%psi(0))
+    eqd_psi_norm(:) = (equil%psi_eqd - equil%simag) / (equil%sibry - equil%simag)
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/step_psi_norm', step_psi_norm, &
+         lbound(step_psi_norm), ubound(step_psi_norm), &
+         comment = 'normalized poloidal flux (stepped)')
+    call h5_add(h5id_root, grp // '/step_q', step_q, lbound(step_q), ubound(step_q), &
+         comment = 'safety factor (stepped)')
+    call h5_add(h5id_root, grp // '/GEQDSK_psi_norm', eqd_psi_norm, &
+         lbound(eqd_psi_norm), ubound(eqd_psi_norm), &
+         comment = 'normalized poloidal flux (GEQDSK)')
+    call h5_add(h5id_root, grp // '/GEQDSK_q', equil%qpsi, lbound(equil%qpsi), ubound(equil%qpsi), &
+         comment = 'safety factor (GEQDSK)')
+    call h5_add(h5id_root, grp // '/RK_psi_norm', psisurf(1:), &
+         lbound(psisurf(1:)), ubound(psisurf(1:)), &
+         comment = 'normalized poloidal flux (Runge-Kutta field line integration)')
+    call h5_add(h5id_root, grp // '/RK_q', qsaf, lbound(qsaf), ubound(qsaf), &
+         comment = 'safety factor (Runge-Kutta field line integration)')
+    call h5_close(h5id_root)
   end subroutine check_safety_factor
 
   subroutine cache_equilibrium_field
@@ -2588,50 +2594,81 @@ contains
   end subroutine compute_j0phi_geqdsk
 
   subroutine check_curr0
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
-    use magdif_conf, only: longlines
-    use magdif_util, only: clight
-    integer :: kf, kt, fid_amp, fid_gs, fid_prof
-    real(dp) :: cmp_gradp, cmp_amp, cmp_gs, theta, R, Z, dum, B0_R, B0_phi, B0_Z, &
-         dB0R_dZ, dB0phi_dR, dB0phi_dZ, dB0Z_dR, J0_R, J0_phi, J0_Z, grad_psi(3)
+    use magdif_conf, only: datafile
+    use magdif_util, only: clight, linspace
+    character(len = *), parameter :: grp = 'debug_equil'
+    integer, parameter :: ntheta = 512
+    integer(HID_T) :: h5id_root
+    integer :: kf, ktheta
+    real(dp) :: R, Z, dum, B0_R, B0_phi, B0_Z, dB0R_dZ, dB0phi_dR, dB0phi_dZ, dB0Z_dR, &
+         grad_psi(2), psi(mesh%nflux), theta(ntheta)
+    real(dp), dimension(ntheta, mesh%nflux) :: grad_p0, amp_lorentz, gs_lorentz, &
+         amp_J0_R, amp_J0_phi, amp_J0_Z, gs_J0_R, gs_J0_phi, gs_J0_Z
 
-    open(newunit = fid_prof, file = 'cmp_prof.dat', recl = longlines, status = 'replace')
-    open(newunit = fid_amp, file = 'j0_amp.dat', recl = longlines, status = 'replace')
-    open(newunit = fid_gs, file = 'j0_gs.dat', recl = longlines, status = 'replace')
+    psi(:) = fs_half%psi - fs%psi(0)
+    theta(:) = linspace(0d0, 2d0 * pi, ntheta, 0, 1)
     do kf = 1, mesh%nflux
-       do kt = 1, mesh%kt_max(kf)
-          theta = (dble(kt) - 0.5d0) / dble(mesh%kt_max(kf)) * 2d0 * pi
+       do ktheta = 1, ntheta
           ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
-          call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), &
-               theta, dum, dum, dum, dum, dum, R, dum, dum, Z, dum, dum)
+          call magdata_in_symfluxcoord_ext(2, dum, psi(kf), theta(ktheta), &
+               dum, dum, dum, dum, dum, R, dum, dum, Z, dum, dum)
           call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dB0R_dZ, dB0phi_dR, &
                dum, dB0phi_dZ, dB0Z_dR, dum, dum)
           ! left-hand side of iMHD force balance
-          grad_psi = [R * B0_Z, 0d0, -R * B0_R]
-          cmp_gradp = fs_half%dp_dpsi(kf) * dot_product(grad_psi, grad_psi) / &
+          grad_psi = [R * B0_Z, -R * B0_R]
+          grad_p0(ktheta, kf) = fs_half%dp_dpsi(kf) * dot_product(grad_psi, grad_psi) / &
                norm2(grad_psi)
           ! current density via Grad-Shafranov equation
-          J0_R = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * B0_R
-          J0_Z = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * B0_Z
-          J0_phi = clight * (fs_half%dp_dpsi(kf) * R + &
+          gs_J0_R(ktheta, kf) = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * B0_R
+          gs_J0_Z(ktheta, kf) = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * B0_Z
+          gs_J0_phi(ktheta, kf) = clight * (fs_half%dp_dpsi(kf) * R + &
                0.25d0 / pi * fs_half%FdF_dpsi(kf) / R)
-          write (fid_gs, '(3(1x, es24.16e3))') J0_R, J0_phi, J0_Z
-          cmp_gs = dot_product([J0_phi * B0_Z - J0_Z * B0_phi, J0_Z * B0_R - J0_R * B0_Z, &
-               J0_R * B0_phi - J0_phi * B0_R], grad_psi) / norm2(grad_psi) / clight
+          gs_lorentz(ktheta, kf) = 1d0 / norm2(grad_psi) / clight * dot_product(grad_psi, &
+               [gs_J0_phi(ktheta, kf) * B0_Z - gs_J0_Z(ktheta, kf) * B0_phi, &
+               gs_J0_R(ktheta, kf) * B0_phi - gs_J0_phi(ktheta, kf) * B0_R])
           ! current density via Ampere's equation
-          J0_R = 0.25d0 / pi * clight * (-dB0phi_dZ)
-          J0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
-          J0_Z = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
-          write (fid_amp, '(3(1x, es24.16e3))') J0_R, J0_phi, J0_Z
-          cmp_amp = dot_product([J0_phi * B0_Z - J0_Z * B0_phi, J0_Z * B0_R - J0_R * B0_Z, &
-               J0_R * B0_phi - J0_phi * B0_R], grad_psi) / norm2(grad_psi) / clight
-          write (fid_prof, '(3(1x, es24.16e3))') cmp_gradp, cmp_amp, cmp_gs
+          amp_J0_R(ktheta, kf) = 0.25d0 / pi * clight * (-dB0phi_dZ)
+          amp_J0_phi(ktheta, kf) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+          amp_J0_Z(ktheta, kf) = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
+          amp_lorentz(ktheta, kf) = 1d0 / norm2(grad_psi) / clight * dot_product(grad_psi, &
+               [amp_J0_phi(ktheta, kf) * B0_Z - amp_J0_Z(ktheta, kf) * B0_phi, &
+               amp_J0_R(ktheta, kf) * B0_phi - amp_J0_phi(ktheta, kf) * B0_R])
        end do
     end do
-    close(fid_prof)
-    close(fid_amp)
-    close(fid_gs)
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/psi', psi, lbound(psi), ubound(psi), &
+         unit = 'Mx', comment = 'poloidal flux')
+    call h5_add(h5id_root, grp // '/theta', theta, lbound(theta), ubound(theta), &
+         unit = 'rad', comment = 'flux poloidal angle')
+    call h5_add(h5id_root, grp // '/grad_p0', grad_p0, lbound(grad_p0), ubound(grad_p0), &
+         unit = 'dyn cm^-3', comment = 'pressure gradient')
+    call h5_add(h5id_root, grp // '/GS_Lorentz', gs_lorentz, lbound(gs_lorentz), ubound(gs_lorentz), &
+         unit = 'dyn cm^-3', comment = 'Lorentz force density via Grad-Shafranov equation')
+    call h5_add(h5id_root, grp // '/Ampere_Lorentz', amp_lorentz, lbound(amp_lorentz), ubound(amp_lorentz), &
+         unit = 'dyn cm^-3', comment = 'Lorentz force density via Ampere equation')
+    call h5_add(h5id_root, grp // '/GS_j0_R', gs_J0_R, &
+         lbound(gs_j0_R), ubound(gs_J0_R), unit = 'statA cm^-2', &
+         comment = 'R component of equilibrium current density via Grad-Shafranov equation')
+    call h5_add(h5id_root, grp // '/GS_j0_phi', gs_J0_phi, &
+         lbound(gs_j0_phi), ubound(gs_J0_phi), unit = 'statA cm^-2', &
+         comment = 'physical phi component of equilibrium current density via Grad-Shafranov equation')
+    call h5_add(h5id_root, grp // '/GS_j0_Z', gs_J0_Z, &
+         lbound(gs_j0_Z), ubound(gs_J0_Z), unit = 'statA cm^-2', &
+         comment = 'Z component of equilibrium current density via Grad-Shafranov equation')
+    call h5_add(h5id_root, grp // '/Ampere_j0_R', amp_J0_R, &
+         lbound(amp_j0_R), ubound(amp_J0_R), unit = 'statA cm^-2', &
+         comment = 'R component of equilibrium current density via Ampere equation')
+    call h5_add(h5id_root, grp // '/Ampere_j0_phi', amp_J0_phi, &
+         lbound(amp_j0_phi), ubound(amp_J0_phi), unit = 'statA cm^-2', &
+         comment = 'physical phi component of equilibrium current density via Ampere equation')
+    call h5_add(h5id_root, grp // '/Ampere_j0_Z', amp_J0_Z, &
+         lbound(amp_j0_Z), ubound(amp_J0_Z), unit = 'statA cm^-2', &
+         comment = 'Z component of equilibrium current density via Ampere equation')
+    call h5_close(h5id_root)
   end subroutine check_curr0
 
   subroutine check_redundant_edges(cache, name)
