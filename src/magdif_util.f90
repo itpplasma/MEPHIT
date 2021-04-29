@@ -40,7 +40,7 @@ module magdif_util
   end type g_eqdsk
 
   character(len = *), parameter :: geqdsk_2000 = '(6a8,3i4)'
-  character(len = *), parameter :: geqdsk_2020 = '(5e16.9)'
+  character(len = *), parameter :: geqdsk_2020 = '(5es16.9)'
   character(len = *), parameter :: geqdsk_2022 = '(2i5)'
 
   character(len = *), parameter :: &
