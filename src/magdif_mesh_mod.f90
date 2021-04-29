@@ -773,7 +773,7 @@ contains
        allocate(mesh%res_modes(1))
        mesh%res_modes(:) = [conf%kilca_pol_mode]
     else
-       allocate(mesh%res_modes(1:mesh%m_res_max-mesh%m_res_min))
+       allocate(mesh%res_modes(mesh%m_res_max - mesh%m_res_min + 1))
        mesh%res_modes(:) = [(m, m = mesh%m_res_min, mesh%m_res_max)]
     end if
     if (allocated(mesh%psi_res)) deallocate(mesh%psi_res)
@@ -922,6 +922,7 @@ contains
 
   subroutine cache_resonance_positions
     use magdif_conf, only: log
+    use magdif_util, only: binsearch
     integer :: m, kf_res
 
     log%msg = 'resonance positions:'
@@ -933,7 +934,7 @@ contains
     ! if more two or more resonance positions are within the same flux surface,
     ! assign the lowest mode number
     do m = mesh%m_res_max, mesh%m_res_min, -1
-       kf_res = minloc(abs(fs_half%psi - mesh%psi_res(m)), 1)
+       call binsearch(fs%psi, 0, mesh%psi_res(m), kf_res)
        mesh%res_ind(m) = kf_res
        mesh%m_res(kf_res) = m
        write (log%msg, '("m = ", i2, ", kf = ", i3, ", rho: ", f19.16, 2(" < ", f19.16))') &
