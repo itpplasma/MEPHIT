@@ -671,8 +671,11 @@ contains
     call compute_gpec_jarea
     call cache_equilibrium_field
     call init_flux_variables
-    call compute_j0phi
+    call flux_func_cache_check
+    call check_safety_factor
     call check_resonance_positions
+    call compute_j0phi
+    call check_curr0
   end subroutine generate_mesh
 
   subroutine write_mesh_cache

@@ -59,11 +59,6 @@ contains
     ! TODO: cache Lagrange polynomials instead
     call fluxvar%init(4, equil%psi_eqd)
 
-    ! check preprocessed data
-    call flux_func_cache_check
-    call check_curr0
-    call check_safety_factor
-
     ! initialize perturbation
     call L1_init(pn, mesh%npoint)
     call RT0_init(Bn, mesh%ntri)
