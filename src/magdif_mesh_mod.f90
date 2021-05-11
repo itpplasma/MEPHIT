@@ -2608,13 +2608,13 @@ contains
     integer(HID_T) :: h5id_root
     integer :: kf, ktheta
     real(dp) :: R, Z, dum, B0_R, B0_phi, B0_Z, dB0R_dZ, dB0phi_dR, dB0phi_dZ, dB0Z_dR, &
-         grad_psi(2), psi(mesh%nflux), theta(ntheta)
-    real(dp), dimension(ntheta, mesh%nflux) :: grad_p0, amp_lorentz, gs_lorentz, &
+         grad_psi(2), psi(2:equil%nw - 1), theta(ntheta)
+    real(dp), dimension(ntheta, 2:equil%nw - 1) :: grad_p0, amp_lorentz, gs_lorentz, &
          amp_J0_R, amp_J0_phi, amp_J0_Z, gs_J0_R, gs_J0_phi, gs_J0_Z
 
-    psi(:) = fs_half%psi - fs%psi(0)
+    psi(:) = equil%psi_eqd(2:equil%nw-1) - equil%simag
     theta(:) = linspace(0d0, 2d0 * pi, ntheta, 0, 1)
-    do kf = 1, mesh%nflux
+    do kf = 2, equil%nw - 1
        do ktheta = 1, ntheta
           ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
           call magdata_in_symfluxcoord_ext(2, dum, psi(kf), theta(ktheta), &
@@ -2623,13 +2623,13 @@ contains
                dum, dB0phi_dZ, dB0Z_dR, dum, dum)
           ! left-hand side of iMHD force balance
           grad_psi = [R * B0_Z, -R * B0_R]
-          grad_p0(ktheta, kf) = fs_half%dp_dpsi(kf) * dot_product(grad_psi, grad_psi) / &
+          grad_p0(ktheta, kf) = equil%pprime(kf) * dot_product(grad_psi, grad_psi) / &
                norm2(grad_psi)
           ! current density via Grad-Shafranov equation
-          gs_J0_R(ktheta, kf) = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * B0_R
-          gs_J0_Z(ktheta, kf) = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * B0_Z
-          gs_J0_phi(ktheta, kf) = clight * (fs_half%dp_dpsi(kf) * R + &
-               0.25d0 / pi * fs_half%FdF_dpsi(kf) / R)
+          gs_J0_R(ktheta, kf) = 0.25d0 / pi * clight * equil%ffprim(kf) / equil%fpol(kf) * B0_R
+          gs_J0_Z(ktheta, kf) = 0.25d0 / pi * clight * equil%ffprim(kf) / equil%fpol(kf) * B0_Z
+          gs_J0_phi(ktheta, kf) = clight * (equil%pprime(kf) * R + &
+               0.25d0 / pi * equil%ffprim(kf) / R)
           gs_lorentz(ktheta, kf) = 1d0 / norm2(grad_psi) / clight * dot_product(grad_psi, &
                [gs_J0_phi(ktheta, kf) * B0_Z - gs_J0_Z(ktheta, kf) * B0_phi, &
                gs_J0_R(ktheta, kf) * B0_phi - gs_J0_phi(ktheta, kf) * B0_R])
@@ -2642,6 +2642,7 @@ contains
                amp_J0_R(ktheta, kf) * B0_phi - amp_J0_phi(ktheta, kf) * B0_R])
        end do
     end do
+    psi(:) = psi / (equil%sibry - equil%simag)
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, grp // '/')
     call h5_add(h5id_root, grp // '/psi', psi, lbound(psi), ubound(psi), &
