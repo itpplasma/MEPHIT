@@ -870,7 +870,7 @@ contains
 
     nfft = nphi / 2 + 1
     R(:) = linspace(Rmin, Rmax, nR, 0, 0)
-    phi(:) = linspace(0d0, 2d0 * pi, nphi, 0, 0)
+    phi(:) = linspace(0d0, 2d0 * pi, nphi, 0, 1)
     cosphi(:) = cos(phi)
     sinphi(:) = sin(phi)
     Z(:) = linspace(Zmin, Zmax, nZ, 0, 0)
@@ -1150,6 +1150,8 @@ contains
        error stop
     end if
     allocate(Bnvac_R(nR, nZ), Bnvac_Z(nR, nZ), Bn(nR, nZ))
+    Bnvac_R(:, :) = (0d0, 0d0)
+    Bnvac_Z(:, :) = (0d0, 0d0)
     do kc = 1, 2 * ncoil
        write (coilname, '("coil_", i2.2)') kc
        call h5_get(h5id_root, modename // '/' // coilname // '/Bn_R', Bn)
