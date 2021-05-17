@@ -11,7 +11,8 @@ module magdif_pert
        RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
        vec_polmodes_read, vec_polmodes_write, AUG_coils_read, AUG_coils_write_Nemov, &
        AUG_coils_read_Nemov, AUG_coils_write_GPEC, AUG_coils_read_GPEC, AUG_coils_write_Fourier, &
-       generate_vacfield, compute_Bnvac, compute_Bn_nonres, avg_flux_on_quad, &
+       read_currents_Nemov, Biot_Savart_sum_coils, write_Bvac_Nemov, generate_vacfield, compute_Bnvac, &
+       compute_Bn_nonres, avg_flux_on_quad, &
        compute_kilca_vacuum, kilca_vacuum, compute_kilca_vac_coeff, kilca_vacuum_fourier, &
        check_kilca_vacuum, check_RT0, debug_fouriermodes, debug_Bnvac_rectplot, debug_Bmnvac
 
@@ -846,6 +847,95 @@ contains
     if (allocated(Bn)) deallocate(Bn)
   end subroutine AUG_coils_write_Fourier
 
+  subroutine read_currents_Nemov(directory, Ic)
+    character(len = *), intent(in) :: directory
+    real(dp), intent(out), allocatable :: Ic(:)
+    integer, parameter :: nwind = 5, ncoil = 8
+    integer :: fid
+
+    allocate(Ic(2 * ncoil))
+    open(newunit = fid, file = directory // '/cur_asd.dd', status = 'old', action = 'read', form = 'formatted')
+    read (fid, *) Ic(:)
+    close(fid)
+    Ic(:) = Ic / real(nwind)
+  end subroutine read_currents_Nemov
+
+  subroutine Biot_Savart_sum_coils(ncoil, nseg, nwind, XYZ, Ic, &
+       Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ, Bvac)
+    use constants, only: pi  ! orbit_mod.f90
+    use magdif_conf, only: log
+    use magdif_util, only: linspace
+    integer, intent(in) :: ncoil, nseg, nwind
+    real(dp), intent(in), dimension(:, :, :) :: XYZ
+    real(dp), intent(in), dimension(:) :: Ic
+    real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
+    integer, intent(in) :: nR, nphi, nZ
+    real(dp), intent(out), dimension(:, :, :, :), allocatable :: Bvac
+    integer :: kc, ks, kR, kphi, kZ
+    real(dp), dimension(nphi) :: phi, cosphi, sinphi
+    real(dp) :: R(nR), Z(nZ), rXYZ(3), crXYZ(3), BXYZ(3), BRfZ(3)
+    real(dp), dimension(size(XYZ, 1), size(XYZ, 2), size(XYZ, 3)) :: cXYZ, dXYZ
+
+    if (3 /= size(XYZ, 1)) then
+       call log%msg_arg_size('Biot_Savart_sum_coils', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (nseg /= size(XYZ, 2)) then
+       call log%msg_arg_size('Biot_Savart_sum_coils', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (2 * ncoil /= size(XYZ, 3)) then
+       call log%msg_arg_size('Biot_Savart_sum_coils', '2 * ncoil', 'size(XYZ, 3)', &
+            2 * ncoil, size(XYZ, 3))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (2 * ncoil /= size(Ic)) then
+       call log%msg_arg_size('Biot_Savart_sum_coils', '2 * ncoil', 'size(Ic)', &
+            2 * ncoil, size(Ic))
+       if (log%err) call log%write
+       error stop
+    end if
+    R(:) = linspace(Rmin, Rmax, nR, 0, 0)
+    phi(:) = linspace(0d0, 2d0 * pi, nphi, 0, 1)
+    cosphi(:) = cos(phi)
+    sinphi(:) = sin(phi)
+    Z(:) = linspace(Zmin, Zmax, nZ, 0, 0)
+    cXYZ(:, :nseg-1, :) = 0.5d0 * (XYZ(:, 2:, :) + XYZ(:, :nseg-1, :))
+    cXYZ(:, nseg, :) = 0.5d0 * (XYZ(:, 1, :) + XYZ(:, nseg, :))
+    dXYZ(:, :nseg-1, :) = XYZ(:, 2:, :) - XYZ(:, :nseg-1, :)
+    dXYZ(:, nseg, :) = XYZ(:, 1, :) - XYZ(:, nseg, :)
+    allocate(Bvac(3, nZ, nphi, nR))
+    Bvac(:, :, :, :) = 0d0
+    do kR = 1, nR
+       do kphi = 1, nphi
+          rXYZ(1:2) = [R(kR) * cosphi(kphi), R(kR) * sinphi(kphi)]
+          do kZ = 1, nZ
+             rXYZ(3) = Z(kZ)
+             ! Biot-Savart integral over coil segments
+             do kc = 1, 2 * ncoil
+                BRfZ(:) = 0d0
+                do ks = 1, nseg
+                   crXYZ(:) = rXYZ(:) - cXYZ(:, ks, kc)
+                   BXYZ(:) = &
+                        [dXYZ(2, ks, kc) * crXYZ(3) - dXYZ(3, ks, kc) * crXYZ(2), &
+                        dXYZ(3, ks, kc) * crXYZ(1) - dXYZ(1, ks, kc) * crXYZ(3), &
+                        dXYZ(1, ks, kc) * crXYZ(2) - dXYZ(2, ks, kc) * crXYZ(1)] &
+                        / sqrt(sum(crXYZ ** 2)) ** 3
+                   BRfZ(:) = BRfZ + &
+                        [BXYZ(2) * sinphi(kphi) + BXYZ(1) * cosphi(kphi), &
+                        BXYZ(2) * cosphi(kphi) - BXYZ(1) * sinphi(kphi), &
+                        BXYZ(3)]
+                end do
+                Bvac(:, kZ, kphi, kR) = Bvac(:, kZ, kphi, kR) + nwind * Ic(kc) * BRfZ
+             end do
+          end do
+       end do
+    end do
+  end subroutine Biot_Savart_sum_coils
+
   subroutine Biot_Savart_Fourier(ncoil, nseg, nwind, XYZ, nmax, &
        Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ, Bn)
     use iso_c_binding, only: c_ptr, c_double, c_double_complex, c_size_t, c_f_pointer
@@ -868,12 +958,6 @@ contains
     real(c_double), dimension(:), pointer :: BR, Bphi, BZ
     complex(c_double_complex), dimension(:), pointer :: BnR, Bnphi, BnZ
 
-    nfft = nphi / 2 + 1
-    R(:) = linspace(Rmin, Rmax, nR, 0, 0)
-    phi(:) = linspace(0d0, 2d0 * pi, nphi, 0, 1)
-    cosphi(:) = cos(phi)
-    sinphi(:) = sin(phi)
-    Z(:) = linspace(Zmin, Zmax, nZ, 0, 0)
     if (3 /= size(XYZ, 1)) then
        call log%msg_arg_size('Biot_Savart_Fourier', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
        if (log%err) call log%write
@@ -896,6 +980,12 @@ contains
        if (log%err) call log%write
        error stop
     end if
+    nfft = nphi / 2 + 1
+    R(:) = linspace(Rmin, Rmax, nR, 0, 0)
+    phi(:) = linspace(0d0, 2d0 * pi, nphi, 0, 1)
+    cosphi(:) = cos(phi)
+    sinphi(:) = sin(phi)
+    Z(:) = linspace(Zmin, Zmax, nZ, 0, 0)
     cXYZ(:, :nseg-1, :) = 0.5d0 * (XYZ(:, 2:, :) + XYZ(:, :nseg-1, :))
     cXYZ(:, nseg, :) = 0.5d0 * (XYZ(:, 1, :) + XYZ(:, nseg, :))
     dXYZ(:, :nseg-1, :) = XYZ(:, 2:, :) - XYZ(:, :nseg-1, :)
@@ -919,20 +1009,22 @@ contains
     plan_Z = fftw_plan_dft_r2c_1d(nphi, BZ, BnZ, ior(FFTW_PATIENT, FFTW_DESTROY_INPUT))
     do kc = 1, 2 * ncoil
        do kZ = 1, nZ
+          rXYZ(3) = Z(kZ)
           do kR = 1, nR
              ! sample points toroidally
              do kphi = 1, nphi
-                rXYZ(:) = [R(kR) * cosphi(kphi), R(kR) * sinphi(kphi), Z(kZ)]
+                rXYZ(1:2) = [R(kR) * cosphi(kphi), R(kR) * sinphi(kphi)]
                 BR(kphi) = 0d0
                 Bphi(kphi) = 0d0
                 BZ(kphi) = 0d0
                 ! Biot-Savart integral over coil segments
                 do ks = 1, nseg
                    crXYZ(:) = rXYZ(:) - cXYZ(:, ks, kc)
-                   BXYZ(:) = nwind / sqrt(sum(crXYZ ** 2)) ** 3 * &
+                   BXYZ(:) = &
                         [dXYZ(2, ks, kc) * crXYZ(3) - dXYZ(3, ks, kc) * crXYZ(2), &
                         dXYZ(3, ks, kc) * crXYZ(1) - dXYZ(1, ks, kc) * crXYZ(3), &
-                        dXYZ(1, ks, kc) * crXYZ(2) - dXYZ(2, ks, kc) * crXYZ(1)]
+                        dXYZ(1, ks, kc) * crXYZ(2) - dXYZ(2, ks, kc) * crXYZ(1)] &
+                        / sqrt(sum(crXYZ ** 2)) ** 3
                    BR(kphi) = BR(kphi) + BXYZ(2) * sinphi(kphi) + BXYZ(1) * cosphi(kphi)
                    Bphi(kphi) = Bphi(kphi) + BXYZ(2) * cosphi(kphi) - BXYZ(1) * sinphi(kphi)
                    BZ(kphi) = BZ(kphi) + BXYZ(3)
@@ -941,9 +1033,9 @@ contains
              call fftw_execute_dft_r2c(plan_R, BR, BnR)
              call fftw_execute_dft_r2c(plan_phi, Bphi, Bnphi)
              call fftw_execute_dft_r2c(plan_Z, BZ, BnZ)
-             Bn(0:nmax, 1, kR, kZ, kc) = BnR(1:nmax+1) / dble(nphi)
-             Bn(0:nmax, 2, kR, kZ, kc) = Bnphi(1:nmax+1) / dble(nphi)
-             Bn(0:nmax, 3, kR, kZ, kc) = BnZ(1:nmax+1) / dble(nphi)
+             Bn(0:nmax, 1, kR, kZ, kc) = nwind * BnR(1:nmax+1) / dble(nphi)
+             Bn(0:nmax, 2, kR, kZ, kc) = nwind * Bnphi(1:nmax+1) / dble(nphi)
+             Bn(0:nmax, 3, kR, kZ, kc) = nwind * BnZ(1:nmax+1) / dble(nphi)
           end do
        end do
     end do
@@ -1001,6 +1093,44 @@ contains
     call s2dcut(nr, nz, hr, hz, An_R%im, imi, ima, jmi, jma, icp, arnim(:, :, :, ntor), ipoint)
   end subroutine vector_potential_single_mode
 
+  subroutine write_Bvac_Nemov(directory, Rmin, Rmax, Zmin, Zmax, Bvac)
+    use magdif_conf, only: log
+    use constants, only: pi  ! orbit_mod.f90
+    character(len = *), intent(in) :: directory
+    real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
+    real(dp), intent(in), dimension(:, :, :, :) :: Bvac
+    integer :: fid, nR, nphi, nZ, kR, kphi, kZ
+
+    if (3 /= size(Bvac, 1)) then
+       call log%msg_arg_size('write_Bnvac_Nemov', '3', 'size(Bvac, 1)', 3, size(Bvac, 1))
+       if (log%err) call log%write
+       error stop
+    end if
+    nZ = size(Bvac, 2)
+    nphi = size(Bvac, 3)
+    nR = size(Bvac, 4)
+    open(newunit = fid, file = directory // '/field.dat', status = 'replace', &
+         action = 'write', form = 'formatted')
+    ! kisslinger_asdex.f90 writes points at phi = 0 and at phi = 2 pi
+    write (fid, '(i0, 1x, i0, 1x, i0, 1x, i0)') nR, nphi + 1, nZ, 1
+    write (fid, '(es24.16e3, 1x, es24.16e3)') Rmin, Rmax
+    write (fid, '(es24.16e3, 1x, es24.16e3)') 0d0, 2d0 * pi
+    write (fid, '(es24.16e3, 1x, es24.16e3)') Zmin, Zmax
+    do kR = 1, nR
+       do kphi = 1, nphi
+          do kZ = 1, nZ
+             write (fid, '(es24.16e3, 1x, es24.16e3, 1x, es24.16e3)') Bvac(:, kZ, kphi, kR)
+          end do
+       end do
+       ! kisslinger_asdex.f90 writes points at phi = 0 and at phi = 2 pi
+       kphi = 1
+       do kZ = 1, nZ
+          write (fid, '(es24.16e3, 1x, es24.16e3, 1x, es24.16e3)') Bvac(:, kZ, kphi, kR)
+       end do
+    end do
+    close(fid)
+  end subroutine write_Bvac_Nemov
+
   subroutine read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bnvac_R, Bnvac_Z)
     use input_files, only: pfile
     use magdif_conf, only: conf
@@ -1018,6 +1148,7 @@ contains
     read (fid, *) Rmin, Rmax
     read (fid, *) ! phimin, phimax
     read (fid, *) Zmin, Zmax
+    ! kisslinger_asdex.f90 writes points at phi = 0 and at phi = 2 pi
     allocate(fourier_basis(nphi - 1))
     fourier_basis(:) = exp(-imun * conf%n * linspace(0d0, 2d0 * pi, nphi - 1, 0, 1)) &
          / dble(nphi - 1)
@@ -1028,6 +1159,7 @@ contains
        do kphi = 1, nphi
           do kZ = 1, nZ
              read (fid, *) B_R, B_phi, B_Z
+             ! kisslinger_asdex.f90 writes points at phi = 0 and at phi = 2 pi
              if (kphi /= nphi) then
                 Bnvac_R(kR, kZ) = Bnvac_R(kR, kZ) + fourier_basis(kphi) * B_R
                 Bnvac_Z(kR, kZ) = Bnvac_Z(kR, kZ) + fourier_basis(kphi) * B_Z
