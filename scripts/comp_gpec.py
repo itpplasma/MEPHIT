@@ -11,19 +11,16 @@ from glob import iglob
 import numpy as np
 from copy import deepcopy
 from functools import partial
-from magdifplot import magdif, fslabel, polmodes, magdif_poloidal_plots, magdif_2d_rectplots, cm_to_m, G_to_T
+from magdifplot import magdif, fslabel, polmodes, magdif_poloidal_plots, magdif_2d_rectplots, cm_to_m, G_to_T, Mx_to_Wb
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.path import Path as Polygon
 import netCDF4
 
-# ylabel_abs = r'$\lvert \mathcal{B}_{mn}^{\psi} \rvert$ / \si{\weber}'
-# ylabel_arg = r'$\arg \mathcal{B}_{mn}^{\psi}$ / \si{\degree}'
-# ylabel_grad_abs = r'$\partial_{\hat{\psi}} \lvert \mathcal{B}_{mn}^{\psi} \rvert$ / \si{\weber}'
-ylabel_abs = r'$\lvert B_{mn}^{\hat{\psi}} \rvert$ / \si{\tesla}'
-ylabel_arg = r'$\arg B_{mn}^{\hat{\psi}}$ / \si{\degree}'
-ylabel_grad_abs = r'$\partial_{\hat{\psi}} \lvert B_{mn}^{\hat{\psi}} \rvert$ / \si{\tesla}'
-cutoff = 0.2
+psi_abs = r'$\abs [B_{n}^{\perp} \sqrt{g} \lVert \nabla \psi \rVert]_{m} A^{-1}$ / \si{\tesla}'
+psi_arg = r'$\arg [B_{n}^{\perp} \sqrt{g} \lVert \nabla \psi \rVert]_{m} A^{-1}$ / \si{\degree}'
+psin_abs = r'$\abs [B_{n}^{\perp}]_{m}$ / \si{\tesla}'
+psin_arg = r'$\arg [B_{n}^{\perp}]_{m}$ / \si{\degree}'
 
 for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     testcase = magdif(workdir)
@@ -43,57 +40,83 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     mephit_vac = polmodes('vacuum perturbation (MEPHIT)', 'r--')
     mephit_vac.read_magdif(testcase.data, fslabel.psi_norm, '/Bmnvac/comp_psi_contravar_dens')
     for m in mephit_vac.var.keys():
-        mephit_vac.var[m] /= testcase.data['/mesh/gpec_jarea'][()] * cm_to_m ** 2
+        mephit_vac.var[m] /= testcase.data['/mesh/gpec_jacfac'][:, 16] * cm_to_m ** 2
     mephit_pert = polmodes('full perturbation (MEPHIT)', 'g--')
     mephit_pert.read_magdif(testcase.data, fslabel.psi_norm, '/postprocess/Bmn/coeff_rad')
     for m in mephit_pert.var.keys():
-        mephit_pert.var[m] /= testcase.data['/mesh/gpec_jarea'][()] * cm_to_m ** 2
+        mephit_pert.var[m] /= testcase.data['/mesh/gpec_jacfac'][:, 16] * cm_to_m ** 2
+    testcase.plots.append(magdif_poloidal_plots(
+        workdir, 'GPEC_Bmn_psi_abs.pdf', testcase.config, testcase.data,
+        fslabel.psi_norm, psi_abs, np.abs, vac, pert, mephit_vac, mephit_pert
+    ))
+    testcase.plots.append(magdif_poloidal_plots(
+        workdir, 'GPEC_Bmn_psi_arg.pdf', testcase.config, testcase.data,
+        fslabel.psi_norm, psi_arg, partial(np.angle, deg=True), vac, pert, mephit_vac, mephit_pert
+    ))
+    testcase.plots.append(magdif_poloidal_plots(
+        workdir, 'debug_Bmn_psi_abs.pdf', testcase.config, testcase.data,
+        fslabel.psi_norm, psi_abs, np.abs, vac, mephit_vac
+    ))
+    testcase.plots.append(magdif_poloidal_plots(
+        workdir, 'debug_Bmn_psi_arg.pdf', testcase.config, testcase.data,
+        fslabel.psi_norm, psi_arg, partial(np.angle, deg=True), vac, mephit_vac
+    ))
+    vacn = polmodes('vacuum perturbation (GPEC)', 'k--')
+    vacn.read_GPEC(path.join(workdir, 'gpec_profile_output_n2.nc'), sgn_dpsi, 'b_n_x')
+    pertn = polmodes('full perturbation (GPEC)', 'b--')
+    pertn.read_GPEC(path.join(workdir, 'gpec_profile_output_n2.nc'), sgn_dpsi, 'b_n')
+    mephit_vacn = polmodes('vacuum perturbation (MEPHIT)', 'r--')
+    mephit_vacn.read_magdif(testcase.data, fslabel.psi_norm, '/Bmnvac/comp_n')
+    for m in mephit_vacn.var.keys():
+        mephit_vacn.var[m] /= cm_to_m ** 2
+    mephit_pertn = polmodes('full perturbation (MEPHIT)', 'g--')
+    mephit_pertn.read_magdif(testcase.data, fslabel.psi_norm, '/postprocess/Bmn/coeff_n')
+    for m in mephit_pertn.var.keys():
+        mephit_pertn.var[m] /= cm_to_m ** 2
     testcase.plots.append(magdif_poloidal_plots(
         workdir, 'GPEC_Bmn_psin_abs.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, ylabel_abs, np.abs, vac, pert, mephit_vac, mephit_pert
+        fslabel.psi_norm, psin_abs, np.abs, vacn, pertn, mephit_vacn, mephit_pertn
     ))
     testcase.plots.append(magdif_poloidal_plots(
         workdir, 'GPEC_Bmn_psin_arg.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, ylabel_arg, partial(np.angle, deg=True), vac, pert, mephit_vac, mephit_pert
+        fslabel.psi_norm, psin_arg, partial(np.angle, deg=True), vacn, pertn, mephit_vacn, mephit_pertn
     ))
     testcase.plots.append(magdif_poloidal_plots(
         workdir, 'debug_Bmn_psin_abs.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, ylabel_abs, np.abs, vac, mephit_vac
+        fslabel.psi_norm, psin_abs, np.abs, vacn, mephit_vacn
     ))
     testcase.plots.append(magdif_poloidal_plots(
         workdir, 'debug_Bmn_psin_arg.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, ylabel_arg, partial(np.angle, deg=True), vac, mephit_vac
+        fslabel.psi_norm, psin_arg, partial(np.angle, deg=True), vacn, mephit_vacn
     ))
-    vac_grad = deepcopy(vac)
-    for m in vac_grad.var.keys():
-        vac_grad.var[m] = np.gradient(np.abs(vac_grad.var[m]), vac_grad.rho[m])
-        vac_grad.var[m] = np.delete(vac_grad.var[m], np.nonzero(vac_grad.rho[m] > cutoff))
-        vac_grad.rho[m] = np.delete(vac_grad.rho[m], np.nonzero(vac_grad.rho[m] > cutoff))
-    mephit_vac_grad = deepcopy(mephit_vac)
-    for m in mephit_vac.var.keys():
-        mephit_vac_grad.var[m] = np.gradient(np.abs(mephit_vac_grad.var[m]), mephit_vac_grad.rho[m])
-        mephit_vac_grad.var[m] = np.delete(mephit_vac_grad.var[m], np.nonzero(mephit_vac_grad.rho[m] > cutoff))
-        mephit_vac_grad.rho[m] = np.delete(mephit_vac_grad.rho[m], np.nonzero(mephit_vac_grad.rho[m] > cutoff))
-    vac_zoom = deepcopy(vac)
-    for m in vac_zoom.var.keys():
-        vac_zoom.var[m] = np.delete(vac_zoom.var[m], np.nonzero(vac_zoom.rho[m] > cutoff))
-        vac_zoom.rho[m] = np.delete(vac_zoom.rho[m], np.nonzero(vac_zoom.rho[m] > cutoff))
-    mephit_vac_zoom = deepcopy(mephit_vac)
-    for m in mephit_vac.var.keys():
-        mephit_vac_zoom.var[m] = np.delete(mephit_vac_zoom.var[m], np.nonzero(mephit_vac_zoom.rho[m] > cutoff))
-        mephit_vac_zoom.rho[m] = np.delete(mephit_vac_zoom.rho[m], np.nonzero(mephit_vac_zoom.rho[m] > cutoff))
-    hack = magdif_poloidal_plots(
-        workdir, 'zoom_Bmn_psin_abs.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, ylabel_abs, np.abs, vac_zoom, mephit_vac_zoom
-    )
-    hack.omit_res = True
-    testcase.plots.append(hack)
-    hack = magdif_poloidal_plots(
-        workdir, 'grad_Bmn_psin_abs.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, ylabel_grad_abs, lambda v: v, vac_grad, mephit_vac_grad
-    )
-    hack.omit_res = True
-    testcase.plots.append(hack)
+    jacfac = deepcopy(vac)
+    data = np.loadtxt(path.join(workdir, 'gpec_diagnostics_jacfac_1.out'), skiprows=2)
+    m_range = np.unique(data[:, 1].astype(int))
+    npsi = data.shape[0] // m_range.size
+    for m in m_range:
+        jacfac.rho[m] = np.empty((npsi,), dtype='d')
+        jacfac.var[m] = np.empty((npsi,), dtype='D')
+    k = 0
+    for kpsi in np.arange(npsi):
+        for m in m_range:
+            jacfac.rho[m][kpsi] = data[k, 0]
+            jacfac.var[m].real[kpsi] = data[k, 2] * sgn_dpsi
+            jacfac.var[m].imag[kpsi] = data[k, 3] * sgn_dpsi * helicity
+            k += 1
+    mephit_jacfac = polmodes('weighting factor (MEPHIT)', 'r--')
+    mephit_jacfac.read_magdif(testcase.data, fslabel.psi_norm, '/mesh/gpec_jacfac')
+    for m in mephit_jacfac.var.keys():
+        mephit_jacfac.var[m] /= Mx_to_Wb * testcase.data['/mesh/gpec_jacfac'][:, 16]
+    testcase.plots.append(magdif_poloidal_plots(
+        workdir, 'debug_jacfac_abs.pdf', testcase.config, testcase.data, fslabel.psi_norm,
+        r'$\abs [\sqrt{g} \lVert \nabla \psi \rVert]_{m}$ / \si{\square\meter}',
+        np.abs, jacfac, mephit_jacfac
+    ))
+    testcase.plots.append(magdif_poloidal_plots(
+        workdir, 'debug_jacfac_arg.pdf', testcase.config, testcase.data, fslabel.psi_norm,
+        r'$\arg [\sqrt{g} \lVert \nabla \psi \rVert]_{m} $ / \si{\square\meter}',
+        partial(np.angle, deg=True), jacfac, mephit_jacfac
+    ))
 
     rootgrp = netCDF4.Dataset(path.join(workdir, 'gpec_cylindrical_output_n2.nc'), 'r')
     R = [testcase.data['/Bnvac/rect_R'][()] * cm_to_m, np.array(rootgrp['R'])]
