@@ -15,12 +15,19 @@ from magdifplot import magdif, fslabel, polmodes, magdif_poloidal_plots, magdif_
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.path import Path as Polygon
+from matplotlib.colors import Normalize
+import colorcet
+from scipy.interpolate import UnivariateSpline
 import netCDF4
 
 psi_abs = r'$\abs [B_{n}^{\perp} \sqrt{g} \lVert \nabla \psi \rVert]_{m} A^{-1}$ / \si{\tesla}'
 psi_arg = r'$\arg [B_{n}^{\perp} \sqrt{g} \lVert \nabla \psi \rVert]_{m} A^{-1}$ / \si{\degree}'
 psin_abs = r'$\abs [B_{n}^{\perp}]_{m}$ / \si{\tesla}'
 psin_arg = r'$\arg [B_{n}^{\perp}]_{m}$ / \si{\degree}'
+
+psi_n = r'$\hat{\psi}$'
+theta_n = r'$\hat{\vartheta}$'
+sqrt_g = r'$\sqrt{g}$ / \si{\meter\per\tesla}'
 
 for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     testcase = magdif(workdir)
@@ -117,6 +124,142 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
         r'$\arg [\sqrt{g} \lVert \nabla \psi \rVert]_{m} $ / \si{\square\meter}',
         partial(np.angle, deg=True), jacfac, mephit_jacfac
     ))
+
+    psi = sgn_dpsi * Mx_to_Wb * testcase.data['/cache/fs/psi'][()]
+    psi -= psi[0]
+    psipol_max = psi[-1]
+    psi /= psipol_max
+    jac_psi = Mx_to_Wb / psipol_max * testcase.data['/debug_GPEC/jac/psi'][()]
+    jac_nrad = jac_psi.size
+    jac_theta = 0.5 / np.pi * testcase.data['/debug_GPEC/jac/theta'][()]
+    jac_npol = jac_theta.size
+    jac_gpec = cm_to_m / G_to_T * np.transpose(testcase.data['/debug_GPEC/jac/jac'][()])
+    jac_mephit = cm_to_m / G_to_T * np.transpose(testcase.data['/debug_GPEC/jac/sqrt_g'][()])
+    debug_psi = Mx_to_Wb / psipol_max * testcase.data['/debug_GPEC/psi'][()]
+    debug_nrad = debug_psi.size
+    debug_theta = 0.5 / np.pi * testcase.data['/debug_GPEC/theta'][()]
+    debug_npol = debug_theta.size
+    debug_R = cm_to_m * np.transpose(testcase.data['/debug_GPEC/R_GPEC'][()])
+    R = cm_to_m * np.transpose(testcase.data['/debug_GPEC/R'][()])
+    rootgrp = netCDF4.Dataset(path.join(workdir, 'dcon_output_n2.nc'), 'r')
+    spline_F = UnivariateSpline(jac_psi, np.array(rootgrp['f']))
+    spline_q = UnivariateSpline(jac_psi, np.array(rootgrp['q']))
+    rootgrp.close()
+    jac_pest = np.empty(debug_R.shape)
+    for k in range(jac_pest.shape[0]):
+        jac_pest[k, :] = debug_R[k, :] ** 2 * np.abs(spline_q(debug_psi[k]) / spline_F(debug_psi[k]))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(jac_psi, jac_gpec[:, 0], label=r'GPEC, $\hat{\vartheta} = 0$')
+    ax.plot(jac_psi, jac_mephit[:, 0], label=r'MEPHIT, $\hat{\vartheta} = 0$')
+    ax.plot(jac_psi, jac_gpec[:, jac_npol // 2], label=r'GPEC, $\hat{\vartheta} = 0.5$')
+    ax.plot(jac_psi, jac_mephit[:, jac_npol // 2], label=r'MEPHIT, $\hat{\vartheta} = 0.5$')
+    ax.set_xlabel(psi_n)
+    ax.set_ylabel(sqrt_g)
+    ax.legend()
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'comp_jac_psi.pdf'))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(debug_psi, jac_pest[:, 0], label=r'PEST, $\hat{\vartheta} = 0$')
+    ax.plot(jac_psi, jac_mephit[:, 0], label=r'MEPHIT, $\hat{\vartheta} = 0$')
+    ax.plot(debug_psi, jac_pest[:, debug_npol // 2], label=r'PEST, $\hat{\vartheta} = 0.5$')
+    ax.plot(jac_psi, jac_mephit[:, jac_npol // 2], label=r'MEPHIT, $\hat{\vartheta} = 0.5$')
+    ax.set_xlabel(psi_n)
+    ax.set_ylabel(sqrt_g)
+    ax.legend()
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'debug_jac_psi.pdf'))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(jac_theta, jac_gpec[jac_nrad // 2, :], label=r'GPEC, $\hat{\psi} = 0.5$')
+    ax.plot(jac_theta, jac_mephit[jac_nrad // 2, :],  label=r'MEPHIT, $\hat{\psi} = 0.5$')
+    ax.plot(jac_theta, jac_gpec[jac_nrad // 4 * 3, :], label=r'GPEC, $\hat{\psi} = 0.75$')
+    ax.plot(jac_theta, jac_mephit[jac_nrad // 4 * 3, :],  label=r'MEPHIT, $\hat{\psi} = 0.75$')
+    ax.set_xlabel(theta_n)
+    ax.set_ylabel(sqrt_g)
+    ax.legend()
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'comp_jac_theta.pdf'))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(jac_psi, jac_gpec[:, 0] / jac_mephit[:, 0], label=r'$\hat{\vartheta} = 0$')
+    ax.plot(jac_psi, jac_gpec[:, jac_npol // 2] / jac_mephit[:, jac_npol // 2], label=r'$\hat{\vartheta} = 0.5$')
+    ax.set_xlabel(psi_n)
+    ax.set_ylabel('ratio of Jacobians (GPEC / MEPHIT)')
+    ax.legend()
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'comp_jac_psi_fac.pdf'))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(jac_theta, jac_gpec[jac_nrad // 2, :] / jac_mephit[jac_nrad // 2, :], label=r'$\hat{\psi} = 0.5$')
+    ax.plot(jac_theta, jac_gpec[jac_nrad // 4 * 3, :] / jac_mephit[jac_nrad // 4 * 3, :], label=r'$\hat{\psi} = 0.75$')
+    ax.set_xlabel(theta_n)
+    ax.set_ylabel('ratio of Jacobians (GPEC / MEPHIT)')
+    ax.legend()
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'comp_jac_theta_fac.pdf'))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(debug_psi, debug_R[:, debug_npol // 4], label=r'GPEC, $\hat{\vartheta} = 0.25$')
+    ax.plot(debug_psi, R[:, debug_npol // 4], label=r'MEPHIT, $\hat{\vartheta} = 0.25$')
+    ax.plot(debug_psi, debug_R[:, debug_npol // 4 * 3], label=r'GPEC, $\hat{\vartheta} = 0.75$')
+    ax.plot(debug_psi, R[:, debug_npol // 4 * 3], label=r'MEPHIT, $\hat{\vartheta} = 0.75$')
+    ax.set_xlabel(psi_n)
+    ax.set_ylabel(r'$R$ / \si{\meter}')
+    ax.legend()
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'comp_R.pdf'))
+
+    fig = Figure(figsize=(8.0, 5.0))
+    axs = fig.subplots(1, 2, sharex='all', sharey='all')
+    images = [axs[0].pcolormesh(jac_theta, jac_psi, jac_mephit, cmap=colorcet.cm.CET_L3,
+                                shading='gouraud', rasterized=True),
+              axs[1].pcolormesh(debug_theta, debug_psi, jac_pest, cmap=colorcet.cm.CET_L3,
+                                shading='gouraud', rasterized=True)]
+    axs[0].set_xlabel(theta_n)
+    axs[0].set_ylabel(psi_n)
+    axs[0].set_title(r'$\sqrt{g}$ from MEPHIT')
+    axs[1].set_xlabel(theta_n)
+    axs[1].set_ylabel(psi_n)
+    axs[1].set_title(r'$\sqrt{g}$ from GPEC (PEST)')
+    axs[1].yaxis.set_tick_params(labelleft=True)
+    axs[1].yaxis.offsetText.set_visible(True)
+    clim = (min(np.amin(image.get_array()) for image in images), max(np.amax(image.get_array()) for image in images))
+    norm = Normalize(vmin=clim[0], vmax=clim[1])
+    for im in images:
+        im.set_norm(norm)
+    axs[0].contour(jac_theta, jac_psi, jac_mephit, np.linspace(clim[0], clim[1], 10), colors='w', linewidths=0.1)
+    axs[1].contour(debug_theta, debug_psi, jac_pest, np.linspace(clim[0], clim[1], 10), colors='w', linewidths=0.1)
+    cbar = fig.colorbar(images[0], ax=axs)
+    cbar.set_label(sqrt_g, rotation=90)
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'debug_jac.pdf'))
+
+    fig = Figure(figsize=(8.0, 5.0))
+    axs = fig.subplots(1, 2, sharex='all', sharey='all')
+    images = [axs[0].pcolormesh(debug_theta, debug_psi, R, cmap=colorcet.cm.CET_L3,
+                                shading='gouraud', rasterized=True),
+              axs[1].pcolormesh(debug_theta, debug_psi, debug_R, cmap=colorcet.cm.CET_L3,
+                                shading='gouraud', rasterized=True)]
+    axs[0].set_xlabel(psi_n)
+    axs[0].set_ylabel(theta_n)
+    axs[0].set_title(r'$R$ from MEPHIT')
+    axs[1].set_xlabel(psi_n)
+    axs[1].set_ylabel(theta_n)
+    axs[1].set_title(r'$R$ from GPEC')
+    axs[1].yaxis.set_tick_params(labelleft=True)
+    axs[1].yaxis.offsetText.set_visible(True)
+    clim = (min(np.amin(image.get_array()) for image in images), max(np.amax(image.get_array()) for image in images))
+    norm = Normalize(vmin=clim[0], vmax=clim[1])
+    for im in images:
+        im.set_norm(norm)
+    axs[0].contour(debug_theta, debug_psi, R, np.linspace(clim[0], clim[1], 10), colors='w', linewidths=0.1)
+    axs[1].contour(debug_theta, debug_psi, debug_R, np.linspace(clim[0], clim[1], 10), colors='w', linewidths=0.1)
+    cbar = fig.colorbar(images[0], ax=axs)
+    cbar.set_label(r'$R$ / \si{\meter}', rotation=90)
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'debug_R.pdf'))
 
     rootgrp = netCDF4.Dataset(path.join(workdir, 'gpec_cylindrical_output_n2.nc'), 'r')
     R = [testcase.data['/Bnvac/rect_R'][()] * cm_to_m, np.array(rootgrp['R'])]

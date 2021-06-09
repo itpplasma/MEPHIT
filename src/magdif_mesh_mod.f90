@@ -2039,7 +2039,7 @@ contains
   subroutine compare_gpec_coordinates
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use netcdf, only: nf90_open, nf90_nowrite, nf90_noerr, nf90_inq_dimid, nf90_inq_varid, &
-         nf90_inquire_dimension, nf90_get_var, nf90_close
+         nf90_inquire_dimension, nf90_get_var, nf90_close, nf90_global, nf90_get_att
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext, psipol_max
     use constants, only: pi  ! orbit_mod.f90
     use magdif_conf, only: conf, log, datafile
@@ -2047,10 +2047,10 @@ contains
     character(len = 1024) :: filename
     logical :: file_exists
     integer(HID_T) :: h5id_root
-    integer :: ncid_file, ncid, nrad, npol, krad, kpol
-    real(dp) :: dum, B0_R, B0_Z, unit_normal(0:1)
+    integer :: ncid_file, ncid, nrad, npol, krad, kpol, idum, fid
+    real(dp) :: dum, B0_R, B0_Z, unit_normal(0:1), q
     real(dp), allocatable :: psi(:), theta(:), R(:, :), Z(:, :), theta_shift(:), &
-         xi_n(:, :, :)
+         xi_n(:, :, :), jac(:, :), sqrt_g(:, :)
     complex(dp), allocatable :: xi_n_R(:), xi_n_Z(:)
 
     write (filename, '("gpec_profile_output_n", i0, ".nc")') conf%n
@@ -2129,6 +2129,63 @@ contains
     if (allocated(xi_n)) deallocate(xi_n)
     if (allocated(xi_n_R)) deallocate(xi_n_R)
     if (allocated(xi_n_Z)) deallocate(xi_n_Z)
+    filename = '2d.out'
+    inquire(file = filename, exist = file_exists)
+    if (.not. file_exists) return
+    write (filename, '("dcon_output_n", i0, ".nc")') conf%n
+    inquire(file = filename, exist = file_exists)
+    if (.not. file_exists) return
+    write (log%msg, '("Files ", a, " and 2d.out found, performing GPEC Jacobian comparison.")') &
+         trim(filename)
+    call check_error("nf90_open", nf90_open(filename, nf90_nowrite, ncid_file))
+    call check_error("nf90_get_att", nf90_get_att(ncid_file, nf90_global, 'mpsi', nrad))
+    call check_error("nf90_get_att", nf90_get_att(ncid_file, nf90_global, 'mtheta', npol))
+    call check_error("nf90_close", nf90_close(ncid_file))
+    nrad = nrad + 1
+    allocate(psi(nrad), theta(npol), theta_shift(nrad), jac(nrad, npol), sqrt_g(nrad, npol), &
+         R(nrad, npol), Z(nrad, npol))
+    open(newunit = fid, file = '2d.out', status = 'old', form = 'formatted', action = 'read')
+    read (fid, *)
+    read (fid, *)
+    do krad = 1, nrad
+       read (fid, '(6x, i3, 6x, e24.16)') idum, psi(krad)
+       psi(krad) = psi(krad) * psipol_max
+       theta_shift(krad) = theta_offset(psi(krad) + fs%psi(0))
+       read (fid, *)
+       read (fid, *)
+       read (fid, *)
+       do kpol = 1, npol
+          read (fid, '(i6, 1p, 8e24.16)') idum, theta(kpol), dum, dum, dum, dum, &
+               R(krad, kpol), Z(krad, kpol), jac(krad, kpol)
+          theta(kpol) = theta(kpol) * 2d0 * pi
+          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol) + theta_shift(krad), &
+               q, dum, sqrt_g(krad, kpol), dum, dum, dum, dum, dum, dum, dum, dum)
+          sqrt_g(krad, kpol) = sqrt_g(krad, kpol) * abs(q)
+       end do
+       read (fid, *)  ! skip theta = 2 pi
+       read (fid, *)
+       read (fid, *)
+       read (fid, *)
+    end do
+    R(:, :) = R * 1d2  ! m to cm
+    Z(:, :) = Z * 1d2  ! m to cm
+    jac(:, :) = jac * 1d-2  ! m per T to cm per G
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, dataset // '/jac/')
+    call h5_add(h5id_root, dataset // '/jac/psi', psi, lbound(psi), ubound(psi), &
+         unit = 'Mx', comment = 'poloidal flux (shifted to zero at axis)')
+    call h5_add(h5id_root, dataset // '/jac/theta', theta, lbound(theta), ubound(theta), &
+         unit = 'rad', comment = 'flux poloidal angle')
+    call h5_add(h5id_root, dataset // '/jac/R', R, lbound(R), ubound(R), &
+         unit = 'cm', comment = 'R(psi, theta)')
+    call h5_add(h5id_root, dataset // '/jac/Z', Z, lbound(Z), ubound(Z), &
+         unit = 'cm', comment = 'Z(psi, theta)')
+    call h5_add(h5id_root, dataset // '/jac/sqrt_g', sqrt_g, lbound(sqrt_g), ubound(sqrt_g), &
+         unit = 'cm', comment = 'MEPHIT Jacobian at (psi, theta)')
+    call h5_add(h5id_root, dataset // '/jac/jac', jac, lbound(jac), ubound(jac), &
+         unit = 'cm', comment = 'GPEC Jacobian at (psi, theta)')
+    call h5_close(h5id_root)
+    deallocate(psi, theta, theta_shift, jac, sqrt_g, R, Z)
 
   contains
     subroutine check_error(funcname, status)
