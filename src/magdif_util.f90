@@ -21,7 +21,7 @@ module magdif_util
   type, public :: g_eqdsk
     type(sign_convention) :: cocos
     character(len = 1024) :: fname
-    character(len = 10) :: text(6)
+    character(len = 48) :: header
     integer :: nw, nh, nbbbs, limitr
     real(dp) :: rdim, zdim, rcentr, rleft, zmid, rmaxis, zmaxis, simag, sibry, bcentr, &
          current
@@ -36,10 +36,12 @@ module magdif_util
     procedure :: scale => g_eqdsk_scale
     procedure :: write => g_eqdsk_write
     procedure :: grad_shafranov_normalization => g_eqdsk_grad_shafranov_normalization
+    procedure :: import_hdf5 => g_eqdsk_import_hdf5
+    procedure :: export_hdf5 => g_eqdsk_export_hdf5
     final :: g_eqdsk_destructor
   end type g_eqdsk
 
-  character(len = *), parameter :: geqdsk_2000 = '(6a8,3i4)'
+  character(len = *), parameter :: geqdsk_2000 = '(a48, 3i4)'
   character(len = *), parameter :: geqdsk_2020 = '(5es16.9)'
   character(len = *), parameter :: geqdsk_2022 = '(2i5)'
 
@@ -281,7 +283,7 @@ contains
     call g_eqdsk_destructor(this)
     this%fname = fname
     open(newunit = fid, file = this%fname, status = 'old')
-    read (fid, geqdsk_2000) (this%text(kw), kw = 1, 6), idum, this%nw, this%nh
+    read (fid, geqdsk_2000) this%header, idum, this%nw, this%nh
     allocate(this%fpol(this%nw))
     allocate(this%pres(this%nw))
     allocate(this%ffprim(this%nw))
@@ -580,7 +582,7 @@ contains
     xdum = 0d0
     this%fname = fname
     open(newunit = fid, file = this%fname, status = 'replace')
-    write (fid, geqdsk_2000) (this%text(kw), kw = 1, 6), idum, this%nw, this%nh
+    write (fid, geqdsk_2000) this%header, idum, this%nw, this%nh
     write (fid, geqdsk_2020) this%rdim * 1d-2, this%zdim * 1d-2, this%rcentr * 1d-2, &
          this%rleft * 1d-2, this%zmid * 1d-2
     write (fid, geqdsk_2020) this%rmaxis * 1d-2, this%zmaxis * 1d-2, this%simag * 1d-8, &
@@ -602,6 +604,128 @@ contains
          kw = 1, this%limitr)
     close(fid)
   end subroutine g_eqdsk_write
+
+  subroutine g_eqdsk_import_hdf5(this, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    class(g_eqdsk), intent(inout) :: this
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
+
+    call g_eqdsk_destructor(this)
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/exp_Bpol', this%cocos%exp_Bpol)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_cyl', this%cocos%sgn_cyl)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_dpsi', this%cocos%sgn_dpsi)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_Btor', this%cocos%sgn_Btor)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_Itor', this%cocos%sgn_Itor)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_F', this%cocos%sgn_F)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_q', this%cocos%sgn_q)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_Bpol', this%cocos%sgn_Bpol)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_pol', this%cocos%sgn_pol)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/index', this%cocos%index)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/fname', this%fname)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/header', this%header)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/nw', this%nw)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/nh', this%nh)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/nbbbs', this%nbbbs)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/limitr', this%limitr)
+    allocate(this%fpol(this%nw), this%pres(this%nw), this%ffprim(this%nw), this%pprime(this%nw), &
+         this%qpsi(this%nw), this%rbbbs(this%nbbbs), this%zbbbs(this%nbbbs), &
+         this%rlim(this%limitr), this%zlim(this%limitr), this%psi_eqd(this%nw), &
+         this%R_eqd(this%nw), this%Z_eqd(this%nh), this%psirz(this%nw, this%nh))
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rdim', this%rdim)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/zdim', this%zdim)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rcentr', this%rcentr)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rleft', this%rleft)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/zmid', this%zmid)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rmaxis', this%rmaxis)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/zmaxis', this%zmaxis)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/simag', this%simag)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/sibry', this%sibry)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/bcentr', this%bcentr)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/current', this%current)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/fpol', this%fpol)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/pres', this%pres)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/ffprim', this%ffprim)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/pprime', this%pprime)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/qpsi', this%qpsi)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rbbbs', this%rbbbs)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/zbbbs', this%zbbbs)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rlim', this%rlim)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/zlim', this%zlim)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi_eqd', this%psi_eqd)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_eqd', this%R_eqd)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_eqd', this%Z_eqd)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/psirz', this%psirz)
+    call h5_close(h5id_root)
+  end subroutine g_eqdsk_import_hdf5
+
+  subroutine g_eqdsk_export_hdf5(this, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    class(g_eqdsk), intent(in) :: this
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
+
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/cocos/')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/exp_Bpol', this%cocos%exp_Bpol)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_cyl', this%cocos%sgn_cyl)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_dpsi', this%cocos%sgn_dpsi)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_Btor', this%cocos%sgn_Btor)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_Itor', this%cocos%sgn_Itor)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_F', this%cocos%sgn_F)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_q', this%cocos%sgn_q)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_Bpol', this%cocos%sgn_Bpol)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_pol', this%cocos%sgn_pol)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/index', this%cocos%index)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/fname', this%fname, &
+         comment = 'original GEQDSK filename')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/header', this%header)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nw', this%nw)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nh', this%nh)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nbbbs', this%nbbbs)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/limitr', this%limitr)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rdim', this%rdim, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/zdim', this%zdim, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rcentr', this%rcentr, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rleft', this%rleft, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/zmid', this%zmid, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rmaxis', this%rmaxis, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/zmaxis', this%zmaxis, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/simag', this%simag, unit = 'Mx')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/sibry', this%sibry, unit = 'Mx')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bcentr', this%bcentr, unit = 'G')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/current', this%current, unit = 'statA')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/fpol', this%fpol, &
+         lbound(this%fpol), ubound(this%fpol), unit = 'G cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/pres', this%pres, &
+         lbound(this%pres), ubound(this%pres), unit = 'dyn cm^-2')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ffprim', this%ffprim, &
+         lbound(this%ffprim), ubound(this%ffprim), unit = 'cm^-1')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/pprime', this%pprime, &
+         lbound(this%pprime), ubound(this%pprime), unit = 'dyn cm^-2 Mx^-1')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/qpsi', this%qpsi, &
+         lbound(this%qpsi), ubound(this%qpsi), unit = '1')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rbbbs', this%rbbbs, &
+         lbound(this%rbbbs), ubound(this%rbbbs), unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/zbbbs', this%zbbbs, &
+         lbound(this%zbbbs), ubound(this%zbbbs), unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rlim', this%rlim, &
+         lbound(this%rlim), ubound(this%rlim), unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/zlim', this%zlim, &
+         lbound(this%zlim), ubound(this%zlim), unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi_eqd', this%psi_eqd, &
+         lbound(this%psi_eqd), ubound(this%psi_eqd), unit = 'Mx', comment = 'equidistant psi grid values')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_eqd', this%R_eqd, &
+         lbound(this%R_eqd), ubound(this%R_eqd), unit = 'cm', comment = 'equidistant R grid values')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_eqd', this%Z_eqd, &
+         lbound(this%Z_eqd), ubound(this%Z_eqd), unit = 'cm', comment = 'equidistant Z grid values')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psirz', this%psirz, &
+         lbound(this%psirz), ubound(this%psirz), unit = 'Mx')
+    call h5_close(h5id_root)
+  end subroutine g_eqdsk_export_hdf5
 
   subroutine g_eqdsk_destructor(this)
     type(g_eqdsk) :: this
