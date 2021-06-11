@@ -60,46 +60,41 @@ void wait_for_exit(child_process_t *child, const char *name)
   }
 }
 
+extern void magdif_run(const char* config_file);
+extern char shared_namedpipe[path_max];
+
 int main(int argc, char *argv[])
 {
   const char ff[] = "FreeFem++-mpi";
   const char ff_log[] = "freefem.out";
-  char *binpath = NULL, *config = NULL, *tmpdir = NULL, *scriptpath = NULL;
+  char *config = NULL, *tmpdir = NULL, *scriptpath = NULL;
   char fifo[path_max] = "";
   int bytes_written, log_fd, errno_save;
   struct sigaction infanticide, prev_sigint, prev_sigterm;
 
   if (argc > 1) {
-    binpath = argv[1];
-    if (!(binpath && strlen(binpath))) {
-      errno_msg(exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for Fortran binary path");
-    }
-  } else {
-    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to Fortran binary as first argument");
-  }
-  if (argc > 2) {
-    config = argv[2];
+    config = argv[1];
     if (!(config && strlen(config))) {
       errno_msg(exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for config file");
     }
   } else {
-    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to config file as second argument");
+    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to config file as first argument");
   }
-  if (argc > 3) {
-    tmpdir = argv[3];
+  if (argc > 2) {
+    tmpdir = argv[2];
     if (!(tmpdir && strlen(tmpdir))) {
       errno_msg(exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for temporary directory");
     }
   } else {
-    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to temporary directory as third argument");
+    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to temporary directory as second argument");
   }
-  if (argc > 4) {
-    scriptpath = argv[4];
+  if (argc > 3) {
+    scriptpath = argv[3];
     if (!(scriptpath && strlen(scriptpath))) {
       errno_msg(exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for FreeFem script file");
     }
   } else {
-    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to FreeFem script file as fourth argument");
+    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to FreeFem script file as third argument");
   }
   /* TODO: if exclusive flock on magdif.h5 fails, exit with error; else, release acquired lock */
   bytes_written = snprintf(fifo, path_max, "%s/MEPHIT_0x%.8x.dat", tmpdir, getpid());
@@ -111,6 +106,8 @@ int main(int argc, char *argv[])
   if (mkfifo(fifo, 0600)) {
     errno_msg(exit, __FILE__, __LINE__, errno, "Failed to create FIFO %s", fifo);
   }
+  strncpy(shared_namedpipe, fifo, path_max - 1);
+  shared_namedpipe[path_max - 1] = '\0';
   fem.pid = fork();
   if (fem.pid == (pid_t) 0) {
     log_fd = open(ff_log, O_WRONLY | O_CREAT, 0644);
@@ -133,8 +130,8 @@ int main(int argc, char *argv[])
   }
   mephit.pid = fork();
   if (mephit.pid == (pid_t) 0) {
-    execl(binpath, binpath, config, fifo, (char *) NULL);
-    errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to execute MEPHIT");
+    magdif_run(config);
+    exit(0);
   } else if (mephit.pid == (pid_t) -1) {
     errno_save = errno;
     if (kill(fem.pid, SIGTERM)) {

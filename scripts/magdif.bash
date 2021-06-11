@@ -202,7 +202,6 @@ magdif_run() {
     for workdir; do
         pushd "$workdir"
         "$bindir/magdif_run.x" \
-            "$bindir/magdif_test.x" \
             "$config" \
             "$tmpdir" \
             "$scriptdir/maxwell_daemon.edp" \

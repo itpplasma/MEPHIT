@@ -32,7 +32,7 @@ Hrot <complex> [ax, ay], [wx, wy];
 Hdiv <complex> [Jr, Jz], [Br, Bz];
 Vh0 <complex> Bphi, Jphi;
 
-real[int] fluxdata(8 * ntri); // (Re, Im) of RT0 DoFs + toroidal component
+real[int] fluxdata(6 * ntri); // (Re, Im) of RT0 DoFs
 complex redundancy;
 int DoF, inconsistent;
 real small = 2.2250738585072014e-308, epsilon = 2.2204460492503131e-16; // taken from Fortran
@@ -41,15 +41,15 @@ cerr.scientific.precision(15);
 // use NaN to signify an unset value
 // ordered comparisons with NaN always return false, so unset values are never inconsistent
 // when core region is processed, set NaN values on the extended mesh to zero
-macro deserializeDoFs(pol, tor)
+macro deserializeDoFs(pol)
 for (int k = 0; k < ntri; k++) {
   for (int j = 0; j < 3; j++) {
     DoF = Hdiv(k, (j+2) % 3);
     redundancy = pol[][DoF];
     if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
-      pol[][DoF] = fluxdata[8*k + 2*j] + 1.0i * fluxdata[8*k + 2*j + 1];
+      pol[][DoF] = fluxdata[6*k + 2*j] + 1.0i * fluxdata[6*k + 2*j + 1];
     } else {
-      pol[][DoF] = -fluxdata[8*k + 2*j] - 1.0i * fluxdata[8*k + 2*j + 1];
+      pol[][DoF] = -fluxdata[6*k + 2*j] - 1.0i * fluxdata[6*k + 2*j + 1];
     }
     inconsistent = 0;
     if (abs(real(redundancy)) < small) {
@@ -69,7 +69,6 @@ for (int k = 0; k < ntri; k++) {
       exit(1);
     }
   }
-  tor[][k] = (fluxdata[8*k + 6] + 1.0i * fluxdata[8*k + 7]) / Th[k].area;
 }
 for (int k = ntri; k < Th.nt; k++) {
   for (int j = 0; j < 3; j++) {
@@ -80,19 +79,17 @@ for (int k = ntri; k < Th.nt; k++) {
   }
 }
 // end macro deserializeDoFs
-macro serializeDoFs(pol, tor)
+macro serializeDoFs(pol)
 for (int k = 0; k < ntri; k++) {
   for (int j = 0; j < 3; j++) {
     if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
-      fluxdata[8*k + 2*j] = real(pol[][Hdiv(k, (j+2) % 3)]);
-      fluxdata[8*k + 2*j + 1] = imag(pol[][Hdiv(k, (j+2) % 3)]);
+      fluxdata[6*k + 2*j] = real(pol[][Hdiv(k, (j+2) % 3)]);
+      fluxdata[6*k + 2*j + 1] = imag(pol[][Hdiv(k, (j+2) % 3)]);
     } else {
-      fluxdata[8*k + 2*j] = -real(pol[][Hdiv(k, (j+2) % 3)]);
-      fluxdata[8*k + 2*j + 1] = -imag(pol[][Hdiv(k, (j+2) % 3)]);
+      fluxdata[6*k + 2*j] = -real(pol[][Hdiv(k, (j+2) % 3)]);
+      fluxdata[6*k + 2*j + 1] = -imag(pol[][Hdiv(k, (j+2) % 3)]);
     }
   }
-  fluxdata[8*k + 6] = real(tor[][k]) * Th[k].area;
-  fluxdata[8*k + 7] = imag(tor[][k]) * Th[k].area;
 }
 // end macro serializeDoFs
 
@@ -113,7 +110,7 @@ while (state != -3) {
     // Ampere solver
     LoadVec(fluxdata, datapipe);
     [Jr, Jz] = [NaN() + 1.0i * NaN(), NaN() + 1.0i * NaN()];
-    deserializeDoFs(Jr, Jphi);
+    deserializeDoFs(Jr);
     // note that the metric determinant x = R is already contained in the input data
     // for J, but not in A
     Ampere;
@@ -121,7 +118,7 @@ while (state != -3) {
     [Br, Bz] = [1.0i * nmode * ay, -1.0i * nmode * ax];
     // contravariant density component identical to physical component
     Bphi = -(dx(ay) - dy(ax));
-    serializeDoFs(Br, Bphi);
+    serializeDoFs(Br);
     SaveVec(fluxdata, datapipe);
     if (doplot) {
       Hdiv [JrRe, JzRe], [JrIm, JzIm], [BrRe, BzRe], [BrIm, BzIm];
@@ -138,7 +135,7 @@ while (state != -3) {
     // convergenve estimation
     LoadVec(fluxdata, datapipe);
     [Br, Bz] = [NaN() + 1.0i * NaN(), NaN() + 1.0i * NaN()];
-    deserializeDoFs(Br, Bphi);
+    deserializeDoFs(Br);
     integral[0] = sqrt(real(int2d(Th)(Br * conj(Br) + Bz * conj(Bz))));
     SaveVec(integral, datapipe);
   }

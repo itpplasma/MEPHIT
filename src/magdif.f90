@@ -6,9 +6,7 @@ module magdif
 
   private
 
-  public :: magdif_init, magdif_cleanup, magdif_iterate, magdif_postprocess, freefem_pipe
-
-  character(len = 1024) :: freefem_pipe = 'maxwell.dat'
+  public :: magdif_run, magdif_init, magdif_cleanup, magdif_iterate, magdif_postprocess
 
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   type(L1_t) :: pn
@@ -25,7 +23,50 @@ module magdif
   !> Current density perturbation in units of statampere cm^-2.
   type(RT0_t) :: jn
 
+  interface
+     subroutine FEM_init(tormode) bind(C, name = 'FEM_init')
+       use iso_c_binding, only: c_int
+       integer(c_int), intent(in), value :: tormode
+     end subroutine FEM_init
+
+     subroutine FEM_compute_Bn(shape, Jn, Bn) bind(C, name = 'FEM_compute_Bn')
+       use iso_c_binding, only: c_int, c_double_complex
+       integer(c_int), intent(in) :: shape(2)
+       complex(c_double_complex), intent(in) :: Jn(1:shape(1), 1:shape(2))
+       complex(c_double_complex), intent(out) :: Bn(1:shape(1), 1:shape(2))
+     end subroutine FEM_compute_Bn
+
+     subroutine FEM_compute_L2int(shape, elem, L2int) bind(C, name = 'FEM_compute_L2int')
+       use iso_c_binding, only: c_int, c_double_complex, c_double
+       integer(c_int), intent(in) :: shape(2)
+       complex(c_double_complex), intent(in) :: elem(1:shape(1), 1:shape(2))
+       real(c_double), intent(out) :: L2int
+     end subroutine FEM_compute_L2int
+
+     subroutine FEM_deinit() bind(C, name = 'FEM_deinit')
+     end subroutine FEM_deinit
+  end interface
+
 contains
+
+  subroutine magdif_run(config_file) bind(C, name = 'magdif_run')
+    use iso_c_binding, only: c_ptr
+    use magdif_util, only: C_F_string
+    use magdif_conf, only: conf, magdif_config_read
+    use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
+    type(c_ptr), intent(in), value :: config_file
+    character(len = 1024) :: filename
+
+    call C_F_string(config_file, filename)
+    call h5_init
+    h5overwrite = .true.
+    call magdif_config_read(conf, filename)
+    call magdif_init
+    call magdif_iterate
+    call magdif_postprocess
+    call magdif_cleanup
+    call h5_deinit
+  end subroutine magdif_run
 
   !> Initialize magdif module
   subroutine magdif_init
@@ -37,7 +78,6 @@ contains
     use magdif_pert, only: RT0_check_div_free, RT0_check_redundant_edges, &
          RT0_init, RT0_read, L1_init
     character(len = 1024) :: gfile, pfile, convexfile
-    integer :: dum
 
     log = magdif_log('-', conf%log_level, conf%quiet)
 
@@ -71,8 +111,7 @@ contains
     call RT0_check_div_free(Bnvac, mesh%n, conf%rel_err_Bn, 'Bnvac')
 
     ! pass effective toroidal mode number to FreeFem++
-    call send_flag_to_freefem(mesh%n, freefem_pipe)
-    call receive_flag_from_freefem(dum, freefem_pipe)
+    call FEM_init(mesh%n)
 
     log%msg = 'magdif initialized'
     if (log%info) call log%write
@@ -84,11 +123,9 @@ contains
     use magdif_mesh, only: B0R, B0phi, B0Z, B0R_Omega, B0phi_Omega, B0Z_Omega, B0flux, &
          j0phi
     use magdif_pert, only: L1_deinit, RT0_deinit
-    integer :: dum
 
     ! tell FreeFem++ to stop processing
-    call send_flag_to_freefem(-3, freefem_pipe)
-    call receive_flag_from_freefem(dum, freefem_pipe)
+    call FEM_deinit
     if (allocated(B0r)) deallocate(B0r)
     if (allocated(B0phi)) deallocate(B0phi)
     if (allocated(B0z)) deallocate(B0z)
@@ -206,7 +243,7 @@ contains
     call vec_polmodes_init(jmn, m_max, mesh%nflux)
     call RT0_init(Bn_diff, mesh%ntri)
     allocate(L2int(0:niter))
-    call compute_L2int(Bnvac, L2int(0))
+    call FEM_compute_L2int(shape(Bnvac%DOF), Bnvac%DOF, L2int(0))
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, 'iter/')
     call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int(0), &
@@ -234,7 +271,7 @@ contains
        end if
 
        call unpack_dof(Bn_diff, packed_Bn - packed_Bn_prev)
-       call compute_L2int(Bn_diff, L2int(kiter))
+       call FEM_compute_L2int(shape(Bn_diff%DOF), Bn_diff%DOF, L2int(kiter))
        if (kiter <= 1) then
           call L1_write(pn, datafile, 'iter/pn' // postfix, &
                'pressure (after iteration)', 'dyn cm^-2')
@@ -337,123 +374,18 @@ contains
     end subroutine next_iteration_arnoldi
   end subroutine magdif_iterate
 
-  subroutine send_flag_to_freefem(flag, namedpipe)
-    use iso_c_binding, only: c_long
-    integer, intent(in) :: flag
-    character(len = *), intent(in) :: namedpipe
-    integer(c_long) :: long_flag
-    integer :: fid
-
-    long_flag = int(flag, c_long)
-    open(newunit = fid, file = namedpipe, status = 'old', access = 'stream', &
-         form = 'unformatted', action = 'write')
-    write (fid) long_flag
-    close(fid)
-  end subroutine send_flag_to_freefem
-
-  subroutine receive_flag_from_freefem(flag, namedpipe)
-    use iso_c_binding, only: c_long
-    integer, intent(out) :: flag
-    character(len = *), intent(in) :: namedpipe
-    integer(c_long) :: long_flag
-    integer :: fid
-
-    open(newunit = fid, file = namedpipe, status = 'old', access = 'stream', &
-         form = 'unformatted', action = 'read')
-    read (fid) long_flag
-    close(fid)
-    flag = int(long_flag)
-  end subroutine receive_flag_from_freefem
-
-  subroutine send_RT0_to_freefem(elem, outfile)
-    use iso_c_binding, only: c_long
-    use magdif_mesh, only: mesh
-    type(RT0_t), intent(in) :: elem
-    character(len = *), intent(in) :: outfile
-    integer(c_long) :: length
-    integer :: ktri, fid
-
-    length = 8 * mesh%ntri  ! (Re, Im) of RT0 DoFs + toroidal component
-    ! status = 'old' for writing to named pipe
-    open(newunit = fid, file = outfile, access = 'stream', status = 'old', &
-         action = 'write', form = 'unformatted')
-    write (fid) length
-    do ktri = 1, mesh%ntri
-       write (fid) elem%DOF(:, ktri), elem%comp_phi(ktri) * mesh%area(ktri)
-    end do
-    close(fid)
-  end subroutine send_RT0_to_freefem
-
-  subroutine receive_RT0_from_freefem(elem, infile)
-    use iso_c_binding, only: c_long
-    use magdif_conf, only: log
-    use magdif_mesh, only: mesh
-    type(RT0_t), intent(inout) :: elem
-    character(len = *), intent(in) :: infile
-    integer(c_long) :: length
-    integer :: ktri, fid
-
-    open(newunit = fid, file = infile, access = 'stream', status = 'old', &
-         action = 'read', form = 'unformatted')
-    read (fid) length
-    if (length < 8 * mesh%ntri) then
-       ! (Re, Im) of RT0 DoFs + toroidal component
-       write (log%msg, '("Pipe ", a, " only contains ", i0, " real values, ' // &
-            'expected ", i0, ".")') infile, length, 8 * mesh%ntri
-       if (log%err) call log%write
-       error stop
-    end if
-    do ktri = 1, mesh%ntri
-       read (fid) elem%DOF(:, ktri), elem%comp_phi(ktri)
-    end do
-    elem%comp_phi = elem%comp_phi / mesh%area
-    close(fid)
-  end subroutine receive_RT0_from_freefem
-
-  !> Computes #bnflux and #bnphi from #jnflux and #jnphi via an external program. No data
-  !> is read yet; this is done by read_bn().
+  !> Computes #bnflux and #bnphi from #jnflux and #jnphi.
   !>
-  !> Currently, this subroutine Calls FreeFem++ via shell script maxwell.sh in the current
-  !> directory and handles the exit code. For further information see maxwell.sh and the
-  !> script called therein.
+  !> This subroutine calls a C function that pipes the data to/from FreeFem.
   subroutine compute_Bn
-    use iso_c_binding, only: c_long
-    use magdif_conf, only: conf, decorate_filename
+    use magdif_util, only: imun
     use magdif_mesh, only: mesh
     use magdif_pert, only: RT0_check_redundant_edges, RT0_check_div_free
-    integer :: dummy
 
-    call send_flag_to_freefem(-1, freefem_pipe)
-    call receive_flag_from_freefem(dummy, freefem_pipe)
-    call send_RT0_to_freefem(jn, freefem_pipe)
-    call receive_RT0_from_freefem(Bn, freefem_pipe)
+    call FEM_compute_Bn(shape(jn%DOF), jn%DOF, Bn%DOF)
     call RT0_check_redundant_edges(Bn, 'Bn')
-    call RT0_check_div_free(Bn, mesh%n, conf%rel_err_Bn, 'Bn')
+    Bn%comp_phi(:) = imun / mesh%n * sum(Bn%DOF, 1) / mesh%area
   end subroutine compute_Bn
-
-  subroutine compute_L2int(elem, integral)
-    use iso_c_binding, only: c_long
-    use magdif_conf, only: log
-    type(RT0_t), intent(in) :: elem
-    real(dp), intent(out) :: integral
-    integer(c_long) :: length
-    integer :: fid, dummy
-
-    call send_flag_to_freefem(-2, freefem_pipe)
-    call receive_flag_from_freefem(dummy, freefem_pipe)
-    call send_RT0_to_freefem(elem, freefem_pipe)
-    open(newunit = fid, file = freefem_pipe, access = 'stream', status = 'old', &
-         action = 'read', form = 'unformatted')
-    read (fid) length
-    if (length /= 1) then
-       close(fid)
-       write (log%msg, '("Expected 1 double value from FreeFem++, but got ", i0)') length
-       if (log%err) call log%write
-       error stop
-    end if
-    read (fid) integral
-    close(fid)
-  end subroutine compute_L2int
 
   !> Assembles a sparse matrix in coordinate list (COO) representation for use with
   !> sparse_mod::sparse_solve().

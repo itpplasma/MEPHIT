@@ -80,6 +80,11 @@ set(MAGDIF_FORTRAN_SRC_FILES
   src/magdif_pert.f90
 )
 
+set(MAGDIF_C_SRC_FILES
+  src/magdif_util.c
+  src/magdif_fem.c
+)
+
 ### Set compiler flags
 set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
@@ -89,7 +94,7 @@ set_source_files_properties(${MAGDIF_FORTRAN_SRC_FILES}
   src/vacfield.f90
   src/standardise_equilibrium.f90
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS}")
-set_source_files_properties(src/magdif_run.c src/magdif_util.c
+set_source_files_properties(src/magdif_run.c ${MAGDIF_C_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "-O2 -g ${WARNING_FLAGS}")
 
 ### Define library
@@ -98,6 +103,7 @@ add_library(magdif SHARED
   # ${SUPERLU_SRC_FILES}
   ${COMMON_FORTRAN_SRC_FILES}
   ${MAGDIF_FORTRAN_SRC_FILES}
+  ${MAGDIF_C_SRC_FILES}
 )
 target_include_directories(magdif PUBLIC ${HDF5_tools_include_dir} ${FGSL_INC} ${NETCDF_INCLUDES})
 set(MAGDIF_LIBS
@@ -118,12 +124,11 @@ set(MAGDIF_LIBS
 target_link_libraries(magdif ${MAGDIF_LIBS})
 
 ### Define executables
-add_executable(magdif_run.x src/magdif_run.c src/magdif_util.c)
-add_executable(magdif_test.x src/magdif_test.f90)
+add_executable(magdif_run.x src/magdif_run.c)
 add_executable(standardise_equilibrium.x src/standardise_equilibrium.f90)
 add_executable(magdif_mesher.x src/magdif_mesher.f90)
 add_executable(vacfield.x src/vacfield.f90)
-target_link_libraries(magdif_test.x magdif)
+target_link_libraries(magdif_run.x magdif)
 target_link_libraries(standardise_equilibrium.x magdif)
 target_link_libraries(magdif_mesher.x magdif)
 target_link_libraries(vacfield.x magdif)

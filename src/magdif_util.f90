@@ -8,7 +8,7 @@ module magdif_util
 
   public :: clight, imun, get_field_filenames, init_field, interp_psi_pol, &
        linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, binsearch, interleave, &
-       gauss_legendre_unit_interval, heapsort_complex, complex_abs_asc
+       gauss_legendre_unit_interval, heapsort_complex, complex_abs_asc, C_F_string
 
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
@@ -804,5 +804,27 @@ contains
     integer :: k
     merged = [([first_s, second_s], k = 1, num / 2)]
   end function interleave_ss
+
+  subroutine C_F_string(C, F)
+    use iso_c_binding, only: c_ptr, c_char, c_associated, c_f_pointer, c_null_char
+    type(c_ptr), intent(in), value :: C
+    character(len = *), intent(out) :: F
+    character(kind = c_char, len = 1), dimension(:), pointer :: p
+    integer :: k
+
+    if (c_associated(C)) then
+       call c_f_pointer(C, p, [huge(0)])
+       k = 1
+       do while (p(k) /= c_null_char .and. k <= len(F))
+          F(k:k) = p(k)
+          k = k + 1
+       end do
+       if (k < len(f)) then
+          F(k:) = ' '
+       end if
+    else
+       F = ''
+    end if
+  end subroutine C_F_string
 
 end module magdif_util
