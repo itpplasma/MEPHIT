@@ -82,14 +82,8 @@ contains
     log = magdif_log('-', conf%log_level, conf%quiet)
 
     call get_field_filenames(gfile, pfile, convexfile)
-    call equil%read(gfile)
-    call equil%classify
-    if (equil%cocos%index /= 3) then
-       write (log%msg, '("GEQDSK file ", a, " is not conforming to COCOS 3")') trim(gfile)
-       if (log%err) call log%write
-       error stop
-    end if
-    call init_field(gfile, pfile, convexfile)
+    call equil%import_hdf5(datafile, 'equil')
+    call init_field(equil, pfile, convexfile, conf%n)
 
     ! read in preprocessed data
     call read_mesh_cache

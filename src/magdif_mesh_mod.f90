@@ -637,26 +637,20 @@ contains
     call h5_close(h5id_root)
   end subroutine coord_cache_ext_read
 
-  subroutine generate_mesh(unprocessed_geqdsk)
-    use magdif_conf, only: conf, log
+  subroutine generate_mesh
+    use magdif_conf, only: conf, datafile
     use magdif_util, only: get_field_filenames, init_field
-
-    character(len = *), intent(in) :: unprocessed_geqdsk
     character(len = 1024) :: gfile, pfile, convexfile
 
     call get_field_filenames(gfile, pfile, convexfile)
-    log%msg = 'attempting to read unprocessed G EQDSK file ' // trim(unprocessed_geqdsk)
-    if (log%info) call log%write
-    call equil%read(trim(unprocessed_geqdsk))
+    call equil%read(trim(gfile))
     call equil%classify
     call equil%standardise
     if (conf%kilca_scale_factor /= 0) then
        call equil%scale(conf%kilca_scale_factor)
     end if
-    log%msg = 'attempting to write processed G EQDSK file ' // trim(gfile)
-    if (log%info) call log%write
-    call equil%write(trim(gfile))
-    call init_field(gfile, pfile, convexfile)
+    call equil%export_hdf5(datafile, 'equil')
+    call init_field(equil, pfile, convexfile, conf%n)
 
     if (conf%kilca_scale_factor /= 0) then
        mesh%n = conf%n * conf%kilca_scale_factor

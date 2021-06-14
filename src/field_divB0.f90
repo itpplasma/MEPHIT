@@ -22,6 +22,7 @@ end module field_c_mod
 !
 module field_eq_mod
   logical :: use_fpol = .true.                                      !<=18.12.18
+  logical :: skip_read = .false.
   integer :: icall_eq=0
   integer :: nrad,nzet,icp,nwindow_r,nwindow_z
   real(kind=8), parameter                      :: pi=3.14159265358979d0
@@ -196,22 +197,27 @@ subroutine field_eq(r,ppp,z,Brad,Bphi,Bzet,dBrdR,dBrdp,dBrdZ  &
   if(icall_eq .lt. 1) then
 !
 !     call read_dimeq0(nrad,nzet)
-    call read_dimeq1(nrad,nzet)
-!
-    allocate(rad(nrad),zet(nzet))
-    allocate(psi0(nrad,nzet),psi(nrad,nzet))
-    allocate(splfpol(0:5,nrad))                                                      !<=18.12.18
+    if (.not. skip_read) then
+        call read_dimeq1(nrad,nzet)
+        allocate(rad(nrad),zet(nzet))
+        allocate(psi0(nrad,nzet),psi(nrad,nzet))
+        allocate(splfpol(0:5,nrad))                                                  !<=18.12.18
+    end if
 
 !     call read_eqfile0(nrad, nzet, psib, btf, rtf, rad, zet, psi)
     if(use_fpol) then                                                                !<=18.12.18
-      call read_eqfile2(nrad, nzet, psi_axis, psi_sep, btf, rtf,    &                !<=18.12.18
-                        splfpol(0,:), rad, zet, psi)                                 !<=18.12.18
+      if (.not. skip_read) then
+         call read_eqfile2(nrad, nzet, psi_axis, psi_sep, btf, rtf, &                !<=18.12.18
+              splfpol(0,:), rad, zet, psi)                                           !<=18.12.18
+      end if
       psib=-psi_axis                                                                 !<=18.12.18
       psi_sep=(psi_sep-psi_axis)*1.d8                                                !<=18.12.18
       splfpol(0,:)=splfpol(0,:)*1.d6                                                 !<=18.12.18
       call spline_fpol                                                               !<=18.12.18
     else                                                                             !<=18.12.18
-      call read_eqfile1(nrad, nzet, psib, btf, rtf, rad, zet, psi)
+       if (.not. skip_read) then
+          call read_eqfile1(nrad, nzet, psib, btf, rtf, rad, zet, psi)
+       end if
     endif                                                                            !<=18.12.18
 !
 ! Filtering:

@@ -99,7 +99,6 @@ magdif_init() {
         replace_first_in_line "$workdir/field_divB0.inp" 7 "'${geqdsk##*/}'"     # gfile
         replace_first_in_line "$workdir/field_divB0.inp" 8 "'${vacfield##*/}'"   # pfile
         replace_first_in_line "$workdir/field_divB0.inp" 9 "'${convexwall##*/}'" # convex
-        cp "$workdir/field_divB0.inp" "$workdir/field_divB0_unprocessed.inp"
     done
 }
 
@@ -145,10 +144,12 @@ magdif_prepare() {
     for workdir; do
         pushd "$workdir"
         rm -f "$log"
-        cp field_divB0_unprocessed.inp field_divB0.inp
-        unprocessed=$(read_first_in_line field_divB0_unprocessed.inp 7)
-        replace_first_in_line field_divB0.inp 7 "'\1_processed'"  # gfile
-        "$bindir/magdif_mesher.x" "$config" "$unprocessed" 2>&1 | tee "$log"
+        if [ -f "field_divB0_unprocessed.inp" ]; then
+            # backwards compatibility for directories
+            # initialized with previous version of this script
+            mv -b -f field_divB0_unprocessed.inp field_divB0.inp
+        fi
+        "$bindir/magdif_mesher.x" "$config" 2>&1 | tee "$log"
         lasterr=$?
         if [ $lasterr -ne 0 ]; then
             echo "$scriptname: error $lasterr during mesh generation in $workdir" | tee -a "$log" >&2

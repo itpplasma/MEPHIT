@@ -7,15 +7,10 @@ program magdif_preprocess
 
   implicit none
 
-  character(len = 1024) :: config_file, unprocessed_geqdsk
+  character(len = 1024) :: config_file
 
   if (command_argument_count() >= 1) then
      call get_command_argument(1, config_file)
-     if (command_argument_count() >= 2) then
-        call get_command_argument(2, unprocessed_geqdsk)
-     else
-        error stop 'expected path to unprocessed G EQDSK file as second parameter'
-     end if
   else
      error stop 'expected path to magdif config file as first parameter'
   endif
@@ -24,7 +19,7 @@ program magdif_preprocess
   h5overwrite = .true.
   call magdif_config_read(conf, config_file)
   log = magdif_log('-', conf%log_level, conf%quiet)
-  call generate_mesh(unprocessed_geqdsk)
+  call generate_mesh
   call write_mesh_cache
   call generate_vacfield
   call h5_deinit

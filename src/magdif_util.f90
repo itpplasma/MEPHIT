@@ -103,30 +103,46 @@ contains
   end subroutine get_field_filenames
 
   !> Set module variables for initialization of subroutine field
-  subroutine init_field(geqdsk, coil, convex)
+  subroutine init_field(equil, coil, convex, n)
     use input_files, only: gfile, pfile, convexfile
     use field_mod, only: icall, ipert, iequil
-    use field_eq_mod, only: icall_eq, nwindow_r, nwindow_z
+    use field_eq_mod, only: skip_read, icall_eq, nwindow_r, nwindow_z, &
+         nrad, nzet, psi_axis, psi_sep, btf, rtf, splfpol, rad, zet, psi, psi0
     use field_c_mod, only: icftype, ntor
-    character(len = *), intent(in) :: geqdsk, coil, convex
+    type(g_eqdsk), intent(in) :: equil
+    character(len = *), intent(in) :: coil, convex
+    integer, intent(in) :: n
     real(dp) :: dum
 
     ! use supplied files
     pfile = coil
-    gfile = geqdsk
+    gfile = equil%fname
     convexfile = convex
     icftype = 4
     ! compute equiibrium field
     ipert = 0
     iequil = 1
     ! default values - TODO: options in magdif_conf
-    ntor = 2
+    ntor = n
     nwindow_r = 0
     nwindow_z = 0
     ! don't let subroutine field read from input file
     icall = 1
     ! let subroutine field_eq do only initialization
     icall_eq = -1
+    ! use preprocessed gfile data
+    skip_read = .true.
+    nrad = equil%nw
+    nzet = equil%nh
+    allocate(rad(nrad), zet(nzet), psi0(nrad, nzet), psi(nrad, nzet), splfpol(0:5, nrad))
+    psi_axis = equil%simag * 1d-8
+    psi_sep = equil%sibry * 1d-8
+    btf = equil%bcentr * 1d-4
+    rtf = equil%rcentr * 1d-2
+    splfpol(0, :) = equil%fpol * 1d-6
+    psi = equil%psirz * 1d-8
+    rad = equil%R_eqd * 1d-2
+    zet = equil%Z_eqd * 1d-2
     call field_eq(0d0, 0d0, 0d0, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
   end subroutine init_field
 
