@@ -126,11 +126,9 @@ target_link_libraries(magdif ${MAGDIF_LIBS})
 ### Define executables
 add_executable(magdif_run.x src/magdif_run.c)
 add_executable(standardise_equilibrium.x src/standardise_equilibrium.f90)
-add_executable(magdif_mesher.x src/magdif_mesher.f90)
 add_executable(vacfield.x src/vacfield.f90)
 target_link_libraries(magdif_run.x magdif)
 target_link_libraries(standardise_equilibrium.x magdif)
-target_link_libraries(magdif_mesher.x magdif)
 target_link_libraries(vacfield.x magdif)
 
 ### Add helper script to binaries

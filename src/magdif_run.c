@@ -66,10 +66,10 @@ extern char shared_namedpipe[path_max];
 int main(int argc, char *argv[])
 {
   const char ff[] = "FreeFem++-mpi";
-  const char ff_log[] = "freefem.out";
+  const char *ssh_client, *display;
   char *config = NULL, *tmpdir = NULL, *scriptpath = NULL;
   char fifo[path_max] = "";
-  int bytes_written, log_fd, errno_save;
+  int bytes_written, errno_save, graphical;
   struct sigaction infanticide, prev_sigint, prev_sigterm;
 
   if (argc > 1) {
@@ -110,20 +110,24 @@ int main(int argc, char *argv[])
   shared_namedpipe[path_max - 1] = '\0';
   fem.pid = fork();
   if (fem.pid == (pid_t) 0) {
-    log_fd = open(ff_log, O_WRONLY | O_CREAT, 0644);
-    if (log_fd < 0) {
-      errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to create FreeFem logfile");
+    // when connected via SSH or not working in an X environmnent,
+    // suppress graphics to avoid setting an error code
+    graphical = 1;
+    ssh_client = getenv("SSH_CLIENT");
+    display = getenv("DISPLAY");
+    if (ssh_client && strlen(ssh_client)) {
+      fprintf(stdout, "Environment variable SSH_CLIENT is set, disabling FreeFem++ graphics.\n");
+      graphical = 0;
     }
-    if (0 > dup2(log_fd, STDOUT_FILENO)) {
-      errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to redirect stdout");
+    if (!(display && strlen(display))) {
+      fprintf(stdout, "Environment variable DISPLAY is not set, disabling FreeFem++ graphics.\n");
+      graphical = 0;
     }
-    if (0 > dup2(log_fd, STDERR_FILENO)) {
-      errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to redirect stderr");
+    if (graphical) {
+      execlp(ff, ff, "-ne", "-wg", "-wait", scriptpath, "-P", fifo, (char *) NULL);
+    } else {
+      execlp(ff, ff, "-ne", "-nw", scriptpath, "-P", fifo, (char *) NULL);
     }
-    if (close(log_fd)) {
-      errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to close duplicate file descriptor");
-    }
-    execlp(ff, ff, "-nw", scriptpath, "-P", fifo, (char *) NULL);
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to execute FreeFem");
   } else if (fem.pid == (pid_t) -1) {
     errno_msg(exit, __FILE__, __LINE__, errno, "Failed to create child process for FreeFem");

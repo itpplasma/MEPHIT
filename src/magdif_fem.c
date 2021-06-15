@@ -135,6 +135,14 @@ void FEM_init(const int tormode)
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
 }
 
+void FEM_extend_mesh(void)
+{
+  long int flag = 0L;
+
+  send_long0_to_FreeFem(shared_namedpipe, &flag);
+  receive_long0_from_FreeFem(shared_namedpipe, &flag);
+}
+
 void FEM_compute_Bn(const int *restrict shape, const complex_double *restrict Jn, complex_double *restrict Bn)
 {
   long int flag = -1L;

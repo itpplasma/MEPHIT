@@ -15,6 +15,12 @@ string meshfile = getARGV("-M", "inputformaxwell_ext.msh");
 string datapipe = getARGV("-P", "maxwell.dat");
 bool doplot = false;
 
+int runmode;
+LoadFlag(runmode, datapipe);
+flag(runmode, datapipe);
+{
+  include "extmesh.edp"
+}
 mesh Th = readmesh(meshfile);
 // count triangles in internal region 0
 int ntri = 0;
