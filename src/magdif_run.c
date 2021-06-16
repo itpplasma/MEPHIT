@@ -60,7 +60,7 @@ void wait_for_exit(child_process_t *child, const char *name)
   }
 }
 
-extern void magdif_run(const char* config_file);
+extern void magdif_run(const int runmode, const char* config_file);
 extern char shared_namedpipe[path_max];
 
 int main(int argc, char *argv[])
@@ -68,46 +68,51 @@ int main(int argc, char *argv[])
   const char ff[] = "FreeFem++-mpi";
   const char *ssh_client, *display;
   char *config = NULL, *tmpdir = NULL, *scriptpath = NULL;
-  char fifo[path_max] = "";
-  int bytes_written, errno_save, graphical;
+  int runmode = 0, bytes_written, errno_save, graphical;
   struct sigaction infanticide, prev_sigint, prev_sigterm;
 
   if (argc > 1) {
-    config = argv[1];
-    if (!(config && strlen(config))) {
-      errno_msg(exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for config file");
+    if (!strlen(argv[1])) {
+      errno_msg(exit, __FILE__, __LINE__, EINVAL, "Empty string for numeric runmode");
     }
+    runmode = strtol(argv[1], NULL, 0);
   } else {
-    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to config file as first argument");
+    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected numeric runmode as first argument");
   }
   if (argc > 2) {
-    tmpdir = argv[2];
-    if (!(tmpdir && strlen(tmpdir))) {
-      errno_msg(exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for temporary directory");
+    if (!strlen(argv[2])) {
+      errno_msg(exit, __FILE__, __LINE__, EINVAL, "Empty string for config file");
     }
+    config = argv[2];
   } else {
-    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to temporary directory as second argument");
+    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to config file as second argument");
   }
   if (argc > 3) {
-    scriptpath = argv[3];
-    if (!(scriptpath && strlen(scriptpath))) {
-      errno_msg(exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for FreeFem script file");
+    if (!strlen(argv[3])) {
+      errno_msg(exit, __FILE__, __LINE__, EINVAL, "Empty string for temporary directory");
     }
+    tmpdir = argv[3];
   } else {
-    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to FreeFem script file as third argument");
+    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to temporary directory as third argument");
+  }
+  if (argc > 4) {
+    if (!strlen(argv[4])) {
+      errno_msg(exit, __FILE__, __LINE__, EINVAL, "Empty string for FreeFem script file");
+    }
+    scriptpath = argv[4];
+  } else {
+    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to FreeFem script file as fourth argument");
   }
   /* TODO: if exclusive flock on magdif.h5 fails, exit with error; else, release acquired lock */
-  bytes_written = snprintf(fifo, path_max, "%s/MEPHIT_0x%.8x.dat", tmpdir, getpid());
+  bytes_written = snprintf(shared_namedpipe, path_max, "%s/MEPHIT_0x%.8x.dat", tmpdir, getpid());
   if (bytes_written < 0) {
     errno_msg(exit, __FILE__, __LINE__, errno, "Failed to generate FIFO name");
   } else if (bytes_written >= path_max) {
     errno_msg(exit, __FILE__, __LINE__, ENAMETOOLONG, "Failed to generate FIFO name");
   }
-  if (mkfifo(fifo, 0600)) {
-    errno_msg(exit, __FILE__, __LINE__, errno, "Failed to create FIFO %s", fifo);
+  if (mkfifo(shared_namedpipe, 0600)) {
+    errno_msg(exit, __FILE__, __LINE__, errno, "Failed to create FIFO %s", shared_namedpipe);
   }
-  strncpy(shared_namedpipe, fifo, path_max - 1);
-  shared_namedpipe[path_max - 1] = '\0';
   fem.pid = fork();
   if (fem.pid == (pid_t) 0) {
     // when connected via SSH or not working in an X environmnent,
@@ -124,9 +129,9 @@ int main(int argc, char *argv[])
       graphical = 0;
     }
     if (graphical) {
-      execlp(ff, ff, "-ne", "-wg", "-wait", scriptpath, "-P", fifo, (char *) NULL);
+      execlp(ff, ff, "-ne", "-wg", "-wait", scriptpath, "-P", shared_namedpipe, (char *) NULL);
     } else {
-      execlp(ff, ff, "-ne", "-nw", scriptpath, "-P", fifo, (char *) NULL);
+      execlp(ff, ff, "-ne", "-nw", scriptpath, "-P", shared_namedpipe, (char *) NULL);
     }
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to execute FreeFem");
   } else if (fem.pid == (pid_t) -1) {
@@ -134,7 +139,7 @@ int main(int argc, char *argv[])
   }
   mephit.pid = fork();
   if (mephit.pid == (pid_t) 0) {
-    magdif_run(config);
+    magdif_run(runmode, config);
     exit(0);
   } else if (mephit.pid == (pid_t) -1) {
     errno_save = errno;
@@ -184,10 +189,10 @@ int main(int argc, char *argv[])
   if (sigaction(SIGTERM, &prev_sigterm, NULL)) {
     errno_msg(NULL, __FILE__, __LINE__, errno, "Failed to unregister signal handler for SIGTERM");
   }
-  if (unlink(fifo)) {
+  if (unlink(shared_namedpipe)) {
     errno_msg(NULL, __FILE__, __LINE__, errno, "Failed to delete FIFO");
   }
-  fifo[0] = '\0';
+  shared_namedpipe[0] = '\0';
 
   if (caught_signal) {
     return 128 + (int) caught_signal;

@@ -15,11 +15,16 @@ string meshfile = getARGV("-M", "inputformaxwell_ext.msh");
 string datapipe = getARGV("-P", "maxwell.dat");
 bool doplot = false;
 
-int runmode;
+int runmode = 0, nmode = 2;
+LoadFlag(nmode, datapipe);
+flag(nmode, datapipe);
 LoadFlag(runmode, datapipe);
 flag(runmode, datapipe);
-{
+if (runmode % 2) {
   include "extmesh.edp"
+}
+if (!((runmode / 2) % 2)) {
+  exit(0);
 }
 mesh Th = readmesh(meshfile);
 // count triangles in internal region 0
@@ -100,9 +105,6 @@ for (int k = 0; k < ntri; k++) {
 // end macro serializeDoFs
 
 real[int] integral(1);  // for SaveVec
-int nmode = 2;
-LoadFlag(nmode, datapipe);
-flag(nmode, datapipe);
 problem Ampere([ax, ay], [wx, wy], solver = sparsesolver) = // defines the PDE
   int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(ay) - dy(ax)))
   + int2d(Th)(nmode^2 / x * (wx * ax + wy * ay))

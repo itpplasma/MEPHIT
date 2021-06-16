@@ -24,9 +24,9 @@ module magdif
   type(RT0_t) :: jn
 
   interface
-     subroutine FEM_init(tormode) bind(C, name = 'FEM_init')
+     subroutine FEM_init(tormode, runmode) bind(C, name = 'FEM_init')
        use iso_c_binding, only: c_int
-       integer(c_int), intent(in), value :: tormode
+       integer(c_int), intent(in), value :: tormode, runmode
      end subroutine FEM_init
 
      subroutine FEM_extend_mesh() bind(C, name = 'FEM_extend_mesh')
@@ -52,35 +52,78 @@ module magdif
 
 contains
 
-  subroutine magdif_run(config_file) bind(C, name = 'magdif_run')
-    use iso_c_binding, only: c_ptr
-    use magdif_util, only: C_F_string
-    use magdif_conf, only: conf, magdif_config_read, magdif_log, log
-    use magdif_mesh, only: generate_mesh, write_mesh_cache
+  subroutine magdif_run(runmode, config_file) bind(C, name = 'magdif_run')
+    use iso_c_binding, only: c_int, c_ptr
+    use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
+    use magdif_util, only: C_F_string, get_field_filenames, init_field
+    use magdif_conf, only: conf, magdif_config_read, conf_arr, magdif_log, log, datafile
+    use magdif_mesh, only: equil, mesh, generate_mesh, write_mesh_cache, read_mesh_cache, fluxvar
     use magdif_pert, only: generate_vacfield
     use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
+    integer(c_int), intent(in), value :: runmode
     type(c_ptr), intent(in), value :: config_file
-    character(len = 1024) :: filename
+    character(len = 1024) :: config_filename, gfile, pfile, convexfile
+    logical :: meshing, analysis, iterations
 
-    call C_F_string(config_file, filename)
+    meshing = iand(runmode, ishft(1, 0)) /= 0
+    iterations = iand(runmode, ishft(1, 1)) /= 0
+    analysis = iand(runmode, ishft(1, 2)) /= 0
+    if (.not. (meshing .or. iterations .or. analysis)) then
+       meshing = .true.
+       iterations = .true.
+       analysis = .true.
+    end if
+    call C_F_string(config_file, config_filename)
+    call magdif_config_read(conf, config_filename)
+    log = magdif_log('-', conf%log_level, conf%quiet)
     call h5_init
     h5overwrite = .true.
-    call magdif_config_read(conf, filename)
-    log = magdif_log('-', conf%log_level, conf%quiet)
-    call generate_mesh
-    call write_mesh_cache
-    call generate_vacfield
-    call FEM_extend_mesh
-    call magdif_init
-    call magdif_iterate
-    call magdif_postprocess
-    call magdif_cleanup
+    if (meshing) then
+       ! initialize equilibrium field
+       call get_field_filenames(gfile, pfile, convexfile)
+       call equil%read(trim(gfile), trim(convexfile))
+       call equil%classify
+       call equil%standardise
+       if (conf%kilca_scale_factor /= 0) then
+          call equil%scale(conf%kilca_scale_factor)
+       end if
+       call equil%export_hdf5(datafile, 'equil')
+       call init_field(equil)
+       ! generate mesh and vacuum field
+       call generate_mesh
+       call write_mesh_cache
+       call generate_vacfield
+       ! pass effective toroidal mode number and runmode to FreeFem++
+       call FEM_init(mesh%n, runmode)
+       call FEM_extend_mesh
+    else
+       ! initialize equilibrium field
+       call equil%import_hdf5(datafile, 'equil')
+       call init_field(equil)
+       ! read in preprocessed data
+       call read_mesh_cache
+       call load_magdata_in_symfluxcoord
+       ! TODO: save previously processed config parameters to HDF5 and load here
+       call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
+       ! TODO: cache Lagrange polynomials instead
+       call fluxvar%init(4, equil%psi_eqd)
+       ! pass effective toroidal mode number and runmode to FreeFem++
+       call FEM_init(mesh%n, runmode)
+    end if
+    if (iterations .or. analysis) then
+       call magdif_init
+       call magdif_iterate
+       call FEM_deinit
+       call magdif_postprocess
+       call magdif_cleanup
+    else
+       call FEM_deinit
+    end if
     call h5_deinit
   end subroutine magdif_run
 
   !> Initialize magdif module
   subroutine magdif_init
-    use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use magdif_conf, only: conf, log, datafile
     use magdif_mesh, only: mesh
     use magdif_pert, only: RT0_check_redundant_edges, RT0_check_div_free, &
@@ -96,9 +139,6 @@ contains
     call RT0_check_redundant_edges(Bnvac, 'Bnvac')
     call RT0_check_div_free(Bnvac, mesh%n, conf%rel_err_Bn, 'Bnvac')
 
-    ! pass effective toroidal mode number to FreeFem++
-    call FEM_init(mesh%n)
-
     log%msg = 'magdif initialized'
     if (log%info) call log%write
   end subroutine magdif_init
@@ -110,8 +150,6 @@ contains
          j0phi
     use magdif_pert, only: L1_deinit, RT0_deinit
 
-    ! tell FreeFem++ to stop processing
-    call FEM_deinit
     if (allocated(B0r)) deallocate(B0r)
     if (allocated(B0phi)) deallocate(B0phi)
     if (allocated(B0z)) deallocate(B0z)

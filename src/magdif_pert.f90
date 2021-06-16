@@ -1134,8 +1134,9 @@ contains
   subroutine read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bnvac_R, Bnvac_Z)
     use input_files, only: pfile
     use magdif_conf, only: conf
-    use magdif_util, only: imun, linspace
+    use magdif_util, only: imun, linspace, get_field_filenames
     use constants, only: pi  ! orbit_mod.f90
+    character(len = 1024) :: gfile, convexfile
     integer, intent(out) :: nR, nZ
     real(dp), intent(out) :: Rmin, Rmax, Zmin, Zmax
     complex(dp), intent(out), dimension(:, :), allocatable :: Bnvac_R, Bnvac_Z
@@ -1143,6 +1144,7 @@ contains
     real(dp) :: B_R, B_phi, B_Z
     complex(dp), allocatable :: fourier_basis(:)
 
+    call get_field_filenames(gfile, pfile, convexfile)
     open(newunit = fid, file = pfile, status = 'old', action = 'read', form = 'formatted')
     read (fid, *) nR, nphi, nZ, idum
     read (fid, *) Rmin, Rmax

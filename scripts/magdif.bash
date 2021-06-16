@@ -137,14 +137,26 @@ magdif_convert() {
 magdif_run() {
     config=magdif.inp
     log=magdif.log
-    batchmode=false
-    TEMP=$(getopt -o 'b' --long 'batchmode' -n "$scriptname" -- "$@")
+    analysis=0
+    iterations=0
+    meshing=0
+    TEMP=$(getopt -o 'aim' --long 'analysis,iterations,meshing' -n "$scriptname" -- "$@")
     eval set -- "$TEMP"
     unset TEMP
     while true; do
         case "$1" in
-            '-b'|'--batchmode')
-                batchmode=true
+            '-a'|'--analysis')
+                analysis=1
+                shift
+                continue
+                ;;
+            '-i'|'--iterations')
+                iterations=1
+                shift
+                continue
+                ;;
+            '-m'|'--meshing')
+                meshing=1
                 shift
                 continue
                 ;;
@@ -158,6 +170,13 @@ magdif_run() {
                 ;;
         esac
     done
+    if [ $analysis -eq 0 -a $iterations -eq 0 -a $meshing -eq 0 ]; then
+        # if no options are set, default to go through all phases
+        analysis=1
+        iterations=1
+        meshing=1
+    fi
+    runmode=$(( analysis << 2 | iterations << 1 | meshing << 0 ))
 
     for workdir; do
         pushd "$workdir"
@@ -168,6 +187,7 @@ magdif_run() {
             mv -b -f field_divB0_unprocessed.inp field_divB0.inp
         fi
         "$bindir/magdif_run.x" \
+            $runmode \
             "$config" \
             "$tmpdir" \
             "$scriptdir/maxwell_daemon.edp" \

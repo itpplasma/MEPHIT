@@ -21,6 +21,7 @@ module magdif_util
   type, public :: g_eqdsk
     type(sign_convention) :: cocos
     character(len = 1024) :: fname
+    character(len = 1024) :: convexfile
     character(len = 48) :: header
     integer :: nw, nh, nbbbs, limitr
     real(dp) :: rdim, zdim, rcentr, rleft, zmid, rmaxis, zmaxis, simag, sibry, bcentr, &
@@ -103,27 +104,20 @@ contains
   end subroutine get_field_filenames
 
   !> Set module variables for initialization of subroutine field
-  subroutine init_field(equil, coil, convex, n)
-    use input_files, only: gfile, pfile, convexfile
+  subroutine init_field(equil)
+    use input_files, only: convexfile
     use field_mod, only: icall, ipert, iequil
     use field_eq_mod, only: skip_read, icall_eq, nwindow_r, nwindow_z, &
          nrad, nzet, psi_axis, psi_sep, btf, rtf, splfpol, rad, zet, psi, psi0
-    use field_c_mod, only: icftype, ntor
     type(g_eqdsk), intent(in) :: equil
-    character(len = *), intent(in) :: coil, convex
-    integer, intent(in) :: n
     real(dp) :: dum
 
-    ! use supplied files
-    pfile = coil
-    gfile = equil%fname
-    convexfile = convex
-    icftype = 4
+    ! use supplied filename
+    convexfile = equil%convexfile
     ! compute equiibrium field
     ipert = 0
     iequil = 1
     ! default values - TODO: options in magdif_conf
-    ntor = n
     nwindow_r = 0
     nwindow_z = 0
     ! don't let subroutine field read from input file
@@ -290,14 +284,15 @@ contains
     comp_tor = comp_phi ! / (1d0 + r / R_0 * cos(theta))  ! exact version
   end subroutine bent_cyl2straight_cyl
 
-  subroutine g_eqdsk_read(this, fname)
+  subroutine g_eqdsk_read(this, fname, convexfile)
     class(g_eqdsk), intent(inout) :: this
-    character(len = *), intent(in) :: fname
+    character(len = *), intent(in) :: fname, convexfile
     integer :: fid, kw, kh, idum
     real(dp) :: xdum
 
     call g_eqdsk_destructor(this)
     this%fname = fname
+    this%convexfile = convexfile
     open(newunit = fid, file = this%fname, status = 'old')
     read (fid, geqdsk_2000) this%header, idum, this%nw, this%nh
     allocate(this%fpol(this%nw))
@@ -641,6 +636,7 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_pol', this%cocos%sgn_pol)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/index', this%cocos%index)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/fname', this%fname)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/convexfile', this%convexfile)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/header', this%header)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/nw', this%nw)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/nh', this%nh)
@@ -698,6 +694,8 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/index', this%cocos%index)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/fname', this%fname, &
          comment = 'original GEQDSK filename')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/convexfile', this%convexfile, &
+         comment = 'associated convexfile for subroutine stretch_coords')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/header', this%header)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/nw', this%nw)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/nh', this%nh)
@@ -746,6 +744,8 @@ contains
   subroutine g_eqdsk_destructor(this)
     type(g_eqdsk) :: this
 
+    this%fname = ''
+    this%convexfile = ''
     if (allocated(this%fpol)) deallocate(this%fpol)
     if (allocated(this%pres)) deallocate(this%pres)
     if (allocated(this%ffprim)) deallocate(this%ffprim)

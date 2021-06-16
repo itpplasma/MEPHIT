@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-void FEM_init(const int tormode);
+void FEM_init(const int tormode, const int runmode);
 void FEM_extend_mesh(void);
 void FEM_compute_Bn(const int *restrict shape, const complex_double *restrict Jn, complex_double *restrict Bn);
 void FEM_compute_L2int(const int *restrict shape, const complex_double *restrict elem, double *restrict L2int);

@@ -638,26 +638,14 @@ contains
   end subroutine coord_cache_ext_read
 
   subroutine generate_mesh
-    use magdif_conf, only: conf, datafile
-    use magdif_util, only: get_field_filenames, init_field
-    character(len = 1024) :: gfile, pfile, convexfile
-
-    call get_field_filenames(gfile, pfile, convexfile)
-    call equil%read(trim(gfile))
-    call equil%classify
-    call equil%standardise
-    if (conf%kilca_scale_factor /= 0) then
-       call equil%scale(conf%kilca_scale_factor)
-    end if
-    call equil%export_hdf5(datafile, 'equil')
-    call init_field(equil, pfile, convexfile, conf%n)
+    use magdif_conf, only: conf
 
     if (conf%kilca_scale_factor /= 0) then
        mesh%n = conf%n * conf%kilca_scale_factor
     else
        mesh%n = conf%n
     end if
-    call create_mesh_points(convexfile)
+    call create_mesh_points
     call compare_gpec_coordinates
     call write_illustration_data(5, 8, 256, 256)
     call connect_mesh_points
@@ -960,7 +948,7 @@ contains
     close(fid)
   end subroutine write_kilca_convexfile
 
-  subroutine create_mesh_points(convexfile)
+  subroutine create_mesh_points
     use constants, only: pi
     use magdif_conf, only: conf, conf_arr, log
     use magdif_util, only: interp_psi_pol, flux_func
@@ -970,7 +958,6 @@ contains
          theta0_at_xpoint, theta_axis, theta0
     use points_2d, only: s_min, create_points_2d
 
-    character(len = *), intent(in) :: convexfile
     integer :: kf, fid
     integer, dimension(:), allocatable :: n_theta
     real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_norm_ref
@@ -986,7 +973,7 @@ contains
             equil%rleft + equil%rdim - equil%rmaxis, &
             equil%zdim * 0.5d0 + equil%zmid - equil%zmaxis, &
             equil%zdim * 0.5d0 - equil%zmid + equil%zmaxis)
-       call write_kilca_convexfile(rho_max, convexfile)
+       call write_kilca_convexfile(rho_max, equil%convexfile)
        o_point = [equil%rmaxis, equil%zmaxis]
        x_point = o_point + [rho_max, 0d0]
     end if
