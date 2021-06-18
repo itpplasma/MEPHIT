@@ -128,13 +128,13 @@ void receive_double1_from_FreeFem(const char *namedpipe, const int size, double 
 
 void FEM_init(const int tormode, const int runmode)
 {
-  long int n = tormode, long_runmode = runmode;
-  long int flag;
+  long int long_tormode = tormode ? tormode : 2;
+  long int long_runmode = runmode ? runmode : (1 << 0 | 1 << 1 | 1 << 2);
  
-  send_long0_to_FreeFem(shared_namedpipe, &n);
-  receive_long0_from_FreeFem(shared_namedpipe, &flag);
+  send_long0_to_FreeFem(shared_namedpipe, &long_tormode);
+  receive_long0_from_FreeFem(shared_namedpipe, &long_tormode);
   send_long0_to_FreeFem(shared_namedpipe, &long_runmode);
-  receive_long0_from_FreeFem(shared_namedpipe, &flag);
+  receive_long0_from_FreeFem(shared_namedpipe, &long_runmode);
 }
 
 void FEM_extend_mesh(void)

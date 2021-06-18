@@ -52,7 +52,7 @@ module magdif
 
 contains
 
-  subroutine magdif_run(runmode, config_file) bind(C, name = 'magdif_run')
+  subroutine magdif_run(runmode, config) bind(C, name = 'magdif_run')
     use iso_c_binding, only: c_int, c_ptr
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use magdif_util, only: C_F_string, get_field_filenames, init_field
@@ -61,19 +61,22 @@ contains
     use magdif_pert, only: generate_vacfield
     use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
     integer(c_int), intent(in), value :: runmode
-    type(c_ptr), intent(in), value :: config_file
+    type(c_ptr), intent(in), value :: config
+    integer(c_int) :: runmode_flags
     character(len = 1024) :: config_filename, gfile, pfile, convexfile
     logical :: meshing, analysis, iterations
 
     meshing = iand(runmode, ishft(1, 0)) /= 0
     iterations = iand(runmode, ishft(1, 1)) /= 0
     analysis = iand(runmode, ishft(1, 2)) /= 0
+    runmode_flags = runmode
     if (.not. (meshing .or. iterations .or. analysis)) then
        meshing = .true.
        iterations = .true.
        analysis = .true.
+       runmode_flags = ior(ior(ishft(1, 0), ishft(1, 1)), ishft(1, 2))
     end if
-    call C_F_string(config_file, config_filename)
+    call C_F_string(config, config_filename)
     call magdif_config_read(conf, config_filename)
     log = magdif_log('-', conf%log_level, conf%quiet)
     call h5_init
@@ -94,7 +97,7 @@ contains
        call write_mesh_cache
        call generate_vacfield
        ! pass effective toroidal mode number and runmode to FreeFem++
-       call FEM_init(mesh%n, runmode)
+       call FEM_init(mesh%n, runmode_flags)
        call FEM_extend_mesh
     else
        ! initialize equilibrium field
@@ -112,12 +115,20 @@ contains
     end if
     if (iterations .or. analysis) then
        call magdif_init
-       call magdif_iterate
-       call FEM_deinit
-       call magdif_postprocess
+       if (iterations) then
+          call magdif_iterate
+          call FEM_deinit
+       else
+          if (analysis) then
+             call magdif_read
+          end if
+          ! FEM_deinit is not needed because scripts/maxwell_daemon.edp exits
+          ! if iterations are not requested
+       end if
+       if (analysis) then
+          call magdif_postprocess
+       end if
        call magdif_cleanup
-    else
-       call FEM_deinit
     end if
     call h5_deinit
   end subroutine magdif_run
@@ -166,6 +177,16 @@ contains
     log%msg = 'magdif cleanup finished'
     if (log%info) call log%write
   end subroutine magdif_cleanup
+
+  subroutine magdif_read
+    use magdif_conf, only: datafile
+    use magdif_pert, only: L1_read, RT0_read
+
+    call L1_read(pn, datafile, 'iter/pn')
+    call RT0_read(Bn, datafile, 'iter/Bn')
+    call RT0_read(Bnplas, datafile, 'iter/Bnplas')
+    call RT0_read(jn, datafile, 'iter/jn')
+  end subroutine magdif_read
 
   subroutine magdif_single
     ! compute pressure based on previous perturbation field
