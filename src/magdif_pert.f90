@@ -1729,7 +1729,7 @@ contains
 
   subroutine debug_fouriermodes
     use magdif_conf, only: conf, datafile, log
-    use magdif_util, only: flux_func, linspace, imun
+    use magdif_util, only: interp1d, linspace, imun
     use magdif_mesh, only: equil
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     logical :: file_exists
@@ -1741,7 +1741,7 @@ contains
     character(len = *), parameter :: ptrn_nsqpsi = 'nrad = ', ptrn_psimax = 'psimax', &
          ptrn_phimax = 'phimax', dataset = 'debug_fouriermodes'
     character(len = 1024) :: line
-    type(flux_func) :: rq_interpolator
+    type(interp1d) :: rq_interpolator
 
     inquire(file = 'amn.dat', exist = file_exists)
     if (.not. file_exists) return
@@ -1777,7 +1777,7 @@ contains
     allocate(rq_eqd(nlabel))
     rq_eqd(:) = linspace(abs(flabel_min), abs(flabel_max), nlabel, 0, 0)
     allocate(psi_n(nlabel))
-    psi_n(:) = [(rq_interpolator%interp(psisurf / psimax, rq_eqd(k)), k = 1, nlabel)]
+    psi_n(:) = [(rq_interpolator%eval(psisurf / psimax, rq_eqd(k)), k = 1, nlabel)]
     allocate(Bmn_contradenspsi(-mpol:mpol, nlabel))
     ! if qsaf does not have the expected sign, theta points in the wrong direction,
     ! and we have to reverse the index m and the overall sign

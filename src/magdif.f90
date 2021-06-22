@@ -57,7 +57,7 @@ contains
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use magdif_util, only: C_F_string, get_field_filenames, init_field
     use magdif_conf, only: conf, magdif_config_read, magdif_config_export_hdf5, conf_arr, magdif_log, log, datafile
-    use magdif_mesh, only: equil, mesh, generate_mesh, write_mesh_cache, read_mesh_cache, fluxvar
+    use magdif_mesh, only: equil, mesh, generate_mesh, write_mesh_cache, read_mesh_cache
     use magdif_pert, only: generate_vacfield
     use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
     integer(c_int), intent(in), value :: runmode
@@ -110,8 +110,6 @@ contains
        ! reload config parameters here in case they changed since the meshing phase
        call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
        call conf_arr%export_hdf5(datafile, 'config')
-       ! TODO: cache Lagrange polynomials instead
-       call fluxvar%init(4, equil%psi_eqd)
        ! pass effective toroidal mode number and runmode to FreeFem++
        call FEM_init(mesh%n, runmode)
     end if

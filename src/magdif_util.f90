@@ -52,15 +52,16 @@ module magdif_util
        unscaled_fmt = '("Flux in ", a, " is not normalized by 2 pi.")', &
        rescale_fmt = '("Rescaling ", a, "...")'
 
-  type, public :: flux_func
-    private
-    integer :: n_lag, n_var
-    real(dp), dimension(:), allocatable :: indep_var
-  contains
-    procedure :: init => flux_func_init
-    procedure :: interp => flux_func_interp
-    final :: flux_func_destructor
-  end type flux_func
+  !> 1D piecewise Lagrange polynomial interpolator
+  type, public :: interp1d
+     private
+     integer :: n_lag, n_var
+     real(dp), dimension(:), allocatable :: indep_var
+   contains
+     procedure :: init => interp1d_init
+     procedure :: eval => interp1d_eval
+     procedure :: deinit => interp1d_deinit
+  end type interp1d
 
   type, public :: neumaier_accumulator_real
      private
@@ -363,7 +364,7 @@ contains
     use magdif_conf, only: log
     class(g_eqdsk), intent(inout) :: this
     integer, parameter :: ignore = 3
-    type(flux_func) :: psi_interpolator
+    type(interp1d) :: psi_interpolator
     real(dp) :: deriv_eqd(this%nw), factor
     logical :: mask(this%nw)
     integer :: k
@@ -380,7 +381,7 @@ contains
        end if
     end if
     call psi_interpolator%init(4, this%psi_eqd)
-    deriv_eqd(:) = [(psi_interpolator%interp(this%pres, this%psi_eqd(k), .true.), &
+    deriv_eqd(:) = [(psi_interpolator%eval(this%pres, this%psi_eqd(k), .true.), &
          k = 1, this%nw)]
     ! ignore a few possibly unreliable values on both ends of the interval
     mask = .true.
@@ -401,7 +402,7 @@ contains
        if (log%info) call log%write
        this%pprime = -this%pprime
     end if
-    deriv_eqd(:) = [(psi_interpolator%interp(this%fpol, this%psi_eqd(k), .true.), &
+    deriv_eqd(:) = [(psi_interpolator%eval(this%fpol, this%psi_eqd(k), .true.), &
          k = 1, this%nw)] * this%fpol
     factor = sum(deriv_eqd / this%ffprim, mask = mask) / dble(count(mask))
     if (abs(factor) >= sqrt(2d0 * pi)) then
@@ -426,7 +427,7 @@ contains
     use magdif_conf, only: log
     class(g_eqdsk), intent(inout) :: this
     real(dp) :: gs_factor
-    type(flux_func) :: psi_interpolator
+    type(interp1d) :: psi_interpolator
     real(dp) :: Delta_R, Delta_Z, psi, gs_rhs, gs_lhs
     integer :: kw, kh
 
@@ -438,8 +439,8 @@ contains
     psi = this%psirz(kw, kh)
     ! evaluate flux functions on RHS of GS equation
     call psi_interpolator%init(4, this%psi_eqd)
-    gs_rhs = -4d0 * pi * this%R_eqd(kw) ** 2 * psi_interpolator%interp(this%pprime, psi) &
-         - psi_interpolator%interp(this%ffprim, psi)
+    gs_rhs = -4d0 * pi * this%R_eqd(kw) ** 2 * psi_interpolator%eval(this%pprime, psi) &
+         - psi_interpolator%eval(this%ffprim, psi)
     ! approximate differential operator on LHS of GS equation
     Delta_R = this%rdim / dble(this%nw - 1)
     Delta_Z = this%zdim / dble(this%nh - 1)
@@ -761,9 +762,9 @@ contains
     if (allocated(this%psirz)) deallocate(this%psirz)
   end subroutine g_eqdsk_destructor
 
-  subroutine flux_func_init(this, n_lag, indep_var)
+  subroutine interp1d_init(this, n_lag, indep_var)
     use magdif_conf, only: log
-    class(flux_func), intent(inout) :: this
+    class(interp1d), intent(inout) :: this
     integer, intent(in) :: n_lag
     real(dp), intent(in), dimension(:) :: indep_var
 
@@ -773,16 +774,16 @@ contains
        if (log%err) call log%write
        return
     end if
-    call flux_func_destructor(this)
+    call interp1d_deinit(this)
     this%n_lag = n_lag
     this%n_var = size(indep_var)
     allocate(this%indep_var(this%n_var))
     this%indep_var = indep_var
-  end subroutine flux_func_init
+  end subroutine interp1d_init
 
-  function flux_func_interp(this, sample, position, deriv) result(interp)
+  function interp1d_eval(this, sample, position, deriv) result(interp)
     use magdif_conf, only: log
-    class(flux_func) :: this
+    class(interp1d) :: this
     real(dp), intent(in) :: sample(:)
     real(dp), intent(in) :: position
     logical, intent(in), optional :: deriv
@@ -797,7 +798,7 @@ contains
        end if
     end if
     if (this%n_var /= size(sample)) then
-       call log%msg_arg_size('flux_func_interp', 'this%n_var', 'size(sample)', &
+       call log%msg_arg_size('interp1d_eval', 'this%n_var', 'size(sample)', &
             this%n_var, size(sample))
        if (log%err) call log%write
        error stop
@@ -813,13 +814,13 @@ contains
     call plag_coeff(this%n_lag, 1, position, &
          this%indep_var(k - this%n_lag / 2:k + this%n_lag / 2 - 1), lag_coeff)
     interp = sum(sample(k - this%n_lag / 2:k + this%n_lag / 2 - 1) * lag_coeff(kder, :))
-  end function flux_func_interp
+  end function interp1d_eval
 
-  subroutine flux_func_destructor(this)
-    type(flux_func), intent(inout) :: this
+  subroutine interp1d_deinit(this)
+    class(interp1d), intent(inout) :: this
 
     if (allocated(this%indep_var)) deallocate(this%indep_var)
-  end subroutine flux_func_destructor
+  end subroutine interp1d_deinit
 
   subroutine neumaier_accumulator_real_init(this)
     class(neumaier_accumulator_real), intent(inout) :: this
