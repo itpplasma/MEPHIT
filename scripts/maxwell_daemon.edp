@@ -15,12 +15,14 @@ string meshfile = getARGV("-M", "inputformaxwell_ext.msh");
 string datapipe = getARGV("-P", "maxwell.dat");
 bool doplot = false;
 
-int runmode = 0, nmode = 2;
+int runmode = 0, nmode = 2, state = 0;
 LoadFlag(nmode, datapipe);
 flag(nmode, datapipe);
 LoadFlag(runmode, datapipe);
 flag(runmode, datapipe);
 if (runmode % 2) {
+  LoadFlag(state, datapipe);
+  flag(state, datapipe);
   include "extmesh.edp"
 }
 if (!((runmode / 2) % 2)) {
@@ -110,7 +112,7 @@ problem Ampere([ax, ay], [wx, wy], solver = sparsesolver) = // defines the PDE
   + int2d(Th)(nmode^2 / x * (wx * ax + wy * ay))
   - int2d(Th)(4.0 * pi / c * (wx * Jr + wy * Jz))
   + on(1, ax = 0, ay = 0);
-int state = 0;
+state = 0;
 while (state != -3) {
   LoadFlag(state, datapipe);
   flag(state, datapipe);
