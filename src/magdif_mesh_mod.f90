@@ -663,9 +663,10 @@ contains
 
   subroutine write_mesh_cache
     use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
-    use magdif_conf, only: datafile
+    use magdif_conf, only: conf_arr, datafile
     integer(HID_T) :: h5id_root
 
+    call conf_arr%export_hdf5(datafile, 'config')
     call mesh_write(mesh, datafile, 'mesh')
     call flux_func_cache_write(fs, datafile, 'cache/fs', 'on flux surfaces')
     call flux_func_cache_write(fs_half, datafile, 'cache/fs_half', 'between flux surfaces')

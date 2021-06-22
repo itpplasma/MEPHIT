@@ -5,8 +5,8 @@ module magdif_conf
 
   private
 
-  public :: magdif_config, magdif_config_read, magdif_config_delayed, magdif_log, conf, &
-       conf_arr, log, runmode_single, runmode_direct, runmode_precon, pres_prof_eps, &
+  public :: magdif_config, magdif_config_read, magdif_config_export_hdf5, magdif_config_delayed, &
+       magdif_log, conf, conf_arr, log, runmode_single, runmode_direct, runmode_precon, pres_prof_eps, &
        pres_prof_par, pres_prof_geqdsk, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
        q_prof_flux, q_prof_rot, q_prof_geqdsk, vac_src_nemov, vac_src_gpec, vac_src_fourier, &
        decorate_filename, longlines, cmplx_fmt, nl_fmt, datafile
@@ -174,6 +174,8 @@ module magdif_conf
 
    contains
      procedure :: read => magdif_config_delayed_read
+     procedure :: export_hdf5 => magdif_config_delayed_export_hdf5
+     procedure :: import_hdf5 => magdif_config_delayed_import_hdf5
      final :: magdif_config_delayed_destructor
   end type magdif_config_delayed
 
@@ -213,6 +215,63 @@ contains
     ! override if erroneously set in namelist
     config%config_file = trim(filename)
   end subroutine magdif_config_read
+
+  subroutine magdif_config_export_hdf5(config, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    type(magdif_config), intent(in) :: config
+    character(len = *), intent(in) :: file, dataset
+    integer(HID_T) :: h5id_root
+
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/runmode', config%runmode)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/pres_prof', config%pres_prof)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/curr_prof', config%curr_prof)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/q_prof', config%q_prof)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/vac_src', config%vac_src)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nonres', config%nonres)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/quad_avg', config%quad_avg)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Ic', config%Ic, &
+         lbound(config%Ic), ubound(config%Ic), unit = 'c_0 statA', &
+         comment = 'coil currents for AUG B coils; upper coils come first')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/niter', config%niter, &
+         comment = 'number of iterations')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nritz', config%nritz, &
+         comment = 'number of Ritz eigenvalues')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ritz_threshold', config%ritz_threshold, &
+         comment = 'threshold for absolute eigenvalues used for Arnoldi preconditioner')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/n', config%n, &
+         comment = 'index of toroidal harmonics of perturbation')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nkpol', config%nkpol, &
+         comment = 'knots per poloidal loop')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nflux_unref', config%nflux_unref, &
+         comment = 'number of flux surfaces before refinement')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nrad_Ipar', config%nrad_Ipar, &
+         comment = 'radial divisions in radially refined regions for parallel current computations')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/temp_min', config%temp_min, &
+         comment = 'minimum temperature', unit = 'eV')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/dens_min', config%dens_min, &
+         comment = 'minimum density', unit = 'cm^-3')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/temp_max', config%temp_max, &
+         comment = 'maximum temperature', unit = 'eV')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/dens_max', config%dens_max, &
+         comment = 'maximum density', unit = 'cm^-3')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/damp', config%damp, &
+         comment = 'damping factor for resonances', unit = '1')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rel_err_Bn', config%rel_err_Bn, &
+         comment = 'error threshold for divergence-freeness of perturbation fields', unit = '1')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rel_err_currn', config%rel_err_currn, &
+         comment = 'error threshold for divergence-freeness of perturbation currents', unit = '1')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_pol_mode', config%kilca_pol_mode, &
+         comment = 'single poloidal mode used in comparison with KiLCA code')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_scale_factor', config%kilca_scale_factor, &
+         comment = 'scaling factor used for comparison with results from KiLCA code')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/max_eig_out', config%max_eig_out, &
+         comment = 'maximum number of exported eigenvectors')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/debug_pol_offset', config%debug_pol_offset)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/debug_kilca_geom_theta', config%debug_kilca_geom_theta)
+    call h5_close(h5id_root)
+  end subroutine magdif_config_export_hdf5
 
   !> Read dynamic configuration from configuration file for magdif.
   subroutine magdif_config_delayed_read(config, filename, m_min, m_max)
@@ -261,6 +320,69 @@ contains
     allocate(config%kilca_vac_Bz(m_min:m_max))
     config%kilca_vac_Bz(:) = kilca_vac_Bz
   end subroutine magdif_config_delayed_read
+
+  subroutine magdif_config_delayed_export_hdf5(config, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    class(magdif_config_delayed), intent(in) :: config
+    character(len = *), intent(in) :: file, dataset
+    integer(HID_T) :: h5id_root
+
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_min', config%m_min, &
+         comment = 'minimum poloidal mode number')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_max', config%m_max, &
+         comment = 'maximum poloidal mode number')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/deletions', config%deletions, &
+         lbound(config%deletions), ubound(config%deletions), &
+         comment = 'number of unrefined flux surfaces to be replaced by refined ones')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/additions', config%additions, &
+         lbound(config%additions), ubound(config%additions), &
+         comment = 'number of refined flux surfaces')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/refinement', config%refinement, &
+         lbound(config%refinement), ubound(config%refinement), &
+         comment = 'relative size of most refined flux surface')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor, &
+         lbound(config%sheet_current_factor), ubound(config%sheet_current_factor), &
+         comment = 'free parameters setting the magnitudes of sheet currents')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_vac_coeff', config%kilca_vac_coeff, &
+         lbound(config%kilca_vac_coeff), ubound(config%kilca_vac_coeff), &
+         comment = 'integration constant for resonant vacuum perturbation in KiLCA comparison')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_vac_r', config%kilca_vac_r, &
+         lbound(config%kilca_vac_r), ubound(config%kilca_vac_r), &
+         comment = 'data point for resonant vacuum perturbation in KiLCA comparison')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_vac_Bz', config%kilca_vac_Bz, &
+         lbound(config%kilca_vac_Bz), ubound(config%kilca_vac_Bz), &
+         comment = 'data point for resonant vacuum perturbation in KiLCA comparison')
+    call h5_close(h5id_root)
+  end subroutine magdif_config_delayed_export_hdf5
+
+  subroutine magdif_config_delayed_import_hdf5(config, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    class(magdif_config_delayed), intent(inout) :: config
+    character(len = *), intent(in) :: file, dataset
+    integer(HID_T) :: h5id_root
+
+    call h5_open(file, h5id_root)
+    call magdif_config_delayed_destructor(config)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_min', config%m_min)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_max', config%m_max)
+    allocate(config%deletions(config%m_min:config%m_max))
+    allocate(config%additions(config%m_min:config%m_max))
+    allocate(config%refinement(config%m_min:config%m_max))
+    allocate(config%sheet_current_factor(config%m_min:config%m_max))
+    allocate(config%kilca_vac_coeff(config%m_min:config%m_max))
+    allocate(config%kilca_vac_r(config%m_min:config%m_max))
+    allocate(config%kilca_vac_Bz(config%m_min:config%m_max))
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/deletions', config%deletions)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/additions', config%additions)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', config%refinement)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/kilca_vac_coeff', config%kilca_vac_coeff)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/kilca_vac_r', config%kilca_vac_r)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/kilca_vac_Bz', config%kilca_vac_Bz)
+    call h5_close(h5id_root)
+  end subroutine magdif_config_delayed_import_hdf5
 
   subroutine magdif_config_delayed_destructor(config)
     type(magdif_config_delayed), intent(inout) :: config

@@ -56,7 +56,7 @@ contains
     use iso_c_binding, only: c_int, c_ptr
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use magdif_util, only: C_F_string, get_field_filenames, init_field
-    use magdif_conf, only: conf, magdif_config_read, conf_arr, magdif_log, log, datafile
+    use magdif_conf, only: conf, magdif_config_read, magdif_config_export_hdf5, conf_arr, magdif_log, log, datafile
     use magdif_mesh, only: equil, mesh, generate_mesh, write_mesh_cache, read_mesh_cache, fluxvar
     use magdif_pert, only: generate_vacfield
     use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
@@ -81,6 +81,7 @@ contains
     log = magdif_log('-', conf%log_level, conf%quiet)
     call h5_init
     h5overwrite = .true.
+    call magdif_config_export_hdf5(conf, datafile, 'config')
     if (meshing) then
        ! initialize equilibrium field
        call get_field_filenames(gfile, pfile, convexfile)
@@ -106,8 +107,9 @@ contains
        ! read in preprocessed data
        call read_mesh_cache
        call load_magdata_in_symfluxcoord
-       ! TODO: save previously processed config parameters to HDF5 and load here
+       ! reload config parameters here in case they changed since the meshing phase
        call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
+       call conf_arr%export_hdf5(datafile, 'config')
        ! TODO: cache Lagrange polynomials instead
        call fluxvar%init(4, equil%psi_eqd)
        ! pass effective toroidal mode number and runmode to FreeFem++
