@@ -727,6 +727,7 @@ contains
          vec_polmodes_write, RT0_poloidal_modes
     integer, parameter :: m_max = 24
     integer :: k
+    character(len = 24) :: dataset
     type(vec_polmodes_t) :: vec_polmodes
     type(coord_cache_ext) :: sample_Ipar
 
@@ -752,56 +753,69 @@ contains
     call coord_cache_ext_init(sample_Ipar, conf%nrad_Ipar, ntheta)
     do k = lbound(mesh%res_modes, 1), ubound(mesh%res_modes, 1)
        call compute_sample_Ipar(sample_Ipar, mesh%res_modes(k))
-       call write_Ipar_symfluxcoord(sample_Ipar)
+       write (dataset, '("postprocess/Imn_par_", i0)') mesh%res_modes(k)
+       call write_Ipar_symfluxcoord(sample_Ipar, datafile, dataset)
        if (conf%kilca_scale_factor /= 0) then
-          call write_Ipar(sample_Ipar)
+          call write_Ipar(sample_Ipar, datafile, 'postprocess/Imn_par_KiLCA')
        end if
     end do
     call coord_cache_ext_deinit(sample_Ipar)
   end subroutine magdif_postprocess
 
   subroutine check_furth(jn, Bmn_plas)
-    use magdif_conf, only: conf, longlines
+    use magdif_conf, only: conf, datafile
     use magdif_util, only: imun, clight
     use magdif_mesh, only: equil, fs_half, mesh, sample_polmodes
     use magdif_pert, only: RT0_t, vec_polmodes_t
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(RT0_t), intent(in) :: jn
     type(vec_polmodes_t), intent(in) :: Bmn_plas
-    integer :: kf, kt, ktri, ktri_eff, kilca_m_res, fid_furth
-    complex(dp) :: sheet_flux
-    real(dp) :: k_z, k_theta
+    character(len = *), parameter :: dataset = 'debug_furth'
+    integer(HID_T) :: h5id_root
+    integer :: kf, kt, ktri, ktri_eff, kilca_m_res
+    complex(dp) :: sheet_flux(mesh%nflux)
+    real(dp) :: k_z, k_theta(mesh%nflux)
 
     kilca_m_res = -equil%cocos%sgn_q * abs(conf%kilca_pol_mode)
     k_z = mesh%n / mesh%R_O
-    open(newunit = fid_furth, file = 'check_furth.dat', recl = longlines, status = 'replace')
+    k_theta(:) = kilca_m_res / fs_half%rad
+    sheet_flux(:) = (0d0, 0d0)
     do kf = 1, mesh%nflux
-       sheet_flux = 0d0
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           ktri_eff = sample_polmodes%ktri(ktri)
-          sheet_flux = sheet_flux + mesh%area(ktri_eff) * jn%comp_phi(ktri_eff) * &
+          sheet_flux(kf) = sheet_flux(kf) + mesh%area(ktri_eff) * jn%comp_phi(ktri_eff) * &
                exp(-imun * kilca_m_res * sample_polmodes%theta(ktri))
        end do
-       k_theta = kilca_m_res / fs_half%rad(kf)
-       sheet_flux = -2d0 * imun / clight / k_theta * sheet_flux
-       write (fid_furth, '(7(1x, es24.16e3))') fs_half%rad(kf), k_z, k_theta, &
-            Bmn_plas%coeff_rad(-kilca_m_res, kf), sheet_flux
     end do
-    close(fid_furth)
+    sheet_flux(:) = -2d0 * imun / clight / k_theta * sheet_flux
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, dataset // '/')
+    call h5_add(h5id_root, dataset // '/k_z', k_z, unit = 'cm^-1')
+    call h5_add(h5id_root, dataset // '/k_theta', k_theta, &
+         lbound(k_theta), ubound(k_theta), unit = 'cm^-1')
+    call h5_add(h5id_root, dataset // '/rad', fs_half%rad, &
+         lbound(fs_half%rad), ubound(fs_half%rad), unit = 'cm')
+    call h5_add(h5id_root, dataset // '/Bmn_plas_rad', Bmn_plas%coeff_rad(-kilca_m_res, :), &
+         [1], [mesh%nflux], unit = 'G')
+    call h5_add(h5id_root, dataset // '/sheet_flux', sheet_flux, &
+         lbound(sheet_flux), ubound(sheet_flux), unit = 'statA')
+    call h5_close(h5id_root)
   end subroutine check_furth
 
 
   !> calculate parallel current (density) on a finer grid
-  subroutine write_Ipar_symfluxcoord(s)
+  subroutine write_Ipar_symfluxcoord(s, file, dataset)
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_conf, only: conf, longlines
+    use magdif_conf, only: conf
     use magdif_util, only: imun, clight
     use magdif_mesh, only: coord_cache_ext
     use magdif_pert, only: RT0_interp
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(coord_cache_ext), intent(in) :: s  ! shorten names
-    character(len = *), parameter :: fname_fmt = '("currn_par_", i0, ".dat")'
-    character(len = 1024) :: fname
-    integer :: krad, kpol, k, fid_jpar
+    character(len = *), intent(in) :: file, dataset
+    integer(HID_T) :: h5id_root
+    integer :: krad, kpol, k
     real(dp) :: B0_psi, dB0R_dpsi, dB0phi_dpsi, dB0Z_dpsi, &
          B0_dB0_dpsi, dhphi2_dpsi, B0_theta, dB0R_dtheta, dB0phi_dtheta, dB0Z_dtheta, &
          B0_dB0_dtheta, dhphi2_dtheta, common_term, dB0theta_dpsi, dB0psi_dtheta, &
@@ -824,8 +838,6 @@ contains
     I_char = 0d0
     Delta_mn_neg = (0d0, 0d0)
     Delta_mn_pos = (0d0, 0d0)
-    write (fname, fname_fmt) s%m
-    open(newunit = fid_jpar, file = fname, status = 'replace', recl = longlines)
     do krad = 1, s%nrad
        do kpol = 1, s%npol
           k = (krad - 1) * s%npol + kpol
@@ -911,24 +923,49 @@ contains
        Delta_mn_neg(krad) = Delta_mn_neg(krad) / dble(s%npol)
        Delta_mn_pos(krad) = Delta_mn_pos(krad) / dble(s%npol)
        I_char(krad) = dble(s%npol) * 0.5d0 * clight / I_char(krad)
-       write (fid_jpar, '(19(1x, es24.16e3))') psi(krad), rad(krad), &
-            jmn_par_neg(krad), jmn_par_pos(krad), &
-            part_int_neg(krad), part_int_pos(krad), bndry_neg(krad), bndry_pos(krad), &
-            I_char(krad), Delta_mn_neg(krad), Delta_mn_pos(krad)
     end do
-    close(fid_jpar)
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', psi, &
+         lbound(psi), ubound(psi))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad', rad, &
+         lbound(rad), ubound(rad))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_pos', jmn_par_pos, &
+         lbound(jmn_par_pos), ubound(jmn_par_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_neg', jmn_par_neg, &
+         lbound(jmn_par_neg), ubound(jmn_par_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_pos', part_int_pos, &
+         lbound(part_int_pos), ubound(part_int_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_neg', part_int_neg, &
+         lbound(part_int_neg), ubound(part_int_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_pos', part_int_pos, &
+         lbound(part_int_pos), ubound(part_int_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_neg', part_int_neg, &
+         lbound(part_int_neg), ubound(part_int_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_pos', bndry_pos, &
+         lbound(bndry_pos), ubound(bndry_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_neg', bndry_neg, &
+         lbound(bndry_neg), ubound(bndry_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/I_char', I_char, &
+         lbound(I_char), ubound(I_char))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_mn_pos', Delta_mn_pos, &
+         lbound(Delta_mn_pos), ubound(Delta_mn_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_mn_neg', Delta_mn_neg, &
+         lbound(Delta_mn_neg), ubound(Delta_mn_neg))
   end subroutine write_Ipar_symfluxcoord
 
 
   !> calculate parallel current (density) on a finer grid
-  subroutine write_Ipar(s)
+  subroutine write_Ipar(s, file, dataset)
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_conf, only: longlines, decorate_filename
     use magdif_util, only: imun, clight, bent_cyl2straight_cyl
     use magdif_mesh, only: mesh, coord_cache_ext
     use magdif_pert, only: RT0_interp
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(coord_cache_ext), intent(in) :: s  ! shorten names
-    integer :: krad, kpol, k, fid_jpar
+    character(len = *), intent(in) :: file, dataset
+    integer(HID_T) :: h5id_root
+    integer :: krad, kpol, k
     real(dp) :: dB0R_drad, dB0phi_drad, dB0Z_drad, B0_dB0_drad, &
          B0_theta, dB0theta_drad, dhz2_drad, dradhthetahz_drad
     complex(dp) :: jn_R, jn_Z, jn_phi, jn_par, Bn_R, Bn_Z, Bn_phi, &
@@ -945,7 +982,6 @@ contains
     part_int_pos = (0d0, 0d0)
     bndry_neg = (0d0, 0d0)
     bndry_pos = (0d0, 0d0)
-    open(newunit = fid_jpar, status = 'replace', recl = longlines, file = 'currn_par.dat')
     do krad = 1, s%nrad
        do kpol = 1, s%npol
           k = (krad - 1) * s%npol + kpol
@@ -993,10 +1029,28 @@ contains
        part_int_pos(krad) = part_int_pos(krad) / dble(s%npol) * 0.25d0 * clight / pi
        bndry_neg(krad) = bndry_neg(krad) / dble(s%npol) * 0.25d0 * clight / pi
        bndry_pos(krad) = bndry_pos(krad) / dble(s%npol) * 0.25d0 * clight / pi
-       write (fid_jpar, '(14(1x, es24.16e3))') psi(krad), rad(krad), &
-            jmn_par_neg(krad), jmn_par_pos(krad), &
-            part_int_neg(krad), part_int_pos(krad), bndry_neg(krad), bndry_pos(krad)
     end do
-    close(fid_jpar)
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', psi, &
+         lbound(psi), ubound(psi))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad', rad, &
+         lbound(rad), ubound(rad))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_pos', jmn_par_pos, &
+         lbound(jmn_par_pos), ubound(jmn_par_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_neg', jmn_par_neg, &
+         lbound(jmn_par_neg), ubound(jmn_par_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_pos', part_int_pos, &
+         lbound(part_int_pos), ubound(part_int_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_neg', part_int_neg, &
+         lbound(part_int_neg), ubound(part_int_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_pos', part_int_pos, &
+         lbound(part_int_pos), ubound(part_int_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_neg', part_int_neg, &
+         lbound(part_int_neg), ubound(part_int_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_pos', bndry_pos, &
+         lbound(bndry_pos), ubound(bndry_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_neg', bndry_neg, &
+         lbound(bndry_neg), ubound(bndry_neg))
   end subroutine write_Ipar
 end module magdif
