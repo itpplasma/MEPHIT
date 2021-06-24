@@ -2,16 +2,30 @@
 
 Prerequisites for running NEO-EQ are as follows.
 
--   current GNU/Linux environment (Bash, coreutils, getopt, ...)
--   CMake
--   current Fortran compiler (tested with `gfortran` and `ifort`)
--   LAPACK, SuiteSparse and SuperLU
--   FFTW3
--   GSL and FGSL
--   Python 3 including matplotlib
--   FreeFem++
+- current GNU/Linux environment (Bash, coreutils, getopt, ...)
+- current Fortran compiler (tested with `gfortran` >= 9.2.0 and `ifort` 18.0.1)
+- [CMake](https://cmake.org/)
+- [LAPACK](https://www.netlib.org/lapack/)
+- [SuiteSparse](https://github.com/DrTimothyAldenDavis/SuiteSparse)
+- [SuperLU](https://github.com/xiaoyeli/superlu)
+- [GSL](https://www.gnu.org/software/gsl/) and [FGSL](https://github.com/reinh-bader/fgsl)
+- [FFTW3](http://fftw.org/)
+- [FreeFem++](https://github.com/FreeFem/FreeFem-sources)
+- [HDF5](https://www.hdfgroup.org/downloads/hdf5)
+- [NetCDF](https://github.com/Unidata/netcdf-fortran)
+- Python 3 including the following packages:
+  - [NumPy](https://github.com/numpy/numpy)
+  - [SciPy](https://github.com/scipy/scipy)
+  - [f90nml](https://github.com/marshallward/f90nml)
+  - [matplotlib](https://github.com/matplotlib/matplotlib)
+  - [colorcet](https://github.com/holoviz/colorcet)
+  - [h5py](https://github.com/h5py/h5py)
+  - [h5pickle](https://github.com/DaanVanVugt/h5pickle)
+  - [netcdf4-python](https://github.com/Unidata/netcdf4-python)
 
 ## Initial build
+
+Choose an appropriate `ProjectConfig.cmake.in.*` (or write your own) and make a symbolic link `ProjectConfig.cmake.in` pointing to it. Then, run
 
     mkdir build
     cd build
@@ -33,18 +47,21 @@ In order to use the configuration `vac_src = 2` (pre-computed Fourier modes), a 
 
     build/bin/magdif init -c <config> -g <gfile> [-v <vacuum_field>] -w <convex_wall> <working_directory> ...
 
-This copies the `<config>`, `<gfile>`, `<vacuum_field>`, and
-`<convex_wall>` and other necessary files to each given
-`<working_directory>`. The `<config>` file can be taken from a list of
-templates in the `data` directory. `<convex_wall>` is usually either
-`data/convexwall.asdex` or `data/convexwall.kilca`. For a KiLCA test
-case, the `<vacuum_field>` should be omitted.
+This copies the `<config>`, `<gfile>`, `<vacuum_field>`, and `<convex_wall>` and other necessary files to each given
+`<working_directory>`. The `<config>` file can be taken from a list of templates in the `data` directory. `<convex_wall>` is usually either `data/convexwall.asdex` or `data/convexwall.kilca`. For a KiLCA test case, the `<vacuum_field>` should be omitted.
 
-## Run
+## Simulations
 
-To generate the mesh and vacuum field data, and run the actual calculations including poloidal mode postprocessing, use
+Simulations consist of three phases:
 
-    build/bin/magdif run <working_directory> ...
+1. meshing (includes calculation of the vacuum field)
+2. iterations
+3. analysis (poloidal modes, parallel currents)
+
+Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default.
+
+    build/bin/magdif run [-m | --meshing] [-i | --iterations] [-a | --analysis] <working_directory> ...
+
 
 ## Plots
 

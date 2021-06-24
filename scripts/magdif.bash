@@ -26,14 +26,6 @@ replace_first_in_line() {
     sed -Ee "$2 s/^ *'?([^' ]*)'?/$3/" -i $1
 }
 
-read_first_in_line() {
-    sed -Ene "$2 s/^ *'?([^' ]*)'? +.*/\1/ p" $1
-}
-
-nml_read_integer() {
-    sed -Ene "s/ *$2 *= *([-0-9]+).*/\1/i p" $1
-}
-
 
 magdif_init() {
     config=
@@ -218,10 +210,8 @@ magdif_plot() {
 magdif_clean() {
     for workdir; do
         pushd "$workdir"
-        # files from magdif_prepare
-        rm -f fort.* magdif.h5 inputformaxwell_ext.msh inputformaxwell.msh box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat optpolres.dat j0_gs.dat j0_amp.dat cmp_prof.dat check_q_step.dat check_q_cont.dat cmp_vac.dat cmp_RT0.dat
         # files from magdif_run
-        rm -f fort.* magdif.h5 freefem.out magdif.log Bmn*.dat currmn*.dat currn_par*.dat
+        rm -f fort.* magdif.h5 magdif.log inputformaxwell_ext.msh inputformaxwell.msh box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat optpolres.dat cmp_vac.dat cmp_RT0.dat
         # files from magdif_plot
         rm -f plot*.pdf convergence.pdf Bmn*.pdf currmn*.pdf
         popd
@@ -258,6 +248,7 @@ case "$1" in
         ;;
     *)
         echo "$scriptname: unrecognized mode '$1'"
+        magdif_help "$@"
         exit 1
         ;;
 esac
