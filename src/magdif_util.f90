@@ -91,7 +91,7 @@ contains
   subroutine get_field_filenames(gfile, pfile, convexfile)
     character(len = *), intent(out) :: gfile, pfile, convexfile
     integer :: fid
-    open(newunit = fid, file = 'field_divB0.inp', status = 'old')
+    open(newunit = fid, file = 'field_divB0.inp', status = 'old', form = 'formatted', action = 'read')
     read (fid, *)
     read (fid, *)
     read (fid, *)
@@ -294,7 +294,7 @@ contains
     call g_eqdsk_destructor(this)
     this%fname = fname
     this%convexfile = convexfile
-    open(newunit = fid, file = this%fname, status = 'old')
+    open(newunit = fid, file = this%fname, status = 'old', form = 'formatted', action = 'read')
     read (fid, geqdsk_2000) this%header, idum, this%nw, this%nh
     allocate(this%fpol(this%nw))
     allocate(this%pres(this%nw))
@@ -593,7 +593,7 @@ contains
     idum = 0
     xdum = 0d0
     this%fname = fname
-    open(newunit = fid, file = this%fname, status = 'replace')
+    open(newunit = fid, file = this%fname, status = 'replace', form = 'formatted', action = 'write')
     write (fid, geqdsk_2000) this%header, idum, this%nw, this%nh
     write (fid, geqdsk_2020) this%rdim * 1d-2, this%zdim * 1d-2, this%rcentr * 1d-2, &
          this%rleft * 1d-2, this%zmid * 1d-2

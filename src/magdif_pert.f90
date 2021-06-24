@@ -1749,13 +1749,13 @@ contains
     if (.not. file_exists) return
     log%msg = 'Files amn.dat and equil_r_q_psi.dat found, performing Fourier mode comparison.'
     if (log%info) call log%write
-    open(newunit = fid, form = 'unformatted', file = 'amn.dat')
+    open(newunit = fid, form = 'unformatted', file = 'amn.dat', action = 'read')
     read (fid) ntor, mpol, nlabel, flabel_min, flabel_max
     allocate(z3dum(-mpol:mpol, ntor, nlabel))
     allocate(Amn_theta(-mpol:mpol, ntor, nlabel))
     read (fid) z3dum, Amn_theta
     close(fid)
-    open(newunit = fid, form = 'formatted', file = 'equil_r_q_psi.dat')
+    open(newunit = fid, form = 'formatted', file = 'equil_r_q_psi.dat', action = 'read')
     read (fid, '(a)') line
     call extract(line, ptrn_nsqpsi)
     read (line, *) nsqpsi

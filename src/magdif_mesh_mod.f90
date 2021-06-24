@@ -941,7 +941,7 @@ contains
     real(dp) :: theta
     integer :: fid, kp
 
-    open(newunit = fid, file = convexfile, status = 'replace')
+    open(newunit = fid, file = convexfile, status = 'replace', form = 'formatted', action = 'write')
     do kp = 1, nrz
        theta = dble(kp) / dble(nrz) * 2d0 * pi
        write (fid, '(2(1x, es24.16e3))') equil%rmaxis + rho_max * cos(theta), &
@@ -1015,15 +1015,17 @@ contains
     do kf = 1, mesh%nflux
        mesh%theta_offset(kf) = theta_offset(fs_half%psi(kf))
     end do
-    ! dump presumedly optimal values for poloidal resolution
-    open(newunit = fid, file = 'optpolres.dat', status = 'replace')
-    do kf = 1, mesh%nflux - 1
-       write (fid, '(2(1x, es24.16e3))') fs%rad(kf), 2d0 * pi * fs%rad(kf) / &
-            (fs_half%rad(kf + 1) - fs_half%rad(kf))
-    end do
-    write (fid, '(2(1x, es24.16e3))') fs%rad(mesh%nflux), 2d0 * pi * fs%rad(mesh%nflux) / &
-         (fs%rad(mesh%nflux) - fs%rad(mesh%nflux - 1))
-    close(fid)
+    if (conf%kilca_scale_factor /= 0) then
+       ! dump presumedly optimal values for poloidal resolution
+       open(newunit = fid, file = 'optpolres.dat', status = 'replace')
+       do kf = 1, mesh%nflux - 1
+          write (fid, '(2(1x, es24.16e3))') fs%rad(kf), 2d0 * pi * fs%rad(kf) / &
+               (fs_half%rad(kf + 1) - fs_half%rad(kf))
+       end do
+       write (fid, '(2(1x, es24.16e3))') fs%rad(mesh%nflux), 2d0 * pi * fs%rad(mesh%nflux) / &
+            (fs%rad(mesh%nflux) - fs%rad(mesh%nflux - 1))
+       close(fid)
+    end if
 
     call init_indices
     mesh%ntri = mesh%kt_low(mesh%nflux + 1)
@@ -1848,7 +1850,7 @@ contains
   subroutine write_meshfile_for_freefem
     integer :: fid, kpoi, ktri, kp
 
-    open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace')
+    open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace', form = 'formatted', action = 'write')
     write (fid, '(3(1x, i0))') mesh%npoint, mesh%ntri, mesh%kp_max(mesh%nflux) - 1
     do kpoi = 1, mesh%kp_low(mesh%nflux + 1)
        write (fid, '(2(1x, es23.15e3), 1x, i0)') &
@@ -2190,7 +2192,7 @@ contains
     real(dp) :: dum
     real(dp), allocatable :: psi(:), theta(:), theta_shift(:), R(:, :), Z(:, :)
 
-    open(newunit = fid, file = 'illustration.asc', status = 'replace', form = 'formatted')
+    open(newunit = fid, file = 'illustration.asc', status = 'replace', form = 'formatted', action = 'write')
     write (fid, '(6(1x, i0))') npsi, ntheta, nrad, npol, equil%nbbbs, equil%limitr
     allocate(psi(npsi), theta(npol), theta_shift(npsi), R(npol, npsi), Z(npol, npsi))
     psi(:) = linspace(0d0, psipol_max, npsi, 1, 1)

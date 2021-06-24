@@ -417,7 +417,7 @@ contains
     if (trim(log%filename) == '-') then
        log%fid = output_unit
     else
-       open(newunit = log%fid, file = log%filename, status = 'replace')
+       open(newunit = log%fid, file = log%filename, status = 'replace', form = 'formatted', action = 'write')
     end if
   end function magdif_log_open
 
