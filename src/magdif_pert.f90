@@ -356,6 +356,7 @@ contains
             comp_theta_covar, lbound(comp_theta_covar), ubound(comp_theta_covar), &
             comment = 'covariant theta component of ' // trim(adjustl(comment)) // ' at centroid', &
             unit = trim(adjustl(unit)) // ' cm')
+       deallocate(comp_R, comp_Z, comp_psi_contravar_dens, comp_theta_covar)
     end if
     if (plots >= 2) then
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/rect_R', rect_R, &
@@ -374,17 +375,9 @@ contains
             rect_comp_Z, lbound(rect_comp_Z), ubound(rect_comp_Z), &
             comment = 'Z component of ' // trim(adjustl(comment)) // ' on GEQDSK grid', &
             unit = trim(adjustl(unit)))
+       deallocate(rect_R, rect_Z, rect_comp_R, rect_comp_phi, rect_comp_Z)
     end if
     call h5_close(h5id_root)
-    if (allocated(comp_R)) deallocate(comp_R)
-    if (allocated(comp_Z)) deallocate(comp_Z)
-    if (allocated(comp_psi_contravar_dens)) deallocate(comp_psi_contravar_dens)
-    if (allocated(comp_theta_covar)) deallocate(comp_theta_covar)
-    if (allocated(rect_R)) deallocate(rect_R)
-    if (allocated(rect_Z)) deallocate(rect_Z)
-    if (allocated(rect_comp_R)) deallocate(rect_comp_R)
-    if (allocated(rect_comp_phi)) deallocate(rect_comp_phi)
-    if (allocated(rect_comp_Z)) deallocate(rect_comp_Z)
   end subroutine RT0_write
 
   subroutine RT0_triplot(elem, comp_R, comp_Z, comp_psi_contravar_dens, comp_theta_covar)
@@ -395,10 +388,8 @@ contains
     integer :: kf, kt, ktri
     real(dp) :: R, Z
 
-    allocate(comp_R(mesh%ntri))
-    allocate(comp_Z(mesh%ntri))
-    allocate(comp_psi_contravar_dens(mesh%ntri))
-    allocate(comp_theta_covar(mesh%ntri))
+    allocate(comp_R(mesh%ntri), comp_Z(mesh%ntri), &
+         comp_psi_contravar_dens(mesh%ntri), comp_theta_covar(mesh%ntri))
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
@@ -422,13 +413,10 @@ contains
     complex(dp), intent(out), dimension(:, :), allocatable :: comp_R, comp_phi, comp_Z
     integer :: kw, kh, ktri
 
-    allocate(rect_R(equil%nw))
-    allocate(rect_Z(equil%nh))
+    allocate(rect_R(equil%nw), rect_Z(equil%nh))
     rect_R(:) = equil%R_eqd
     rect_Z(:) = equil%Z_eqd
-    allocate(comp_R(equil%nw, equil%nh))
-    allocate(comp_phi(equil%nw, equil%nh))
-    allocate(comp_Z(equil%nw, equil%nh))
+    allocate(comp_R(equil%nw, equil%nh), comp_phi(equil%nw, equil%nh), comp_Z(equil%nw, equil%nh))
     do kw = 1, equil%nw
        do kh = 1, equil%nh
           ktri = point_location(rect_R(kw), rect_Z(kh))
@@ -621,7 +609,7 @@ contains
        XYZ(2, :, kc + ncoil) = 1d2 * R_Z_phi(:, 1) * sin(R_Z_phi(:, 3))
        XYZ(3, :, kc + ncoil) = 1d2 * R_Z_phi(:, 2)
     end do
-    if (allocated(R_Z_phi)) deallocate(R_Z_phi)
+    deallocate(R_Z_phi)
   end subroutine AUG_coils_read
 
   subroutine AUG_coils_write_Nemov(directory, ncoil, nseg, XYZ)
@@ -844,7 +832,7 @@ contains
        end do
     end do
     call h5_close(h5id_root)
-    if (allocated(Bn)) deallocate(Bn)
+    deallocate(Bn)
   end subroutine AUG_coils_write_Fourier
 
   subroutine read_currents_Nemov(directory, Ic)
@@ -1294,7 +1282,7 @@ contains
        Bnvac_Z(:, :) = Bnvac_Z + Ic(kc) * Bn
     end do
     call h5_close(h5id_root)
-    if (allocated(Bn)) deallocate(Bn)
+    deallocate(Bn)
   end subroutine read_Bnvac_Fourier
 
   subroutine compute_Bnvac(Bn)
@@ -1760,10 +1748,10 @@ contains
     if (log%info) call log%write
     open(newunit = fid, form = 'unformatted', file = 'amn.dat', action = 'read')
     read (fid) ntor, mpol, nlabel, flabel_min, flabel_max
-    allocate(z3dum(-mpol:mpol, ntor, nlabel))
-    allocate(Amn_theta(-mpol:mpol, ntor, nlabel))
+    allocate(z3dum(-mpol:mpol, ntor, nlabel), Amn_theta(-mpol:mpol, ntor, nlabel))
     read (fid) z3dum, Amn_theta
     close(fid)
+    deallocate(z3dum)
     open(newunit = fid, form = 'formatted', file = 'equil_r_q_psi.dat', action = 'read')
     read (fid, '(a)') line
     call extract(line, ptrn_nsqpsi)
@@ -1774,20 +1762,16 @@ contains
     call extract(line, ptrn_phimax)
     read (line, *) phimax
     read (fid, *)
-    allocate(qsaf(nsqpsi))
-    allocate(psisurf(nsqpsi))
-    allocate(rsmall(nsqpsi))
+    allocate(qsaf(nsqpsi), psisurf(nsqpsi), rsmall(nsqpsi))
     do k = 1, nsqpsi
        read (fid, *) ddum, qsaf(k), psisurf(k), ddum, ddum, rsmall(k)
     end do
     close(fid)
     sgn_dpsi = sign(1d0, psimax)
     call rq_interpolator%init(4, rsmall * abs(qsaf))
-    allocate(rq_eqd(nlabel))
+    allocate(rq_eqd(nlabel), psi_n(nlabel), Bmn_contradenspsi(-mpol:mpol, nlabel))
     rq_eqd(:) = linspace(abs(flabel_min), abs(flabel_max), nlabel, 0, 0)
-    allocate(psi_n(nlabel))
     psi_n(:) = [(rq_interpolator%eval(psisurf / psimax, rq_eqd(k)), k = 1, nlabel)]
-    allocate(Bmn_contradenspsi(-mpol:mpol, nlabel))
     ! if qsaf does not have the expected sign, theta points in the wrong direction,
     ! and we have to reverse the index m and the overall sign
     if (equil%cocos%sgn_q * qsaf(nsqpsi) < 0d0) then
@@ -1804,14 +1788,7 @@ contains
          lbound(Bmn_contradenspsi), ubound(Bmn_contradenspsi), unit = 'Mx', &
          comment = 'normalized poloidal flux of interpolation points')
     call h5_close(h5id_root)
-    if (allocated(z3dum)) deallocate(z3dum)
-    if (allocated(Amn_theta)) deallocate(Amn_theta)
-    if (allocated(qsaf)) deallocate(qsaf)
-    if (allocated(psisurf)) deallocate(psisurf)
-    if (allocated(rsmall)) deallocate(rsmall)
-    if (allocated(rq_eqd)) deallocate(rq_eqd)
-    if (allocated(psi_n)) deallocate(psi_n)
-    if (allocated(Bmn_contradenspsi)) deallocate(Bmn_contradenspsi)
+    deallocate(Amn_theta, qsaf, psisurf, rsmall, rq_eqd, psi_n, Bmn_contradenspsi)
 
   contains
     subroutine extract(string, preceding)

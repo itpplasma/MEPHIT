@@ -277,7 +277,7 @@ contains
           end do
           allocate(ipiv(ngrow))
           call zgesv(ngrow, ngrow, Lr, ngrow, ipiv, Yr, ngrow, info)
-          if (allocated(ipiv)) deallocate(ipiv)
+          deallocate(ipiv)
           if (info == 0) then
              log%msg = 'Successfully inverted matrix for preconditioner'
              if (log%info) call log%write
@@ -290,7 +290,7 @@ contains
           do i = 1, ngrow
              Lr(i, :) = eigvals(i) * Yr(i, :)
           end do
-          if (allocated(Yr)) deallocate(Yr)
+          deallocate(Yr)
        else
           preconditioned = .false.
        end if
@@ -344,6 +344,7 @@ contains
 
        call pack_dof(Bn, packed_Bn_prev)
     end do
+    if (allocated(Lr)) deallocate(Lr)
     Bnplas%DOF(:, :) = Bn%DOF - Bnvac%DOF
     Bnplas%comp_phi(:) = Bn%comp_phi - Bnvac%comp_phi
     call h5_open_rw(datafile, h5id_root)
@@ -361,10 +362,8 @@ contains
 
     call RT0_deinit(Bn_diff)
     call vec_polmodes_deinit(jmn)
-    if (allocated(Lr)) deallocate(Lr)
-    if (allocated(L2int)) deallocate(L2int)
     ! TODO: refactor arnoldi_mod?
-    if (allocated(eigvecs)) deallocate(eigvecs)
+    deallocate(L2int, eigvecs)
 
   contains
 

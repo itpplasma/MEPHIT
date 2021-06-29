@@ -902,8 +902,7 @@ contains
             rho_norm_ref(ref_ind(kref) - 1), mesh%rad_norm_res(m), rho_norm_ref(ref_ind(kref))
        if (log%debug) call log%write
     end do
-    if (allocated(ref_ind)) deallocate(ref_ind)
-    if (allocated(mask)) deallocate(mask)
+    deallocate(ref_ind, mask)
   end subroutine refine_resonant_surfaces
 
   subroutine cache_resonance_positions
@@ -1033,9 +1032,7 @@ contains
     allocate(mesh%node_theta_flux(mesh%npoint))
     allocate(mesh%node_theta_geom(mesh%npoint))
 
-    allocate(n_theta(mesh%nflux))
-    allocate(points(3, mesh%npoint))
-    allocate(points_s_theta_phi(3, mesh%npoint))
+    allocate(n_theta(mesh%nflux), points(3, mesh%npoint), points_s_theta_phi(3, mesh%npoint))
     n_theta = conf%nkpol
     s_min = 1d-16
     ! inp_label 2 to use poloidal psi with magdata_in_symfluxcoord_ext
@@ -1053,12 +1050,9 @@ contains
     mesh%R_max = maxval(mesh%node_R)
     mesh%Z_min = minval(mesh%node_Z)
     mesh%Z_max = maxval(mesh%node_Z)
+    deallocate(n_theta, points, points_s_theta_phi)
 
-    if (allocated(n_theta)) deallocate(n_theta)
-    if (allocated(points)) deallocate(points)
-    if (allocated(points_s_theta_phi)) deallocate(points_s_theta_phi)
-    if (allocated(rho_norm_ref)) deallocate(rho_norm_ref)
-    if (allocated(rho_norm_eqd)) deallocate(rho_norm_eqd)
+    deallocate(rho_norm_ref, rho_norm_eqd)
 
   contains
     function psi2rho_norm(psi) result(rho_norm)
@@ -2095,7 +2089,7 @@ contains
        xi_n_R(kpol) = unit_normal(0) * 1d2 * cmplx(xi_n(krad, kpol, 0), xi_n(krad, kpol, 1), dp)
        xi_n_Z(kpol) = unit_normal(1) * 1d2 * cmplx(xi_n(krad, kpol, 0), xi_n(krad, kpol, 1), dp)
     end do
-    if (allocated(theta_shift)) deallocate(theta_shift)
+    deallocate(theta_shift)
     call h5_add(h5id_root, dataset // '/R', R, lbound(R), ubound(R), &
          unit = 'cm', comment = 'R(psi, theta)')
     call h5_add(h5id_root, dataset // '/Z', Z, lbound(Z), ubound(Z), &
@@ -2105,13 +2099,8 @@ contains
     call h5_add(h5id_root, dataset // '/xi_n_Z', xi_n_Z, lbound(xi_n_Z), ubound(xi_n_Z), &
          unit = 'cm', comment = 'Axial component of normal displacement xi_n(theta) at last flux surface')
     call h5_close(h5id_root)
-    if (allocated(psi)) deallocate(psi)
-    if (allocated(theta)) deallocate(theta)
-    if (allocated(R)) deallocate(R)
-    if (allocated(Z)) deallocate(Z)
-    if (allocated(xi_n)) deallocate(xi_n)
-    if (allocated(xi_n_R)) deallocate(xi_n_R)
-    if (allocated(xi_n_Z)) deallocate(xi_n_Z)
+    deallocate(psi, theta, R, Z, xi_n, xi_n_R, xi_n_Z)
+
     filename = '2d.out'
     inquire(file = filename, exist = file_exists)
     if (.not. file_exists) return
