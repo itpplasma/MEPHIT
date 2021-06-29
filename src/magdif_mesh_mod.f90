@@ -998,14 +998,14 @@ contains
     call refine_resonant_surfaces(rho_norm_ref)
     call fs%init(mesh%nflux, .false.)
     call fs_half%init(mesh%nflux, .true.)
-    fs%rad = rho_norm_ref
-    fs%psi = [(interp_psi_pol(raxis + fs%rad(kf) * theta_axis(1), &
+    fs%rad(:) = rho_norm_ref
+    fs%psi(:) = [(interp_psi_pol(raxis + fs%rad(kf) * theta_axis(1), &
          zaxis + fs%rad(kf) * theta_axis(2)), kf = 0, mesh%nflux)]
-    fs_half%rad = 0.5d0 * (fs%rad(0:mesh%nflux-1) + fs%rad(1:mesh%nflux))
-    fs_half%psi = [(interp_psi_pol(raxis + fs_half%rad(kf) * theta_axis(1), &
+    fs_half%rad(:) = 0.5d0 * (fs%rad(0:mesh%nflux-1) + fs%rad(1:mesh%nflux))
+    fs_half%psi(:) = [(interp_psi_pol(raxis + fs_half%rad(kf) * theta_axis(1), &
          zaxis + fs_half%rad(kf) * theta_axis(2)), kf = 1, mesh%nflux)]
-    fs%rad = fs%rad * hypot(theta_axis(1), theta_axis(2))
-    fs_half%rad = fs_half%rad * hypot(theta_axis(1), theta_axis(2))
+    fs%rad(:) = fs%rad * hypot(theta_axis(1), theta_axis(2))
+    fs_half%rad(:) = fs_half%rad * hypot(theta_axis(1), theta_axis(2))
     call flux_func_cache_check
     call cache_resonance_positions
     allocate(mesh%theta_offset(mesh%nflux))
@@ -1106,8 +1106,8 @@ contains
     allocate(mesh%kp_low(mesh%nflux + 1))
     allocate(mesh%kt_low(mesh%nflux + 1))
 
-    mesh%kp_max = conf%nkpol
-    mesh%kt_max = 2 * conf%nkpol
+    mesh%kp_max(:) = conf%nkpol
+    mesh%kt_max(:) = 2 * conf%nkpol
     mesh%kt_max(1) = conf%nkpol
 
     mesh%kp_low(1) = 1
@@ -2262,10 +2262,10 @@ contains
        error stop
     end select
 
-    fs%F = [(psi_interpolator%eval(equil%fpol, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs%FdF_dpsi = [(psi_interpolator%eval(equil%ffprim, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs_half%F = [(psi_interpolator%eval(equil%fpol, fs_half%psi(kf)), kf = 1, mesh%nflux)]
-    fs_half%FdF_dpsi = [(psi_interpolator%eval(equil%ffprim, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    fs%F(:) = [(psi_interpolator%eval(equil%fpol, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs%FdF_dpsi(:) = [(psi_interpolator%eval(equil%ffprim, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs_half%F(:) = [(psi_interpolator%eval(equil%fpol, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    fs_half%FdF_dpsi(:) = [(psi_interpolator%eval(equil%ffprim, fs_half%psi(kf)), kf = 1, mesh%nflux)]
   end subroutine init_flux_variables
 
   subroutine compute_pres_prof_eps
@@ -2295,12 +2295,12 @@ contains
     write (log%msg, '("temp@axis: ", es24.16e3, ", dens@axis: ", es24.16e3)') &
          temp(0), dens(0)
     if (log%info) call log%write
-    fs%p = dens * temp * ev2erg
-    fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
+    fs%p(:) = dens * temp * ev2erg
+    fs%dp_dpsi(:) = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
     dens(1:) = (fs_half%psi - psi_ext) / psi_int * conf%dens_max + conf%dens_min
     temp(1:) = (fs_half%psi - psi_ext) / psi_int * conf%temp_max + conf%temp_min
-    fs_half%p = dens(1:) * temp(1:) * ev2erg
-    fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
+    fs_half%p(:) = dens(1:) * temp(1:) * ev2erg
+    fs_half%dp_dpsi(:) = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
   end subroutine compute_pres_prof_eps
 
   subroutine compute_pres_prof_par
@@ -2329,23 +2329,23 @@ contains
          + conf%dens_min
     temp = (fs%psi - psi_ext) / (psi_int - psi_ext) * (conf%temp_max - conf%temp_min) &
          + conf%temp_min
-    fs%p = dens * temp * ev2erg
-    fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
+    fs%p(:) = dens * temp * ev2erg
+    fs%dp_dpsi(:) = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
     dens(1:) = (fs_half%psi - psi_ext) / (psi_int - psi_ext) * &
          (conf%dens_max - conf%dens_min) + conf%dens_min
     temp(1:) = (fs_half%psi - psi_ext) / (psi_int - psi_ext) * &
          (conf%temp_max - conf%temp_min) + conf%temp_min
-    fs_half%p = dens(1:) * temp(1:) * ev2erg
-    fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
+    fs_half%p(:) = dens(1:) * temp(1:) * ev2erg
+    fs_half%dp_dpsi(:) = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
   end subroutine compute_pres_prof_par
 
   subroutine compute_pres_prof_geqdsk
     integer :: kf
 
-    fs%p = [(psi_interpolator%eval(equil%pres, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs%dp_dpsi = [(psi_interpolator%eval(equil%pprime, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs_half%p = [(psi_interpolator%eval(equil%pres, fs_half%psi(kf)), kf = 1, mesh%nflux)]
-    fs_half%dp_dpsi = [(psi_interpolator%eval(equil%pprime, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    fs%p(:) = [(psi_interpolator%eval(equil%pres, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs%dp_dpsi(:) = [(psi_interpolator%eval(equil%pprime, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs_half%p(:) = [(psi_interpolator%eval(equil%pres, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    fs_half%dp_dpsi(:) = [(psi_interpolator%eval(equil%pprime, fs_half%psi(kf)), kf = 1, mesh%nflux)]
   end subroutine compute_pres_prof_geqdsk
 
   subroutine compute_safety_factor_flux
@@ -2364,7 +2364,7 @@ contains
     end do
     call psi_half_interpolator%init(4, fs_half%psi)
     ! Lagrange polynomial extrapolation for values at separatrix and magnetic axis
-    fs%q = [(psi_half_interpolator%eval(fs_half%q, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs%q(:) = [(psi_half_interpolator%eval(fs_half%q, fs%psi(kf)), kf = 0, mesh%nflux)]
     call psi_half_interpolator%deinit
   end subroutine compute_safety_factor_flux
 
@@ -2373,15 +2373,15 @@ contains
     integer :: kf
 
     ! Lagrange polynomial extrapolation for value at magnetic axis
-    fs%q = [(psi_fine_interpolator%eval(qsaf, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs_half%q = [(psi_fine_interpolator%eval(qsaf, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    fs%q(:) = [(psi_fine_interpolator%eval(qsaf, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs_half%q(:) = [(psi_fine_interpolator%eval(qsaf, fs_half%psi(kf)), kf = 1, mesh%nflux)]
   end subroutine compute_safety_factor_rot
 
   subroutine compute_safety_factor_geqdsk
     integer :: kf
 
-    fs%q = [(psi_interpolator%eval(equil%qpsi, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs_half%q = [(psi_interpolator%eval(equil%qpsi, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    fs%q(:) = [(psi_interpolator%eval(equil%qpsi, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs_half%q(:) = [(psi_interpolator%eval(equil%qpsi, fs_half%psi(kf)), kf = 1, mesh%nflux)]
   end subroutine compute_safety_factor_geqdsk
 
   subroutine check_resonance_positions

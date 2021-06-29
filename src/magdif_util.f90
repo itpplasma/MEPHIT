@@ -547,17 +547,17 @@ contains
        if (log%info) call log%write
        this%simag = -this%simag
        this%sibry = -this%sibry
-       this%psirz = -this%psirz
-       this%psi_eqd = -this%psi_eqd
+       this%psirz(:, :) = -this%psirz
+       this%psi_eqd(:) = -this%psi_eqd
        this%cocos%sgn_dpsi = -this%cocos%sgn_dpsi
-       this%pprime = -this%pprime
-       this%ffprim = -this%ffprim
+       this%pprime(:) = -this%pprime
+       this%ffprim(:) = -this%ffprim
        this%cocos%sgn_Bpol = -this%cocos%sgn_Bpol
     end if
     if (this%cocos%sgn_pol == +1) then
        write (log%msg, invert_fmt) 'QPSI'
        if (log%info) call log%write
-       this%qpsi = -this%qpsi
+       this%qpsi(:) = -this%qpsi
        this%cocos%sgn_q = -this%cocos%sgn_q
        this%cocos%sgn_pol = -this%cocos%sgn_pol
     end if
@@ -568,10 +568,10 @@ contains
        if (log%info) call log%write
        this%simag = this%simag / (2d0 * pi)
        this%sibry = this%sibry / (2d0 * pi)
-       this%psirz = this%psirz / (2d0 * pi)
-       this%psi_eqd = this%psi_eqd / (2d0 * pi)
-       this%pprime = this%pprime * (2d0 * pi)
-       this%ffprim = this%ffprim * (2d0 * pi)
+       this%psirz(:, :) = this%psirz / (2d0 * pi)
+       this%psi_eqd(:) = this%psi_eqd / (2d0 * pi)
+       this%pprime(:) = this%pprime * (2d0 * pi)
+       this%ffprim(:) = this%ffprim * (2d0 * pi)
        this%cocos%exp_Bpol = 0
     end if
     this%cocos%index = 3
@@ -588,16 +588,16 @@ contains
     this%rmaxis = this%rmaxis + r_shift
     this%simag = this%simag * gamma
     this%sibry = this%sibry * gamma
-    this%fpol = this%fpol * gamma
-    this%ffprim = this%ffprim * gamma
-    this%pprime = this%pprime / gamma
-    this%psirz = this%psirz * gamma
-    this%qpsi = this%qpsi / gamma
-    this%rbbbs = this%rbbbs + r_shift
-    this%rlim = this%rlim + r_shift
+    this%fpol(:) = this%fpol * gamma
+    this%ffprim(:) = this%ffprim * gamma
+    this%pprime(:) = this%pprime / gamma
+    this%psirz(:, :) = this%psirz * gamma
+    this%qpsi(:) = this%qpsi / gamma
+    this%rbbbs(:) = this%rbbbs + r_shift
+    this%rlim(:) = this%rlim + r_shift
     ! auxiliary values
-    this%psi_eqd = this%psi_eqd * gamma
-    this%R_eqd = this%R_eqd + r_shift
+    this%psi_eqd(:) = this%psi_eqd * gamma
+    this%R_eqd(:) = this%R_eqd + r_shift
   end subroutine g_eqdsk_scale
 
   subroutine g_eqdsk_write(this, fname)
@@ -794,7 +794,7 @@ contains
     this%n_lag = n_lag
     this%n_var = size(indep_var)
     allocate(this%indep_var(this%n_var))
-    this%indep_var = indep_var
+    this%indep_var(:) = indep_var
   end subroutine interp1d_init
 
   function interp1d_eval(this, sample, position, deriv) result(interp)

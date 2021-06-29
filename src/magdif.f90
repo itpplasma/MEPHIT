@@ -380,7 +380,7 @@ contains
       use magdif_util, only: imun
       type(RT0_t), intent(inout) :: elem
       complex(dp), intent(in) :: packed(mesh%nedge)
-      integer :: kedge, ktri
+      integer :: kedge
       do kedge = 1, mesh%nedge
          elem%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_map2ktri(1, kedge)) = &
               packed(kedge)
@@ -389,9 +389,7 @@ contains
                  -packed(kedge)
          end if
       end do
-      do ktri = 1, mesh%ntri
-         elem%comp_phi(ktri) = sum(elem%DOF(:, ktri)) * imun / mesh%n / mesh%area(ktri)
-      end do
+      elem%comp_phi(:) = sum(elem%DOF, 1) * imun / mesh%n / mesh%area
     end subroutine unpack_dof
 
     ! computes B_(n+1) = K*B_n + B_vac ... different from kin2d.f90
@@ -565,7 +563,7 @@ contains
        inhom = x  ! remember inhomogeneity before x is overwritten with the solution
        call sparse_solve(conf%nkpol, conf%nkpol, nz, irow, icol, aval, x)
        call sparse_matmul(conf%nkpol, conf%nkpol, irow, icol, aval, x, resid)
-       resid = resid - inhom
+       resid(:) = resid - inhom
        where (abs(inhom) >= small)
           rel_err = abs(resid) / abs(inhom)
        elsewhere
@@ -653,7 +651,7 @@ contains
          inhom = x  ! remember inhomogeneity before x is overwritten with the solution
          call sparse_solve(ndim, ndim, nz, irow(:nz), icol(:nz), aval(:nz), x(:ndim))
          call sparse_matmul(ndim, ndim, irow(:nz), icol(:nz), aval(:nz), x(:ndim), resid)
-         resid = resid - inhom(:ndim)
+         resid(:) = resid - inhom(:ndim)
          where (abs(inhom(:ndim)) >= small)
             rel_err(:ndim) = abs(resid(:ndim)) / abs(inhom(:ndim))
          elsewhere
