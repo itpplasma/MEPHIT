@@ -60,6 +60,7 @@ program vacfield
      if (log%err) call log%write
      error stop
   end if
+  call log%deinit
   if (allocated(XYZ)) deallocate(XYZ)
 
 end program vacfield

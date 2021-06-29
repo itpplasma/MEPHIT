@@ -6,7 +6,7 @@ module magdif_util
 
   private
 
-  public :: clight, imun, get_field_filenames, init_field, interp_psi_pol, &
+  public :: clight, imun, get_field_filenames, init_field, deinit_field, interp_psi_pol, &
        linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, binsearch, interleave, &
        gauss_legendre_unit_interval, heapsort_complex, complex_abs_asc, C_F_string
 
@@ -39,7 +39,7 @@ module magdif_util
     procedure :: grad_shafranov_normalization => g_eqdsk_grad_shafranov_normalization
     procedure :: import_hdf5 => g_eqdsk_import_hdf5
     procedure :: export_hdf5 => g_eqdsk_export_hdf5
-    final :: g_eqdsk_destructor
+    procedure :: deinit => g_eqdsk_deinit
   end type g_eqdsk
 
   character(len = *), parameter :: geqdsk_2000 = '(a48, 3i4)'
@@ -140,6 +140,22 @@ contains
     zet = equil%Z_eqd * 1d-2
     call field_eq(0d0, 0d0, 0d0, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
   end subroutine init_field
+
+  subroutine deinit_field()
+    use field_eq_mod, only: ima, imi, jma, jmi, splpsi, splfpol, rad, zet, psi, psi0, ipoint
+
+    if (allocated(ima)) deallocate(ima)
+    if (allocated(imi)) deallocate(imi)
+    if (allocated(jma)) deallocate(jma)
+    if (allocated(jmi)) deallocate(jmi)
+    if (allocated(splpsi)) deallocate(splpsi)
+    if (allocated(splfpol)) deallocate(splfpol)
+    if (allocated(rad)) deallocate(rad)
+    if (allocated(zet)) deallocate(zet)
+    if (allocated(psi)) deallocate(psi)
+    if (allocated(psi0)) deallocate(psi0)
+    if (allocated(ipoint)) deallocate(ipoint)
+  end subroutine deinit_field
 
   function interp_psi_pol(r, z) result(psi_pol)
     use field_eq_mod, only: psif, psib
@@ -291,7 +307,7 @@ contains
     integer :: fid, kw, kh, idum
     real(dp) :: xdum
 
-    call g_eqdsk_destructor(this)
+    call g_eqdsk_deinit(this)
     this%fname = fname
     this%convexfile = convexfile
     open(newunit = fid, file = this%fname, status = 'old', form = 'formatted', action = 'read')
@@ -624,7 +640,7 @@ contains
     character(len = *), intent(in) :: dataset
     integer(HID_T) :: h5id_root
 
-    call g_eqdsk_destructor(this)
+    call g_eqdsk_deinit(this)
     call h5_open(file, h5id_root)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/exp_Bpol', this%cocos%exp_Bpol)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_cyl', this%cocos%sgn_cyl)
@@ -742,8 +758,8 @@ contains
     call h5_close(h5id_root)
   end subroutine g_eqdsk_export_hdf5
 
-  subroutine g_eqdsk_destructor(this)
-    type(g_eqdsk) :: this
+  subroutine g_eqdsk_deinit(this)
+    class(g_eqdsk) :: this
 
     this%fname = ''
     this%convexfile = ''
@@ -760,7 +776,7 @@ contains
     if (allocated(this%R_eqd)) deallocate(this%R_eqd)
     if (allocated(this%Z_eqd)) deallocate(this%Z_eqd)
     if (allocated(this%psirz)) deallocate(this%psirz)
-  end subroutine g_eqdsk_destructor
+  end subroutine g_eqdsk_deinit
 
   subroutine interp1d_init(this, n_lag, indep_var)
     use magdif_conf, only: log

@@ -1347,6 +1347,7 @@ contains
   end subroutine compute_Bnvac
 
   subroutine generate_vacfield
+    use bdivfree_mod, only: Rpoi, Zpoi, ipoint, AZnRe, AZnIm, ARnRe, ARnIm
     use magdif_conf, only: conf, datafile
     use magdif_mesh, only: mesh
     type(RT0_t) :: Bn
@@ -1366,6 +1367,14 @@ contains
           call debug_B0_rectplot
           call debug_Bmnvac
           call debug_fouriermodes
+          ! deallocate arrays allocated in vector_potential_single_mode
+          if (allocated(Rpoi)) deallocate(Rpoi)
+          if (allocated(Zpoi)) deallocate(Zpoi)
+          if (allocated(ipoint)) deallocate(ipoint)
+          if (allocated(AZnRe)) deallocate(AZnRe)
+          if (allocated(AZnIm)) deallocate(AZnIm)
+          if (allocated(ARnRe)) deallocate(ARnRe)
+          if (allocated(ARnIm)) deallocate(ARnIm)
        end if
     end if
     call RT0_check_redundant_edges(Bn, 'Bnvac')

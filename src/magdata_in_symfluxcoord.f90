@@ -1,6 +1,6 @@
 !
 module magdata_in_symfluxcoor_mod
-  public :: load_magdata_in_symfluxcoord, magdata_in_symfluxcoord_ext
+  public :: load_magdata_in_symfluxcoord, magdata_in_symfluxcoord_ext, unload_magdata_in_symfluxcoord
   integer, parameter :: nspl  = 3 !spline order in poloidal angle interpolation
   integer, parameter :: nplag = 4 !stencil for Largange polynomial interpolation (polynomial order + 1)
   integer, parameter :: nder  = 1 !number of derivatives from Largange polynomial interpolation
@@ -235,4 +235,8 @@ contains
   end subroutine magdata_in_symfluxcoord_ext
   !
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
+  subroutine unload_magdata_in_symfluxcoord
+    deallocate(rbeg, rsmall, qsaf, psisurf, phitor, R_st, Z_st, bmod_st, sqgnorm_st)
+  end subroutine unload_magdata_in_symfluxcoord
 end module magdata_in_symfluxcoor_mod

@@ -9,13 +9,13 @@ module magdif_mesh
 
   public :: equil, flux_func_cache, fs, fs_half, mesh_t, mesh, B0r, B0phi, B0z, &
        B0r_Omega, B0phi_Omega, B0z_Omega, B0flux, j0phi, coord_cache, sample_polmodes, &
-       coord_cache_ext, coord_cache_ext_init, compute_sample_Ipar, coord_cache_ext_deinit, &
-       coord_cache_ext_write, coord_cache_ext_read, &
-       flux_func_cache_init, flux_func_cache_check, flux_func_cache_destructor, generate_mesh, &
+       coord_cache_ext, coord_cache_ext_init, coord_cache_deinit, compute_sample_Ipar, &
+       coord_cache_ext_write, coord_cache_ext_read, coord_cache_ext_deinit, &
+       flux_func_cache_init, flux_func_cache_check, flux_func_cache_deinit, generate_mesh, &
        compute_resonance_positions, refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile, &
-       create_mesh_points, init_indices, common_triangles, &
+       create_mesh_points, init_indices, common_triangles, psi_interpolator, psi_fine_interpolator, &
        connect_mesh_points, get_labeled_edges, write_mesh_cache, read_mesh_cache, &
-       magdif_mesh_destructor, init_flux_variables, compute_pres_prof_eps, compute_pres_prof_par, &
+       magdif_mesh_deinit, init_flux_variables, compute_pres_prof_eps, compute_pres_prof_par, &
        compute_pres_prof_geqdsk, compute_safety_factor_flux, compute_safety_factor_rot, &
        compute_safety_factor_geqdsk, check_safety_factor, cache_equilibrium_field, &
        compute_j0phi, check_curr0, point_location, point_in_triangle
@@ -52,7 +52,7 @@ module magdif_mesh
      real(dp), dimension(:), allocatable, public :: q
    contains
      procedure :: init => flux_func_cache_init
-     final :: flux_func_cache_destructor
+     procedure :: deinit => flux_func_cache_deinit
   end type flux_func_cache
 
   type(interp1d) :: psi_interpolator
@@ -212,8 +212,6 @@ module magdif_mesh
      real(dp), allocatable :: R_Omega(:)
      real(dp), allocatable :: Z_Omega(:)
 
-   contains
-     final :: magdif_mesh_destructor
   end type mesh_t
 
   type(mesh_t) :: mesh
@@ -306,7 +304,7 @@ contains
     integer, intent(in) :: nflux
     logical, intent(in) :: half_step
 
-    call flux_func_cache_destructor(this)
+    call flux_func_cache_deinit(this)
     if (half_step) then
        allocate(this%psi(nflux))
        allocate(this%rad(nflux))
@@ -333,8 +331,8 @@ contains
     this%q = 0d0
   end subroutine flux_func_cache_init
 
-  subroutine flux_func_cache_destructor(this)
-    type(flux_func_cache), intent(inout) :: this
+  subroutine flux_func_cache_deinit(this)
+    class(flux_func_cache), intent(inout) :: this
 
     if (allocated(this%psi)) deallocate(this%psi)
     if (allocated(this%rad)) deallocate(this%rad)
@@ -343,7 +341,7 @@ contains
     if (allocated(this%FdF_dpsi)) deallocate(this%FdF_dpsi)
     if (allocated(this%dp_dpsi)) deallocate(this%dp_dpsi)
     if (allocated(this%q)) deallocate(this%q)
-  end subroutine flux_func_cache_destructor
+  end subroutine flux_func_cache_deinit
 
   subroutine flux_func_cache_write(cache, file, dataset, comment)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
@@ -1878,7 +1876,7 @@ contains
     integer(HID_T) :: h5id_root
     integer, allocatable :: orient(:)
 
-    call magdif_mesh_destructor(mesh)
+    call magdif_mesh_deinit(mesh)
     call h5_open(file, h5id_root)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_O', mesh%R_O)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_O', mesh%Z_O)
@@ -1981,8 +1979,9 @@ contains
     deallocate(orient)
   end subroutine mesh_read
 
-  subroutine magdif_mesh_destructor(this)
-    type(mesh_t), intent(inout) :: this
+  subroutine magdif_mesh_deinit(this)
+    class(mesh_t), intent(inout) :: this
+
     if (allocated(this%deletions)) deallocate(this%deletions)
     if (allocated(this%additions)) deallocate(this%additions)
     if (allocated(this%refinement)) deallocate(this%refinement)
@@ -2018,7 +2017,7 @@ contains
     if (allocated(this%area)) deallocate(this%area)
     if (allocated(this%R_Omega)) deallocate(this%R_Omega)
     if (allocated(this%Z_Omega)) deallocate(this%Z_Omega)
-  end subroutine magdif_mesh_destructor
+  end subroutine magdif_mesh_deinit
 
   subroutine compare_gpec_coordinates
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close

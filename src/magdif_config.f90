@@ -176,7 +176,7 @@ module magdif_conf
      procedure :: read => magdif_config_delayed_read
      procedure :: export_hdf5 => magdif_config_delayed_export_hdf5
      procedure :: import_hdf5 => magdif_config_delayed_import_hdf5
-     final :: magdif_config_delayed_destructor
+     procedure :: deinit => magdif_config_delayed_destructor
   end type magdif_config_delayed
 
   type :: magdif_log
@@ -189,7 +189,7 @@ module magdif_conf
    contains
      procedure :: write => magdif_log_write
      procedure :: msg_arg_size => magdif_log_msg_arg_size
-     final :: magdif_log_close
+     procedure :: deinit => magdif_log_deinit
   end type magdif_log
 
   interface magdif_log
@@ -385,7 +385,10 @@ contains
   end subroutine magdif_config_delayed_import_hdf5
 
   subroutine magdif_config_delayed_destructor(config)
-    type(magdif_config_delayed), intent(inout) :: config
+    class(magdif_config_delayed), intent(inout) :: config
+
+    config%m_min = 0
+    config%m_max = 0
     if (allocated(config%deletions)) deallocate(config%deletions)
     if (allocated(config%additions)) deallocate(config%additions)
     if (allocated(config%refinement)) deallocate(config%refinement)
@@ -422,11 +425,12 @@ contains
   end function magdif_log_open
 
   !> Close logfile if necessary.
-  subroutine magdif_log_close(log)
+  subroutine magdif_log_deinit(log)
     use iso_fortran_env, only: output_unit
-    type(magdif_log), intent(inout) :: log
+    class(magdif_log), intent(inout) :: log
+
     if (log%fid /= output_unit) close(log%fid)
-  end subroutine magdif_log_close
+  end subroutine magdif_log_deinit
 
   !> Generate timestamp
   function timestamp()

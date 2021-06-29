@@ -54,10 +54,12 @@ contains
 
   subroutine magdif_run(runmode, config) bind(C, name = 'magdif_run')
     use iso_c_binding, only: c_int, c_ptr
-    use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
-    use magdif_util, only: C_F_string, get_field_filenames, init_field
+    use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord, unload_magdata_in_symfluxcoord
+    use magdif_util, only: C_F_string, get_field_filenames, init_field, deinit_field
     use magdif_conf, only: conf, magdif_config_read, magdif_config_export_hdf5, conf_arr, magdif_log, log, datafile
-    use magdif_mesh, only: equil, mesh, generate_mesh, write_mesh_cache, read_mesh_cache
+    use magdif_mesh, only: equil, fs, fs_half, mesh, generate_mesh, write_mesh_cache, read_mesh_cache, &
+         magdif_mesh_deinit, sample_polmodes, coord_cache_deinit, psi_interpolator, psi_fine_interpolator, &
+         B0R, B0phi, B0Z, B0R_Omega, B0phi_Omega, B0Z_Omega, B0flux, j0phi
     use magdif_pert, only: generate_vacfield
     use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
     integer(c_int), intent(in), value :: runmode
@@ -130,6 +132,25 @@ contains
        end if
        call magdif_cleanup
     end if
+    if (allocated(B0r)) deallocate(B0r)
+    if (allocated(B0phi)) deallocate(B0phi)
+    if (allocated(B0z)) deallocate(B0z)
+    if (allocated(B0r_Omega)) deallocate(B0r_Omega)
+    if (allocated(B0phi_Omega)) deallocate(B0phi_Omega)
+    if (allocated(B0z_Omega)) deallocate(B0z_Omega)
+    if (allocated(B0flux)) deallocate(B0flux)
+    if (allocated(j0phi)) deallocate(j0phi)
+    call psi_interpolator%deinit
+    call psi_fine_interpolator%deinit
+    call coord_cache_deinit(sample_polmodes)
+    call fs%deinit
+    call fs_half%deinit
+    call magdif_mesh_deinit(mesh)
+    call unload_magdata_in_symfluxcoord
+    call deinit_field
+    call equil%deinit
+    call conf_arr%deinit
+    call log%deinit
     call h5_deinit
   end subroutine magdif_run
 
@@ -157,18 +178,8 @@ contains
   !> Deallocates all previously allocated variables.
   subroutine magdif_cleanup
     use magdif_conf, only: log
-    use magdif_mesh, only: B0R, B0phi, B0Z, B0R_Omega, B0phi_Omega, B0Z_Omega, B0flux, &
-         j0phi
     use magdif_pert, only: L1_deinit, RT0_deinit
 
-    if (allocated(B0r)) deallocate(B0r)
-    if (allocated(B0phi)) deallocate(B0phi)
-    if (allocated(B0z)) deallocate(B0z)
-    if (allocated(B0r_Omega)) deallocate(B0r_Omega)
-    if (allocated(B0phi_Omega)) deallocate(B0phi_Omega)
-    if (allocated(B0z_Omega)) deallocate(B0z_Omega)
-    if (allocated(B0flux)) deallocate(B0flux)
-    if (allocated(j0phi)) deallocate(j0phi)
     call L1_deinit(pn)
     call RT0_deinit(Bn)
     call RT0_deinit(Bnvac)
@@ -352,6 +363,8 @@ contains
     call vec_polmodes_deinit(jmn)
     if (allocated(Lr)) deallocate(Lr)
     if (allocated(L2int)) deallocate(L2int)
+    ! TODO: refactor arnoldi_mod?
+    if (allocated(eigvecs)) deallocate(eigvecs)
 
   contains
 

@@ -23,4 +23,6 @@ program standardise_equilibrium
   call equil%classify
   call equil%standardise
   call equil%write(trim(standardised_geqdsk))
+  call equil%deinit
+  call log%deinit
 end program standardise_equilibrium
