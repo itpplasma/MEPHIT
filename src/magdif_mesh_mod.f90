@@ -803,7 +803,7 @@ contains
     if (nref < 1) then
        mesh%nflux = conf%nflux_unref
        allocate(refined(0:mesh%nflux))
-       refined = linspace(0d0, 1d0, mesh%nflux + 1, 0, 0)
+       refined(:) = linspace(0d0, 1d0, mesh%nflux + 1, 0, 0)
        return
     end if
     if (nref /= size(deletions)) then
@@ -886,7 +886,7 @@ contains
     mesh%deletions(:) = conf_arr%deletions
     mesh%additions(:) = conf_arr%additions
     allocate(mask(mesh%m_res_min:mesh%m_res_max))
-    mask = 0d0 < mesh%refinement .and. mesh%refinement < 1d0
+    mask(:) = 0d0 < mesh%refinement .and. mesh%refinement < 1d0
     allocate(ref_ind(count(mask)))
     call refine_eqd_partition(count(mask), pack(mesh%deletions, mask), &
          pack(mesh%additions, mask), pack(mesh%refinement, mask), &
@@ -991,7 +991,7 @@ contains
     call psi_fine_interpolator%init(4, psisurf(1:) * psipol_max + psi_axis)
     ! interpolate between psi and rho
     allocate(rho_norm_eqd(nlabel))
-    rho_norm_eqd = rbeg / hypot(theta_axis(1), theta_axis(2))
+    rho_norm_eqd(:) = rbeg / hypot(theta_axis(1), theta_axis(2))
 
     call compute_resonance_positions(psisurf(1:) * psipol_max + psi_axis, qsaf, psi2rho_norm)
     call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)

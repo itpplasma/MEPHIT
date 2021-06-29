@@ -135,9 +135,9 @@ contains
     btf = equil%bcentr * 1d-4
     rtf = equil%rcentr * 1d-2
     splfpol(0, :) = equil%fpol * 1d-6
-    psi = equil%psirz * 1d-8
-    rad = equil%R_eqd * 1d-2
-    zet = equil%Z_eqd * 1d-2
+    psi(:, :) = equil%psirz * 1d-8
+    rad(:) = equil%R_eqd * 1d-2
+    zet(:) = equil%Z_eqd * 1d-2
     call field_eq(0d0, 0d0, 0d0, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
   end subroutine init_field
 
