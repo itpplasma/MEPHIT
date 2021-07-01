@@ -13,30 +13,29 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from os import path
 
-canvas = (6.6, 3.6)
+figsize = (6.6, 3.6)
 res = 300
 thin = 0.5
 
 work_dir = '/home/patrick/git/NEO-EQ/run/30835_3200_ed6'
-nrad = 2048  ### read from config
 m_min = 3
 m_max = 9
 
 magdif = h5py.File(path.join(work_dir, 'magdif.h5'), 'r')
+nrad = magdif['/config/nrad_Ipar'][()]
 rad_max = magdif['/cache/fs/rad'][-1]
 rad_res = {}
 for k, m in enumerate(range(magdif['/mesh/rad_norm_res'].attrs['lbounds'][0],
                             magdif['/mesh/rad_norm_res'].attrs['ubounds'][0])):
     rad_res[m] = magdif['/mesh/rad_norm_res'][k] * rad_max
 mephit = parcurr()
-mephit.process_magdif(lambda m: path.join(work_dir, f"currn_par_{m}.dat"),
-                      range(m_min, m_max + 1), nrad, rad_res, symfluxcoord=True)
+mephit.process_magdif(lambda m: magdif, range(m_min, m_max + 1), nrad, rad_res, symfluxcoord=True)
 gpec = parcurr()
 gpec.process_GPEC(path.join(work_dir, 'gpec_profile_output_n2.nc'))
 
 for m in range(m_min, m_max + 1):
     # plots
-    fig = Figure(figsize=canvas)
+    fig = Figure(figsize=figsize)
     ax = fig.subplots()
     ax.axhline(np.abs(gpec.I_res[m]), lw=0.25 * thin, color='k', label='GPEC')
     ax.plot(mephit.width[m], np.abs(mephit.intJ[m]), '--b', lw=thin, label='J, symfluxcoord.')

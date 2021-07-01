@@ -11,19 +11,23 @@ from glob import iglob
 import numpy as np
 from copy import deepcopy
 from functools import partial
-from magdifplot import magdif, fslabel, polmodes, magdif_poloidal_plots, magdif_2d_rectplots, cm_to_m, G_to_T
+from magdifplot import magdif, fslabel, polmodes, magdif_poloidal_plots, magdif_2d_rectplots, cm_to_m, G_to_T, Mx_to_Wb
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.path import Path as Polygon
+from matplotlib.colors import Normalize
+import colorcet
+from scipy.interpolate import UnivariateSpline
 import netCDF4
 
-# ylabel_abs = r'$\lvert \mathcal{B}_{mn}^{\psi} \rvert$ / \si{\weber}'
-# ylabel_arg = r'$\arg \mathcal{B}_{mn}^{\psi}$ / \si{\degree}'
-# ylabel_grad_abs = r'$\partial_{\hat{\psi}} \lvert \mathcal{B}_{mn}^{\psi} \rvert$ / \si{\weber}'
-ylabel_abs = r'$\lvert B_{mn}^{\hat{\psi}} \rvert$ / \si{\tesla}'
-ylabel_arg = r'$\arg B_{mn}^{\hat{\psi}}$ / \si{\degree}'
-ylabel_grad_abs = r'$\partial_{\hat{\psi}} \lvert B_{mn}^{\hat{\psi}} \rvert$ / \si{\tesla}'
-cutoff = 0.2
+psi_abs = r'$\abs [B_{n}^{\perp} \sqrt{g} \lVert \nabla \psi \rVert]_{m} A^{-1}$ / \si{\tesla}'
+psi_arg = r'$\arg [B_{n}^{\perp} \sqrt{g} \lVert \nabla \psi \rVert]_{m} A^{-1}$ / \si{\degree}'
+psin_abs = r'$\abs [B_{n}^{\perp}]_{m}$ / \si{\tesla}'
+psin_arg = r'$\arg [B_{n}^{\perp}]_{m}$ / \si{\degree}'
+
+psi_n = r'$\hat{\psi}$'
+theta_n = r'$\hat{\vartheta}$'
+sqrt_g = r'$\sqrt{g}$ / \si{\meter\per\tesla}'
 
 for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     testcase = magdif(workdir)
@@ -43,57 +47,219 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     mephit_vac = polmodes('vacuum perturbation (MEPHIT)', 'r--')
     mephit_vac.read_magdif(testcase.data, fslabel.psi_norm, '/Bmnvac/comp_psi_contravar_dens')
     for m in mephit_vac.var.keys():
-        mephit_vac.var[m] /= testcase.data['/mesh/gpec_jarea'][()] * cm_to_m ** 2
+        mephit_vac.var[m] /= testcase.data['/mesh/gpec_jacfac'][:, 16] * cm_to_m ** 2
     mephit_pert = polmodes('full perturbation (MEPHIT)', 'g--')
     mephit_pert.read_magdif(testcase.data, fslabel.psi_norm, '/postprocess/Bmn/coeff_rad')
     for m in mephit_pert.var.keys():
-        mephit_pert.var[m] /= testcase.data['/mesh/gpec_jarea'][()] * cm_to_m ** 2
+        mephit_pert.var[m] /= testcase.data['/mesh/gpec_jacfac'][:, 16] * cm_to_m ** 2
+    testcase.plots.append(magdif_poloidal_plots(
+        workdir, 'GPEC_Bmn_psi_abs.pdf', testcase.config, testcase.data,
+        fslabel.psi_norm, psi_abs, np.abs, vac, pert, mephit_vac, mephit_pert
+    ))
+    testcase.plots.append(magdif_poloidal_plots(
+        workdir, 'GPEC_Bmn_psi_arg.pdf', testcase.config, testcase.data,
+        fslabel.psi_norm, psi_arg, partial(np.angle, deg=True), vac, pert, mephit_vac, mephit_pert
+    ))
+    testcase.plots.append(magdif_poloidal_plots(
+        workdir, 'debug_Bmn_psi_abs.pdf', testcase.config, testcase.data,
+        fslabel.psi_norm, psi_abs, np.abs, vac, mephit_vac
+    ))
+    testcase.plots.append(magdif_poloidal_plots(
+        workdir, 'debug_Bmn_psi_arg.pdf', testcase.config, testcase.data,
+        fslabel.psi_norm, psi_arg, partial(np.angle, deg=True), vac, mephit_vac
+    ))
+    vacn = polmodes('vacuum perturbation (GPEC)', 'k--')
+    vacn.read_GPEC(path.join(workdir, 'gpec_profile_output_n2.nc'), sgn_dpsi, 'b_n_x')
+    pertn = polmodes('full perturbation (GPEC)', 'b--')
+    pertn.read_GPEC(path.join(workdir, 'gpec_profile_output_n2.nc'), sgn_dpsi, 'b_n')
+    mephit_vacn = polmodes('vacuum perturbation (MEPHIT)', 'r--')
+    mephit_vacn.read_magdif(testcase.data, fslabel.psi_norm, '/Bmnvac/comp_n')
+    for m in mephit_vacn.var.keys():
+        mephit_vacn.var[m] /= cm_to_m ** 2
+    mephit_pertn = polmodes('full perturbation (MEPHIT)', 'g--')
+    mephit_pertn.read_magdif(testcase.data, fslabel.psi_norm, '/postprocess/Bmn/coeff_n')
+    for m in mephit_pertn.var.keys():
+        mephit_pertn.var[m] /= cm_to_m ** 2
     testcase.plots.append(magdif_poloidal_plots(
         workdir, 'GPEC_Bmn_psin_abs.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, ylabel_abs, np.abs, vac, pert, mephit_vac, mephit_pert
+        fslabel.psi_norm, psin_abs, np.abs, vacn, pertn, mephit_vacn, mephit_pertn
     ))
     testcase.plots.append(magdif_poloidal_plots(
         workdir, 'GPEC_Bmn_psin_arg.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, ylabel_arg, partial(np.angle, deg=True), vac, pert, mephit_vac, mephit_pert
+        fslabel.psi_norm, psin_arg, partial(np.angle, deg=True), vacn, pertn, mephit_vacn, mephit_pertn
     ))
     testcase.plots.append(magdif_poloidal_plots(
         workdir, 'debug_Bmn_psin_abs.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, ylabel_abs, np.abs, vac, mephit_vac
+        fslabel.psi_norm, psin_abs, np.abs, vacn, mephit_vacn
     ))
     testcase.plots.append(magdif_poloidal_plots(
         workdir, 'debug_Bmn_psin_arg.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, ylabel_arg, partial(np.angle, deg=True), vac, mephit_vac
+        fslabel.psi_norm, psin_arg, partial(np.angle, deg=True), vacn, mephit_vacn
     ))
-    vac_grad = deepcopy(vac)
-    for m in vac_grad.var.keys():
-        vac_grad.var[m] = np.gradient(np.abs(vac_grad.var[m]), vac_grad.rho[m])
-        vac_grad.var[m] = np.delete(vac_grad.var[m], np.nonzero(vac_grad.rho[m] > cutoff))
-        vac_grad.rho[m] = np.delete(vac_grad.rho[m], np.nonzero(vac_grad.rho[m] > cutoff))
-    mephit_vac_grad = deepcopy(mephit_vac)
-    for m in mephit_vac.var.keys():
-        mephit_vac_grad.var[m] = np.gradient(np.abs(mephit_vac_grad.var[m]), mephit_vac_grad.rho[m])
-        mephit_vac_grad.var[m] = np.delete(mephit_vac_grad.var[m], np.nonzero(mephit_vac_grad.rho[m] > cutoff))
-        mephit_vac_grad.rho[m] = np.delete(mephit_vac_grad.rho[m], np.nonzero(mephit_vac_grad.rho[m] > cutoff))
-    vac_zoom = deepcopy(vac)
-    for m in vac_zoom.var.keys():
-        vac_zoom.var[m] = np.delete(vac_zoom.var[m], np.nonzero(vac_zoom.rho[m] > cutoff))
-        vac_zoom.rho[m] = np.delete(vac_zoom.rho[m], np.nonzero(vac_zoom.rho[m] > cutoff))
-    mephit_vac_zoom = deepcopy(mephit_vac)
-    for m in mephit_vac.var.keys():
-        mephit_vac_zoom.var[m] = np.delete(mephit_vac_zoom.var[m], np.nonzero(mephit_vac_zoom.rho[m] > cutoff))
-        mephit_vac_zoom.rho[m] = np.delete(mephit_vac_zoom.rho[m], np.nonzero(mephit_vac_zoom.rho[m] > cutoff))
-    hack = magdif_poloidal_plots(
-        workdir, 'zoom_Bmn_psin_abs.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, ylabel_abs, np.abs, vac_zoom, mephit_vac_zoom
-    )
-    hack.omit_res = True
-    testcase.plots.append(hack)
-    hack = magdif_poloidal_plots(
-        workdir, 'grad_Bmn_psin_abs.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, ylabel_grad_abs, lambda v: v, vac_grad, mephit_vac_grad
-    )
-    hack.omit_res = True
-    testcase.plots.append(hack)
+    jacfac = deepcopy(vac)
+    data = np.loadtxt(path.join(workdir, 'gpec_diagnostics_jacfac_1.out'), skiprows=2)
+    m_range = np.unique(data[:, 1].astype(int))
+    npsi = data.shape[0] // m_range.size
+    for m in m_range:
+        jacfac.rho[m] = np.empty((npsi,), dtype='d')
+        jacfac.var[m] = np.empty((npsi,), dtype='D')
+    k = 0
+    for kpsi in np.arange(npsi):
+        for m in m_range:
+            jacfac.rho[m][kpsi] = data[k, 0]
+            jacfac.var[m].real[kpsi] = data[k, 2] * sgn_dpsi
+            jacfac.var[m].imag[kpsi] = data[k, 3] * sgn_dpsi * helicity
+            k += 1
+    mephit_jacfac = polmodes('weighting factor (MEPHIT)', 'r--')
+    mephit_jacfac.read_magdif(testcase.data, fslabel.psi_norm, '/mesh/gpec_jacfac')
+    for m in mephit_jacfac.var.keys():
+        mephit_jacfac.var[m] /= Mx_to_Wb * testcase.data['/mesh/gpec_jacfac'][:, 16]
+    testcase.plots.append(magdif_poloidal_plots(
+        workdir, 'debug_jacfac_abs.pdf', testcase.config, testcase.data, fslabel.psi_norm,
+        r'$\abs [\sqrt{g} \lVert \nabla \psi \rVert]_{m}$ / \si{\square\meter}',
+        np.abs, jacfac, mephit_jacfac
+    ))
+    testcase.plots.append(magdif_poloidal_plots(
+        workdir, 'debug_jacfac_arg.pdf', testcase.config, testcase.data, fslabel.psi_norm,
+        r'$\arg [\sqrt{g} \lVert \nabla \psi \rVert]_{m} $ / \si{\square\meter}',
+        partial(np.angle, deg=True), jacfac, mephit_jacfac
+    ))
+
+    psi = sgn_dpsi * Mx_to_Wb * testcase.data['/cache/fs/psi'][()]
+    psi -= psi[0]
+    psipol_max = psi[-1]
+    psi /= psipol_max
+    jac_psi = Mx_to_Wb / psipol_max * testcase.data['/debug_GPEC/jac/psi'][()]
+    jac_nrad = jac_psi.size
+    jac_theta = 0.5 / np.pi * testcase.data['/debug_GPEC/jac/theta'][()]
+    jac_npol = jac_theta.size
+    jac_gpec = cm_to_m / G_to_T * np.transpose(testcase.data['/debug_GPEC/jac/jac'][()])
+    jac_mephit = cm_to_m / G_to_T * np.transpose(testcase.data['/debug_GPEC/jac/sqrt_g'][()])
+    debug_psi = Mx_to_Wb / psipol_max * testcase.data['/debug_GPEC/psi'][()]
+    debug_nrad = debug_psi.size
+    debug_theta = 0.5 / np.pi * testcase.data['/debug_GPEC/theta'][()]
+    debug_npol = debug_theta.size
+    debug_R = cm_to_m * np.transpose(testcase.data['/debug_GPEC/R_GPEC'][()])
+    R = cm_to_m * np.transpose(testcase.data['/debug_GPEC/R'][()])
+    rootgrp = netCDF4.Dataset(path.join(workdir, 'dcon_output_n2.nc'), 'r')
+    spline_F = UnivariateSpline(jac_psi, np.array(rootgrp['f']), s=0)
+    spline_q = UnivariateSpline(jac_psi, np.array(rootgrp['q']), s=0)
+    rootgrp.close()
+    jac_pest = np.empty(debug_R.shape)
+    for k in range(jac_pest.shape[0]):
+        jac_pest[k, :] = debug_R[k, :] ** 2 * np.abs(spline_q(debug_psi[k]) / spline_F(debug_psi[k]))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(jac_psi, jac_gpec[:, 0], label=r'GPEC, $\hat{\vartheta} = 0$')
+    ax.plot(jac_psi, jac_gpec[:, jac_npol // 2], label=r'GPEC, $\hat{\vartheta} = 0.5$')
+    ax.plot(jac_psi, jac_mephit[:, 0], label=r'MEPHIT, $\hat{\vartheta} = 0$')
+    ax.plot(jac_psi, jac_mephit[:, jac_npol // 2], label=r'MEPHIT, $\hat{\vartheta} = 0.5$')
+    ax.set_xlabel(psi_n)
+    ax.set_ylabel(sqrt_g)
+    ax.legend()
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'comp_jac_psi.pdf'))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(debug_psi, jac_pest[:, 0], label=r'PEST, $\hat{\vartheta} = 0$')
+    ax.plot(debug_psi, jac_pest[:, debug_npol // 2], label=r'PEST, $\hat{\vartheta} = 0.5$')
+    ax.plot(jac_psi, jac_mephit[:, 0], label=r'MEPHIT, $\hat{\vartheta} = 0$')
+    ax.plot(jac_psi, jac_mephit[:, jac_npol // 2], label=r'MEPHIT, $\hat{\vartheta} = 0.5$')
+    ax.set_xlabel(psi_n)
+    ax.set_ylabel(sqrt_g)
+    ax.legend()
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'debug_jac_psi.pdf'))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(jac_theta, jac_gpec[jac_nrad // 2, :], label=r'GPEC, $\hat{\psi} = 0.5$')
+    ax.plot(jac_theta, jac_gpec[jac_nrad // 4 * 3, :], label=r'GPEC, $\hat{\psi} = 0.75$')
+    ax.plot(jac_theta, jac_mephit[jac_nrad // 2, :], label=r'MEPHIT, $\hat{\psi} = 0.5$')
+    ax.plot(jac_theta, jac_mephit[jac_nrad // 4 * 3, :], label=r'MEPHIT, $\hat{\psi} = 0.75$')
+    ax.set_xlabel(theta_n)
+    ax.set_ylabel(sqrt_g)
+    ax.legend()
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'comp_jac_theta.pdf'))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(jac_psi, jac_gpec[:, 0] / jac_mephit[:, 0], label=r'$\hat{\vartheta} = 0$')
+    ax.plot(jac_psi, jac_gpec[:, jac_npol // 2] / jac_mephit[:, jac_npol // 2], label=r'$\hat{\vartheta} = 0.5$')
+    ax.set_xlabel(psi_n)
+    ax.set_ylabel('ratio of Jacobians (GPEC / MEPHIT)')
+    ax.legend()
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'comp_jac_psi_fac.pdf'))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(jac_theta, jac_gpec[jac_nrad // 2, :] / jac_mephit[jac_nrad // 2, :], label=r'$\hat{\psi} = 0.5$')
+    ax.plot(jac_theta, jac_gpec[jac_nrad // 4 * 3, :] / jac_mephit[jac_nrad // 4 * 3, :], label=r'$\hat{\psi} = 0.75$')
+    ax.set_xlabel(theta_n)
+    ax.set_ylabel('ratio of Jacobians (GPEC / MEPHIT)')
+    ax.legend()
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'comp_jac_theta_fac.pdf'))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(debug_psi, debug_R[:, debug_npol // 4], label=r'GPEC, $\hat{\vartheta} = 0.25$')
+    ax.plot(debug_psi, debug_R[:, debug_npol // 4 * 3], label=r'GPEC, $\hat{\vartheta} = 0.75$')
+    ax.plot(debug_psi, R[:, debug_npol // 4], label=r'MEPHIT, $\hat{\vartheta} = 0.25$')
+    ax.plot(debug_psi, R[:, debug_npol // 4 * 3], label=r'MEPHIT, $\hat{\vartheta} = 0.75$')
+    ax.set_xlabel(psi_n)
+    ax.set_ylabel(r'$R$ / \si{\meter}')
+    ax.legend()
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'comp_R.pdf'))
+
+    fig = Figure(figsize=(8.0, 5.0))
+    axs = fig.subplots(1, 2, sharex='all', sharey='all')
+    images = [axs[0].pcolormesh(jac_theta, jac_psi, jac_mephit, cmap=colorcet.cm.CET_L3,
+                                shading='gouraud', rasterized=True),
+              axs[1].pcolormesh(debug_theta, debug_psi, jac_pest, cmap=colorcet.cm.CET_L3,
+                                shading='gouraud', rasterized=True)]
+    axs[0].set_xlabel(theta_n)
+    axs[0].set_ylabel(psi_n)
+    axs[0].set_title(r'$\sqrt{g}$ from MEPHIT')
+    axs[1].set_xlabel(theta_n)
+    axs[1].set_ylabel(psi_n)
+    axs[1].set_title(r'$\sqrt{g}$ from GPEC (PEST)')
+    axs[1].yaxis.set_tick_params(labelleft=True)
+    axs[1].yaxis.offsetText.set_visible(True)
+    clim = (min(np.amin(image.get_array()) for image in images), max(np.amax(image.get_array()) for image in images))
+    norm = Normalize(vmin=clim[0], vmax=clim[1])
+    for im in images:
+        im.set_norm(norm)
+    axs[0].contour(jac_theta, jac_psi, jac_mephit, np.linspace(clim[0], clim[1], 10), colors='w', linewidths=0.1)
+    axs[1].contour(debug_theta, debug_psi, jac_pest, np.linspace(clim[0], clim[1], 10), colors='w', linewidths=0.1)
+    cbar = fig.colorbar(images[0], ax=axs)
+    cbar.set_label(sqrt_g, rotation=90)
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'debug_jac.pdf'))
+
+    fig = Figure(figsize=(8.0, 5.0))
+    axs = fig.subplots(1, 2, sharex='all', sharey='all')
+    images = [axs[0].pcolormesh(debug_theta, debug_psi, R, cmap=colorcet.cm.CET_L3,
+                                shading='gouraud', rasterized=True),
+              axs[1].pcolormesh(debug_theta, debug_psi, debug_R, cmap=colorcet.cm.CET_L3,
+                                shading='gouraud', rasterized=True)]
+    axs[0].set_xlabel(psi_n)
+    axs[0].set_ylabel(theta_n)
+    axs[0].set_title(r'$R$ from MEPHIT')
+    axs[1].set_xlabel(psi_n)
+    axs[1].set_ylabel(theta_n)
+    axs[1].set_title(r'$R$ from GPEC')
+    axs[1].yaxis.set_tick_params(labelleft=True)
+    axs[1].yaxis.offsetText.set_visible(True)
+    clim = (min(np.amin(image.get_array()) for image in images), max(np.amax(image.get_array()) for image in images))
+    norm = Normalize(vmin=clim[0], vmax=clim[1])
+    for im in images:
+        im.set_norm(norm)
+    axs[0].contour(debug_theta, debug_psi, R, np.linspace(clim[0], clim[1], 10), colors='w', linewidths=0.1)
+    axs[1].contour(debug_theta, debug_psi, debug_R, np.linspace(clim[0], clim[1], 10), colors='w', linewidths=0.1)
+    cbar = fig.colorbar(images[0], ax=axs)
+    cbar.set_label(r'$R$ / \si{\meter}', rotation=90)
+    canvas = FigureCanvas(fig)
+    fig.savefig(path.join(workdir, 'debug_R.pdf'))
 
     rootgrp = netCDF4.Dataset(path.join(workdir, 'gpec_cylindrical_output_n2.nc'), 'r')
     R = [testcase.data['/Bnvac/rect_R'][()] * cm_to_m, np.array(rootgrp['R'])]

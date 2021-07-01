@@ -19,8 +19,10 @@ program standardise_equilibrium
   end if
 
   log = magdif_log('-', 4, .false.) ! log_level = debug
-  call equil%read(trim(unprocessed_geqdsk))
+  call equil%read(trim(unprocessed_geqdsk), '')
   call equil%classify
   call equil%standardise
   call equil%write(trim(standardised_geqdsk))
+  call equil%deinit
+  call log%deinit
 end program standardise_equilibrium

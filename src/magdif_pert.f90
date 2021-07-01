@@ -11,7 +11,8 @@ module magdif_pert
        RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
        vec_polmodes_read, vec_polmodes_write, AUG_coils_read, AUG_coils_write_Nemov, &
        AUG_coils_read_Nemov, AUG_coils_write_GPEC, AUG_coils_read_GPEC, AUG_coils_write_Fourier, &
-       generate_vacfield, compute_Bnvac, compute_Bn_nonres, avg_flux_on_quad, &
+       read_currents_Nemov, Biot_Savart_sum_coils, write_Bvac_Nemov, generate_vacfield, compute_Bnvac, &
+       compute_Bn_nonres, avg_flux_on_quad, &
        compute_kilca_vacuum, kilca_vacuum, compute_kilca_vac_coeff, kilca_vacuum_fourier, &
        check_kilca_vacuum, check_RT0, debug_fouriermodes, debug_Bnvac_rectplot, debug_Bmnvac
 
@@ -355,6 +356,7 @@ contains
             comp_theta_covar, lbound(comp_theta_covar), ubound(comp_theta_covar), &
             comment = 'covariant theta component of ' // trim(adjustl(comment)) // ' at centroid', &
             unit = trim(adjustl(unit)) // ' cm')
+       deallocate(comp_R, comp_Z, comp_psi_contravar_dens, comp_theta_covar)
     end if
     if (plots >= 2) then
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/rect_R', rect_R, &
@@ -373,17 +375,9 @@ contains
             rect_comp_Z, lbound(rect_comp_Z), ubound(rect_comp_Z), &
             comment = 'Z component of ' // trim(adjustl(comment)) // ' on GEQDSK grid', &
             unit = trim(adjustl(unit)))
+       deallocate(rect_R, rect_Z, rect_comp_R, rect_comp_phi, rect_comp_Z)
     end if
     call h5_close(h5id_root)
-    if (allocated(comp_R)) deallocate(comp_R)
-    if (allocated(comp_Z)) deallocate(comp_Z)
-    if (allocated(comp_psi_contravar_dens)) deallocate(comp_psi_contravar_dens)
-    if (allocated(comp_theta_covar)) deallocate(comp_theta_covar)
-    if (allocated(rect_R)) deallocate(rect_R)
-    if (allocated(rect_Z)) deallocate(rect_Z)
-    if (allocated(rect_comp_R)) deallocate(rect_comp_R)
-    if (allocated(rect_comp_phi)) deallocate(rect_comp_phi)
-    if (allocated(rect_comp_Z)) deallocate(rect_comp_Z)
   end subroutine RT0_write
 
   subroutine RT0_triplot(elem, comp_R, comp_Z, comp_psi_contravar_dens, comp_theta_covar)
@@ -394,10 +388,8 @@ contains
     integer :: kf, kt, ktri
     real(dp) :: R, Z
 
-    allocate(comp_R(mesh%ntri))
-    allocate(comp_Z(mesh%ntri))
-    allocate(comp_psi_contravar_dens(mesh%ntri))
-    allocate(comp_theta_covar(mesh%ntri))
+    allocate(comp_R(mesh%ntri), comp_Z(mesh%ntri), &
+         comp_psi_contravar_dens(mesh%ntri), comp_theta_covar(mesh%ntri))
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
@@ -421,13 +413,10 @@ contains
     complex(dp), intent(out), dimension(:, :), allocatable :: comp_R, comp_phi, comp_Z
     integer :: kw, kh, ktri
 
-    allocate(rect_R(equil%nw))
-    allocate(rect_Z(equil%nh))
+    allocate(rect_R(equil%nw), rect_Z(equil%nh))
     rect_R(:) = equil%R_eqd
     rect_Z(:) = equil%Z_eqd
-    allocate(comp_R(equil%nw, equil%nh))
-    allocate(comp_phi(equil%nw, equil%nh))
-    allocate(comp_Z(equil%nw, equil%nh))
+    allocate(comp_R(equil%nw, equil%nh), comp_phi(equil%nw, equil%nh), comp_Z(equil%nw, equil%nh))
     do kw = 1, equil%nw
        do kh = 1, equil%nh
           ktri = point_location(rect_R(kw), rect_Z(kh))
@@ -620,7 +609,7 @@ contains
        XYZ(2, :, kc + ncoil) = 1d2 * R_Z_phi(:, 1) * sin(R_Z_phi(:, 3))
        XYZ(3, :, kc + ncoil) = 1d2 * R_Z_phi(:, 2)
     end do
-    if (allocated(R_Z_phi)) deallocate(R_Z_phi)
+    deallocate(R_Z_phi)
   end subroutine AUG_coils_read
 
   subroutine AUG_coils_write_Nemov(directory, ncoil, nseg, XYZ)
@@ -843,8 +832,97 @@ contains
        end do
     end do
     call h5_close(h5id_root)
-    if (allocated(Bn)) deallocate(Bn)
+    deallocate(Bn)
   end subroutine AUG_coils_write_Fourier
+
+  subroutine read_currents_Nemov(directory, Ic)
+    character(len = *), intent(in) :: directory
+    real(dp), intent(out), allocatable :: Ic(:)
+    integer, parameter :: nwind = 5, ncoil = 8
+    integer :: fid
+
+    allocate(Ic(2 * ncoil))
+    open(newunit = fid, file = directory // '/cur_asd.dd', status = 'old', action = 'read', form = 'formatted')
+    read (fid, *) Ic(:)
+    close(fid)
+    Ic(:) = Ic / real(nwind)
+  end subroutine read_currents_Nemov
+
+  subroutine Biot_Savart_sum_coils(ncoil, nseg, nwind, XYZ, Ic, &
+       Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ, Bvac)
+    use constants, only: pi  ! orbit_mod.f90
+    use magdif_conf, only: log
+    use magdif_util, only: linspace
+    integer, intent(in) :: ncoil, nseg, nwind
+    real(dp), intent(in), dimension(:, :, :) :: XYZ
+    real(dp), intent(in), dimension(:) :: Ic
+    real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
+    integer, intent(in) :: nR, nphi, nZ
+    real(dp), intent(out), dimension(:, :, :, :), allocatable :: Bvac
+    integer :: kc, ks, kR, kphi, kZ
+    real(dp), dimension(nphi) :: phi, cosphi, sinphi
+    real(dp) :: R(nR), Z(nZ), rXYZ(3), crXYZ(3), BXYZ(3), BRfZ(3)
+    real(dp), dimension(size(XYZ, 1), size(XYZ, 2), size(XYZ, 3)) :: cXYZ, dXYZ
+
+    if (3 /= size(XYZ, 1)) then
+       call log%msg_arg_size('Biot_Savart_sum_coils', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (nseg /= size(XYZ, 2)) then
+       call log%msg_arg_size('Biot_Savart_sum_coils', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (2 * ncoil /= size(XYZ, 3)) then
+       call log%msg_arg_size('Biot_Savart_sum_coils', '2 * ncoil', 'size(XYZ, 3)', &
+            2 * ncoil, size(XYZ, 3))
+       if (log%err) call log%write
+       error stop
+    end if
+    if (2 * ncoil /= size(Ic)) then
+       call log%msg_arg_size('Biot_Savart_sum_coils', '2 * ncoil', 'size(Ic)', &
+            2 * ncoil, size(Ic))
+       if (log%err) call log%write
+       error stop
+    end if
+    R(:) = linspace(Rmin, Rmax, nR, 0, 0)
+    phi(:) = linspace(0d0, 2d0 * pi, nphi, 0, 1)
+    cosphi(:) = cos(phi)
+    sinphi(:) = sin(phi)
+    Z(:) = linspace(Zmin, Zmax, nZ, 0, 0)
+    cXYZ(:, :nseg-1, :) = 0.5d0 * (XYZ(:, 2:, :) + XYZ(:, :nseg-1, :))
+    cXYZ(:, nseg, :) = 0.5d0 * (XYZ(:, 1, :) + XYZ(:, nseg, :))
+    dXYZ(:, :nseg-1, :) = XYZ(:, 2:, :) - XYZ(:, :nseg-1, :)
+    dXYZ(:, nseg, :) = XYZ(:, 1, :) - XYZ(:, nseg, :)
+    allocate(Bvac(3, nZ, nphi, nR))
+    Bvac(:, :, :, :) = 0d0
+    do kR = 1, nR
+       do kphi = 1, nphi
+          rXYZ(1:2) = [R(kR) * cosphi(kphi), R(kR) * sinphi(kphi)]
+          do kZ = 1, nZ
+             rXYZ(3) = Z(kZ)
+             ! Biot-Savart integral over coil segments
+             do kc = 1, 2 * ncoil
+                BRfZ(:) = 0d0
+                do ks = 1, nseg
+                   crXYZ(:) = rXYZ(:) - cXYZ(:, ks, kc)
+                   BXYZ(:) = &
+                        [dXYZ(2, ks, kc) * crXYZ(3) - dXYZ(3, ks, kc) * crXYZ(2), &
+                        dXYZ(3, ks, kc) * crXYZ(1) - dXYZ(1, ks, kc) * crXYZ(3), &
+                        dXYZ(1, ks, kc) * crXYZ(2) - dXYZ(2, ks, kc) * crXYZ(1)] &
+                        / sqrt(sum(crXYZ ** 2)) ** 3
+                   BRfZ(:) = BRfZ + &
+                        [BXYZ(2) * sinphi(kphi) + BXYZ(1) * cosphi(kphi), &
+                        BXYZ(2) * cosphi(kphi) - BXYZ(1) * sinphi(kphi), &
+                        BXYZ(3)]
+                end do
+                Bvac(:, kZ, kphi, kR) = Bvac(:, kZ, kphi, kR) + nwind * Ic(kc) * BRfZ
+             end do
+          end do
+       end do
+    end do
+  end subroutine Biot_Savart_sum_coils
 
   subroutine Biot_Savart_Fourier(ncoil, nseg, nwind, XYZ, nmax, &
        Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ, Bn)
@@ -868,12 +946,6 @@ contains
     real(c_double), dimension(:), pointer :: BR, Bphi, BZ
     complex(c_double_complex), dimension(:), pointer :: BnR, Bnphi, BnZ
 
-    nfft = nphi / 2 + 1
-    R(:) = linspace(Rmin, Rmax, nR, 0, 0)
-    phi(:) = linspace(0d0, 2d0 * pi, nphi, 0, 0)
-    cosphi(:) = cos(phi)
-    sinphi(:) = sin(phi)
-    Z(:) = linspace(Zmin, Zmax, nZ, 0, 0)
     if (3 /= size(XYZ, 1)) then
        call log%msg_arg_size('Biot_Savart_Fourier', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
        if (log%err) call log%write
@@ -896,6 +968,12 @@ contains
        if (log%err) call log%write
        error stop
     end if
+    nfft = nphi / 2 + 1
+    R(:) = linspace(Rmin, Rmax, nR, 0, 0)
+    phi(:) = linspace(0d0, 2d0 * pi, nphi, 0, 1)
+    cosphi(:) = cos(phi)
+    sinphi(:) = sin(phi)
+    Z(:) = linspace(Zmin, Zmax, nZ, 0, 0)
     cXYZ(:, :nseg-1, :) = 0.5d0 * (XYZ(:, 2:, :) + XYZ(:, :nseg-1, :))
     cXYZ(:, nseg, :) = 0.5d0 * (XYZ(:, 1, :) + XYZ(:, nseg, :))
     dXYZ(:, :nseg-1, :) = XYZ(:, 2:, :) - XYZ(:, :nseg-1, :)
@@ -919,20 +997,22 @@ contains
     plan_Z = fftw_plan_dft_r2c_1d(nphi, BZ, BnZ, ior(FFTW_PATIENT, FFTW_DESTROY_INPUT))
     do kc = 1, 2 * ncoil
        do kZ = 1, nZ
+          rXYZ(3) = Z(kZ)
           do kR = 1, nR
              ! sample points toroidally
              do kphi = 1, nphi
-                rXYZ(:) = [R(kR) * cosphi(kphi), R(kR) * sinphi(kphi), Z(kZ)]
+                rXYZ(1:2) = [R(kR) * cosphi(kphi), R(kR) * sinphi(kphi)]
                 BR(kphi) = 0d0
                 Bphi(kphi) = 0d0
                 BZ(kphi) = 0d0
                 ! Biot-Savart integral over coil segments
                 do ks = 1, nseg
                    crXYZ(:) = rXYZ(:) - cXYZ(:, ks, kc)
-                   BXYZ(:) = nwind / sqrt(sum(crXYZ ** 2)) ** 3 * &
+                   BXYZ(:) = &
                         [dXYZ(2, ks, kc) * crXYZ(3) - dXYZ(3, ks, kc) * crXYZ(2), &
                         dXYZ(3, ks, kc) * crXYZ(1) - dXYZ(1, ks, kc) * crXYZ(3), &
-                        dXYZ(1, ks, kc) * crXYZ(2) - dXYZ(2, ks, kc) * crXYZ(1)]
+                        dXYZ(1, ks, kc) * crXYZ(2) - dXYZ(2, ks, kc) * crXYZ(1)] &
+                        / sqrt(sum(crXYZ ** 2)) ** 3
                    BR(kphi) = BR(kphi) + BXYZ(2) * sinphi(kphi) + BXYZ(1) * cosphi(kphi)
                    Bphi(kphi) = Bphi(kphi) + BXYZ(2) * cosphi(kphi) - BXYZ(1) * sinphi(kphi)
                    BZ(kphi) = BZ(kphi) + BXYZ(3)
@@ -941,9 +1021,9 @@ contains
              call fftw_execute_dft_r2c(plan_R, BR, BnR)
              call fftw_execute_dft_r2c(plan_phi, Bphi, Bnphi)
              call fftw_execute_dft_r2c(plan_Z, BZ, BnZ)
-             Bn(0:nmax, 1, kR, kZ, kc) = BnR(1:nmax+1) / dble(nphi)
-             Bn(0:nmax, 2, kR, kZ, kc) = Bnphi(1:nmax+1) / dble(nphi)
-             Bn(0:nmax, 3, kR, kZ, kc) = BnZ(1:nmax+1) / dble(nphi)
+             Bn(0:nmax, 1, kR, kZ, kc) = nwind * BnR(1:nmax+1) / dble(nphi)
+             Bn(0:nmax, 2, kR, kZ, kc) = nwind * Bnphi(1:nmax+1) / dble(nphi)
+             Bn(0:nmax, 3, kR, kZ, kc) = nwind * BnZ(1:nmax+1) / dble(nphi)
           end do
        end do
     end do
@@ -1001,11 +1081,50 @@ contains
     call s2dcut(nr, nz, hr, hz, An_R%im, imi, ima, jmi, jma, icp, arnim(:, :, :, ntor), ipoint)
   end subroutine vector_potential_single_mode
 
+  subroutine write_Bvac_Nemov(directory, Rmin, Rmax, Zmin, Zmax, Bvac)
+    use magdif_conf, only: log
+    use constants, only: pi  ! orbit_mod.f90
+    character(len = *), intent(in) :: directory
+    real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
+    real(dp), intent(in), dimension(:, :, :, :) :: Bvac
+    integer :: fid, nR, nphi, nZ, kR, kphi, kZ
+
+    if (3 /= size(Bvac, 1)) then
+       call log%msg_arg_size('write_Bnvac_Nemov', '3', 'size(Bvac, 1)', 3, size(Bvac, 1))
+       if (log%err) call log%write
+       error stop
+    end if
+    nZ = size(Bvac, 2)
+    nphi = size(Bvac, 3)
+    nR = size(Bvac, 4)
+    open(newunit = fid, file = directory // '/field.dat', status = 'replace', &
+         action = 'write', form = 'formatted')
+    ! kisslinger_asdex.f90 writes points at phi = 0 and at phi = 2 pi
+    write (fid, '(i0, 1x, i0, 1x, i0, 1x, i0)') nR, nphi + 1, nZ, 1
+    write (fid, '(es24.16e3, 1x, es24.16e3)') Rmin, Rmax
+    write (fid, '(es24.16e3, 1x, es24.16e3)') 0d0, 2d0 * pi
+    write (fid, '(es24.16e3, 1x, es24.16e3)') Zmin, Zmax
+    do kR = 1, nR
+       do kphi = 1, nphi
+          do kZ = 1, nZ
+             write (fid, '(es24.16e3, 1x, es24.16e3, 1x, es24.16e3)') Bvac(:, kZ, kphi, kR)
+          end do
+       end do
+       ! kisslinger_asdex.f90 writes points at phi = 0 and at phi = 2 pi
+       kphi = 1
+       do kZ = 1, nZ
+          write (fid, '(es24.16e3, 1x, es24.16e3, 1x, es24.16e3)') Bvac(:, kZ, kphi, kR)
+       end do
+    end do
+    close(fid)
+  end subroutine write_Bvac_Nemov
+
   subroutine read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bnvac_R, Bnvac_Z)
     use input_files, only: pfile
     use magdif_conf, only: conf
-    use magdif_util, only: imun, linspace
+    use magdif_util, only: imun, linspace, get_field_filenames
     use constants, only: pi  ! orbit_mod.f90
+    character(len = 1024) :: gfile, convexfile
     integer, intent(out) :: nR, nZ
     real(dp), intent(out) :: Rmin, Rmax, Zmin, Zmax
     complex(dp), intent(out), dimension(:, :), allocatable :: Bnvac_R, Bnvac_Z
@@ -1013,11 +1132,13 @@ contains
     real(dp) :: B_R, B_phi, B_Z
     complex(dp), allocatable :: fourier_basis(:)
 
+    call get_field_filenames(gfile, pfile, convexfile)
     open(newunit = fid, file = pfile, status = 'old', action = 'read', form = 'formatted')
     read (fid, *) nR, nphi, nZ, idum
     read (fid, *) Rmin, Rmax
     read (fid, *) ! phimin, phimax
     read (fid, *) Zmin, Zmax
+    ! kisslinger_asdex.f90 writes points at phi = 0 and at phi = 2 pi
     allocate(fourier_basis(nphi - 1))
     fourier_basis(:) = exp(-imun * conf%n * linspace(0d0, 2d0 * pi, nphi - 1, 0, 1)) &
          / dble(nphi - 1)
@@ -1028,6 +1149,7 @@ contains
        do kphi = 1, nphi
           do kZ = 1, nZ
              read (fid, *) B_R, B_phi, B_Z
+             ! kisslinger_asdex.f90 writes points at phi = 0 and at phi = 2 pi
              if (kphi /= nphi) then
                 Bnvac_R(kR, kZ) = Bnvac_R(kR, kZ) + fourier_basis(kphi) * B_R
                 Bnvac_Z(kR, kZ) = Bnvac_Z(kR, kZ) + fourier_basis(kphi) * B_Z
@@ -1150,6 +1272,8 @@ contains
        error stop
     end if
     allocate(Bnvac_R(nR, nZ), Bnvac_Z(nR, nZ), Bn(nR, nZ))
+    Bnvac_R(:, :) = (0d0, 0d0)
+    Bnvac_Z(:, :) = (0d0, 0d0)
     do kc = 1, 2 * ncoil
        write (coilname, '("coil_", i2.2)') kc
        call h5_get(h5id_root, modename // '/' // coilname // '/Bn_R', Bn)
@@ -1158,7 +1282,7 @@ contains
        Bnvac_Z(:, :) = Bnvac_Z + Ic(kc) * Bn
     end do
     call h5_close(h5id_root)
-    if (allocated(Bn)) deallocate(Bn)
+    deallocate(Bn)
   end subroutine read_Bnvac_Fourier
 
   subroutine compute_Bnvac(Bn)
@@ -1211,6 +1335,7 @@ contains
   end subroutine compute_Bnvac
 
   subroutine generate_vacfield
+    use bdivfree_mod, only: Rpoi, Zpoi, ipoint, AZnRe, AZnIm, ARnRe, ARnIm
     use magdif_conf, only: conf, datafile
     use magdif_mesh, only: mesh
     type(RT0_t) :: Bn
@@ -1230,6 +1355,14 @@ contains
           call debug_B0_rectplot
           call debug_Bmnvac
           call debug_fouriermodes
+          ! deallocate arrays allocated in vector_potential_single_mode
+          if (allocated(Rpoi)) deallocate(Rpoi)
+          if (allocated(Zpoi)) deallocate(Zpoi)
+          if (allocated(ipoint)) deallocate(ipoint)
+          if (allocated(AZnRe)) deallocate(AZnRe)
+          if (allocated(AZnIm)) deallocate(AZnIm)
+          if (allocated(ARnRe)) deallocate(ARnRe)
+          if (allocated(ARnIm)) deallocate(ARnIm)
        end if
     end if
     call RT0_check_redundant_edges(Bn, 'Bnvac')
@@ -1593,7 +1726,7 @@ contains
 
   subroutine debug_fouriermodes
     use magdif_conf, only: conf, datafile, log
-    use magdif_util, only: flux_func, linspace, imun
+    use magdif_util, only: interp1d, linspace, imun
     use magdif_mesh, only: equil
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     logical :: file_exists
@@ -1605,7 +1738,7 @@ contains
     character(len = *), parameter :: ptrn_nsqpsi = 'nrad = ', ptrn_psimax = 'psimax', &
          ptrn_phimax = 'phimax', dataset = 'debug_fouriermodes'
     character(len = 1024) :: line
-    type(flux_func) :: rq_interpolator
+    type(interp1d) :: rq_interpolator
 
     inquire(file = 'amn.dat', exist = file_exists)
     if (.not. file_exists) return
@@ -1613,13 +1746,13 @@ contains
     if (.not. file_exists) return
     log%msg = 'Files amn.dat and equil_r_q_psi.dat found, performing Fourier mode comparison.'
     if (log%info) call log%write
-    open(newunit = fid, form = 'unformatted', file = 'amn.dat')
+    open(newunit = fid, form = 'unformatted', file = 'amn.dat', action = 'read')
     read (fid) ntor, mpol, nlabel, flabel_min, flabel_max
-    allocate(z3dum(-mpol:mpol, ntor, nlabel))
-    allocate(Amn_theta(-mpol:mpol, ntor, nlabel))
+    allocate(z3dum(-mpol:mpol, ntor, nlabel), Amn_theta(-mpol:mpol, ntor, nlabel))
     read (fid) z3dum, Amn_theta
     close(fid)
-    open(newunit = fid, form = 'formatted', file = 'equil_r_q_psi.dat')
+    deallocate(z3dum)
+    open(newunit = fid, form = 'formatted', file = 'equil_r_q_psi.dat', action = 'read')
     read (fid, '(a)') line
     call extract(line, ptrn_nsqpsi)
     read (line, *) nsqpsi
@@ -1629,20 +1762,16 @@ contains
     call extract(line, ptrn_phimax)
     read (line, *) phimax
     read (fid, *)
-    allocate(qsaf(nsqpsi))
-    allocate(psisurf(nsqpsi))
-    allocate(rsmall(nsqpsi))
+    allocate(qsaf(nsqpsi), psisurf(nsqpsi), rsmall(nsqpsi))
     do k = 1, nsqpsi
        read (fid, *) ddum, qsaf(k), psisurf(k), ddum, ddum, rsmall(k)
     end do
     close(fid)
     sgn_dpsi = sign(1d0, psimax)
     call rq_interpolator%init(4, rsmall * abs(qsaf))
-    allocate(rq_eqd(nlabel))
+    allocate(rq_eqd(nlabel), psi_n(nlabel), Bmn_contradenspsi(-mpol:mpol, nlabel))
     rq_eqd(:) = linspace(abs(flabel_min), abs(flabel_max), nlabel, 0, 0)
-    allocate(psi_n(nlabel))
-    psi_n(:) = [(rq_interpolator%interp(psisurf / psimax, rq_eqd(k)), k = 1, nlabel)]
-    allocate(Bmn_contradenspsi(-mpol:mpol, nlabel))
+    psi_n(:) = [(rq_interpolator%eval(psisurf / psimax, rq_eqd(k)), k = 1, nlabel)]
     ! if qsaf does not have the expected sign, theta points in the wrong direction,
     ! and we have to reverse the index m and the overall sign
     if (equil%cocos%sgn_q * qsaf(nsqpsi) < 0d0) then
@@ -1659,14 +1788,7 @@ contains
          lbound(Bmn_contradenspsi), ubound(Bmn_contradenspsi), unit = 'Mx', &
          comment = 'normalized poloidal flux of interpolation points')
     call h5_close(h5id_root)
-    if (allocated(z3dum)) deallocate(z3dum)
-    if (allocated(Amn_theta)) deallocate(Amn_theta)
-    if (allocated(qsaf)) deallocate(qsaf)
-    if (allocated(psisurf)) deallocate(psisurf)
-    if (allocated(rsmall)) deallocate(rsmall)
-    if (allocated(rq_eqd)) deallocate(rq_eqd)
-    if (allocated(psi_n)) deallocate(psi_n)
-    if (allocated(Bmn_contradenspsi)) deallocate(Bmn_contradenspsi)
+    deallocate(Amn_theta, qsaf, psisurf, rsmall, rq_eqd, psi_n, Bmn_contradenspsi)
 
   contains
     subroutine extract(string, preceding)

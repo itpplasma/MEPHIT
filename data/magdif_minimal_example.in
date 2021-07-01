@@ -16,10 +16,6 @@
 
    ! toroidal mode number of perturbation
    config%n = 2
-   ! minimal absolute poloidal mode number
-   config%m_min = 3
-   ! maximal absolute poloidal mode number
-   config%m_max = 11
    ! number of iteration steps
    config%niter = 20
    ! number of Ritz eigenvalues

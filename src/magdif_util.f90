@@ -6,9 +6,9 @@ module magdif_util
 
   private
 
-  public :: clight, imun, get_field_filenames, init_field, interp_psi_pol, &
+  public :: clight, imun, get_field_filenames, init_field, deinit_field, interp_psi_pol, &
        linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, binsearch, interleave, &
-       gauss_legendre_unit_interval, heapsort_complex, complex_abs_asc
+       gauss_legendre_unit_interval, heapsort_complex, complex_abs_asc, C_F_string
 
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
@@ -21,7 +21,8 @@ module magdif_util
   type, public :: g_eqdsk
     type(sign_convention) :: cocos
     character(len = 1024) :: fname
-    character(len = 10) :: text(6)
+    character(len = 1024) :: convexfile
+    character(len = 48) :: header
     integer :: nw, nh, nbbbs, limitr
     real(dp) :: rdim, zdim, rcentr, rleft, zmid, rmaxis, zmaxis, simag, sibry, bcentr, &
          current
@@ -36,11 +37,13 @@ module magdif_util
     procedure :: scale => g_eqdsk_scale
     procedure :: write => g_eqdsk_write
     procedure :: grad_shafranov_normalization => g_eqdsk_grad_shafranov_normalization
-    final :: g_eqdsk_destructor
+    procedure :: import_hdf5 => g_eqdsk_import_hdf5
+    procedure :: export_hdf5 => g_eqdsk_export_hdf5
+    procedure :: deinit => g_eqdsk_deinit
   end type g_eqdsk
 
-  character(len = *), parameter :: geqdsk_2000 = '(6a8,3i4)'
-  character(len = *), parameter :: geqdsk_2020 = '(5e16.9)'
+  character(len = *), parameter :: geqdsk_2000 = '(a48, 3i4)'
+  character(len = *), parameter :: geqdsk_2020 = '(5es16.9)'
   character(len = *), parameter :: geqdsk_2022 = '(2i5)'
 
   character(len = *), parameter :: &
@@ -49,15 +52,16 @@ module magdif_util
        unscaled_fmt = '("Flux in ", a, " is not normalized by 2 pi.")', &
        rescale_fmt = '("Rescaling ", a, "...")'
 
-  type, public :: flux_func
-    private
-    integer :: n_lag, n_var
-    real(dp), dimension(:), allocatable :: indep_var
-  contains
-    procedure :: init => flux_func_init
-    procedure :: interp => flux_func_interp
-    final :: flux_func_destructor
-  end type flux_func
+  !> 1D piecewise Lagrange polynomial interpolator
+  type, public :: interp1d
+     private
+     integer :: n_lag, n_var
+     real(dp), dimension(:), allocatable :: indep_var
+   contains
+     procedure :: init => interp1d_init
+     procedure :: eval => interp1d_eval
+     procedure :: deinit => interp1d_deinit
+  end type interp1d
 
   type, public :: neumaier_accumulator_real
      private
@@ -87,7 +91,7 @@ contains
   subroutine get_field_filenames(gfile, pfile, convexfile)
     character(len = *), intent(out) :: gfile, pfile, convexfile
     integer :: fid
-    open(newunit = fid, file = 'field_divB0.inp', status = 'old')
+    open(newunit = fid, file = 'field_divB0.inp', status = 'old', form = 'formatted', action = 'read')
     read (fid, *)
     read (fid, *)
     read (fid, *)
@@ -101,32 +105,57 @@ contains
   end subroutine get_field_filenames
 
   !> Set module variables for initialization of subroutine field
-  subroutine init_field(geqdsk, coil, convex)
-    use input_files, only: gfile, pfile, convexfile
+  subroutine init_field(equil)
+    use input_files, only: convexfile
     use field_mod, only: icall, ipert, iequil
-    use field_eq_mod, only: icall_eq, nwindow_r, nwindow_z
-    use field_c_mod, only: icftype, ntor
-    character(len = *), intent(in) :: geqdsk, coil, convex
+    use field_eq_mod, only: skip_read, icall_eq, nwindow_r, nwindow_z, &
+         nrad, nzet, psi_axis, psi_sep, btf, rtf, splfpol, rad, zet, psi, psi0
+    type(g_eqdsk), intent(in) :: equil
     real(dp) :: dum
 
-    ! use supplied files
-    pfile = coil
-    gfile = geqdsk
-    convexfile = convex
-    icftype = 4
+    ! use supplied filename
+    convexfile = equil%convexfile
     ! compute equiibrium field
     ipert = 0
     iequil = 1
     ! default values - TODO: options in magdif_conf
-    ntor = 2
     nwindow_r = 0
     nwindow_z = 0
     ! don't let subroutine field read from input file
     icall = 1
     ! let subroutine field_eq do only initialization
     icall_eq = -1
+    ! use preprocessed gfile data
+    skip_read = .true.
+    nrad = equil%nw
+    nzet = equil%nh
+    allocate(rad(nrad), zet(nzet), psi0(nrad, nzet), psi(nrad, nzet), splfpol(0:5, nrad))
+    psi_axis = equil%simag * 1d-8
+    psi_sep = equil%sibry * 1d-8
+    btf = equil%bcentr * 1d-4
+    rtf = equil%rcentr * 1d-2
+    splfpol(0, :) = equil%fpol * 1d-6
+    psi(:, :) = equil%psirz * 1d-8
+    rad(:) = equil%R_eqd * 1d-2
+    zet(:) = equil%Z_eqd * 1d-2
     call field_eq(0d0, 0d0, 0d0, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
   end subroutine init_field
+
+  subroutine deinit_field()
+    use field_eq_mod, only: ima, imi, jma, jmi, splpsi, splfpol, rad, zet, psi, psi0, ipoint
+
+    if (allocated(ima)) deallocate(ima)
+    if (allocated(imi)) deallocate(imi)
+    if (allocated(jma)) deallocate(jma)
+    if (allocated(jmi)) deallocate(jmi)
+    if (allocated(splpsi)) deallocate(splpsi)
+    if (allocated(splfpol)) deallocate(splfpol)
+    if (allocated(rad)) deallocate(rad)
+    if (allocated(zet)) deallocate(zet)
+    if (allocated(psi)) deallocate(psi)
+    if (allocated(psi0)) deallocate(psi0)
+    if (allocated(ipoint)) deallocate(ipoint)
+  end subroutine deinit_field
 
   function interp_psi_pol(r, z) result(psi_pol)
     use field_eq_mod, only: psif, psib
@@ -272,16 +301,17 @@ contains
     comp_tor = comp_phi ! / (1d0 + r / R_0 * cos(theta))  ! exact version
   end subroutine bent_cyl2straight_cyl
 
-  subroutine g_eqdsk_read(this, fname)
+  subroutine g_eqdsk_read(this, fname, convexfile)
     class(g_eqdsk), intent(inout) :: this
-    character(len = *), intent(in) :: fname
+    character(len = *), intent(in) :: fname, convexfile
     integer :: fid, kw, kh, idum
     real(dp) :: xdum
 
-    call g_eqdsk_destructor(this)
+    call g_eqdsk_deinit(this)
     this%fname = fname
-    open(newunit = fid, file = this%fname, status = 'old')
-    read (fid, geqdsk_2000) (this%text(kw), kw = 1, 6), idum, this%nw, this%nh
+    this%convexfile = convexfile
+    open(newunit = fid, file = this%fname, status = 'old', form = 'formatted', action = 'read')
+    read (fid, geqdsk_2000) this%header, idum, this%nw, this%nh
     allocate(this%fpol(this%nw))
     allocate(this%pres(this%nw))
     allocate(this%ffprim(this%nw))
@@ -350,7 +380,7 @@ contains
     use magdif_conf, only: log
     class(g_eqdsk), intent(inout) :: this
     integer, parameter :: ignore = 3
-    type(flux_func) :: psi_interpolator
+    type(interp1d) :: psi_interpolator
     real(dp) :: deriv_eqd(this%nw), factor
     logical :: mask(this%nw)
     integer :: k
@@ -367,7 +397,7 @@ contains
        end if
     end if
     call psi_interpolator%init(4, this%psi_eqd)
-    deriv_eqd(:) = [(psi_interpolator%interp(this%pres, this%psi_eqd(k), .true.), &
+    deriv_eqd(:) = [(psi_interpolator%eval(this%pres, this%psi_eqd(k), .true.), &
          k = 1, this%nw)]
     ! ignore a few possibly unreliable values on both ends of the interval
     mask = .true.
@@ -388,7 +418,7 @@ contains
        if (log%info) call log%write
        this%pprime = -this%pprime
     end if
-    deriv_eqd(:) = [(psi_interpolator%interp(this%fpol, this%psi_eqd(k), .true.), &
+    deriv_eqd(:) = [(psi_interpolator%eval(this%fpol, this%psi_eqd(k), .true.), &
          k = 1, this%nw)] * this%fpol
     factor = sum(deriv_eqd / this%ffprim, mask = mask) / dble(count(mask))
     if (abs(factor) >= sqrt(2d0 * pi)) then
@@ -413,7 +443,7 @@ contains
     use magdif_conf, only: log
     class(g_eqdsk), intent(inout) :: this
     real(dp) :: gs_factor
-    type(flux_func) :: psi_interpolator
+    type(interp1d) :: psi_interpolator
     real(dp) :: Delta_R, Delta_Z, psi, gs_rhs, gs_lhs
     integer :: kw, kh
 
@@ -425,8 +455,8 @@ contains
     psi = this%psirz(kw, kh)
     ! evaluate flux functions on RHS of GS equation
     call psi_interpolator%init(4, this%psi_eqd)
-    gs_rhs = -4d0 * pi * this%R_eqd(kw) ** 2 * psi_interpolator%interp(this%pprime, psi) &
-         - psi_interpolator%interp(this%ffprim, psi)
+    gs_rhs = -4d0 * pi * this%R_eqd(kw) ** 2 * psi_interpolator%eval(this%pprime, psi) &
+         - psi_interpolator%eval(this%ffprim, psi)
     ! approximate differential operator on LHS of GS equation
     Delta_R = this%rdim / dble(this%nw - 1)
     Delta_Z = this%zdim / dble(this%nh - 1)
@@ -517,17 +547,17 @@ contains
        if (log%info) call log%write
        this%simag = -this%simag
        this%sibry = -this%sibry
-       this%psirz = -this%psirz
-       this%psi_eqd = -this%psi_eqd
+       this%psirz(:, :) = -this%psirz
+       this%psi_eqd(:) = -this%psi_eqd
        this%cocos%sgn_dpsi = -this%cocos%sgn_dpsi
-       this%pprime = -this%pprime
-       this%ffprim = -this%ffprim
+       this%pprime(:) = -this%pprime
+       this%ffprim(:) = -this%ffprim
        this%cocos%sgn_Bpol = -this%cocos%sgn_Bpol
     end if
     if (this%cocos%sgn_pol == +1) then
        write (log%msg, invert_fmt) 'QPSI'
        if (log%info) call log%write
-       this%qpsi = -this%qpsi
+       this%qpsi(:) = -this%qpsi
        this%cocos%sgn_q = -this%cocos%sgn_q
        this%cocos%sgn_pol = -this%cocos%sgn_pol
     end if
@@ -538,10 +568,10 @@ contains
        if (log%info) call log%write
        this%simag = this%simag / (2d0 * pi)
        this%sibry = this%sibry / (2d0 * pi)
-       this%psirz = this%psirz / (2d0 * pi)
-       this%psi_eqd = this%psi_eqd / (2d0 * pi)
-       this%pprime = this%pprime * (2d0 * pi)
-       this%ffprim = this%ffprim * (2d0 * pi)
+       this%psirz(:, :) = this%psirz / (2d0 * pi)
+       this%psi_eqd(:) = this%psi_eqd / (2d0 * pi)
+       this%pprime(:) = this%pprime * (2d0 * pi)
+       this%ffprim(:) = this%ffprim * (2d0 * pi)
        this%cocos%exp_Bpol = 0
     end if
     this%cocos%index = 3
@@ -558,16 +588,16 @@ contains
     this%rmaxis = this%rmaxis + r_shift
     this%simag = this%simag * gamma
     this%sibry = this%sibry * gamma
-    this%fpol = this%fpol * gamma
-    this%ffprim = this%ffprim * gamma
-    this%pprime = this%pprime / gamma
-    this%psirz = this%psirz * gamma
-    this%qpsi = this%qpsi / gamma
-    this%rbbbs = this%rbbbs + r_shift
-    this%rlim = this%rlim + r_shift
+    this%fpol(:) = this%fpol * gamma
+    this%ffprim(:) = this%ffprim * gamma
+    this%pprime(:) = this%pprime / gamma
+    this%psirz(:, :) = this%psirz * gamma
+    this%qpsi(:) = this%qpsi / gamma
+    this%rbbbs(:) = this%rbbbs + r_shift
+    this%rlim(:) = this%rlim + r_shift
     ! auxiliary values
-    this%psi_eqd = this%psi_eqd * gamma
-    this%R_eqd = this%R_eqd + r_shift
+    this%psi_eqd(:) = this%psi_eqd * gamma
+    this%R_eqd(:) = this%R_eqd + r_shift
   end subroutine g_eqdsk_scale
 
   subroutine g_eqdsk_write(this, fname)
@@ -579,8 +609,8 @@ contains
     idum = 0
     xdum = 0d0
     this%fname = fname
-    open(newunit = fid, file = this%fname, status = 'replace')
-    write (fid, geqdsk_2000) (this%text(kw), kw = 1, 6), idum, this%nw, this%nh
+    open(newunit = fid, file = this%fname, status = 'replace', form = 'formatted', action = 'write')
+    write (fid, geqdsk_2000) this%header, idum, this%nw, this%nh
     write (fid, geqdsk_2020) this%rdim * 1d-2, this%zdim * 1d-2, this%rcentr * 1d-2, &
          this%rleft * 1d-2, this%zmid * 1d-2
     write (fid, geqdsk_2020) this%rmaxis * 1d-2, this%zmaxis * 1d-2, this%simag * 1d-8, &
@@ -603,9 +633,136 @@ contains
     close(fid)
   end subroutine g_eqdsk_write
 
-  subroutine g_eqdsk_destructor(this)
-    type(g_eqdsk) :: this
+  subroutine g_eqdsk_import_hdf5(this, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    class(g_eqdsk), intent(inout) :: this
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
 
+    call g_eqdsk_deinit(this)
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/exp_Bpol', this%cocos%exp_Bpol)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_cyl', this%cocos%sgn_cyl)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_dpsi', this%cocos%sgn_dpsi)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_Btor', this%cocos%sgn_Btor)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_Itor', this%cocos%sgn_Itor)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_F', this%cocos%sgn_F)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_q', this%cocos%sgn_q)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_Bpol', this%cocos%sgn_Bpol)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_pol', this%cocos%sgn_pol)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/index', this%cocos%index)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/fname', this%fname)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/convexfile', this%convexfile)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/header', this%header)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/nw', this%nw)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/nh', this%nh)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/nbbbs', this%nbbbs)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/limitr', this%limitr)
+    allocate(this%fpol(this%nw), this%pres(this%nw), this%ffprim(this%nw), this%pprime(this%nw), &
+         this%qpsi(this%nw), this%rbbbs(this%nbbbs), this%zbbbs(this%nbbbs), &
+         this%rlim(this%limitr), this%zlim(this%limitr), this%psi_eqd(this%nw), &
+         this%R_eqd(this%nw), this%Z_eqd(this%nh), this%psirz(this%nw, this%nh))
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rdim', this%rdim)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/zdim', this%zdim)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rcentr', this%rcentr)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rleft', this%rleft)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/zmid', this%zmid)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rmaxis', this%rmaxis)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/zmaxis', this%zmaxis)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/simag', this%simag)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/sibry', this%sibry)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/bcentr', this%bcentr)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/current', this%current)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/fpol', this%fpol)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/pres', this%pres)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/ffprim', this%ffprim)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/pprime', this%pprime)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/qpsi', this%qpsi)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rbbbs', this%rbbbs)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/zbbbs', this%zbbbs)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rlim', this%rlim)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/zlim', this%zlim)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi_eqd', this%psi_eqd)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_eqd', this%R_eqd)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_eqd', this%Z_eqd)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/psirz', this%psirz)
+    call h5_close(h5id_root)
+  end subroutine g_eqdsk_import_hdf5
+
+  subroutine g_eqdsk_export_hdf5(this, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    class(g_eqdsk), intent(in) :: this
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
+
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/cocos/')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/exp_Bpol', this%cocos%exp_Bpol)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_cyl', this%cocos%sgn_cyl)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_dpsi', this%cocos%sgn_dpsi)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_Btor', this%cocos%sgn_Btor)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_Itor', this%cocos%sgn_Itor)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_F', this%cocos%sgn_F)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_q', this%cocos%sgn_q)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_Bpol', this%cocos%sgn_Bpol)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_pol', this%cocos%sgn_pol)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/index', this%cocos%index)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/fname', this%fname, &
+         comment = 'original GEQDSK filename')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/convexfile', this%convexfile, &
+         comment = 'associated convexfile for subroutine stretch_coords')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/header', this%header)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nw', this%nw)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nh', this%nh)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nbbbs', this%nbbbs)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/limitr', this%limitr)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rdim', this%rdim, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/zdim', this%zdim, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rcentr', this%rcentr, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rleft', this%rleft, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/zmid', this%zmid, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rmaxis', this%rmaxis, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/zmaxis', this%zmaxis, unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/simag', this%simag, unit = 'Mx')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/sibry', this%sibry, unit = 'Mx')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bcentr', this%bcentr, unit = 'G')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/current', this%current, unit = 'statA')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/fpol', this%fpol, &
+         lbound(this%fpol), ubound(this%fpol), unit = 'G cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/pres', this%pres, &
+         lbound(this%pres), ubound(this%pres), unit = 'dyn cm^-2')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ffprim', this%ffprim, &
+         lbound(this%ffprim), ubound(this%ffprim), unit = 'cm^-1')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/pprime', this%pprime, &
+         lbound(this%pprime), ubound(this%pprime), unit = 'dyn cm^-2 Mx^-1')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/qpsi', this%qpsi, &
+         lbound(this%qpsi), ubound(this%qpsi), unit = '1')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rbbbs', this%rbbbs, &
+         lbound(this%rbbbs), ubound(this%rbbbs), unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/zbbbs', this%zbbbs, &
+         lbound(this%zbbbs), ubound(this%zbbbs), unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rlim', this%rlim, &
+         lbound(this%rlim), ubound(this%rlim), unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/zlim', this%zlim, &
+         lbound(this%zlim), ubound(this%zlim), unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi_eqd', this%psi_eqd, &
+         lbound(this%psi_eqd), ubound(this%psi_eqd), unit = 'Mx', comment = 'equidistant psi grid values')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_eqd', this%R_eqd, &
+         lbound(this%R_eqd), ubound(this%R_eqd), unit = 'cm', comment = 'equidistant R grid values')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_eqd', this%Z_eqd, &
+         lbound(this%Z_eqd), ubound(this%Z_eqd), unit = 'cm', comment = 'equidistant Z grid values')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psirz', this%psirz, &
+         lbound(this%psirz), ubound(this%psirz), unit = 'Mx')
+    call h5_close(h5id_root)
+  end subroutine g_eqdsk_export_hdf5
+
+  subroutine g_eqdsk_deinit(this)
+    class(g_eqdsk) :: this
+
+    this%fname = ''
+    this%convexfile = ''
     if (allocated(this%fpol)) deallocate(this%fpol)
     if (allocated(this%pres)) deallocate(this%pres)
     if (allocated(this%ffprim)) deallocate(this%ffprim)
@@ -619,11 +776,11 @@ contains
     if (allocated(this%R_eqd)) deallocate(this%R_eqd)
     if (allocated(this%Z_eqd)) deallocate(this%Z_eqd)
     if (allocated(this%psirz)) deallocate(this%psirz)
-  end subroutine g_eqdsk_destructor
+  end subroutine g_eqdsk_deinit
 
-  subroutine flux_func_init(this, n_lag, indep_var)
+  subroutine interp1d_init(this, n_lag, indep_var)
     use magdif_conf, only: log
-    class(flux_func), intent(inout) :: this
+    class(interp1d), intent(inout) :: this
     integer, intent(in) :: n_lag
     real(dp), intent(in), dimension(:) :: indep_var
 
@@ -633,16 +790,16 @@ contains
        if (log%err) call log%write
        return
     end if
-    call flux_func_destructor(this)
+    call interp1d_deinit(this)
     this%n_lag = n_lag
     this%n_var = size(indep_var)
     allocate(this%indep_var(this%n_var))
-    this%indep_var = indep_var
-  end subroutine flux_func_init
+    this%indep_var(:) = indep_var
+  end subroutine interp1d_init
 
-  function flux_func_interp(this, sample, position, deriv) result(interp)
+  function interp1d_eval(this, sample, position, deriv) result(interp)
     use magdif_conf, only: log
-    class(flux_func) :: this
+    class(interp1d) :: this
     real(dp), intent(in) :: sample(:)
     real(dp), intent(in) :: position
     logical, intent(in), optional :: deriv
@@ -657,7 +814,7 @@ contains
        end if
     end if
     if (this%n_var /= size(sample)) then
-       call log%msg_arg_size('flux_func_interp', 'this%n_var', 'size(sample)', &
+       call log%msg_arg_size('interp1d_eval', 'this%n_var', 'size(sample)', &
             this%n_var, size(sample))
        if (log%err) call log%write
        error stop
@@ -673,13 +830,13 @@ contains
     call plag_coeff(this%n_lag, 1, position, &
          this%indep_var(k - this%n_lag / 2:k + this%n_lag / 2 - 1), lag_coeff)
     interp = sum(sample(k - this%n_lag / 2:k + this%n_lag / 2 - 1) * lag_coeff(kder, :))
-  end function flux_func_interp
+  end function interp1d_eval
 
-  subroutine flux_func_destructor(this)
-    type(flux_func), intent(inout) :: this
+  subroutine interp1d_deinit(this)
+    class(interp1d), intent(inout) :: this
 
     if (allocated(this%indep_var)) deallocate(this%indep_var)
-  end subroutine flux_func_destructor
+  end subroutine interp1d_deinit
 
   subroutine neumaier_accumulator_real_init(this)
     class(neumaier_accumulator_real), intent(inout) :: this
@@ -804,5 +961,27 @@ contains
     integer :: k
     merged = [([first_s, second_s], k = 1, num / 2)]
   end function interleave_ss
+
+  subroutine C_F_string(C, F)
+    use iso_c_binding, only: c_ptr, c_char, c_associated, c_f_pointer, c_null_char
+    type(c_ptr), intent(in), value :: C
+    character(len = *), intent(out) :: F
+    character(kind = c_char, len = 1), dimension(:), pointer :: p
+    integer :: k
+
+    if (c_associated(C)) then
+       call c_f_pointer(C, p, [huge(0)])
+       k = 1
+       do while (p(k) /= c_null_char .and. k <= len(F))
+          F(k:k) = p(k)
+          k = k + 1
+       end do
+       if (k < len(f)) then
+          F(k:) = ' '
+       end if
+    else
+       F = ''
+    end if
+  end subroutine C_F_string
 
 end module magdif_util

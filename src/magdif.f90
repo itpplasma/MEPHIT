@@ -6,9 +6,7 @@ module magdif
 
   private
 
-  public :: magdif_init, magdif_cleanup, magdif_iterate, magdif_postprocess, freefem_pipe
-
-  character(len = 1024) :: freefem_pipe = 'maxwell.dat'
+  public :: magdif_run, magdif_init, magdif_cleanup, magdif_iterate, magdif_postprocess
 
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   type(L1_t) :: pn
@@ -25,73 +23,115 @@ module magdif
   !> Current density perturbation in units of statampere cm^-2.
   type(RT0_t) :: jn
 
+  interface
+     subroutine FEM_init(tormode, runmode) bind(C, name = 'FEM_init')
+       use iso_c_binding, only: c_int
+       integer(c_int), intent(in), value :: tormode, runmode
+     end subroutine FEM_init
+
+     subroutine FEM_extend_mesh() bind(C, name = 'FEM_extend_mesh')
+     end subroutine FEM_extend_mesh
+
+     subroutine FEM_compute_Bn(shape, Jn, Bn) bind(C, name = 'FEM_compute_Bn')
+       use iso_c_binding, only: c_int, c_double_complex
+       integer(c_int), intent(in) :: shape(2)
+       complex(c_double_complex), intent(in) :: Jn(1:shape(1), 1:shape(2))
+       complex(c_double_complex), intent(out) :: Bn(1:shape(1), 1:shape(2))
+     end subroutine FEM_compute_Bn
+
+     subroutine FEM_compute_L2int(shape, elem, L2int) bind(C, name = 'FEM_compute_L2int')
+       use iso_c_binding, only: c_int, c_double_complex, c_double
+       integer(c_int), intent(in) :: shape(2)
+       complex(c_double_complex), intent(in) :: elem(1:shape(1), 1:shape(2))
+       real(c_double), intent(out) :: L2int
+     end subroutine FEM_compute_L2int
+
+     subroutine FEM_deinit() bind(C, name = 'FEM_deinit')
+     end subroutine FEM_deinit
+  end interface
+
 contains
 
-  !> Initialize magdif module
-  subroutine magdif_init
-    use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
-    use magdif_conf, only: conf, log, magdif_log, datafile
-    use magdif_util, only: get_field_filenames, init_field
-    use magdif_mesh, only: equil, mesh, read_mesh_cache, fluxvar, flux_func_cache_check, &
-         check_curr0, check_safety_factor
-    use magdif_pert, only: RT0_check_div_free, RT0_check_redundant_edges, &
-         RT0_init, RT0_read, L1_init
-    character(len = 1024) :: gfile, pfile, convexfile
-    integer :: dum
+  subroutine magdif_run(runmode, config) bind(C, name = 'magdif_run')
+    use iso_c_binding, only: c_int, c_ptr
+    use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord, unload_magdata_in_symfluxcoord
+    use magdif_util, only: C_F_string, get_field_filenames, init_field, deinit_field
+    use magdif_conf, only: conf, magdif_config_read, magdif_config_export_hdf5, conf_arr, magdif_log, log, datafile
+    use magdif_mesh, only: equil, fs, fs_half, mesh, generate_mesh, write_mesh_cache, read_mesh_cache, &
+         magdif_mesh_deinit, sample_polmodes, coord_cache_deinit, psi_interpolator, psi_fine_interpolator, &
+         B0R, B0phi, B0Z, B0R_Omega, B0phi_Omega, B0Z_Omega, B0flux, j0phi
+    use magdif_pert, only: generate_vacfield
+    use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
+    integer(c_int), intent(in), value :: runmode
+    type(c_ptr), intent(in), value :: config
+    integer(c_int) :: runmode_flags
+    character(len = 1024) :: config_filename, gfile, pfile, convexfile
+    logical :: meshing, analysis, iterations
 
-    log = magdif_log('-', conf%log_level, conf%quiet)
-
-    call get_field_filenames(gfile, pfile, convexfile)
-    call equil%read(gfile)
-    call equil%classify
-    if (equil%cocos%index /= 3) then
-       write (log%msg, '("GEQDSK file ", a, " is not conforming to COCOS 3")') trim(gfile)
-       if (log%err) call log%write
-       error stop
+    meshing = iand(runmode, ishft(1, 0)) /= 0
+    iterations = iand(runmode, ishft(1, 1)) /= 0
+    analysis = iand(runmode, ishft(1, 2)) /= 0
+    runmode_flags = runmode
+    if (.not. (meshing .or. iterations .or. analysis)) then
+       meshing = .true.
+       iterations = .true.
+       analysis = .true.
+       runmode_flags = ior(ior(ishft(1, 0), ishft(1, 1)), ishft(1, 2))
     end if
-    call init_field(gfile, pfile, convexfile)
-
-    ! read in preprocessed data
-    call read_mesh_cache
-    call load_magdata_in_symfluxcoord
-    ! TODO: cache Lagrange polynomials instead
-    call fluxvar%init(4, equil%psi_eqd)
-
-    ! check preprocessed data
-    call flux_func_cache_check
-    call check_curr0
-    call check_safety_factor
-
-    ! initialize perturbation
-    call L1_init(pn, mesh%npoint)
-    call RT0_init(Bn, mesh%ntri)
-    call RT0_init(Bnvac, mesh%ntri)
-    call RT0_init(Bnplas, Bn%ntri)
-    call RT0_init(jn, mesh%ntri)
-
-    call RT0_read(Bnvac, datafile, 'Bnvac')
-    call RT0_check_redundant_edges(Bnvac, 'Bnvac')
-    call RT0_check_div_free(Bnvac, mesh%n, conf%rel_err_Bn, 'Bnvac')
-
-    ! pass effective toroidal mode number to FreeFem++
-    call send_flag_to_freefem(mesh%n, freefem_pipe)
-    call receive_flag_from_freefem(dum, freefem_pipe)
-
-    log%msg = 'magdif initialized'
-    if (log%info) call log%write
-  end subroutine magdif_init
-
-  !> Deallocates all previously allocated variables.
-  subroutine magdif_cleanup
-    use magdif_conf, only: log
-    use magdif_mesh, only: B0R, B0phi, B0Z, B0R_Omega, B0phi_Omega, B0Z_Omega, B0flux, &
-         j0phi
-    use magdif_pert, only: L1_deinit, RT0_deinit
-    integer :: dum
-
-    ! tell FreeFem++ to stop processing
-    call send_flag_to_freefem(-3, freefem_pipe)
-    call receive_flag_from_freefem(dum, freefem_pipe)
+    call C_F_string(config, config_filename)
+    call magdif_config_read(conf, config_filename)
+    log = magdif_log('-', conf%log_level, conf%quiet)
+    call h5_init
+    h5overwrite = .true.
+    call magdif_config_export_hdf5(conf, datafile, 'config')
+    if (meshing) then
+       ! initialize equilibrium field
+       call get_field_filenames(gfile, pfile, convexfile)
+       call equil%read(trim(gfile), trim(convexfile))
+       call equil%classify
+       call equil%standardise
+       if (conf%kilca_scale_factor /= 0) then
+          call equil%scale(conf%kilca_scale_factor)
+       end if
+       call equil%export_hdf5(datafile, 'equil')
+       call init_field(equil)
+       ! generate mesh and vacuum field
+       call generate_mesh
+       call write_mesh_cache
+       call generate_vacfield
+       ! pass effective toroidal mode number and runmode to FreeFem++
+       call FEM_init(mesh%n, runmode_flags)
+       call FEM_extend_mesh
+    else
+       ! initialize equilibrium field
+       call equil%import_hdf5(datafile, 'equil')
+       call init_field(equil)
+       ! read in preprocessed data
+       call read_mesh_cache
+       call load_magdata_in_symfluxcoord
+       ! reload config parameters here in case they changed since the meshing phase
+       call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
+       call conf_arr%export_hdf5(datafile, 'config')
+       ! pass effective toroidal mode number and runmode to FreeFem++
+       call FEM_init(mesh%n, runmode)
+    end if
+    if (iterations .or. analysis) then
+       call magdif_init
+       if (iterations) then
+          call magdif_iterate
+          call FEM_deinit
+       else
+          if (analysis) then
+             call magdif_read
+          end if
+          ! FEM_deinit is not needed because scripts/maxwell_daemon.edp exits
+          ! if iterations are not requested
+       end if
+       if (analysis) then
+          call magdif_postprocess
+       end if
+       call magdif_cleanup
+    end if
     if (allocated(B0r)) deallocate(B0r)
     if (allocated(B0phi)) deallocate(B0phi)
     if (allocated(B0z)) deallocate(B0z)
@@ -100,6 +140,46 @@ contains
     if (allocated(B0z_Omega)) deallocate(B0z_Omega)
     if (allocated(B0flux)) deallocate(B0flux)
     if (allocated(j0phi)) deallocate(j0phi)
+    call psi_interpolator%deinit
+    call psi_fine_interpolator%deinit
+    call coord_cache_deinit(sample_polmodes)
+    call fs%deinit
+    call fs_half%deinit
+    call magdif_mesh_deinit(mesh)
+    call unload_magdata_in_symfluxcoord
+    call deinit_field
+    call equil%deinit
+    call conf_arr%deinit
+    call log%deinit
+    call h5_deinit
+  end subroutine magdif_run
+
+  !> Initialize magdif module
+  subroutine magdif_init
+    use magdif_conf, only: conf, log, datafile
+    use magdif_mesh, only: mesh
+    use magdif_pert, only: RT0_check_redundant_edges, RT0_check_div_free, &
+         RT0_init, RT0_read, L1_init
+
+    ! initialize perturbation
+    call L1_init(pn, mesh%npoint)
+    call RT0_init(Bn, mesh%ntri)
+    call RT0_init(Bnvac, mesh%ntri)
+    call RT0_init(Bnplas, mesh%ntri)
+    call RT0_init(jn, mesh%ntri)
+    call RT0_read(Bnvac, datafile, 'Bnvac')
+    call RT0_check_redundant_edges(Bnvac, 'Bnvac')
+    call RT0_check_div_free(Bnvac, mesh%n, conf%rel_err_Bn, 'Bnvac')
+
+    log%msg = 'magdif initialized'
+    if (log%info) call log%write
+  end subroutine magdif_init
+
+  !> Deallocates all previously allocated variables.
+  subroutine magdif_cleanup
+    use magdif_conf, only: log
+    use magdif_pert, only: L1_deinit, RT0_deinit
+
     call L1_deinit(pn)
     call RT0_deinit(Bn)
     call RT0_deinit(Bnvac)
@@ -108,6 +188,16 @@ contains
     log%msg = 'magdif cleanup finished'
     if (log%info) call log%write
   end subroutine magdif_cleanup
+
+  subroutine magdif_read
+    use magdif_conf, only: datafile
+    use magdif_pert, only: L1_read, RT0_read
+
+    call L1_read(pn, datafile, 'iter/pn')
+    call RT0_read(Bn, datafile, 'iter/Bn')
+    call RT0_read(Bnplas, datafile, 'iter/Bnplas')
+    call RT0_read(jn, datafile, 'iter/jn')
+  end subroutine magdif_read
 
   subroutine magdif_single
     ! compute pressure based on previous perturbation field
@@ -187,7 +277,7 @@ contains
           end do
           allocate(ipiv(ngrow))
           call zgesv(ngrow, ngrow, Lr, ngrow, ipiv, Yr, ngrow, info)
-          if (allocated(ipiv)) deallocate(ipiv)
+          deallocate(ipiv)
           if (info == 0) then
              log%msg = 'Successfully inverted matrix for preconditioner'
              if (log%info) call log%write
@@ -200,7 +290,7 @@ contains
           do i = 1, ngrow
              Lr(i, :) = eigvals(i) * Yr(i, :)
           end do
-          if (allocated(Yr)) deallocate(Yr)
+          deallocate(Yr)
        else
           preconditioned = .false.
        end if
@@ -209,7 +299,7 @@ contains
     call vec_polmodes_init(jmn, m_max, mesh%nflux)
     call RT0_init(Bn_diff, mesh%ntri)
     allocate(L2int(0:niter))
-    call compute_L2int(Bnvac, L2int(0))
+    call FEM_compute_L2int(shape(Bnvac%DOF), Bnvac%DOF, L2int(0))
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, 'iter/')
     call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int(0), &
@@ -237,7 +327,7 @@ contains
        end if
 
        call unpack_dof(Bn_diff, packed_Bn - packed_Bn_prev)
-       call compute_L2int(Bn_diff, L2int(kiter))
+       call FEM_compute_L2int(shape(Bn_diff%DOF), Bn_diff%DOF, L2int(kiter))
        if (kiter <= 1) then
           call L1_write(pn, datafile, 'iter/pn' // postfix, &
                'pressure (after iteration)', 'dyn cm^-2')
@@ -254,6 +344,7 @@ contains
 
        call pack_dof(Bn, packed_Bn_prev)
     end do
+    if (allocated(Lr)) deallocate(Lr)
     Bnplas%DOF(:, :) = Bn%DOF - Bnvac%DOF
     Bnplas%comp_phi(:) = Bn%comp_phi - Bnvac%comp_phi
     call h5_open_rw(datafile, h5id_root)
@@ -271,8 +362,8 @@ contains
 
     call RT0_deinit(Bn_diff)
     call vec_polmodes_deinit(jmn)
-    if (allocated(Lr)) deallocate(Lr)
-    if (allocated(L2int)) deallocate(L2int)
+    ! TODO: refactor arnoldi_mod?
+    deallocate(L2int, eigvecs)
 
   contains
 
@@ -289,7 +380,7 @@ contains
       use magdif_util, only: imun
       type(RT0_t), intent(inout) :: elem
       complex(dp), intent(in) :: packed(mesh%nedge)
-      integer :: kedge, ktri
+      integer :: kedge
       do kedge = 1, mesh%nedge
          elem%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_map2ktri(1, kedge)) = &
               packed(kedge)
@@ -298,9 +389,7 @@ contains
                  -packed(kedge)
          end if
       end do
-      do ktri = 1, mesh%ntri
-         elem%comp_phi(ktri) = sum(elem%DOF(:, ktri)) * imun / mesh%n / mesh%area(ktri)
-      end do
+      elem%comp_phi(:) = sum(elem%DOF, 1) * imun / mesh%n / mesh%area
     end subroutine unpack_dof
 
     ! computes B_(n+1) = K*B_n + B_vac ... different from kin2d.f90
@@ -340,123 +429,18 @@ contains
     end subroutine next_iteration_arnoldi
   end subroutine magdif_iterate
 
-  subroutine send_flag_to_freefem(flag, namedpipe)
-    use iso_c_binding, only: c_long
-    integer, intent(in) :: flag
-    character(len = *), intent(in) :: namedpipe
-    integer(c_long) :: long_flag
-    integer :: fid
-
-    long_flag = int(flag, c_long)
-    open(newunit = fid, file = namedpipe, status = 'old', access = 'stream', &
-         form = 'unformatted', action = 'write')
-    write (fid) long_flag
-    close(fid)
-  end subroutine send_flag_to_freefem
-
-  subroutine receive_flag_from_freefem(flag, namedpipe)
-    use iso_c_binding, only: c_long
-    integer, intent(out) :: flag
-    character(len = *), intent(in) :: namedpipe
-    integer(c_long) :: long_flag
-    integer :: fid
-
-    open(newunit = fid, file = namedpipe, status = 'old', access = 'stream', &
-         form = 'unformatted', action = 'read')
-    read (fid) long_flag
-    close(fid)
-    flag = int(long_flag)
-  end subroutine receive_flag_from_freefem
-
-  subroutine send_RT0_to_freefem(elem, outfile)
-    use iso_c_binding, only: c_long
-    use magdif_mesh, only: mesh
-    type(RT0_t), intent(in) :: elem
-    character(len = *), intent(in) :: outfile
-    integer(c_long) :: length
-    integer :: ktri, fid
-
-    length = 8 * mesh%ntri  ! (Re, Im) of RT0 DoFs + toroidal component
-    ! status = 'old' for writing to named pipe
-    open(newunit = fid, file = outfile, access = 'stream', status = 'old', &
-         action = 'write', form = 'unformatted')
-    write (fid) length
-    do ktri = 1, mesh%ntri
-       write (fid) elem%DOF(:, ktri), elem%comp_phi(ktri) * mesh%area(ktri)
-    end do
-    close(fid)
-  end subroutine send_RT0_to_freefem
-
-  subroutine receive_RT0_from_freefem(elem, infile)
-    use iso_c_binding, only: c_long
-    use magdif_conf, only: log
-    use magdif_mesh, only: mesh
-    type(RT0_t), intent(inout) :: elem
-    character(len = *), intent(in) :: infile
-    integer(c_long) :: length
-    integer :: ktri, fid
-
-    open(newunit = fid, file = infile, access = 'stream', status = 'old', &
-         action = 'read', form = 'unformatted')
-    read (fid) length
-    if (length < 8 * mesh%ntri) then
-       ! (Re, Im) of RT0 DoFs + toroidal component
-       write (log%msg, '("Pipe ", a, " only contains ", i0, " real values, ' // &
-            'expected ", i0, ".")') infile, length, 8 * mesh%ntri
-       if (log%err) call log%write
-       error stop
-    end if
-    do ktri = 1, mesh%ntri
-       read (fid) elem%DOF(:, ktri), elem%comp_phi(ktri)
-    end do
-    elem%comp_phi = elem%comp_phi / mesh%area
-    close(fid)
-  end subroutine receive_RT0_from_freefem
-
-  !> Computes #bnflux and #bnphi from #jnflux and #jnphi via an external program. No data
-  !> is read yet; this is done by read_bn().
+  !> Computes #bnflux and #bnphi from #jnflux and #jnphi.
   !>
-  !> Currently, this subroutine Calls FreeFem++ via shell script maxwell.sh in the current
-  !> directory and handles the exit code. For further information see maxwell.sh and the
-  !> script called therein.
+  !> This subroutine calls a C function that pipes the data to/from FreeFem.
   subroutine compute_Bn
-    use iso_c_binding, only: c_long
-    use magdif_conf, only: conf, decorate_filename
+    use magdif_util, only: imun
     use magdif_mesh, only: mesh
     use magdif_pert, only: RT0_check_redundant_edges, RT0_check_div_free
-    integer :: dummy
 
-    call send_flag_to_freefem(-1, freefem_pipe)
-    call receive_flag_from_freefem(dummy, freefem_pipe)
-    call send_RT0_to_freefem(jn, freefem_pipe)
-    call receive_RT0_from_freefem(Bn, freefem_pipe)
+    call FEM_compute_Bn(shape(jn%DOF), jn%DOF, Bn%DOF)
     call RT0_check_redundant_edges(Bn, 'Bn')
-    call RT0_check_div_free(Bn, mesh%n, conf%rel_err_Bn, 'Bn')
+    Bn%comp_phi(:) = imun / mesh%n * sum(Bn%DOF, 1) / mesh%area
   end subroutine compute_Bn
-
-  subroutine compute_L2int(elem, integral)
-    use iso_c_binding, only: c_long
-    use magdif_conf, only: log
-    type(RT0_t), intent(in) :: elem
-    real(dp), intent(out) :: integral
-    integer(c_long) :: length
-    integer :: fid, dummy
-
-    call send_flag_to_freefem(-2, freefem_pipe)
-    call receive_flag_from_freefem(dummy, freefem_pipe)
-    call send_RT0_to_freefem(elem, freefem_pipe)
-    open(newunit = fid, file = freefem_pipe, access = 'stream', status = 'old', &
-         action = 'read', form = 'unformatted')
-    read (fid) length
-    if (length /= 1) then
-       close(fid)
-       write (log%msg, '("Expected 1 double value from FreeFem++, but got ", i0)') length
-       if (log%err) call log%write
-       error stop
-    end if
-    read (fid) integral
-    close(fid)
-  end subroutine compute_L2int
 
   !> Assembles a sparse matrix in coordinate list (COO) representation for use with
   !> sparse_mod::sparse_solve().
@@ -579,7 +563,7 @@ contains
        inhom = x  ! remember inhomogeneity before x is overwritten with the solution
        call sparse_solve(conf%nkpol, conf%nkpol, nz, irow, icol, aval, x)
        call sparse_matmul(conf%nkpol, conf%nkpol, irow, icol, aval, x, resid)
-       resid = resid - inhom
+       resid(:) = resid - inhom
        where (abs(inhom) >= small)
           rel_err = abs(resid) / abs(inhom)
        elsewhere
@@ -667,7 +651,7 @@ contains
          inhom = x  ! remember inhomogeneity before x is overwritten with the solution
          call sparse_solve(ndim, ndim, nz, irow(:nz), icol(:nz), aval(:nz), x(:ndim))
          call sparse_matmul(ndim, ndim, irow(:nz), icol(:nz), aval(:nz), x(:ndim), resid)
-         resid = resid - inhom(:ndim)
+         resid(:) = resid - inhom(:ndim)
          where (abs(inhom(:ndim)) >= small)
             rel_err(:ndim) = abs(resid(:ndim)) / abs(inhom(:ndim))
          elsewhere
@@ -753,6 +737,7 @@ contains
          vec_polmodes_write, RT0_poloidal_modes
     integer, parameter :: m_max = 24
     integer :: k
+    character(len = 24) :: dataset
     type(vec_polmodes_t) :: vec_polmodes
     type(coord_cache_ext) :: sample_Ipar
 
@@ -778,56 +763,69 @@ contains
     call coord_cache_ext_init(sample_Ipar, conf%nrad_Ipar, ntheta)
     do k = lbound(mesh%res_modes, 1), ubound(mesh%res_modes, 1)
        call compute_sample_Ipar(sample_Ipar, mesh%res_modes(k))
-       call write_Ipar_symfluxcoord(sample_Ipar)
+       write (dataset, '("postprocess/Imn_par_", i0)') mesh%res_modes(k)
+       call write_Ipar_symfluxcoord(sample_Ipar, datafile, dataset)
        if (conf%kilca_scale_factor /= 0) then
-          call write_Ipar(sample_Ipar)
+          call write_Ipar(sample_Ipar, datafile, 'postprocess/Imn_par_KiLCA')
        end if
     end do
     call coord_cache_ext_deinit(sample_Ipar)
   end subroutine magdif_postprocess
 
   subroutine check_furth(jn, Bmn_plas)
-    use magdif_conf, only: conf, longlines
+    use magdif_conf, only: conf, datafile
     use magdif_util, only: imun, clight
     use magdif_mesh, only: equil, fs_half, mesh, sample_polmodes
     use magdif_pert, only: RT0_t, vec_polmodes_t
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(RT0_t), intent(in) :: jn
     type(vec_polmodes_t), intent(in) :: Bmn_plas
-    integer :: kf, kt, ktri, ktri_eff, kilca_m_res, fid_furth
-    complex(dp) :: sheet_flux
-    real(dp) :: k_z, k_theta
+    character(len = *), parameter :: dataset = 'debug_furth'
+    integer(HID_T) :: h5id_root
+    integer :: kf, kt, ktri, ktri_eff, kilca_m_res
+    complex(dp) :: sheet_flux(mesh%nflux)
+    real(dp) :: k_z, k_theta(mesh%nflux)
 
     kilca_m_res = -equil%cocos%sgn_q * abs(conf%kilca_pol_mode)
     k_z = mesh%n / mesh%R_O
-    open(newunit = fid_furth, file = 'check_furth.dat', recl = longlines, status = 'replace')
+    k_theta(:) = kilca_m_res / fs_half%rad
+    sheet_flux(:) = (0d0, 0d0)
     do kf = 1, mesh%nflux
-       sheet_flux = 0d0
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           ktri_eff = sample_polmodes%ktri(ktri)
-          sheet_flux = sheet_flux + mesh%area(ktri_eff) * jn%comp_phi(ktri_eff) * &
+          sheet_flux(kf) = sheet_flux(kf) + mesh%area(ktri_eff) * jn%comp_phi(ktri_eff) * &
                exp(-imun * kilca_m_res * sample_polmodes%theta(ktri))
        end do
-       k_theta = kilca_m_res / fs_half%rad(kf)
-       sheet_flux = -2d0 * imun / clight / k_theta * sheet_flux
-       write (fid_furth, '(7(1x, es24.16e3))') fs_half%rad(kf), k_z, k_theta, &
-            Bmn_plas%coeff_rad(-kilca_m_res, kf), sheet_flux
     end do
-    close(fid_furth)
+    sheet_flux(:) = -2d0 * imun / clight / k_theta * sheet_flux
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, dataset // '/')
+    call h5_add(h5id_root, dataset // '/k_z', k_z, unit = 'cm^-1')
+    call h5_add(h5id_root, dataset // '/k_theta', k_theta, &
+         lbound(k_theta), ubound(k_theta), unit = 'cm^-1')
+    call h5_add(h5id_root, dataset // '/rad', fs_half%rad, &
+         lbound(fs_half%rad), ubound(fs_half%rad), unit = 'cm')
+    call h5_add(h5id_root, dataset // '/Bmn_plas_rad', Bmn_plas%coeff_rad(-kilca_m_res, :), &
+         [1], [mesh%nflux], unit = 'G')
+    call h5_add(h5id_root, dataset // '/sheet_flux', sheet_flux, &
+         lbound(sheet_flux), ubound(sheet_flux), unit = 'statA')
+    call h5_close(h5id_root)
   end subroutine check_furth
 
 
   !> calculate parallel current (density) on a finer grid
-  subroutine write_Ipar_symfluxcoord(s)
+  subroutine write_Ipar_symfluxcoord(s, file, dataset)
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_conf, only: conf, longlines
+    use magdif_conf, only: conf
     use magdif_util, only: imun, clight
     use magdif_mesh, only: coord_cache_ext
     use magdif_pert, only: RT0_interp
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(coord_cache_ext), intent(in) :: s  ! shorten names
-    character(len = *), parameter :: fname_fmt = '("currn_par_", i0, ".dat")'
-    character(len = 1024) :: fname
-    integer :: krad, kpol, k, fid_jpar
+    character(len = *), intent(in) :: file, dataset
+    integer(HID_T) :: h5id_root
+    integer :: krad, kpol, k
     real(dp) :: B0_psi, dB0R_dpsi, dB0phi_dpsi, dB0Z_dpsi, &
          B0_dB0_dpsi, dhphi2_dpsi, B0_theta, dB0R_dtheta, dB0phi_dtheta, dB0Z_dtheta, &
          B0_dB0_dtheta, dhphi2_dtheta, common_term, dB0theta_dpsi, dB0psi_dtheta, &
@@ -850,8 +848,6 @@ contains
     I_char = 0d0
     Delta_mn_neg = (0d0, 0d0)
     Delta_mn_pos = (0d0, 0d0)
-    write (fname, fname_fmt) s%m
-    open(newunit = fid_jpar, file = fname, status = 'replace', recl = longlines)
     do krad = 1, s%nrad
        do kpol = 1, s%npol
           k = (krad - 1) * s%npol + kpol
@@ -937,24 +933,49 @@ contains
        Delta_mn_neg(krad) = Delta_mn_neg(krad) / dble(s%npol)
        Delta_mn_pos(krad) = Delta_mn_pos(krad) / dble(s%npol)
        I_char(krad) = dble(s%npol) * 0.5d0 * clight / I_char(krad)
-       write (fid_jpar, '(19(1x, es24.16e3))') psi(krad), rad(krad), &
-            jmn_par_neg(krad), jmn_par_pos(krad), &
-            part_int_neg(krad), part_int_pos(krad), bndry_neg(krad), bndry_pos(krad), &
-            I_char(krad), Delta_mn_neg(krad), Delta_mn_pos(krad)
     end do
-    close(fid_jpar)
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', psi, &
+         lbound(psi), ubound(psi))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad', rad, &
+         lbound(rad), ubound(rad))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_pos', jmn_par_pos, &
+         lbound(jmn_par_pos), ubound(jmn_par_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_neg', jmn_par_neg, &
+         lbound(jmn_par_neg), ubound(jmn_par_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_pos', part_int_pos, &
+         lbound(part_int_pos), ubound(part_int_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_neg', part_int_neg, &
+         lbound(part_int_neg), ubound(part_int_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_pos', part_int_pos, &
+         lbound(part_int_pos), ubound(part_int_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_neg', part_int_neg, &
+         lbound(part_int_neg), ubound(part_int_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_pos', bndry_pos, &
+         lbound(bndry_pos), ubound(bndry_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_neg', bndry_neg, &
+         lbound(bndry_neg), ubound(bndry_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/I_char', I_char, &
+         lbound(I_char), ubound(I_char))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_mn_pos', Delta_mn_pos, &
+         lbound(Delta_mn_pos), ubound(Delta_mn_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_mn_neg', Delta_mn_neg, &
+         lbound(Delta_mn_neg), ubound(Delta_mn_neg))
   end subroutine write_Ipar_symfluxcoord
 
 
   !> calculate parallel current (density) on a finer grid
-  subroutine write_Ipar(s)
+  subroutine write_Ipar(s, file, dataset)
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_conf, only: longlines, decorate_filename
     use magdif_util, only: imun, clight, bent_cyl2straight_cyl
     use magdif_mesh, only: mesh, coord_cache_ext
     use magdif_pert, only: RT0_interp
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(coord_cache_ext), intent(in) :: s  ! shorten names
-    integer :: krad, kpol, k, fid_jpar
+    character(len = *), intent(in) :: file, dataset
+    integer(HID_T) :: h5id_root
+    integer :: krad, kpol, k
     real(dp) :: dB0R_drad, dB0phi_drad, dB0Z_drad, B0_dB0_drad, &
          B0_theta, dB0theta_drad, dhz2_drad, dradhthetahz_drad
     complex(dp) :: jn_R, jn_Z, jn_phi, jn_par, Bn_R, Bn_Z, Bn_phi, &
@@ -971,7 +992,6 @@ contains
     part_int_pos = (0d0, 0d0)
     bndry_neg = (0d0, 0d0)
     bndry_pos = (0d0, 0d0)
-    open(newunit = fid_jpar, status = 'replace', recl = longlines, file = 'currn_par.dat')
     do krad = 1, s%nrad
        do kpol = 1, s%npol
           k = (krad - 1) * s%npol + kpol
@@ -1019,10 +1039,28 @@ contains
        part_int_pos(krad) = part_int_pos(krad) / dble(s%npol) * 0.25d0 * clight / pi
        bndry_neg(krad) = bndry_neg(krad) / dble(s%npol) * 0.25d0 * clight / pi
        bndry_pos(krad) = bndry_pos(krad) / dble(s%npol) * 0.25d0 * clight / pi
-       write (fid_jpar, '(14(1x, es24.16e3))') psi(krad), rad(krad), &
-            jmn_par_neg(krad), jmn_par_pos(krad), &
-            part_int_neg(krad), part_int_pos(krad), bndry_neg(krad), bndry_pos(krad)
     end do
-    close(fid_jpar)
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', psi, &
+         lbound(psi), ubound(psi))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad', rad, &
+         lbound(rad), ubound(rad))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_pos', jmn_par_pos, &
+         lbound(jmn_par_pos), ubound(jmn_par_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_neg', jmn_par_neg, &
+         lbound(jmn_par_neg), ubound(jmn_par_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_pos', part_int_pos, &
+         lbound(part_int_pos), ubound(part_int_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_neg', part_int_neg, &
+         lbound(part_int_neg), ubound(part_int_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_pos', part_int_pos, &
+         lbound(part_int_pos), ubound(part_int_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_neg', part_int_neg, &
+         lbound(part_int_neg), ubound(part_int_neg))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_pos', bndry_pos, &
+         lbound(bndry_pos), ubound(bndry_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_neg', bndry_neg, &
+         lbound(bndry_neg), ubound(bndry_neg))
   end subroutine write_Ipar
 end module magdif
