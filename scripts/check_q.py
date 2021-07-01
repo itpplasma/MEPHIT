@@ -6,46 +6,34 @@ Created on Tue Jun 30 13:48:52 2020
 @author: patrick
 """
 
-import numpy as np
-import matplotlib
-from matplotlib import rcParams, use, pyplot as plt
+from numpy import clip
+from magdifplot import magdif
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.figure import Figure
+from matplotlib.ticker import MultipleLocator
 from os import path
 from glob import iglob
 
-rcParams['text.usetex'] = True
-rcParams['font.family'] = 'serif'
-rcParams['mathtext.fontset'] = 'cm'
-use('Agg')
-scifmt = matplotlib.ticker.ScalarFormatter()
-scifmt.set_powerlimits((-3, 3))
-canvas = (6.6, 3.6)
-res = 300
-thin = 0.5
-
-# work_dir = '/home/patrick/git/NEO-EQ/run/ED6_30835_3200'
-# work_dir = '/home/patrick/git/NEO-EQ/run/EQH_30835_3200'
-# work_dir = '/home/patrick/git/NEO-EQ/run/geomint_TCFP'
+q_max = 10.0
 for work_dir in iglob('/temp/lainer_p/git/NEO-EQ/run/g*'):
-    data_step = np.loadtxt(path.join(work_dir, 'check_q_step.dat'))
-    data_cont = np.loadtxt(path.join(work_dir, 'check_q_cont.dat'))
-
-    mask = np.abs(data_cont[:, 3] - data_cont[:, 2]) < 5.0
-    plt.figure(figsize=canvas)
-    plt.plot(data_cont[mask, 0], data_cont[mask, 3], '-k', lw=thin, label='gfile')
-    plt.plot(data_cont[:, 0], data_cont[:, 2], '--r', lw=thin, label='field line')
-    plt.step(data_step[:, 0], data_step[:, 2], where='mid', lw=thin,
-             label='triangle grid')
-    plt.gca().yaxis.set_major_locator(matplotlib.ticker.MultipleLocator(0.5))
-    plt.gca().grid(which='major', axis='y', lw=0.5*thin)
-    ### TCFP
-    # plt.xlim([55.6, 56.2])
-    # plt.ylim([0.00448, 0.00452])
-    ### ED6
-    # plt.xlim([74.0, 76.5])
-    # plt.ylim([-3.05, -2.95])
-    plt.gca().legend()
-    plt.xlabel(r'$\hat{\psi}$')
-    plt.ylabel(r'$q$')
-    plt.title('Comparison of safety factor approximations')
-    plt.savefig(path.join(work_dir, "check_q.png"), dpi=res)
-    plt.close()
+    try:
+        testcase = magdif(work_dir)
+        testcase.read_datafile()
+        fig = Figure()
+        ax = fig.subplots()
+        ax.plot(testcase.data['/debug_q/GEQDSK_psi_norm'][()],
+                clip(testcase.data['/debug_q/GEQDSK_q'][()], -q_max, q_max), label='gfile')
+        ax.plot(testcase.data['/debug_q/RK_psi_norm'][()],
+                testcase.data['/debug_q/RK_q'][()], label='field line')
+        ax.step(testcase.data['/debug_q/step_psi_norm'][()],
+                testcase.data['/debug_q/step_q'][()], where='mid', label='triangle grid')
+        ax.yaxis.set_major_locator(MultipleLocator(0.5))
+        ax.grid(which='major', axis='y', lw=0.25)
+        ax.legend()
+        ax.set_xlabel(r'normalized poloidal flux $\hat{\psi}$')
+        ax.set_ylabel(r'safety factor $q$')
+        canvas = FigureCanvas(fig)
+        fig.savefig(path.join(work_dir, "check_q.pdf"))
+    except:
+        print(f"error in processing {work_dir}")
+        continue

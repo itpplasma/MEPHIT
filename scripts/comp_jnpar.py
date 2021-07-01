@@ -14,28 +14,30 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from os import path
 
-canvas = (6.6, 3.6)
+figsize = (6.6, 3.6)
 res = 300
 thin = 0.5
 
 test_dir = '/home/patrick/itp-temp/git/NEO-EQ/run'
 work_dir = '/home/patrick/git/NEO-EQ/run/geomint_TCFP'
-nrad = 2048  ### read from config
 m_min = 3
 m_max = 9
+m_range = range(m_min, m_max + 1)
 
 magdif = h5py.File(path.join(work_dir, 'magdif.h5'), 'r')
+nrad = magdif['/config/nrad_Ipar'][()]
 rad_max = magdif['/cache/fs/rad'][-1]
 rad_res = {}
 for k, m in enumerate(range(magdif['/mesh/rad_norm_res'].attrs['lbounds'][0],
                             magdif['/mesh/rad_norm_res'].attrs['ubounds'][0])):
     rad_res[m] = magdif['/mesh/rad_norm_res'][k] * rad_max
+h5_files = {}
+for m in m_range:
+    h5_files[m] = h5py.File(path.join(test_dir, f"TCFP_Ipar_{m}/magdif.h5"), 'r')
 cylcoor = parcurr()
-cylcoor.process_magdif(lambda m: path.join(test_dir, f"TCFP_Ipar_{m}/currn_par.dat"),
-                       range(m_min, m_max + 1), nrad, rad_res, symfluxcoord=False)
+cylcoor.process_magdif(lambda m: h5_files[m], m_range, nrad, rad_res, symfluxcoord=False)
 fluxcoor = parcurr()
-fluxcoor.process_magdif(lambda m: path.join(test_dir, f"TCFP_Ipar_{m}/currn_par_{m}.dat"),
-                        range(m_min, m_max + 1), nrad, rad_res, symfluxcoord=True)
+fluxcoor.process_magdif(lambda m: h5_files[m], m_range, nrad, rad_res, symfluxcoord=True)
 kilca_hic = parcurr()
 kilca_hic.process_KiLCA(path.join(work_dir, 'TCFP_flre_hic.hdf5'), nrad)
 kilca_mec = parcurr()
@@ -44,7 +46,7 @@ kilca_loc = parcurr()
 kilca_loc.process_KiLCA(path.join(work_dir, 'TCFP_flre_loc.hdf5'), nrad)
 
 full_r_range = (0.0, np.amax(kilca_mec.rad[0]))
-fig = Figure(figsize=canvas)
+fig = Figure(figsize=figsize)
 ax = fig.subplots()
 for m in range(m_min, m_max + 1):
     ax.plot(cylcoor.rad[m], np.abs(cylcoor.jnpar[m]) * statA_per_cm2_to_A_per_m2, '-', lw=thin, label=f"m = {m}")
@@ -69,7 +71,7 @@ ax.set_title('Parallel current density of poloidal modes from MEPHIT (cylcoord)'
 canvas = FigureCanvas(fig)
 fig.savefig(path.join(work_dir, 'plot_Jnpar_cycloor.png'), dpi=res)
 
-fig = Figure(figsize=canvas)
+fig = Figure(figsize=figsize)
 ax = fig.subplots()
 for m in range(m_min, m_max + 1):
     ax.plot(fluxcoor.rad[m], np.abs(fluxcoor.jnpar[m]) * statA_per_cm2_to_A_per_m2, '-', lw=thin, label=f"m = {m}")
@@ -94,7 +96,7 @@ ax.set_title('Parallel current density of poloidal modes from MEPHIT (symfluxcoo
 canvas = FigureCanvas(fig)
 fig.savefig(path.join(work_dir, 'plot_Jnpar_fluxcoor.png'), dpi=res)
 
-fig = Figure(figsize=canvas)
+fig = Figure(figsize=figsize)
 ax = fig.subplots()
 for m in range(m_min, m_max + 1):
     ax.axvline(kilca_hic.rres[m], lw=0.25 * thin, color='k')
@@ -109,7 +111,7 @@ ax.set_title('Parallel current density from KiLCA ($c = 100$)')
 canvas = FigureCanvas(fig)
 fig.savefig(path.join(work_dir, 'plot_Jnpar_kilca_hic.png'), dpi=res)
 
-fig = Figure(figsize=canvas)
+fig = Figure(figsize=figsize)
 ax = fig.subplots()
 for m in range(m_min, m_max + 1):
     ax.axvline(kilca_loc.rres[m], lw=0.25 * thin, color='k')
@@ -126,7 +128,7 @@ fig.savefig(path.join(work_dir, 'plot_Jnpar_kilca_loc.png'), dpi=res)
 
 for m in range(m_min, m_max + 1):
     # plot: compare KiLCA collisionality
-    fig = Figure(figsize=canvas)
+    fig = Figure(figsize=figsize)
     ax = fig.subplots()
     ax.axvline(kilca_mec.d[m], lw=thin, color='k', ls='-')
     ax.axhline(np.abs(kilca_mec.Imnpar[m]), lw=thin, color='k', ls='-')
@@ -144,7 +146,7 @@ for m in range(m_min, m_max + 1):
     canvas = FigureCanvas(fig)
     fig.savefig(path.join(work_dir, f"cmp_KiLCA_{m}.png"), dpi=res)
     # plot: compare KiLCA and MEPHIT
-    fig = Figure(figsize=canvas)
+    fig = Figure(figsize=figsize)
     ax = fig.subplots()
     ax.axvline(kilca_mec.d[m], lw=0.25 * thin, color='k')
     ax.axhline(np.abs(kilca_mec.Imnpar[m]), lw=0.25 * thin, color='k', ls='-')

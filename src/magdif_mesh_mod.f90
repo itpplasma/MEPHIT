@@ -1,21 +1,21 @@
 module magdif_mesh
 
   use iso_fortran_env, only: dp => real64
-  use magdif_util, only: g_eqdsk, flux_func
+  use magdif_util, only: g_eqdsk, interp1d
 
   implicit none
 
   private
 
-  public :: equil, fluxvar, flux_func_cache, fs, fs_half, mesh_t, mesh, B0r, B0phi, B0z, &
+  public :: equil, flux_func_cache, fs, fs_half, mesh_t, mesh, B0r, B0phi, B0z, &
        B0r_Omega, B0phi_Omega, B0z_Omega, B0flux, j0phi, coord_cache, sample_polmodes, &
-       coord_cache_ext, coord_cache_ext_init, compute_sample_Ipar, coord_cache_ext_deinit, &
-       coord_cache_ext_write, coord_cache_ext_read, &
-       flux_func_cache_init, flux_func_cache_check, flux_func_cache_destructor, generate_mesh, &
-       refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile,  &
-       create_mesh_points, init_indices, common_triangles, &
+       coord_cache_ext, coord_cache_ext_init, coord_cache_deinit, compute_sample_Ipar, &
+       coord_cache_ext_write, coord_cache_ext_read, coord_cache_ext_deinit, &
+       flux_func_cache_init, flux_func_cache_check, flux_func_cache_deinit, generate_mesh, &
+       compute_resonance_positions, refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile, &
+       create_mesh_points, init_indices, common_triangles, psi_interpolator, psi_fine_interpolator, &
        connect_mesh_points, get_labeled_edges, write_mesh_cache, read_mesh_cache, &
-       magdif_mesh_destructor, init_flux_variables, compute_pres_prof_eps, compute_pres_prof_par, &
+       magdif_mesh_deinit, init_flux_variables, compute_pres_prof_eps, compute_pres_prof_par, &
        compute_pres_prof_geqdsk, compute_safety_factor_flux, compute_safety_factor_rot, &
        compute_safety_factor_geqdsk, check_safety_factor, cache_equilibrium_field, &
        compute_j0phi, check_curr0, point_location, point_in_triangle
@@ -52,10 +52,11 @@ module magdif_mesh
      real(dp), dimension(:), allocatable, public :: q
    contains
      procedure :: init => flux_func_cache_init
-     final :: flux_func_cache_destructor
+     procedure :: deinit => flux_func_cache_deinit
   end type flux_func_cache
 
-  type(flux_func) :: fluxvar
+  type(interp1d) :: psi_interpolator
+  type(interp1d) :: psi_fine_interpolator
   type(flux_func_cache) :: fs
   type(flux_func_cache) :: fs_half
 
@@ -205,13 +206,12 @@ module magdif_mesh
      integer, allocatable :: edge_map2ke(:, :)
 
      !> Surface integral Jacobian used for normalization of poloidal modes in GPEC
-     real(dp), allocatable :: gpec_jarea(:)
+     complex(dp), allocatable :: gpec_jacfac(:, :)
+
      real(dp), allocatable :: area(:)
      real(dp), allocatable :: R_Omega(:)
      real(dp), allocatable :: Z_Omega(:)
 
-   contains
-     final :: magdif_mesh_destructor
   end type mesh_t
 
   type(mesh_t) :: mesh
@@ -304,7 +304,7 @@ contains
     integer, intent(in) :: nflux
     logical, intent(in) :: half_step
 
-    call flux_func_cache_destructor(this)
+    call flux_func_cache_deinit(this)
     if (half_step) then
        allocate(this%psi(nflux))
        allocate(this%rad(nflux))
@@ -331,8 +331,8 @@ contains
     this%q = 0d0
   end subroutine flux_func_cache_init
 
-  subroutine flux_func_cache_destructor(this)
-    type(flux_func_cache), intent(inout) :: this
+  subroutine flux_func_cache_deinit(this)
+    class(flux_func_cache), intent(inout) :: this
 
     if (allocated(this%psi)) deallocate(this%psi)
     if (allocated(this%rad)) deallocate(this%rad)
@@ -341,7 +341,7 @@ contains
     if (allocated(this%FdF_dpsi)) deallocate(this%FdF_dpsi)
     if (allocated(this%dp_dpsi)) deallocate(this%dp_dpsi)
     if (allocated(this%q)) deallocate(this%q)
-  end subroutine flux_func_cache_destructor
+  end subroutine flux_func_cache_deinit
 
   subroutine flux_func_cache_write(cache, file, dataset, comment)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
@@ -636,50 +636,36 @@ contains
     call h5_close(h5id_root)
   end subroutine coord_cache_ext_read
 
-  subroutine generate_mesh(unprocessed_geqdsk)
-    use magdif_conf, only: conf, log
-    use magdif_util, only: get_field_filenames, init_field
-
-    character(len = *), intent(in) :: unprocessed_geqdsk
-    character(len = 1024) :: gfile, pfile, convexfile
-
-    call get_field_filenames(gfile, pfile, convexfile)
-    log%msg = 'attempting to read unprocessed G EQDSK file ' // trim(unprocessed_geqdsk)
-    if (log%info) call log%write
-    call equil%read(trim(unprocessed_geqdsk))
-    call equil%classify
-    call equil%standardise
-    if (conf%kilca_scale_factor /= 0) then
-       call equil%scale(conf%kilca_scale_factor)
-    end if
-    log%msg = 'attempting to write processed G EQDSK file ' // trim(gfile)
-    if (log%info) call log%write
-    call equil%write(trim(gfile))
-    call init_field(gfile, pfile, convexfile)
+  subroutine generate_mesh
+    use magdif_conf, only: conf
 
     if (conf%kilca_scale_factor /= 0) then
        mesh%n = conf%n * conf%kilca_scale_factor
     else
        mesh%n = conf%n
     end if
-    call create_mesh_points(convexfile)
+    call create_mesh_points
     call compare_gpec_coordinates
     call write_illustration_data(5, 8, 256, 256)
     call connect_mesh_points
     call write_meshfile_for_freefem
     call compute_sample_polmodes
-    call compute_gpec_jarea
+    call compute_gpec_jacfac
     call cache_equilibrium_field
     call init_flux_variables
+    call flux_func_cache_check
+    call check_safety_factor
+    call check_resonance_positions
     call compute_j0phi
-    call cache_resonance_positions
+    call check_curr0
   end subroutine generate_mesh
 
   subroutine write_mesh_cache
     use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
-    use magdif_conf, only: datafile
+    use magdif_conf, only: conf_arr, datafile
     integer(HID_T) :: h5id_root
 
+    call conf_arr%export_hdf5(datafile, 'config')
     call mesh_write(mesh, datafile, 'mesh')
     call flux_func_cache_write(fs, datafile, 'cache/fs', 'on flux surfaces')
     call flux_func_cache_write(fs_half, datafile, 'cache/fs_half', 'between flux surfaces')
@@ -740,6 +726,64 @@ contains
     call h5_close(h5id_root)
   end subroutine read_mesh_cache
 
+  subroutine compute_resonance_positions(psi_sample, q_sample, psi2rho_norm)
+    use magdif_conf, only: conf, log
+    use magdif_util, only: interp1d
+    use netlib_mod, only: zeroin
+    real(dp), dimension(:), intent(in) :: psi_sample
+    real(dp), dimension(:), intent(in) :: q_sample
+    interface
+       function psi2rho_norm(psi)
+         import :: dp
+         real(dp), intent(in) :: psi
+         real(dp) :: psi2rho_norm
+       end function psi2rho_norm
+    end interface
+    real(dp) :: psi_min, psi_max
+    integer :: m
+    type(interp1d) :: psi_sample_interpolator
+
+    if (size(psi_sample) /= size(q_sample)) then
+       call log%msg_arg_size('refine_resonant_surfaces', 'size(psi_sample)', &
+            'size(q_sample)', size(psi_sample), size(q_sample))
+       if (log%err) call log%write
+       error stop
+    end if
+    psi_min = minval(psi_sample)
+    psi_max = maxval(psi_sample)
+    call psi_sample_interpolator%init(4, psi_sample)
+    mesh%m_res_min = max(ceiling(minval(abs(q_sample)) * dble(mesh%n)), conf%n + 1)
+    mesh%m_res_max = floor(maxval(abs(q_sample)) * dble(mesh%n))
+    if (allocated(mesh%res_modes)) deallocate(mesh%res_modes)
+    if (conf%kilca_scale_factor /= 0) then
+       allocate(mesh%res_modes(1))
+       mesh%res_modes(:) = [conf%kilca_pol_mode]
+    else
+       allocate(mesh%res_modes(mesh%m_res_max - mesh%m_res_min + 1))
+       mesh%res_modes(:) = [(m, m = mesh%m_res_min, mesh%m_res_max)]
+    end if
+    if (allocated(mesh%psi_res)) deallocate(mesh%psi_res)
+    if (allocated(mesh%rad_norm_res)) deallocate(mesh%rad_norm_res)
+    allocate(mesh%psi_res(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%rad_norm_res(mesh%m_res_min:mesh%m_res_max))
+    log%msg = 'resonance positions:'
+    if (log%debug) call log%write
+    do m = mesh%m_res_min, mesh%m_res_max
+       mesh%psi_res(m) = zeroin(psi_min, psi_max, q_interp_resonant, 1d-9)
+       mesh%rad_norm_res(m) = psi2rho_norm(mesh%psi_res(m))
+       write (log%msg, '("m = ", i2, ", psi_m = ", es24.16e3, ", rho_m = ", f19.16)') &
+            m, mesh%psi_res(m), mesh%rad_norm_res(m)
+       if (log%debug) call log%write
+    end do
+
+  contains
+    function q_interp_resonant(psi)
+      real(dp), intent(in) :: psi
+      real(dp) :: q_interp_resonant
+      q_interp_resonant = psi_sample_interpolator%eval(abs(q_sample), psi) - dble(m) / dble(mesh%n)
+    end function q_interp_resonant
+  end subroutine compute_resonance_positions
+
   subroutine refine_eqd_partition(nref, deletions, additions, refinement, res, refined, &
        ref_ind)
     use magdif_conf, only: conf, log
@@ -759,7 +803,7 @@ contains
     if (nref < 1) then
        mesh%nflux = conf%nflux_unref
        allocate(refined(0:mesh%nflux))
-       refined = linspace(0d0, 1d0, mesh%nflux + 1, 0, 0)
+       refined(:) = linspace(0d0, 1d0, mesh%nflux + 1, 0, 0)
        return
     end if
     if (nref /= size(deletions)) then
@@ -825,93 +869,28 @@ contains
          mesh%nflux - fine_hi(nref), 1, 0)
   end subroutine refine_eqd_partition
 
-  subroutine refine_resonant_surfaces(psi_sample, q_sample, psi2rho_norm, rho_norm_ref)
-    use magdif_conf, only: conf, conf_arr, log
-    use magdif_util, only: flux_func
-    use netlib_mod, only: zeroin
-    real(dp), dimension(:), intent(in) :: psi_sample
-    real(dp), dimension(:), intent(in) :: q_sample
-    interface
-       function psi2rho_norm(psi)
-         import :: dp
-         real(dp), intent(in) :: psi
-         real(dp) :: psi2rho_norm
-       end function psi2rho_norm
-    end interface
+  subroutine refine_resonant_surfaces(rho_norm_ref)
+    use magdif_conf, only: conf_arr, log
     real(dp), dimension(:), allocatable, intent(out) :: rho_norm_ref
-    real(dp) :: psi_min, psi_max
-    integer :: m, kref, m_lo, m_hi
-    type(flux_func) :: psi_eqd
+    integer :: m, kref
     integer, dimension(:), allocatable :: ref_ind
     logical, dimension(:), allocatable :: mask
 
-    if (size(psi_sample) /= size(q_sample)) then
-       call log%msg_arg_size('refine_resonant_surfaces', 'size(psi_sample)', &
-            'size(q_sample)', size(psi_sample), size(q_sample))
-       if (log%err) call log%write
-       error stop
-    end if
-    psi_min = minval(psi_sample)
-    psi_max = maxval(psi_sample)
-    call psi_eqd%init(4, psi_sample)
-    mesh%m_res_min = max(ceiling(minval(abs(q_sample)) * dble(mesh%n)), conf%n + 1)
-    mesh%m_res_max = floor(maxval(abs(q_sample)) * dble(mesh%n))
-    if (conf_arr%m_min < mesh%m_res_min) then
-       write (log%msg, '("Ignoring configuration values for ", i0, " <= m < ", i0, ".")') &
-            conf_arr%m_min, mesh%m_res_min
-       if (log%warn) call log%write
-       m_lo = mesh%m_res_min
-    else
-       m_lo = conf_arr%m_min
-    end if
-    if (conf_arr%m_max > mesh%m_res_max) then
-       write (log%msg, '("Ignoring configuration values for ", i0, " < m <= ", i0, ".")') &
-            mesh%m_res_max, conf_arr%m_max
-       if (log%warn) call log%write
-       m_hi = mesh%m_res_max
-    else
-       m_hi = conf_arr%m_max
-    end if
-    if (allocated(mesh%res_modes)) deallocate(mesh%res_modes)
-    if (conf%kilca_scale_factor /= 0) then
-       allocate(mesh%res_modes(1))
-       mesh%res_modes(:) = [conf%kilca_pol_mode]
-    else
-       allocate(mesh%res_modes(1:mesh%m_res_max-mesh%m_res_min))
-       mesh%res_modes(:) = [(m, m = mesh%m_res_min, mesh%m_res_max)]
-    end if
     if (allocated(mesh%refinement)) deallocate(mesh%refinement)
     if (allocated(mesh%deletions)) deallocate(mesh%deletions)
     if (allocated(mesh%additions)) deallocate(mesh%additions)
     allocate(mesh%refinement(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%deletions(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%additions(mesh%m_res_min:mesh%m_res_max))
-    mesh%refinement = 0d0
-    mesh%deletions = 0
-    mesh%additions = 0
-    mesh%refinement(m_lo:m_hi) = conf_arr%refinement(m_lo:m_hi)
-    mesh%deletions(m_lo:m_hi) = conf_arr%deletions(m_lo:m_hi)
-    mesh%additions(m_lo:m_hi) = conf_arr%additions(m_lo:m_hi)
-    if (allocated(mesh%psi_res)) deallocate(mesh%psi_res)
-    if (allocated(mesh%rad_norm_res)) deallocate(mesh%rad_norm_res)
-    allocate(mesh%psi_res(mesh%m_res_min:mesh%m_res_max))
-    allocate(mesh%rad_norm_res(mesh%m_res_min:mesh%m_res_max))
-    log%msg = 'resonance positions:'
-    if (log%debug) call log%write
-    do m = mesh%m_res_min, mesh%m_res_max
-       mesh%psi_res(m) = zeroin(psi_min, psi_max, q_interp_resonant, 1d-9)
-       mesh%rad_norm_res(m) = psi2rho_norm(mesh%psi_res(m))
-       write (log%msg, '("m = ", i2, ", psi_m = ", es24.16e3, ", rho_m = ", f19.16)') &
-            m, mesh%psi_res(m), mesh%rad_norm_res(m)
-       if (log%debug) call log%write
-    end do
+    mesh%refinement(:) = conf_arr%refinement
+    mesh%deletions(:) = conf_arr%deletions
+    mesh%additions(:) = conf_arr%additions
     allocate(mask(mesh%m_res_min:mesh%m_res_max))
-    mask = 0d0 < mesh%refinement .and. mesh%refinement < 1d0
+    mask(:) = 0d0 < mesh%refinement .and. mesh%refinement < 1d0
     allocate(ref_ind(count(mask)))
     call refine_eqd_partition(count(mask), pack(mesh%deletions, mask), &
          pack(mesh%additions, mask), pack(mesh%refinement, mask), &
          pack(mesh%rad_norm_res, mask), rho_norm_ref, ref_ind)
-
     log%msg = 'refinement positions:'
     if (log%debug) call log%write
     kref = 0
@@ -923,17 +902,32 @@ contains
             rho_norm_ref(ref_ind(kref) - 1), mesh%rad_norm_res(m), rho_norm_ref(ref_ind(kref))
        if (log%debug) call log%write
     end do
-
-    if (allocated(ref_ind)) deallocate(ref_ind)
-    if (allocated(mask)) deallocate(mask)
-
-  contains
-    function q_interp_resonant(psi)
-      real(dp), intent(in) :: psi
-      real(dp) :: q_interp_resonant
-      q_interp_resonant = psi_eqd%interp(abs(q_sample), psi) - dble(m) / dble(mesh%n)
-    end function q_interp_resonant
+    deallocate(ref_ind, mask)
   end subroutine refine_resonant_surfaces
+
+  subroutine cache_resonance_positions
+    use magdif_conf, only: log
+    use magdif_util, only: binsearch
+    integer :: m, kf_res
+
+    log%msg = 'resonance positions:'
+    if (log%debug) call log%write
+    allocate(mesh%m_res(mesh%nflux))
+    allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
+    mesh%m_res = 0
+    mesh%res_ind = 0
+    ! if more two or more resonance positions are within the same flux surface,
+    ! assign the lowest mode number
+    do m = mesh%m_res_max, mesh%m_res_min, -1
+       call binsearch(fs%psi, 0, mesh%psi_res(m), kf_res)
+       mesh%res_ind(m) = kf_res
+       mesh%m_res(kf_res) = m
+       write (log%msg, '("m = ", i2, ", kf = ", i3, ", rho: ", f19.16, 2(" < ", f19.16))') &
+            m, kf_res, fs%rad(kf_res - 1) / fs%rad(mesh%nflux), mesh%rad_norm_res(m), &
+            fs%rad(kf_res) / fs%rad(mesh%nflux)
+       if (log%debug) call log%write
+    end do
+  end subroutine cache_resonance_positions
 
   subroutine write_kilca_convexfile(rho_max, convexfile)
     use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
@@ -944,7 +938,7 @@ contains
     real(dp) :: theta
     integer :: fid, kp
 
-    open(newunit = fid, file = convexfile, status = 'replace')
+    open(newunit = fid, file = convexfile, status = 'replace', form = 'formatted', action = 'write')
     do kp = 1, nrz
        theta = dble(kp) / dble(nrz) * 2d0 * pi
        write (fid, '(2(1x, es24.16e3))') equil%rmaxis + rho_max * cos(theta), &
@@ -953,22 +947,20 @@ contains
     close(fid)
   end subroutine write_kilca_convexfile
 
-  subroutine create_mesh_points(convexfile)
+  subroutine create_mesh_points
     use constants, only: pi
-    use magdif_conf, only: conf, log
-    use magdif_util, only: interp_psi_pol, flux_func
+    use magdif_conf, only: conf, conf_arr, log
+    use magdif_util, only: interp_psi_pol
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
          raxis, zaxis, load_magdata_in_symfluxcoord
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
          theta0_at_xpoint, theta_axis, theta0
     use points_2d, only: s_min, create_points_2d
 
-    character(len = *), intent(in) :: convexfile
     integer :: kf, fid
     integer, dimension(:), allocatable :: n_theta
     real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_norm_ref
     real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
-    type(flux_func) :: psi_interpolator
     real(dp) :: psi_axis, rho_max
 
     theta0_at_xpoint = .true.
@@ -979,7 +971,7 @@ contains
             equil%rleft + equil%rdim - equil%rmaxis, &
             equil%zdim * 0.5d0 + equil%zmid - equil%zmaxis, &
             equil%zdim * 0.5d0 - equil%zmid + equil%zmaxis)
-       call write_kilca_convexfile(rho_max, convexfile)
+       call write_kilca_convexfile(rho_max, equil%convexfile)
        o_point = [equil%rmaxis, equil%zmaxis]
        x_point = o_point + [rho_max, 0d0]
     end if
@@ -996,37 +988,41 @@ contains
     ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
     ! load_magdata_in_symfluxcoord_ext divides by psipol_max
     psi_axis = interp_psi_pol(raxis, zaxis)
-    call psi_interpolator%init(4, psisurf(1:) * psipol_max + psi_axis)
+    call psi_fine_interpolator%init(4, psisurf(1:) * psipol_max + psi_axis)
     ! interpolate between psi and rho
     allocate(rho_norm_eqd(nlabel))
-    rho_norm_eqd = rbeg / hypot(theta_axis(1), theta_axis(2))
+    rho_norm_eqd(:) = rbeg / hypot(theta_axis(1), theta_axis(2))
 
-    call refine_resonant_surfaces(psisurf(1:) * psipol_max + psi_axis, qsaf, &
-         psi2rho_norm, rho_norm_ref)
+    call compute_resonance_positions(psisurf(1:) * psipol_max + psi_axis, qsaf, psi2rho_norm)
+    call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
+    call refine_resonant_surfaces(rho_norm_ref)
     call fs%init(mesh%nflux, .false.)
     call fs_half%init(mesh%nflux, .true.)
-    fs%rad = rho_norm_ref
-    fs%psi = [(interp_psi_pol(raxis + fs%rad(kf) * theta_axis(1), &
+    fs%rad(:) = rho_norm_ref
+    fs%psi(:) = [(interp_psi_pol(raxis + fs%rad(kf) * theta_axis(1), &
          zaxis + fs%rad(kf) * theta_axis(2)), kf = 0, mesh%nflux)]
-    fs_half%rad = 0.5d0 * (fs%rad(0:mesh%nflux-1) + fs%rad(1:mesh%nflux))
-    fs_half%psi = [(interp_psi_pol(raxis + fs_half%rad(kf) * theta_axis(1), &
+    fs_half%rad(:) = 0.5d0 * (fs%rad(0:mesh%nflux-1) + fs%rad(1:mesh%nflux))
+    fs_half%psi(:) = [(interp_psi_pol(raxis + fs_half%rad(kf) * theta_axis(1), &
          zaxis + fs_half%rad(kf) * theta_axis(2)), kf = 1, mesh%nflux)]
-    fs%rad = fs%rad * hypot(theta_axis(1), theta_axis(2))
-    fs_half%rad = fs_half%rad * hypot(theta_axis(1), theta_axis(2))
+    fs%rad(:) = fs%rad * hypot(theta_axis(1), theta_axis(2))
+    fs_half%rad(:) = fs_half%rad * hypot(theta_axis(1), theta_axis(2))
     call flux_func_cache_check
+    call cache_resonance_positions
     allocate(mesh%theta_offset(mesh%nflux))
     do kf = 1, mesh%nflux
        mesh%theta_offset(kf) = theta_offset(fs_half%psi(kf))
     end do
-    ! dump presumedly optimal values for poloidal resolution
-    open(newunit = fid, file = 'optpolres.dat', status = 'replace')
-    do kf = 1, mesh%nflux - 1
-       write (fid, '(2(1x, es24.16e3))') fs%rad(kf), 2d0 * pi * fs%rad(kf) / &
-            (fs_half%rad(kf + 1) - fs_half%rad(kf))
-    end do
-    write (fid, '(2(1x, es24.16e3))') fs%rad(mesh%nflux), 2d0 * pi * fs%rad(mesh%nflux) / &
-         (fs%rad(mesh%nflux) - fs%rad(mesh%nflux - 1))
-    close(fid)
+    if (conf%kilca_scale_factor /= 0) then
+       ! dump presumedly optimal values for poloidal resolution
+       open(newunit = fid, file = 'optpolres.dat', status = 'replace')
+       do kf = 1, mesh%nflux - 1
+          write (fid, '(2(1x, es24.16e3))') fs%rad(kf), 2d0 * pi * fs%rad(kf) / &
+               (fs_half%rad(kf + 1) - fs_half%rad(kf))
+       end do
+       write (fid, '(2(1x, es24.16e3))') fs%rad(mesh%nflux), 2d0 * pi * fs%rad(mesh%nflux) / &
+            (fs%rad(mesh%nflux) - fs%rad(mesh%nflux - 1))
+       close(fid)
+    end if
 
     call init_indices
     mesh%ntri = mesh%kt_low(mesh%nflux + 1)
@@ -1036,9 +1032,7 @@ contains
     allocate(mesh%node_theta_flux(mesh%npoint))
     allocate(mesh%node_theta_geom(mesh%npoint))
 
-    allocate(n_theta(mesh%nflux))
-    allocate(points(3, mesh%npoint))
-    allocate(points_s_theta_phi(3, mesh%npoint))
+    allocate(n_theta(mesh%nflux), points(3, mesh%npoint), points_s_theta_phi(3, mesh%npoint))
     n_theta = conf%nkpol
     s_min = 1d-16
     ! inp_label 2 to use poloidal psi with magdata_in_symfluxcoord_ext
@@ -1056,18 +1050,15 @@ contains
     mesh%R_max = maxval(mesh%node_R)
     mesh%Z_min = minval(mesh%node_Z)
     mesh%Z_max = maxval(mesh%node_Z)
+    deallocate(n_theta, points, points_s_theta_phi)
 
-    if (allocated(n_theta)) deallocate(n_theta)
-    if (allocated(points)) deallocate(points)
-    if (allocated(points_s_theta_phi)) deallocate(points_s_theta_phi)
-    if (allocated(rho_norm_ref)) deallocate(rho_norm_ref)
-    if (allocated(rho_norm_eqd)) deallocate(rho_norm_eqd)
+    deallocate(rho_norm_ref, rho_norm_eqd)
 
   contains
     function psi2rho_norm(psi) result(rho_norm)
       real(dp), intent(in) :: psi
       real(dp) :: rho_norm
-      rho_norm = psi_interpolator%interp(rho_norm_eqd, psi)
+      rho_norm = psi_fine_interpolator%eval(rho_norm_eqd, psi)
     end function psi2rho_norm
     function psi_ref(psi_eqd)
       real(dp), dimension(:), intent(in) :: psi_eqd
@@ -1115,8 +1106,8 @@ contains
     allocate(mesh%kp_low(mesh%nflux + 1))
     allocate(mesh%kt_low(mesh%nflux + 1))
 
-    mesh%kp_max = conf%nkpol
-    mesh%kt_max = 2 * conf%nkpol
+    mesh%kp_max(:) = conf%nkpol
+    mesh%kt_max(:) = 2 * conf%nkpol
     mesh%kt_max(1) = conf%nkpol
 
     mesh%kp_low(1) = 1
@@ -1445,22 +1436,26 @@ contains
     Z = sum(mesh%node_Z(nodes)) * 0.25d0
   end subroutine ring_centered_avg_coord
 
-  subroutine compute_gpec_jarea
-    integer :: kf, kt, ktri
+  subroutine compute_gpec_jacfac
+    use magdif_util, only: imun
+    integer, parameter :: m_max = 16
+    integer :: kf, kt, ktri, m
+    complex(dp) :: fourier_basis(-m_max:m_max)
 
-    allocate(mesh%gpec_jarea(mesh%nflux))
-    mesh%gpec_jarea(:) = 0d0
+    allocate(mesh%gpec_jacfac(-m_max:m_max, mesh%nflux))
+    mesh%gpec_jacfac(:, :) = 0d0
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           associate (s => sample_polmodes)
-            mesh%gpec_jarea(kf) = mesh%gpec_jarea(kf) + s%sqrt_g(ktri) * &
-                 s%R(ktri) * hypot(s%B0_Z(ktri), -s%B0_Z(ktri))
+            fourier_basis = [(exp(-imun * m * s%theta(ktri)), m = -m_max, m_max)]
+            mesh%gpec_jacfac(:, kf) = mesh%gpec_jacfac(:, kf) + s%sqrt_g(ktri) * &
+                 s%R(ktri) * hypot(s%B0_Z(ktri), -s%B0_Z(ktri)) * fourier_basis
           end associate
        end do
-       mesh%gpec_jarea(kf) = mesh%gpec_jarea(kf) / mesh%kt_max(kf)
+       mesh%gpec_jacfac(:, kf) = mesh%gpec_jacfac(:, kf) / mesh%kt_max(kf)
     end do
-  end subroutine compute_gpec_jarea
+  end subroutine compute_gpec_jacfac
 
   !> Compute coarse grid for poloidal mode sampling points - one point per triangle.
   subroutine compute_sample_polmodes
@@ -1545,8 +1540,8 @@ contains
                s%Z(k) = mesh%Z_O + rad(krad) * sin(theta(kpol))
                s%dR_dtheta(k) = -rad(krad) * sin(theta(kpol))
                s%dZ_dtheta(k) =  rad(krad) * cos(theta(kpol))
-               s%dq_dpsi(k) = fluxvar%interp(equil%qpsi, psi(krad))
-               drad_dpsi = 1d0 / fluxvar%interp(rad_eqd, psi(krad))
+               s%dq_dpsi(k) = psi_interpolator%eval(equil%qpsi, psi(krad))
+               drad_dpsi = 1d0 / psi_interpolator%eval(rad_eqd, psi(krad))
                s%dR_dpsi(k) = drad_dpsi * cos(theta(kpol))
                s%dZ_dpsi(k) = drad_dpsi * sin(theta(kpol))
                s%d2R_dpsi_dtheta(k) = -drad_dpsi * sin(theta(kpol))
@@ -1838,16 +1833,16 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area, &
          lbound(mesh%area), ubound(mesh%area), &
          comment = 'triangle area', unit = 'cm^2')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/gpec_jarea', mesh%gpec_jarea, &
-         lbound(mesh%gpec_jarea), ubound(mesh%gpec_jarea), unit = 'cm^3 Mx^-1', &
-         comment = 'Jacobian surface integral (used for normalization in GPEC) between flux surfaces')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/gpec_jacfac', mesh%gpec_jacfac, &
+         lbound(mesh%gpec_jacfac), ubound(mesh%gpec_jacfac), unit = 'cm^2', &
+         comment = 'Jacobian surface factor between flux surfaces')
     call h5_close(h5id_root)
   end subroutine mesh_write
 
   subroutine write_meshfile_for_freefem
     integer :: fid, kpoi, ktri, kp
 
-    open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace')
+    open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace', form = 'formatted', action = 'write')
     write (fid, '(3(1x, i0))') mesh%npoint, mesh%ntri, mesh%kp_max(mesh%nflux) - 1
     do kpoi = 1, mesh%kp_low(mesh%nflux + 1)
        write (fid, '(2(1x, es23.15e3), 1x, i0)') &
@@ -1875,7 +1870,7 @@ contains
     integer(HID_T) :: h5id_root
     integer, allocatable :: orient(:)
 
-    call magdif_mesh_destructor(mesh)
+    call magdif_mesh_deinit(mesh)
     call h5_open(file, h5id_root)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_O', mesh%R_O)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_O', mesh%Z_O)
@@ -1930,7 +1925,7 @@ contains
     allocate(mesh%edge_map2global(3, mesh%ntri))
     allocate(mesh%edge_map2ktri(2, mesh%nedge))
     allocate(mesh%edge_map2ke(2, mesh%nedge))
-    allocate(mesh%gpec_jarea(mesh%nflux))
+    allocate(mesh%gpec_jacfac(-16:16, mesh%nflux))
     allocate(mesh%area(mesh%ntri))
     allocate(mesh%R_Omega(mesh%ntri))
     allocate(mesh%Z_Omega(mesh%ntri))
@@ -1968,7 +1963,7 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_Omega', mesh%Z_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/gpec_jarea', mesh%gpec_jarea)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/gpec_jacfac', mesh%gpec_jacfac)
     call h5_close(h5id_root)
     where (orient == 1)
        mesh%orient = .true.
@@ -1978,8 +1973,9 @@ contains
     deallocate(orient)
   end subroutine mesh_read
 
-  subroutine magdif_mesh_destructor(this)
-    type(mesh_t), intent(inout) :: this
+  subroutine magdif_mesh_deinit(this)
+    class(mesh_t), intent(inout) :: this
+
     if (allocated(this%deletions)) deallocate(this%deletions)
     if (allocated(this%additions)) deallocate(this%additions)
     if (allocated(this%refinement)) deallocate(this%refinement)
@@ -2011,16 +2007,16 @@ contains
     if (allocated(this%edge_map2global)) deallocate(this%edge_map2global)
     if (allocated(this%edge_map2ktri)) deallocate(this%edge_map2ktri)
     if (allocated(this%edge_map2ke)) deallocate(this%edge_map2ke)
-    if (allocated(this%gpec_jarea)) deallocate(this%gpec_jarea)
+    if (allocated(this%gpec_jacfac)) deallocate(this%gpec_jacfac)
     if (allocated(this%area)) deallocate(this%area)
     if (allocated(this%R_Omega)) deallocate(this%R_Omega)
     if (allocated(this%Z_Omega)) deallocate(this%Z_Omega)
-  end subroutine magdif_mesh_destructor
+  end subroutine magdif_mesh_deinit
 
   subroutine compare_gpec_coordinates
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use netcdf, only: nf90_open, nf90_nowrite, nf90_noerr, nf90_inq_dimid, nf90_inq_varid, &
-         nf90_inquire_dimension, nf90_get_var, nf90_close
+         nf90_inquire_dimension, nf90_get_var, nf90_close, nf90_global, nf90_get_att
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext, psipol_max
     use constants, only: pi  ! orbit_mod.f90
     use magdif_conf, only: conf, log, datafile
@@ -2028,10 +2024,10 @@ contains
     character(len = 1024) :: filename
     logical :: file_exists
     integer(HID_T) :: h5id_root
-    integer :: ncid_file, ncid, nrad, npol, krad, kpol
-    real(dp) :: dum, B0_R, B0_Z, unit_normal(0:1)
+    integer :: ncid_file, ncid, nrad, npol, krad, kpol, idum, fid
+    real(dp) :: dum, B0_R, B0_Z, unit_normal(0:1), q
     real(dp), allocatable :: psi(:), theta(:), R(:, :), Z(:, :), theta_shift(:), &
-         xi_n(:, :, :)
+         xi_n(:, :, :), jac(:, :), sqrt_g(:, :)
     complex(dp), allocatable :: xi_n_R(:), xi_n_Z(:)
 
     write (filename, '("gpec_profile_output_n", i0, ".nc")') conf%n
@@ -2093,7 +2089,7 @@ contains
        xi_n_R(kpol) = unit_normal(0) * 1d2 * cmplx(xi_n(krad, kpol, 0), xi_n(krad, kpol, 1), dp)
        xi_n_Z(kpol) = unit_normal(1) * 1d2 * cmplx(xi_n(krad, kpol, 0), xi_n(krad, kpol, 1), dp)
     end do
-    if (allocated(theta_shift)) deallocate(theta_shift)
+    deallocate(theta_shift)
     call h5_add(h5id_root, dataset // '/R', R, lbound(R), ubound(R), &
          unit = 'cm', comment = 'R(psi, theta)')
     call h5_add(h5id_root, dataset // '/Z', Z, lbound(Z), ubound(Z), &
@@ -2103,13 +2099,65 @@ contains
     call h5_add(h5id_root, dataset // '/xi_n_Z', xi_n_Z, lbound(xi_n_Z), ubound(xi_n_Z), &
          unit = 'cm', comment = 'Axial component of normal displacement xi_n(theta) at last flux surface')
     call h5_close(h5id_root)
-    if (allocated(psi)) deallocate(psi)
-    if (allocated(theta)) deallocate(theta)
-    if (allocated(R)) deallocate(R)
-    if (allocated(Z)) deallocate(Z)
-    if (allocated(xi_n)) deallocate(xi_n)
-    if (allocated(xi_n_R)) deallocate(xi_n_R)
-    if (allocated(xi_n_Z)) deallocate(xi_n_Z)
+    deallocate(psi, theta, R, Z, xi_n, xi_n_R, xi_n_Z)
+
+    filename = '2d.out'
+    inquire(file = filename, exist = file_exists)
+    if (.not. file_exists) return
+    write (filename, '("dcon_output_n", i0, ".nc")') conf%n
+    inquire(file = filename, exist = file_exists)
+    if (.not. file_exists) return
+    write (log%msg, '("Files ", a, " and 2d.out found, performing GPEC Jacobian comparison.")') &
+         trim(filename)
+    call check_error("nf90_open", nf90_open(filename, nf90_nowrite, ncid_file))
+    call check_error("nf90_get_att", nf90_get_att(ncid_file, nf90_global, 'mpsi', nrad))
+    call check_error("nf90_get_att", nf90_get_att(ncid_file, nf90_global, 'mtheta', npol))
+    call check_error("nf90_close", nf90_close(ncid_file))
+    nrad = nrad + 1
+    allocate(psi(nrad), theta(npol), theta_shift(nrad), jac(nrad, npol), sqrt_g(nrad, npol), &
+         R(nrad, npol), Z(nrad, npol))
+    open(newunit = fid, file = '2d.out', status = 'old', form = 'formatted', action = 'read')
+    read (fid, *)
+    read (fid, *)
+    do krad = 1, nrad
+       read (fid, '(6x, i3, 6x, e24.16)') idum, psi(krad)
+       psi(krad) = psi(krad) * psipol_max
+       theta_shift(krad) = theta_offset(psi(krad) + fs%psi(0))
+       read (fid, *)
+       read (fid, *)
+       read (fid, *)
+       do kpol = 1, npol
+          read (fid, '(i6, 1p, 8e24.16)') idum, theta(kpol), dum, dum, dum, dum, &
+               R(krad, kpol), Z(krad, kpol), jac(krad, kpol)
+          theta(kpol) = theta(kpol) * 2d0 * pi
+          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol) + theta_shift(krad), &
+               q, dum, sqrt_g(krad, kpol), dum, dum, dum, dum, dum, dum, dum, dum)
+          sqrt_g(krad, kpol) = sqrt_g(krad, kpol) * abs(q)
+       end do
+       read (fid, *)  ! skip theta = 2 pi
+       read (fid, *)
+       read (fid, *)
+       read (fid, *)
+    end do
+    R(:, :) = R * 1d2  ! m to cm
+    Z(:, :) = Z * 1d2  ! m to cm
+    jac(:, :) = jac * 1d-2  ! m per T to cm per G
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, dataset // '/jac/')
+    call h5_add(h5id_root, dataset // '/jac/psi', psi, lbound(psi), ubound(psi), &
+         unit = 'Mx', comment = 'poloidal flux (shifted to zero at axis)')
+    call h5_add(h5id_root, dataset // '/jac/theta', theta, lbound(theta), ubound(theta), &
+         unit = 'rad', comment = 'flux poloidal angle')
+    call h5_add(h5id_root, dataset // '/jac/R', R, lbound(R), ubound(R), &
+         unit = 'cm', comment = 'R(psi, theta)')
+    call h5_add(h5id_root, dataset // '/jac/Z', Z, lbound(Z), ubound(Z), &
+         unit = 'cm', comment = 'Z(psi, theta)')
+    call h5_add(h5id_root, dataset // '/jac/sqrt_g', sqrt_g, lbound(sqrt_g), ubound(sqrt_g), &
+         unit = 'cm', comment = 'MEPHIT Jacobian at (psi, theta)')
+    call h5_add(h5id_root, dataset // '/jac/jac', jac, lbound(jac), ubound(jac), &
+         unit = 'cm', comment = 'GPEC Jacobian at (psi, theta)')
+    call h5_close(h5id_root)
+    deallocate(psi, theta, theta_shift, jac, sqrt_g, R, Z)
 
   contains
     subroutine check_error(funcname, status)
@@ -2132,7 +2180,7 @@ contains
     real(dp) :: dum
     real(dp), allocatable :: psi(:), theta(:), theta_shift(:), R(:, :), Z(:, :)
 
-    open(newunit = fid, file = 'illustration.asc', status = 'replace', form = 'formatted')
+    open(newunit = fid, file = 'illustration.asc', status = 'replace', form = 'formatted', action = 'write')
     write (fid, '(6(1x, i0))') npsi, ntheta, nrad, npol, equil%nbbbs, equil%limitr
     allocate(psi(npsi), theta(npol), theta_shift(npsi), R(npol, npsi), Z(npol, npsi))
     psi(:) = linspace(0d0, psipol_max, npsi, 1, 1)
@@ -2186,7 +2234,7 @@ contains
     integer :: kf
 
     ! initialize fluxvar with equidistant psi values
-    call fluxvar%init(4, equil%psi_eqd)
+    call psi_interpolator%init(4, equil%psi_eqd)
 
     select case (conf%pres_prof)
     case (pres_prof_eps)
@@ -2214,11 +2262,10 @@ contains
        error stop
     end select
 
-    fs%F = [(fluxvar%interp(equil%fpol, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs%FdF_dpsi = [(fluxvar%interp(equil%ffprim, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs_half%F = [(fluxvar%interp(equil%fpol, fs_half%psi(kf)), kf = 1, mesh%nflux)]
-    fs_half%FdF_dpsi = [(fluxvar%interp(equil%ffprim, fs_half%psi(kf)), &
-         kf = 1, mesh%nflux)]
+    fs%F(:) = [(psi_interpolator%eval(equil%fpol, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs%FdF_dpsi(:) = [(psi_interpolator%eval(equil%ffprim, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs_half%F(:) = [(psi_interpolator%eval(equil%fpol, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    fs_half%FdF_dpsi(:) = [(psi_interpolator%eval(equil%ffprim, fs_half%psi(kf)), kf = 1, mesh%nflux)]
   end subroutine init_flux_variables
 
   subroutine compute_pres_prof_eps
@@ -2248,12 +2295,12 @@ contains
     write (log%msg, '("temp@axis: ", es24.16e3, ", dens@axis: ", es24.16e3)') &
          temp(0), dens(0)
     if (log%info) call log%write
-    fs%p = dens * temp * ev2erg
-    fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
+    fs%p(:) = dens * temp * ev2erg
+    fs%dp_dpsi(:) = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
     dens(1:) = (fs_half%psi - psi_ext) / psi_int * conf%dens_max + conf%dens_min
     temp(1:) = (fs_half%psi - psi_ext) / psi_int * conf%temp_max + conf%temp_min
-    fs_half%p = dens(1:) * temp(1:) * ev2erg
-    fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
+    fs_half%p(:) = dens(1:) * temp(1:) * ev2erg
+    fs_half%dp_dpsi(:) = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
   end subroutine compute_pres_prof_eps
 
   subroutine compute_pres_prof_par
@@ -2282,29 +2329,30 @@ contains
          + conf%dens_min
     temp = (fs%psi - psi_ext) / (psi_int - psi_ext) * (conf%temp_max - conf%temp_min) &
          + conf%temp_min
-    fs%p = dens * temp * ev2erg
-    fs%dp_dpsi = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
+    fs%p(:) = dens * temp * ev2erg
+    fs%dp_dpsi(:) = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
     dens(1:) = (fs_half%psi - psi_ext) / (psi_int - psi_ext) * &
          (conf%dens_max - conf%dens_min) + conf%dens_min
     temp(1:) = (fs_half%psi - psi_ext) / (psi_int - psi_ext) * &
          (conf%temp_max - conf%temp_min) + conf%temp_min
-    fs_half%p = dens(1:) * temp(1:) * ev2erg
-    fs_half%dp_dpsi = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
+    fs_half%p(:) = dens(1:) * temp(1:) * ev2erg
+    fs_half%dp_dpsi(:) = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
   end subroutine compute_pres_prof_par
 
   subroutine compute_pres_prof_geqdsk
     integer :: kf
-    fs%p = [(fluxvar%interp(equil%pres, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs%dp_dpsi = [(fluxvar%interp(equil%pprime, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs_half%p = [(fluxvar%interp(equil%pres, fs_half%psi(kf)), kf = 1, mesh%nflux)]
-    fs_half%dp_dpsi = [(fluxvar%interp(equil%pprime, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+
+    fs%p(:) = [(psi_interpolator%eval(equil%pres, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs%dp_dpsi(:) = [(psi_interpolator%eval(equil%pprime, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs_half%p(:) = [(psi_interpolator%eval(equil%pres, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    fs_half%dp_dpsi(:) = [(psi_interpolator%eval(equil%pprime, fs_half%psi(kf)), kf = 1, mesh%nflux)]
   end subroutine compute_pres_prof_geqdsk
 
   subroutine compute_safety_factor_flux
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_util, only: flux_func
+    use magdif_util, only: interp1d
     integer :: kf, kt, ktri
-    type(flux_func) :: psi_interpolator
+    type(interp1d) :: psi_half_interpolator
 
     fs_half%q = 0d0
     do kf = 1, mesh%nflux
@@ -2314,98 +2362,83 @@ contains
        end do
        fs_half%q(kf) = fs_half%q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
     end do
-    call psi_interpolator%init(4, fs_half%psi)
+    call psi_half_interpolator%init(4, fs_half%psi)
     ! Lagrange polynomial extrapolation for values at separatrix and magnetic axis
-    fs%q = [(psi_interpolator%interp(fs_half%q, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs%q(:) = [(psi_half_interpolator%eval(fs_half%q, fs%psi(kf)), kf = 0, mesh%nflux)]
+    call psi_half_interpolator%deinit
   end subroutine compute_safety_factor_flux
 
   subroutine compute_safety_factor_rot
-    use magdif_util, only: flux_func
-    use magdata_in_symfluxcoor_mod, only: psipol_max, psisurf, qsaf
+    use magdata_in_symfluxcoor_mod, only: qsaf
     integer :: kf
-    type(flux_func) :: psi_interpolator
 
-    ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
-    ! load_magdata_in_symfluxcoord_ext divides by psipol_max
-    call psi_interpolator%init(4, psisurf(1:) * psipol_max + fs%psi(0))
     ! Lagrange polynomial extrapolation for value at magnetic axis
-    fs%q = [(psi_interpolator%interp(qsaf, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs_half%q = [(psi_interpolator%interp(qsaf, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    fs%q(:) = [(psi_fine_interpolator%eval(qsaf, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs_half%q(:) = [(psi_fine_interpolator%eval(qsaf, fs_half%psi(kf)), kf = 1, mesh%nflux)]
   end subroutine compute_safety_factor_rot
 
   subroutine compute_safety_factor_geqdsk
     integer :: kf
 
-    fs%q = [(fluxvar%interp(equil%qpsi, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs_half%q = [(fluxvar%interp(equil%qpsi, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    fs%q(:) = [(psi_interpolator%eval(equil%qpsi, fs%psi(kf)), kf = 0, mesh%nflux)]
+    fs_half%q(:) = [(psi_interpolator%eval(equil%qpsi, fs_half%psi(kf)), kf = 1, mesh%nflux)]
   end subroutine compute_safety_factor_geqdsk
 
-  subroutine cache_resonance_positions
-    use magdif_conf, only: conf, conf_arr, log, cmplx_fmt
-    integer :: kf, m, kf_res
+  subroutine check_resonance_positions
+    use magdif_conf, only: log
+    integer :: m, kf
     real(dp), dimension(mesh%nflux) :: abs_err
 
-    allocate(mesh%m_res(mesh%nflux))
-    mesh%m_res = 0
-    allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
-    mesh%res_ind = 0
-    log%msg = 'resonance positions:'
-    if (log%debug) call log%write
     do m = mesh%m_res_max, mesh%m_res_min, -1
        abs_err = [(abs(abs(fs_half%q(kf)) - dble(m) / dble(mesh%n)), kf = 1, mesh%nflux)]
-       kf_res = minloc(abs_err, 1)
-       mesh%res_ind(m) = kf_res
-       mesh%m_res(kf_res) = m
-       write (log%msg, '("m = ", i0, ", kf_res = ", i0, ' // &
-            '", rho: ", f19.16, 2(" < ", f19.16))') m, kf_res, &
-            [fs%rad(kf_res - 1), fs_half%rad(kf_res), fs%rad(kf_res)] / fs%rad(mesh%nflux)
-       if (log%debug) call log%write
+       kf = minloc(abs_err, 1)
+       if (kf /= mesh%res_ind(m)) then
+          write (log%msg, '("m = ", i0, ": q is resonant at index ", i0, ' // &
+               '", but psi is resonant at index ", i0)') m, kf, mesh%res_ind(m)
+          if (log%warn) call log%write
+       end if
     end do
-
-    if (log%info) then
-       log%msg = 'absolute poloidal mode number, sheet current factor'
-       call log%write
-       do m = conf%m_min, conf%m_max
-          write (log%msg, '(i2, 1x, ' // cmplx_fmt // ')') m, &
-               conf_arr%sheet_current_factor(m)
-          call log%write
-       end do
-    end if
-  end subroutine cache_resonance_positions
+  end subroutine check_resonance_positions
 
   subroutine check_safety_factor
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use constants, only: pi  ! orbit_mod.f90
-    use magdata_in_symfluxcoor_mod, only: nlabel, psipol_max, psisurf, rbeg, qsaf
-    integer :: kf, kt, ktri, fid
-    real(dp), allocatable :: q(:)
+    use magdata_in_symfluxcoor_mod, only: psisurf, qsaf
+    use magdif_conf, only: datafile
+    character(len = *), parameter :: grp = 'debug_q'
+    integer(HID_T) :: h5id_root
 
-    allocate(q(mesh%nflux))
-    q = 0d0
+    integer :: kf, kt, ktri
+    real(dp) :: step_q(mesh%nflux), step_psi_norm(mesh%nflux), eqd_psi_norm(equil%nw)
+
+    step_q(:) = 0d0
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          q(kf) = q(kf) + B0phi_Omega(ktri) * mesh%area(ktri)
+          step_q(kf) = step_q(kf) + B0phi_Omega(ktri) * mesh%area(ktri)
        end do
-       q(kf) = q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
+       step_q(kf) = step_q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
     end do
-    open(newunit = fid, file = 'check_q_step.dat', status = 'replace')
-    do kf = 1, mesh%nflux
-       write (fid, '(3(1x, es24.16e3))') (fs_half%psi(kf) - fs%psi(0)) / &
-            (fs%psi(mesh%nflux) - fs%psi(0)), fs_half%rad(kf), q(kf)
-    end do
-    close(fid)
-    deallocate(q)
-    allocate(q(nlabel))
-    ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
-    ! load_magdata_in_symfluxcoord_ext divides by psipol_max
-    q = [(fluxvar%interp(equil%qpsi, psisurf(kf) * psipol_max + fs%psi(0)), &
-         kf = 1, nlabel)]
-    open(newunit = fid, file = 'check_q_cont.dat', status = 'replace')
-    do kf = 1, nlabel
-       write (fid, '(4(1x, es24.16e3))') psisurf(kf), rbeg(kf), qsaf(kf), q(kf)
-    end do
-    close(fid)
-    deallocate(q)
+    step_psi_norm(:) = (fs_half%psi - fs%psi(0)) / (fs%psi(mesh%nflux) - fs%psi(0))
+    eqd_psi_norm(:) = (equil%psi_eqd - equil%simag) / (equil%sibry - equil%simag)
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/step_psi_norm', step_psi_norm, &
+         lbound(step_psi_norm), ubound(step_psi_norm), &
+         comment = 'normalized poloidal flux (stepped)')
+    call h5_add(h5id_root, grp // '/step_q', step_q, lbound(step_q), ubound(step_q), &
+         comment = 'safety factor (stepped)')
+    call h5_add(h5id_root, grp // '/GEQDSK_psi_norm', eqd_psi_norm, &
+         lbound(eqd_psi_norm), ubound(eqd_psi_norm), &
+         comment = 'normalized poloidal flux (GEQDSK)')
+    call h5_add(h5id_root, grp // '/GEQDSK_q', equil%qpsi, lbound(equil%qpsi), ubound(equil%qpsi), &
+         comment = 'safety factor (GEQDSK)')
+    call h5_add(h5id_root, grp // '/RK_psi_norm', psisurf(1:), &
+         lbound(psisurf(1:)), ubound(psisurf(1:)), &
+         comment = 'normalized poloidal flux (Runge-Kutta field line integration)')
+    call h5_add(h5id_root, grp // '/RK_q', qsaf, lbound(qsaf), ubound(qsaf), &
+         comment = 'safety factor (Runge-Kutta field line integration)')
+    call h5_close(h5id_root)
   end subroutine check_safety_factor
 
   subroutine cache_equilibrium_field
@@ -2595,50 +2628,82 @@ contains
   end subroutine compute_j0phi_geqdsk
 
   subroutine check_curr0
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
-    use magdif_conf, only: longlines
-    use magdif_util, only: clight
-    integer :: kf, kt, fid_amp, fid_gs, fid_prof
-    real(dp) :: cmp_gradp, cmp_amp, cmp_gs, theta, R, Z, dum, B0_R, B0_phi, B0_Z, &
-         dB0R_dZ, dB0phi_dR, dB0phi_dZ, dB0Z_dR, J0_R, J0_phi, J0_Z, grad_psi(3)
+    use magdif_conf, only: datafile
+    use magdif_util, only: clight, linspace
+    character(len = *), parameter :: grp = 'debug_equil'
+    integer, parameter :: ntheta = 512
+    integer(HID_T) :: h5id_root
+    integer :: kf, ktheta
+    real(dp) :: R, Z, dum, B0_R, B0_phi, B0_Z, dB0R_dZ, dB0phi_dR, dB0phi_dZ, dB0Z_dR, &
+         grad_psi(2), psi(2:equil%nw - 1), theta(ntheta)
+    real(dp), dimension(ntheta, 2:equil%nw - 1) :: grad_p0, amp_lorentz, gs_lorentz, &
+         amp_J0_R, amp_J0_phi, amp_J0_Z, gs_J0_R, gs_J0_phi, gs_J0_Z
 
-    open(newunit = fid_prof, file = 'cmp_prof.dat', recl = longlines, status = 'replace')
-    open(newunit = fid_amp, file = 'j0_amp.dat', recl = longlines, status = 'replace')
-    open(newunit = fid_gs, file = 'j0_gs.dat', recl = longlines, status = 'replace')
-    do kf = 1, mesh%nflux
-       do kt = 1, mesh%kt_max(kf)
-          theta = (dble(kt) - 0.5d0) / dble(mesh%kt_max(kf)) * 2d0 * pi
+    psi(:) = equil%psi_eqd(2:equil%nw-1) - equil%simag
+    theta(:) = linspace(0d0, 2d0 * pi, ntheta, 0, 1)
+    do kf = 2, equil%nw - 1
+       do ktheta = 1, ntheta
           ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
-          call magdata_in_symfluxcoord_ext(2, dum, fs_half%psi(kf) - fs%psi(0), &
-               theta, dum, dum, dum, dum, dum, R, dum, dum, Z, dum, dum)
+          call magdata_in_symfluxcoord_ext(2, dum, psi(kf), theta(ktheta), &
+               dum, dum, dum, dum, dum, R, dum, dum, Z, dum, dum)
           call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dB0R_dZ, dB0phi_dR, &
                dum, dB0phi_dZ, dB0Z_dR, dum, dum)
           ! left-hand side of iMHD force balance
-          grad_psi = [R * B0_Z, 0d0, -R * B0_R]
-          cmp_gradp = fs_half%dp_dpsi(kf) * dot_product(grad_psi, grad_psi) / &
+          grad_psi = [R * B0_Z, -R * B0_R]
+          grad_p0(ktheta, kf) = equil%pprime(kf) * dot_product(grad_psi, grad_psi) / &
                norm2(grad_psi)
           ! current density via Grad-Shafranov equation
-          J0_R = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * B0_R
-          J0_Z = 0.25d0 / pi * clight * fs_half%FdF_dpsi(kf) / fs_half%F(kf) * B0_Z
-          J0_phi = clight * (fs_half%dp_dpsi(kf) * R + &
-               0.25d0 / pi * fs_half%FdF_dpsi(kf) / R)
-          write (fid_gs, '(3(1x, es24.16e3))') J0_R, J0_phi, J0_Z
-          cmp_gs = dot_product([J0_phi * B0_Z - J0_Z * B0_phi, J0_Z * B0_R - J0_R * B0_Z, &
-               J0_R * B0_phi - J0_phi * B0_R], grad_psi) / norm2(grad_psi) / clight
+          gs_J0_R(ktheta, kf) = 0.25d0 / pi * clight * equil%ffprim(kf) / equil%fpol(kf) * B0_R
+          gs_J0_Z(ktheta, kf) = 0.25d0 / pi * clight * equil%ffprim(kf) / equil%fpol(kf) * B0_Z
+          gs_J0_phi(ktheta, kf) = clight * (equil%pprime(kf) * R + &
+               0.25d0 / pi * equil%ffprim(kf) / R)
+          gs_lorentz(ktheta, kf) = 1d0 / norm2(grad_psi) / clight * dot_product(grad_psi, &
+               [gs_J0_phi(ktheta, kf) * B0_Z - gs_J0_Z(ktheta, kf) * B0_phi, &
+               gs_J0_R(ktheta, kf) * B0_phi - gs_J0_phi(ktheta, kf) * B0_R])
           ! current density via Ampere's equation
-          J0_R = 0.25d0 / pi * clight * (-dB0phi_dZ)
-          J0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
-          J0_Z = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
-          write (fid_amp, '(3(1x, es24.16e3))') J0_R, J0_phi, J0_Z
-          cmp_amp = dot_product([J0_phi * B0_Z - J0_Z * B0_phi, J0_Z * B0_R - J0_R * B0_Z, &
-               J0_R * B0_phi - J0_phi * B0_R], grad_psi) / norm2(grad_psi) / clight
-          write (fid_prof, '(3(1x, es24.16e3))') cmp_gradp, cmp_amp, cmp_gs
+          amp_J0_R(ktheta, kf) = 0.25d0 / pi * clight * (-dB0phi_dZ)
+          amp_J0_phi(ktheta, kf) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+          amp_J0_Z(ktheta, kf) = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
+          amp_lorentz(ktheta, kf) = 1d0 / norm2(grad_psi) / clight * dot_product(grad_psi, &
+               [amp_J0_phi(ktheta, kf) * B0_Z - amp_J0_Z(ktheta, kf) * B0_phi, &
+               amp_J0_R(ktheta, kf) * B0_phi - amp_J0_phi(ktheta, kf) * B0_R])
        end do
     end do
-    close(fid_prof)
-    close(fid_amp)
-    close(fid_gs)
+    psi(:) = psi / (equil%sibry - equil%simag)
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/psi', psi, lbound(psi), ubound(psi), &
+         unit = 'Mx', comment = 'poloidal flux')
+    call h5_add(h5id_root, grp // '/theta', theta, lbound(theta), ubound(theta), &
+         unit = 'rad', comment = 'flux poloidal angle')
+    call h5_add(h5id_root, grp // '/grad_p0', grad_p0, lbound(grad_p0), ubound(grad_p0), &
+         unit = 'dyn cm^-3', comment = 'pressure gradient')
+    call h5_add(h5id_root, grp // '/GS_Lorentz', gs_lorentz, lbound(gs_lorentz), ubound(gs_lorentz), &
+         unit = 'dyn cm^-3', comment = 'Lorentz force density via Grad-Shafranov equation')
+    call h5_add(h5id_root, grp // '/Ampere_Lorentz', amp_lorentz, lbound(amp_lorentz), ubound(amp_lorentz), &
+         unit = 'dyn cm^-3', comment = 'Lorentz force density via Ampere equation')
+    call h5_add(h5id_root, grp // '/GS_j0_R', gs_J0_R, &
+         lbound(gs_j0_R), ubound(gs_J0_R), unit = 'statA cm^-2', &
+         comment = 'R component of equilibrium current density via Grad-Shafranov equation')
+    call h5_add(h5id_root, grp // '/GS_j0_phi', gs_J0_phi, &
+         lbound(gs_j0_phi), ubound(gs_J0_phi), unit = 'statA cm^-2', &
+         comment = 'physical phi component of equilibrium current density via Grad-Shafranov equation')
+    call h5_add(h5id_root, grp // '/GS_j0_Z', gs_J0_Z, &
+         lbound(gs_j0_Z), ubound(gs_J0_Z), unit = 'statA cm^-2', &
+         comment = 'Z component of equilibrium current density via Grad-Shafranov equation')
+    call h5_add(h5id_root, grp // '/Ampere_j0_R', amp_J0_R, &
+         lbound(amp_j0_R), ubound(amp_J0_R), unit = 'statA cm^-2', &
+         comment = 'R component of equilibrium current density via Ampere equation')
+    call h5_add(h5id_root, grp // '/Ampere_j0_phi', amp_J0_phi, &
+         lbound(amp_j0_phi), ubound(amp_J0_phi), unit = 'statA cm^-2', &
+         comment = 'physical phi component of equilibrium current density via Ampere equation')
+    call h5_add(h5id_root, grp // '/Ampere_j0_Z', amp_J0_Z, &
+         lbound(amp_j0_Z), ubound(amp_J0_Z), unit = 'statA cm^-2', &
+         comment = 'Z component of equilibrium current density via Ampere equation')
+    call h5_close(h5id_root)
   end subroutine check_curr0
 
   subroutine check_redundant_edges(cache, name)

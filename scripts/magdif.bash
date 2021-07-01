@@ -26,14 +26,6 @@ replace_first_in_line() {
     sed -Ee "$2 s/^ *'?([^' ]*)'?/$3/" -i $1
 }
 
-read_first_in_line() {
-    sed -Ene "$2 s/^ *'?([^' ]*)'? +.*/\1/ p" $1
-}
-
-nml_read_integer() {
-    sed -Ene "s/ *$2 *= *([-0-9]+).*/\1/i p" $1
-}
-
 
 magdif_init() {
     config=
@@ -99,7 +91,6 @@ magdif_init() {
         replace_first_in_line "$workdir/field_divB0.inp" 7 "'${geqdsk##*/}'"     # gfile
         replace_first_in_line "$workdir/field_divB0.inp" 8 "'${vacfield##*/}'"   # pfile
         replace_first_in_line "$workdir/field_divB0.inp" 9 "'${convexwall##*/}'" # convex
-        cp "$workdir/field_divB0.inp" "$workdir/field_divB0_unprocessed.inp"
     done
 }
 
@@ -135,56 +126,29 @@ magdif_convert() {
     fi
 }
 
-magdif_prepare() {
-    config=magdif.inp
-    log=magdif.log
-    # maybe implement mesh file options when magdif_mesh_mod.f90 is complete
-    mesh=inputformaxwell.msh
-    extended=inputformaxwell_ext.msh
-
-    for workdir; do
-        pushd "$workdir"
-        rm -f "$log"
-        cp field_divB0_unprocessed.inp field_divB0.inp
-        unprocessed=$(read_first_in_line field_divB0_unprocessed.inp 7)
-        replace_first_in_line field_divB0.inp 7 "'\1_processed'"  # gfile
-        "$bindir/magdif_mesher.x" "$config" "$unprocessed" 2>&1 | tee "$log"
-        lasterr=$?
-        if [ $lasterr -ne 0 ]; then
-            echo "$scriptname: error $lasterr during mesh generation in $workdir" | tee -a "$log" >&2
-            popd
-            anyerr=$lasterr
-            continue
-        fi
-        if [ -n "$SSH_CLIENT" -o -z "$DISPLAY" ]; then
-            # when connected via SSH or not working in an X environmnent,
-            # suppress graphics to avoid setting an error code
-            FreeFem++ -nw "$scriptdir/extmesh.edp" 2>&1 | tee -a "$log"
-        else
-            FreeFem++ "$scriptdir/extmesh.edp" 2>&1 | tee -a "$log"
-        fi
-        lasterr=$?
-        if [ $lasterr -ne 0 ]; then
-            echo "$scriptname: error $lasterr during mesh generation in $workdir" | tee -a "$log" >&2
-            popd
-            anyerr=$lasterr
-            continue
-        fi
-        popd
-    done
-}
-
 magdif_run() {
     config=magdif.inp
     log=magdif.log
-    batchmode=false
-    TEMP=$(getopt -o 'b' --long 'batchmode' -n "$scriptname" -- "$@")
+    analysis=0
+    iterations=0
+    meshing=0
+    TEMP=$(getopt -o 'aim' --long 'analysis,iterations,meshing' -n "$scriptname" -- "$@")
     eval set -- "$TEMP"
     unset TEMP
     while true; do
         case "$1" in
-            '-b'|'--batchmode')
-                batchmode=true
+            '-a'|'--analysis')
+                analysis=1
+                shift
+                continue
+                ;;
+            '-i'|'--iterations')
+                iterations=1
+                shift
+                continue
+                ;;
+            '-m'|'--meshing')
+                meshing=1
                 shift
                 continue
                 ;;
@@ -198,11 +162,24 @@ magdif_run() {
                 ;;
         esac
     done
+    if [ $analysis -eq 0 -a $iterations -eq 0 -a $meshing -eq 0 ]; then
+        # if no options are set, default to go through all phases
+        analysis=1
+        iterations=1
+        meshing=1
+    fi
+    runmode=$(( analysis << 2 | iterations << 1 | meshing << 0 ))
 
     for workdir; do
         pushd "$workdir"
+        rm -f "$log"
+        if [ -f "field_divB0_unprocessed.inp" ]; then
+            # backwards compatibility for directories
+            # initialized with previous version of this script
+            mv -b -f field_divB0_unprocessed.inp field_divB0.inp
+        fi
         "$bindir/magdif_run.x" \
-            "$bindir/magdif_test.x" \
+            $runmode \
             "$config" \
             "$tmpdir" \
             "$scriptdir/maxwell_daemon.edp" \
@@ -233,10 +210,8 @@ magdif_plot() {
 magdif_clean() {
     for workdir; do
         pushd "$workdir"
-        # files from magdif_prepare
-        rm -f fort.* magdif.h5 inputformaxwell_ext.msh inputformaxwell.msh box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat optpolres.dat j0_gs.dat j0_amp.dat cmp_prof.dat check_q_step.dat check_q_cont.dat cmp_vac.dat cmp_RT0.dat
         # files from magdif_run
-        rm -f fort.* magdif.h5 freefem.out magdif.log Bmn*.dat currmn*.dat currn_par*.dat
+        rm -f fort.* magdif.h5 magdif.log inputformaxwell_ext.msh inputformaxwell.msh box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat optpolres.dat cmp_vac.dat cmp_RT0.dat
         # files from magdif_plot
         rm -f plot*.pdf convergence.pdf Bmn*.pdf currmn*.pdf
         popd
@@ -262,7 +237,7 @@ set -o pipefail
 scriptname=$0
 anyerr=0
 case "$1" in
-    init|convert|prepare|run|plot|clean)
+    init|convert|run|plot|clean)
         mode=$1
         shift
         magdif_$mode "$@"
@@ -273,6 +248,7 @@ case "$1" in
         ;;
     *)
         echo "$scriptname: unrecognized mode '$1'"
+        magdif_help "$@"
         exit 1
         ;;
 esac

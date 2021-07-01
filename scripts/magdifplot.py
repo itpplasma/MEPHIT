@@ -367,7 +367,7 @@ class parcurr:
     def __init__(self):
         pass
 
-    def process_magdif(self, datafile_func, m_range, nrad, rres, symfluxcoord=True):
+    def process_magdif(self, data_func, m_range, nrad, rres, symfluxcoord=True):
         self.rad = {}
         self.jnpar = {}
         self.rres = rres
@@ -377,24 +377,18 @@ class parcurr:
             self.psi = {}
             self.Ichar = {}
             self.Delta = {}
+            dataset_func = lambda m: f"/postprocess/Imn_par_{m}"
+        else:
+            dataset_func = lambda m: '/postprocess/Imn_par_KiLCA'
         for m in m_range:
-            data = np.loadtxt(datafile_func(m))
-            self.rad[m] = data[:, 1].copy()
-            self.jnpar[m] = np.empty((nrad), dtype='D')
-            self.jnpar[m].real = data[:, 2].copy()
-            self.jnpar[m].imag = data[:, 3].copy()
-            self.part_int[m] = np.empty((nrad), dtype='D')
-            self.part_int[m].real = data[:, 6].copy()
-            self.part_int[m].imag = data[:, 7].copy()
-            self.bndry[m] = np.empty((nrad), dtype='D')
-            self.bndry[m].real = data[:, 10].copy()
-            self.bndry[m].imag = data[:, 11].copy()
+            self.rad[m] = data_func(m)[dataset_func(m) + '/rad'][()]
+            self.jnpar[m] = data_func(m)[dataset_func(m) + '/jmn_par_neg'][()]
+            self.part_int[m] = data_func(m)[dataset_func(m) + '/part_int_neg'][()]
+            self.bndry[m] = data_func(m)[dataset_func(m) + '/bndry_neg'][()]
             if symfluxcoord:
-                self.psi[m] = data[:, 0].copy()
-                self.Ichar[m] = data[:, 14].copy()
-                self.Delta[m] = np.empty((nrad), dtype='D')
-                self.Delta[m].real = data[:, 15].copy()
-                self.Delta[m].imag = data[:, 16].copy()
+                self.psi[m] = data_func(m)[dataset_func(m) + '/psi'][()]
+                self.Ichar[m] = data_func(m)[dataset_func(m) + '/I_char'][()]
+                self.Delta[m] = data_func(m)[dataset_func(m) + '/Delta_mn_neg'][()]
         const = 2.0 * np.pi * statA_to_A
         self.width = {}
         self.intJ = {}
@@ -496,8 +490,8 @@ class parcurr:
         self.I_res = {}
         self.w_isl = {}
         for k, m in enumerate(range(m_min, m_max + 1)):
-            self.I_res[m] = np.cdouble(rootgrp.variables['I_res'][0, k],
-                                       rootgrp.variables['I_res'][1, k])
+            self.I_res[m] = complex(rootgrp.variables['I_res'][0, k],
+                                    rootgrp.variables['I_res'][1, k])
             self.w_isl[m] = rootgrp.variables['w_isl'][k]
 
 
