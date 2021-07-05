@@ -920,6 +920,10 @@ contains
     ! assign the lowest mode number
     do m = mesh%m_res_max, mesh%m_res_min, -1
        call binsearch(fs%psi, 0, mesh%psi_res(m), kf_res)
+       if (kf_res <= 1) then
+          write (log%msg, '("Warning: resonance for m = ", i0, " occurs at flux surface index ", i0)') m, kf_res
+          if (log%warn) call log%write
+       end if
        mesh%res_ind(m) = kf_res
        mesh%m_res(kf_res) = m
        write (log%msg, '("m = ", i2, ", kf = ", i3, ", rho: ", f19.16, 2(" < ", f19.16))') &

@@ -691,29 +691,20 @@ contains
              do kt = 1, mesh%kt_max(kf)
                 ktri = mesh%kt_low(kf) + kt
                 ! add sheet current on edge i
-                if (mod(kt, 2) == 0) then
-                   ! edge i is diagonal
-                   if (mesh%orient(ktri)) then
-                      pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri)))
-                   else
-                      ktri_adj = mesh%adj_tri(mesh%ei(ktri), ktri)
-                      pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri_adj)))
-                   end if
-                else
+                if (mesh%orient(ktri)) then
                    pn_half = pn%DOF(mesh%li(2, ktri))
+                else
+                   ! edge i is diagonal
+                   ktri_adj = mesh%adj_tri(mesh%ei(ktri), ktri)
+                   pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri_adj)))
                 end if
                 jn%DOF(mesh%ei(ktri), ktri) = jn%DOF(mesh%ei(ktri), ktri) + &
                      conf_arr%sheet_current_factor(mesh%m_res(kf)) * &
                      B0flux(mesh%ei(ktri), ktri) * pn_half
                 ! add sheet current on edge o
-                if (mod(kt, 2) == 1) then
+                if (mesh%orient(ktri)) then
                    ! edge o is diagonal
-                   if (mesh%orient(ktri)) then
-                      pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri)))
-                   else
-                      ktri_adj = mesh%adj_tri(mesh%eo(ktri), ktri)
-                      pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri_adj)))
-                   end if
+                   pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri)))
                 else
                    pn_half = pn%DOF(mesh%lo(1, ktri))
                 end if
