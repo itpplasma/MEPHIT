@@ -59,7 +59,7 @@ contains
     use magdif_conf, only: conf, magdif_config_read, magdif_config_export_hdf5, conf_arr, magdif_log, log, datafile
     use magdif_mesh, only: equil, fs, fs_half, mesh, generate_mesh, write_mesh_cache, read_mesh_cache, &
          magdif_mesh_deinit, sample_polmodes, coord_cache_deinit, psi_interpolator, psi_fine_interpolator, &
-         B0R, B0phi, B0Z, B0R_Omega, B0phi_Omega, B0Z_Omega, B0flux, j0phi
+         B0R_edge, B0phi_edge, B0Z_edge, B0R_Omega, B0phi_Omega, B0Z_Omega, B0_flux, j0phi_edge
     use magdif_pert, only: generate_vacfield
     use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
     integer(c_int), intent(in), value :: runmode
@@ -132,14 +132,14 @@ contains
        end if
        call magdif_cleanup
     end if
-    if (allocated(B0r)) deallocate(B0r)
-    if (allocated(B0phi)) deallocate(B0phi)
-    if (allocated(B0z)) deallocate(B0z)
+    if (allocated(B0R_edge)) deallocate(B0R_edge)
+    if (allocated(B0phi_edge)) deallocate(B0phi_edge)
+    if (allocated(B0Z_edge)) deallocate(B0Z_edge)
     if (allocated(B0r_Omega)) deallocate(B0r_Omega)
     if (allocated(B0phi_Omega)) deallocate(B0phi_Omega)
     if (allocated(B0z_Omega)) deallocate(B0z_Omega)
-    if (allocated(B0flux)) deallocate(B0flux)
-    if (allocated(j0phi)) deallocate(j0phi)
+    if (allocated(B0_flux)) deallocate(B0_flux)
+    if (allocated(j0phi_edge)) deallocate(j0phi_edge)
     call psi_interpolator%deinit
     call psi_fine_interpolator%deinit
     call coord_cache_deinit(sample_polmodes)
@@ -522,14 +522,14 @@ contains
     use sparse_mod, only: sparse_solve, sparse_matmul
     use magdif_conf, only: conf, log
     use magdif_util, only: imun
-    use magdif_mesh, only: fs, mesh, B0R, B0phi, B0Z
+    use magdif_mesh, only: fs, mesh, B0R_edge, B0phi_edge, B0Z_edge
     real(dp) :: r
     real(dp) :: lr, lz  ! edge vector components
     complex(dp), dimension(conf%nkpol) :: a, b, x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(conf%nkpol) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kt, ktri, kp
+    integer :: kf, kt, ktri, kp, kedge
     integer :: nz
     integer, dimension(2 * conf%nkpol) :: irow, icol
     complex(dp), dimension(2 * conf%nkpol) :: aval
@@ -550,10 +550,10 @@ contains
           lZ = mesh%node_Z(tip) - mesh%node_Z(base)
 
           kp = base - mesh%kp_low(kf)
-          a(kp) = (B0R(mesh%ef(ktri), ktri) * lR + B0Z(mesh%ef(ktri), ktri) * lZ) / &
-               (lR ** 2 + lZ ** 2)
+          kedge = mesh%edge_map2global(mesh%ef(ktri), ktri)
+          a(kp) = (B0R_edge(kedge) * lR + B0Z_edge(kedge) * lZ) / (lR ** 2 + lZ ** 2)
           x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bn%DOF(mesh%ef(ktri), ktri)
-          b(kp) = imun * (mesh%n + imun * conf%damp) * B0phi(mesh%ef(ktri), ktri) / R
+          b(kp) = imun * (mesh%n + imun * conf%damp) * B0phi_edge(kedge) / R
        end do inner
 
        ! solve linear system
@@ -595,14 +595,14 @@ contains
   subroutine compute_currn
     use sparse_mod, only: sparse_solve, sparse_matmul
     use magdif_conf, only: conf, log, decorate_filename
-    use magdif_mesh, only: fs, mesh, B0phi, B0flux, j0phi
+    use magdif_mesh, only: fs, mesh, B0phi_edge, B0_flux, j0phi_edge
     use magdif_pert, only: RT0_check_div_free, RT0_check_redundant_edges
     use magdif_util, only: imun, clight
     complex(dp), dimension(2 * conf%nkpol) :: x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(2 * conf%nkpol) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kt, ktri, ke
+    integer :: kf, kt, ktri, ke, kedge
     integer :: nz
     integer, dimension(4 * conf%nkpol) :: irow, icol
     complex(dp), dimension(4 * conf%nkpol) :: aval
@@ -618,32 +618,35 @@ contains
           area = mesh%area(ktri)
           ! first term on source side: flux through edge f
           ke = mesh%ef(ktri)
+          kedge = mesh%edge_map2global(ke, ktri)
           R = sum(mesh%node_R(mesh%lf(:, ktri))) * 0.5d0
-          jn%DOF(ke, ktri) = j0phi(ke, ktri) / B0phi(ke, ktri) * Bn%DOF(ke, ktri) + &
-               clight * R / B0phi(ke, ktri) * (pn%DOF(mesh%lf(2, ktri)) - pn%DOF(mesh%lf(1, ktri)))
+          jn%DOF(ke, ktri) = j0phi_edge(kedge) / B0phi_edge(kedge) * Bn%DOF(ke, ktri) + &
+               clight * R / B0phi_edge(kedge) * (pn%DOF(mesh%lf(2, ktri)) - pn%DOF(mesh%lf(1, ktri)))
           x(kt) = -jn%DOF(ke, ktri)
           ! diagonal matrix element - edge i
           ke = mesh%ei(ktri)
+          kedge = mesh%edge_map2global(ke, ktri)
           d(kt) = -1d0 - imun * (mesh%n + imun * conf%damp) * area * 0.5d0 * &
-               B0phi(ke, ktri) / B0flux(ke, ktri)
+               B0phi_edge(kedge) / B0_flux(kedge)
           ! additional term from edge i on source side
           R = sum(mesh%node_R(mesh%li(:, ktri))) * 0.5d0
           Bnphi_Gamma = 0.5d0 * (Bn%comp_phi(ktri) + Bn%comp_phi(mesh%adj_tri(ke, ktri)))
-          x(kt) = x(kt) - imun * mesh%n * area * 0.5d0 * (clight * R / B0flux(ke, ktri) * &
-               (Bnphi_Gamma / B0phi(ke, ktri) * (fs%p(kf) - fs%p(kf-1)) - &
-               (pn%DOF(mesh%li(2, ktri)) - pn%DOF(mesh%li(1, ktri)))) + j0phi(ke, ktri) * &
-               (Bnphi_Gamma / B0phi(ke, ktri) - Bn%DOF(ke, ktri) / B0flux(ke, ktri)))
+          x(kt) = x(kt) - imun * mesh%n * area * 0.5d0 * (clight * R / B0_flux(kedge) * &
+               (Bnphi_Gamma / B0phi_edge(kedge) * (fs%p(kf) - fs%p(kf-1)) - &
+               (pn%DOF(mesh%li(2, ktri)) - pn%DOF(mesh%li(1, ktri)))) + j0phi_edge(kedge) * &
+               (Bnphi_Gamma / B0phi_edge(kedge) - Bn%DOF(ke, ktri) / B0_flux(kedge)))
           ! superdiagonal matrix element - edge o
           ke = mesh%eo(ktri)
+          kedge = mesh%edge_map2global(ke, ktri)
           du(kt) = 1d0 + imun * (mesh%n + imun * conf%damp) * area * 0.5d0 * &
-               B0phi(ke, ktri) / B0flux(ke, ktri)
+               B0phi_edge(kedge) / (-B0_flux(kedge))
           ! additional term from edge o on source side
           R = sum(mesh%node_R(mesh%lo(:, ktri))) * 0.5d0
           Bnphi_Gamma = 0.5d0 * (Bn%comp_phi(ktri) + Bn%comp_phi(mesh%adj_tri(ke, ktri)))
-          x(kt) = x(kt) - imun * mesh%n * area * 0.5d0 * (clight * r / B0flux(ke, ktri) * &
-               (Bnphi_Gamma / B0phi(ke, ktri) * (fs%p(kf-1) - fs%p(kf)) - &
-               (pn%DOF(mesh%lo(2, ktri)) - pn%DOF(mesh%lo(1, ktri)))) + j0phi(ke, ktri) * &
-               (Bnphi_Gamma / B0phi(ke, ktri) - Bn%DOF(ke, ktri) / B0flux(ke, ktri)))
+          x(kt) = x(kt) - imun * mesh%n * area * 0.5d0 * (clight * r / (-B0_flux(kedge)) * &
+               (Bnphi_Gamma / B0phi_edge(kedge) * (fs%p(kf-1) - fs%p(kf)) - &
+               (pn%DOF(mesh%lo(2, ktri)) - pn%DOF(mesh%lo(1, ktri)))) + j0phi_edge(kedge) * &
+               (Bnphi_Gamma / B0phi_edge(kedge) - Bn%DOF(ke, ktri) / (-B0_flux(kedge))))
        end do
        associate (ndim => mesh%kt_max(kf))
          call assemble_sparse(ndim, d(:ndim), du(:ndim), nz, &
@@ -681,8 +684,8 @@ contains
   subroutine add_sheet_current
     use magdif_conf, only: conf_arr
     use magdif_util, only: imun
-    use magdif_mesh, only: mesh, B0flux
-    integer :: kf, kt, ktri, ktri_adj
+    use magdif_mesh, only: mesh, B0_flux
+    integer :: kf, kt, ktri, ktri_adj, kedge
     complex(dp) :: pn_half
 
     do kf = 1, mesh%nflux
@@ -698,9 +701,9 @@ contains
                    ktri_adj = mesh%adj_tri(mesh%ei(ktri), ktri)
                    pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri_adj)))
                 end if
+                kedge = mesh%edge_map2global(mesh%ei(ktri), ktri)
                 jn%DOF(mesh%ei(ktri), ktri) = jn%DOF(mesh%ei(ktri), ktri) + &
-                     conf_arr%sheet_current_factor(mesh%m_res(kf)) * &
-                     B0flux(mesh%ei(ktri), ktri) * pn_half
+                     conf_arr%sheet_current_factor(mesh%m_res(kf)) * B0_flux(kedge) * pn_half
                 ! add sheet current on edge o
                 if (mesh%orient(ktri)) then
                    ! edge o is diagonal
@@ -708,9 +711,9 @@ contains
                 else
                    pn_half = pn%DOF(mesh%lo(1, ktri))
                 end if
+                kedge = mesh%edge_map2global(mesh%eo(ktri), ktri)
                 jn%DOF(mesh%eo(ktri), ktri) = jn%DOF(mesh%eo(ktri), ktri) + &
-                     conf_arr%sheet_current_factor(mesh%m_res(kf)) * &
-                     B0flux(mesh%eo(ktri), ktri) * pn_half
+                     conf_arr%sheet_current_factor(mesh%m_res(kf)) * (-B0_flux(kedge)) * pn_half
                 ! adjust toroidal current density
                 jn%comp_phi(ktri) = sum(jn%DOF(:, ktri)) * imun / mesh%n / mesh%area(ktri)
              end do

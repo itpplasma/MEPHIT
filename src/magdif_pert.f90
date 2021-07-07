@@ -1482,9 +1482,9 @@ contains
   subroutine compute_Bn_nonres(Bn)
     use magdif_conf, only: conf
     use magdif_util, only: imun
-    use magdif_mesh, only: mesh, B0R, B0phi, B0Z
+    use magdif_mesh, only: mesh, B0R_edge, B0phi_edge, B0Z_edge
     type(RT0_t), intent(inout) :: Bn
-    integer :: kf, kt, ktri, base, tip
+    integer :: kf, kt, ktri, base, tip, kedge
     real(dp) :: r, lr, lz
     complex(dp) :: Bnpsi
 
@@ -1497,9 +1497,10 @@ contains
           R = (mesh%node_R(base) + mesh%node_R(tip)) * 0.5d0
           lR = mesh%node_R(tip) - mesh%node_R(base)
           lZ = mesh%node_Z(tip) - mesh%node_Z(base)
-          Bnpsi = -mesh%R_O * B0phi(mesh%ef(ktri), ktri) / r
+          kedge = mesh%edge_map2global(mesh%ef(ktri), ktri)
+          Bnpsi = -mesh%R_O * B0phi_edge(kedge) / r
           Bn%DOF(mesh%ef(ktri), ktri) = Bnpsi * (lR ** 2 + lZ ** 2) / &
-               (B0R(mesh%ef(ktri), ktri) * lR + B0Z(mesh%ef(ktri), ktri) * lZ)
+               (B0R_edge(kedge) * lR + B0Z_edge(kedge) * lZ)
           Bn%comp_phi(ktri) = imun / mesh%n * Bn%DOF(mesh%ef(ktri), ktri) / mesh%area(ktri)
           Bn%DOF(mesh%ei(ktri), ktri) = (0d0, 0d0)
           Bn%DOF(mesh%eo(ktri), ktri) = (0d0, 0d0)

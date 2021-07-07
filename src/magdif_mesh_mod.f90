@@ -7,8 +7,8 @@ module magdif_mesh
 
   private
 
-  public :: equil, flux_func_cache, fs, fs_half, mesh_t, mesh, B0r, B0phi, B0z, &
-       B0r_Omega, B0phi_Omega, B0z_Omega, B0flux, j0phi, coord_cache, sample_polmodes, &
+  public :: equil, flux_func_cache, fs, fs_half, mesh_t, mesh, B0R_edge, B0phi_edge, B0Z_edge, &
+       B0r_Omega, B0phi_Omega, B0z_Omega, B0_flux, j0phi_edge, coord_cache, sample_polmodes, &
        coord_cache_ext, coord_cache_ext_init, coord_cache_deinit, compute_sample_Ipar, &
        coord_cache_ext_write, coord_cache_ext_read, coord_cache_ext_deinit, &
        flux_func_cache_init, flux_func_cache_check, flux_func_cache_deinit, generate_mesh, &
@@ -218,29 +218,14 @@ module magdif_mesh
 
   type(mesh_t) :: mesh
 
-  !> \f$ R \f$ component of equilibrium magnetic field \f$ B_{0} \f$.
-  !>
-  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
-  !> refers to the triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
-  !> by get_labeled_edges().
-  real(dp), allocatable :: B0r(:,:)
+  !> \f$ R \f$ component of equilibrium magnetic field \f$ B_{0} \f$ on each edge.
+  real(dp), allocatable :: B0R_edge(:)
 
-  !> \f$ \phi \f$ component of equilibrium magnetic field \f$ B_{0} \f$.
-  !>
-  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
-  !> refers to the triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
-  !> by get_labeled_edges().
-  real(dp), allocatable :: B0phi(:,:)
+  !> \f$ \phi \f$ component of equilibrium magnetic field \f$ B_{0} \f$ on each edge.
+  real(dp), allocatable :: B0phi_edge(:)
 
-  !> \f$ Z \f$ component of equilibrium magnetic field \f$ B_{0} \f$.
-  !>
-  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
-  !> refers to the triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
-  !> by get_labeled_edges().
-  real(dp), allocatable :: B0z(:,:)
+  !> \f$ Z \f$ component of equilibrium magnetic field \f$ B_{0} \f$ on each edge.
+  real(dp), allocatable :: B0Z_edge(:)
 
   !> \f$ \phi \f$ component of equilibrium magnetic field \f$ B_{0} (\Omega) \f$.
   !>
@@ -260,16 +245,12 @@ module magdif_mesh
   !> for #mesh_mod::mesh_element.
   real(dp), allocatable :: B0z_Omega(:)
 
-  real(dp), allocatable :: B0flux(:,:)
+  !> !!!
+  real(dp), allocatable :: B0_flux(:)
 
-  !> Physical toroidal component of equilibrium current \f$ j_{0 (\phi)} \f$ in
-  !> statampere cm^-2.
-  !>
-  !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
-  !> refers to the triangle and the indexing scheme is the same as for
-  !> #mesh_mod::mesh_element. The second index refers to the edge and can be interpreted
-  !> by get_labeled_edges().
-  real(dp), allocatable :: j0phi(:,:)
+  !> Physical toroidal component of equilibrium current \f$ j_{0 (\phi)} \f$  on each edge
+  !> in statampere cm^-2.
+  real(dp), allocatable :: j0phi_edge(:)
 
   type :: coord_cache
      integer :: n
@@ -676,13 +657,13 @@ contains
     ! TODO: put in separate subroutine for edge_cache_type
     call h5_open_rw(datafile, h5id_root)
     ! TODO: revise naming and indexing when edge_cache type is working for GL quadrature in compute_currn
-    call h5_add(h5id_root, 'cache/B0R_edge', B0R, lbound(B0R), ubound(B0R), &
+    call h5_add(h5id_root, 'cache/B0R_edge', B0R_edge, lbound(B0R_edge), ubound(B0R_edge), &
          comment = 'R component of equilibrium magnetic field on triangle edge', unit = 'G')
-    call h5_add(h5id_root, 'cache/B0phi_edge', B0phi, lbound(B0phi), ubound(B0phi), &
+    call h5_add(h5id_root, 'cache/B0phi_edge', B0phi_edge, lbound(B0phi_edge), ubound(B0phi_edge), &
          comment = 'phi component of equilibrium magnetic field on triangle edge', unit = 'G')
-    call h5_add(h5id_root, 'cache/B0Z_edge', B0Z, lbound(B0Z), ubound(B0Z), &
+    call h5_add(h5id_root, 'cache/B0Z_edge', B0Z_edge, lbound(B0Z_edge), ubound(B0Z_edge), &
          comment = 'Z component of equilibrium magnetic field on triangle edge', unit = 'G')
-    call h5_add(h5id_root, 'cache/B0_flux', B0flux, lbound(B0flux), ubound(B0flux), &
+    call h5_add(h5id_root, 'cache/B0_flux', B0_flux, lbound(B0_flux), ubound(B0_flux), &
          comment = 'Equilibrium magnetic flux through triangle edge', unit = 'G cm^2')
     call h5_add(h5id_root, 'cache/B0R_centr', B0R_Omega, lbound(B0R_Omega), ubound(B0R_Omega), &
          comment = 'R component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
@@ -690,7 +671,7 @@ contains
          comment = 'phi component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
     call h5_add(h5id_root, 'cache/B0Z_centr', B0Z_Omega, lbound(B0Z_Omega), ubound(B0Z_Omega), &
          comment = 'Z component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
-    call h5_add(h5id_root, 'cache/j0phi_edge', j0phi, lbound(j0phi), ubound(j0phi), &
+    call h5_add(h5id_root, 'cache/j0phi_edge', j0phi_edge, lbound(j0phi_edge), ubound(j0phi_edge), &
          comment = 'phi component of equilibrium current density on triangle edge', unit = 'statA cm^-2')
     call h5_close(h5id_root)
   end subroutine write_mesh_cache
@@ -708,23 +689,23 @@ contains
     call flux_func_cache_read(fs_half, datafile, 'cache/fs_half')
     call coord_cache_read(sample_polmodes, datafile, 'cache/sample_polmodes')
     ! TODO: revise naming and indexing when edge_cache type is working for GL quadrature in compute_currn
-    allocate(B0R(3, mesh%ntri))
-    allocate(B0phi(3, mesh%ntri))
-    allocate(B0Z(3, mesh%ntri))
+    allocate(B0R_edge(mesh%nedge))
+    allocate(B0phi_edge(mesh%nedge))
+    allocate(B0Z_edge(mesh%nedge))
     allocate(B0R_Omega(mesh%ntri))
     allocate(B0phi_Omega(mesh%ntri))
     allocate(B0Z_Omega(mesh%ntri))
-    allocate(B0flux(3, mesh%ntri))
-    allocate(j0phi(3, mesh%ntri))
+    allocate(B0_flux(mesh%nedge))
+    allocate(j0phi_edge(mesh%nedge))
     call h5_open(datafile, h5id_root)
-    call h5_get(h5id_root, 'cache/B0R_edge', B0R)
-    call h5_get(h5id_root, 'cache/B0phi_edge', B0phi)
-    call h5_get(h5id_root, 'cache/B0Z_edge', B0Z)
-    call h5_get(h5id_root, 'cache/B0_flux', B0flux)
+    call h5_get(h5id_root, 'cache/B0R_edge', B0R_edge)
+    call h5_get(h5id_root, 'cache/B0phi_edge', B0phi_edge)
+    call h5_get(h5id_root, 'cache/B0Z_edge', B0Z_edge)
+    call h5_get(h5id_root, 'cache/B0_flux', B0_flux)
     call h5_get(h5id_root, 'cache/B0R_centr', B0R_Omega)
     call h5_get(h5id_root, 'cache/B0phi_centr', B0phi_Omega)
     call h5_get(h5id_root, 'cache/B0Z_centr', B0Z_Omega)
-    call h5_get(h5id_root, 'cache/j0phi_edge', j0phi)
+    call h5_get(h5id_root, 'cache/j0phi_edge', j0phi_edge)
     call h5_close(h5id_root)
   end subroutine read_mesh_cache
 
@@ -2473,41 +2454,37 @@ contains
   end subroutine check_safety_factor
 
   subroutine cache_equilibrium_field
-    real(dp) :: R, Z, B0_R, B0_phi, B0_Z, dum
-    integer :: kf, kt, ktri, ke
+    real(dp) :: R, Z, dum
+    integer :: kf, kt, ktri, kedge
     integer :: base, tip
     real(dp) :: n_r, n_z
 
-    allocate(B0R(3, mesh%ntri))
-    allocate(B0phi(3, mesh%ntri))
-    allocate(B0Z(3, mesh%ntri))
+    allocate(B0R_edge(mesh%nedge))
+    allocate(B0phi_edge(mesh%nedge))
+    allocate(B0Z_edge(mesh%nedge))
     allocate(B0R_Omega(mesh%ntri))
     allocate(B0phi_Omega(mesh%ntri))
     allocate(B0Z_Omega(mesh%ntri))
-    allocate(B0flux(3, mesh%ntri))
+    allocate(B0_flux(mesh%nedge))
+    ! edges
+    do kedge = 1, mesh%nedge
+       base = mesh%edge_node(1, kedge)
+       tip = mesh%edge_node(2, kedge)
+       R = (mesh%node_R(base) + mesh%node_R(tip)) * 0.5d0
+       Z = (mesh%node_Z(base) + mesh%node_Z(tip)) * 0.5d0
+       call field(R, 0d0, Z, B0R_edge(kedge), B0phi_edge(kedge), B0Z_edge(kedge), &
+            dum, dum, dum, dum, dum, dum, dum, dum, dum)
+       n_R = mesh%node_Z(tip) - mesh%node_Z(base)
+       n_Z = mesh%node_R(base) - mesh%node_R(tip)
+       B0_flux(kedge) = R * (B0R_edge(kedge) * n_R + B0Z_edge(kedge) * n_Z)
+    end do
+    ! centroids
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          do ke = 1, 3
-             base = mesh%tri_node(ke, ktri)
-             tip = mesh%tri_node(mod(ke, 3) + 1, ktri)
-             R = (mesh%node_R(base) + mesh%node_R(tip)) * 0.5d0
-             Z = (mesh%node_Z(base) + mesh%node_Z(tip)) * 0.5d0
-             call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dum, &
-                  dum, dum, dum, dum, dum, dum)
-             B0R(ke, ktri) = B0_R
-             B0phi(ke, ktri) = B0_phi
-             B0Z(ke, ktri) = B0_Z
-             n_R = mesh%node_Z(tip) - mesh%node_Z(base)
-             n_Z = mesh%node_R(base) - mesh%node_R(tip)
-             B0flux(ke, ktri) = R * (B0_R * n_R + B0_Z * n_Z)
-          end do
           call ring_centered_avg_coord(ktri, R, Z)
-          call field(R, 0d0, Z, B0_R, B0_phi, B0_Z, dum, dum, dum, &
-               dum, dum, dum, dum, dum, dum)
-          B0R_Omega(ktri) = B0_R
-          B0phi_Omega(ktri) = B0_phi
-          B0Z_Omega(ktri) = B0_Z
+          call field(R, 0d0, Z, B0R_Omega(ktri), B0phi_Omega(ktri), B0Z_Omega(ktri), &
+               dum, dum, dum, dum, dum, dum, dum, dum, dum)
        end do
     end do
   end subroutine cache_equilibrium_field
@@ -2516,8 +2493,8 @@ contains
     use magdif_conf, only: conf, log, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk
     real(dp) :: plot_j0phi(mesh%ntri)
 
-    allocate(j0phi(3, mesh%ntri))
-    j0phi = 0d0
+    allocate(j0phi_edge(mesh%nedge))
+    j0phi_edge = 0d0
     select case (conf%curr_prof)
     case (curr_prof_ps)
        call compute_j0phi_ps(plot_j0phi)
@@ -2531,59 +2508,55 @@ contains
        error stop
     end select
     ! TODO: write out plot_j0phi when edge_cache type is working
-    call check_redundant_edges(j0phi, 'j0phi')
   end subroutine compute_j0phi
 
   subroutine compute_j0phi_ps(plot_j0phi)
     use magdif_util, only: clight
     real(dp), intent(out) :: plot_j0phi(:)
-    integer :: kf, kt, ktri
+    integer :: kf, kt, ktri, kp, kedge
     real(dp) :: R
-    real(dp) :: Btor2
     real(dp), dimension(mesh%nflux) :: B2avg, B2avg_half
 
     B2avg = 0d0
+    do kf = 1, mesh%nflux
+       do kp = 1, mesh%kp_max(kf)
+          kedge = mesh%kp_low(kf) + kp - 1
+          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
+          B2avg(kf) = B2avg(kf) + B0R_edge(kedge) ** 2 + B0phi_edge(kedge) ** 2 + B0Z_edge(kedge) ** 2
+       end do
+       B2avg(kf) = B2avg(kf) / mesh%kp_max(kf)
+    end do
     B2avg_half = 0d0
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
-          ktri = mesh%kt_low(kf) + kt
-          R = sum(mesh%node_R(mesh%lf(:, ktri))) * 0.5d0
-          B2avg(kf) = B2avg(kf) + B0R(mesh%ef(ktri), ktri) ** 2 + &
-               B0phi(mesh%ef(ktri), ktri) ** 2 + B0Z(mesh%ef(ktri), ktri) ** 2
-          R = sum(mesh%node_R(mesh%li(:, ktri))) * 0.5d0
-          B2avg_half(kf) = B2avg_half(kf) + B0R(mesh%ei(ktri), ktri) ** 2 + &
-               B0phi(mesh%ei(ktri), ktri) ** 2 + B0Z(mesh%ei(ktri), ktri) ** 2
+          kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
+          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
+          B2avg_half(kf) = B2avg_half(kf) + B0R_edge(kedge) ** 2 + B0phi_edge(kedge) ** 2 + B0Z_edge(kedge) ** 2
        end do
-       B2avg(kf) = B2avg(kf) / mesh%kt_max(kf)
        B2avg_half(kf) = B2avg_half(kf) / mesh%kt_max(kf)
     end do
+    ! edges in poloidal direction
+    do kf = 1, mesh%nflux
+       do kp = 1, mesh%kp_max(kf)
+          kedge = mesh%kp_low(kf) + kp - 1
+          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
+          j0phi_edge(kedge) = clight * R * fs%dp_dpsi(kf) * (1d0 - B0phi_edge(kedge) ** 2 / B2avg(kf))
+       end do
+    end do
+    ! edges in radial direction
+    do kf = 1, mesh%nflux
+       do kt = 1, mesh%kt_max(kf)
+          kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
+          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
+          j0phi_edge(kedge) = clight * R * fs_half%dp_dpsi(kf) * (1d0 - B0phi_edge(kedge) ** 2 / B2avg_half(kf))
+       end do
+    end do
+    ! centroid
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          ! edge f
-          R = sum(mesh%node_R(mesh%lf(:, ktri))) * 0.5d0
-          Btor2 = B0phi(ktri, mesh%ef(ktri)) ** 2
-          if (kf == 1 .or. mesh%orient(ktri)) then
-             j0phi(mesh%ef(ktri), ktri) = clight * R * fs%dp_dpsi(kf) * (1d0 - &
-                  Btor2 / B2avg(kf))
-          else
-             j0phi(mesh%ef(ktri), ktri) = clight * R * fs%dp_dpsi(kf-1) * (1d0 - &
-                  Btor2 / B2avg(kf-1))
-          end if
-          ! edge i
-          R = sum(mesh%node_R(mesh%li(:, ktri))) * 0.5d0
-          Btor2 = B0phi(mesh%ei(ktri), ktri) ** 2
-          j0phi(mesh%ei(ktri), ktri) = clight * R * fs_half%dp_dpsi(kf) * (1d0 - &
-               Btor2 / B2avg_half(kf))
-          ! edge o
-          R = sum(mesh%node_R(mesh%lo(:, ktri))) * 0.5d0
-          Btor2 = B0phi(mesh%eo(ktri), ktri) ** 2
-          j0phi(mesh%eo(ktri), ktri) = clight * R * fs_half%dp_dpsi(kf) * (1d0 - &
-               Btor2 / B2avg_half(kf))
-          ! centroid
-          Btor2 = B0phi_Omega(ktri) ** 2
           plot_j0phi(ktri) = clight * mesh%R_Omega(ktri) * fs_half%dp_dpsi(kf) * (1d0 - &
-               Btor2 / B2avg_half(kf))
+               B0phi_Omega(ktri) ** 2 / B2avg_half(kf))
        end do
     end do
   end subroutine compute_j0phi_ps
@@ -2592,31 +2565,20 @@ contains
     use constants, only: pi  ! orbit_mod.f90
     use magdif_util, only: clight
     real(dp), intent(out) :: plot_j0phi(:)
-    integer :: kf, kt, ktri
+    integer :: kf, kt, ktri, kedge
     real(dp) :: R, Z, dum, dB0R_dZ, dB0Z_dR
 
+    ! edges
+    do kedge = 1, mesh%nedge
+       R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
+       Z = sum(mesh%node_Z(mesh%edge_node(:, kedge))) * 0.5d0
+       call field(R, 0d0, Z, dum, dum, dum, dum, dum, dB0R_dZ, dum, dum, dum, dB0Z_dR, dum, dum)
+       j0phi_edge(kedge) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+    end do
+    ! centroid
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          ! edge f
-          R = sum(mesh%node_R(mesh%lf(:, ktri))) * 0.5d0
-          Z = sum(mesh%node_Z(mesh%lf(:, ktri))) * 0.5d0
-          call field(R, 0d0, Z, dum, dum, dum, dum, dum, dB0R_dZ, &
-               dum, dum, dum, dB0Z_dR, dum, dum)
-          j0phi(mesh%ef(ktri), ktri) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
-          ! edge i
-          R = sum(mesh%node_R(mesh%li(:, ktri))) * 0.5d0
-          Z = sum(mesh%node_Z(mesh%li(:, ktri))) * 0.5d0
-          call field(R, 0d0, Z, dum, dum, dum, dum, dum, dB0R_dZ, &
-               dum, dum, dum, dB0Z_dR, dum, dum)
-          j0phi(mesh%ei(ktri), ktri) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
-          ! edge o
-          R = sum(mesh%node_R(mesh%lo(:, ktri))) * 0.5d0
-          Z = sum(mesh%node_Z(mesh%lo(:, ktri))) * 0.5d0
-          call field(R, 0d0, Z, dum, dum, dum, dum, dum, dB0R_dZ, &
-               dum, dum, dum, dB0Z_dR, dum, dum)
-          j0phi(mesh%eo(ktri), ktri) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
-          ! centroid
           call field(mesh%R_Omega(ktri), 0d0, mesh%Z_Omega(ktri), dum, dum, dum, &
                dum, dum, dB0R_dZ, dum, dum, dum, dB0Z_dR, dum, dum)
           plot_j0phi(ktri) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
@@ -2628,30 +2590,29 @@ contains
     use constants, only: pi  ! orbit_mod.f90
     use magdif_util, only: clight
     real(dp), intent(out) :: plot_j0phi(:)
-    integer :: kf, kt, ktri
+    integer :: kf, kp, kt, ktri, kedge
     real(dp) :: R
 
+    ! edges in poloidal direction
+    do kf = 1, mesh%nflux
+       do kp = 1, mesh%kp_max(kf)
+          kedge = mesh%kp_low(kf) + kp - 1
+          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
+          j0phi_edge(kedge) = clight * (fs%dp_dpsi(kf) * R + 0.25d0 / pi * fs%FdF_dpsi(kf) / R)
+       end do
+    end do
+    ! edges in radial direction
+    do kf = 1, mesh%nflux
+       do kt = 1, mesh%kt_max(kf)
+          kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
+          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
+          j0phi_edge(kedge) = clight * (fs_half%dp_dpsi(kf) * R + 0.25d0 / pi * fs_half%FdF_dpsi(kf) / R)
+       end do
+    end do
+    ! centroid
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          ! edge f
-          R = sum(mesh%node_R(mesh%lf(:, ktri))) * 0.5d0
-          if (kf == 1 .or. mesh%orient(ktri)) then
-             j0phi(mesh%ef(ktri), ktri) = clight * (fs%dp_dpsi(kf) * R + &
-                  0.25d0 / pi * fs%FdF_dpsi(kf) / R)
-          else
-             j0phi(mesh%ef(ktri), ktri) = clight * (fs%dp_dpsi(kf-1) * R + &
-                  0.25d0 / pi * fs%FdF_dpsi(kf-1) / R)
-          end if
-          ! edge i
-          R = sum(mesh%node_R(mesh%li(:, ktri))) * 0.5d0
-          j0phi(mesh%ei(ktri), ktri) = clight * (fs_half%dp_dpsi(kf) * R + &
-               0.25d0 / pi * fs_half%FdF_dpsi(kf) / R)
-          ! edge o
-          R = sum(mesh%node_R(mesh%lo(:, ktri))) * 0.5d0
-          j0phi(mesh%eo(ktri), ktri) = clight * (fs_half%dp_dpsi(kf) * R + &
-               0.25d0 / pi * fs_half%FdF_dpsi(kf) / R)
-          ! centroid
           plot_j0phi(ktri) = clight * (fs_half%dp_dpsi(kf) * mesh%R_Omega(ktri) + &
                0.25d0 / pi * fs_half%FdF_dpsi(kf) / mesh%R_Omega(ktri))
        end do
@@ -2736,39 +2697,6 @@ contains
          comment = 'Z component of equilibrium current density via Ampere equation')
     call h5_close(h5id_root)
   end subroutine check_curr0
-
-  subroutine check_redundant_edges(cache, name)
-    use magdif_conf, only: log
-    real(dp), intent(in) :: cache(:, :)
-    character(len = *), intent(in) :: name
-    integer :: kedge, ktri, ktri_adj, ke, ke_adj
-    logical :: inconsistent
-    real(dp), parameter :: eps = epsilon(1d0), small = tiny(0d0)
-
-    do kedge = 1, mesh%nedge
-       ktri = mesh%edge_map2ktri(1, kedge)
-       ktri_adj = mesh%edge_map2ktri(2, kedge)
-       ke = mesh%edge_map2ke(1, kedge)
-       ke_adj = mesh%edge_map2ke(2, kedge)
-       if (ktri_adj <= 0) cycle
-       inconsistent = .false.
-       if (abs(cache(ke, ktri)) < small) then
-          inconsistent = inconsistent .or. abs(cache(ke_adj, ktri_adj)) >= small
-       else
-          inconsistent = inconsistent .or. eps < abs(1d0 - &
-               cache(ke_adj, ktri_adj) / cache(ke, ktri))
-       end if
-       if (inconsistent) then
-          write (log%msg, '("inconsistent redundant edges: ", ' // &
-               'a, "(", i0, ", ", i0, ") = ", es24.16e3, ", ", ' // &
-               'a, "(", i0, ", ", i0, ") = ", es24.16e3)') &
-               trim(name), ke, ktri, cache(ke, ktri), &
-               trim(name), ke_adj, ktri_adj, cache(ke_adj, ktri_adj)
-          if (log%err) call log%write
-          error stop
-       end if
-    end do
-  end subroutine check_redundant_edges
 
   subroutine flux_func_cache_check
     use magdif_conf, only: log
