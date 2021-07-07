@@ -201,6 +201,8 @@ module magdif_mesh
      integer, allocatable :: adj_tri(:, :)
      integer, allocatable :: adj_edge(:, :)
 
+     integer, allocatable :: edge_node(:, :)
+     integer, allocatable :: edge_tri(:, :)
      integer, allocatable :: edge_map2global(:, :)
      integer, allocatable :: edge_map2ktri(:, :)
      integer, allocatable :: edge_map2ke(:, :)
@@ -1031,6 +1033,7 @@ contains
     call init_indices
     mesh%ntri = mesh%kt_low(mesh%nflux + 1)
     mesh%npoint = mesh%kp_low(mesh%nflux + 1)
+    mesh%nedge = mesh%ntri + mesh%npoint - 1
     allocate(mesh%node_R(mesh%npoint))
     allocate(mesh%node_Z(mesh%npoint))
     allocate(mesh%node_theta_flux(mesh%npoint))
@@ -1159,12 +1162,9 @@ contains
     case (0)
        common_tri = [0, 0]
     case (1)
-       ! TODO: use findloc intrinsic when implementation is readily available
-       common_tri = [maxloc(merge(1, 0, tri_mask), 1), 0]
+       common_tri = [findloc(tri_mask, .true., 1), 0]
     case (2)
-       ! TODO: use findloc intrinsic when implementation is readily available
-       common_tri = [maxloc(merge(1, 0, tri_mask), 1), &
-            mesh%ntri + 1 - maxloc(merge(1, 0, tri_mask(mesh%ntri:1:-1)), 1)]
+       common_tri = [findloc(tri_mask, .true., 1), findloc(tri_mask, .true., 1, back = .true.)]
     case default
        write (log%msg, '("More than two common triangles for knots ", ' // &
             'i0, " and ", i0)') knot1, knot2
@@ -1174,94 +1174,132 @@ contains
   end subroutine common_triangles
 
   subroutine connect_mesh_points
-    integer :: kf, kp, kt, ktri, ktri_adj, common_tri(2), kedge, ke, ke_adj
+    integer :: kf, kp, kt, ktri, ktri_adj, kedge
 
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
     allocate(mesh%adj_tri(3, mesh%ntri))
     allocate(mesh%adj_edge(3, mesh%ntri))
+    allocate(mesh%edge_node(2, mesh%nedge))
+    allocate(mesh%edge_tri(2, mesh%nedge))
+    allocate(mesh%edge_map2global(3, mesh%ntri))
+    allocate(mesh%edge_map2ktri(2, mesh%nedge))
+    allocate(mesh%edge_map2ke(2, mesh%nedge))
     mesh%tri_node = 0
     mesh%tri_node_F = 0
-    allocate(mesh%area(mesh%ntri))
+    mesh%adj_tri = 0
+    mesh%adj_edge = 0
+    mesh%edge_node = 0
+    mesh%edge_tri = 0
+    mesh%edge_map2global = 0
+    mesh%edge_map2ktri = 0
+    mesh%edge_map2ke = 0
+    kedge = 0
     ktri = mesh%kt_low(1)
-    ! define trianlges on innermost flux surface
+    ! define triangles on innermost flux surface
     kf = 1
     do kp = 1, mesh%kp_max(kf)
+       ! node indices for triangle with poloidal edge on outer flux surface
        ktri = ktri + 1
        mesh%tri_node(1, ktri) = mesh%kp_low(kf) + kp
        mesh%tri_node(2, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
        mesh%tri_node(3, ktri) = mesh%kp_low(kf)
        mesh%tri_node_F(ktri) = 3
-       mesh%area(ktri) = tri_area(ktri)
-    end do
-    ! define triangles on outer flux surfaces
-    do kf = 2, mesh%nflux
-       do kp = 1, mesh%kp_max(kf)
-          ktri = ktri + 1
-          mesh%tri_node(1, ktri) = mesh%kp_low(kf) + kp
-          mesh%tri_node(2, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
-          mesh%tri_node(3, ktri) = mesh%kp_low(kf - 1) + kp
-          mesh%tri_node_F(ktri) = 3
-          mesh%area(ktri) = tri_area(ktri)
-          ktri = ktri + 1
-          mesh%tri_node(1, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
-          mesh%tri_node(2, ktri) = mesh%kp_low(kf - 1) + mod(kp, mesh%kp_max(kf - 1)) + 1
-          mesh%tri_node(3, ktri) = mesh%kp_low(kf - 1) + kp
-          mesh%tri_node_F(ktri) = 1
-          mesh%area(ktri) = tri_area(ktri)
-       end do
-    end do
-    ! set neighbours for edges i and o on innermost flux surface
-    kf = 1
-    do kt = 1, mesh%kt_max(kf)
-       ktri = mesh%kt_low(kf) + kt
+       ! triangle and nodes indices for poloidal edge
+       kedge = mesh%kp_low(kf) + kp - 1
+       mesh%edge_node(:, kedge) = [mesh%tri_node(1, ktri), mesh%tri_node(2, ktri)]
+       mesh%edge_tri(1, kedge) = ktri
+       ! neighbours for radial edges
+       kt = ktri - mesh%kt_low(kf)
        ktri_adj = mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf)) + 1
        mesh%adj_tri(2, ktri) = ktri_adj
        mesh%adj_edge(2, ktri) = 3
        mesh%adj_tri(3, ktri_adj) = ktri
        mesh%adj_edge(3, ktri_adj) = 2
+       ! triangle indices for radial edge
+       mesh%edge_tri(:, mesh%npoint + mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf))) = [ktri, ktri_adj]
+       ! local edge mappings
+       kedge = mesh%kp_low(kf) + kp - 1
+       mesh%edge_map2global(1, ktri) = kedge
+       mesh%edge_map2ke(1, kedge) = 1
+       kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
+       mesh%edge_map2global(3, ktri) = kedge
+       mesh%edge_map2ke(2, kedge) = 3
+       kedge = mesh%npoint + mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf))
+       mesh%edge_map2global(2, ktri) = kedge
+       mesh%edge_map2ke(1, kedge) = 2
     end do
-    ! set neighbours for edges i and o on outer flux surfaces
+    ! define triangles on outer flux surfaces
     do kf = 2, mesh%nflux
-       do kt = 1, mesh%kt_max(kf)
-          ktri = mesh%kt_low(kf) + kt
-          ktri_adj = mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf)) + 1
-          if (mod(kt, 2) == 1) then
-             mesh%adj_tri(2, ktri) = ktri_adj
-             mesh%adj_edge(2, ktri) = 3
-             mesh%adj_tri(3, ktri_adj) = ktri
-             mesh%adj_edge(3, ktri_adj) = 2
-          else
-             mesh%adj_tri(1, ktri) = ktri_adj
-             mesh%adj_edge(1, ktri) = 3
-             mesh%adj_tri(3, ktri_adj) = ktri
-             mesh%adj_edge(3, ktri_adj) = 1
-          end if
-       end do
-    end do
-    ! set neighbours for edges f
-    do kf = 1, mesh%nflux - 1
        do kp = 1, mesh%kp_max(kf)
-          call common_triangles(mesh%kp_low(kf) + kp, &
-               mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1, common_tri)
-          ktri = minval(common_tri)
-          ktri_adj = maxval(common_tri)
+          ! node indices for triangle with poloidal edge on outer flux surface
+          ktri = ktri + 1
+          mesh%tri_node(1, ktri) = mesh%kp_low(kf) + kp
+          mesh%tri_node(2, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
+          mesh%tri_node(3, ktri) = mesh%kp_low(kf - 1) + kp
+          mesh%tri_node_F(ktri) = 3
+          ! triangle and nodes indices for poloidal edge
+          kedge = mesh%kp_low(kf) + kp - 1
+          mesh%edge_node(:, kedge) = [mesh%tri_node(1, ktri), mesh%tri_node(2, ktri)]
+          mesh%edge_tri(1, kedge) = ktri
+          ! neighbours for radial edges
+          kt = ktri - mesh%kt_low(kf)
+          ktri_adj = mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf)) + 1
+          mesh%adj_tri(2, ktri) = ktri_adj
+          mesh%adj_edge(2, ktri) = 3
+          mesh%adj_tri(3, ktri_adj) = ktri
+          mesh%adj_edge(3, ktri_adj) = 2
+          ! triangle indices for radial edge
+          mesh%edge_tri(:, mesh%npoint + mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf))) = [ktri, ktri_adj]
+          ! local edge mappings
+          kedge = mesh%kp_low(kf) + kp - 1
+          mesh%edge_map2global(1, ktri) = kedge
+          mesh%edge_map2ke(1, kedge) = 1
+          kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
+          mesh%edge_map2global(3, ktri) = kedge
+          mesh%edge_map2ke(2, kedge) = 3
+          kedge = mesh%npoint + mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf))
+          mesh%edge_map2global(2, ktri) = kedge
+          mesh%edge_map2ke(1, kedge) = 2
+          ! triangle with poloidal edge on inner flux surface
+          ktri = ktri + 1
+          mesh%tri_node(1, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
+          mesh%tri_node(2, ktri) = mesh%kp_low(kf - 1) + mod(kp, mesh%kp_max(kf - 1)) + 1
+          mesh%tri_node(3, ktri) = mesh%kp_low(kf - 1) + kp
+          mesh%tri_node_F(ktri) = 1
+          ! triangle index for poloidal edge
+          mesh%edge_tri(2, mesh%kp_low(kf - 1) + kp - 1) = ktri
+          ! neighbours for poloidal edges
+          ktri_adj = mesh%edge_tri(1, mesh%kp_low(kf - 1) + kp - 1)
+          mesh%adj_tri(2, ktri) = ktri_adj
+          mesh%adj_edge(2, ktri) = 1
+          mesh%adj_tri(1, ktri_adj) = ktri
+          mesh%adj_edge(1, ktri_adj) = 2
+          ! neighbours for radial edges
+          kt = ktri - mesh%kt_low(kf)
+          ktri_adj = mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf)) + 1
           mesh%adj_tri(1, ktri) = ktri_adj
-          mesh%adj_edge(1, ktri) = 2
-          mesh%adj_tri(2, ktri_adj) = ktri
-          mesh%adj_edge(2, ktri_adj) = 1
+          mesh%adj_edge(1, ktri) = 3
+          mesh%adj_tri(3, ktri_adj) = ktri
+          mesh%adj_edge(3, ktri_adj) = 1
+          ! triangle indices for radial edge
+          mesh%edge_tri(:, mesh%npoint + mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf))) = [ktri, ktri_adj]
+          ! local edge mappings
+          kedge = mesh%kp_low(kf - 1) + kp - 1
+          mesh%edge_map2global(2, ktri) = kedge
+          mesh%edge_map2ke(2, kedge) = 2
+          kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
+          mesh%edge_map2global(3, ktri) = kedge
+          mesh%edge_map2ke(2, kedge) = 3
+          kedge = mesh%npoint + mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf))
+          mesh%edge_map2global(1, ktri) = kedge
+          mesh%edge_map2ke(1, kedge) = 1
        end do
     end do
-    ! set dummy values for edges on boundary
-    kf = mesh%nflux
-    do kt = 1, mesh%kt_max(kf)
-       if (mod(kt, 2) == 1) then
-          ktri = mesh%kt_low(kf) + kt
-          ktri_adj = ktri + mesh%kt_max(kf) + 1
-          mesh%adj_tri(1, ktri) = ktri_adj
-          mesh%adj_edge(1, ktri) = 2
-       end if
-    end do
+    ! nodes for radial edges
+    mesh%edge_node(:, mesh%npoint:) = mesh%tri_node([3, 1], :)
+    ! local edge mappings
+    mesh%edge_map2ktri(:, :) = mesh%edge_tri
     ! define edges and 'centroids'
     allocate(mesh%li(2, mesh%ntri))
     allocate(mesh%lo(2, mesh%ntri))
@@ -1272,36 +1310,13 @@ contains
     allocate(mesh%orient(mesh%ntri))
     allocate(mesh%R_Omega(mesh%ntri))
     allocate(mesh%Z_Omega(mesh%ntri))
-    mesh%nedge = (3 * mesh%kt_low(mesh%nflux + 1) + mesh%kp_max(mesh%nflux)) / 2
-    allocate(mesh%edge_map2global(3, mesh%ntri))
-    allocate(mesh%edge_map2ktri(2, mesh%nedge))
-    allocate(mesh%edge_map2ke(2, mesh%nedge))
-    mesh%edge_map2global = 0
-    mesh%edge_map2ktri = 0
-    mesh%edge_map2ke = 0
+    allocate(mesh%area(mesh%ntri))
     kedge = 1
     do ktri = 1, mesh%ntri
        call get_labeled_edges(ktri, mesh%li(:, ktri), mesh%lo(:, ktri), mesh%lf(:, ktri), &
             mesh%ei(ktri), mesh%eo(ktri), mesh%ef(ktri), mesh%orient(ktri))
        call ring_centered_avg_coord(ktri, mesh%R_Omega(ktri), mesh%Z_Omega(ktri))
-       do ke = 1, 3
-          if (mesh%edge_map2global(ke, ktri) == 0) then
-             ktri_adj = mesh%adj_tri(ke, ktri)
-             ke_adj = mesh%adj_edge(ke, ktri)
-             if (ktri_adj > mesh%ntri) then
-                mesh%edge_map2global(ke, ktri) = kedge
-                mesh%edge_map2ktri(:, kedge) = [ktri, -1]
-                mesh%edge_map2ke(:, kedge) = [ke, -1]
-                kedge = kedge + 1
-             else
-                mesh%edge_map2global(ke, ktri) = kedge
-                mesh%edge_map2global(ke_adj, ktri_adj) = kedge
-                mesh%edge_map2ktri(:, kedge) = [ktri, ktri_adj]
-                mesh%edge_map2ke(:, kedge) = [ke, ke_adj]
-                kedge = kedge + 1
-             end if
-          end if
-       end do
+       mesh%area(ktri) = tri_area(ktri)
     end do
   end subroutine connect_mesh_points
 
@@ -1819,6 +1834,12 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/adj_edge', mesh%adj_edge, &
          lbound(mesh%adj_edge), ubound(mesh%adj_edge), &
          comment = 'adjacent triangle edge indices')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_node', mesh%edge_node, &
+         lbound(mesh%edge_node), ubound(mesh%edge_node), &
+         comment = 'nodes connected by edge with global index')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_tri', mesh%edge_tri, &
+         lbound(mesh%edge_tri), ubound(mesh%edge_tri), &
+         comment = 'triangles connected by edge with global index')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_map2kedge', mesh%edge_map2global, &
          lbound(mesh%edge_map2global), ubound(mesh%edge_map2global), &
          comment = 'mapping of triangle & local edge index to global edge index')
@@ -1926,6 +1947,8 @@ contains
     allocate(orient(mesh%ntri))
     allocate(mesh%adj_tri(3, mesh%ntri))
     allocate(mesh%adj_edge(3, mesh%ntri))
+    allocate(mesh%edge_node(2, mesh%nedge))
+    allocate(mesh%edge_tri(2, mesh%nedge))
     allocate(mesh%edge_map2global(3, mesh%ntri))
     allocate(mesh%edge_map2ktri(2, mesh%nedge))
     allocate(mesh%edge_map2ke(2, mesh%nedge))
@@ -1961,6 +1984,8 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/orient', orient)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/adj_tri', mesh%adj_tri)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/adj_edge', mesh%adj_edge)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_node', mesh%edge_node)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_tri', mesh%edge_tri)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_map2kedge', mesh%edge_map2global)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_map2ktri', mesh%edge_map2ktri)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_map2ke', mesh%edge_map2ke)
@@ -2008,6 +2033,8 @@ contains
     if (allocated(this%orient)) deallocate(this%orient)
     if (allocated(this%adj_tri)) deallocate(this%adj_tri)
     if (allocated(this%adj_edge)) deallocate(this%adj_edge)
+    if (allocated(this%edge_node)) deallocate(this%edge_node)
+    if (allocated(this%edge_tri)) deallocate(this%edge_tri)
     if (allocated(this%edge_map2global)) deallocate(this%edge_map2global)
     if (allocated(this%edge_map2ktri)) deallocate(this%edge_map2ktri)
     if (allocated(this%edge_map2ke)) deallocate(this%edge_map2ke)

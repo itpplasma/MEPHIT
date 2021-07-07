@@ -53,33 +53,6 @@ subroutine read_hpsi
 end subroutine read_hpsi
 
 
-    integer, dimension(:,:), allocatable :: connections
-    integer :: low, kt, ke, kt_adj, ke_adj
-    allocate(connections(ntri, 3))
-    connections = 0
-    low = 1
-    do kt = 1, kt_low(nflux+1)
-       do ke = 1, 3
-          if (connections(kt, ke) == 0) then
-             kt_adj = mesh_element(kt)%neighbour(ke)
-             ke_adj = mesh_element(kt)%neighbour_edge(ke)
-             if (connections(kt_adj, ke_adj) == 0) then
-                connections(kt, ke) = low
-                connections(kt_adj, ke_adj) = low
-                low = low + 1
-             else
-                connections(kt, ke) = connections(kt_adj, ke_adj)
-             end if
-          end if
-       end do
-    end do
-    open(1, file = 'connectivity.dat')
-    do kt = 1, ntri
-       write (1, *) connections(kt, :)
-    end do
-    close(1)
-    deallocate(connections)
-
 program connectivity
   implicit none
   integer :: fid, kt, ke, low
