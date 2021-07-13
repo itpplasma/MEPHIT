@@ -208,6 +208,9 @@ module magdif_mesh
      integer, allocatable :: edge_map2ktri(:, :)
      integer, allocatable :: edge_map2ke(:, :)
 
+     real(dp), allocatable :: edge_R(:)
+     real(dp), allocatable :: edge_Z(:)
+
      !> Surface integral Jacobian used for normalization of poloidal modes in GPEC
      complex(dp), allocatable :: gpec_jacfac(:, :)
 
@@ -1317,6 +1320,13 @@ contains
        call ring_centered_avg_coord(ktri, mesh%R_Omega(ktri), mesh%Z_Omega(ktri))
        mesh%area(ktri) = tri_area(ktri)
     end do
+    ! cache edge midpoints
+    allocate(mesh%edge_R(mesh%nedge))
+    allocate(mesh%edge_Z(mesh%nedge))
+    do kedge = 1, mesh%nedge
+       mesh%edge_R(kedge) = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
+       mesh%edge_Z(kedge) = sum(mesh%node_Z(mesh%edge_node(:, kedge))) * 0.5d0
+    end do
   end subroutine connect_mesh_points
 
   !> Map edge symbols to integer indices.
@@ -1851,6 +1861,12 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_map2ke', mesh%edge_map2ke, &
          lbound(mesh%edge_map2ke), ubound(mesh%edge_map2ke), &
          comment = 'mapping of global edge index to local edge index')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_R', mesh%edge_R, &
+         lbound(mesh%edge_R), ubound(mesh%edge_R), &
+         comment = 'R coordinate of edge midpoint', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_Z', mesh%edge_Z, &
+         lbound(mesh%edge_Z), ubound(mesh%edge_Z), &
+         comment = 'Z coordinate of edge midpoint', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega, &
          lbound(mesh%R_Omega), ubound(mesh%R_Omega), &
          comment = 'R coordinate of triangle ''centroid''', unit = 'cm')
@@ -1955,6 +1971,8 @@ contains
     allocate(mesh%edge_map2global(3, mesh%ntri))
     allocate(mesh%edge_map2ktri(2, mesh%nedge))
     allocate(mesh%edge_map2ke(2, mesh%nedge))
+    allocate(mesh%edge_R(mesh%nedge))
+    allocate(mesh%edge_Z(mesh%nedge))
     allocate(mesh%gpec_jacfac(-16:16, mesh%nflux))
     allocate(mesh%area(mesh%ntri))
     allocate(mesh%R_Omega(mesh%ntri))
@@ -1993,6 +2011,8 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_map2kedge', mesh%edge_map2global)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_map2ktri', mesh%edge_map2ktri)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_map2ke', mesh%edge_map2ke)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_R', mesh%edge_R)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_Z', mesh%edge_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_Omega', mesh%Z_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area)
@@ -2043,6 +2063,8 @@ contains
     if (allocated(this%edge_map2global)) deallocate(this%edge_map2global)
     if (allocated(this%edge_map2ktri)) deallocate(this%edge_map2ktri)
     if (allocated(this%edge_map2ke)) deallocate(this%edge_map2ke)
+    if (allocated(this%edge_R)) deallocate(this%edge_R)
+    if (allocated(this%edge_Z)) deallocate(this%edge_Z)
     if (allocated(this%gpec_jacfac)) deallocate(this%gpec_jacfac)
     if (allocated(this%area)) deallocate(this%area)
     if (allocated(this%R_Omega)) deallocate(this%R_Omega)
@@ -2478,10 +2500,8 @@ contains
   end subroutine check_safety_factor
 
   subroutine cache_equilibrium_field
-    real(dp) :: R, Z, dum
-    integer :: kf, kt, ktri, kedge
-    integer :: base, tip
-    real(dp) :: n_r, n_z
+    integer :: kf, kt, ktri, kedge, base, tip
+    real(dp) :: dum, n_R, n_Z
 
     allocate(B0R_edge(mesh%nedge))
     allocate(B0phi_edge(mesh%nedge))
@@ -2492,23 +2512,20 @@ contains
     allocate(B0_flux(mesh%nedge))
     ! edges
     do kedge = 1, mesh%nedge
+       call field(mesh%edge_R(kedge), 0d0, mesh%edge_Z(kedge), &
+            B0R_edge(kedge), B0phi_edge(kedge), B0Z_edge(kedge), dum, dum, dum, dum, dum, dum, dum, dum, dum)
        base = mesh%edge_node(1, kedge)
        tip = mesh%edge_node(2, kedge)
-       R = (mesh%node_R(base) + mesh%node_R(tip)) * 0.5d0
-       Z = (mesh%node_Z(base) + mesh%node_Z(tip)) * 0.5d0
-       call field(R, 0d0, Z, B0R_edge(kedge), B0phi_edge(kedge), B0Z_edge(kedge), &
-            dum, dum, dum, dum, dum, dum, dum, dum, dum)
        n_R = mesh%node_Z(tip) - mesh%node_Z(base)
        n_Z = mesh%node_R(base) - mesh%node_R(tip)
-       B0_flux(kedge) = R * (B0R_edge(kedge) * n_R + B0Z_edge(kedge) * n_Z)
+       B0_flux(kedge) = mesh%edge_R(kedge) * (B0R_edge(kedge) * n_R + B0Z_edge(kedge) * n_Z)
     end do
     ! centroids
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          call ring_centered_avg_coord(ktri, R, Z)
-          call field(R, 0d0, Z, B0R_Omega(ktri), B0phi_Omega(ktri), B0Z_Omega(ktri), &
-               dum, dum, dum, dum, dum, dum, dum, dum, dum)
+          call field(mesh%R_Omega(ktri), 0d0, mesh%Z_Omega(ktri), &
+               B0R_Omega(ktri), B0phi_Omega(ktri), B0Z_Omega(ktri), dum, dum, dum, dum, dum, dum, dum, dum, dum)
        end do
     end do
   end subroutine cache_equilibrium_field
@@ -2538,14 +2555,12 @@ contains
     use magdif_util, only: clight
     real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kt, ktri, kp, kedge
-    real(dp) :: R
     real(dp), dimension(mesh%nflux) :: B2avg, B2avg_half
 
     B2avg = 0d0
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
-          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
           B2avg(kf) = B2avg(kf) + B0R_edge(kedge) ** 2 + B0phi_edge(kedge) ** 2 + B0Z_edge(kedge) ** 2
        end do
        B2avg(kf) = B2avg(kf) / mesh%kp_max(kf)
@@ -2554,7 +2569,6 @@ contains
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
-          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
           B2avg_half(kf) = B2avg_half(kf) + B0R_edge(kedge) ** 2 + B0phi_edge(kedge) ** 2 + B0Z_edge(kedge) ** 2
        end do
        B2avg_half(kf) = B2avg_half(kf) / mesh%kt_max(kf)
@@ -2563,24 +2577,24 @@ contains
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
-          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
-          j0phi_edge(kedge) = clight * R * fs%dp_dpsi(kf) * (1d0 - B0phi_edge(kedge) ** 2 / B2avg(kf))
+          j0phi_edge(kedge) = clight * mesh%edge_R(kedge) * fs%dp_dpsi(kf) * &
+               (1d0 - B0phi_edge(kedge) ** 2 / B2avg(kf))
        end do
     end do
     ! edges in radial direction
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
-          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
-          j0phi_edge(kedge) = clight * R * fs_half%dp_dpsi(kf) * (1d0 - B0phi_edge(kedge) ** 2 / B2avg_half(kf))
+          j0phi_edge(kedge) = clight * mesh%edge_R(kedge) * fs_half%dp_dpsi(kf) * &
+               (1d0 - B0phi_edge(kedge) ** 2 / B2avg_half(kf))
        end do
     end do
     ! centroid
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          plot_j0phi(ktri) = clight * mesh%R_Omega(ktri) * fs_half%dp_dpsi(kf) * (1d0 - &
-               B0phi_Omega(ktri) ** 2 / B2avg_half(kf))
+          plot_j0phi(ktri) = clight * mesh%R_Omega(ktri) * fs_half%dp_dpsi(kf) * &
+               (1d0 - B0phi_Omega(ktri) ** 2 / B2avg_half(kf))
        end do
     end do
   end subroutine compute_j0phi_ps
@@ -2590,13 +2604,12 @@ contains
     use magdif_util, only: clight
     real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kt, ktri, kedge
-    real(dp) :: R, Z, dum, dB0R_dZ, dB0Z_dR
+    real(dp) :: dum, dB0R_dZ, dB0Z_dR
 
     ! edges
     do kedge = 1, mesh%nedge
-       R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
-       Z = sum(mesh%node_Z(mesh%edge_node(:, kedge))) * 0.5d0
-       call field(R, 0d0, Z, dum, dum, dum, dum, dum, dB0R_dZ, dum, dum, dum, dB0Z_dR, dum, dum)
+       call field(mesh%edge_R(kedge), 0d0, mesh%edge_Z(kedge), &
+            dum, dum, dum, dum, dum, dB0R_dZ, dum, dum, dum, dB0Z_dR, dum, dum)
        j0phi_edge(kedge) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
     end do
     ! centroid
@@ -2615,22 +2628,21 @@ contains
     use magdif_util, only: clight
     real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kp, kt, ktri, kedge
-    real(dp) :: R
 
     ! edges in poloidal direction
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
-          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
-          j0phi_edge(kedge) = clight * (fs%dp_dpsi(kf) * R + 0.25d0 / pi * fs%FdF_dpsi(kf) / R)
+          j0phi_edge(kedge) = clight * (fs%dp_dpsi(kf) * mesh%edge_R(kedge) + &
+               0.25d0 / pi * fs%FdF_dpsi(kf) / mesh%edge_R(kedge))
        end do
     end do
     ! edges in radial direction
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
-          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
-          j0phi_edge(kedge) = clight * (fs_half%dp_dpsi(kf) * R + 0.25d0 / pi * fs_half%FdF_dpsi(kf) / R)
+          j0phi_edge(kedge) = clight * (fs_half%dp_dpsi(kf) * mesh%edge_R(kedge) + &
+               0.25d0 / pi * fs_half%FdF_dpsi(kf) / mesh%edge_R(kedge))
        end do
     end do
     ! centroid

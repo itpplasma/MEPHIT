@@ -523,7 +523,6 @@ contains
     use magdif_conf, only: conf, log
     use magdif_util, only: imun
     use magdif_mesh, only: fs, mesh, B0R_edge, B0phi_edge, B0Z_edge
-    real(dp) :: r
     real(dp) :: lr, lz  ! edge vector components
     complex(dp), dimension(conf%nkpol) :: a, b, x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
@@ -544,13 +543,12 @@ contains
           ! use midpoint of poloidal edge
           base = mesh%edge_node(1, kedge)
           tip = mesh%edge_node(2, kedge)
-          R = (mesh%node_R(base) + mesh%node_R(tip)) * 0.5d0
           lR = mesh%node_R(tip) - mesh%node_R(base)
           lZ = mesh%node_Z(tip) - mesh%node_Z(base)
           ktri = mesh%edge_tri(1, kedge)
           a(kp) = (B0R_edge(kedge) * lR + B0Z_edge(kedge) * lZ) / (lR ** 2 + lZ ** 2)
           x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bn%DOF(mesh%ef(ktri), ktri)
-          b(kp) = imun * (mesh%n + imun * conf%damp) * B0phi_edge(kedge) / R
+          b(kp) = imun * (mesh%n + imun * conf%damp) * B0phi_edge(kedge) / mesh%edge_R(kedge)
        end do
 
        ! solve linear system
@@ -604,7 +602,7 @@ contains
     integer, dimension(4 * conf%nkpol) :: irow, icol
     complex(dp), dimension(4 * conf%nkpol) :: aval
     complex(dp) :: Bnphi_edge, Delta_pn
-    real(dp) :: R, Delta_p0
+    real(dp) :: Delta_p0
     real(dp), parameter :: small = tiny(0d0)
 
     max_rel_err = 0d0
@@ -614,9 +612,9 @@ contains
           kedge = mesh%kp_low(kf) + kp - 1
           ktri = mesh%edge_tri(1, kedge)
           ke = mesh%edge_map2ke(1, kedge)
-          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
           jn%DOF(ke, ktri) = j0phi_edge(kedge) / B0phi_edge(kedge) * Bn%DOF(ke, ktri) + &
-               clight * R / B0phi_edge(kedge) * (pn%DOF(mesh%edge_node(2, kedge)) - pn%DOF(mesh%edge_node(1, kedge)))
+               clight * mesh%edge_R(kedge) / B0phi_edge(kedge) * &
+               (pn%DOF(mesh%edge_node(2, kedge)) - pn%DOF(mesh%edge_node(1, kedge)))
           if (mesh%edge_tri(2, kedge) > 0) then
              jn%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_tri(2, kedge)) = -jn%DOF(ke, ktri)
           end if
@@ -627,7 +625,6 @@ contains
        x = (0d0, 0d0)
        do kt = 1, mesh%kt_max(kf)
           kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
-          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
           Bnphi_edge = 0.5d0 * sum(Bn%comp_phi(mesh%edge_tri(:, kedge)))
           Delta_pn = pn%DOF(mesh%edge_node(2, kedge)) - pn%DOF(mesh%edge_node(1, kedge))
           ! first term on source side: flux through edge f
@@ -638,7 +635,7 @@ contains
           d(ke) = -1d0 - imun * (mesh%n + imun * conf%damp) * &
                mesh%area(ktri) * 0.5d0 * B0phi_edge(kedge) / B0_flux(kedge)
           ! additional term from edge i on source side
-          x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * R / B0_flux(kedge) * &
+          x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%edge_R(kedge) / B0_flux(kedge) * &
                (Bnphi_edge / B0phi_edge(kedge) * Delta_p0 - Delta_pn) + j0phi_edge(kedge) * &
                (Bnphi_edge / B0phi_edge(kedge) - Bn%DOF(mesh%ei(ktri), ktri) / B0_flux(kedge)))
           ! superdiagonal matrix element - edge o
@@ -647,7 +644,7 @@ contains
           du(ke) = 1d0 + imun * (mesh%n + imun * conf%damp) * &
                mesh%area(ktri) * 0.5d0 * B0phi_edge(kedge) / (-B0_flux(kedge))
           ! additional term from edge o on source side
-          x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * R / (-B0_flux(kedge)) * &
+          x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%edge_R(kedge) / (-B0_flux(kedge)) * &
                (Bnphi_edge / B0phi_edge(kedge) * (-Delta_p0) - (-Delta_pn)) + j0phi_edge(kedge) * &
                (Bnphi_edge / B0phi_edge(kedge) - Bn%DOF(mesh%eo(ktri), ktri) / (-B0_flux(kedge))))
        end do
