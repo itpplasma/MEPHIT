@@ -379,7 +379,7 @@ contains
     end subroutine pack_dof
 
     pure subroutine unpack_dof(elem, packed)
-      use magdif_util, only: imun
+      use magdif_pert, only: RT0_compute_tor_comp
       type(RT0_t), intent(inout) :: elem
       complex(dp), intent(in) :: packed(mesh%nedge)
       integer :: kedge
@@ -391,7 +391,7 @@ contains
                  -packed(kedge)
          end if
       end do
-      elem%comp_phi(:) = sum(elem%DOF, 1) * imun / mesh%n / mesh%area
+      call RT0_compute_tor_comp(elem)
     end subroutine unpack_dof
 
     ! computes B_(n+1) = K*B_n + B_vac ... different from kin2d.f90
@@ -435,13 +435,11 @@ contains
   !>
   !> This subroutine calls a C function that pipes the data to/from FreeFem.
   subroutine compute_Bn
-    use magdif_util, only: imun
-    use magdif_mesh, only: mesh
-    use magdif_pert, only: RT0_check_redundant_edges, RT0_check_div_free
+    use magdif_pert, only: RT0_compute_tor_comp, RT0_check_redundant_edges
 
     call FEM_compute_Bn(shape(jn%DOF), jn%DOF, Bn%DOF)
     call RT0_check_redundant_edges(Bn, 'Bn')
-    Bn%comp_phi(:) = imun / mesh%n * sum(Bn%DOF, 1) / mesh%area
+    call RT0_compute_tor_comp(Bn)
   end subroutine compute_Bn
 
   !> Assembles a sparse matrix in coordinate list (COO) representation for use with
@@ -595,7 +593,7 @@ contains
     use sparse_mod, only: sparse_solve, sparse_matmul
     use magdif_conf, only: conf, log, decorate_filename
     use magdif_mesh, only: fs, mesh, B0phi_edge, B0_flux, j0phi_edge
-    use magdif_pert, only: RT0_check_div_free, RT0_check_redundant_edges
+    use magdif_pert, only: RT0_compute_tor_comp, RT0_check_div_free, RT0_check_redundant_edges
     use magdif_util, only: imun, clight
     complex(dp), dimension(2 * conf%nkpol) :: x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
@@ -672,7 +670,6 @@ contains
           ktri = mesh%kt_low(kf) + kt
           jn%DOF(mesh%ei(ktri), ktri) = -x(kt)
           jn%DOF(mesh%eo(ktri), ktri) = x(mod(kt, mesh%kt_max(kf)) + 1)
-          jn%comp_phi(ktri) = sum(jn%DOF(:, ktri)) * imun / mesh%n / mesh%area(ktri)
        end do
     end do
     avg_rel_err = avg_rel_err / sum(mesh%kt_max(1:mesh%nflux))
@@ -682,13 +679,13 @@ contains
     if (allocated(resid)) deallocate(resid)
 
     call add_sheet_current
+    call RT0_compute_tor_comp(jn)
     call RT0_check_redundant_edges(jn, 'jn')
     call RT0_check_div_free(jn, mesh%n, conf%rel_err_currn, 'jn')
   end subroutine compute_currn
 
   subroutine add_sheet_current
     use magdif_conf, only: conf_arr
-    use magdif_util, only: imun
     use magdif_mesh, only: mesh, B0_flux
     integer :: kf, kt, ktri, ktri_adj, kedge
     complex(dp) :: pn_half
@@ -710,11 +707,6 @@ contains
                      conf_arr%sheet_current_factor(mesh%m_res(kf)) * B0_flux(kedge) * pn_half
                 jn%DOF(mesh%eo(ktri_adj), ktri_adj) = jn%DOF(mesh%eo(ktri_adj), ktri_adj) + &
                      conf_arr%sheet_current_factor(mesh%m_res(kf)) * (-B0_flux(kedge)) * pn_half
-             end do
-             do kt = 1, mesh%kt_max(kf)
-                ktri = mesh%kt_low(kf) + kt
-                ! adjust toroidal current density
-                jn%comp_phi(ktri) = sum(jn%DOF(:, ktri)) * imun / mesh%n / mesh%area(ktri)
              end do
           end if
        end if

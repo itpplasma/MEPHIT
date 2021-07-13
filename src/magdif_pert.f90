@@ -7,7 +7,7 @@ module magdif_pert
   private
 
   public :: L1_init, L1_deinit, L1_read, L1_write, RT0_init, RT0_deinit, RT0_read, &
-       RT0_write, RT0_interp, RT0_check_div_free, RT0_check_redundant_edges, RT0_triplot, &
+       RT0_write, RT0_interp, RT0_compute_tor_comp, RT0_check_div_free, RT0_check_redundant_edges, RT0_triplot, &
        RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
        vec_polmodes_read, vec_polmodes_write, AUG_coils_read, AUG_coils_write_Nemov, &
        AUG_coils_read_Nemov, AUG_coils_write_GPEC, AUG_coils_read_GPEC, AUG_coils_write_Fourier, &
@@ -205,6 +205,14 @@ contains
        comp_Z_dZ = sum(elem%DOF(:, ktri)) * 0.5d0 / mesh%area(ktri) / R
     end if
   end subroutine RT0_interp
+
+  pure subroutine RT0_compute_tor_comp(elem)
+    use magdif_util, only: imun
+    use magdif_mesh, only: mesh
+    type(RT0_t), intent(inout) :: elem
+
+    elem%comp_phi(:) = imun / mesh%n * sum(elem%DOF, 1) / mesh%area
+  end subroutine RT0_compute_tor_comp
 
   !> Checks if divergence-freeness of the given vector field is fulfilled on each
   !> triangle, otherwise halts the program.
@@ -1287,7 +1295,7 @@ contains
 
   subroutine compute_Bnvac(Bn)
     use magdif_conf, only: conf, log, vac_src_nemov, vac_src_gpec, vac_src_fourier
-    use magdif_util, only: gauss_legendre_unit_interval, imun
+    use magdif_util, only: gauss_legendre_unit_interval
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
     integer, parameter :: order = 2
@@ -1329,9 +1337,9 @@ contains
                   weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
           end do
        end do
-       ! toroidal flux via zero divergence
-       Bn%comp_phi(ktri) = imun / mesh%n * sum(Bn%DOF(:, ktri)) / mesh%area(ktri)
     end do
+    ! toroidal flux via zero divergence
+    call RT0_compute_tor_comp(Bn)
   end subroutine compute_Bnvac
 
   subroutine generate_vacfield
@@ -1481,7 +1489,6 @@ contains
 
   subroutine compute_Bn_nonres(Bn)
     use magdif_conf, only: conf
-    use magdif_util, only: imun
     use magdif_mesh, only: mesh, B0R_edge, B0phi_edge, B0Z_edge
     type(RT0_t), intent(inout) :: Bn
     integer :: kf, kt, ktri, base, tip, kedge
@@ -1501,11 +1508,11 @@ contains
           Bnpsi = -mesh%R_O * B0phi_edge(kedge) / r
           Bn%DOF(mesh%ef(ktri), ktri) = Bnpsi * (lR ** 2 + lZ ** 2) / &
                (B0R_edge(kedge) * lR + B0Z_edge(kedge) * lZ)
-          Bn%comp_phi(ktri) = imun / mesh%n * Bn%DOF(mesh%ef(ktri), ktri) / mesh%area(ktri)
           Bn%DOF(mesh%ei(ktri), ktri) = (0d0, 0d0)
           Bn%DOF(mesh%eo(ktri), ktri) = (0d0, 0d0)
        end do
     end do
+    call RT0_compute_tor_comp(Bn)
     if (conf%quad_avg) call avg_flux_on_quad(Bn)
   end subroutine compute_Bn_nonres
 
@@ -1538,7 +1545,7 @@ contains
   ! calculate resonant vacuum perturbation
   subroutine compute_kilca_vacuum(Bn)
     use magdif_conf, only: conf
-    use magdif_util, only: imun, gauss_legendre_unit_interval
+    use magdif_util, only: gauss_legendre_unit_interval
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
     integer, parameter :: order = 2
@@ -1565,9 +1572,9 @@ contains
                   weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
           end do
        end do
-       ! toroidal flux via zero divergence
-       Bn%comp_phi(ktri) = imun / mesh%n * sum(Bn%DOF(:, ktri)) / mesh%area(ktri)
     end do
+    ! toroidal flux via zero divergence
+    call RT0_compute_tor_comp(Bn)
   end subroutine compute_kilca_vacuum
 
   !> Calculate the vacuum perturbation field in cylindrical coordinates from the Fourier
