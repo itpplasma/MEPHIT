@@ -363,7 +363,9 @@ contains
     call RT0_deinit(Bn_diff)
     call vec_polmodes_deinit(jmn)
     ! TODO: refactor arnoldi_mod?
-    deallocate(L2int, eigvecs)
+    if (preconditioned) then
+       deallocate(L2int, eigvecs)
+    end if
 
   contains
 
