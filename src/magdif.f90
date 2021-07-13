@@ -529,7 +529,7 @@ contains
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(conf%nkpol) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kt, ktri, kp, kedge
+    integer :: kf, kp, kedge, ktri
     integer :: nz
     integer, dimension(2 * conf%nkpol) :: irow, icol
     complex(dp), dimension(2 * conf%nkpol) :: aval
@@ -539,22 +539,19 @@ contains
     max_rel_err = 0d0
     avg_rel_err = 0d0
     do kf = 1, mesh%nflux
-       inner: do kt = 1, mesh%kt_max(kf)
-          ktri = mesh%kt_low(kf) + kt
-          if (.not. mesh%orient(ktri)) cycle inner
-          ! use midpoint of edge f
-          base = mesh%lf(1, ktri)
-          tip = mesh%lf(2, ktri)
+       do kp = 1, mesh%kp_max(kf)
+          kedge = mesh%kp_low(kf) + kp - 1
+          ! use midpoint of poloidal edge
+          base = mesh%edge_node(1, kedge)
+          tip = mesh%edge_node(2, kedge)
           R = (mesh%node_R(base) + mesh%node_R(tip)) * 0.5d0
           lR = mesh%node_R(tip) - mesh%node_R(base)
           lZ = mesh%node_Z(tip) - mesh%node_Z(base)
-
-          kp = base - mesh%kp_low(kf)
-          kedge = mesh%edge_map2global(mesh%ef(ktri), ktri)
+          ktri = mesh%edge_tri(1, kedge)
           a(kp) = (B0R_edge(kedge) * lR + B0Z_edge(kedge) * lZ) / (lR ** 2 + lZ ** 2)
           x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bn%DOF(mesh%ef(ktri), ktri)
           b(kp) = imun * (mesh%n + imun * conf%damp) * B0phi_edge(kedge) / R
-       end do inner
+       end do
 
        ! solve linear system
        d = -a + b * 0.5d0
@@ -602,51 +599,57 @@ contains
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(2 * conf%nkpol) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kt, ktri, ke, kedge
+    integer :: kf, kp, kt, ktri, ke, kedge
     integer :: nz
     integer, dimension(4 * conf%nkpol) :: irow, icol
     complex(dp), dimension(4 * conf%nkpol) :: aval
-    complex(dp) :: Bnphi_Gamma
-    real(dp) :: R, area
+    complex(dp) :: Bnphi_edge, Delta_pn
+    real(dp) :: R, Delta_p0
     real(dp), parameter :: small = tiny(0d0)
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
-    do kf = 1, mesh%nflux ! loop through flux surfaces
-       do kt = 1, mesh%kt_max(kf)
-          ktri = mesh%kt_low(kf) + kt
-          area = mesh%area(ktri)
-          ! first term on source side: flux through edge f
-          ke = mesh%ef(ktri)
-          kedge = mesh%edge_map2global(ke, ktri)
-          R = sum(mesh%node_R(mesh%lf(:, ktri))) * 0.5d0
+    do kf = 1, mesh%nflux
+       do kp = 1, mesh%kp_max(kf)
+          kedge = mesh%kp_low(kf) + kp - 1
+          ktri = mesh%edge_tri(1, kedge)
+          ke = mesh%edge_map2ke(1, kedge)
+          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
           jn%DOF(ke, ktri) = j0phi_edge(kedge) / B0phi_edge(kedge) * Bn%DOF(ke, ktri) + &
-               clight * R / B0phi_edge(kedge) * (pn%DOF(mesh%lf(2, ktri)) - pn%DOF(mesh%lf(1, ktri)))
-          x(kt) = -jn%DOF(ke, ktri)
+               clight * R / B0phi_edge(kedge) * (pn%DOF(mesh%edge_node(2, kedge)) - pn%DOF(mesh%edge_node(1, kedge)))
+          if (mesh%edge_tri(2, kedge) > 0) then
+             jn%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_tri(2, kedge)) = -jn%DOF(ke, ktri)
+          end if
+       end do
+    end do
+    do kf = 1, mesh%nflux
+       Delta_p0 = fs%p(kf) - fs%p(kf-1)
+       x = (0d0, 0d0)
+       do kt = 1, mesh%kt_max(kf)
+          kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
+          R = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
+          Bnphi_edge = 0.5d0 * sum(Bn%comp_phi(mesh%edge_tri(:, kedge)))
+          Delta_pn = pn%DOF(mesh%edge_node(2, kedge)) - pn%DOF(mesh%edge_node(1, kedge))
+          ! first term on source side: flux through edge f
+          ktri = mesh%edge_tri(2, kedge)
+          ke = kt
+          x(ke) = x(ke) - jn%DOF(mesh%ef(ktri), ktri)
           ! diagonal matrix element - edge i
-          ke = mesh%ei(ktri)
-          kedge = mesh%edge_map2global(ke, ktri)
-          d(kt) = -1d0 - imun * (mesh%n + imun * conf%damp) * area * 0.5d0 * &
-               B0phi_edge(kedge) / B0_flux(kedge)
+          d(ke) = -1d0 - imun * (mesh%n + imun * conf%damp) * &
+               mesh%area(ktri) * 0.5d0 * B0phi_edge(kedge) / B0_flux(kedge)
           ! additional term from edge i on source side
-          R = sum(mesh%node_R(mesh%li(:, ktri))) * 0.5d0
-          Bnphi_Gamma = 0.5d0 * (Bn%comp_phi(ktri) + Bn%comp_phi(mesh%adj_tri(ke, ktri)))
-          x(kt) = x(kt) - imun * mesh%n * area * 0.5d0 * (clight * R / B0_flux(kedge) * &
-               (Bnphi_Gamma / B0phi_edge(kedge) * (fs%p(kf) - fs%p(kf-1)) - &
-               (pn%DOF(mesh%li(2, ktri)) - pn%DOF(mesh%li(1, ktri)))) + j0phi_edge(kedge) * &
-               (Bnphi_Gamma / B0phi_edge(kedge) - Bn%DOF(ke, ktri) / B0_flux(kedge)))
+          x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * R / B0_flux(kedge) * &
+               (Bnphi_edge / B0phi_edge(kedge) * Delta_p0 - Delta_pn) + j0phi_edge(kedge) * &
+               (Bnphi_edge / B0phi_edge(kedge) - Bn%DOF(mesh%ei(ktri), ktri) / B0_flux(kedge)))
           ! superdiagonal matrix element - edge o
-          ke = mesh%eo(ktri)
-          kedge = mesh%edge_map2global(ke, ktri)
-          du(kt) = 1d0 + imun * (mesh%n + imun * conf%damp) * area * 0.5d0 * &
-               B0phi_edge(kedge) / (-B0_flux(kedge))
+          ktri = mesh%edge_tri(1, kedge)
+          ke = mod(kt + mesh%kt_max(kf) - 2, mesh%kt_max(kf)) + 1
+          du(ke) = 1d0 + imun * (mesh%n + imun * conf%damp) * &
+               mesh%area(ktri) * 0.5d0 * B0phi_edge(kedge) / (-B0_flux(kedge))
           ! additional term from edge o on source side
-          R = sum(mesh%node_R(mesh%lo(:, ktri))) * 0.5d0
-          Bnphi_Gamma = 0.5d0 * (Bn%comp_phi(ktri) + Bn%comp_phi(mesh%adj_tri(ke, ktri)))
-          x(kt) = x(kt) - imun * mesh%n * area * 0.5d0 * (clight * r / (-B0_flux(kedge)) * &
-               (Bnphi_Gamma / B0phi_edge(kedge) * (fs%p(kf-1) - fs%p(kf)) - &
-               (pn%DOF(mesh%lo(2, ktri)) - pn%DOF(mesh%lo(1, ktri)))) + j0phi_edge(kedge) * &
-               (Bnphi_Gamma / B0phi_edge(kedge) - Bn%DOF(ke, ktri) / (-B0_flux(kedge))))
+          x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * R / (-B0_flux(kedge)) * &
+               (Bnphi_edge / B0phi_edge(kedge) * (-Delta_p0) - (-Delta_pn)) + j0phi_edge(kedge) * &
+               (Bnphi_edge / B0phi_edge(kedge) - Bn%DOF(mesh%eo(ktri), ktri) / (-B0_flux(kedge))))
        end do
        associate (ndim => mesh%kt_max(kf))
          call assemble_sparse(ndim, d(:ndim), du(:ndim), nz, &
@@ -692,28 +695,22 @@ contains
        if (mesh%m_res(kf) > 0) then
           if (abs(conf_arr%sheet_current_factor(mesh%m_res(kf))) > 0d0) then
              do kt = 1, mesh%kt_max(kf)
-                ktri = mesh%kt_low(kf) + kt
-                ! add sheet current on edge i
+                kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
+                ktri = mesh%edge_tri(2, kedge)
+                ktri_adj = mesh%edge_tri(1, kedge)
                 if (mesh%orient(ktri)) then
-                   pn_half = pn%DOF(mesh%li(2, ktri))
+                   pn_half = pn%DOF(mesh%edge_node(2, kedge))
                 else
                    ! edge i is diagonal
-                   ktri_adj = mesh%adj_tri(mesh%ei(ktri), ktri)
                    pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri_adj)))
                 end if
-                kedge = mesh%edge_map2global(mesh%ei(ktri), ktri)
                 jn%DOF(mesh%ei(ktri), ktri) = jn%DOF(mesh%ei(ktri), ktri) + &
                      conf_arr%sheet_current_factor(mesh%m_res(kf)) * B0_flux(kedge) * pn_half
-                ! add sheet current on edge o
-                if (mesh%orient(ktri)) then
-                   ! edge o is diagonal
-                   pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri)))
-                else
-                   pn_half = pn%DOF(mesh%lo(1, ktri))
-                end if
-                kedge = mesh%edge_map2global(mesh%eo(ktri), ktri)
-                jn%DOF(mesh%eo(ktri), ktri) = jn%DOF(mesh%eo(ktri), ktri) + &
+                jn%DOF(mesh%eo(ktri_adj), ktri_adj) = jn%DOF(mesh%eo(ktri_adj), ktri_adj) + &
                      conf_arr%sheet_current_factor(mesh%m_res(kf)) * (-B0_flux(kedge)) * pn_half
+             end do
+             do kt = 1, mesh%kt_max(kf)
+                ktri = mesh%kt_low(kf) + kt
                 ! adjust toroidal current density
                 jn%comp_phi(ktri) = sum(jn%DOF(:, ktri)) * imun / mesh%n / mesh%area(ktri)
              end do
