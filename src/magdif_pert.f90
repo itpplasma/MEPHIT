@@ -1299,8 +1299,8 @@ contains
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
     integer, parameter :: order = 2
-    integer :: nR, nZ, ktri, ke, k
-    real(dp) :: Rmin, Rmax, Zmin, Zmax, R, Z, edge_R, edge_Z, node_R(4), node_Z(4)
+    integer :: nR, nZ, ke, ktri, kedge, k
+    real(dp) :: Rmin, Rmax, Zmin, Zmax, R, Z, edge_R, edge_Z, node_R(2), node_Z(2)
     real(dp), dimension(order) :: points, weights
     complex(dp) :: B_R, B_phi, B_Z
     complex(dp), dimension(:, :), allocatable :: Bn_R, Bn_Z
@@ -1323,20 +1323,31 @@ contains
     deallocate(Bn_R, Bn_Z)
     ! project to finite elements
     call gauss_legendre_unit_interval(order, points, weights)
-    do ktri = 1, mesh%ntri
-       node_R = mesh%node_R([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
-       node_Z = mesh%node_Z([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
-       do ke = 1, 3
-          edge_R = node_R(ke + 1) - node_R(ke)
-          edge_Z = node_Z(ke + 1) - node_Z(ke)
-          do k = 1, order
-             R = node_R(ke) * points(k) + node_R(ke + 1) * points(order - k + 1)
-             Z = node_Z(ke) * points(k) + node_Z(ke + 1) * points(order - k + 1)
-             call spline_bn(conf%n, R, Z, B_R, B_phi, B_Z)
-             Bn%DOF(ke, ktri) = Bn%DOF(ke, ktri) + &
-                  weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
-          end do
+    Bn%DOF = (0d0, 0d0)
+    do kedge = 1, mesh%nedge
+       ke = mesh%edge_map2ke(1, kedge)
+       ktri = mesh%edge_tri(1, kedge)
+       node_R = mesh%node_R(mesh%edge_node(:, kedge))
+       node_Z = mesh%node_Z(mesh%edge_node(:, kedge))
+       if (kedge < mesh%npoint) then
+          ! poloidal edges
+          edge_R = node_R(2) - node_R(1)
+          edge_Z = node_Z(2) - node_Z(1)
+       else
+          ! radial edges - reverse point order so normal vector points out of first triangle
+          edge_R = node_R(1) - node_R(2)
+          edge_Z = node_Z(1) - node_Z(2)
+       end if
+       do k = 1, order
+          R = node_R(1) * points(k) + node_R(2) * points(order - k + 1)
+          Z = node_Z(1) * points(k) + node_Z(2) * points(order - k + 1)
+          call spline_bn(conf%n, R, Z, B_R, B_phi, B_Z)
+          Bn%DOF(ke, ktri) = Bn%DOF(ke, ktri) + &
+               weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
        end do
+       if (mesh%edge_tri(2, kedge) > 0) then
+          Bn%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_tri(2, kedge)) = -Bn%DOF(ke, ktri)
+       end if
     end do
     ! toroidal flux via zero divergence
     call RT0_compute_tor_comp(Bn)
@@ -1491,26 +1502,24 @@ contains
     use magdif_conf, only: conf
     use magdif_mesh, only: mesh, B0R_edge, B0phi_edge, B0Z_edge
     type(RT0_t), intent(inout) :: Bn
-    integer :: kf, kt, ktri, base, tip, kedge
-    real(dp) :: r, lr, lz
+    integer :: base, tip, kedge
+    real(dp) :: lR, lZ
     complex(dp) :: Bnpsi
 
-    do kf = 1, mesh%nflux
-       do kt = 1, mesh%kt_max(kf)
-          ktri = mesh%kt_low(kf) + kt
-          ! use midpoint of edge f
-          base = mesh%lf(1, ktri)
-          tip = mesh%lf(2, ktri)
-          R = (mesh%node_R(base) + mesh%node_R(tip)) * 0.5d0
-          lR = mesh%node_R(tip) - mesh%node_R(base)
-          lZ = mesh%node_Z(tip) - mesh%node_Z(base)
-          kedge = mesh%edge_map2global(mesh%ef(ktri), ktri)
-          Bnpsi = -mesh%R_O * B0phi_edge(kedge) / r
-          Bn%DOF(mesh%ef(ktri), ktri) = Bnpsi * (lR ** 2 + lZ ** 2) / &
-               (B0R_edge(kedge) * lR + B0Z_edge(kedge) * lZ)
-          Bn%DOF(mesh%ei(ktri), ktri) = (0d0, 0d0)
-          Bn%DOF(mesh%eo(ktri), ktri) = (0d0, 0d0)
-       end do
+    ! fluxes in poloidal direction are set to zero
+    Bn%DOF = (0d0, 0d0)
+    do kedge = 1, mesh%npoint - 1
+       base = mesh%edge_node(1, kedge)
+       tip = mesh%edge_node(2, kedge)
+       lR = mesh%node_R(tip) - mesh%node_R(base)
+       lZ = mesh%node_Z(tip) - mesh%node_Z(base)
+       Bnpsi = -mesh%R_O * B0phi_edge(kedge) / mesh%edge_R(kedge)
+       Bn%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_tri(1, kedge)) = Bnpsi * (lR ** 2 + lZ ** 2) / &
+            (B0R_edge(kedge) * lR + B0Z_edge(kedge) * lZ)
+       if (mesh%edge_tri(2, kedge) > 0) then
+          Bn%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_tri(2, kedge)) = &
+               -Bn%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_tri(1, kedge))
+       end if
     end do
     call RT0_compute_tor_comp(Bn)
     if (conf%quad_avg) call avg_flux_on_quad(Bn)
@@ -1549,29 +1558,40 @@ contains
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
     integer, parameter :: order = 2
-    integer :: ktri, k, ke, pol_modes(2)
-    real(dp) :: R, Z, rho, theta, edge_R, edge_Z, node_R(4), node_Z(4)
+    integer :: kedge, ktri, k, ke, pol_modes(2)
+    real(dp) :: R, Z, rho, theta, edge_R, edge_Z, node_R(2), node_Z(2)
     real(dp), dimension(order) :: points, weights
     complex(dp) :: B_R, B_phi, B_Z
 
     pol_modes = [conf%kilca_pol_mode, -conf%kilca_pol_mode]
     call gauss_legendre_unit_interval(order, points, weights)
-    do ktri = 1, mesh%ntri
-       node_R = mesh%node_R([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
-       node_Z = mesh%node_Z([mesh%tri_node(:, ktri), mesh%tri_node(1, ktri)])
-       do ke = 1, 3
-          edge_R = node_R(ke + 1) - node_R(ke)
-          edge_Z = node_Z(ke + 1) - node_Z(ke)
-          do k = 1, order
-             R = node_R(ke) * points(k) + node_R(ke + 1) * points(order - k + 1)
-             Z = node_Z(ke) * points(k) + node_Z(ke + 1) * points(order - k + 1)
-             rho = hypot(R - mesh%R_O, Z - mesh%Z_O)
-             theta = atan2(Z - mesh%Z_O, R - mesh%R_O)
-             call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, rho, theta, B_R, B_phi, B_Z)
-             Bn%DOF(ke, ktri) = Bn%DOF(ke, ktri) + &
-                  weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
-          end do
+    Bn%DOF = (0d0, 0d0)
+    do kedge = 1, mesh%nedge
+       ke = mesh%edge_map2ke(1, kedge)
+       ktri = mesh%edge_tri(1, kedge)
+       node_R = mesh%node_R(mesh%edge_node(:, kedge))
+       node_Z = mesh%node_Z(mesh%edge_node(:, kedge))
+       if (kedge < mesh%npoint) then
+          ! poloidal edges
+          edge_R = node_R(2) - node_R(1)
+          edge_Z = node_Z(2) - node_Z(1)
+       else
+          ! radial edges - reverse point order so normal vector points out of first triangle
+          edge_R = node_R(1) - node_R(2)
+          edge_Z = node_Z(1) - node_Z(2)
+       end if
+       do k = 1, order
+          R = node_R(1) * points(k) + node_R(2) * points(order - k + 1)
+          Z = node_Z(1) * points(k) + node_Z(2) * points(order - k + 1)
+          rho = hypot(R - mesh%R_O, Z - mesh%Z_O)
+          theta = atan2(Z - mesh%Z_O, R - mesh%R_O)
+          call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, rho, theta, B_R, B_phi, B_Z)
+          Bn%DOF(ke, ktri) = Bn%DOF(ke, ktri) + &
+               weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
        end do
+       if (mesh%edge_tri(2, kedge) > 0) then
+          Bn%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_tri(2, kedge)) = -Bn%DOF(ke, ktri)
+       end if
     end do
     ! toroidal flux via zero divergence
     call RT0_compute_tor_comp(Bn)
