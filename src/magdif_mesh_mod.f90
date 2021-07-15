@@ -638,7 +638,7 @@ contains
     call compare_gpec_coordinates
     call write_illustration_data(5, 8, 256, 256)
     call connect_mesh_points
-    call write_meshfile_for_freefem
+    call write_FreeFem_mesh
     call compute_sample_polmodes
     call compute_gpec_jacfac
     call cache_equilibrium_field
@@ -1882,8 +1882,8 @@ contains
     call h5_close(h5id_root)
   end subroutine mesh_write
 
-  subroutine write_meshfile_for_freefem
-    integer :: fid, kpoi, ktri, kp
+  subroutine write_FreeFem_mesh
+    integer :: fid, kpoi, ktri, kp, kedge
 
     open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace', form = 'formatted', action = 'write')
     write (fid, '(3(1x, i0))') mesh%npoint, mesh%ntri, mesh%kp_max(mesh%nflux) - 1
@@ -1902,7 +1902,18 @@ contains
        write (fid, '(4(1x, i0))') mesh%kp_low(mesh%nflux) + kp, mesh%kp_low(mesh%nflux) + kp + 1, 1
     end do
     close(fid)
-  end subroutine write_meshfile_for_freefem
+    open(newunit = fid, file = 'edgemap.dat', status = 'replace', form = 'formatted', action = 'write')
+    ! poloidal edges: node indices are sorted in ascending order except for the last triangle
+    do kedge = 1, mesh%npoint - 1
+       write (fid, '(2(1x, i0))') mesh%edge_tri(1, kedge), sign(mesh%edge_map2ke(1, kedge), &
+            mesh%edge_node(2, kedge) - mesh%edge_node(1, kedge))
+    end do
+    ! radial edges: use edge i for natural ordering
+    do kedge = mesh%npoint, mesh%nedge
+       write (fid, '(2(1x, i0))') mesh%edge_tri(2, kedge), -mesh%edge_map2ke(2, kedge)
+    end do
+    close(fid)
+  end subroutine write_FreeFem_mesh
 
   subroutine mesh_read(mesh, file, dataset)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close

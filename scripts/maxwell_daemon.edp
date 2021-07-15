@@ -12,12 +12,15 @@ real c = 29979245800.0; // speed of light
 
 include "getARGV.idp"
 string meshfile = getARGV("-M", "inputformaxwell_ext.msh");
+string edgefile = getARGV("-E", "edgemap.dat");
 string datapipe = getARGV("-P", "maxwell.dat");
 bool doplot = false;
 
-int runmode = 0, nmode = 2, state = 0;
+int runmode = 0, nmode = 2, nedge = 0, state = 0;
 LoadFlag(nmode, datapipe);
 flag(nmode, datapipe);
+LoadFlag(nedge, datapipe);
+flag(nedge, datapipe);
 LoadFlag(runmode, datapipe);
 flag(runmode, datapipe);
 if (runmode % 2) {
@@ -45,64 +48,28 @@ Hrot <complex> [ax, ay], [wx, wy];
 Hdiv <complex> [Jr, Jz], [Br, Bz];
 Vh0 <complex> Bphi, Jphi;
 
-real[int] fluxdata(6 * ntri); // (Re, Im) of RT0 DoFs
-complex redundancy;
-int DoF, inconsistent;
-real small = 2.2250738585072014e-308, epsilon = 2.2204460492503131e-16; // taken from Fortran
-cerr.scientific.precision(15);
-// check orientation of edges and assign normal flux coordinate accordingly
-// use NaN to signify an unset value
-// ordered comparisons with NaN always return false, so unset values are never inconsistent
-// when core region is processed, set NaN values on the extended mesh to zero
-macro deserializeDoFs(pol)
-for (int k = 0; k < ntri; k++) {
-  for (int j = 0; j < 3; j++) {
-    DoF = Hdiv(k, (j+2) % 3);
-    redundancy = pol[][DoF];
-    if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
-      pol[][DoF] = fluxdata[6*k + 2*j] + 1.0i * fluxdata[6*k + 2*j + 1];
-    } else {
-      pol[][DoF] = -fluxdata[6*k + 2*j] - 1.0i * fluxdata[6*k + 2*j + 1];
-    }
-    inconsistent = 0;
-    if (abs(real(redundancy)) < small) {
-      inconsistent += abs(real(pol[][DoF])) >= small;
-    } else {
-      inconsistent += abs(1.0 - real(pol[][DoF]) / real(redundancy)) > epsilon;
-    }
-    if (abs(imag(redundancy)) < small) {
-      inconsistent += abs(imag(pol[][DoF])) >= small;
-    } else {
-      inconsistent += abs(1.0 - imag(pol[][DoF]) / imag(redundancy)) > epsilon;
-    }
-    if (inconsistent) {
-      cerr << "Flux inconsistent for input flag " << state
-           << " at triangle " << k << ", edge " << (j+2) % 3 << ": "
-           << redundancy << " != " << pol[][DoF] << endl;
-      exit(1);
-    }
+int[int] edgemap(nedge), signmap(nedge);
+{
+  ifstream in(edgefile);
+  int ke, ktri;
+  for (int kedge = 0; kedge < nedge; kedge++) {
+    in >> ktri >> ke;
+    // ke and ktri are one-based indices and edge numbering is shifted by one
+    edgemap[kedge] = Hdiv(ktri - 1, (abs(ke) + 1) % 3);
+    // the sign of ke indicates when edge orientation differs in FreeFem
+    signmap[kedge] = (ke > 0) ? 1 : -1;
   }
 }
-for (int k = ntri; k < Th.nt; k++) {
-  for (int j = 0; j < 3; j++) {
-    DoF = Hdiv(k, j);
-    if (isNaN(real(pol[][DoF])) || isNaN(imag(pol[][DoF]))) {
-      pol[][DoF] = 0.0 + 0.0i;
-    }
-  }
+real[int] fluxdata(2 * nedge); // (Re, Im) of RT0 DoFs
+macro deserializeDoFs(pol)
+for (int k = 0; k < nedge; k++) {
+  pol[][edgemap[k]] = signmap[k] * (fluxdata[2 * k] + 1.0i * fluxdata[2 * k + 1]);
 }
 // end macro deserializeDoFs
 macro serializeDoFs(pol)
-for (int k = 0; k < ntri; k++) {
-  for (int j = 0; j < 3; j++) {
-    if ((Th[k][(j+1) % 3] - Th[k][(j+0) % 3]) > 0) {
-      fluxdata[6*k + 2*j] = real(pol[][Hdiv(k, (j+2) % 3)]);
-      fluxdata[6*k + 2*j + 1] = imag(pol[][Hdiv(k, (j+2) % 3)]);
-    } else {
-      fluxdata[6*k + 2*j] = -real(pol[][Hdiv(k, (j+2) % 3)]);
-      fluxdata[6*k + 2*j + 1] = -imag(pol[][Hdiv(k, (j+2) % 3)]);
-    }
-  }
+for (int k = 0; k < nedge; k++) {
+  fluxdata[2 * k] = signmap[k] * real(pol[][edgemap[k]]);
+  fluxdata[2 * k + 1] = signmap[k] * imag(pol[][edgemap[k]]);
 }
 // end macro serializeDoFs
 
@@ -119,7 +86,7 @@ while (state != -3) {
   if (state == -1) {
     // Ampere solver
     LoadVec(fluxdata, datapipe);
-    [Jr, Jz] = [NaN() + 1.0i * NaN(), NaN() + 1.0i * NaN()];
+    [Jr, Jz] = [0.0 + 0.0i, 0.0 + 0.0i];
     deserializeDoFs(Jr);
     // note that the metric determinant x = R is already contained in the input data
     // for J, but not in A
@@ -144,7 +111,7 @@ while (state != -3) {
   } else if (state == -2) {
     // convergenve estimation
     LoadVec(fluxdata, datapipe);
-    [Br, Bz] = [NaN() + 1.0i * NaN(), NaN() + 1.0i * NaN()];
+    [Br, Bz] = [0.0 + 0.0i, 0.0 + 0.0i];
     deserializeDoFs(Br);
     integral[0] = sqrt(real(int2d(Th)(Br * conj(Br) + Bz * conj(Bz))));
     SaveVec(integral, datapipe);

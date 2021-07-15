@@ -24,25 +24,25 @@ module magdif
   type(RT0_t) :: jn
 
   interface
-     subroutine FEM_init(tormode, runmode) bind(C, name = 'FEM_init')
+     subroutine FEM_init(tormode, nedge, runmode) bind(C, name = 'FEM_init')
        use iso_c_binding, only: c_int
-       integer(c_int), intent(in), value :: tormode, runmode
+       integer(c_int), intent(in), value :: tormode, nedge, runmode
      end subroutine FEM_init
 
      subroutine FEM_extend_mesh() bind(C, name = 'FEM_extend_mesh')
      end subroutine FEM_extend_mesh
 
-     subroutine FEM_compute_Bn(shape, Jn, Bn) bind(C, name = 'FEM_compute_Bn')
+     subroutine FEM_compute_Bn(nedge, Jn, Bn) bind(C, name = 'FEM_compute_Bn')
        use iso_c_binding, only: c_int, c_double_complex
-       integer(c_int), intent(in) :: shape(2)
-       complex(c_double_complex), intent(in) :: Jn(1:shape(1), 1:shape(2))
-       complex(c_double_complex), intent(out) :: Bn(1:shape(1), 1:shape(2))
+       integer(c_int), intent(in), value :: nedge
+       complex(c_double_complex), intent(in) :: Jn(1:nedge)
+       complex(c_double_complex), intent(out) :: Bn(1:nedge)
      end subroutine FEM_compute_Bn
 
-     subroutine FEM_compute_L2int(shape, elem, L2int) bind(C, name = 'FEM_compute_L2int')
+     subroutine FEM_compute_L2int(nedge, elem, L2int) bind(C, name = 'FEM_compute_L2int')
        use iso_c_binding, only: c_int, c_double_complex, c_double
-       integer(c_int), intent(in) :: shape(2)
-       complex(c_double_complex), intent(in) :: elem(1:shape(1), 1:shape(2))
+       integer(c_int), intent(in), value :: nedge
+       complex(c_double_complex), intent(in) :: elem(1:nedge)
        real(c_double), intent(out) :: L2int
      end subroutine FEM_compute_L2int
 
@@ -100,7 +100,7 @@ contains
        call write_mesh_cache
        call generate_vacfield
        ! pass effective toroidal mode number and runmode to FreeFem++
-       call FEM_init(mesh%n, runmode_flags)
+       call FEM_init(mesh%n, mesh%nedge, runmode_flags)
        call FEM_extend_mesh
     else
        ! initialize equilibrium field
@@ -113,7 +113,7 @@ contains
        call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
        call conf_arr%export_hdf5(datafile, 'config')
        ! pass effective toroidal mode number and runmode to FreeFem++
-       call FEM_init(mesh%n, runmode)
+       call FEM_init(mesh%n, mesh%nedge, runmode)
     end if
     if (iterations .or. analysis) then
        call magdif_init
@@ -212,7 +212,7 @@ contains
     use arnoldi_mod, only: ieigen, ngrow, tol, eigvecs  ! arnoldi.f90
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use magdif_mesh, only: mesh
-    use magdif_pert, only: RT0_init, RT0_deinit, RT0_write, L1_write, &
+    use magdif_pert, only: RT0_init, RT0_deinit, RT0_write, pack_dof, unpack_dof, L1_write, &
          RT0_check_div_free, RT0_check_redundant_edges, vec_polmodes_t, vec_polmodes_init, &
          vec_polmodes_deinit, vec_polmodes_write, RT0_poloidal_modes
     use magdif_conf, only: conf, log, runmode_precon, runmode_single, datafile, cmplx_fmt, &
@@ -223,7 +223,7 @@ contains
     integer(HID_T) :: h5id_root
     real(dp), allocatable :: L2int(:)
     type(RT0_t) :: Bn_diff
-    complex(dp) :: packed_Bn(mesh%nedge), packed_Bn_prev(mesh%nedge)
+    complex(dp), dimension(mesh%nedge) :: packed_Bn, packed_Bn_prev, packed_Bn_diff
     complex(dp) :: eigvals(conf%nritz)
     complex(dp), allocatable :: Lr(:,:), Yr(:,:)
     integer, allocatable :: ipiv(:)
@@ -299,15 +299,15 @@ contains
     call vec_polmodes_init(jmn, m_max, mesh%nflux)
     call RT0_init(Bn_diff, mesh%ntri)
     allocate(L2int(0:niter))
-    call FEM_compute_L2int(shape(Bnvac%DOF), Bnvac%DOF, L2int(0))
+    Bn%DOF(:, :) = Bnvac%DOF
+    Bn%comp_phi(:) = Bnvac%comp_phi
+    call pack_dof(Bnvac, packed_Bn_prev)
+    call FEM_compute_L2int(mesh%nedge, packed_Bn_prev, L2int(0))
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, 'iter/')
     call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int(0), &
          comment = 'L2 integral of magnetic field (vacuum)', unit = 'Mx')
     call h5_close(h5id_root)
-    Bn%DOF(:, :) = Bnvac%DOF
-    Bn%comp_phi(:) = Bnvac%comp_phi
-    call pack_dof(Bnvac, packed_Bn_prev)
     if (preconditioned) then
        packed_Bn_prev(:) = packed_Bn_prev - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
             matmul(transpose(conjg(eigvecs(:, 1:ngrow))), packed_Bn_prev)))
@@ -326,8 +326,8 @@ contains
           call RT0_check_div_free(Bn, mesh%n, conf%rel_err_Bn, 'Bn')
        end if
 
-       call unpack_dof(Bn_diff, packed_Bn - packed_Bn_prev)
-       call FEM_compute_L2int(shape(Bn_diff%DOF), Bn_diff%DOF, L2int(kiter))
+       packed_Bn_diff = packed_Bn - packed_Bn_prev
+       call FEM_compute_L2int(mesh%nedge, packed_Bn_diff, L2int(kiter))
        if (kiter <= 1) then
           call L1_write(pn, datafile, 'iter/pn' // postfix, &
                'pressure (after iteration)', 'dyn cm^-2')
@@ -335,6 +335,7 @@ contains
                'current density (after iteration)', 'statA cm^-2', 1)
           call RT0_write(Bn, datafile, 'iter/Bn' // postfix, &
                'magnetic field (after iteration)', 'G', 1)
+          call unpack_dof(Bn_diff, packed_Bn_diff)
           call RT0_write(Bn_diff, datafile, 'iter/Bn_diff' // postfix, &
                'magnetic field (difference between iterations)', 'G', 1)
           call RT0_poloidal_modes(jn, jmn)
@@ -368,31 +369,6 @@ contains
     end if
 
   contains
-
-    pure subroutine pack_dof(elem, packed)
-      type(RT0_t), intent(in) :: elem
-      complex(dp), intent(out) :: packed(mesh%nedge)
-      integer :: kedge
-      do kedge = 1, mesh%nedge
-         packed(kedge) = elem%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_map2ktri(1, kedge))
-      end do
-    end subroutine pack_dof
-
-    pure subroutine unpack_dof(elem, packed)
-      use magdif_pert, only: RT0_compute_tor_comp
-      type(RT0_t), intent(inout) :: elem
-      complex(dp), intent(in) :: packed(mesh%nedge)
-      integer :: kedge
-      do kedge = 1, mesh%nedge
-         elem%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_map2ktri(1, kedge)) = &
-              packed(kedge)
-         if (mesh%edge_map2ktri(2, kedge) > 0) then
-            elem%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_map2ktri(2, kedge)) = &
-                 -packed(kedge)
-         end if
-      end do
-      call RT0_compute_tor_comp(elem)
-    end subroutine unpack_dof
 
     ! computes B_(n+1) = K*B_n + B_vac ... different from kin2d.f90
     subroutine next_iteration(n, xold, xnew)
@@ -435,9 +411,13 @@ contains
   !>
   !> This subroutine calls a C function that pipes the data to/from FreeFem.
   subroutine compute_Bn
-    use magdif_pert, only: RT0_compute_tor_comp, RT0_check_redundant_edges
+    use magdif_mesh, only: mesh
+    use magdif_pert, only: pack_dof, unpack_dof, RT0_compute_tor_comp, RT0_check_redundant_edges
+    complex(dp), dimension(mesh%nedge) :: packed_jn, packed_Bn
 
-    call FEM_compute_Bn(shape(jn%DOF), jn%DOF, Bn%DOF)
+    call pack_dof(jn, packed_jn)
+    call FEM_compute_Bn(mesh%nedge, packed_jn, packed_Bn)
+    call unpack_dof(Bn, packed_Bn)
     call RT0_check_redundant_edges(Bn, 'Bn')
     call RT0_compute_tor_comp(Bn)
   end subroutine compute_Bn

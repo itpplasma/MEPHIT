@@ -6,7 +6,7 @@ module magdif_pert
 
   private
 
-  public :: L1_init, L1_deinit, L1_read, L1_write, RT0_init, RT0_deinit, RT0_read, &
+  public :: L1_init, L1_deinit, L1_read, L1_write, RT0_init, RT0_deinit, RT0_read, pack_dof, unpack_dof, &
        RT0_write, RT0_interp, RT0_compute_tor_comp, RT0_check_div_free, RT0_check_redundant_edges, RT0_triplot, &
        RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
        vec_polmodes_read, vec_polmodes_write, AUG_coils_read, AUG_coils_write_Nemov, &
@@ -213,6 +213,32 @@ contains
 
     elem%comp_phi(:) = imun / mesh%n * sum(elem%DOF, 1) / mesh%area
   end subroutine RT0_compute_tor_comp
+
+  pure subroutine pack_dof(elem, packed)
+    use magdif_mesh, only: mesh
+    type(RT0_t), intent(in) :: elem
+    complex(dp), intent(out) :: packed(mesh%nedge)
+    integer :: kedge
+    do kedge = 1, mesh%nedge
+       packed(kedge) = elem%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_map2ktri(1, kedge))
+    end do
+  end subroutine pack_dof
+
+  pure subroutine unpack_dof(elem, packed)
+    use magdif_mesh, only: mesh
+    type(RT0_t), intent(inout) :: elem
+    complex(dp), intent(in) :: packed(mesh%nedge)
+    integer :: kedge
+    do kedge = 1, mesh%nedge
+       elem%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_map2ktri(1, kedge)) = &
+            packed(kedge)
+       if (mesh%edge_map2ktri(2, kedge) > 0) then
+          elem%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_map2ktri(2, kedge)) = &
+               -packed(kedge)
+       end if
+    end do
+    call RT0_compute_tor_comp(elem)
+  end subroutine unpack_dof
 
   !> Checks if divergence-freeness of the given vector field is fulfilled on each
   !> triangle, otherwise halts the program.
