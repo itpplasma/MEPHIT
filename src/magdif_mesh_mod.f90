@@ -14,7 +14,7 @@ module magdif_mesh
        flux_func_cache_init, flux_func_cache_check, flux_func_cache_deinit, generate_mesh, &
        compute_resonance_positions, refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile, &
        create_mesh_points, init_indices, common_triangles, psi_interpolator, psi_fine_interpolator, &
-       connect_mesh_points, get_labeled_edges, write_mesh_cache, read_mesh_cache, &
+       connect_mesh_points, write_mesh_cache, read_mesh_cache, &
        magdif_mesh_deinit, init_flux_variables, compute_pres_prof_eps, compute_pres_prof_par, &
        compute_pres_prof_geqdsk, compute_safety_factor_flux, compute_safety_factor_rot, &
        compute_safety_factor_geqdsk, check_safety_factor, cache_equilibrium_field, &
@@ -190,12 +190,7 @@ module magdif_mesh
      integer, allocatable :: tri_node(:, :)
      integer, allocatable :: tri_node_F(:)
 
-     integer, allocatable :: li(:, :)
-     integer, allocatable :: lo(:, :)
-     integer, allocatable :: lf(:, :)
-     integer, allocatable :: ei(:)
-     integer, allocatable :: eo(:)
-     integer, allocatable :: ef(:)
+     !> true if edge f of given triangle lies on the outer flux surface, false otherwise
      logical, allocatable :: orient(:)
 
      integer, allocatable :: adj_tri(:, :)
@@ -203,6 +198,7 @@ module magdif_mesh
 
      integer, allocatable :: edge_node(:, :)
      integer, allocatable :: edge_tri(:, :)
+     !> Edges [f, o, i] for a given triangle
      integer, allocatable :: tri_edge(:, :)
      integer, allocatable :: edge_map2global(:, :)
      integer, allocatable :: edge_map2ktri(:, :)
@@ -1166,6 +1162,7 @@ contains
 
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
+    allocate(mesh%orient(mesh%ntri))
     allocate(mesh%adj_tri(3, mesh%ntri))
     allocate(mesh%adj_edge(3, mesh%ntri))
     allocate(mesh%edge_node(2, mesh%nedge))
@@ -1191,6 +1188,7 @@ contains
     do kp = 1, mesh%kp_max(kf)
        ! node indices for triangle with poloidal edge on outer flux surface
        ktri = ktri + 1
+       mesh%orient(ktri) = .true.
        mesh%tri_node(1, ktri) = mesh%kp_low(kf) + kp
        mesh%tri_node(2, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
        mesh%tri_node(3, ktri) = mesh%kp_low(kf)
@@ -1228,6 +1226,7 @@ contains
        do kp = 1, mesh%kp_max(kf)
           ! node indices for triangle with poloidal edge on outer flux surface
           ktri = ktri + 1
+          mesh%orient(ktri) = .true.
           mesh%tri_node(1, ktri) = mesh%kp_low(kf) + kp
           mesh%tri_node(2, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
           mesh%tri_node(3, ktri) = mesh%kp_low(kf - 1) + kp
@@ -1261,6 +1260,7 @@ contains
           mesh%edge_map2ke(1, kedge) = 2
           ! triangle with poloidal edge on inner flux surface
           ktri = ktri + 1
+          mesh%orient(ktri) = .false.
           mesh%tri_node(1, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
           mesh%tri_node(2, ktri) = mesh%kp_low(kf - 1) + mod(kp, mesh%kp_max(kf - 1)) + 1
           mesh%tri_node(3, ktri) = mesh%kp_low(kf - 1) + kp
@@ -1268,7 +1268,7 @@ contains
           ! triangle index for poloidal edge
           kedge = mesh%kp_low(kf - 1) + kp - 1
           mesh%edge_tri(2, kedge) = ktri
-          mesh%tri_edge(2, ktri) = kedge
+          mesh%tri_edge(1, ktri) = kedge
           ! neighbours for poloidal edges
           ktri_adj = mesh%edge_tri(1, kedge)
           mesh%adj_tri(2, ktri) = ktri_adj
@@ -1285,7 +1285,7 @@ contains
           ! triangle indices for radial edge
           kedge = mesh%npoint + mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf))
           mesh%edge_tri(:, kedge) = [ktri, ktri_adj]
-          mesh%tri_edge(1, ktri) = kedge
+          mesh%tri_edge(2, ktri) = kedge
           mesh%tri_edge(3, ktri_adj) = kedge
           ! local edge mappings
           kedge = mesh%kp_low(kf - 1) + kp - 1
@@ -1303,20 +1303,11 @@ contains
     mesh%edge_node(:, mesh%npoint:) = mesh%tri_node([3, 1], :)
     ! local edge mappings
     mesh%edge_map2ktri(:, :) = mesh%edge_tri
-    ! define edges and 'centroids'
-    allocate(mesh%li(2, mesh%ntri))
-    allocate(mesh%lo(2, mesh%ntri))
-    allocate(mesh%lf(2, mesh%ntri))
-    allocate(mesh%ei(mesh%ntri))
-    allocate(mesh%eo(mesh%ntri))
-    allocate(mesh%ef(mesh%ntri))
-    allocate(mesh%orient(mesh%ntri))
+    ! cache areas and 'centroids'
     allocate(mesh%R_Omega(mesh%ntri))
     allocate(mesh%Z_Omega(mesh%ntri))
     allocate(mesh%area(mesh%ntri))
     do ktri = 1, mesh%ntri
-       call get_labeled_edges(ktri, mesh%li(:, ktri), mesh%lo(:, ktri), mesh%lf(:, ktri), &
-            mesh%ei(ktri), mesh%eo(ktri), mesh%ef(ktri), mesh%orient(ktri))
        call ring_centered_avg_coord(ktri, mesh%R_Omega(ktri), mesh%Z_Omega(ktri))
        mesh%area(ktri) = tri_area(ktri)
     end do
@@ -1328,118 +1319,6 @@ contains
        mesh%edge_Z(kedge) = sum(mesh%node_Z(mesh%edge_node(:, kedge))) * 0.5d0
     end do
   end subroutine connect_mesh_points
-
-  !> Map edge symbols to integer indices.
-  !>
-  !> @param elem the triangle for which indices are to be obtained
-  !> @param li knot indices for base (1) and tip (2) of edge i
-  !> @param lo knot indices for base (1) and tip (2) of edge o
-  !> @param lf knot indices for base (1) and tip (2) of edge f
-  !> @param ei index of edge i, e.g. for #bnflux
-  !> @param eo index of edge o, e.g. for #bnflux
-  !> @param ef index of edge f, e.g. for #bnflux
-  !> @param orient true if edge f lies on the outer flux surface, false otherwise
-  !>
-  !> It is assumed that the knots are globally numbered in ascending order starting from
-  !> the magnetic axis and going counter-clockwise around each flux surface. Furthermore
-  !> it is assumed that edge 1 goes from knot 1 to knot 2, edge 2 from knot 2 to knot 3
-  !> and edge 3 from knot 3 to knot 1. It is not assumed that knots are orderd
-  !> counter-clockwise locally.
-
-  subroutine get_labeled_edges(ktri, li, lo, lf, ei, eo, ef, orient)
-    use magdif_conf, only: log
-    integer, intent(in) :: ktri
-    integer, dimension(:), intent(out) :: li, lo, lf
-    integer, intent(out) :: ei, eo, ef
-    logical, intent(out) :: orient
-    integer, dimension(3) :: i_knot_diff
-    integer :: knot_i, knot_o, knot_f
-    integer :: i1, i2
-    logical :: closing_loop
-
-    if (2 /= size(li)) then
-       call log%msg_arg_size('get_labeled_edges', 'expected size(li)', 'actual size(li)', &
-            2, size(li))
-       if (log%err) call log%write
-       error stop
-    end if
-    if (2 /= size(lo)) then
-       call log%msg_arg_size('get_labeled_edges', 'expected size(lo)', 'actual size(lo)', &
-            2, size(lo))
-       if (log%err) call log%write
-       error stop
-    end if
-    if (2 /= size(lf)) then
-       call log%msg_arg_size('get_labeled_edges', 'expected size(lf)', 'actual size(lf)', &
-            2, size(lf))
-       if (log%err) call log%write
-       error stop
-    end if
-    log%msg = 'cannot find correct label for triangle edges'
-
-    ! initialize to suppress compiler warnings
-    i1 = 0
-    i2 = 0
-    knot_f = mesh%tri_node_F(ktri)
-    select case (knot_f)
-    case (1)
-       i1 = 2
-       i2 = 3
-    case (2)
-       i1 = 3
-       i2 = 1
-    case (3)
-       i1 = 1
-       i2 = 2
-    end select
-    if (mesh%tri_node(i1, ktri) == mesh%tri_node(i2, ktri)) then
-       if (log%err) call log%write
-       error stop
-    end if
-    ! last triangle in strip if indices not next to each other
-    closing_loop = abs(mesh%tri_node(i1, ktri) - mesh%tri_node(i2, ktri)) /= 1
-    i_knot_diff = mesh%tri_node(:, ktri) - mesh%tri_node(knot_f, ktri)
-    if (all(i_knot_diff >= 0)) then
-       ! knot_f lies on inner surface
-       orient = .true.
-       if ((mesh%tri_node(i1, ktri) < mesh%tri_node(i2, ktri)) .neqv. closing_loop) then
-          ! i1 is next after knot_f counter-clockwise
-          knot_o = i1
-          knot_i = i2
-       else
-          ! i2 is next after knot_f counter-clockwise
-          knot_o = i2
-          knot_i = i1
-       end if
-       ei = knot_f
-       eo = knot_i
-       ef = knot_o
-       li = [mesh%tri_node(knot_f, ktri), mesh%tri_node(knot_o, ktri)]
-       lo = [mesh%tri_node(knot_i, ktri), mesh%tri_node(knot_f, ktri)]
-       lf = [mesh%tri_node(knot_o, ktri), mesh%tri_node(knot_i, ktri)]
-    else if (all(i_knot_diff <= 0)) then
-       ! knot_f lies on outer surface
-       orient = .false.
-       if ((mesh%tri_node(i1, ktri) > mesh%tri_node(i2, ktri)) .neqv. closing_loop) then
-          ! i1 is next after knot_f counter-clockwise
-          knot_i = i1
-          knot_o = i2
-       else
-          ! i2 is next after knot_f counter-clockwise
-          knot_i = i2
-          knot_o = i1
-       end if
-       ei = knot_o
-       eo = knot_f
-       ef = knot_i
-       li = [mesh%tri_node(knot_o, ktri), mesh%tri_node(knot_f, ktri)]
-       lo = [mesh%tri_node(knot_f, ktri), mesh%tri_node(knot_i, ktri)]
-       lf = [mesh%tri_node(knot_i, ktri), mesh%tri_node(knot_o, ktri)]
-    else
-       if (log%err) call log%write
-       error stop
-    end if
-  end subroutine get_labeled_edges
 
   !> Computes the "weighted" centroid for a triangle so that it is approximately
   !> equidistant between the enclosing flux surfaces, independent of triangle orientation.
@@ -1816,24 +1695,6 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/tri_node_F', mesh%tri_node_F, &
          lbound(mesh%tri_node_F), ubound(mesh%tri_node_F), &
          comment = 'local node index of node F')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/li', mesh%li, &
-         lbound(mesh%li), ubound(mesh%li), &
-         comment = 'local node indices of edge i, counter-clockwise')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/lo', mesh%lo, &
-         lbound(mesh%lo), ubound(mesh%lo), &
-         comment = 'local node indices of edge o, counter-clockwise')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/lf', mesh%lf, &
-         lbound(mesh%lf), ubound(mesh%lf), &
-         comment = 'local node indices of edge f, counter-clockwise')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ei', mesh%ei, &
-         lbound(mesh%ei), ubound(mesh%ei), &
-         comment = 'local edge index of edge i')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/eo', mesh%eo, &
-         lbound(mesh%eo), ubound(mesh%eo), &
-         comment = 'local edge index of edge o')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ef', mesh%ef, &
-         lbound(mesh%ef), ubound(mesh%ef), &
-         comment = 'local edge index of edge f')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/orient', orient, &
          lbound(orient), ubound(orient), &
          comment = 'triangle orientation: true (1) if edge f lies on outer flux surface')
@@ -1966,12 +1827,6 @@ contains
     allocate(mesh%node_theta_geom(mesh%npoint))
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
-    allocate(mesh%li(2, mesh%ntri))
-    allocate(mesh%lo(2, mesh%ntri))
-    allocate(mesh%lf(2, mesh%ntri))
-    allocate(mesh%ei(mesh%ntri))
-    allocate(mesh%eo(mesh%ntri))
-    allocate(mesh%ef(mesh%ntri))
     allocate(mesh%orient(mesh%ntri))
     allocate(orient(mesh%ntri))
     allocate(mesh%adj_tri(3, mesh%ntri))
@@ -2007,12 +1862,6 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/node_theta_geom', mesh%node_theta_geom)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_node', mesh%tri_node)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_node_F', mesh%tri_node_F)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/li', mesh%li)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/lo', mesh%lo)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/lf', mesh%lf)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/ei', mesh%ei)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/eo', mesh%eo)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/ef', mesh%ef)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/orient', orient)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/adj_tri', mesh%adj_tri)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/adj_edge', mesh%adj_edge)
@@ -2059,12 +1908,6 @@ contains
     if (allocated(this%node_theta_geom)) deallocate(this%node_theta_geom)
     if (allocated(this%tri_node)) deallocate(this%tri_node)
     if (allocated(this%tri_node_F)) deallocate(this%tri_node_F)
-    if (allocated(this%li)) deallocate(this%li)
-    if (allocated(this%lo)) deallocate(this%lo)
-    if (allocated(this%lf)) deallocate(this%lf)
-    if (allocated(this%ei)) deallocate(this%ei)
-    if (allocated(this%eo)) deallocate(this%eo)
-    if (allocated(this%ef)) deallocate(this%ef)
     if (allocated(this%orient)) deallocate(this%orient)
     if (allocated(this%adj_tri)) deallocate(this%adj_tri)
     if (allocated(this%adj_edge)) deallocate(this%adj_edge)

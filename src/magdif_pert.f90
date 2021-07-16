@@ -1556,7 +1556,7 @@ contains
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: elem
 
-    integer :: kf, kt, ktri1, ktri2
+    integer :: kf, kt, ktri1, ktri2, ke1, ke2
     complex(dp) :: tor_flux_avg, tor_flux_diff
 
     do kf = 2, mesh%nflux
@@ -1568,10 +1568,12 @@ contains
           tor_flux_diff = 0.5d0 * (elem%comp_phi(ktri2) * mesh%area(ktri2) - &
                elem%comp_phi(ktri1) * mesh%area(ktri1))
           elem%comp_phi(ktri1) = tor_flux_avg / mesh%area(ktri1)
-          elem%DOF(mesh%eo(ktri1), ktri1) = elem%DOF(mesh%eo(ktri1), ktri1) - &
+          ke1 = mesh%edge_map2ke(1, mesh%tri_edge(2, ktri1))
+          elem%DOF(ke1, ktri1) = elem%DOF(ke1, ktri1) - &
                imun * mesh%n * tor_flux_diff
           elem%comp_phi(ktri2) = tor_flux_avg / mesh%area(ktri2)
-          elem%DOF(mesh%ei(ktri2), ktri2) = elem%DOF(mesh%ei(ktri2), ktri2) + &
+          ke2 = mesh%edge_map2ke(2, mesh%tri_edge(3, ktri1))
+          elem%DOF(ke2, ktri2) = elem%DOF(ke2, ktri2) + &
                imun * mesh%n * tor_flux_diff
        end do
     end do

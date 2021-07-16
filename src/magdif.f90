@@ -508,7 +508,7 @@ contains
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(conf%nkpol) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kp, kedge, ktri
+    integer :: kf, kp, kedge, ktri, ke
     integer :: nz
     integer, dimension(2 * conf%nkpol) :: irow, icol
     complex(dp), dimension(2 * conf%nkpol) :: aval
@@ -526,8 +526,9 @@ contains
           lR = mesh%node_R(tip) - mesh%node_R(base)
           lZ = mesh%node_Z(tip) - mesh%node_Z(base)
           ktri = mesh%edge_tri(1, kedge)
+          ke = mesh%edge_map2ke(1, mesh%tri_edge(1, ktri))
           a(kp) = (B0R_edge(kedge) * lR + B0Z_edge(kedge) * lZ) / (lR ** 2 + lZ ** 2)
-          x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bn%DOF(mesh%ef(ktri), ktri)
+          x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bn%DOF(ke, ktri)
           b(kp) = imun * (mesh%n + imun * conf%damp) * B0phi_edge(kedge) / mesh%edge_R(kedge)
        end do
 
@@ -577,7 +578,7 @@ contains
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(2 * conf%nkpol) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kp, kt, ktri, ke, kedge
+    integer :: kf, kp, kt, ktri, ke, kedge, ke_local
     integer :: nz
     integer, dimension(4 * conf%nkpol) :: irow, icol
     complex(dp), dimension(4 * conf%nkpol) :: aval
@@ -591,12 +592,12 @@ contains
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
           ktri = mesh%edge_tri(1, kedge)
-          ke = mesh%edge_map2ke(1, kedge)
-          jn%DOF(ke, ktri) = j0phi_edge(kedge) / B0phi_edge(kedge) * Bn%DOF(ke, ktri) + &
+          ke_local = mesh%edge_map2ke(1, kedge)
+          jn%DOF(ke_local, ktri) = j0phi_edge(kedge) / B0phi_edge(kedge) * Bn%DOF(ke_local, ktri) + &
                clight * mesh%edge_R(kedge) / B0phi_edge(kedge) * &
                (pn%DOF(mesh%edge_node(2, kedge)) - pn%DOF(mesh%edge_node(1, kedge)))
           if (mesh%edge_tri(2, kedge) > 0) then
-             jn%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_tri(2, kedge)) = -jn%DOF(ke, ktri)
+             jn%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_tri(2, kedge)) = -jn%DOF(ke_local, ktri)
           end if
        end do
     end do
@@ -610,23 +611,30 @@ contains
           ! first term on source side: flux through edge f
           ktri = mesh%edge_tri(2, kedge)
           ke = kt
-          x(ke) = x(ke) - jn%DOF(mesh%ef(ktri), ktri)
+          if (mesh%orient(ktri)) then
+             ke_local = mesh%edge_map2ke(1, mesh%tri_edge(1, ktri))
+          else
+             ke_local = mesh%edge_map2ke(2, mesh%tri_edge(1, ktri))
+          end if
+          x(ke) = x(ke) - jn%DOF(ke_local, ktri)
           ! diagonal matrix element - edge i
           d(ke) = -1d0 - imun * (mesh%n + imun * conf%damp) * &
                mesh%area(ktri) * 0.5d0 * B0phi_edge(kedge) / B0_flux(kedge)
           ! additional term from edge i on source side
+          ke_local = mesh%edge_map2ke(2, mesh%tri_edge(3, ktri))
           x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%edge_R(kedge) / B0_flux(kedge) * &
                (Bnphi_edge / B0phi_edge(kedge) * Delta_p0 - Delta_pn) + j0phi_edge(kedge) * &
-               (Bnphi_edge / B0phi_edge(kedge) - Bn%DOF(mesh%ei(ktri), ktri) / B0_flux(kedge)))
+               (Bnphi_edge / B0phi_edge(kedge) - Bn%DOF(ke_local, ktri) / B0_flux(kedge)))
           ! superdiagonal matrix element - edge o
           ktri = mesh%edge_tri(1, kedge)
           ke = mod(kt + mesh%kt_max(kf) - 2, mesh%kt_max(kf)) + 1
           du(ke) = 1d0 + imun * (mesh%n + imun * conf%damp) * &
                mesh%area(ktri) * 0.5d0 * B0phi_edge(kedge) / (-B0_flux(kedge))
           ! additional term from edge o on source side
+          ke_local = mesh%edge_map2ke(1, mesh%tri_edge(2, ktri))
           x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%edge_R(kedge) / (-B0_flux(kedge)) * &
                (Bnphi_edge / B0phi_edge(kedge) * (-Delta_p0) - (-Delta_pn)) + j0phi_edge(kedge) * &
-               (Bnphi_edge / B0phi_edge(kedge) - Bn%DOF(mesh%eo(ktri), ktri) / (-B0_flux(kedge))))
+               (Bnphi_edge / B0phi_edge(kedge) - Bn%DOF(ke_local, ktri) / (-B0_flux(kedge))))
        end do
        associate (ndim => mesh%kt_max(kf))
          call assemble_sparse(ndim, d(:ndim), du(:ndim), nz, &
@@ -645,8 +653,8 @@ contains
        end associate
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          jn%DOF(mesh%ei(ktri), ktri) = -x(kt)
-          jn%DOF(mesh%eo(ktri), ktri) = x(mod(kt, mesh%kt_max(kf)) + 1)
+          jn%DOF(mesh%edge_map2ke(2, mesh%tri_edge(3, ktri)), ktri) = -x(kt)
+          jn%DOF(mesh%edge_map2ke(1, mesh%tri_edge(2, ktri)), ktri) = x(mod(kt, mesh%kt_max(kf)) + 1)
        end do
     end do
     avg_rel_err = avg_rel_err / sum(mesh%kt_max(1:mesh%nflux))
@@ -664,7 +672,7 @@ contains
   subroutine add_sheet_current
     use magdif_conf, only: conf_arr
     use magdif_mesh, only: mesh, B0_flux
-    integer :: kf, kt, ktri, ktri_adj, kedge
+    integer :: kf, kt, ktri, ktri_adj, kedge, ke
     complex(dp) :: pn_half
 
     do kf = 1, mesh%nflux
@@ -678,11 +686,13 @@ contains
                    pn_half = pn%DOF(mesh%edge_node(2, kedge))
                 else
                    ! edge i is diagonal
-                   pn_half = 0.5d0 * sum(pn%DOF(mesh%lf(:, ktri_adj)))
+                   pn_half = 0.5d0 * sum(pn%DOF(mesh%edge_node(:, mesh%tri_edge(1, ktri_adj))))
                 end if
-                jn%DOF(mesh%ei(ktri), ktri) = jn%DOF(mesh%ei(ktri), ktri) + &
+                ke = mesh%edge_map2ke(2, mesh%tri_edge(3, ktri))
+                jn%DOF(ke, ktri) = jn%DOF(ke, ktri) + &
                      conf_arr%sheet_current_factor(mesh%m_res(kf)) * B0_flux(kedge) * pn_half
-                jn%DOF(mesh%eo(ktri_adj), ktri_adj) = jn%DOF(mesh%eo(ktri_adj), ktri_adj) + &
+                ke = mesh%edge_map2ke(1, mesh%tri_edge(2, ktri_adj))
+                jn%DOF(ke, ktri_adj) = jn%DOF(ke, ktri_adj) + &
                      conf_arr%sheet_current_factor(mesh%m_res(kf)) * (-B0_flux(kedge)) * pn_half
              end do
           end if
