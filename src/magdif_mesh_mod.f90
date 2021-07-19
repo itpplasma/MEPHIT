@@ -1771,7 +1771,7 @@ contains
     end do
     ! radial edges: use edge i for natural ordering
     do kedge = mesh%npoint, mesh%nedge
-       write (fid, '(2(1x, i0))') mesh%edge_tri(2, kedge), -mesh%edge_map2ke(2, kedge)
+       write (fid, '(2(1x, i0))') mesh%edge_tri(2, kedge), mesh%edge_map2ke(2, kedge)
     end do
     close(fid)
   end subroutine write_FreeFem_mesh

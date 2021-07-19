@@ -6,8 +6,8 @@ module magdif_pert
 
   private
 
-  public :: L1_init, L1_deinit, L1_read, L1_write, RT0_init, RT0_deinit, RT0_read, pack_dof, unpack_dof, &
-       RT0_write, RT0_interp, RT0_compute_tor_comp, RT0_check_div_free, RT0_check_redundant_edges, RT0_triplot, &
+  public :: L1_init, L1_deinit, L1_read, L1_write, RT0_init, RT0_deinit, RT0_read, &
+       RT0_write, RT0_interp, RT0_compute_tor_comp, RT0_triplot, &
        RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
        vec_polmodes_read, vec_polmodes_write, AUG_coils_read, AUG_coils_write_Nemov, &
        AUG_coils_read_Nemov, AUG_coils_write_GPEC, AUG_coils_read_GPEC, AUG_coils_write_Fourier, &
@@ -31,9 +31,9 @@ module magdif_pert
      !> Edge fluxes \f$ R \vec{v} \cdot \vec{n} \f$, given in base units of
      !> \f$ \vec{v} \f$ times cm^2.
      !>
-     !> Values are stored seprately for each triangle, i.e. twice per edge. The first index
-     !> refers to the edge and the second index refers to the triangle.
-     complex(dp), allocatable :: DOF(:, :)
+     !> The normal vector points to the right of the edge vector. Thus on poloidal edges,
+     !> it points radially outward, and on radial edges, it points in poloidally clockwise direction.
+     complex(dp), allocatable :: DOF(:)
 
      !> Physical toroidal component \f$ v_{n (\phi)} \f$ in base units of \f$ \vec{v} \f$.
      !>
@@ -125,13 +125,13 @@ contains
     call h5_close(h5id_root)
   end subroutine L1_read
 
-  subroutine RT0_init(this, ntri)
+  subroutine RT0_init(this, nedge, ntri)
     type(RT0_t), intent(inout) :: this
-    integer, intent(in) :: ntri
+    integer, intent(in) :: nedge, ntri
 
     call RT0_deinit(this)
     this%ntri = ntri
-    allocate(this%DOF(3, ntri))
+    allocate(this%DOF(nedge))
     allocate(this%comp_phi(ntri))
     this%DOF = (0d0, 0d0)
     this%comp_phi = (0d0, 0d0)
@@ -177,23 +177,41 @@ contains
        return
     end if
     nodes = mesh%tri_node(:, ktri)
-    ! edge 1 lies opposite to knot 3, etc.
-    comp_R = 0.5d0 / mesh%area(ktri) / R * ( &
-         elem%DOF(1, ktri) * (R - mesh%node_R(nodes(3))) + &
-         elem%DOF(2, ktri) * (R - mesh%node_R(nodes(1))) + &
-         elem%DOF(3, ktri) * (R - mesh%node_R(nodes(2))))
-    comp_Z = 0.5d0 / mesh%area(ktri) / R * ( &
-         elem%DOF(1, ktri) * (Z - mesh%node_Z(nodes(3))) + &
-         elem%DOF(2, ktri) * (Z - mesh%node_Z(nodes(1))) + &
-         elem%DOF(3, ktri) * (Z - mesh%node_Z(nodes(2))))
+    ! indices of nodes and opposite edges as defined in magdif_mesh::connect_mesh_points
+    if (mesh%orient(ktri)) then
+       comp_R = 0.5d0 / mesh%area(ktri) / R * ( &
+            elem%DOF(mesh%tri_edge(1, ktri)) * (R - mesh%node_R(nodes(3))) + &
+            (-elem%DOF(mesh%tri_edge(2, ktri))) * (R - mesh%node_R(nodes(1))) + &
+            elem%DOF(mesh%tri_edge(3, ktri)) * (R - mesh%node_R(nodes(2))))
+       comp_Z = 0.5d0 / mesh%area(ktri) / R * ( &
+            elem%DOF(mesh%tri_edge(1, ktri)) * (Z - mesh%node_Z(nodes(3))) + &
+            (-elem%DOF(mesh%tri_edge(2, ktri))) * (Z - mesh%node_Z(nodes(1))) + &
+            elem%DOF(mesh%tri_edge(3, ktri)) * (Z - mesh%node_Z(nodes(2))))
+    else
+       comp_R = 0.5d0 / mesh%area(ktri) / R * ( &
+            (-elem%DOF(mesh%tri_edge(1, ktri))) * (R - mesh%node_R(nodes(1))) + &
+            (-elem%DOF(mesh%tri_edge(2, ktri))) * (R - mesh%node_R(nodes(3))) + &
+            elem%DOF(mesh%tri_edge(3, ktri)) * (R - mesh%node_R(nodes(2))))
+       comp_Z = 0.5d0 / mesh%area(ktri) / R * ( &
+            (-elem%DOF(mesh%tri_edge(1, ktri))) * (Z - mesh%node_Z(nodes(1))) + &
+            (-elem%DOF(mesh%tri_edge(2, ktri))) * (Z - mesh%node_Z(nodes(3))) + &
+            elem%DOF(mesh%tri_edge(3, ktri)) * (Z - mesh%node_Z(nodes(2))))
+    end if
     if (present(comp_phi)) then
        comp_phi = elem%comp_phi(ktri)
     end if
     if (present(comp_R_dR)) then
-       comp_R_dR = 0.5d0 / mesh%area(ktri) / R ** 2 * ( &
-            elem%DOF(1, ktri) * mesh%node_R(nodes(3)) + &
-            elem%DOF(2, ktri) * mesh%node_R(nodes(1)) + &
-            elem%DOF(3, ktri) * mesh%node_R(nodes(2)))
+       if (mesh%orient(ktri)) then
+          comp_R_dR = 0.5d0 / mesh%area(ktri) / R ** 2 * ( &
+               elem%DOF(mesh%tri_edge(1, ktri)) * mesh%node_R(nodes(3)) + &
+               (-elem%DOF(mesh%tri_edge(2, ktri))) * mesh%node_R(nodes(1)) + &
+               elem%DOF(mesh%tri_edge(3, ktri)) * mesh%node_R(nodes(2)))
+       else
+          comp_R = 0.5d0 / mesh%area(ktri) / R * ( &
+               (-elem%DOF(mesh%tri_edge(1, ktri))) * (R - mesh%node_R(nodes(1))) + &
+               (-elem%DOF(mesh%tri_edge(2, ktri))) * (R - mesh%node_R(nodes(3))) + &
+               elem%DOF(mesh%tri_edge(3, ktri)) * (R - mesh%node_R(nodes(2))))
+       end if
     end if
     if (present(comp_R_dZ)) then
        comp_R_dZ = (0d0, 0d0)
@@ -202,7 +220,13 @@ contains
        comp_Z_dR = -comp_Z / R
     end if
     if (present(comp_Z_dZ)) then
-       comp_Z_dZ = sum(elem%DOF(:, ktri)) * 0.5d0 / mesh%area(ktri) / R
+       if (mesh%orient(ktri)) then
+          comp_Z_dZ = 0.5d0 / mesh%area(ktri) / R * (elem%DOF(mesh%tri_edge(1, ktri)) &
+               - elem%DOF(mesh%tri_edge(2, ktri)) + elem%DOF(mesh%tri_edge(3, ktri)))
+       else
+          comp_Z_dZ = 0.5d0 / mesh%area(ktri) / R * (-elem%DOF(mesh%tri_edge(1, ktri)) &
+               - elem%DOF(mesh%tri_edge(2, ktri)) + elem%DOF(mesh%tri_edge(3, ktri)))
+       end if
     end if
   end subroutine RT0_interp
 
@@ -210,118 +234,17 @@ contains
     use magdif_util, only: imun
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: elem
-
-    elem%comp_phi(:) = imun / mesh%n * sum(elem%DOF, 1) / mesh%area
-  end subroutine RT0_compute_tor_comp
-
-  pure subroutine pack_dof(elem, packed)
-    use magdif_mesh, only: mesh
-    type(RT0_t), intent(in) :: elem
-    complex(dp), intent(out) :: packed(mesh%nedge)
-    integer :: kedge
-    do kedge = 1, mesh%nedge
-       packed(kedge) = elem%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_map2ktri(1, kedge))
-    end do
-  end subroutine pack_dof
-
-  pure subroutine unpack_dof(elem, packed)
-    use magdif_mesh, only: mesh
-    type(RT0_t), intent(inout) :: elem
-    complex(dp), intent(in) :: packed(mesh%nedge)
-    integer :: kedge
-    do kedge = 1, mesh%nedge
-       elem%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_map2ktri(1, kedge)) = &
-            packed(kedge)
-       if (mesh%edge_map2ktri(2, kedge) > 0) then
-          elem%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_map2ktri(2, kedge)) = &
-               -packed(kedge)
-       end if
-    end do
-    call RT0_compute_tor_comp(elem)
-  end subroutine unpack_dof
-
-  !> Checks if divergence-freeness of the given vector field is fulfilled on each
-  !> triangle, otherwise halts the program.
-  !>
-  !> @param pol_flux poloidal flux components, e.g. #jnflux - first index refers to the
-  !> triangle, second index refers to the edge on that triangle, as per
-  !> #mesh_mod::mesh_element
-  !> @param tor_comp toroidal field components, e.g. #jnphi - index refers to the triangle
-  !> @param rel_err relative error threshold, i.e. maximum acceptable value for divergence
-  !> after division by absolute flux through the triangle
-  !> @param field_name name given to the vector field in the error message
-  !>
-  !> This subroutine calculates the divergence via the divergence theorem, i.e. by adding
-  !> up the fluxes of the vector field through triangle edges. If this sum, divided by the
-  !> absolute flux, is higher than \p rel_err on any triangle, it halts the program.
-  subroutine RT0_check_div_free(elem, n, rel_err, field_name)
-    use magdif_conf, only: log
-    use magdif_util, only: imun
-    use magdif_mesh, only: mesh
-    type(RT0_t), intent(in) :: elem
-    integer, intent(in) :: n
-    real(dp), intent(in) :: rel_err
-    character(len = *), intent(in) :: field_name
-
     integer :: ktri
-    real(dp) :: div, abs_flux
 
-    do ktri = 1, mesh%ntri
-       abs_flux = sum(abs(elem%DOF(:, ktri))) + abs(imun * n * elem%comp_phi(ktri) * &
-            mesh%area(ktri))
-       if (abs_flux > 0d0) then
-          div = abs((sum(elem%DOF(:, ktri)) + imun * n * elem%comp_phi(ktri) * &
-               mesh%area(ktri))) / abs_flux
-          if (div > rel_err) then
-             write (log%msg, '("divergence of ", a, ' // &
-                  '" above threshold in triangle ", i0, ": ", es24.16e3)') &
-                  trim(field_name), ktri, div
-              if (log%err) call log%write
-              error stop
-          end if
-       end if
-    end do
-  end subroutine RT0_check_div_free
-
-  subroutine RT0_check_redundant_edges(elem, name)
-    use magdif_conf, only: log, cmplx_fmt
-    use magdif_mesh, only: mesh
-    type(RT0_t), intent(in) :: elem
-    character(len = *), intent(in) :: name
-    integer :: kedge, ktri, ktri_adj, ke, ke_adj
-    logical :: inconsistent
-    real(dp), parameter :: eps = epsilon(1d0), small = tiny(0d0)
-
-    do kedge = 1, mesh%nedge
-       ktri = mesh%edge_map2ktri(1, kedge)
-       ktri_adj = mesh%edge_map2ktri(2, kedge)
-       ke = mesh%edge_map2ke(1, kedge)
-       ke_adj = mesh%edge_map2ke(2, kedge)
-       if (ktri_adj <= 0) cycle
-       inconsistent = .false.
-       if (abs(real(elem%DOF(ke, ktri))) < small) then
-          inconsistent = inconsistent .or. abs(real(elem%DOF(ke_adj, ktri_adj))) >= small
-       else
-          inconsistent = inconsistent .or. eps < abs(1d0 + &
-               real(elem%DOF(ke_adj, ktri_adj)) / real(elem%DOF(ke, ktri)))
-       end if
-       if (abs(aimag(elem%DOF(ke, ktri))) < small) then
-          inconsistent = inconsistent .or. abs(aimag(elem%DOF(ke_adj, ktri_adj))) >= small
-       else
-          inconsistent = inconsistent .or. eps < abs(1d0 + &
-               aimag(elem%DOF(ke_adj, ktri_adj)) / aimag(elem%DOF(ke, ktri)))
-       end if
-       if (inconsistent) then
-          write (log%msg, '("inconsistent redundant edges: ", ' // &
-               'a, "(", i0, ", ", i0, ") = ", ' // cmplx_fmt // ', ", ", ' // &
-               'a, "(", i0, ", ", i0, ") = ", ' // cmplx_fmt // ')') &
-               trim(name), ke, ktri, elem%DOF(ke, ktri), &
-               trim(name), ke_adj, ktri_adj, elem%DOF(ke_adj, ktri_adj)
-          if (log%err) call log%write
-          error stop
-       end if
-    end do
-  end subroutine RT0_check_redundant_edges
+    forall (ktri = 1:mesh%ntri, mesh%orient(ktri))
+       elem%comp_phi(ktri) = imun / mesh%n / mesh%area(ktri) * (elem%DOF(mesh%tri_edge(1, ktri)) &
+            - elem%DOF(mesh%tri_edge(2, ktri)) + elem%DOF(mesh%tri_edge(3, ktri)))
+    end forall
+    forall (ktri = 1:mesh%ntri, .not. mesh%orient(ktri))
+       elem%comp_phi(ktri) = imun / mesh%n / mesh%area(ktri) * (-elem%DOF(mesh%tri_edge(1, ktri)) &
+            - elem%DOF(mesh%tri_edge(2, ktri)) + elem%DOF(mesh%tri_edge(3, ktri)))
+    end forall
+  end subroutine RT0_compute_tor_comp
 
   subroutine RT0_read(elem, file, dataset)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
@@ -1325,7 +1248,7 @@ contains
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
     integer, parameter :: order = 2
-    integer :: nR, nZ, ke, ktri, kedge, k
+    integer :: nR, nZ, kedge, k
     real(dp) :: Rmin, Rmax, Zmin, Zmax, R, Z, edge_R, edge_Z, node_R(2), node_Z(2)
     real(dp), dimension(order) :: points, weights
     complex(dp) :: B_R, B_phi, B_Z
@@ -1351,29 +1274,16 @@ contains
     call gauss_legendre_unit_interval(order, points, weights)
     Bn%DOF = (0d0, 0d0)
     do kedge = 1, mesh%nedge
-       ke = mesh%edge_map2ke(1, kedge)
-       ktri = mesh%edge_tri(1, kedge)
        node_R = mesh%node_R(mesh%edge_node(:, kedge))
        node_Z = mesh%node_Z(mesh%edge_node(:, kedge))
-       if (kedge < mesh%npoint) then
-          ! poloidal edges
-          edge_R = node_R(2) - node_R(1)
-          edge_Z = node_Z(2) - node_Z(1)
-       else
-          ! radial edges - reverse point order so normal vector points out of first triangle
-          edge_R = node_R(1) - node_R(2)
-          edge_Z = node_Z(1) - node_Z(2)
-       end if
+       edge_R = node_R(2) - node_R(1)
+       edge_Z = node_Z(2) - node_Z(1)
        do k = 1, order
           R = node_R(1) * points(k) + node_R(2) * points(order - k + 1)
           Z = node_Z(1) * points(k) + node_Z(2) * points(order - k + 1)
           call spline_bn(conf%n, R, Z, B_R, B_phi, B_Z)
-          Bn%DOF(ke, ktri) = Bn%DOF(ke, ktri) + &
-               weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
+          Bn%DOF(kedge) = Bn%DOF(kedge) + weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
        end do
-       if (mesh%edge_tri(2, kedge) > 0) then
-          Bn%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_tri(2, kedge)) = -Bn%DOF(ke, ktri)
-       end if
     end do
     ! toroidal flux via zero divergence
     call RT0_compute_tor_comp(Bn)
@@ -1385,7 +1295,7 @@ contains
     use magdif_mesh, only: mesh
     type(RT0_t) :: Bn
 
-    call RT0_init(Bn, mesh%ntri)
+    call RT0_init(Bn, mesh%nedge, mesh%ntri)
     if (conf%kilca_scale_factor /= 0) then
        call compute_kilca_vac_coeff
        call compute_kilca_vacuum(Bn)
@@ -1410,8 +1320,6 @@ contains
           if (allocated(ARnIm)) deallocate(ARnIm)
        end if
     end if
-    call RT0_check_redundant_edges(Bn, 'Bnvac')
-    call RT0_check_div_free(Bn, mesh%n, 1d-9, 'Bnvac')
     call RT0_write(Bn, datafile, 'Bnvac', 'magnetic field (vacuum)', 'G', 1)
     call RT0_deinit(Bn)
   end subroutine generate_vacfield
@@ -1540,12 +1448,7 @@ contains
        lR = mesh%node_R(tip) - mesh%node_R(base)
        lZ = mesh%node_Z(tip) - mesh%node_Z(base)
        Bnpsi = -mesh%R_O * B0phi_edge(kedge) / mesh%edge_R(kedge)
-       Bn%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_tri(1, kedge)) = Bnpsi * (lR ** 2 + lZ ** 2) / &
-            (B0R_edge(kedge) * lR + B0Z_edge(kedge) * lZ)
-       if (mesh%edge_tri(2, kedge) > 0) then
-          Bn%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_tri(2, kedge)) = &
-               -Bn%DOF(mesh%edge_map2ke(1, kedge), mesh%edge_tri(1, kedge))
-       end if
+       Bn%DOF(kedge) = Bnpsi * (lR ** 2 + lZ ** 2) / (B0R_edge(kedge) * lR + B0Z_edge(kedge) * lZ)
     end do
     call RT0_compute_tor_comp(Bn)
     if (conf%quad_avg) call avg_flux_on_quad(Bn)
@@ -1556,25 +1459,22 @@ contains
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: elem
 
-    integer :: kf, kt, ktri1, ktri2, ke1, ke2
+    integer :: kf, kt, kedge, ktri1, ktri2
     complex(dp) :: tor_flux_avg, tor_flux_diff
 
     do kf = 2, mesh%nflux
        do kt = 1, mesh%kt_max(kf), 2
+          kedge = mesh%npoint + mesh%kt_low(kf) + kt  ! every odd edge
           ktri1 = mesh%kt_low(kf) + kt
           ktri2 = mesh%kt_low(kf) + kt + 1
           tor_flux_avg = 0.5d0 * (elem%comp_phi(ktri2) * mesh%area(ktri2) + &
                elem%comp_phi(ktri1) * mesh%area(ktri1))
           tor_flux_diff = 0.5d0 * (elem%comp_phi(ktri2) * mesh%area(ktri2) - &
                elem%comp_phi(ktri1) * mesh%area(ktri1))
+          ! DoF points in the direction opposite to the difference above
+          elem%DOF(kedge) = elem%DOF(kedge) + imun * mesh%n * tor_flux_diff
           elem%comp_phi(ktri1) = tor_flux_avg / mesh%area(ktri1)
-          ke1 = mesh%edge_map2ke(1, mesh%tri_edge(2, ktri1))
-          elem%DOF(ke1, ktri1) = elem%DOF(ke1, ktri1) - &
-               imun * mesh%n * tor_flux_diff
           elem%comp_phi(ktri2) = tor_flux_avg / mesh%area(ktri2)
-          ke2 = mesh%edge_map2ke(2, mesh%tri_edge(3, ktri1))
-          elem%DOF(ke2, ktri2) = elem%DOF(ke2, ktri2) + &
-               imun * mesh%n * tor_flux_diff
        end do
     end do
   end subroutine avg_flux_on_quad
@@ -1586,7 +1486,7 @@ contains
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
     integer, parameter :: order = 2
-    integer :: kedge, ktri, k, ke, pol_modes(2)
+    integer :: kedge, k, pol_modes(2)
     real(dp) :: R, Z, rho, theta, edge_R, edge_Z, node_R(2), node_Z(2)
     real(dp), dimension(order) :: points, weights
     complex(dp) :: B_R, B_phi, B_Z
@@ -1595,31 +1495,18 @@ contains
     call gauss_legendre_unit_interval(order, points, weights)
     Bn%DOF = (0d0, 0d0)
     do kedge = 1, mesh%nedge
-       ke = mesh%edge_map2ke(1, kedge)
-       ktri = mesh%edge_tri(1, kedge)
        node_R = mesh%node_R(mesh%edge_node(:, kedge))
        node_Z = mesh%node_Z(mesh%edge_node(:, kedge))
-       if (kedge < mesh%npoint) then
-          ! poloidal edges
-          edge_R = node_R(2) - node_R(1)
-          edge_Z = node_Z(2) - node_Z(1)
-       else
-          ! radial edges - reverse point order so normal vector points out of first triangle
-          edge_R = node_R(1) - node_R(2)
-          edge_Z = node_Z(1) - node_Z(2)
-       end if
+       edge_R = node_R(2) - node_R(1)
+       edge_Z = node_Z(2) - node_Z(1)
        do k = 1, order
           R = node_R(1) * points(k) + node_R(2) * points(order - k + 1)
           Z = node_Z(1) * points(k) + node_Z(2) * points(order - k + 1)
           rho = hypot(R - mesh%R_O, Z - mesh%Z_O)
           theta = atan2(Z - mesh%Z_O, R - mesh%R_O)
           call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, rho, theta, B_R, B_phi, B_Z)
-          Bn%DOF(ke, ktri) = Bn%DOF(ke, ktri) + &
-               weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
+          Bn%DOF(kedge) = Bn%DOF(kedge) + weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
        end do
-       if (mesh%edge_tri(2, kedge) > 0) then
-          Bn%DOF(mesh%edge_map2ke(2, kedge), mesh%edge_tri(2, kedge)) = -Bn%DOF(ke, ktri)
-       end if
     end do
     ! toroidal flux via zero divergence
     call RT0_compute_tor_comp(Bn)
