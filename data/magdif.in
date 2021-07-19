@@ -38,11 +38,6 @@
    config%damp = 0d0
    ! maximal number of eigenvectors to be saved
    config%max_eig_out = 10
-
-   ! error threshold for magnetic field perturbation
-   config%rel_err_Bn = 1d-7
-   ! error threshold for current perturbation
-   config%rel_err_currn = 1d-8
 /
 &arrays
    ! coefficients for sheet currents

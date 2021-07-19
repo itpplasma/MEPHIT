@@ -211,8 +211,7 @@ contains
     use magdif_mesh, only: mesh
     use magdif_pert, only: L1_write, RT0_init, RT0_deinit, RT0_write, RT0_compute_tor_comp, &
          RT0_poloidal_modes, vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write
-    use magdif_conf, only: conf, log, runmode_precon, runmode_single, datafile, cmplx_fmt, &
-         decorate_filename
+    use magdif_conf, only: conf, log, runmode_precon, runmode_single, datafile, cmplx_fmt
 
     logical :: preconditioned
     integer :: kiter, niter, ndim, i, j, info
@@ -560,7 +559,7 @@ contains
   !> surface. The result is written to #magdif_conf::currn_file.
   subroutine compute_currn
     use sparse_mod, only: sparse_solve, sparse_matmul
-    use magdif_conf, only: conf, log, decorate_filename
+    use magdif_conf, only: conf, log
     use magdif_mesh, only: fs, mesh, B0phi_edge, B0_flux, j0phi_edge
     use magdif_pert, only: RT0_compute_tor_comp
     use magdif_util, only: imun, clight

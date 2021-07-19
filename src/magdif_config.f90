@@ -122,12 +122,6 @@ module magdif_conf
      !> Damping factor for resonances. Defaults to 0.
      real(dp) :: damp = 0d0
 
-     !> Error threshold for divergence-freeness of #bnflux and #bnphi. Defaults to 10^-7.
-     real(dp) :: rel_err_Bn = 1d-7
-
-     !> Error threshold for divergence-freeness of #jnflux and #jnphi. Defaults to 10^-8.
-     real(dp) :: rel_err_currn = 1d-8
-
      !> Single poloidal mode used in comparison with KiLCA code. Defaults to 0 (ASDEX
      !> geometry).
      integer :: kilca_pol_mode = 0
@@ -258,10 +252,6 @@ contains
          comment = 'maximum density', unit = 'cm^-3')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/damp', config%damp, &
          comment = 'damping factor for resonances', unit = '1')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rel_err_Bn', config%rel_err_Bn, &
-         comment = 'error threshold for divergence-freeness of perturbation fields', unit = '1')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rel_err_currn', config%rel_err_currn, &
-         comment = 'error threshold for divergence-freeness of perturbation currents', unit = '1')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_pol_mode', config%kilca_pol_mode, &
          comment = 'single poloidal mode used in comparison with KiLCA code')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_scale_factor', config%kilca_scale_factor, &

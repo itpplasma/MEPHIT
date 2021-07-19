@@ -1,37 +1,3 @@
-subroutine unshared_knots(common_tri, outer_knot, inner_knot)
-  integer, intent(in) :: common_tri(2)
-  type(knot), intent(out) :: outer_knot, inner_knot
-  integer, dimension(2, 3) :: set
-  integer, dimension(2) :: i_unshared
-  integer :: tri, k, n_unshared
-  character(len = *), parameter :: errmsg = &
-       'not exactly one unshared knot between triangles'
-
-  set(1, :) = mesh_element(common_tri(1))%i_knot(:)
-  set(2, :) = mesh_element(common_tri(2))%i_knot(:)
-  do tri = 1, 2
-     n_unshared = 0
-     do k = 1, 3
-        if (.not. any(set(tri, k) == set(3-tri, :))) then
-           n_unshared = n_unshared + 1
-           i_unshared(tri) = set(tri, k)
-        end if
-     end do
-     if (n_unshared /= 1) then
-        if (log_debug) write(logfile, *) errmsg
-        stop errmsg
-     end if
-  end do
-  if (i_unshared(1) > i_unshared(2)) then
-     outer_knot = mesh_point(i_unshared(1))
-     inner_knot = mesh_point(i_unshared(2))
-  else
-     outer_knot = mesh_point(i_unshared(2))
-     inner_knot = mesh_point(i_unshared(1))
-  end if
-end subroutine unshared_knots
-
-
 !> TODO: get rid of this due to redundancy with bnflux
 subroutine read_hpsi
   integer :: k
@@ -52,38 +18,6 @@ subroutine read_hpsi
   close(1)
 end subroutine read_hpsi
 
-
-program connectivity
-  implicit none
-  integer :: fid, kt, ke, low
-  integer, parameter :: ntri = 35680
-  integer, dimension(ntri, 3) :: connections
-  integer, dimension(:), allocatable :: mapping
-
-  open(newunit = fid, file = '../FEM/connectivity.dat')
-  do kt = 1, ntri
-     read (fid, *) connections(kt, :)
-  end do
-  close(fid)
-  allocate(mapping(minval(connections):maxval(connections)))
-  mapping = 0
-  low = 1
-  do kt = 1, ntri
-     do ke = 1, 3
-        if (mapping(connections(kt, ke)) == 0) then
-           mapping(connections(kt, ke)) = low
-           low = low + 1
-        end if
-        connections(kt, ke) = mapping(connections(kt, ke))
-     end do
-  end do
-  open(newunit = fid, file = '../FEM/connections.dat')
-  do kt = 1, ntri
-     write (fid, *) connections(kt, :)
-  end do
-  close(fid)
-  deallocate(mapping)
-end program connectivity
 
     do kf = 1, nflux
        if (sheet_current_factor /= 0d0 .and. m_res(kf) > 0) then
