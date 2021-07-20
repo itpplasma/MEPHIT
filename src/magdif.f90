@@ -291,36 +291,37 @@ contains
        end if
     end if
 
-    call vec_polmodes_init(jmn, m_max, mesh%nflux)
-    call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
-    call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
     allocate(L2int(0:niter))
-    Bn_prev%DOF(:) = Bnvac%DOF
-    Bn_prev%comp_phi(:) = Bnvac%comp_phi
-    call FEM_compute_L2int(mesh%nedge, Bn_prev%DOF, L2int(0))
+    call FEM_compute_L2int(mesh%nedge, Bnvac%DOF, L2int(0))
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, 'iter/')
     call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int(0), &
          comment = 'L2 integral of magnetic field (vacuum)', unit = 'Mx')
     call h5_close(h5id_root)
+    call vec_polmodes_init(jmn, m_max, mesh%nflux)
+    call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
+    call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
+    Bn%DOF(:) = Bnvac%DOF
+    Bn%comp_phi(:) = Bnvac%comp_phi
     if (preconditioned) then
-       Bn_prev%DOF(:) = Bn_prev%DOF - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
-            matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn_prev%DOF)))
-       call RT0_compute_tor_comp(Bn_prev)
+       Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
+            matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn%DOF)))
+       call RT0_compute_tor_comp(Bn)
     end if
-    Bn%DOF(:) = (0d0, 0d0)
-    Bn%comp_phi(:) = (0d0, 0d0)
     do kiter = 0, niter
        write (log%msg, '("Iteration ", i2, " of ", i2)') kiter, niter
        if (log%info) call log%write
        write (postfix, postfix_fmt) kiter
-
-       call next_iteration(ndim, Bn_prev%DOF, Bn%DOF)
+       Bn_prev%DOF(:) = Bn%DOF
+       Bn_prev%comp_phi(:) = Bn%comp_phi
+       ! compute B_(n+1) = K*B_n + B_vac ... different from kin2d.f90 and next_iteration_arnoldi
+       call magdif_single
+       Bn%DOF(:) = Bn%DOF + Bnvac%DOF
        if (preconditioned) then
           Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
                matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn%DOF - Bn_prev%DOF)))
        end if
-       call RT0_compute_tor_comp(Bn)  ! not called in next_iteration
+       call RT0_compute_tor_comp(Bn)
        Bn_diff%DOF(:) = Bn%DOF - Bn_prev%DOF
        Bn_diff%comp_phi(:) = Bn%comp_phi - Bn_prev%comp_phi
        call FEM_compute_L2int(mesh%nedge, Bn_diff%DOF, L2int(kiter))
@@ -337,9 +338,6 @@ contains
           call vec_polmodes_write(jmn, datafile, 'postprocess/jmn' // postfix, &
                'current density (after iteration)', 'statA cm^-2')
        end if
-
-       Bn_prev%DOF(:) = Bn%DOF
-       Bn_prev%comp_phi(:) = Bn%comp_phi
     end do
     if (allocated(Lr)) deallocate(Lr)
     Bnplas%DOF(:) = Bn%DOF - Bnvac%DOF
@@ -356,7 +354,6 @@ contains
          'magnetic field (plasma response)', 'G', 2)
     call RT0_write(jn, datafile, 'iter/jn', &
          'current density (full perturbation)', 'statA cm^-2', 1)
-
     call RT0_deinit(Bn_prev)
     call RT0_deinit(Bn_diff)
     call vec_polmodes_deinit(jmn)
@@ -366,27 +363,6 @@ contains
     end if
 
   contains
-
-    ! computes B_(n+1) = K*B_n + B_vac ... different from kin2d.f90
-    subroutine next_iteration(n, xold, xnew)
-      integer, intent(in) :: n
-      complex(dp), intent(in) :: xold(:)
-      complex(dp), intent(out) :: xnew(:)
-      if (n /= size(xold)) then
-         call log%msg_arg_size('next_iteration', 'n', 'size(xold)', n, size(xold))
-         if (log%err) call log%write
-         error stop
-      end if
-      if (n /= size(xnew)) then
-         call log%msg_arg_size('next_iteration', 'n', 'size(xnew)', n, size(xnew))
-         if (log%err) call log%write
-         error stop
-      end if
-      Bn%DOF(:) = xold
-      call RT0_compute_tor_comp(Bn)
-      call magdif_single
-      xnew(:) = Bn%DOF + Bnvac%DOF
-    end subroutine next_iteration
 
     ! computes B_(n+1) = K*(B_n + B_vac) ... as in kin2d.f90
     ! next_iteration in arnoldi_mod is still declared external and has no interface,
