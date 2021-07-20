@@ -74,12 +74,6 @@ module magdif_mesh
      !> Z coordinate of the X point in cm.
      real(dp) :: Z_X
 
-     !> Geometric poloidal angle where symmetry flux poloidal angle is zero.
-     !>
-     !> When theta0_at_xpoint is true, this is atan2(Z_X - Z_O, R_X - R_O);
-     !> otherwise, this is zero.
-     real(dp) :: theta0
-
      !> Minimal R value on computational grid in cm.
      real(dp) :: R_min
 
@@ -178,9 +172,6 @@ module magdif_mesh
      !> therefore 0), to #magdif_config::nflux+1, giving the last triangle inside the last
      !> closed flux surface.
      integer, allocatable :: kt_low(:)
-
-     !> Symmetry flux poloidal angle where geometric poloidal angle is zero.
-     real(dp), allocatable :: theta_offset(:)
 
      real(dp), allocatable :: node_R(:)
      real(dp), allocatable :: node_Z(:)
@@ -936,27 +927,26 @@ contains
     use magdif_util, only: interp_psi_pol
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
          raxis, zaxis, load_magdata_in_symfluxcoord
-    use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
-         theta0_at_xpoint, theta_axis, theta0
+    use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, theta0_at_xpoint
     use points_2d, only: s_min, create_points_2d
 
     integer :: kf, fid
     integer, dimension(:), allocatable :: n_theta
     real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_norm_ref
     real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
-    real(dp) :: psi_axis, rho_max
+    real(dp) :: psi_axis, rad_max
 
-    theta0_at_xpoint = .true.
+    theta0_at_xpoint = .false.
     circ_mesh_scale = conf%kilca_scale_factor
     if (conf%kilca_scale_factor /= 0) then
        ! calculate maximal extent from magnetic axis
-       rho_max = min(equil%rmaxis - equil%rleft, &
+       rad_max = min(equil%rmaxis - equil%rleft, &
             equil%rleft + equil%rdim - equil%rmaxis, &
             equil%zdim * 0.5d0 + equil%zmid - equil%zmaxis, &
             equil%zdim * 0.5d0 - equil%zmid + equil%zmaxis)
-       call write_kilca_convexfile(rho_max, equil%convexfile)
+       call write_kilca_convexfile(rad_max, equil%convexfile)
        o_point = [equil%rmaxis, equil%zmaxis]
-       x_point = o_point + [rho_max, 0d0]
+       x_point = o_point + [rad_max, 0d0]
     end if
     ! calculates points on a fine grid in the core region by integrating along field lines
     call preload_for_SYNCH
@@ -967,14 +957,14 @@ contains
     mesh%Z_O = zaxis
     mesh%R_X = X_point(1)
     mesh%Z_X = X_point(2)
-    mesh%theta0 = theta0
     ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
     ! load_magdata_in_symfluxcoord_ext divides by psipol_max
     psi_axis = interp_psi_pol(raxis, zaxis)
     call psi_fine_interpolator%init(4, psisurf(1:) * psipol_max + psi_axis)
     ! interpolate between psi and rho
+    rad_max = rbeg(nlabel)
     allocate(rho_norm_eqd(nlabel))
-    rho_norm_eqd(:) = rbeg / hypot(theta_axis(1), theta_axis(2))
+    rho_norm_eqd(:) = rbeg / rad_max
 
     call compute_resonance_positions(psisurf(1:) * psipol_max + psi_axis, qsaf, psi2rho_norm)
     call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
@@ -982,19 +972,13 @@ contains
     call fs%init(mesh%nflux, .false.)
     call fs_half%init(mesh%nflux, .true.)
     fs%rad(:) = rho_norm_ref
-    fs%psi(:) = [(interp_psi_pol(raxis + fs%rad(kf) * theta_axis(1), &
-         zaxis + fs%rad(kf) * theta_axis(2)), kf = 0, mesh%nflux)]
+    fs%psi(:) = [(interp_psi_pol(raxis + fs%rad(kf) * rad_max, zaxis), kf = 0, mesh%nflux)]
     fs_half%rad(:) = 0.5d0 * (fs%rad(0:mesh%nflux-1) + fs%rad(1:mesh%nflux))
-    fs_half%psi(:) = [(interp_psi_pol(raxis + fs_half%rad(kf) * theta_axis(1), &
-         zaxis + fs_half%rad(kf) * theta_axis(2)), kf = 1, mesh%nflux)]
-    fs%rad(:) = fs%rad * hypot(theta_axis(1), theta_axis(2))
-    fs_half%rad(:) = fs_half%rad * hypot(theta_axis(1), theta_axis(2))
+    fs_half%psi(:) = [(interp_psi_pol(raxis + fs_half%rad(kf) * rad_max, zaxis), kf = 1, mesh%nflux)]
+    fs%rad(:) = fs%rad * rad_max
+    fs_half%rad(:) = fs_half%rad * rad_max
     call flux_func_cache_check
     call cache_resonance_positions
-    allocate(mesh%theta_offset(mesh%nflux))
-    do kf = 1, mesh%nflux
-       mesh%theta_offset(kf) = theta_offset(fs_half%psi(kf))
-    end do
     if (conf%kilca_scale_factor /= 0) then
        ! dump presumedly optimal values for poloidal resolution
        open(newunit = fid, file = 'optpolres.dat', status = 'replace')
@@ -1054,29 +1038,10 @@ contains
          if (log%err) call log%write
          error stop
       end if
-      psi_ref = [(interp_psi_pol(raxis + rho_norm_ref(kf) * theta_axis(1), &
-           zaxis + rho_norm_ref(kf) * theta_axis(2)) - psi_axis, kf = 1, mesh%nflux)]
+      psi_ref = [(interp_psi_pol(raxis + rho_norm_ref(kf) * rad_max, zaxis) - &
+           psi_axis, kf = 1, mesh%nflux)]
     end function psi_ref
   end subroutine create_mesh_points
-
-  function theta_offset(psi)
-    use netlib_mod, only: zeroin
-    use constants, only: pi  ! orbit_mod.f90
-    real(dp), intent(in) :: psi
-    real(dp) :: theta_offset
-
-    theta_offset = zeroin(0d0, pi, Z_offset, 1d-9)
-  contains
-    function Z_offset(theta)
-      use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
-      real(dp), intent(in) :: theta
-      real(dp) :: Z_offset
-      real(dp) :: dum
-      call magdata_in_symfluxcoord_ext(2, dum, psi - fs%psi(0), theta, dum, dum, &
-           dum, dum, dum, dum, dum, dum, Z_offset, dum, dum)
-      Z_offset = Z_offset - mesh%Z_O
-    end function Z_offset
-  end function theta_offset
 
   !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
   !> of #magdif_config::nflux and #magdif_config::nkpol. Deallocation is done in
@@ -1316,8 +1281,8 @@ contains
                s%dZ_dtheta(ktri) =  fs_half%rad(kf) * cos(s%theta(ktri))
             else
                ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
-               call magdata_in_symfluxcoord_ext(2, dum, s%psi(ktri) - fs%psi(0), &
-                    s%theta(ktri) + mesh%theta_offset(kf), q, dum, s%sqrt_g(ktri), dum, dum, &
+               call magdata_in_symfluxcoord_ext(2, dum, s%psi(ktri) - fs%psi(0), s%theta(ktri), &
+                    q, dum, s%sqrt_g(ktri), dum, dum, &
                     s%R(ktri), dum, s%dR_dtheta(ktri), s%Z(ktri), dum, s%dZ_dtheta(ktri))
             end if
             s%ktri(ktri) = point_location(s%R(ktri), s%Z(ktri))
@@ -1361,8 +1326,7 @@ contains
     if (conf%kilca_scale_factor /= 0) then
        psi(:) = [(interp_psi_pol(mesh%R_O, mesh%Z_O + rad(krad)), krad = 1, sample_Ipar%nrad)]
     else
-       psi(:) = [(interp_psi_pol(mesh%R_O + rad(krad) * cos(mesh%theta0), &
-            mesh%Z_O + rad(krad) * sin(mesh%theta0)), krad = 1, sample_Ipar%nrad)]
+       psi(:) = [(interp_psi_pol(mesh%R_O + rad(krad), mesh%Z_O), krad = 1, sample_Ipar%nrad)]
     end if
     theta(:) = 2d0 * pi * [(dble(kpol) - 0.5d0, kpol = 1, sample_Ipar%npol)] / dble(sample_Ipar%npol)
     do krad = 1, sample_Ipar%nrad
@@ -1544,8 +1508,6 @@ contains
          comment = 'R coordinate of X point', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_X', mesh%Z_X, &
          comment = 'Z coordinate of X point', unit = 'cm')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta0', mesh%theta0, unit = 'rad', &
-         comment = 'geometric poloidal angle of symmetry flux poloidal angle origin')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_min', mesh%R_min, &
          comment = 'minimal R coordinate of computational grid', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_min', mesh%Z_min, &
@@ -1604,9 +1566,6 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/kt_low', mesh%kt_low, &
          lbound(mesh%kt_low), ubound(mesh%kt_low), &
          comment = 'index of last triangle on previous flux surface')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta_offset', mesh%theta_offset, &
-         lbound(mesh%theta_offset), ubound(mesh%theta_offset), unit = 'rad', &
-         comment = 'flux poloidal angle at zero geometric poloidal angle between flux surfaces')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/node_R', mesh%node_R, &
          lbound(mesh%node_R), ubound(mesh%node_R), &
          comment = 'R coordinates of mesh points', unit = 'cm')
@@ -1707,7 +1666,6 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_O', mesh%Z_O)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_X', mesh%R_X)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_X', mesh%Z_X)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/theta0', mesh%theta0)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_min', mesh%R_min)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_min', mesh%Z_min)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_max', mesh%R_max)
@@ -1736,7 +1694,6 @@ contains
     allocate(mesh%kt_max(mesh%nflux))
     allocate(mesh%kp_low(mesh%nflux + 1))
     allocate(mesh%kt_low(mesh%nflux + 1))
-    allocate(mesh%theta_offset(mesh%nflux))
     allocate(mesh%node_R(mesh%npoint))
     allocate(mesh%node_Z(mesh%npoint))
     allocate(mesh%node_theta_flux(mesh%npoint))
@@ -1766,7 +1723,6 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/kp_low', mesh%kp_low)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/kt_max', mesh%kt_max)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/kt_low', mesh%kt_low)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/theta_offset', mesh%theta_offset)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/node_R', mesh%node_R)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/node_Z', mesh%node_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/node_theta_flux', mesh%node_theta_flux)
@@ -1807,7 +1763,6 @@ contains
     if (allocated(this%kt_max)) deallocate(this%kt_max)
     if (allocated(this%kp_low)) deallocate(this%kp_low)
     if (allocated(this%kt_low)) deallocate(this%kt_low)
-    if (allocated(this%theta_offset)) deallocate(this%theta_offset)
     if (allocated(this%node_R)) deallocate(this%node_R)
     if (allocated(this%node_Z)) deallocate(this%node_Z)
     if (allocated(this%node_theta_flux)) deallocate(this%node_theta_flux)
@@ -1839,8 +1794,7 @@ contains
     integer(HID_T) :: h5id_root
     integer :: ncid_file, ncid, nrad, npol, krad, kpol, idum, fid
     real(dp) :: dum, B0_R, B0_Z, unit_normal(0:1), q
-    real(dp), allocatable :: psi(:), theta(:), R(:, :), Z(:, :), theta_shift(:), &
-         xi_n(:, :, :), jac(:, :), sqrt_g(:, :)
+    real(dp), allocatable :: psi(:), theta(:), R(:, :), Z(:, :), xi_n(:, :, :), jac(:, :), sqrt_g(:, :)
     complex(dp), allocatable :: xi_n_R(:), xi_n_Z(:)
 
     write (filename, '("gpec_profile_output_n", i0, ".nc")') conf%n
@@ -1882,13 +1836,9 @@ contains
          unit = 'cm', comment = 'R(psi, theta) from GPEC')
     call h5_add(h5id_root, dataset // '/Z_GPEC', Z, lbound(Z), ubound(Z), &
          unit = 'cm', comment = 'Z(psi, theta) from GPEC')
-    allocate(theta_shift(nrad))
-    do krad = 1, nrad
-       theta_shift(krad) = theta_offset(psi(krad) + fs%psi(0))
-    end do
     do kpol = 1, npol
        do krad = 1, nrad
-          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol) + theta_shift(krad), &
+          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol), &
                dum, dum, dum, dum, dum, R(krad, kpol), dum, dum, Z(krad, kpol), dum, dum)
        end do
     end do
@@ -1902,7 +1852,6 @@ contains
        xi_n_R(kpol) = unit_normal(0) * 1d2 * cmplx(xi_n(krad, kpol, 0), xi_n(krad, kpol, 1), dp)
        xi_n_Z(kpol) = unit_normal(1) * 1d2 * cmplx(xi_n(krad, kpol, 0), xi_n(krad, kpol, 1), dp)
     end do
-    deallocate(theta_shift)
     call h5_add(h5id_root, dataset // '/R', R, lbound(R), ubound(R), &
          unit = 'cm', comment = 'R(psi, theta)')
     call h5_add(h5id_root, dataset // '/Z', Z, lbound(Z), ubound(Z), &
@@ -1927,15 +1876,13 @@ contains
     call check_error("nf90_get_att", nf90_get_att(ncid_file, nf90_global, 'mtheta', npol))
     call check_error("nf90_close", nf90_close(ncid_file))
     nrad = nrad + 1
-    allocate(psi(nrad), theta(npol), theta_shift(nrad), jac(nrad, npol), sqrt_g(nrad, npol), &
-         R(nrad, npol), Z(nrad, npol))
+    allocate(psi(nrad), theta(npol), jac(nrad, npol), sqrt_g(nrad, npol), R(nrad, npol), Z(nrad, npol))
     open(newunit = fid, file = '2d.out', status = 'old', form = 'formatted', action = 'read')
     read (fid, *)
     read (fid, *)
     do krad = 1, nrad
        read (fid, '(6x, i3, 6x, e24.16)') idum, psi(krad)
        psi(krad) = psi(krad) * psipol_max
-       theta_shift(krad) = theta_offset(psi(krad) + fs%psi(0))
        read (fid, *)
        read (fid, *)
        read (fid, *)
@@ -1943,7 +1890,7 @@ contains
           read (fid, '(i6, 1p, 8e24.16)') idum, theta(kpol), dum, dum, dum, dum, &
                R(krad, kpol), Z(krad, kpol), jac(krad, kpol)
           theta(kpol) = theta(kpol) * 2d0 * pi
-          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol) + theta_shift(krad), &
+          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol), &
                q, dum, sqrt_g(krad, kpol), dum, dum, dum, dum, dum, dum, dum, dum)
           sqrt_g(krad, kpol) = sqrt_g(krad, kpol) * abs(q)
        end do
@@ -1970,7 +1917,7 @@ contains
     call h5_add(h5id_root, dataset // '/jac/jac', jac, lbound(jac), ubound(jac), &
          unit = 'cm', comment = 'GPEC Jacobian at (psi, theta)')
     call h5_close(h5id_root)
-    deallocate(psi, theta, theta_shift, jac, sqrt_g, R, Z)
+    deallocate(psi, theta, jac, sqrt_g, R, Z)
 
   contains
     subroutine check_error(funcname, status)
@@ -1991,19 +1938,16 @@ contains
     integer, intent(in) :: npsi, ntheta, nrad, npol
     integer :: fid, krad, kpol
     real(dp) :: dum
-    real(dp), allocatable :: psi(:), theta(:), theta_shift(:), R(:, :), Z(:, :)
+    real(dp), allocatable :: psi(:), theta(:), R(:, :), Z(:, :)
 
     open(newunit = fid, file = 'illustration.asc', status = 'replace', form = 'formatted', action = 'write')
     write (fid, '(6(1x, i0))') npsi, ntheta, nrad, npol, equil%nbbbs, equil%limitr
-    allocate(psi(npsi), theta(npol), theta_shift(npsi), R(npol, npsi), Z(npol, npsi))
+    allocate(psi(npsi), theta(npol), R(npol, npsi), Z(npol, npsi))
     psi(:) = linspace(0d0, psipol_max, npsi, 1, 1)
     theta(:) = linspace(0d0, 2d0 * pi, npol, 0, 1)
     do krad = 1, npsi
-       theta_shift(krad) = theta_offset(psi(krad) + fs%psi(0))
-    end do
-    do krad = 1, npsi
        do kpol = 1, npol
-          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol) + theta_shift(krad), &
+          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol), &
                dum, dum, dum, dum, dum, R(kpol, krad), dum, dum, Z(kpol, krad), dum, dum)
        end do
     end do
@@ -2012,16 +1956,13 @@ contains
           write (fid, '(es24.16e3, 1x, es24.16e3)') R(kpol, krad), Z(kpol, krad)
        end do
     end do
-    deallocate(psi, theta, theta_shift, R, Z)
-    allocate(psi(nrad), theta(ntheta), theta_shift(nrad), R(nrad, ntheta), Z(nrad, ntheta))
+    deallocate(psi, theta, R, Z)
+    allocate(psi(nrad), theta(ntheta), R(nrad, ntheta), Z(nrad, ntheta))
     psi(:) = linspace(0d0, psipol_max, nrad, 0, 0)
     theta(:) = linspace(0d0, 2d0 * pi, ntheta, 0, 1)
-    do krad = 1, nrad
-       theta_shift(krad) = theta_offset(psi(krad) + fs%psi(0))
-    end do
     do kpol = 1, ntheta
        do krad = 2, nrad
-          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol) + theta_shift(krad), &
+          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol), &
                dum, dum, dum, dum, dum, R(krad, kpol), dum, dum, Z(krad, kpol), dum, dum)
        end do
     end do
@@ -2031,7 +1972,7 @@ contains
           write (fid, '(es24.16e3, 1x, es24.16e3)') R(krad, kpol), Z(krad, kpol)
        end do
     end do
-    deallocate(psi, theta, theta_shift, R, Z)
+    deallocate(psi, theta, R, Z)
     do kpol = 1, equil%nbbbs
        write (fid, '(es24.16e3, 1x, es24.16e3)') equil%rbbbs(kpol), equil%zbbbs(kpol)
     end do
