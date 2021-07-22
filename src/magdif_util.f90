@@ -6,10 +6,11 @@ module magdif_util
 
   private
 
-  public :: clight, imun, get_field_filenames, init_field, deinit_field, interp_psi_pol, &
-       linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, binsearch, interleave, &
+  public :: pi, clight, imun, get_field_filenames, init_field, deinit_field, interp_psi_pol, &
+       pos_angle, linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, binsearch, interleave, &
        gauss_legendre_unit_interval, heapsort_complex, complex_abs_asc, C_F_string
 
+  real(dp), parameter :: pi = 4d0 * atan(1d0)
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
 
@@ -169,6 +170,19 @@ contains
     ! field_divB0.f90 adds psib (SIBRY, i.e., flux at the boundary) to interpolated psi[f]
     psi_pol = psif - psib
   end function interp_psi_pol
+
+  pure elemental function pos_angle(atan_angle)
+    real(dp), intent(in) :: atan_angle
+    real(dp) :: pos_angle
+
+    pos_angle = atan_angle
+    if (pos_angle < 0d0) then
+       pos_angle = pos_angle + 2d0 * pi
+    end if
+    if (pos_angle > 2d0 * pi) then
+       pos_angle = pos_angle - 2d0 * pi
+    end if
+  end function pos_angle
 
   function linspace(lo, hi, cnt, excl_lo, excl_hi)
     real(dp), intent(in) :: lo, hi

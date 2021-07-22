@@ -180,6 +180,7 @@ module magdif_mesh
 
      integer, allocatable :: tri_node(:, :)
      integer, allocatable :: tri_node_F(:)
+     real(dp), allocatable :: tri_theta_extent(:, :)
 
      !> true if edge f of given triangle lies on the outer flux surface, false otherwise
      logical, allocatable :: orient(:)
@@ -922,9 +923,8 @@ contains
   end subroutine write_kilca_convexfile
 
   subroutine create_mesh_points
-    use constants, only: pi
     use magdif_conf, only: conf, conf_arr, log
-    use magdif_util, only: interp_psi_pol
+    use magdif_util, only: interp_psi_pol, pi, pos_angle
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
          raxis, zaxis, load_magdata_in_symfluxcoord
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, theta0_at_xpoint
@@ -1013,13 +1013,17 @@ contains
     mesh%node_theta_flux(1) = 0d0
     mesh%node_theta_flux(2:) = points_s_theta_phi(2, 2:)
     mesh%node_theta_geom(1) = 0d0
-    mesh%node_theta_geom(2:) = atan2(mesh%node_Z(2:) - mesh%Z_O, mesh%node_R(2:) - mesh%R_O)
+    mesh%node_theta_geom(2:) = pos_angle(atan2(mesh%node_Z(2:) - mesh%Z_O, mesh%node_R(2:) - mesh%R_O))
+    ! set theta = 0 exactly
+    do kf = 1, mesh%nflux
+       mesh%node_theta_flux(mesh%kp_low(kf) + 1) = 0d0
+       mesh%node_theta_geom(mesh%kp_low(kf) + 1) = 0d0
+    end do
     mesh%R_min = minval(mesh%node_R)
     mesh%R_max = maxval(mesh%node_R)
     mesh%Z_min = minval(mesh%node_Z)
     mesh%Z_max = maxval(mesh%node_Z)
     deallocate(n_theta, points, points_s_theta_phi)
-
     deallocate(rho_norm_ref, rho_norm_eqd)
 
   contains
@@ -1116,16 +1120,19 @@ contains
   end subroutine common_triangles
 
   subroutine connect_mesh_points
+    use magdif_util, only: pi
     integer :: kf, kp, kt, ktri, ktri_adj, kedge
 
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
+    allocate(mesh%tri_theta_extent(2, mesh%ntri))
     allocate(mesh%orient(mesh%ntri))
     allocate(mesh%edge_node(2, mesh%nedge))
     allocate(mesh%edge_tri(2, mesh%nedge))
     allocate(mesh%tri_edge(3, mesh%ntri))
     mesh%tri_node = 0
     mesh%tri_node_F = 0
+    mesh%tri_theta_extent = 0d0
     mesh%edge_node = 0
     mesh%edge_tri = 0
     mesh%tri_edge = 0
@@ -1141,6 +1148,8 @@ contains
        mesh%tri_node(2, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
        mesh%tri_node(3, ktri) = mesh%kp_low(kf)
        mesh%tri_node_F(ktri) = 3
+       mesh%tri_theta_extent(1, ktri) = mesh%node_theta_geom(mesh%tri_node(1, ktri))
+       mesh%tri_theta_extent(2, ktri) = upper_branch(mesh%node_theta_geom(mesh%tri_node(2, ktri)))
        ! triangle and nodes indices for poloidal edge
        kedge = mesh%kp_low(kf) + kp - 1
        mesh%edge_node(:, kedge) = [mesh%tri_node(1, ktri), mesh%tri_node(2, ktri)]
@@ -1164,6 +1173,13 @@ contains
           mesh%tri_node(2, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
           mesh%tri_node(3, ktri) = mesh%kp_low(kf - 1) + kp
           mesh%tri_node_F(ktri) = 3
+          if (all(mesh%node_theta_geom(mesh%tri_node(:, ktri)) > epsilon(1d0)) .or. kp < (mesh%kp_max(kf) - kp)) then
+             mesh%tri_theta_extent(1, ktri) = minval(mesh%node_theta_geom(mesh%tri_node(:, ktri)))
+             mesh%tri_theta_extent(2, ktri) = maxval(mesh%node_theta_geom(mesh%tri_node(:, ktri)))
+          else
+             mesh%tri_theta_extent(1, ktri) = minval(upper_branch(mesh%node_theta_geom(mesh%tri_node(:, ktri))))
+             mesh%tri_theta_extent(2, ktri) = maxval(upper_branch(mesh%node_theta_geom(mesh%tri_node(:, ktri))))
+          end if
           ! triangle and nodes indices for poloidal edge
           kedge = mesh%kp_low(kf) + kp - 1
           mesh%edge_node(:, kedge) = [mesh%tri_node(1, ktri), mesh%tri_node(2, ktri)]
@@ -1183,6 +1199,13 @@ contains
           mesh%tri_node(2, ktri) = mesh%kp_low(kf - 1) + mod(kp, mesh%kp_max(kf - 1)) + 1
           mesh%tri_node(3, ktri) = mesh%kp_low(kf - 1) + kp
           mesh%tri_node_F(ktri) = 1
+          if (all(mesh%node_theta_geom(mesh%tri_node(:, ktri)) > epsilon(1d0)) .or. kp < (mesh%kp_max(kf) - kp)) then
+             mesh%tri_theta_extent(1, ktri) = minval(mesh%node_theta_geom(mesh%tri_node(:, ktri)))
+             mesh%tri_theta_extent(2, ktri) = maxval(mesh%node_theta_geom(mesh%tri_node(:, ktri)))
+          else
+             mesh%tri_theta_extent(1, ktri) = minval(upper_branch(mesh%node_theta_geom(mesh%tri_node(:, ktri))))
+             mesh%tri_theta_extent(2, ktri) = maxval(upper_branch(mesh%node_theta_geom(mesh%tri_node(:, ktri))))
+          end if
           ! triangle index for poloidal edge
           kedge = mesh%kp_low(kf - 1) + kp - 1
           mesh%edge_tri(2, kedge) = ktri
@@ -1196,6 +1219,10 @@ contains
           mesh%tri_edge(3, ktri_adj) = kedge
        end do
     end do
+    ! set theta = 2 pi exactly
+    where (mesh%tri_theta_extent(2, :) < epsilon(1d0))
+       mesh%tri_theta_extent(2, :) = 2d0 * pi
+    end where
     ! nodes for radial edges
     mesh%edge_node(:, mesh%npoint:) = mesh%tri_node([3, 1], :)
     ! cache areas and 'centroids'
@@ -1214,6 +1241,17 @@ contains
        mesh%edge_Z(kedge) = sum(mesh%node_Z(mesh%edge_node(:, kedge))) * 0.5d0
     end do
   end subroutine connect_mesh_points
+
+  pure elemental function upper_branch(angle)
+    use magdif_util, only: pi
+    real(dp), intent(in) :: angle
+    real(dp) :: upper_branch
+    if (angle <= 0d0) then
+       upper_branch = angle + 2d0 * pi
+    else
+       upper_branch = angle
+    end if
+  end function upper_branch
 
   !> Computes the "weighted" centroid for a triangle so that it is approximately
   !> equidistant between the enclosing flux surfaces, independent of triangle orientation.
@@ -1379,77 +1417,151 @@ contains
     end do
   end subroutine compute_sample_Ipar
 
-  function point_location(r, z) result(location)
-    use constants, only: pi  ! orbit_mod.f90
-    use magdif_conf, only: conf
-    use magdif_util, only: interp_psi_pol, binsearch
-    real(dp), intent(in) :: r, z
+  function point_location(R, Z, hint_psi) result(location)
+    use magdif_util, only: interp_psi_pol, binsearch, pos_angle
+    real(dp), intent(in) :: R, Z
+    real(dp), intent(in), optional :: hint_psi
     integer :: location
+    integer :: kf, kp, kedge, ktri_min, ktri_max, ktri
+    real(dp) :: thickness, psi, theta, theta_interval(0:maxval(mesh%kp_max))
 
-    integer :: kf, kq, k, k_max, ktri, candidates(6)
-    real(dp) :: psi, pol_frac, pol_offset, pol_interval(0:conf%nkpol), thickness
-
+    ! return -1 if point is outside computational box
     location = -1
     if (R < mesh%R_min .or. R > mesh%R_max .or. Z < mesh%Z_min .or. Z > mesh%Z_max) return
+    ! return -2 if point is outside separatrix
     location = -2
-    psi = interp_psi_pol(r, z)
+    if (present(hint_psi)) then
+       psi = hint_psi
+    else
+       psi = interp_psi_pol(R, Z)
+    end if
     if (equil%cocos%sgn_dpsi == +1) then
        if (psi > fs%psi(mesh%nflux)) return
     else
        if (psi < fs%psi(mesh%nflux)) return
     end if
+    ! estimate radial and poloidal position
     call binsearch(fs%psi, lbound(fs%psi, 1), psi, kf)
-    location = -3
+    theta = pos_angle(atan2(Z - mesh%Z_O, R - mesh%R_O))
 
-    pol_interval = 0d0
-    pol_interval(0:mesh%kp_max(kf)-1) = 0.5d0 / pi * atan2( &
-         mesh%node_Z((mesh%kp_low(kf) + 1):(mesh%kp_low(kf) + mesh%kp_max(kf))) - mesh%Z_O, &
-         mesh%node_R((mesh%kp_low(kf) + 1):(mesh%kp_low(kf) + mesh%kp_max(kf))) - mesh%R_O)
-    pol_offset = pol_interval(0)
-    pol_interval = pol_interval - pol_offset
-    pol_interval(mesh%kp_max(kf)) = 1d0
-    where (pol_interval < 0d0) pol_interval = pol_interval + 1d0
-    where (pol_interval > 1d0) pol_interval = pol_interval - 1d0
-    pol_frac = 0.5d0 / pi * atan2(Z - mesh%Z_O, R - mesh%R_O) - pol_offset
-    if (pol_frac < 0d0) pol_frac = pol_frac + 1d0
-    if (pol_frac > 1d0) pol_frac = pol_frac - 1d0
-    call binsearch(pol_interval, lbound(pol_interval, 1), pol_frac, kq)
-
-    ! Triangle edges do not lie exactly on flux surfaces, so we include the two adjacent
-    ! triangle strips in the search. The candidates are ordered by decreasing likelihood
-    ! of being the correct guess, i.e., the current loop, the outer loop and the inner
-    ! loop, or filler if any of these is not applicable.
-    if (kf == 1) then
-       k_max = 3
-       candidates = [mesh%kt_low(kf) + kq, &
-            mesh%kt_low(kf + 1) + 2 * kq - 1, mesh%kt_low(kf + 1) + 2 * kq, &
-            -1, -1, -1]
-    elseif (kf == 2) then
-       k_max = 5
-       candidates = [mesh%kt_low(kf) + 2 * kq - 1, mesh%kt_low(kf) + 2 * kq, &
-            mesh%kt_low(kf + 1) + 2 * kq - 1, mesh%kt_low(kf + 1) + 2 * kq, &
-            mesh%kt_low(kf - 1) + kq, -1]
-    elseif (kf == mesh%nflux) then
-       k_max = 4
-       candidates = [mesh%kt_low(kf) + 2 * kq - 1, mesh%kt_low(kf) + 2 * kq, &
-            mesh%kt_low(kf - 1) + 2 * kq - 1, mesh%kt_low(kf - 1) + 2 * kq, &
-            -1, -1]
-    else
-       k_max = 6
-       candidates = [mesh%kt_low(kf) + 2 * kq - 1, mesh%kt_low(kf) + 2 * kq, &
-            mesh%kt_low(kf + 1) + 2 * kq - 1, mesh%kt_low(kf + 1) + 2 * kq, &
-            mesh%kt_low(kf - 1) + 2 * kq - 1, mesh%kt_low(kf - 1) + 2 * kq]
-    end if
-
+    theta_interval = 0d0
+    ktri_min = mesh%ntri
+    ktri_max = 1
     thickness = fs%rad(mesh%nflux) * sqrt(epsilon(1d0)) * 8d0
-    do k = 1, k_max
-       ktri = candidates(k)
+    location = -3
+    ! if inner flux surface is not the magnetic axis, scan its edge nodes
+    if (kf > 1) then
+       theta_interval(0:(mesh%kp_max(kf-1) - 1)) = &
+            mesh%node_theta_geom((mesh%kp_low(kf-1) + 1):(mesh%kp_low(kf-1) + mesh%kp_max(kf-1)))
+       theta_interval(mesh%kp_max(kf-1)) = upper_branch(mesh%node_theta_geom(mesh%kp_low(kf-1) + 1))
+       call binsearch(theta_interval(0:mesh%kp_max(kf-1)), lbound(theta_interval, 1), theta, kp)
+       kedge = mesh%kp_low(kf-1) + kp - 1
+       ktri_min = mesh%edge_tri(2, kedge)
+       ktri_max = mesh%edge_tri(2, kedge)
+    end if
+    ! scan edge nodes of outer flux surface
+    theta_interval(0:(mesh%kp_max(kf) - 1)) = &
+         mesh%node_theta_geom((mesh%kp_low(kf) + 1):(mesh%kp_low(kf) + mesh%kp_max(kf)))
+    theta_interval(mesh%kp_max(kf)) = upper_branch(mesh%node_theta_geom(mesh%kp_low(kf) + 1))
+    call binsearch(theta_interval(0:mesh%kp_max(kf)), lbound(theta_interval, 1), theta, kp)
+    kedge = mesh%kp_low(kf) + kp - 1
+    ktri_min = min(ktri_min, mesh%edge_tri(1, kedge))
+    ktri_max = max(ktri_max, mesh%edge_tri(1, kedge))
+    ! scan triangle interval
+    do ktri = ktri_min, ktri_max
        if (point_in_triangle(ktri, R, Z, thickness)) then
           location = ktri
-          exit
+          return
        end if
     end do
+    ! flux surfaces circumscribe poloidal edges, so parts of the outer triangles may be included
+    if (kf < mesh%nflux) then
+       kf = kf + 1
+       ! re-use previous results for inner flux surface
+       ktri_min = mesh%edge_tri(2, kedge)
+       ktri_max = mesh%edge_tri(2, kedge)
+       ! scan edge nodes of outer flux surface
+       theta_interval(0:(mesh%kp_max(kf) - 1)) = &
+            mesh%node_theta_geom((mesh%kp_low(kf) + 1):(mesh%kp_low(kf) + mesh%kp_max(kf)))
+       theta_interval(mesh%kp_max(kf)) = upper_branch(mesh%node_theta_geom(mesh%kp_low(kf) + 1))
+       call binsearch(theta_interval(0:mesh%kp_max(kf)), lbound(theta_interval, 1), theta, kp)
+       kedge = mesh%kp_low(kf) + kp - 1
+       ktri_min = min(ktri_min, mesh%edge_tri(1, kedge))
+       ktri_max = max(ktri_max, mesh%edge_tri(1, kedge))
+       ! scan triangle interval
+       do ktri = ktri_min, ktri_max
+          if (point_in_triangle(ktri, R, Z, thickness)) then
+             location = ktri
+             return
+          end if
+       end do
+    end if
   end function point_location
+
+  function point_location_check(R, Z, hint_psi) result(location)
+    use magdif_util, only: interp_psi_pol, binsearch, pos_angle
+    real(dp), intent(in) :: R, Z
+    real(dp), intent(in), optional :: hint_psi
+    integer :: location
+    integer :: kf, ktri_min, ktri_max, ktri
+    real(dp) :: thickness, psi, theta
+    logical :: tri_mask(mesh%ntri)
+
+    ! return -1 if point is outside computational box
+    location = -1
+    if (R < mesh%R_min .or. R > mesh%R_max .or. Z < mesh%Z_min .or. Z > mesh%Z_max) return
+    ! return -2 if point is outside separatrix
+    location = -2
+    if (present(hint_psi)) then
+       psi = hint_psi
+    else
+       psi = interp_psi_pol(R, Z)
+    end if
+    if (equil%cocos%sgn_dpsi == +1) then
+       if (psi > fs%psi(mesh%nflux)) return
+    else
+       if (psi < fs%psi(mesh%nflux)) return
+    end if
+    ! estimate radial and poloidal position
+    call binsearch(fs%psi, lbound(fs%psi, 1), psi, kf)
+    theta = pos_angle(atan2(Z - mesh%Z_O, R - mesh%R_O))
+
+    ktri_min = mesh%ntri
+    ktri_max = 1
+    thickness = fs%rad(mesh%nflux) * sqrt(epsilon(1d0)) * 8d0
+    location = -3
+    ! scan flux surface
+    tri_mask = .false.
+    tri_mask((mesh%kt_low(kf) + 1):(mesh%kt_low(kf) + mesh%kt_max(kf))) = .true.
+    ktri_min = findloc(mesh%tri_theta_extent(1, :) <= theta .and. &
+         theta <= mesh%tri_theta_extent(2, :), .true., 1, tri_mask)
+    ktri_max = findloc(mesh%tri_theta_extent(1, :) <= theta .and. &
+         theta <= mesh%tri_theta_extent(2, :), .true., 1, tri_mask, back = .true.)
+    ! scan triangle interval
+    do ktri = ktri_min, ktri_max
+       if (point_in_triangle(ktri, R, Z, thickness)) then
+          location = ktri
+          return
+       end if
+    end do
+    ! flux surfaces circumscribe poloidal edges, so parts of the outer triangles may be included
+    if (kf < mesh%nflux) then
+       kf = kf + 1
+       tri_mask = .false.
+       tri_mask((mesh%kt_low(kf) + 1):(mesh%kt_low(kf) + mesh%kt_max(kf))) = .true.
+       ktri_min = findloc(mesh%tri_theta_extent(1, :) <= theta .and. &
+            theta <= mesh%tri_theta_extent(2, :), .true., 1, tri_mask)
+       ktri_max = findloc(mesh%tri_theta_extent(1, :) <= theta .and. &
+            theta <= mesh%tri_theta_extent(2, :), .true., 1, tri_mask, back = .true.)
+       ! scan triangle interval
+       do ktri = ktri_min, ktri_max
+          if (point_in_triangle(ktri, R, Z, thickness)) then
+             location = ktri
+             return
+          end if
+       end do
+    end if
+  end function point_location_check
 
   ! based on http://totologic.blogspot.com/2014/01/accurate-point-in-triangle-test.html
   function point_in_triangle(ktri, R, Z, thickness) result(probably)
@@ -1584,6 +1696,9 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/tri_node_F', mesh%tri_node_F, &
          lbound(mesh%tri_node_F), ubound(mesh%tri_node_F), &
          comment = 'local node index of node F')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/tri_theta_extent', mesh%tri_theta_extent, &
+         lbound(mesh%tri_theta_extent), ubound(mesh%tri_theta_extent), &
+         comment = 'range of geometrical poloidal angle covered by triangle')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/orient', orient, &
          lbound(orient), ubound(orient), &
          comment = 'triangle orientation: true (1) if edge f lies on outer flux surface')
@@ -1700,6 +1815,7 @@ contains
     allocate(mesh%node_theta_geom(mesh%npoint))
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
+    allocate(mesh%tri_theta_extent(2, mesh%ntri))
     allocate(mesh%orient(mesh%ntri))
     allocate(orient(mesh%ntri))
     allocate(mesh%edge_node(2, mesh%nedge))
@@ -1729,6 +1845,7 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/node_theta_geom', mesh%node_theta_geom)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_node', mesh%tri_node)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_node_F', mesh%tri_node_F)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_theta_extent', mesh%tri_theta_extent)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/orient', orient)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_node', mesh%edge_node)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_tri', mesh%edge_tri)
@@ -1769,6 +1886,7 @@ contains
     if (allocated(this%node_theta_geom)) deallocate(this%node_theta_geom)
     if (allocated(this%tri_node)) deallocate(this%tri_node)
     if (allocated(this%tri_node_F)) deallocate(this%tri_node_F)
+    if (allocated(this%tri_theta_extent)) deallocate(this%tri_theta_extent)
     if (allocated(this%orient)) deallocate(this%orient)
     if (allocated(this%edge_node)) deallocate(this%edge_node)
     if (allocated(this%edge_tri)) deallocate(this%edge_tri)
