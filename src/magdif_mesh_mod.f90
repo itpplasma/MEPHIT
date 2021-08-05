@@ -619,6 +619,7 @@ contains
     call compare_gpec_coordinates
     call write_illustration_data(5, 8, 256, 256)
     call connect_mesh_points
+    call check_mesh
     call write_FreeFem_mesh
     call compute_sample_polmodes
     call compute_gpec_jacfac
@@ -1111,11 +1112,14 @@ contains
        common_tri = [findloc(tri_mask, .true., 1), 0]
     case (2)
        common_tri = [findloc(tri_mask, .true., 1), findloc(tri_mask, .true., 1, back = .true.)]
+       if (any((common_tri(1) == mesh%kt_low(:mesh%nflux) + 1) .and. &
+            (common_tri(2) == mesh%kt_low(:mesh%nflux) + mesh%kt_max))) then
+          common_tri = common_tri([2, 1])
+       end if
     case default
        write (log%msg, '("More than two common triangles for knots ", ' // &
             'i0, " and ", i0)') knot1, knot2
-       if (log%err) call log%write
-       error stop
+       if (log%debug) call log%write
     end select
   end subroutine common_triangles
 
@@ -1290,6 +1294,103 @@ contains
     R = sum(mesh%node_R(nodes)) * 0.25d0
     Z = sum(mesh%node_Z(nodes)) * 0.25d0
   end subroutine ring_centered_avg_coord
+
+  subroutine check_mesh
+    use magdif_conf, only: log
+    integer :: kedge, ktri, ktri_check, k_min, k_max, discrepancies, &
+         edge_count(mesh%nedge), tri_count(0:mesh%ntri), common_tri(2)
+
+    ! check node indices
+    k_min = minval(mesh%tri_node)
+    k_max = maxval(mesh%tri_node)
+    if (k_min /= 1 .or. k_max /= mesh%npoint) then
+       write (log%msg, '("mesh%tri_node values are out of range [1, ", i0, "]: [", i0, ", ", i0, "]")') &
+            mesh%npoint, k_min, k_max
+       if (log%debug) call log%write
+    end if
+    k_min = minval(mesh%edge_node)
+    k_max = maxval(mesh%edge_node)
+    if (k_min /= 1 .or. k_max /= mesh%npoint) then
+       write (log%msg, '("mesh%edge_node values are out of range [1, ", i0, "]: [", i0, ", ", i0, "]")') &
+            mesh%npoint, k_min, k_max
+       if (log%debug) call log%write
+    end if
+    ! check edge indices
+    k_min = minval(mesh%tri_edge)
+    k_max = maxval(mesh%tri_edge)
+    if (k_min /= 1 .or. k_max /= mesh%nedge) then
+       write (log%msg, '("mesh%tri_edge values are out of range ' // &
+            '[1, ", i0, "]: [", i0, ", ", i0, "]")') mesh%nedge, k_min, k_max
+       if (log%debug) call log%write
+    end if
+    edge_count = 0
+    do ktri = 1, mesh%ntri
+       edge_count(mesh%tri_edge(:, ktri)) = edge_count(mesh%tri_edge(:, ktri)) + 1
+    end do
+    discrepancies = count(2 /= edge_count(:(mesh%kp_low(mesh%nflux) - 1)))
+    if (discrepancies > 0) then
+       write (log%msg, '(i0, " discrepancies in edge index counts ' // &
+            'from mesh%tri_edge for non-boundary poloidal edges")') discrepancies
+       if (log%debug) call log%write
+    end if
+    discrepancies = count(1 /= edge_count(mesh%kp_low(mesh%nflux):(mesh%npoint - 1)))
+    if (discrepancies > 0) then
+       write (log%msg, '(i0, " discrepancies in edge index counts ' // &
+            'from mesh%tri_edge for boundary poloidal edges")') discrepancies
+       if (log%debug) call log%write
+    end if
+    discrepancies = count(2 /= edge_count(mesh%npoint:))
+    if (discrepancies > 0) then
+       write (log%msg, '(i0, " discrepancies in edge index counts ' // &
+            'from mesh%tri_edge for radial edges")') discrepancies
+       if (log%debug) call log%write
+    end if
+    ! check triangle indices
+    k_min = minval(mesh%edge_tri)
+    k_max = maxval(mesh%edge_tri)
+    if (k_min /= 0 .or. k_max /= mesh%ntri) then
+       write (log%msg, '("mesh%edge_tri values are out of range ' // &
+            '[0, ", i0, "]: [", i0, ", ", i0, "]")') mesh%ntri, k_min, k_max
+       if (log%debug) call log%write
+    end if
+    tri_count = 0
+    do kedge = 1, mesh%nedge
+       tri_count(mesh%edge_tri(:, kedge)) = tri_count(mesh%edge_tri(:, kedge)) + 1
+    end do
+    if (tri_count(0) /= mesh%kp_max(mesh%nflux)) then
+       write (log%msg, '("expected ", i0, " boundary triangles, but counted ", i0, " in mesh%edge_tri")') &
+            mesh%kp_max(mesh%nflux), tri_count(0)
+       if (log%debug) call log%write
+    end if
+    discrepancies = count(3 /= tri_count(1:))
+    if (discrepancies > 0) then
+       write (log%msg, '(i0, " discrepancies in triangle index counts ' // &
+            'from mesh%edge_tri")') discrepancies
+       if (log%debug) call log%write
+    end if
+    ! check consistency of connections
+    do kedge = 1, mesh%nedge
+       call common_triangles(mesh%edge_node(1, kedge), mesh%edge_node(2, kedge), common_tri)
+       if (any(mesh%edge_tri(:, kedge) /= common_tri)) then
+          write (log%msg, '("mesh%edge_tri(:, ", i0, ") = [", i0, ", ", i0, "], ' // &
+               'but common_triangle yields [", i0, ", ", i0, "]")') kedge, mesh%edge_tri(:, kedge), common_tri
+          if (log%debug) call log%write
+       end if
+    end do
+    ! check point locations
+    do ktri = 1, mesh%ntri
+       ktri_check = point_location(mesh%R_Omega(ktri), mesh%Z_Omega(ktri))
+       if (ktri /= ktri_check) then
+          write (log%msg, '("point_location returns ", i0, " for centroid of triangle ", i0)') ktri_check, ktri
+          if (log%debug) call log%write
+       end if
+       ktri_check = point_location_check(mesh%R_Omega(ktri), mesh%Z_Omega(ktri))
+       if (ktri /= ktri_check) then
+          write (log%msg, '("point_location_check returns ", i0, " for centroid of triangle ", i0)') ktri_check, ktri
+          if (log%debug) call log%write
+       end if
+    end do
+  end subroutine check_mesh
 
   subroutine compute_gpec_jacfac
     use magdif_util, only: imun
