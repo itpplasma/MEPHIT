@@ -10,7 +10,7 @@ module magdata_in_symfluxcoor_mod
   double precision, dimension(nplag)        :: R_lag,Z_lag,sqrtg_lag,bmod_lag,dbmod_dt_lag, &
                                                dR_dt_lag, dZ_dt_lag
   double precision, dimension(0:nder,nplag) :: coef
-  double precision, dimension(:),     allocatable :: rbeg,rsmall,qsaf,psisurf,phitor
+  double precision, dimension(:),     allocatable :: rbeg,rsmall,qsaf,psisurf,phitor,circumf
   double precision, dimension(:,:,:), allocatable :: R_st,Z_st,bmod_st,sqgnorm_st
 !
 contains
@@ -43,7 +43,7 @@ contains
   open(1,form='formatted',file='twodim_functions.dat')
   read (1,*) nlabel, ntheta   !'<= nlabel, ntheta'
 !
-  allocate(rbeg(nlabel),rsmall(nlabel),qsaf(nlabel),psisurf(0:nlabel),phitor(0:nlabel))
+  allocate(rbeg(nlabel),rsmall(nlabel),qsaf(nlabel),psisurf(0:nlabel),phitor(0:nlabel),circumf(nlabel))
   allocate(R_st(0:nspl,0:ntheta,nlabel))
   allocate(Z_st(0:nspl,0:ntheta,nlabel))
   allocate(bmod_st(0:nspl,0:ntheta,nlabel))
@@ -101,7 +101,7 @@ contains
   open(1,form='formatted',file='flux_functions.dat')
   read (1,*)
   do i=1,nlabel
-    read (1,*) rbeg(i),rsmall(i),qsaf(i),psisurf(i),phitor(i)
+    read (1,*) rbeg(i),rsmall(i),qsaf(i),psisurf(i),phitor(i),circumf(i)
   enddo
   close(1)
 !

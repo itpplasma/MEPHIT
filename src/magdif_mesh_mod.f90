@@ -50,6 +50,12 @@ module magdif_mesh
 
      !> Safety factor \f$ q \f$ (dimensionless).
      real(dp), dimension(:), allocatable, public :: q
+
+     !> Area of poloidal cross-section, in cm^2
+     real(dp), dimension(:), allocatable, public :: area
+
+     !> Perimeter of poloidal cross-section, in cm
+     real(dp), dimension(:), allocatable, public :: perimeter
    contains
      procedure :: init => flux_func_cache_init
      procedure :: deinit => flux_func_cache_deinit
@@ -284,6 +290,8 @@ contains
        allocate(this%FdF_dpsi(nflux))
        allocate(this%dp_dpsi(nflux))
        allocate(this%q(nflux))
+       allocate(this%area(nflux))
+       allocate(this%perimeter(nflux))
     else
        allocate(this%psi(0:nflux))
        allocate(this%rad(0:nflux))
@@ -292,6 +300,8 @@ contains
        allocate(this%FdF_dpsi(0:nflux))
        allocate(this%dp_dpsi(0:nflux))
        allocate(this%q(0:nflux))
+       allocate(this%area(0:nflux))
+       allocate(this%perimeter(0:nflux))
     end if
     this%psi = 0d0
     this%rad = 0d0
@@ -300,6 +310,8 @@ contains
     this%FdF_dpsi = 0d0
     this%dp_dpsi = 0d0
     this%q = 0d0
+    this%area = 0d0
+    this%perimeter = 0d0
   end subroutine flux_func_cache_init
 
   subroutine flux_func_cache_deinit(this)
@@ -312,6 +324,8 @@ contains
     if (allocated(this%FdF_dpsi)) deallocate(this%FdF_dpsi)
     if (allocated(this%dp_dpsi)) deallocate(this%dp_dpsi)
     if (allocated(this%q)) deallocate(this%q)
+    if (allocated(this%area)) deallocate(this%area)
+    if (allocated(this%perimeter)) deallocate(this%perimeter)
   end subroutine flux_func_cache_deinit
 
   subroutine flux_func_cache_write(cache, file, dataset, comment)
@@ -345,6 +359,12 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/q', &
          cache%q, lbound(cache%q), ubound(cache%q), unit = '1', &
          comment = 'safety factor ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/area', &
+         cache%area, lbound(cache%area), ubound(cache%area), unit = 'cm^2', &
+         comment = 'poloidal cross-section area ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/perimeter', &
+         cache%perimeter, lbound(cache%perimeter), ubound(cache%perimeter), unit = 'cm', &
+         comment = 'poloidal cross-section perimeter ' // trim(adjustl(comment)))
     call h5_close(h5id_root)
   end subroutine flux_func_cache_write
 
@@ -363,6 +383,8 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/FdF_dpsi', cache%FdF_dpsi)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/dp_dpsi', cache%dp_dpsi)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/q', cache%q)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/area', cache%area)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/perimeter', cache%perimeter)
     call h5_close(h5id_root)
   end subroutine flux_func_cache_read
 
@@ -927,7 +949,7 @@ contains
     use magdif_conf, only: conf, conf_arr, log
     use magdif_util, only: interp_psi_pol, pi, pos_angle
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
-         raxis, zaxis, load_magdata_in_symfluxcoord
+         rsmall, circumf, raxis, zaxis, load_magdata_in_symfluxcoord
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, theta0_at_xpoint
     use points_2d, only: s_min, create_points_2d
 
@@ -980,6 +1002,15 @@ contains
     fs_half%rad(:) = fs_half%rad * rad_max
     call flux_func_cache_check
     call cache_resonance_positions
+
+    fs%area(:) = [(pi * psi_fine_interpolator%eval(rsmall, fs%psi(kf)) ** 2, &
+         kf = 0, mesh%nflux)]
+    fs%perimeter(:) = [(psi_fine_interpolator%eval(circumf, fs%psi(kf)), &
+         kf = 0, mesh%nflux)]
+    fs_half%area(:) = [(pi * psi_fine_interpolator%eval(rsmall, fs_half%psi(kf)) ** 2, &
+         kf = 1, mesh%nflux)]
+    fs_half%perimeter(:) = [(psi_fine_interpolator%eval(circumf, fs_half%psi(kf)), &
+         kf = 1, mesh%nflux)]
     if (conf%kilca_scale_factor /= 0) then
        ! dump presumedly optimal values for poloidal resolution
        open(newunit = fid, file = 'optpolres.dat', status = 'replace')
@@ -990,6 +1021,7 @@ contains
        write (fid, '(2(1x, es24.16e3))') fs%rad(mesh%nflux), 2d0 * pi * fs%rad(mesh%nflux) / &
             (fs%rad(mesh%nflux) - fs%rad(mesh%nflux - 1))
        close(fid)
+    else
     end if
 
     call init_indices

@@ -5,7 +5,7 @@
   integer :: nstep,nsurfmax,nlabel,ntheta,i
 !
   double precision :: rmn,rmx,zmn,zmx,raxis,zaxis
-  double precision, dimension(:),   allocatable :: rbeg,rsmall,qsaf,psisurf,phitor
+  double precision, dimension(:),   allocatable :: rbeg,rsmall,qsaf,psisurf,phitor,circumf
   double precision, dimension(:,:), allocatable :: R_st,Z_st,bmod_st,sqgnorm_st
 !
   open(1,file='preload_for_SYNCH.inp')
@@ -17,13 +17,13 @@
                       !when searching for the separatrix
   close(1)
 !
-  allocate(rbeg(nlabel),rsmall(nlabel),qsaf(nlabel),psisurf(nlabel),phitor(nlabel))
+  allocate(rbeg(nlabel),rsmall(nlabel),qsaf(nlabel),psisurf(nlabel),phitor(nlabel),circumf(nlabel))
   allocate(R_st(nlabel,ntheta),Z_st(nlabel,ntheta),bmod_st(nlabel,ntheta),sqgnorm_st(nlabel,ntheta))
 !
   call field_line_integration_for_SYNCH(nstep,nsurfmax,nlabel,ntheta,    &
                                         rmn,rmx,zmn,zmx,raxis,zaxis,     &
                                         rbeg,rsmall,qsaf,psisurf,phitor, &
-                                        R_st,Z_st,bmod_st,sqgnorm_st)
+                                        circumf,R_st,Z_st,bmod_st,sqgnorm_st)
 !
   open(1,form='formatted',file='box_size_axis.dat')
   write (1,*) rmn,rmx, '<= rmn, rmx (cm)'
@@ -32,9 +32,9 @@
   close(1)
 !
   open(1,form='formatted',file='flux_functions.dat')
-  write (1,*) '# R_beg, r,  q, psi_pol, psi_tor'
+  write (1,*) '# R_beg, r,  q, psi_pol, psi_tor, circumf'
   do i=1,nlabel
-    write (1,*) rbeg(i),rsmall(i),qsaf(i),psisurf(i),phitor(i)
+    write (1,*) rbeg(i),rsmall(i),qsaf(i),psisurf(i),phitor(i),circumf(i)
   enddo
   close(1)
 !
@@ -58,7 +58,7 @@
   enddo
   close(1)
 !
-  deallocate(rbeg,rsmall,qsaf,psisurf,phitor)
+  deallocate(rbeg,rsmall,qsaf,psisurf,phitor,circumf)
   deallocate(R_st,Z_st,bmod_st,sqgnorm_st)
 !
   end subroutine preload_for_SYNCH

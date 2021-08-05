@@ -16,7 +16,7 @@
   subroutine field_line_integration_for_SYNCH(nstep,nsurfmax,nlabel,ntheta,    &
                                               rmn,rmx,zmn,zmx,raxis,zaxis,     &
                                               rbeg,rsmall,qsaf,psisurf,phitor, &
-                                              R_st,Z_st,bmod_st,sqgnorm_st)
+                                              circumf,R_st,Z_st,bmod_st,sqgnorm_st)
 !
   use field_eq_mod,  only : psif,dpsidr,dpsidz,d2psidr2,d2psidrdz,d2psidz2, &
                             icall_eq,nrad,nzet,rad,zet,rtf,btf
@@ -27,7 +27,7 @@
 !
   implicit none
 !
-  integer, parameter :: neq=4
+  integer, parameter :: neq=5
   integer, parameter :: niter_axis=20  !number of iterations for finding axis
   integer, parameter :: niter=50    !number of iterations for Newton method
   integer, parameter :: nstep_min=10   !minimum number of steps
@@ -47,7 +47,7 @@
   double precision, dimension(2) :: prev_ymet, ymet_axis
 
   double precision, dimension(neq)           :: ymet
-  double precision, dimension(nlabel)        :: rbeg,rsmall,qsaf,psisurf,phitor
+  double precision, dimension(nlabel)        :: rbeg,rsmall,qsaf,psisurf,phitor,circumf
   double precision, dimension(nlabel,ntheta) :: R_st,Z_st,bmod_st,sqgnorm_st
 !
   external :: rhs_axis, rhs_surf  !, rhs_surf_theta
@@ -130,6 +130,7 @@
         ymet(2)=zaxis
         ymet(3)=0.d0
         ymet(4)=0.d0
+        ymet(5)=0.d0
         call odeint_allroutines(ymet,neq,phi,phiout,relerr,rhs_surf)
         sig=ymet(2)-zaxis
         do while(sig*(ymet(2)-zaxis).gt.0.d0)
@@ -173,6 +174,7 @@
      ymet(2) = zaxis
      ymet(3) = 0.d0
      ymet(4) = 0.d0
+     ymet(5) = 0.d0
      theta_axis = ymet(1:2) - [raxis, zaxis]
 
      prev_ymet = ymet(1:2)
@@ -204,7 +206,7 @@
   theta0 = atan2(theta_axis(2), theta_axis(1))
 !------------------------------------------------------------------------------
 !
-! Computation of flux functions: effective radius, safety factor, poloidal and toroidal fluxes
+! Computation of flux functions: effective radius, safety factor, poloidal and toroidal fluxes, circumference
 !
   do isurf=1,nlabel
     phi=0.d0
@@ -213,6 +215,7 @@
     ymet(1:2)=[raxis, zaxis] + theta_axis * (isurf * 1.d0) / nlabel
     ymet(3)=0.d0
     ymet(4)=0.d0
+    ymet(5)=0.d0
 
     sig_start = 1.d0 * sigma
     sig_end = 1.d0 * sigma
@@ -247,6 +250,7 @@
     qsaf(isurf) = sigma / aiota
     psisurf(isurf)=psif-psi_axis
     phitor(isurf)=ymet(4)/(2.d0*pi)
+    circumf(isurf)=ymet(5)
   enddo
 !
   print *,'Flux functions done'
@@ -262,6 +266,7 @@
     ymet(1:2)=[raxis, zaxis] + theta_axis * (isurf * 1.d0) / nlabel
     ymet(3) = 0.d0
     ymet(4) = 0.d0
+    ymet(5) = 0.d0
 !
     do j=1,ntheta
 !
@@ -294,7 +299,7 @@
 !
   implicit none
 !
-  integer, parameter :: ndim = 4
+  integer, parameter :: ndim = 5
 !
   double precision, dimension(ndim) :: y,dy
   double precision :: R,phi,Z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ,   &
@@ -310,6 +315,7 @@
   dy(2)=Bz*R/Bp
   dy(3)=y(1)
   dy(4)=y(2)
+  dy(5)=0.d0
 !
   return
   end subroutine rhs_axis
@@ -324,7 +330,7 @@
 !
   implicit none
 !
-  integer, parameter :: ndim = 4
+  integer, parameter :: ndim = 5
 !
   double precision, dimension(ndim) :: y,dy
   double precision :: R,phi,Z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ,   &
@@ -340,6 +346,7 @@
   dy(2)=Bz*R/Bp
   dy(3)=y(1)*dy(2)
   dy(4)=y(1)*y(2)*Br
+  dy(5)=hypot(dy(1), dy(2))
 !
   dr_dphi=dy(1)
   dz_dphi=dy(2)
