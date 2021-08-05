@@ -1818,7 +1818,7 @@ contains
     if (conf%kilca_scale_factor /= 0) then
        allocate(mesh%res_modes(1))
     else
-       allocate(mesh%res_modes(1:mesh%m_res_max-mesh%m_res_min))
+       allocate(mesh%res_modes(mesh%m_res_max - mesh%m_res_min + 1))
     end if
     allocate(mesh%kp_max(mesh%nflux))
     allocate(mesh%kt_max(mesh%nflux))
