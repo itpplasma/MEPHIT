@@ -1120,8 +1120,10 @@ contains
   end subroutine common_triangles
 
   subroutine connect_mesh_points
+    use magdif_conf, only: log
     use magdif_util, only: pi
-    integer :: kf, kp, kt, ktri, ktri_adj, kedge
+    integer :: kf, kp, kp_lo, kp_hi, kt, ktri, ktri_adj, kedge, nodes(4)
+    real(dp) :: mat(3, 3)
 
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
@@ -1165,58 +1167,71 @@ contains
     end do
     ! define triangles on outer flux surfaces
     do kf = 2, mesh%nflux
-       do kp = 1, mesh%kp_max(kf)
-          ! node indices for triangle with poloidal edge on outer flux surface
-          ktri = ktri + 1
-          mesh%orient(ktri) = .true.
-          mesh%tri_node(1, ktri) = mesh%kp_low(kf) + kp
-          mesh%tri_node(2, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
-          mesh%tri_node(3, ktri) = mesh%kp_low(kf - 1) + kp
-          mesh%tri_node_F(ktri) = 3
-          if (all(mesh%node_theta_geom(mesh%tri_node(:, ktri)) > epsilon(1d0)) .or. kp < (mesh%kp_max(kf) - kp)) then
+       kp_lo = 1
+       kp_hi = 1
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          ! edge i is fixed by nodes(1) and nodes(2)
+          ! nodes(3) and nodes(4) are candidates for node I
+          nodes(1) = mesh%kp_low(kf - 1) + kp_lo
+          nodes(2) = mesh%kp_low(kf) + kp_hi
+          nodes(3) = mesh%kp_low(kf) + mod(kp_hi, mesh%kp_max(kf)) + 1
+          nodes(4) = mesh%kp_low(kf - 1) + mod(kp_lo, mesh%kp_max(kf - 1)) + 1
+          if (kt < mesh%kt_max(kf)) then
+             ! test Delaunay condition for nodes(3) as node I
+             mat(:, 1) = mesh%node_R(nodes(1:3)) - mesh%node_R(nodes(4))
+             mat(:, 2) = mesh%node_Z(nodes(1:3)) - mesh%node_Z(nodes(4))
+             mat(:, 3) = mat(:, 1) * mat(:, 1) + mat(:, 2) * mat(:, 2)
+             mesh%orient(ktri) = 0d0 >= &
+                  mat(1, 1) * mat(2, 2) * mat(3, 3) + mat(1, 2) * mat(2, 3) * mat(3, 1) + mat(1, 3) * mat(2, 1) * mat(3, 2) - &
+                  mat(3, 1) * mat(2, 2) * mat(1, 3) - mat(3, 2) * mat(2, 3) * mat(1, 1) - mat(3, 3) * mat(2, 1) * mat(1, 2)
+          else
+             ! the last edge is already fixed, so we ignore the Delaunay condition
+             if (kp_lo >= 1 .and. kp_hi <= mesh%kp_max(kf)) then
+                mesh%orient(ktri) = .true.
+             elseif (kp_lo <= mesh%kp_max(kf - 1) .and. kp_hi >= 1) then
+                mesh%orient(ktri) = .false.
+             else
+                write (log%msg, '("Cannot close triangle loop correctly: ' // &
+                     'kf = ", i0, ", kp_lo = ", i0, ", kp_hi = ", i0)') kf, kp_lo, kp_hi
+                if (log%err) call log%write
+                error stop
+             end if
+          end if
+          if (mesh%orient(ktri)) then
+             ! node indices for triangle with poloidal edge on outer flux surface
+             mesh%tri_node(:, ktri) = nodes([2, 3, 1])
+             mesh%tri_node_F(ktri) = 3
+             ! triangle and nodes indices for poloidal edge
+             kedge = mesh%kp_low(kf) + kp_hi - 1
+             mesh%edge_node(:, kedge) = [mesh%tri_node(1, ktri), mesh%tri_node(2, ktri)]
+             mesh%edge_tri(1, kedge) = ktri
+             mesh%tri_edge(1, ktri) = kedge
+             kp_hi = mod(kp_hi, mesh%kp_max(kf)) + 1
+          else
+             ! node indices for triangle with poloidal edge on inner flux surface
+             mesh%tri_node(:, ktri) = nodes([2, 4, 1])
+             mesh%tri_node_F(ktri) = 1
+             ! triangle index for poloidal edge
+             kedge = mesh%kp_low(kf - 1) + kp_lo - 1
+             mesh%edge_tri(2, kedge) = ktri
+             mesh%tri_edge(1, ktri) = kedge
+             kp_lo = mod(kp_lo, mesh%kp_max(kf - 1)) + 1
+          end if
+          ! triangle indices for radial edge
+          ktri_adj = mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf)) + 1
+          kedge = mesh%npoint + mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf))
+          mesh%edge_tri(:, kedge) = [ktri, ktri_adj]
+          mesh%tri_edge(2, ktri) = kedge
+          mesh%tri_edge(3, ktri_adj) = kedge
+          ! cache poloidal extent of triangles for point_location_check
+          if (all(mesh%node_theta_geom(mesh%tri_node(:, ktri)) > epsilon(1d0)) .or. kt < (mesh%kt_max(kf) - kt)) then
              mesh%tri_theta_extent(1, ktri) = minval(mesh%node_theta_geom(mesh%tri_node(:, ktri)))
              mesh%tri_theta_extent(2, ktri) = maxval(mesh%node_theta_geom(mesh%tri_node(:, ktri)))
           else
              mesh%tri_theta_extent(1, ktri) = minval(upper_branch(mesh%node_theta_geom(mesh%tri_node(:, ktri))))
              mesh%tri_theta_extent(2, ktri) = maxval(upper_branch(mesh%node_theta_geom(mesh%tri_node(:, ktri))))
           end if
-          ! triangle and nodes indices for poloidal edge
-          kedge = mesh%kp_low(kf) + kp - 1
-          mesh%edge_node(:, kedge) = [mesh%tri_node(1, ktri), mesh%tri_node(2, ktri)]
-          mesh%edge_tri(1, kedge) = ktri
-          mesh%tri_edge(1, ktri) = kedge
-          ! triangle indices for radial edge
-          kt = ktri - mesh%kt_low(kf)
-          ktri_adj = mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf)) + 1
-          kedge = mesh%npoint + mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf))
-          mesh%edge_tri(:, kedge) = [ktri, ktri_adj]
-          mesh%tri_edge(2, ktri) = kedge
-          mesh%tri_edge(3, ktri_adj) = kedge
-          ! triangle with poloidal edge on inner flux surface
-          ktri = ktri + 1
-          mesh%orient(ktri) = .false.
-          mesh%tri_node(1, ktri) = mesh%kp_low(kf) + mod(kp, mesh%kp_max(kf)) + 1
-          mesh%tri_node(2, ktri) = mesh%kp_low(kf - 1) + mod(kp, mesh%kp_max(kf - 1)) + 1
-          mesh%tri_node(3, ktri) = mesh%kp_low(kf - 1) + kp
-          mesh%tri_node_F(ktri) = 1
-          if (all(mesh%node_theta_geom(mesh%tri_node(:, ktri)) > epsilon(1d0)) .or. kp < (mesh%kp_max(kf) - kp)) then
-             mesh%tri_theta_extent(1, ktri) = minval(mesh%node_theta_geom(mesh%tri_node(:, ktri)))
-             mesh%tri_theta_extent(2, ktri) = maxval(mesh%node_theta_geom(mesh%tri_node(:, ktri)))
-          else
-             mesh%tri_theta_extent(1, ktri) = minval(upper_branch(mesh%node_theta_geom(mesh%tri_node(:, ktri))))
-             mesh%tri_theta_extent(2, ktri) = maxval(upper_branch(mesh%node_theta_geom(mesh%tri_node(:, ktri))))
-          end if
-          ! triangle index for poloidal edge
-          kedge = mesh%kp_low(kf - 1) + kp - 1
-          mesh%edge_tri(2, kedge) = ktri
-          mesh%tri_edge(1, ktri) = kedge
-          ! triangle indices for radial edge
-          kt = ktri - mesh%kt_low(kf)
-          ktri_adj = mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf)) + 1
-          kedge = mesh%npoint + mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf))
-          mesh%edge_tri(:, kedge) = [ktri, ktri_adj]
-          mesh%tri_edge(2, ktri) = kedge
-          mesh%tri_edge(3, ktri_adj) = kedge
        end do
     end do
     ! set theta = 2 pi exactly
