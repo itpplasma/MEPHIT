@@ -13,7 +13,7 @@ module magdif_mesh
        coord_cache_ext_write, coord_cache_ext_read, coord_cache_ext_deinit, &
        flux_func_cache_init, flux_func_cache_check, flux_func_cache_deinit, generate_mesh, &
        compute_resonance_positions, refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile, &
-       create_mesh_points, init_indices, common_triangles, psi_interpolator, psi_fine_interpolator, &
+       create_mesh_points, common_triangles, psi_interpolator, psi_fine_interpolator, &
        connect_mesh_points, write_mesh_cache, read_mesh_cache, &
        magdif_mesh_deinit, init_flux_variables, compute_pres_prof_eps, compute_pres_prof_par, &
        compute_pres_prof_geqdsk, compute_safety_factor_flux, compute_safety_factor_rot, &
@@ -954,7 +954,6 @@ contains
     use points_2d, only: s_min, create_points_2d
 
     integer :: kf, fid
-    integer, dimension(:), allocatable :: n_theta
     real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_norm_ref
     real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
     real(dp) :: psi_axis, rad_max
@@ -1023,22 +1022,34 @@ contains
        close(fid)
     else
     end if
-
-    call init_indices
-    mesh%ntri = mesh%kt_low(mesh%nflux + 1)
-    mesh%npoint = mesh%kp_low(mesh%nflux + 1)
+    allocate(mesh%kp_max(mesh%nflux))
+    allocate(mesh%kt_max(mesh%nflux))
+    allocate(mesh%kp_low(mesh%nflux))
+    allocate(mesh%kt_low(mesh%nflux))
+    mesh%kp_max(:) = conf%nkpol
+    mesh%kp_low(1) = 1
+    do kf = 2, mesh%nflux
+       mesh%kp_low(kf) = mesh%kp_low(kf-1) + mesh%kp_max(kf-1)
+    end do
+    mesh%kt_max(1) = mesh%kp_max(1)
+    mesh%kt_max(2:) = mesh%kp_max(:(mesh%nflux - 1)) + mesh%kp_max(2:)
+    mesh%kt_low(1) = 0
+    do kf = 2, mesh%nflux
+       mesh%kt_low(kf) = mesh%kt_low(kf-1) + mesh%kt_max(kf-1)
+    end do
+    mesh%ntri = mesh%kt_low(mesh%nflux) + mesh%kt_max(mesh%nflux)
+    mesh%npoint = mesh%kp_low(mesh%nflux) + mesh%kp_max(mesh%nflux)
     mesh%nedge = mesh%ntri + mesh%npoint - 1
+
     allocate(mesh%node_R(mesh%npoint))
     allocate(mesh%node_Z(mesh%npoint))
     allocate(mesh%node_theta_flux(mesh%npoint))
     allocate(mesh%node_theta_geom(mesh%npoint))
-
-    allocate(n_theta(mesh%nflux), points(3, mesh%npoint), points_s_theta_phi(3, mesh%npoint))
-    n_theta = conf%nkpol
+    allocate(points(3, mesh%npoint), points_s_theta_phi(3, mesh%npoint))
     s_min = 1d-16
     ! inp_label 2 to use poloidal psi with magdata_in_symfluxcoord_ext
     ! psi is not normalized by psipol_max, but shifted by -psi_axis
-    call create_points_2d(2, n_theta, points, points_s_theta_phi, r_scaling_func = psi_ref)
+    call create_points_2d(2, mesh%kp_max, points, points_s_theta_phi, r_scaling_func = psi_ref)
     mesh%node_R(1) = mesh%R_O
     mesh%node_R(2:) = points(1, 2:)
     mesh%node_Z(1) = mesh%Z_O
@@ -1056,7 +1067,7 @@ contains
     mesh%R_max = maxval(mesh%node_R)
     mesh%Z_min = minval(mesh%node_Z)
     mesh%Z_max = maxval(mesh%node_Z)
-    deallocate(n_theta, points, points_s_theta_phi)
+    deallocate(points, points_s_theta_phi)
     deallocate(rho_norm_ref, rho_norm_eqd)
 
   contains
@@ -1079,37 +1090,6 @@ contains
            psi_axis, kf = 1, mesh%nflux)]
     end function psi_ref
   end subroutine create_mesh_points
-
-  !> Allocates and initializes #kp_low, #kp_max, #kt_low and #kt_max based on the values
-  !> of #magdif_config::nflux and #magdif_config::nkpol. Deallocation is done in
-  !> magdif_cleanup().
-  subroutine init_indices
-    use magdif_conf, only: conf, log
-    integer :: kf
-
-    allocate(mesh%kp_max(mesh%nflux))
-    allocate(mesh%kt_max(mesh%nflux))
-    allocate(mesh%kp_low(mesh%nflux + 1))
-    allocate(mesh%kt_low(mesh%nflux + 1))
-
-    mesh%kp_max(:) = conf%nkpol
-    mesh%kt_max(:) = 2 * conf%nkpol
-    mesh%kt_max(1) = conf%nkpol
-
-    mesh%kp_low(1) = 1
-    do kf = 2, mesh%nflux + 1
-       mesh%kp_low(kf) = mesh%kp_low(kf-1) + mesh%kp_max(kf-1)
-    end do
-    mesh%kt_low(1) = 0
-    do kf = 2, mesh%nflux + 1
-       mesh%kt_low(kf) = mesh%kt_low(kf-1) + mesh%kt_max(kf-1)
-    end do
-
-    write (log%msg, '("Number of points up to LCFS: ", i0)') mesh%kp_low(mesh%nflux + 1)
-    if (log%info) call log%write
-    write (log%msg, '("Number of triangles up to LCFS: ", i0)') mesh%kt_low(mesh%nflux + 1)
-    if (log%info) call log%write
-  end subroutine init_indices
 
   function tri_area(ktri)
     integer, intent(in) :: ktri
@@ -1144,8 +1124,8 @@ contains
        common_tri = [findloc(tri_mask, .true., 1), 0]
     case (2)
        common_tri = [findloc(tri_mask, .true., 1), findloc(tri_mask, .true., 1, back = .true.)]
-       if (any((common_tri(1) == mesh%kt_low(:mesh%nflux) + 1) .and. &
-            (common_tri(2) == mesh%kt_low(:mesh%nflux) + mesh%kt_max))) then
+       if (any((common_tri(1) == mesh%kt_low + 1) .and. &
+            (common_tri(2) == mesh%kt_low + mesh%kt_max))) then
           common_tri = common_tri([2, 1])
        end if
     case default
@@ -1885,19 +1865,16 @@ contains
 
     open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace', form = 'formatted', action = 'write')
     write (fid, '(3(1x, i0))') mesh%npoint, mesh%ntri, mesh%kp_max(mesh%nflux) - 1
-    do kpoi = 1, mesh%kp_low(mesh%nflux + 1)
+    do kpoi = 1, mesh%npoint
        write (fid, '(2(1x, es23.15e3), 1x, i0)') &
             mesh%node_R(kpoi), mesh%node_Z(kpoi), 0
-    end do
-    do kpoi = mesh%kp_low(mesh%nflux + 1) + 1, mesh%npoint
-       write (fid, '(2(1x, es23.15e3), 1x, i0)') &
-            mesh%node_R(kpoi), mesh%node_Z(kpoi), 1
     end do
     do ktri = 1, mesh%ntri
        write (fid, '(4(1x, i0))') mesh%tri_node(:, ktri), 0
     end do
-    do kp = 1, mesh%kp_max(mesh%nflux) - 1
-       write (fid, '(4(1x, i0))') mesh%kp_low(mesh%nflux) + kp, mesh%kp_low(mesh%nflux) + kp + 1, 1
+    do kp = 1, mesh%kp_max(mesh%nflux)
+       write (fid, '(4(1x, i0))') mesh%kp_low(mesh%nflux) + kp, &
+            mesh%kp_low(mesh%nflux) + mod(kp, mesh%kp_max(mesh%nflux)) + 1, 1
     end do
     close(fid)
     ! edge numbering as defined in magdif_mesh::connect_mesh_points
@@ -1955,8 +1932,8 @@ contains
     end if
     allocate(mesh%kp_max(mesh%nflux))
     allocate(mesh%kt_max(mesh%nflux))
-    allocate(mesh%kp_low(mesh%nflux + 1))
-    allocate(mesh%kt_low(mesh%nflux + 1))
+    allocate(mesh%kp_low(mesh%nflux))
+    allocate(mesh%kt_low(mesh%nflux))
     allocate(mesh%node_R(mesh%npoint))
     allocate(mesh%node_Z(mesh%npoint))
     allocate(mesh%node_theta_flux(mesh%npoint))

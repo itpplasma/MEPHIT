@@ -389,81 +389,6 @@ contains
     call RT0_compute_tor_comp(Bn)
   end subroutine compute_Bn
 
-  !> Assembles a sparse matrix in coordinate list (COO) representation for use with
-  !> sparse_mod::sparse_solve().
-  !>
-  !> @param nrow number \f$ n \f$ of rows in the matrix
-  !> @param d \f$ n \f$ diagnonal elements of stiffness matrix \f$ A \f$
-  !> @param du \f$ n-1 \f$ superdiagonal elements of stiffness matrix \f$ A \f$ and
-  !> \f$ A_{n, 1} \f$ (lower left corner)
-  !> @param nz number of non-zero entries (2*nrow)
-  !> @param irow nz row indices of non-zero entries
-  !> @param icol nz column indices of non-zero entries
-  !> @param aval nz values of non-zero entries
-  !>
-  !> The input is a stiffness matrix \f$ K \f$ with non-zero entries on the main diagonal,
-  !> the upper diagonal and, due to periodicity, in the lower left corner. This shape
-  !> results from the problems in compute_presn() and compute_currn().
-  subroutine assemble_sparse(nrow, d, du, nz, irow, icol, aval)
-    use magdif_conf, only: log
-    integer, intent(in)  :: nrow
-    complex(dp), intent(in)  :: d(1:)  !nrow
-    complex(dp), intent(in)  :: du(1:)  !nrow
-    integer, intent(out) :: nz
-    integer, intent(out) :: irow(1:), icol(1:)  !2*nrow
-    complex(dp), intent(out) :: aval(1:)  !2*nrow
-
-    integer :: k
-
-    nz = 2*nrow
-
-    if (nrow /= size(d)) then
-       call log%msg_arg_size('assemble_sparse', 'nrow', 'size(d)', nrow, size(d))
-       if (log%err) call log%write
-       error stop
-    end if
-    if (nrow /= size(du)) then
-       call log%msg_arg_size('assemble_sparse', 'nrow', 'size(du)', nrow, size(du))
-       if (log%err) call log%write
-       error stop
-    end if
-    if (nz /= size(irow)) then
-       call log%msg_arg_size('assemble_sparse', 'nz', 'size(irow)', nz, size(irow))
-       if (log%err) call log%write
-       error stop
-    end if
-    if (nz /= size(icol)) then
-       call log%msg_arg_size('assemble_sparse', 'nz', 'size(icol)', nz, size(icol))
-       if (log%err) call log%write
-       error stop
-    end if
-    if (nz /= size(aval)) then
-       call log%msg_arg_size('assemble_sparse', 'nz', 'size(aval)', nz, size(aval))
-       if (log%err) call log%write
-       error stop
-    end if
-
-    irow(1) = 1
-    icol(1) = 1
-    aval(1) = d(1)
-
-    irow(2) = nrow
-    icol(2) = 1
-    aval(2) = du(nrow)
-
-    do k = 2, nrow
-       ! off-diagonal
-       irow(2*k-1) = k-1
-       icol(2*k-1) = k
-       aval(2*k-1) = du(k-1)
-
-       ! diagonal
-       irow(2*k) = k
-       icol(2*k) = k
-       aval(2*k) = d(k)
-    end do
-  end subroutine assemble_sparse
-
   !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
   subroutine compute_presn
     use sparse_mod, only: sparse_solve, sparse_matmul
@@ -471,19 +396,21 @@ contains
     use magdif_util, only: imun
     use magdif_mesh, only: fs, mesh, B0R_edge, B0phi_edge, B0Z_edge
     real(dp) :: lr, lz  ! edge vector components
-    complex(dp), dimension(conf%nkpol) :: a, b, x, d, du, inhom
+    complex(dp), dimension(maxval(mesh%kp_max)) :: a, b, x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
-    real(dp), dimension(conf%nkpol) :: rel_err
+    real(dp), dimension(maxval(mesh%kp_max)) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kp, kedge
-    integer :: nz
-    integer, dimension(2 * conf%nkpol) :: irow, icol
-    complex(dp), dimension(2 * conf%nkpol) :: aval
+    integer :: kf, kp, kedge, k
+    integer, dimension(2 * maxval(mesh%kp_max)) :: irow, icol
+    complex(dp), dimension(2 * maxval(mesh%kp_max)) :: aval
     integer :: base, tip
     real(dp), parameter :: small = tiny(0d0)
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
+    a = (0d0, 0d0)
+    b = (0d0, 0d0)
+    x = (0d0, 0d0)
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
@@ -496,32 +423,49 @@ contains
           x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bn%DOF(kedge)
           b(kp) = imun * (mesh%n + imun * conf%damp) * B0phi_edge(kedge) / mesh%edge_R(kedge)
        end do
-
-       ! solve linear system
        d = -a + b * 0.5d0
        du = a + b * 0.5d0
-       call assemble_sparse(conf%nkpol, d, du, nz, irow, icol, aval)
-       inhom = x  ! remember inhomogeneity before x is overwritten with the solution
-       call sparse_solve(conf%nkpol, conf%nkpol, nz, irow, icol, aval, x)
-       call sparse_matmul(conf%nkpol, conf%nkpol, irow, icol, aval, x, resid)
-       resid(:) = resid - inhom
-       where (abs(inhom) >= small)
-          rel_err = abs(resid) / abs(inhom)
-       elsewhere
-          rel_err = 0d0
-       end where
-       max_rel_err = max(max_rel_err, maxval(rel_err))
-       avg_rel_err = avg_rel_err + sum(rel_err)
-
+       associate (ndim => mesh%kp_max(kf), nz => 2 * mesh%kp_max(kf))
+         ! assemble sparse matrix (COO format)
+         ! first column, diagonal
+         irow(1) = 1
+         icol(1) = 1
+         aval(1) = d(1)
+         ! first column, off-diagonal
+         irow(2) = ndim
+         icol(2) = 1
+         aval(2) = du(ndim)
+         do k = 2, ndim
+            ! off-diagonal
+            irow(2*k-1) = k-1
+            icol(2*k-1) = k
+            aval(2*k-1) = du(k-1)
+            ! diagonal
+            irow(2*k) = k
+            icol(2*k) = k
+            aval(2*k) = d(k)
+         end do
+         inhom = x  ! remember inhomogeneity before x is overwritten with the solution
+         call sparse_solve(ndim, ndim, nz, irow(:nz), icol(:nz), aval(:nz), x(:ndim))
+         call sparse_matmul(ndim, ndim, irow(:nz), icol(:nz), aval(:nz), x(:ndim), resid)
+         resid(:) = resid - inhom(:ndim)
+         where (abs(inhom(:ndim)) >= small)
+            rel_err(:ndim) = abs(resid(:ndim)) / abs(inhom(:ndim))
+         elsewhere
+            rel_err(:ndim) = 0d0
+         end where
+         max_rel_err = max(max_rel_err, maxval(rel_err(:ndim)))
+         avg_rel_err = avg_rel_err + sum(rel_err(:ndim))
+       end associate
        if (kf == 1) then ! first point on axis - average over enclosing flux surface
-          pn%DOF(1) = sum(x) / size(x)
+          pn%DOF(1) = sum(x(:mesh%kp_max(1))) / dble(mesh%kp_max(1))
        end if
        do kp = 1, mesh%kp_max(kf)
           pn%DOF(mesh%kp_low(kf) + kp) = x(kp)
        end do
     end do
 
-    avg_rel_err = avg_rel_err / sum(mesh%kp_max(1:mesh%nflux))
+    avg_rel_err = avg_rel_err / dble(mesh%npoint - 1)
     write (log%msg, '("compute_presn: diagonalization max_rel_err = ", ' // &
          'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (log%debug) call log%write
@@ -539,14 +483,13 @@ contains
     use magdif_mesh, only: fs, mesh, B0phi_edge, B0_flux, j0phi_edge
     use magdif_pert, only: RT0_compute_tor_comp
     use magdif_util, only: imun, clight
-    complex(dp), dimension(2 * conf%nkpol) :: x, d, du, inhom
+    complex(dp), dimension(maxval(mesh%kt_max)) :: x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
-    real(dp), dimension(2 * conf%nkpol) :: rel_err
+    real(dp), dimension(maxval(mesh%kt_max)) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kp, kt, ktri, ke, kedge
-    integer :: nz
-    integer, dimension(4 * conf%nkpol) :: irow, icol
-    complex(dp), dimension(4 * conf%nkpol) :: aval
+    integer :: kf, kp, kt, ktri, ke, kedge, k
+    integer, dimension(2 * maxval(mesh%kt_max)) :: irow, icol
+    complex(dp), dimension(2 * maxval(mesh%kt_max)) :: aval
     complex(dp) :: Bnphi_edge, Delta_pn
     real(dp) :: Delta_p0
     real(dp), parameter :: small = tiny(0d0)
@@ -594,9 +537,26 @@ contains
                (Bnphi_edge / B0phi_edge(kedge) * (-Delta_p0) - (-Delta_pn)) + j0phi_edge(kedge) * &
                (Bnphi_edge / B0phi_edge(kedge) - (-Bn%DOF(kedge)) / (-B0_flux(kedge))))
        end do
-       associate (ndim => mesh%kt_max(kf))
-         call assemble_sparse(ndim, d(:ndim), du(:ndim), nz, &
-              irow(:2*ndim), icol(:2*ndim), aval(:2*ndim))
+       associate (ndim => mesh%kt_max(kf), nz => 2 * mesh%kt_max(kf))
+         ! assemble sparse matrix (COO format)
+         ! first column, diagonal
+         irow(1) = 1
+         icol(1) = 1
+         aval(1) = d(1)
+         ! first column, off-diagonal
+         irow(2) = ndim
+         icol(2) = 1
+         aval(2) = du(ndim)
+         do k = 2, ndim
+            ! off-diagonal
+            irow(2*k-1) = k-1
+            icol(2*k-1) = k
+            aval(2*k-1) = du(k-1)
+            ! diagonal
+            irow(2*k) = k
+            icol(2*k) = k
+            aval(2*k) = d(k)
+         end do
          inhom = x  ! remember inhomogeneity before x is overwritten with the solution
          call sparse_solve(ndim, ndim, nz, irow(:nz), icol(:nz), aval(:nz), x(:ndim))
          call sparse_matmul(ndim, ndim, irow(:nz), icol(:nz), aval(:nz), x(:ndim), resid)
@@ -614,7 +574,7 @@ contains
           jn%DOF(kedge) = -x(kt)
        end do
     end do
-    avg_rel_err = avg_rel_err / sum(mesh%kt_max(1:mesh%nflux))
+    avg_rel_err = avg_rel_err / dble(mesh%ntri)
     write (log%msg, '("compute_currn: diagonalization max_rel_err = ", ' // &
          'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (log%debug) call log%write
