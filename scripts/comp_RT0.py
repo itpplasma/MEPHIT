@@ -7,170 +7,114 @@ Created on Mon May  4 15:56:57 2020
 """
 
 from os import path
-from matplotlib import use, rcParams, ticker, pyplot as plt
+from h5py import File
+import magdifplot
+from matplotlib import ticker
+from matplotlib.figure import Figure
+from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy as np
 from scipy import interpolate
 
-rcParams['text.usetex'] = True
-rcParams['font.family'] = 'serif'
-rcParams['mathtext.fontset'] = 'cm'
-use('Agg')
-scifmt = ticker.ScalarFormatter()
-scifmt.set_powerlimits((-3, 4))
-canvas = (6.6, 3.6)
-res = 300
-thin = 0.5
+def compare(datafile, outdir, prefix, subtitle, m):
+    data = File(datafile, 'r')
+    kf = data['/mesh/res_ind'][m - data['/mesh/m_res_min'][()]]
+    ktri_min = data['/mesh/kt_low'][kf]
+    ktri_max = data['/mesh/kt_low'][kf] + data['/mesh/kt_max'][kf] - 1
+    psi_n = (data['/cache/fs_half/psi'][kf] - data['/cache/fs/psi'][0]) / \
+            (data['/cache/fs/psi'][-1] - data['/cache/fs/psi'][0])
+    th = data['/cache/sample_polmodes/theta'][ktri_min:ktri_max]
+    BR = data['/debug_RT0/Bn_R'][ktri_min:ktri_max]
+    Bph = data['/debug_RT0/Bn_phi'][ktri_min:ktri_max]
+    BZ = data['/debug_RT0/Bn_Z'][ktri_min:ktri_max]
+    BR_int = data['/debug_RT0/Bn_R_RT0'][ktri_min:ktri_max]
+    Bph_int = data['/debug_RT0/Bn_phi_RT0'][ktri_min:ktri_max]
+    BZ_int = data['/debug_RT0/Bn_Z_RT0'][ktri_min:ktri_max]
+    BR_spl = interpolate.interp1d(th, BR_int, kind='linear', copy=False, fill_value='extrapolate', assume_sorted=True)
+    Bph_spl = interpolate.interp1d(th, Bph_int, kind='linear', copy=False, fill_value='extrapolate', assume_sorted=True)
+    BZ_spl = interpolate.interp1d(th, BZ_int, kind='linear', copy=False, fill_value='extrapolate', assume_sorted=True)
+    data.close()
 
-try:
-    data = np.loadtxt('optpolres.dat')
-except Exception as err:
-    print('Error: {}'.format(err))
-    exit
-plt.figure(figsize=canvas)
-plt.axhline(300, color='k', lw=thin, ls='--',
-            label=r'$N^{\mathrm{pol}} = 300$')
-plt.semilogy(data[:, 0], data[:, 1], '-r', lw=thin,
-             label=r'opt. $N^{\mathrm{pol}}$')
-plt.gca().legend()
-plt.xlabel(r'$r$ / cm')
-plt.ylabel(r'$N^{\mathrm{pol}}$')
-plt.title('Estimate of optimal poloidal resolution (poins per flux surface)')
-plt.savefig('optpolres.png', dpi=res)
-plt.close()
-exit
-
-def compare(datafile, outdir, prefix, subtitle, m, avg):
-    try:
-        data = np.loadtxt(datafile)
-    except Exception as err:
-        print('Error: {}'.format(err))
-        exit
+    title = f"Vacuum perturbation field at fixed $\\hat{{\\psi}} = {psi_n:.3}$,\n{subtitle}"
     fname = path.join(outdir, prefix)
-    title = "Vacuum perturbation field at fixed $r$,\n{}".format(subtitle)
-    
-    sh = (data.shape[0])
-    # r = data[:, 0]
-    th = data[:, 1]
-    BR = np.empty(sh, dtype=complex)
-    BR.real = data[:, 2]
-    BR.imag = data[:, 3]
-    Bph = np.empty(sh, dtype=complex)
-    Bph.real = data[:, 4]
-    Bph.imag = data[:, 5]
-    BZ = np.empty(sh, dtype=complex)
-    BZ.real = data[:, 6]
-    BZ.imag = data[:, 7]
-    BR_int = np.empty(sh, dtype=complex)
-    BR_int.real = data[:, 8]
-    BR_int.imag = data[:, 9]
-    Bph_int = np.empty(sh, dtype=complex)
-    Bph_int.real = data[:, 10]
-    Bph_int.imag = data[:, 11]
-    BZ_int = np.empty(sh, dtype=complex)
-    BZ_int.real = data[:, 12]
-    BZ_int.imag = data[:, 13]
-    
-    if avg:
-        BR_int = 0.5 * (BR_int[0::2] + BR_int[1::2])
-        Bph_int = 0.5 * (Bph_int[0::2] + Bph_int[1::2])
-        BZ_int = 0.5 * (BZ_int[0::2] + BZ_int[1::2])
-        th_int = 0.5 * (th[0::2] + th[1::2])
-    else:
-        th_int = th
-    
-    BR_spl = interpolate.interp1d(th_int, BR_int, kind='cubic', copy=False,
-                                  fill_value='extrapolate', assume_sorted=True)
-    Bph_spl = interpolate.interp1d(th_int, Bph_int, kind='cubic', copy=False,
-                                  fill_value='extrapolate', assume_sorted=True)
-    BZ_spl = interpolate.interp1d(th_int, BZ_int, kind='cubic', copy=False,
-                                  fill_value='extrapolate', assume_sorted=True)
-    
-    plt.figure(figsize=canvas)
-    plt.plot(np.rad2deg(th_int), np.imag(BR_int), '-r', lw=thin,
-             label='interpolated')
-    plt.plot(np.rad2deg(th), np.imag(BR), '-k', lw=thin,
-             label='exact')
-    plt.plot(np.rad2deg(th), np.imag(BR_spl(th)) - np.imag(BR), '-b', lw=thin,
-             label='difference')
-    plt.gca().get_xaxis().set_major_locator(ticker.MultipleLocator(45))
-    plt.gca().get_yaxis().set_major_formatter(scifmt)
-    plt.gca().legend(loc='lower right')
-    plt.xlabel(r'$\theta$ / °')
-    plt.ylabel(r'$\mathrm{Im} \, B_{n}^{R}$ / G')
-    plt.title(title)
-    plt.savefig(fname + '_BR.png', dpi=res)
-    plt.close()
-    
-    plt.figure(figsize=canvas)
-    plt.plot(np.rad2deg(th_int), np.imag(BZ_int), '-r', lw=thin,
-             label='interpolated')
-    plt.plot(np.rad2deg(th), np.imag(BZ), '-k', lw=thin,
-             label='exact')
-    plt.plot(np.rad2deg(th), np.imag(BZ_spl(th)) - np.imag(BZ), '-b', lw=thin,
-             label='difference')
-    plt.gca().get_xaxis().set_major_locator(ticker.MultipleLocator(45))
-    plt.gca().get_yaxis().set_major_formatter(scifmt)
-    plt.gca().legend(loc='lower right')
-    plt.xlabel(r'$\theta$ / °')
-    plt.ylabel(r'$\mathrm{Im} \, B_{n}^{Z}$ / G')
-    plt.title(title)
-    plt.savefig(fname + '_BZ.png', dpi=res)
-    plt.close()
-    
-    plt.figure(figsize=canvas)
-    plt.plot(np.rad2deg(th_int), np.real(Bph_int), '-r', lw=thin,
-             label='interpolated')
-    plt.plot(np.rad2deg(th), np.real(Bph_spl(th)) - np.real(Bph), '-b', lw=thin,
-             label='difference')
-    plt.plot(np.rad2deg(th), np.real(Bph), '-k', lw=thin,
-             label='exact')
-    plt.gca().get_xaxis().set_major_locator(ticker.MultipleLocator(45))
-    plt.gca().get_yaxis().set_major_formatter(scifmt)
-    plt.gca().legend(loc='lower right')
-    plt.xlabel(r'$\theta$ / °')
-    plt.ylabel(r'$\mathrm{Re} \, R B_{n}^{\varphi}$ / G')
-    plt.title(title)
-    plt.savefig(fname + '_Bph.png', dpi=res)
-    plt.close()
-    
-    Br = BZ * np.sin(th) + BR * np.cos(th)
-    Bth = BZ * np.cos(th) - BR * np.sin(th)
-    Br_int = BZ_int * np.sin(th_int) + BR_int * np.cos(th_int)
-    Bth_int = BZ_int * np.cos(th_int) - BR_int * np.sin(th_int)
-    
-    return {'Bmn_r': np.mean(Br * np.exp(-1j * m * th)),
-            'Bmn_theta': np.mean(Bth * np.exp(-1j * m * th)),
-            'Bmn_z': np.mean(Bph * np.exp(-1j * m * th)),
-            'int_Bmn_r': np.mean(Br_int * np.exp(-1j * m * th_int)),
-            'int_Bmn_theta': np.mean(Bth_int * np.exp(-1j * m * th_int)),
-            'int_Bmn_z': np.mean(Bph_int * np.exp(-1j * m * th_int))}
 
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(np.rad2deg(th), np.real(BR), '-r', label='interpolated')
+    ax.plot(np.rad2deg(th), np.real(BR), '--k', label='exact')
+    ax.plot(np.rad2deg(th), np.real(BR_spl(th)) - np.real(BR), '-b', label='difference')
+    ax.get_xaxis().set_major_locator(ticker.MultipleLocator(45))
+    ax.legend()
+    ax.set_xlabel(r'$\vartheta$ / \si{\degree}')
+    ax.set_ylabel(r'$\Real B_{n}^{R}$ / \si{\gauss}')
+    ax.set_title(title)
+    canvas = FigureCanvas(fig)
+    fig.savefig(fname + '_Bn_R_Re.pdf')
 
-coeff_RT0_GL2 = compare('cmp_RT0.dat', '.', 'cmp_RT0_GL2_cut',
-        'RT0 elements, GL quadrature order 2, w/o averaging', 9, False)
-coeff_RT0_GL2_avg = compare('cmp_RT0.dat', '.', 'cmp_RT0_GL2_cut_avg',
-        'RT0 elements, GL quadrature order 2, w/ averaging', 9, True)
-print("Bmn_r = {:.15e}".format(coeff_RT0_GL2['Bmn_r']))
-print("Bmn_r_RT0_GL2 = {:.15e}".format(coeff_RT0_GL2['int_Bmn_r']))
-print("Bmn_r_RT0_GL2_avg = {:.15e}".format(coeff_RT0_GL2_avg['int_Bmn_r']))
-print("Bmn_z = {:.15e}".format(coeff_RT0_GL2['Bmn_z']))
-print("Bmn_z_RT0_GL2 = {:.15e}".format(coeff_RT0_GL2['int_Bmn_z']))
-print("Bmn_z_RT0_GL2_avg = {:.15e}".format(coeff_RT0_GL2_avg['int_Bmn_z']))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(np.rad2deg(th), np.imag(BR), '-r', label='interpolated')
+    ax.plot(np.rad2deg(th), np.imag(BR), '--k', label='exact')
+    ax.plot(np.rad2deg(th), np.imag(BR_spl(th)) - np.imag(BR), '-b', label='difference')
+    ax.get_xaxis().set_major_locator(ticker.MultipleLocator(45))
+    ax.legend()
+    ax.set_xlabel(r'$\vartheta$ / \si{\degree}')
+    ax.set_ylabel(r'$\Imag B_{n}^{R}$ / \si{\gauss}')
+    ax.set_title(title)
+    canvas = FigureCanvas(fig)
+    fig.savefig(fname + '_Bn_R_Im.pdf')
 
-coeff_BDM1 = compare('cmp_RT0_ff.dat', '.', 'cmp_BDM1_cut',
-        'BDM1 elements, w/o averaging', 9, False)
-coeff_BDM1_avg = compare('cmp_RT0_ff.dat', '.', 'cmp_BDM1_cut_avg',
-        'BDM1 elements, w/ averaging', 9, True)
-print("Bmn_r = {:.15e}".format(coeff_BDM1['Bmn_r']))
-print("Bmn_r_BDM1 = {:.15e}".format(coeff_BDM1['int_Bmn_r']))
-print("Bmn_r_BDM1_avg = {:.15e}".format(coeff_BDM1_avg['int_Bmn_r']))
-print("Bmn_z = {:.15e}".format(coeff_BDM1['Bmn_z']))
-print("Bmn_z_BDM1 = {:.15e}".format(coeff_BDM1['int_Bmn_z']))
-print("Bmn_z_BDM1_avg = {:.15e}".format(coeff_BDM1_avg['int_Bmn_z']))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(np.rad2deg(th), np.real(BZ), '-r', label='interpolated')
+    ax.plot(np.rad2deg(th), np.real(BZ), '--k', label='exact')
+    ax.plot(np.rad2deg(th), np.real(BZ_spl(th)) - np.real(BZ), '-b', label='difference')
+    ax.get_xaxis().set_major_locator(ticker.MultipleLocator(45))
+    ax.legend()
+    ax.set_xlabel(r'$\vartheta$ / \si{\degree}')
+    ax.set_ylabel(r'$\Real B_{n}^{Z}$ / \si{\gauss}')
+    ax.set_title(title)
+    canvas = FigureCanvas(fig)
+    fig.savefig(fname + '_Bn_Z_Re.pdf')
 
-coeff_optpolres = compare('cmp_polres.dat', '.', 'cmp_optpolres_cut',
-        'BDM1 elements, optimized poloidal resolution', 9, False)
-print("Bmn_r = {:.15e}".format(coeff_optpolres['Bmn_r']))
-print("Bmn_r_optpolres = {:.15e}".format(coeff_optpolres['int_Bmn_r']))
-print("Bmn_z = {:.15e}".format(coeff_optpolres['Bmn_z']))
-print("Bmn_z_optpolres = {:.15e}".format(coeff_optpolres['int_Bmn_z']))
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(np.rad2deg(th), np.imag(BZ), '-r', label='interpolated')
+    ax.plot(np.rad2deg(th), np.imag(BZ), '--k', label='exact')
+    ax.plot(np.rad2deg(th), np.imag(BZ_spl(th)) - np.imag(BZ), '-b', label='difference')
+    ax.get_xaxis().set_major_locator(ticker.MultipleLocator(45))
+    ax.legend()
+    ax.set_xlabel(r'$\vartheta$ / \si{\degree}')
+    ax.set_ylabel(r'$\Imag B_{n}^{Z}$ / \si{\gauss}')
+    ax.set_title(title)
+    canvas = FigureCanvas(fig)
+    fig.savefig(fname + '_Bn_Z_Im.pdf')
+
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(np.rad2deg(th), np.real(Bph_int), '-r', label='interpolated')
+    ax.plot(np.rad2deg(th), np.real(Bph_spl(th)) - np.real(Bph), '-b', label='difference')
+    ax.plot(np.rad2deg(th), np.real(Bph), '--k', label='exact')
+    ax.get_xaxis().set_major_locator(ticker.MultipleLocator(45))
+    ax.legend()
+    ax.set_xlabel(r'$\vartheta$ / \si{\degree}')
+    ax.set_ylabel(r'$\Real R B_{n}^{\varphi}$ / \si{\gauss}')
+    ax.set_title(title)
+    canvas = FigureCanvas(fig)
+    fig.savefig(fname + '_Bn_phi_Re.pdf')
+
+    fig = Figure()
+    ax = fig.subplots()
+    ax.plot(np.rad2deg(th), np.imag(Bph_int), '-r', label='interpolated')
+    ax.plot(np.rad2deg(th), np.imag(Bph_spl(th)) - np.imag(Bph), '-b', label='difference')
+    ax.plot(np.rad2deg(th), np.imag(Bph), '--k', label='exact')
+    ax.get_xaxis().set_major_locator(ticker.MultipleLocator(45))
+    ax.legend()
+    ax.set_xlabel(r'$\vartheta$ / \si{\degree}')
+    ax.set_ylabel(r'$\Imag R B_{n}^{\varphi}$ / \si{\gauss}')
+    ax.set_title(title)
+    canvas = FigureCanvas(fig)
+    fig.savefig(fname + '_Bn_phi_Im.pdf')
+
+workdir = '/home/patrick/git/NEO-EQ/run/33353_2325'
+compare(path.join(workdir, 'magdif_fix.h5'), workdir, 'res_fix', 'with fixed poloidal resolution', 6)
+compare(path.join(workdir, 'magdif.h5'), workdir, 'res_opt', 'with optimized poloidal resolution', 6)

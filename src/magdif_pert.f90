@@ -11,10 +11,7 @@ module magdif_pert
        RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
        vec_polmodes_read, vec_polmodes_write, AUG_coils_read, AUG_coils_write_Nemov, &
        AUG_coils_read_Nemov, AUG_coils_write_GPEC, AUG_coils_read_GPEC, AUG_coils_write_Fourier, &
-       read_currents_Nemov, Biot_Savart_sum_coils, write_Bvac_Nemov, generate_vacfield, compute_Bnvac, &
-       compute_Bn_nonres, avg_flux_on_quad, &
-       compute_kilca_vacuum, kilca_vacuum, compute_kilca_vac_coeff, kilca_vacuum_fourier, &
-       check_kilca_vacuum, check_RT0, debug_fouriermodes, debug_Bnvac_rectplot, debug_Bmnvac
+       read_currents_Nemov, Biot_Savart_sum_coils, write_Bvac_Nemov, generate_vacfield
 
   type, public :: L1_t
      !> Number of points on which the L1 are defined
@@ -1299,8 +1296,8 @@ contains
     if (conf%kilca_scale_factor /= 0) then
        call compute_kilca_vac_coeff
        call compute_kilca_vacuum(Bn)
-       call check_kilca_vacuum
-       call check_RT0(Bn)
+       call debug_Bmnvac_kilca
+       call debug_RT0(Bn)
     else
        if (conf%nonres) then
           call compute_Bn_nonres(Bn)
@@ -1309,6 +1306,7 @@ contains
           call debug_Bnvac_rectplot
           call debug_B0_rectplot
           call debug_Bmnvac
+          call debug_RT0(Bn)
           call debug_fouriermodes
           ! deallocate arrays allocated in vector_potential_single_mode
           if (allocated(Rpoi)) deallocate(Rpoi)
@@ -1395,7 +1393,7 @@ contains
     use magdif_conf, only: conf, datafile
     use magdif_util, only: imun
     use magdif_mesh, only: equil, mesh, sample_polmodes
-    character(len=*), parameter :: dataset = 'Bmnvac'
+    character(len = *), parameter :: dataset = 'Bmnvac'
     integer, parameter :: m_max = 24
     integer :: kf, kt, ktri, m
     integer(HID_T) :: h5id_root
@@ -1618,54 +1616,82 @@ contains
     B_tor = imun * I_m(0) * vac_coeff
   end subroutine kilca_vacuum_fourier
 
-  subroutine check_kilca_vacuum
-    use magdif_conf, only: conf, conf_arr, longlines
+  subroutine debug_Bmnvac_kilca
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use magdif_conf, only: conf, conf_arr, datafile
     use magdif_mesh, only: fs_half, mesh
-    complex(dp) :: B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
-    real(dp) :: rad
-    integer :: kf, fid, abs_pol_mode
+    character(len = *), parameter :: dataset = 'Bmnvac'
+    integer(HID_T) :: h5id_root
+    complex(dp), dimension(mesh%nflux) :: B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
+    integer :: kf, abs_pol_mode
 
     abs_pol_mode = abs(conf%kilca_pol_mode)
-    open(newunit = fid, file = 'cmp_vac.dat', recl = 3 * longlines)
     do kf = 1, mesh%nflux
-       rad = fs_half%rad(kf)
-       call kilca_vacuum_fourier(mesh%n, -abs_pol_mode, mesh%R_O, rad, &
-            conf_arr%kilca_vac_coeff(abs_pol_mode), B_rad_neg, B_pol_neg, B_tor_neg)
-       call kilca_vacuum_fourier(mesh%n, abs_pol_mode, mesh%R_O, rad, &
-            conf_arr%kilca_vac_coeff(abs_pol_mode), B_rad_pos, B_pol_pos, B_tor_pos)
-       write (fid, '(13(1x, es24.16e3))') rad, &
-           B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
+       call kilca_vacuum_fourier(mesh%n, -abs_pol_mode, mesh%R_O, fs_half%rad(kf), &
+            conf_arr%kilca_vac_coeff(abs_pol_mode), B_rad_neg(kf), B_pol_neg(kf), B_tor_neg(kf))
+       call kilca_vacuum_fourier(mesh%n, abs_pol_mode, mesh%R_O, fs_half%rad(kf), &
+            conf_arr%kilca_vac_coeff(abs_pol_mode), B_rad_pos(kf), B_pol_pos(kf), B_tor_pos(kf))
     end do
-    close(fid)
-  end subroutine check_kilca_vacuum
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, dataset // '/')
+    call h5_add(h5id_root, dataset // '/comp_rad_neg', B_rad_neg, lbound(B_rad_neg), ubound(B_rad_neg), &
+         comment = 'radial component of negative poloidal mode of KiLCA vacuum at half-grid steps', unit = 'G')
+    call h5_add(h5id_root, dataset // '/comp_pol_neg', B_pol_neg, lbound(B_pol_neg), ubound(B_pol_neg), &
+         comment = 'poloidal component of negative poloidal mode of KiLCA vacuum at half-grid steps', unit = 'G')
+    call h5_add(h5id_root, dataset // '/comp_tor_neg', B_tor_neg, lbound(B_tor_neg), ubound(B_tor_neg), &
+         comment = 'toroidal component of negative poloidal mode of KiLCA vacuum at half-grid steps', unit = 'G')
+    call h5_add(h5id_root, dataset // '/comp_rad_pos', B_rad_pos, lbound(B_rad_pos), ubound(B_rad_pos), &
+         comment = 'radial component of posative poloidal mode of KiLCA vacuum at half-grid steps', unit = 'G')
+    call h5_add(h5id_root, dataset // '/comp_pol_pos', B_pol_pos, lbound(B_pol_pos), ubound(B_pol_pos), &
+         comment = 'poloidal component of posative poloidal mode of KiLCA vacuum at half-grid steps', unit = 'G')
+    call h5_add(h5id_root, dataset // '/comp_tor_pos', B_tor_pos, lbound(B_tor_pos), ubound(B_tor_pos), &
+         comment = 'toroidal component of posative poloidal mode of KiLCA vacuum at half-gridd steps', unit = 'G')
+    call h5_close(h5id_root)
+  end subroutine debug_Bmnvac_kilca
 
-  subroutine check_RT0(Bn)
-    use magdif_conf, only: conf, longlines
-    use magdif_mesh, only: fs_half, mesh, point_location
-    use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
+  subroutine debug_RT0(Bn)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use magdif_conf, only: conf, datafile
+    use magdif_mesh, only: mesh, fs_half, sample_polmodes
     type(RT0_t), intent(in) :: Bn
-    integer :: fid, kf, kpol, ktri
-    real(dp) :: rad, theta, R, Z
-    complex(dp) :: B_R, B_Z, B_phi, B_R_interp, B_Z_interp, B_phi_interp
-    integer :: pol_modes(2)
+    character(len = *), parameter :: dataset = 'debug_RT0'
+    integer(HID_T) :: h5id_root
+    integer :: kf, kt, ktri, pol_modes(2)
+    complex(dp), dimension(mesh%ntri) :: B_R, B_Z, B_phi, B_R_interp, B_Z_interp, B_phi_interp
 
     pol_modes = [conf%kilca_pol_mode, -conf%kilca_pol_mode]
-    open(newunit = fid, file = 'cmp_RT0.dat', recl = longlines)
-    do kf = mesh%nflux / 3, mesh%nflux / 3 ! 1, nflux
-       rad = fs_half%rad(kf)
-       do kpol = 1, 2 * conf%nkpol
-          theta = (kpol - 0.5d0) / dble(2 * conf%nkpol) * 2d0 * pi
-          call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, rad, theta, B_R, B_phi, B_Z)
-          R = mesh%R_O + rad * cos(theta)
-          Z = mesh%Z_O + rad * sin(theta)
-          ktri = point_location(R, Z)
-          call RT0_interp(ktri, Bn, R, Z, B_R_interp, B_Z_interp, B_phi_interp)
-          write (fid, '(14(1x, es23.15e3))') rad, theta, B_R, B_phi, B_Z, &
-               B_R_interp, B_phi_interp, B_Z_interp
+    do kf = 1, mesh%nflux
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          associate (s => sample_polmodes)
+            if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
+               ! sample_polmodes is evaluated at half-grid steps
+               call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, &
+                    fs_half%rad(kf), s%theta(ktri), B_R(ktri), B_phi(ktri), B_Z(ktri))
+            else
+               call spline_bn(conf%n, s%R(ktri), s%Z(ktri), B_R(ktri), B_phi(ktri), B_Z(ktri))
+            end if
+            call RT0_interp(s%ktri(ktri), Bn, s%R(ktri), s%Z(ktri), &
+                 B_R_interp(ktri), B_Z_interp(ktri), B_phi_interp(ktri))
+          end associate
        end do
     end do
-    close(fid)
-  end subroutine check_RT0
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, dataset // '/')
+    call h5_add(h5id_root, dataset // '/Bn_R', B_R, lbound(B_R), ubound(B_R), &
+         comment = 'R component of magnetic field (vacuum perturbation)', unit = 'G')
+    call h5_add(h5id_root, dataset // '/Bn_phi', B_phi, lbound(B_phi), ubound(B_phi), &
+         comment = 'phi component of magnetic field (vacuum perturbation)', unit = 'G')
+    call h5_add(h5id_root, dataset // '/Bn_Z', B_Z, lbound(B_Z), ubound(B_Z), &
+         comment = 'Z component of magnetic field (vacuum perturbation)', unit = 'G')
+    call h5_add(h5id_root, dataset // '/Bn_R_RT0', B_R_interp, lbound(B_R_interp), ubound(B_R_interp), &
+         comment = 'RT0-interpolated R component of magnetic field (vacuum perturbation)', unit = 'G')
+    call h5_add(h5id_root, dataset // '/Bn_phi_RT0', B_phi_interp, lbound(B_phi_interp), ubound(B_phi_interp), &
+         comment = 'RT0-interpolated phi component of magnetic field (vacuum perturbation)', unit = 'G')
+    call h5_add(h5id_root, dataset // '/Bn_Z_RT0', B_Z_interp, lbound(B_Z_interp), ubound(B_Z_interp), &
+         comment = 'RT0-interpolated Z component of magnetic field (vacuum perturbation)', unit = 'G')
+    call h5_close(h5id_root)
+  end subroutine debug_RT0
 
   subroutine debug_fouriermodes
     use magdif_conf, only: conf, datafile, log

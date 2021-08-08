@@ -953,7 +953,7 @@ contains
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, theta0_at_xpoint
     use points_2d, only: s_min, create_points_2d
 
-    integer :: kf, fid
+    integer :: kf
     real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_norm_ref
     real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
     real(dp) :: psi_axis, rad_max
@@ -1010,18 +1010,6 @@ contains
          kf = 1, mesh%nflux)]
     fs_half%perimeter(:) = [(psi_fine_interpolator%eval(circumf, fs_half%psi(kf)), &
          kf = 1, mesh%nflux)]
-    if (conf%kilca_scale_factor /= 0) then
-       ! dump presumedly optimal values for poloidal resolution
-       open(newunit = fid, file = 'optpolres.dat', status = 'replace')
-       do kf = 1, mesh%nflux - 1
-          write (fid, '(2(1x, es24.16e3))') fs%rad(kf), 2d0 * pi * fs%rad(kf) / &
-               (fs_half%rad(kf + 1) - fs_half%rad(kf))
-       end do
-       write (fid, '(2(1x, es24.16e3))') fs%rad(mesh%nflux), 2d0 * pi * fs%rad(mesh%nflux) / &
-            (fs%rad(mesh%nflux) - fs%rad(mesh%nflux - 1))
-       close(fid)
-    else
-    end if
     allocate(mesh%kp_max(mesh%nflux))
     allocate(mesh%kt_max(mesh%nflux))
     allocate(mesh%kp_low(mesh%nflux))
