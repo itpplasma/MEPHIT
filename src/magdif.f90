@@ -57,7 +57,7 @@ contains
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord, unload_magdata_in_symfluxcoord
     use magdif_util, only: C_F_string, get_field_filenames, init_field, deinit_field
     use magdif_conf, only: conf, magdif_config_read, magdif_config_export_hdf5, conf_arr, magdif_log, log, datafile
-    use magdif_mesh, only: equil, fs, fs_half, mesh, generate_mesh, write_mesh_cache, read_mesh_cache, &
+    use magdif_mesh, only: equil, fs, fs_half, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
          magdif_mesh_deinit, sample_polmodes, coord_cache_deinit, psi_interpolator, psi_fine_interpolator, &
          B0R_edge, B0phi_edge, B0Z_edge, B0R_Omega, B0phi_Omega, B0Z_Omega, B0_flux, j0phi_edge
     use magdif_pert, only: generate_vacfield
@@ -97,7 +97,8 @@ contains
        call init_field(equil)
        ! generate mesh and vacuum field
        call generate_mesh
-       call write_mesh_cache
+       call mesh_write(mesh, datafile, 'mesh')
+       call write_cache
        call generate_vacfield
        ! pass effective toroidal mode number and runmode to FreeFem++
        call FEM_init(mesh%n, mesh%nedge, runmode_flags)
@@ -107,7 +108,8 @@ contains
        call equil%import_hdf5(datafile, 'equil')
        call init_field(equil)
        ! read in preprocessed data
-       call read_mesh_cache
+       call mesh_read(mesh, datafile, 'mesh')
+       call read_cache
        call load_magdata_in_symfluxcoord
        ! reload config parameters here in case they changed since the meshing phase
        call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)

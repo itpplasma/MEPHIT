@@ -14,7 +14,7 @@ module magdif_mesh
        flux_func_cache_init, flux_func_cache_check, flux_func_cache_deinit, generate_mesh, &
        compute_resonance_positions, refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile, &
        create_mesh_points, common_triangles, psi_interpolator, psi_fine_interpolator, &
-       connect_mesh_points, write_mesh_cache, read_mesh_cache, &
+       connect_mesh_points, mesh_write, mesh_read, write_cache, read_cache, &
        magdif_mesh_deinit, init_flux_variables, compute_pres_prof_eps, compute_pres_prof_par, &
        compute_pres_prof_geqdsk, compute_safety_factor_flux, compute_safety_factor_rot, &
        compute_safety_factor_geqdsk, check_safety_factor, cache_equilibrium_field, &
@@ -34,7 +34,7 @@ module magdif_mesh
      !> positive and its magnitude is growing in the radially inward direction.
      real(dp), dimension(:), allocatable, public :: psi
 
-     !> Minor radius \f$ r \f$ in centimeter.
+     !> Minor radius \f$ r \f$ in centimeter
      real(dp), dimension(:), allocatable, public :: rad
 
      real(dp), dimension(:), allocatable, public :: F
@@ -654,13 +654,12 @@ contains
     call check_curr0
   end subroutine generate_mesh
 
-  subroutine write_mesh_cache
+  subroutine write_cache
     use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
     use magdif_conf, only: conf_arr, datafile
     integer(HID_T) :: h5id_root
 
     call conf_arr%export_hdf5(datafile, 'config')
-    call mesh_write(mesh, datafile, 'mesh')
     call flux_func_cache_write(fs, datafile, 'cache/fs', 'on flux surfaces')
     call flux_func_cache_write(fs_half, datafile, 'cache/fs_half', 'between flux surfaces')
     call coord_cache_write(sample_polmodes, datafile, 'cache/sample_polmodes', &
@@ -685,14 +684,13 @@ contains
     call h5_add(h5id_root, 'cache/j0phi_edge', j0phi_edge, lbound(j0phi_edge), ubound(j0phi_edge), &
          comment = 'phi component of equilibrium current density on triangle edge', unit = 'statA cm^-2')
     call h5_close(h5id_root)
-  end subroutine write_mesh_cache
+  end subroutine write_cache
 
-  subroutine read_mesh_cache
+  subroutine read_cache
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
     use magdif_conf, only: datafile
     integer(HID_T) :: h5id_root
 
-    call mesh_read(mesh, datafile, 'mesh')
     call flux_func_cache_init(fs, mesh%nflux, .false.)
     call flux_func_cache_init(fs_half, mesh%nflux, .true.)
     call coord_cache_init(sample_polmodes, mesh%ntri)
@@ -718,7 +716,7 @@ contains
     call h5_get(h5id_root, 'cache/B0Z_centr', B0Z_Omega)
     call h5_get(h5id_root, 'cache/j0phi_edge', j0phi_edge)
     call h5_close(h5id_root)
-  end subroutine read_mesh_cache
+  end subroutine read_cache
 
   subroutine compute_resonance_positions(psi_sample, q_sample, psi2rho_norm)
     use magdif_conf, only: conf, log
@@ -1191,9 +1189,9 @@ contains
                   mat(3, 1) * mat(2, 2) * mat(1, 3) - mat(3, 2) * mat(2, 3) * mat(1, 1) - mat(3, 3) * mat(2, 1) * mat(1, 2)
           else
              ! the last edge is already fixed, so we ignore the Delaunay condition
-             if (kp_lo >= 1 .and. kp_hi <= mesh%kp_max(kf)) then
+             if (kp_lo == 1 .and. kp_hi == mesh%kp_max(kf)) then
                 mesh%orient(ktri) = .true.
-             elseif (kp_lo <= mesh%kp_max(kf - 1) .and. kp_hi >= 1) then
+             elseif (kp_lo == mesh%kp_max(kf - 1) .and. kp_hi == 1) then
                 mesh%orient(ktri) = .false.
              else
                 write (log%msg, '("Cannot close triangle loop correctly: ' // &
