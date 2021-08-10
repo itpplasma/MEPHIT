@@ -34,7 +34,7 @@ module magdif_mesh
      !> positive and its magnitude is growing in the radially inward direction.
      real(dp), dimension(:), allocatable, public :: psi
 
-     !> Minor radius \f$ r \f$ in centimeter
+     !> Minor radius \f$ r \f$ in centimeter, measured outward from magnetic axis.
      real(dp), dimension(:), allocatable, public :: rad
 
      real(dp), dimension(:), allocatable, public :: F
@@ -343,7 +343,7 @@ contains
          comment = 'poloidal flux ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad', &
          cache%rad, lbound(cache%rad), ubound(cache%rad), unit = 'cm', &
-         comment = 'radial position on OX line ' // trim(adjustl(comment)))
+         comment = 'radial position outward from magnetic axis ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/F', &
          cache%F, lbound(cache%F), ubound(cache%F), unit = 'G cm', &
          comment = 'covariant toroidal equilibrium field ' // trim(adjustl(comment)))
@@ -952,7 +952,7 @@ contains
     use points_2d, only: s_min, create_points_2d
 
     integer :: kf
-    real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_norm_ref
+    real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_norm_ref, opt_pol_edge_len
     real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
     real(dp) :: psi_axis, rad_max
 
@@ -1008,11 +1008,21 @@ contains
          kf = 1, mesh%nflux)]
     fs_half%perimeter(:) = [(psi_fine_interpolator%eval(circumf, fs_half%psi(kf)), &
          kf = 1, mesh%nflux)]
+    allocate(opt_pol_edge_len(mesh%nflux + 1))
+    ! cache averaged radius at half-grid steps
+    opt_pol_edge_len(:mesh%nflux) = sqrt(2d0 * fs_half%rad * fs_half%area / fs_half%perimeter)
+    ! extrapolate linearly
+    opt_pol_edge_len(mesh%nflux + 1) = 2d0 * opt_pol_edge_len(mesh%nflux) - opt_pol_edge_len(mesh%nflux - 1)
+    ! compute successive difference
+    opt_pol_edge_len(:mesh%nflux) = opt_pol_edge_len(2:) - opt_pol_edge_len(:mesh%nflux)
+    ! averaged radius corresponds to altitude - factor for edge length of equilateral triangle
+    opt_pol_edge_len(:mesh%nflux) = 2d0 / sqrt(3d0) * opt_pol_edge_len(:mesh%nflux)
     allocate(mesh%kp_max(mesh%nflux))
     allocate(mesh%kt_max(mesh%nflux))
     allocate(mesh%kp_low(mesh%nflux))
     allocate(mesh%kt_low(mesh%nflux))
-    mesh%kp_max(:) = conf%nkpol
+    ! round to even numbers
+    mesh%kp_max(:) = 2 * nint(0.5d0 * fs%perimeter(1:) / opt_pol_edge_len(:mesh%nflux))
     mesh%kp_low(1) = 1
     do kf = 2, mesh%nflux
        mesh%kp_low(kf) = mesh%kp_low(kf-1) + mesh%kp_max(kf-1)
@@ -1026,6 +1036,7 @@ contains
     mesh%ntri = mesh%kt_low(mesh%nflux) + mesh%kt_max(mesh%nflux)
     mesh%npoint = mesh%kp_low(mesh%nflux) + mesh%kp_max(mesh%nflux)
     mesh%nedge = mesh%ntri + mesh%npoint - 1
+    deallocate(opt_pol_edge_len)
 
     allocate(mesh%node_R(mesh%npoint))
     allocate(mesh%node_Z(mesh%npoint))

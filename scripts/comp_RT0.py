@@ -13,7 +13,7 @@ from matplotlib import ticker
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 import numpy as np
-from scipy import interpolate
+
 
 def compare(datafile, outdir, prefix, subtitle, m):
     data = File(datafile, 'r')
@@ -29,9 +29,6 @@ def compare(datafile, outdir, prefix, subtitle, m):
     BR_int = data['/debug_RT0/Bn_R_RT0'][ktri_min:ktri_max]
     Bph_int = data['/debug_RT0/Bn_phi_RT0'][ktri_min:ktri_max]
     BZ_int = data['/debug_RT0/Bn_Z_RT0'][ktri_min:ktri_max]
-    BR_spl = interpolate.interp1d(th, BR_int, kind='linear', copy=False, fill_value='extrapolate', assume_sorted=True)
-    Bph_spl = interpolate.interp1d(th, Bph_int, kind='linear', copy=False, fill_value='extrapolate', assume_sorted=True)
-    BZ_spl = interpolate.interp1d(th, BZ_int, kind='linear', copy=False, fill_value='extrapolate', assume_sorted=True)
     data.close()
 
     title = f"Vacuum perturbation field at fixed $\\hat{{\\psi}} = {psi_n:.3}$,\n{subtitle}"
@@ -39,9 +36,9 @@ def compare(datafile, outdir, prefix, subtitle, m):
 
     fig = Figure()
     ax = fig.subplots()
-    ax.plot(np.rad2deg(th), np.real(BR), '-r', label='interpolated')
+    ax.plot(np.rad2deg(th), np.real(BR_int), '-r', label='interpolated')
     ax.plot(np.rad2deg(th), np.real(BR), '--k', label='exact')
-    ax.plot(np.rad2deg(th), np.real(BR_spl(th)) - np.real(BR), '-b', label='difference')
+    ax.plot(np.rad2deg(th), np.real(BR_int) - np.real(BR), '-b', label='difference')
     ax.get_xaxis().set_major_locator(ticker.MultipleLocator(45))
     ax.legend()
     ax.set_xlabel(r'$\vartheta$ / \si{\degree}')
@@ -52,9 +49,9 @@ def compare(datafile, outdir, prefix, subtitle, m):
 
     fig = Figure()
     ax = fig.subplots()
-    ax.plot(np.rad2deg(th), np.imag(BR), '-r', label='interpolated')
+    ax.plot(np.rad2deg(th), np.imag(BR_int), '-r', label='interpolated')
     ax.plot(np.rad2deg(th), np.imag(BR), '--k', label='exact')
-    ax.plot(np.rad2deg(th), np.imag(BR_spl(th)) - np.imag(BR), '-b', label='difference')
+    ax.plot(np.rad2deg(th), np.imag(BR_int) - np.imag(BR), '-b', label='difference')
     ax.get_xaxis().set_major_locator(ticker.MultipleLocator(45))
     ax.legend()
     ax.set_xlabel(r'$\vartheta$ / \si{\degree}')
@@ -65,9 +62,9 @@ def compare(datafile, outdir, prefix, subtitle, m):
 
     fig = Figure()
     ax = fig.subplots()
-    ax.plot(np.rad2deg(th), np.real(BZ), '-r', label='interpolated')
+    ax.plot(np.rad2deg(th), np.real(BZ_int), '-r', label='interpolated')
     ax.plot(np.rad2deg(th), np.real(BZ), '--k', label='exact')
-    ax.plot(np.rad2deg(th), np.real(BZ_spl(th)) - np.real(BZ), '-b', label='difference')
+    ax.plot(np.rad2deg(th), np.real(BZ_int) - np.real(BZ), '-b', label='difference')
     ax.get_xaxis().set_major_locator(ticker.MultipleLocator(45))
     ax.legend()
     ax.set_xlabel(r'$\vartheta$ / \si{\degree}')
@@ -78,9 +75,9 @@ def compare(datafile, outdir, prefix, subtitle, m):
 
     fig = Figure()
     ax = fig.subplots()
-    ax.plot(np.rad2deg(th), np.imag(BZ), '-r', label='interpolated')
+    ax.plot(np.rad2deg(th), np.imag(BZ_int), '-r', label='interpolated')
     ax.plot(np.rad2deg(th), np.imag(BZ), '--k', label='exact')
-    ax.plot(np.rad2deg(th), np.imag(BZ_spl(th)) - np.imag(BZ), '-b', label='difference')
+    ax.plot(np.rad2deg(th), np.imag(BZ_int) - np.imag(BZ), '-b', label='difference')
     ax.get_xaxis().set_major_locator(ticker.MultipleLocator(45))
     ax.legend()
     ax.set_xlabel(r'$\vartheta$ / \si{\degree}')
@@ -92,7 +89,7 @@ def compare(datafile, outdir, prefix, subtitle, m):
     fig = Figure()
     ax = fig.subplots()
     ax.plot(np.rad2deg(th), np.real(Bph_int), '-r', label='interpolated')
-    ax.plot(np.rad2deg(th), np.real(Bph_spl(th)) - np.real(Bph), '-b', label='difference')
+    ax.plot(np.rad2deg(th), np.real(Bph_int) - np.real(Bph), '-b', label='difference')
     ax.plot(np.rad2deg(th), np.real(Bph), '--k', label='exact')
     ax.get_xaxis().set_major_locator(ticker.MultipleLocator(45))
     ax.legend()
@@ -105,7 +102,7 @@ def compare(datafile, outdir, prefix, subtitle, m):
     fig = Figure()
     ax = fig.subplots()
     ax.plot(np.rad2deg(th), np.imag(Bph_int), '-r', label='interpolated')
-    ax.plot(np.rad2deg(th), np.imag(Bph_spl(th)) - np.imag(Bph), '-b', label='difference')
+    ax.plot(np.rad2deg(th), np.imag(Bph_int) - np.imag(Bph), '-b', label='difference')
     ax.plot(np.rad2deg(th), np.imag(Bph), '--k', label='exact')
     ax.get_xaxis().set_major_locator(ticker.MultipleLocator(45))
     ax.legend()
@@ -114,6 +111,7 @@ def compare(datafile, outdir, prefix, subtitle, m):
     ax.set_title(title)
     canvas = FigureCanvas(fig)
     fig.savefig(fname + '_Bn_phi_Im.pdf')
+
 
 workdir = '/home/patrick/git/NEO-EQ/run/33353_2325'
 compare(path.join(workdir, 'magdif_fix.h5'), workdir, 'res_fix', 'with fixed poloidal resolution', 6)
