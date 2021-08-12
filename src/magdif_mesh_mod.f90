@@ -951,7 +951,7 @@ contains
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, theta0_at_xpoint
     use points_2d, only: s_min, create_points_2d
 
-    integer :: kf
+    integer :: kf, kp
     real(dp), dimension(:), allocatable :: rho_norm_eqd, rho_norm_ref, opt_pol_edge_len
     real(dp), dimension(:, :), allocatable :: points, points_s_theta_phi
     real(dp) :: psi_axis, rad_max
@@ -1060,6 +1060,11 @@ contains
        mesh%node_theta_flux(mesh%kp_low(kf) + 1) = 0d0
        mesh%node_theta_geom(mesh%kp_low(kf) + 1) = 0d0
     end do
+    ! reposition closest point exactly to X point
+    kp = minloc(hypot(mesh%node_R((mesh%kp_low(mesh%nflux) + 1):) - mesh%R_X, &
+         mesh%node_Z((mesh%kp_low(mesh%nflux) + 1):) - mesh%Z_X), 1)
+    mesh%node_R(mesh%kp_low(mesh%nflux) + kp) = mesh%R_X
+    mesh%node_Z(mesh%kp_low(mesh%nflux) + kp) = mesh%Z_X
     mesh%R_min = minval(mesh%node_R)
     mesh%R_max = maxval(mesh%node_R)
     mesh%Z_min = minval(mesh%node_Z)

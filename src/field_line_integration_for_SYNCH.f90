@@ -170,7 +170,7 @@
      phi = 0.d0
      phiout = h * sigma
 !
-     ymet(1) = raxis+hbr*dfloat(nlabel)
+     ymet(1) = r_sep
      ymet(2) = zaxis
      ymet(3) = 0.d0
      ymet(4) = 0.d0
