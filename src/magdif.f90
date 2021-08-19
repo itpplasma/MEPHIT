@@ -56,7 +56,7 @@ contains
     use iso_c_binding, only: c_int, c_ptr
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord, unload_magdata_in_symfluxcoord
     use magdif_util, only: C_F_string, get_field_filenames, init_field, deinit_field
-    use magdif_conf, only: conf, magdif_config_read, magdif_config_export_hdf5, conf_arr, magdif_log, log, datafile
+    use magdif_conf, only: conf, magdif_config_read, magdif_config_export_hdf5, conf_arr, logger, datafile
     use magdif_mesh, only: equil, fs, fs_half, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
          magdif_mesh_deinit, sample_polmodes, coord_cache_deinit, psi_interpolator, psi_fine_interpolator, &
          B0R_edge, B0phi_edge, B0Z_edge, B0R_Omega, B0phi_Omega, B0Z_Omega, B0_flux, j0phi_edge
@@ -80,7 +80,7 @@ contains
     end if
     call C_F_string(config, config_filename)
     call magdif_config_read(conf, config_filename)
-    log = magdif_log('-', conf%log_level, conf%quiet)
+    call logger%init('-', conf%log_level, conf%quiet)
     call h5_init
     h5overwrite = .true.
     call magdif_config_export_hdf5(conf, datafile, 'config')
@@ -152,13 +152,13 @@ contains
     call deinit_field
     call equil%deinit
     call conf_arr%deinit
-    call log%deinit
+    call logger%deinit
     call h5_deinit
   end subroutine magdif_run
 
   !> Initialize magdif module
   subroutine magdif_init
-    use magdif_conf, only: log, datafile
+    use magdif_conf, only: logger, datafile
     use magdif_mesh, only: mesh
     use magdif_pert, only: RT0_init, RT0_read, L1_init
 
@@ -170,13 +170,13 @@ contains
     call RT0_init(jn, mesh%nedge, mesh%ntri)
     call RT0_read(Bnvac, datafile, 'Bnvac')
 
-    log%msg = 'magdif initialized'
-    if (log%info) call log%write
+    logger%msg = 'magdif initialized'
+    if (logger%info) call logger%write_msg
   end subroutine magdif_init
 
   !> Deallocates all previously allocated variables.
   subroutine magdif_cleanup
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     use magdif_pert, only: L1_deinit, RT0_deinit
 
     call L1_deinit(pn)
@@ -184,8 +184,8 @@ contains
     call RT0_deinit(Bnvac)
     call RT0_deinit(Bnplas)
     call RT0_deinit(jn)
-    log%msg = 'magdif cleanup finished'
-    if (log%info) call log%write
+    logger%msg = 'magdif cleanup finished'
+    if (logger%info) call logger%write_msg
   end subroutine magdif_cleanup
 
   subroutine magdif_read
@@ -213,7 +213,7 @@ contains
     use magdif_mesh, only: mesh
     use magdif_pert, only: L1_write, RT0_init, RT0_deinit, RT0_write, RT0_compute_tor_comp, &
          RT0_poloidal_modes, vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write
-    use magdif_conf, only: conf, log, runmode_precon, runmode_single, datafile, cmplx_fmt
+    use magdif_conf, only: conf, logger, runmode_precon, runmode_single, datafile, cmplx_fmt
 
     logical :: preconditioned
     integer :: kiter, niter, ndim, i, j, info
@@ -247,13 +247,13 @@ contains
        call h5_add(h5id_root, 'iter/eigvals', eigvals, lbound(eigvals), ubound(eigvals), &
          comment = 'iteration eigenvalues')
        call h5_close(h5id_root)
-       if (log%info) then
-          write (log%msg, '("Arnoldi method yields ", i0, " Ritz eigenvalues > ", f0.2)') &
+       if (logger%info) then
+          write (logger%msg, '("Arnoldi method yields ", i0, " Ritz eigenvalues > ", f0.2)') &
                ngrow, tol
-          call log%write
+          call logger%write_msg
           do i = 1, ngrow
-             write (log%msg, '("lambda ", i0, ": ", ' // cmplx_fmt // ')') i, eigvals(i)
-             call log%write
+             write (logger%msg, '("lambda ", i0, ": ", ' // cmplx_fmt // ')') i, eigvals(i)
+             call logger%write_msg
           end do
        end if
        if (ngrow > 0) then
@@ -276,12 +276,12 @@ contains
           call zgesv(ngrow, ngrow, Lr, ngrow, ipiv, Yr, ngrow, info)
           deallocate(ipiv)
           if (info == 0) then
-             log%msg = 'Successfully inverted matrix for preconditioner'
-             if (log%info) call log%write
+             logger%msg = 'Successfully inverted matrix for preconditioner'
+             if (logger%info) call logger%write_msg
           else
-             write (log%msg, '("Matrix inversion for preconditioner failed: ' // &
+             write (logger%msg, '("Matrix inversion for preconditioner failed: ' // &
                   'zgesv returns error ", i0)') info
-             if (log%err) call log%write
+             if (logger%err) call logger%write_msg
              error stop
           end if
           do i = 1, ngrow
@@ -311,8 +311,8 @@ contains
        call RT0_compute_tor_comp(Bn)
     end if
     do kiter = 0, niter
-       write (log%msg, '("Iteration ", i2, " of ", i2)') kiter, niter
-       if (log%info) call log%write
+       write (logger%msg, '("Iteration ", i2, " of ", i2)') kiter, niter
+       if (logger%info) call logger%write_msg
        write (postfix, postfix_fmt) kiter
        Bn_prev%DOF(:) = Bn%DOF
        Bn_prev%comp_phi(:) = Bn%comp_phi
@@ -394,7 +394,7 @@ contains
   !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
   subroutine compute_presn
     use sparse_mod, only: sparse_solve, sparse_matmul
-    use magdif_conf, only: conf, log
+    use magdif_conf, only: conf, logger
     use magdif_util, only: imun
     use magdif_mesh, only: fs, mesh, B0R_edge, B0phi_edge, B0Z_edge
     real(dp) :: lr, lz  ! edge vector components
@@ -468,9 +468,9 @@ contains
     end do
 
     avg_rel_err = avg_rel_err / dble(mesh%npoint - 1)
-    write (log%msg, '("compute_presn: diagonalization max_rel_err = ", ' // &
+    write (logger%msg, '("compute_presn: diagonalization max_rel_err = ", ' // &
          'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
-    if (log%debug) call log%write
+    if (logger%debug) call logger%write_msg
     if (allocated(resid)) deallocate(resid)
   end subroutine compute_presn
 
@@ -481,7 +481,7 @@ contains
   !> surface. The result is written to #magdif_conf::currn_file.
   subroutine compute_currn
     use sparse_mod, only: sparse_solve, sparse_matmul
-    use magdif_conf, only: conf, log
+    use magdif_conf, only: conf, logger
     use magdif_mesh, only: fs, mesh, B0phi_edge, B0_flux, j0phi_edge
     use magdif_pert, only: RT0_compute_tor_comp
     use magdif_util, only: imun, clight
@@ -577,9 +577,9 @@ contains
        end do
     end do
     avg_rel_err = avg_rel_err / dble(mesh%ntri)
-    write (log%msg, '("compute_currn: diagonalization max_rel_err = ", ' // &
+    write (logger%msg, '("compute_currn: diagonalization max_rel_err = ", ' // &
          'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
-    if (log%debug) call log%write
+    if (logger%debug) call logger%write_msg
     if (allocated(resid)) deallocate(resid)
 
     call add_sheet_current

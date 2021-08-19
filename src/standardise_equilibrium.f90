@@ -1,5 +1,5 @@
 program standardise_equilibrium
-  use magdif_conf, only: log, magdif_log
+  use magdif_conf, only: logger
   use magdif_util, only: g_eqdsk
 
   implicit none
@@ -18,11 +18,11 @@ program standardise_equilibrium
      error stop 'expected path to unprocessed G EQDSK file as first parameter'
   end if
 
-  log = magdif_log('-', 4, .false.) ! log_level = debug
+  call logger%init('-', 4, .false.) ! log_level = debug
   call equil%read(trim(unprocessed_geqdsk), '')
   call equil%classify
   call equil%standardise
   call equil%write(trim(standardised_geqdsk))
   call equil%deinit
-  call log%deinit
+  call logger%deinit
 end program standardise_equilibrium

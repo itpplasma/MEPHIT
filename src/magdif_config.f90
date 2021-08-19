@@ -6,7 +6,7 @@ module magdif_conf
   private
 
   public :: magdif_config, magdif_config_read, magdif_config_export_hdf5, magdif_config_delayed, &
-       magdif_log, conf, conf_arr, log, runmode_single, runmode_direct, runmode_precon, pres_prof_eps, &
+       logger_t, conf, conf_arr, logger, runmode_single, runmode_direct, runmode_precon, pres_prof_eps, &
        pres_prof_par, pres_prof_geqdsk, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
        q_prof_flux, q_prof_rot, q_prof_geqdsk, vac_src_nemov, vac_src_gpec, vac_src_fourier, &
        decorate_filename, longlines, cmplx_fmt, nl_fmt, datafile
@@ -173,7 +173,7 @@ module magdif_conf
      procedure :: deinit => magdif_config_delayed_destructor
   end type magdif_config_delayed
 
-  type :: magdif_log
+  type :: logger_t
      private
      character(len = 1024), public :: msg = ''
      character(len = 1024), public :: filename = ''
@@ -181,18 +181,15 @@ module magdif_conf
      integer, public :: level
      logical, public :: err, warn, info, debug, quiet
    contains
-     procedure :: write => magdif_log_write
-     procedure :: msg_arg_size => magdif_log_msg_arg_size
-     procedure :: deinit => magdif_log_deinit
-  end type magdif_log
-
-  interface magdif_log
-     module procedure magdif_log_open
-  end interface magdif_log
+     procedure :: init => logger_init
+     procedure :: write_msg => logger_write_msg
+     procedure :: msg_arg_size => logger_msg_arg_size
+     procedure :: deinit => logger_deinit
+  end type logger_t
 
   type(magdif_config) :: conf
   type(magdif_config_delayed) :: conf_arr
-  type(magdif_log) :: log
+  type(logger_t) :: logger
 
 contains
 
@@ -389,38 +386,38 @@ contains
   end subroutine magdif_config_delayed_destructor
 
   !> Associate logfile and open if necessary.
-  function magdif_log_open(filename, log_level, quiet) result(log)
+  subroutine logger_init(this, filename, log_level, quiet)
     use iso_fortran_env, only: output_unit
+    class(logger_t), intent(inout) :: this
     character(len = *), intent(in) :: filename
     integer, intent(in) :: log_level
     logical, intent(in) :: quiet
-    type(magdif_log) :: log
 
-    log%filename = filename
-    log%quiet = quiet
-    log%level = log_level
-    log%err = .false.
-    log%warn = .false.
-    log%info = .false.
-    log%debug = .false.
-    if (log%level > 0) log%err = .true.
-    if (log%level > 1) log%warn = .true.
-    if (log%level > 2) log%info = .true.
-    if (log%level > 3) log%debug = .true.
-    if (trim(log%filename) == '-') then
-       log%fid = output_unit
+    this%filename = filename
+    this%quiet = quiet
+    this%level = log_level
+    this%err = .false.
+    this%warn = .false.
+    this%info = .false.
+    this%debug = .false.
+    if (this%level > 0) this%err = .true.
+    if (this%level > 1) this%warn = .true.
+    if (this%level > 2) this%info = .true.
+    if (this%level > 3) this%debug = .true.
+    if (trim(this%filename) == '-') then
+       this%fid = output_unit
     else
-       open(newunit = log%fid, file = log%filename, status = 'replace', form = 'formatted', action = 'write')
+       open(newunit = this%fid, file = this%filename, status = 'replace', form = 'formatted', action = 'write')
     end if
-  end function magdif_log_open
+  end subroutine logger_init
 
   !> Close logfile if necessary.
-  subroutine magdif_log_deinit(log)
+  subroutine logger_deinit(this)
     use iso_fortran_env, only: output_unit
-    class(magdif_log), intent(inout) :: log
+    class(logger_t), intent(inout) :: this
 
-    if (log%fid /= output_unit) close(log%fid)
-  end subroutine magdif_log_deinit
+    if (this%fid /= output_unit) close(this%fid)
+  end subroutine logger_deinit
 
   !> Generate timestamp
   function timestamp()
@@ -434,23 +431,23 @@ contains
   end function timestamp
 
   !> Write to logfile and flush if necessary.
-  subroutine magdif_log_write(log)
+  subroutine logger_write_msg(this)
     use iso_fortran_env, only: output_unit
-    class(magdif_log), intent(inout) :: log
-    character(len = 28 + len_trim(log%msg)) :: full_msg
-    write (full_msg, '("[", a25, "] ", a)') timestamp(), trim(log%msg)
-    write (log%fid, '(a)') full_msg
-    if (log%fid /= output_unit .and. .not. log%quiet) write (output_unit, '(a)') full_msg
-    flush(log%fid)
-  end subroutine magdif_log_write
+    class(logger_t), intent(inout) :: this
+    character(len = 28 + len_trim(logger%msg)) :: full_msg
+    write (full_msg, '("[", a25, "] ", a)') timestamp(), trim(this%msg)
+    write (this%fid, '(a)') full_msg
+    if (this%fid /= output_unit .and. .not. this%quiet) write (output_unit, '(a)') full_msg
+    flush(this%fid)
+  end subroutine logger_write_msg
 
-  subroutine magdif_log_msg_arg_size(log, funcname, name1, name2, value1, value2)
-    class(magdif_log), intent(inout) :: log
+  subroutine logger_msg_arg_size(this, funcname, name1, name2, value1, value2)
+    class(logger_t), intent(inout) :: this
     character(len = *), intent(in) :: funcname, name1, name2
     integer, intent(in) :: value1, value2
-    write (log%msg, '("Argument size mismatch in ", a, ": ", a, " = ", i0, ' // &
+    write (this%msg, '("Argument size mismatch in ", a, ": ", a, " = ", i0, ' // &
          '", ", a, " = ", i0)') funcname, name1, value1, name2, value2
-  end subroutine magdif_log_msg_arg_size
+  end subroutine logger_msg_arg_size
 
   !> Generates a new filename from a given template.
   !>

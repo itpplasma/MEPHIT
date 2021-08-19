@@ -2,7 +2,7 @@ program vacfield
 
   use iso_fortran_env, only: dp => real64
   use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
-  use magdif_conf, only: log, magdif_log
+  use magdif_conf, only: logger
   use magdif_pert, only: AUG_coils_read, AUG_coils_write_Nemov, AUG_coils_read_Nemov, &
        AUG_coils_write_GPEC, AUG_coils_read_GPEC, AUG_coils_write_Fourier, read_currents_Nemov, &
        Biot_Savart_sum_coils, write_Bvac_Nemov
@@ -25,7 +25,7 @@ program vacfield
   else
      error stop 'Expected 4 command line arguments, see documentation'
   endif
-  log = magdif_log('-', 4, .false.)
+  call logger%init('-', 4, .false.)
 
   if (in_type == 'AUG') then
      call AUG_coils_read(trim(in_dir), ncoil, nseg, nwind, XYZ)
@@ -34,8 +34,8 @@ program vacfield
   else if (in_type == 'Nemov') then
      call AUG_coils_read_Nemov(trim(in_dir), ncoil, nseg, nwind, XYZ)
   else
-     write (log%msg, '("unknown input type ", a)') trim(in_type)
-     if (log%err) call log%write
+     write (logger%msg, '("unknown input type ", a)') trim(in_type)
+     if (logger%err) call logger%write_msg
      error stop
   end if
   if (out_type == 'Fourier') then
@@ -56,11 +56,11 @@ program vacfield
      if (allocated(Ic)) deallocate(Ic)
      if (allocated(Bvac)) deallocate(Bvac)
   else
-     write (log%msg, '("unknown output type ", a)') trim(out_type)
-     if (log%err) call log%write
+     write (logger%msg, '("unknown output type ", a)') trim(out_type)
+     if (logger%err) call logger%write_msg
      error stop
   end if
-  call log%deinit
+  call logger%deinit
   if (allocated(XYZ)) deallocate(XYZ)
 
 end program vacfield

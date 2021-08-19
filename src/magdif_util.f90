@@ -237,7 +237,7 @@ contains
   end subroutine binsearch
 
   subroutine gauss_legendre_unit_interval(order, points, weights)
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     use fgsl, only: fgsl_size_t, fgsl_double, fgsl_int, fgsl_success, &
          fgsl_integration_glfixed_point, fgsl_integration_glfixed_table, &
          fgsl_integration_glfixed_table_alloc, fgsl_integration_glfixed_table_free
@@ -247,23 +247,23 @@ contains
     integer(fgsl_size_t) :: k
     integer(fgsl_int) :: err
     if (order /= size(points)) then
-       call log%msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(points)', &
+       call logger%msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(points)', &
             order, size(points))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (order /= size(weights)) then
-       call log%msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(weights)', &
+       call logger%msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(weights)', &
             order, size(weights))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     table = fgsl_integration_glfixed_table_alloc(int(order, fgsl_size_t))
     do k = 1, int(order, fgsl_size_t)
        err = fgsl_integration_glfixed_point(0d0, 1d0, k-1, points(k), weights(k), table)
        if (err /= fgsl_success) then
-          write (log%msg, '("fgsl_integration_glfixed_point returned error ", i0)') err
-          if (log%err) call log%write
+          write (logger%msg, '("fgsl_integration_glfixed_point returned error ", i0)') err
+          if (logger%err) call logger%write_msg
           error stop
        end if
     end do
@@ -391,7 +391,7 @@ contains
 
   subroutine g_eqdsk_check_consistency(this)
     use constants, only: pi  ! src/orbit_mod.f90
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
     integer, parameter :: ignore = 3
     type(interp1d) :: psi_interpolator
@@ -400,12 +400,12 @@ contains
     integer :: k
 
     if (this%cocos%sgn_Btor /= this%cocos%sgn_F) then
-       write (log%msg, incons_fmt) 'FPOL', 'BCENTR'
-       if (log%warn) call log%write
+       write (logger%msg, incons_fmt) 'FPOL', 'BCENTR'
+       if (logger%warn) call logger%write_msg
        ! only modify array if signs are consistent
        if (this%cocos%sgn_F /= 0) then
-          write (log%msg, invert_fmt) 'FPOL'
-          if (log%info) call log%write
+          write (logger%msg, invert_fmt) 'FPOL'
+          if (logger%info) call logger%write_msg
           this%fpol = -this%fpol
           this%cocos%sgn_F = -this%cocos%sgn_F
        end if
@@ -419,34 +419,34 @@ contains
     mask(this%nw-ignore:this%nw) = .false.
     factor = sum(deriv_eqd / this%pprime, mask = mask) / dble(count(mask))
     if (abs(factor) >= sqrt(2d0 * pi)) then
-       write (log%msg, unscaled_fmt) 'PPRIME'
-       if (log%warn) call log%write
-       write (log%msg, rescale_fmt) 'PPRIME'
-       if (log%info) call log%write
+       write (logger%msg, unscaled_fmt) 'PPRIME'
+       if (logger%warn) call logger%write_msg
+       write (logger%msg, rescale_fmt) 'PPRIME'
+       if (logger%info) call logger%write_msg
        this%pprime = this%pprime * (2d0 * pi)
     end if
     if (factor < 0d0) then
-       write (log%msg, incons_fmt) 'PPRIME', 'PRES/SIBRY-SIMAG'
-       if (log%warn) call log%write
-       write (log%msg, invert_fmt) 'PPRIME'
-       if (log%info) call log%write
+       write (logger%msg, incons_fmt) 'PPRIME', 'PRES/SIBRY-SIMAG'
+       if (logger%warn) call logger%write_msg
+       write (logger%msg, invert_fmt) 'PPRIME'
+       if (logger%info) call logger%write_msg
        this%pprime = -this%pprime
     end if
     deriv_eqd(:) = [(psi_interpolator%eval(this%fpol, this%psi_eqd(k), .true.), &
          k = 1, this%nw)] * this%fpol
     factor = sum(deriv_eqd / this%ffprim, mask = mask) / dble(count(mask))
     if (abs(factor) >= sqrt(2d0 * pi)) then
-       write (log%msg, unscaled_fmt) 'FFPRIM'
-       if (log%warn) call log%write
-       write (log%msg, rescale_fmt) 'FFPRIM'
-       if (log%info) call log%write
+       write (logger%msg, unscaled_fmt) 'FFPRIM'
+       if (logger%warn) call logger%write_msg
+       write (logger%msg, rescale_fmt) 'FFPRIM'
+       if (logger%info) call logger%write_msg
        this%ffprim = this%ffprim * (2d0 * pi)
     end if
     if (factor < 0d0) then
-       write (log%msg, incons_fmt) 'FFPRIM', 'FPOL/SIBRY-SIMAG'
-       if (log%warn) call log%write
-       write (log%msg, invert_fmt) 'FFPRIM'
-       if (log%info) call log%write
+       write (logger%msg, incons_fmt) 'FFPRIM', 'FPOL/SIBRY-SIMAG'
+       if (logger%warn) call logger%write_msg
+       write (logger%msg, invert_fmt) 'FFPRIM'
+       if (logger%info) call logger%write_msg
        this%ffprim = -this%ffprim
     end if
   end subroutine g_eqdsk_check_consistency
@@ -454,7 +454,7 @@ contains
   !> Estimates terms of Grad-Shafranov equation to determine sign_convention::exp_bpol.
   function g_eqdsk_grad_shafranov_normalization(this) result(gs_factor)
     use constants, only: pi  ! src/orbit_mod.f90
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
     real(dp) :: gs_factor
     type(interp1d) :: psi_interpolator
@@ -478,12 +478,12 @@ contains
          + (this%psirz(kw + 1, kh) - 2d0 * psi + this%psirz(kw - 1, kh)) / Delta_R ** 2 &
          - (this%psirz(kw + 1, kh) - this%psirz(kw - 1, kh)) / (2d0 * Delta_R * this%R_eqd(kw))
     gs_factor = gs_lhs / gs_rhs
-    write (log%msg, '("Grad-Shafranov equation LHS / RHS: ", f19.16)') gs_factor
-    if (log%info) call log%write
+    write (logger%msg, '("Grad-Shafranov equation LHS / RHS: ", f19.16)') gs_factor
+    if (logger%info) call logger%write_msg
   end function g_eqdsk_grad_shafranov_normalization
 
   function sign_array(array, name, most)
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     real(dp), intent(in), dimension(:) :: array
     character(len = *), intent(in) :: name
     logical, intent(in), optional :: most
@@ -503,14 +503,14 @@ contains
        sign_array = -1
     else
        sign_array = 0
-       write (log%msg, '("Sign of ", a, " is inconsistent.")') trim(name)
-       if (log%warn) call log%write
+       write (logger%msg, '("Sign of ", a, " is inconsistent.")') trim(name)
+       if (logger%warn) call logger%write_msg
     end if
   end function sign_array
 
   subroutine g_eqdsk_classify(this)
     use constants, only: pi  ! src/orbit_mod.f90
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
 
     this%cocos = sign_convention(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -538,8 +538,8 @@ contains
        end if
     end if
     if (this%cocos%index == 0) then
-       log%msg = 'COCOS index could not be determined for ' // trim(this%fname)
-       if (log%warn) call log%write
+       logger%msg = 'COCOS index could not be determined for ' // trim(this%fname)
+       if (logger%warn) call logger%write_msg
     end if
     call this%check_consistency
     if (abs(this%grad_shafranov_normalization()) >= 2d0 * pi) then
@@ -553,12 +553,12 @@ contains
 
   subroutine g_eqdsk_standardise(this)
     use constants, only: pi  ! src/orbit_mod.f90
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
 
     if (this%cocos%sgn_Bpol == +1) then
-       write (log%msg, invert_fmt) 'SIMAG, SIBRY, PSIRZ, PPRIME, FFPRIM'
-       if (log%info) call log%write
+       write (logger%msg, invert_fmt) 'SIMAG, SIBRY, PSIRZ, PPRIME, FFPRIM'
+       if (logger%info) call logger%write_msg
        this%simag = -this%simag
        this%sibry = -this%sibry
        this%psirz(:, :) = -this%psirz
@@ -569,17 +569,17 @@ contains
        this%cocos%sgn_Bpol = -this%cocos%sgn_Bpol
     end if
     if (this%cocos%sgn_pol == +1) then
-       write (log%msg, invert_fmt) 'QPSI'
-       if (log%info) call log%write
+       write (logger%msg, invert_fmt) 'QPSI'
+       if (logger%info) call logger%write_msg
        this%qpsi(:) = -this%qpsi
        this%cocos%sgn_q = -this%cocos%sgn_q
        this%cocos%sgn_pol = -this%cocos%sgn_pol
     end if
     if (this%cocos%exp_Bpol == 1) then
-       write (log%msg, unscaled_fmt) 'SIMAG, SIBRY, PSIRZ, PPRIME, FFPRIM'
-       if (log%warn) call log%write
-       write (log%msg, rescale_fmt) 'SIMAG, SIBRY, PSIRZ, PPRIME, FFPRIM'
-       if (log%info) call log%write
+       write (logger%msg, unscaled_fmt) 'SIMAG, SIBRY, PSIRZ, PPRIME, FFPRIM'
+       if (logger%warn) call logger%write_msg
+       write (logger%msg, rescale_fmt) 'SIMAG, SIBRY, PSIRZ, PPRIME, FFPRIM'
+       if (logger%info) call logger%write_msg
        this%simag = this%simag / (2d0 * pi)
        this%sibry = this%sibry / (2d0 * pi)
        this%psirz(:, :) = this%psirz / (2d0 * pi)
@@ -793,15 +793,15 @@ contains
   end subroutine g_eqdsk_deinit
 
   subroutine interp1d_init(this, n_lag, indep_var)
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     class(interp1d), intent(inout) :: this
     integer, intent(in) :: n_lag
     real(dp), intent(in), dimension(:) :: indep_var
 
     if (n_lag >= size(indep_var)) then
-       write (log%msg, '("Lagrange polynomial order ", i0, ' // &
+       write (logger%msg, '("Lagrange polynomial order ", i0, ' // &
             '" must be lower than number of sample points", i0)') n_lag, size(indep_var)
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        return
     end if
     call interp1d_deinit(this)
@@ -812,7 +812,7 @@ contains
   end subroutine interp1d_init
 
   function interp1d_eval(this, sample, position, deriv) result(interp)
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     class(interp1d) :: this
     real(dp), intent(in) :: sample(:)
     real(dp), intent(in) :: position
@@ -828,9 +828,9 @@ contains
        end if
     end if
     if (this%n_var /= size(sample)) then
-       call log%msg_arg_size('interp1d_eval', 'this%n_var', 'size(sample)', &
+       call logger%msg_arg_size('interp1d_eval', 'this%n_var', 'size(sample)', &
             this%n_var, size(sample))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     call binsearch(this%indep_var, lbound(this%indep_var, 1), position, k)

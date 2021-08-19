@@ -719,7 +719,7 @@ contains
   end subroutine read_cache
 
   subroutine compute_resonance_positions(psi_sample, q_sample, psi2rho_norm)
-    use magdif_conf, only: conf, log
+    use magdif_conf, only: conf, logger
     use magdif_util, only: interp1d
     use netlib_mod, only: zeroin
     real(dp), dimension(:), intent(in) :: psi_sample
@@ -736,9 +736,9 @@ contains
     type(interp1d) :: psi_sample_interpolator
 
     if (size(psi_sample) /= size(q_sample)) then
-       call log%msg_arg_size('refine_resonant_surfaces', 'size(psi_sample)', &
+       call logger%msg_arg_size('refine_resonant_surfaces', 'size(psi_sample)', &
             'size(q_sample)', size(psi_sample), size(q_sample))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     psi_min = minval(psi_sample)
@@ -758,14 +758,14 @@ contains
     if (allocated(mesh%rad_norm_res)) deallocate(mesh%rad_norm_res)
     allocate(mesh%psi_res(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%rad_norm_res(mesh%m_res_min:mesh%m_res_max))
-    log%msg = 'resonance positions:'
-    if (log%debug) call log%write
+    logger%msg = 'resonance positions:'
+    if (logger%debug) call logger%write_msg
     do m = mesh%m_res_min, mesh%m_res_max
        mesh%psi_res(m) = zeroin(psi_min, psi_max, q_interp_resonant, 1d-9)
        mesh%rad_norm_res(m) = psi2rho_norm(mesh%psi_res(m))
-       write (log%msg, '("m = ", i2, ", psi_m = ", es24.16e3, ", rho_m = ", f19.16)') &
+       write (logger%msg, '("m = ", i2, ", psi_m = ", es24.16e3, ", rho_m = ", f19.16)') &
             m, mesh%psi_res(m), mesh%rad_norm_res(m)
-       if (log%debug) call log%write
+       if (logger%debug) call logger%write_msg
     end do
 
   contains
@@ -778,7 +778,7 @@ contains
 
   subroutine refine_eqd_partition(nref, deletions, additions, refinement, res, refined, &
        ref_ind)
-    use magdif_conf, only: conf, log
+    use magdif_conf, only: conf, logger
     use magdif_util, only: linspace
     integer, intent(in) :: nref
     integer, dimension(:), intent(in) :: deletions, additions
@@ -799,32 +799,32 @@ contains
        return
     end if
     if (nref /= size(deletions)) then
-       call log%msg_arg_size('refine_eqd_partition', 'nref', 'size(deletions)', nref, &
+       call logger%msg_arg_size('refine_eqd_partition', 'nref', 'size(deletions)', nref, &
             size(deletions))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (nref /= size(additions)) then
-       call log%msg_arg_size('refine_eqd_partition', 'nref', 'size(additions)', nref, &
+       call logger%msg_arg_size('refine_eqd_partition', 'nref', 'size(additions)', nref, &
             size(additions))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (nref /= size(refinement)) then
-       call log%msg_arg_size('refine_eqd_partition', 'nref', 'size(refinement)', nref, &
+       call logger%msg_arg_size('refine_eqd_partition', 'nref', 'size(refinement)', nref, &
             size(refinement))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (nref /= size(res)) then
-       call log%msg_arg_size('refine_eqd_partition', 'nref', 'size(res)', nref, size(res))
-       if (log%err) call log%write
+       call logger%msg_arg_size('refine_eqd_partition', 'nref', 'size(res)', nref, size(res))
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (nref /= size(ref_ind)) then
-       call log%msg_arg_size('refine_eqd_partition', 'nref', 'size(ref_ind)', nref, &
+       call logger%msg_arg_size('refine_eqd_partition', 'nref', 'size(ref_ind)', nref, &
             size(ref_ind))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     mesh%nflux = conf%nflux_unref + 2 * sum(additions - deletions)
@@ -862,7 +862,7 @@ contains
   end subroutine refine_eqd_partition
 
   subroutine refine_resonant_surfaces(rho_norm_ref)
-    use magdif_conf, only: conf_arr, log
+    use magdif_conf, only: conf_arr, logger
     real(dp), dimension(:), allocatable, intent(out) :: rho_norm_ref
     integer :: m, kref
     integer, dimension(:), allocatable :: ref_ind
@@ -883,27 +883,27 @@ contains
     call refine_eqd_partition(count(mask), pack(mesh%deletions, mask), &
          pack(mesh%additions, mask), pack(mesh%refinement, mask), &
          pack(mesh%rad_norm_res, mask), rho_norm_ref, ref_ind)
-    log%msg = 'refinement positions:'
-    if (log%debug) call log%write
+    logger%msg = 'refinement positions:'
+    if (logger%debug) call logger%write_msg
     kref = 0
     do m = mesh%m_res_min, mesh%m_res_max
        if (.not. mask(m)) cycle
        kref = kref + 1
-       write (log%msg, '("m = ", i0, ", kf = ", i0, ' // &
+       write (logger%msg, '("m = ", i0, ", kf = ", i0, ' // &
             '", rho: ", f19.16, 2(" < ", f19.16))') m, ref_ind(kref), &
             rho_norm_ref(ref_ind(kref) - 1), mesh%rad_norm_res(m), rho_norm_ref(ref_ind(kref))
-       if (log%debug) call log%write
+       if (logger%debug) call logger%write_msg
     end do
     deallocate(ref_ind, mask)
   end subroutine refine_resonant_surfaces
 
   subroutine cache_resonance_positions
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     use magdif_util, only: binsearch
     integer :: m, kf_res
 
-    log%msg = 'resonance positions:'
-    if (log%debug) call log%write
+    logger%msg = 'resonance positions:'
+    if (logger%debug) call logger%write_msg
     allocate(mesh%m_res(mesh%nflux))
     allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
     mesh%m_res = 0
@@ -913,15 +913,15 @@ contains
     do m = mesh%m_res_max, mesh%m_res_min, -1
        call binsearch(fs%psi, 0, mesh%psi_res(m), kf_res)
        if (kf_res <= 1) then
-          write (log%msg, '("Warning: resonance for m = ", i0, " occurs at flux surface index ", i0)') m, kf_res
-          if (log%warn) call log%write
+          write (logger%msg, '("Warning: resonance for m = ", i0, " occurs at flux surface index ", i0)') m, kf_res
+          if (logger%warn) call logger%write_msg
        end if
        mesh%res_ind(m) = kf_res
        mesh%m_res(kf_res) = m
-       write (log%msg, '("m = ", i2, ", kf = ", i3, ", rho: ", f19.16, 2(" < ", f19.16))') &
+       write (logger%msg, '("m = ", i2, ", kf = ", i3, ", rho: ", f19.16, 2(" < ", f19.16))') &
             m, kf_res, fs%rad(kf_res - 1) / fs%rad(mesh%nflux), mesh%rad_norm_res(m), &
             fs%rad(kf_res) / fs%rad(mesh%nflux)
-       if (log%debug) call log%write
+       if (logger%debug) call logger%write_msg
     end do
   end subroutine cache_resonance_positions
 
@@ -944,7 +944,7 @@ contains
   end subroutine write_kilca_convexfile
 
   subroutine create_mesh_points
-    use magdif_conf, only: conf, conf_arr, log
+    use magdif_conf, only: conf, conf_arr, logger
     use magdif_util, only: interp_psi_pol, pi, pos_angle
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
          rsmall, circumf, raxis, zaxis, load_magdata_in_symfluxcoord
@@ -1083,9 +1083,9 @@ contains
       real(dp), dimension(size(psi_eqd)) :: psi_ref
       integer :: kf
       if (mesh%nflux /= size(psi_eqd)) then
-         call log%msg_arg_size('psi_ref', 'nflux', 'size(psi_eqd)', &
+         call logger%msg_arg_size('psi_ref', 'nflux', 'size(psi_eqd)', &
               mesh%nflux, size(psi_eqd))
-         if (log%err) call log%write
+         if (logger%err) call logger%write_msg
          error stop
       end if
       psi_ref = [(interp_psi_pol(raxis + rho_norm_ref(kf) * rad_max, zaxis) - &
@@ -1112,7 +1112,7 @@ contains
   !> The program is halted if the input data is invalid, i.e. if more than two triangles
   !> appear to share the edge.
   subroutine common_triangles(knot1, knot2, common_tri)
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     integer, intent(in) :: knot1, knot2
     integer, intent(out) :: common_tri(2)
     logical :: tri_mask(mesh%ntri)
@@ -1131,14 +1131,14 @@ contains
           common_tri = common_tri([2, 1])
        end if
     case default
-       write (log%msg, '("More than two common triangles for knots ", ' // &
+       write (logger%msg, '("More than two common triangles for knots ", ' // &
             'i0, " and ", i0)') knot1, knot2
-       if (log%debug) call log%write
+       if (logger%debug) call logger%write_msg
     end select
   end subroutine common_triangles
 
   subroutine connect_mesh_points
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     use magdif_util, only: pi
     integer :: kf, kp, kp_lo, kp_hi, kt, ktri, ktri_adj, kedge, nodes(4)
     real(dp) :: mat(3, 3)
@@ -1210,9 +1210,9 @@ contains
              elseif (kp_lo == mesh%kp_max(kf - 1) .and. kp_hi == 1) then
                 mesh%orient(ktri) = .false.
              else
-                write (log%msg, '("Cannot close triangle loop correctly: ' // &
+                write (logger%msg, '("Cannot close triangle loop correctly: ' // &
                      'kf = ", i0, ", kp_lo = ", i0, ", kp_hi = ", i0)') kf, kp_lo, kp_hi
-                if (log%err) call log%write
+                if (logger%err) call logger%write_msg
                 error stop
              end if
           end if
@@ -1310,7 +1310,7 @@ contains
   end subroutine ring_centered_avg_coord
 
   subroutine check_mesh
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     integer :: kedge, ktri, ktri_check, k_min, k_max, discrepancies, &
          edge_count(mesh%nedge), tri_count(0:mesh%ntri), common_tri(2)
 
@@ -1318,24 +1318,24 @@ contains
     k_min = minval(mesh%tri_node)
     k_max = maxval(mesh%tri_node)
     if (k_min /= 1 .or. k_max /= mesh%npoint) then
-       write (log%msg, '("mesh%tri_node values are out of range [1, ", i0, "]: [", i0, ", ", i0, "]")') &
+       write (logger%msg, '("mesh%tri_node values are out of range [1, ", i0, "]: [", i0, ", ", i0, "]")') &
             mesh%npoint, k_min, k_max
-       if (log%debug) call log%write
+       if (logger%debug) call logger%write_msg
     end if
     k_min = minval(mesh%edge_node)
     k_max = maxval(mesh%edge_node)
     if (k_min /= 1 .or. k_max /= mesh%npoint) then
-       write (log%msg, '("mesh%edge_node values are out of range [1, ", i0, "]: [", i0, ", ", i0, "]")') &
+       write (logger%msg, '("mesh%edge_node values are out of range [1, ", i0, "]: [", i0, ", ", i0, "]")') &
             mesh%npoint, k_min, k_max
-       if (log%debug) call log%write
+       if (logger%debug) call logger%write_msg
     end if
     ! check edge indices
     k_min = minval(mesh%tri_edge)
     k_max = maxval(mesh%tri_edge)
     if (k_min /= 1 .or. k_max /= mesh%nedge) then
-       write (log%msg, '("mesh%tri_edge values are out of range ' // &
+       write (logger%msg, '("mesh%tri_edge values are out of range ' // &
             '[1, ", i0, "]: [", i0, ", ", i0, "]")') mesh%nedge, k_min, k_max
-       if (log%debug) call log%write
+       if (logger%debug) call logger%write_msg
     end if
     edge_count = 0
     do ktri = 1, mesh%ntri
@@ -1343,65 +1343,65 @@ contains
     end do
     discrepancies = count(2 /= edge_count(:(mesh%kp_low(mesh%nflux) - 1)))
     if (discrepancies > 0) then
-       write (log%msg, '(i0, " discrepancies in edge index counts ' // &
+       write (logger%msg, '(i0, " discrepancies in edge index counts ' // &
             'from mesh%tri_edge for non-boundary poloidal edges")') discrepancies
-       if (log%debug) call log%write
+       if (logger%debug) call logger%write_msg
     end if
     discrepancies = count(1 /= edge_count(mesh%kp_low(mesh%nflux):(mesh%npoint - 1)))
     if (discrepancies > 0) then
-       write (log%msg, '(i0, " discrepancies in edge index counts ' // &
+       write (logger%msg, '(i0, " discrepancies in edge index counts ' // &
             'from mesh%tri_edge for boundary poloidal edges")') discrepancies
-       if (log%debug) call log%write
+       if (logger%debug) call logger%write_msg
     end if
     discrepancies = count(2 /= edge_count(mesh%npoint:))
     if (discrepancies > 0) then
-       write (log%msg, '(i0, " discrepancies in edge index counts ' // &
+       write (logger%msg, '(i0, " discrepancies in edge index counts ' // &
             'from mesh%tri_edge for radial edges")') discrepancies
-       if (log%debug) call log%write
+       if (logger%debug) call logger%write_msg
     end if
     ! check triangle indices
     k_min = minval(mesh%edge_tri)
     k_max = maxval(mesh%edge_tri)
     if (k_min /= 0 .or. k_max /= mesh%ntri) then
-       write (log%msg, '("mesh%edge_tri values are out of range ' // &
+       write (logger%msg, '("mesh%edge_tri values are out of range ' // &
             '[0, ", i0, "]: [", i0, ", ", i0, "]")') mesh%ntri, k_min, k_max
-       if (log%debug) call log%write
+       if (logger%debug) call logger%write_msg
     end if
     tri_count = 0
     do kedge = 1, mesh%nedge
        tri_count(mesh%edge_tri(:, kedge)) = tri_count(mesh%edge_tri(:, kedge)) + 1
     end do
     if (tri_count(0) /= mesh%kp_max(mesh%nflux)) then
-       write (log%msg, '("expected ", i0, " boundary triangles, but counted ", i0, " in mesh%edge_tri")') &
+       write (logger%msg, '("expected ", i0, " boundary triangles, but counted ", i0, " in mesh%edge_tri")') &
             mesh%kp_max(mesh%nflux), tri_count(0)
-       if (log%debug) call log%write
+       if (logger%debug) call logger%write_msg
     end if
     discrepancies = count(3 /= tri_count(1:))
     if (discrepancies > 0) then
-       write (log%msg, '(i0, " discrepancies in triangle index counts ' // &
+       write (logger%msg, '(i0, " discrepancies in triangle index counts ' // &
             'from mesh%edge_tri")') discrepancies
-       if (log%debug) call log%write
+       if (logger%debug) call logger%write_msg
     end if
     ! check consistency of connections
     do kedge = 1, mesh%nedge
        call common_triangles(mesh%edge_node(1, kedge), mesh%edge_node(2, kedge), common_tri)
        if (any(mesh%edge_tri(:, kedge) /= common_tri)) then
-          write (log%msg, '("mesh%edge_tri(:, ", i0, ") = [", i0, ", ", i0, "], ' // &
+          write (logger%msg, '("mesh%edge_tri(:, ", i0, ") = [", i0, ", ", i0, "], ' // &
                'but common_triangle yields [", i0, ", ", i0, "]")') kedge, mesh%edge_tri(:, kedge), common_tri
-          if (log%debug) call log%write
+          if (logger%debug) call logger%write_msg
        end if
     end do
     ! check point locations
     do ktri = 1, mesh%ntri
        ktri_check = point_location(mesh%R_Omega(ktri), mesh%Z_Omega(ktri))
        if (ktri /= ktri_check) then
-          write (log%msg, '("point_location returns ", i0, " for centroid of triangle ", i0)') ktri_check, ktri
-          if (log%debug) call log%write
+          write (logger%msg, '("point_location returns ", i0, " for centroid of triangle ", i0)') ktri_check, ktri
+          if (logger%debug) call logger%write_msg
        end if
        ktri_check = point_location_check(mesh%R_Omega(ktri), mesh%Z_Omega(ktri))
        if (ktri /= ktri_check) then
-          write (log%msg, '("point_location_check returns ", i0, " for centroid of triangle ", i0)') ktri_check, ktri
-          if (log%debug) call log%write
+          write (logger%msg, '("point_location_check returns ", i0, " for centroid of triangle ", i0)') ktri_check, ktri
+          if (logger%debug) call logger%write_msg
        end if
     end do
   end subroutine check_mesh
@@ -2032,7 +2032,7 @@ contains
          nf90_inquire_dimension, nf90_get_var, nf90_close, nf90_global, nf90_get_att
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext, psipol_max
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_conf, only: conf, log, datafile
+    use magdif_conf, only: conf, logger, datafile
     character(len = *), parameter :: dataset = 'debug_GPEC'
     character(len = 1024) :: filename
     logical :: file_exists
@@ -2045,9 +2045,9 @@ contains
     write (filename, '("gpec_profile_output_n", i0, ".nc")') conf%n
     inquire(file = filename, exist = file_exists)
     if (.not. file_exists) return
-    write (log%msg, '("File ", a, " found, performing GPEC coordinate comparison.")') &
+    write (logger%msg, '("File ", a, " found, performing GPEC coordinate comparison.")') &
          trim(filename)
-    if (log%info) call log%write
+    if (logger%info) call logger%write_msg
     call check_error("nf90_open", nf90_open(filename, nf90_nowrite, ncid_file))
     call check_error("nf90_inq_dimid", nf90_inq_dimid(ncid_file, "psi_n", ncid))
     call check_error("nf90_inquire_dimension", &
@@ -2114,7 +2114,7 @@ contains
     write (filename, '("dcon_output_n", i0, ".nc")') conf%n
     inquire(file = filename, exist = file_exists)
     if (.not. file_exists) return
-    write (log%msg, '("Files ", a, " and 2d.out found, performing GPEC Jacobian comparison.")') &
+    write (logger%msg, '("Files ", a, " and 2d.out found, performing GPEC Jacobian comparison.")') &
          trim(filename)
     call check_error("nf90_open", nf90_open(filename, nf90_nowrite, ncid_file))
     call check_error("nf90_get_att", nf90_get_att(ncid_file, nf90_global, 'mpsi', nrad))
@@ -2169,8 +2169,8 @@ contains
       character(len = *), intent(in) :: funcname
       integer, intent(in) :: status
       if (status /= nf90_noerr) then
-         write (log%msg, '(a, " returned error ", i0)') funcname, status
-         if (log%err) call log%write
+         write (logger%msg, '(a, " returned error ", i0)') funcname, status
+         if (logger%err) call logger%write_msg
          error stop
       end if
     end subroutine check_error
@@ -2228,7 +2228,7 @@ contains
   end subroutine write_illustration_data
 
   subroutine init_flux_variables
-    use magdif_conf, only: conf, log, pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
+    use magdif_conf, only: conf, logger, pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
          q_prof_flux, q_prof_rot, q_prof_geqdsk
     integer :: kf
 
@@ -2243,8 +2243,8 @@ contains
     case (pres_prof_geqdsk)
        call compute_pres_prof_geqdsk
     case default
-       write (log%msg, '("unknown pressure profile selection", i0)') conf%pres_prof
-       if (log%err) call log%write
+       write (logger%msg, '("unknown pressure profile selection", i0)') conf%pres_prof
+       if (logger%err) call logger%write_msg
        error stop
     end select
 
@@ -2256,8 +2256,8 @@ contains
     case (q_prof_geqdsk)
        call compute_safety_factor_geqdsk
     case default
-       write (log%msg, '("unknown q profile selection: ", i0)') conf%q_prof
-       if (log%err) call log%write
+       write (logger%msg, '("unknown q profile selection: ", i0)') conf%q_prof
+       if (logger%err) call logger%write_msg
        error stop
     end select
 
@@ -2269,7 +2269,7 @@ contains
 
   subroutine compute_pres_prof_eps
     use constants, only: ev2erg  ! orbit_mod.f90
-    use magdif_conf, only: conf, log
+    use magdif_conf, only: conf, logger
     real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
 
     ! Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
@@ -2291,9 +2291,9 @@ contains
     dtemp_dpsi = conf%temp_max / psi_int
     dens = (fs%psi - psi_ext) / psi_int * conf%dens_max + conf%dens_min
     temp = (fs%psi - psi_ext) / psi_int * conf%temp_max + conf%temp_min
-    write (log%msg, '("temp@axis: ", es24.16e3, ", dens@axis: ", es24.16e3)') &
+    write (logger%msg, '("temp@axis: ", es24.16e3, ", dens@axis: ", es24.16e3)') &
          temp(0), dens(0)
-    if (log%info) call log%write
+    if (logger%info) call logger%write_msg
     fs%p(:) = dens * temp * ev2erg
     fs%dp_dpsi(:) = (dens * dtemp_dpsi + ddens_dpsi * temp) * ev2erg
     dens(1:) = (fs_half%psi - psi_ext) / psi_int * conf%dens_max + conf%dens_min
@@ -2384,7 +2384,7 @@ contains
   end subroutine compute_safety_factor_geqdsk
 
   subroutine check_resonance_positions
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     integer :: m, kf
     real(dp), dimension(mesh%nflux) :: abs_err
 
@@ -2392,9 +2392,9 @@ contains
        abs_err = [(abs(abs(fs_half%q(kf)) - dble(m) / dble(mesh%n)), kf = 1, mesh%nflux)]
        kf = minloc(abs_err, 1)
        if (kf /= mesh%res_ind(m)) then
-          write (log%msg, '("m = ", i0, ": q is resonant at index ", i0, ' // &
+          write (logger%msg, '("m = ", i0, ": q is resonant at index ", i0, ' // &
                '", but psi is resonant at index ", i0)') m, kf, mesh%res_ind(m)
-          if (log%warn) call log%write
+          if (logger%warn) call logger%write_msg
        end if
     end do
   end subroutine check_resonance_positions
@@ -2472,7 +2472,7 @@ contains
   end subroutine cache_equilibrium_field
 
   subroutine compute_j0phi
-    use magdif_conf, only: conf, log, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk
+    use magdif_conf, only: conf, logger, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk
     real(dp) :: plot_j0phi(mesh%ntri)
 
     allocate(j0phi_edge(mesh%nedge))
@@ -2485,8 +2485,8 @@ contains
     case (curr_prof_geqdsk)
        call compute_j0phi_geqdsk(plot_j0phi)
     case default
-       write (log%msg, '("unknown current profile selection: ", i0)') conf%curr_prof
-       if (log%err) call log%write
+       write (logger%msg, '("unknown current profile selection: ", i0)') conf%curr_prof
+       if (logger%err) call logger%write_msg
        error stop
     end select
     ! TODO: write out plot_j0phi when edge_cache type is working
@@ -2676,24 +2676,24 @@ contains
   end subroutine check_curr0
 
   subroutine flux_func_cache_check
-    use magdif_conf, only: log
-    log%msg = 'checking flux_func_cache...'
-    if (log%debug) call log%write
-    write (log%msg, '("array bounds: fs%psi(", i0, ":", i0, "), ' // &
+    use magdif_conf, only: logger
+    logger%msg = 'checking flux_func_cache...'
+    if (logger%debug) call logger%write_msg
+    write (logger%msg, '("array bounds: fs%psi(", i0, ":", i0, "), ' // &
          ' fs%rad(", i0, ":", i0, "), fs_half%psi(", i0, ":", i0, "), ' // &
          'fs_half%rad(", i0, ":", i0, ")")') lbound(fs%psi, 1), ubound(fs%psi, 1), &
          lbound(fs%rad, 1), ubound(fs%rad, 1), lbound(fs_half%psi, 1), &
          ubound(fs_half%psi, 1), lbound(fs_half%rad, 1), ubound(fs_half%rad, 1)
-    if (log%debug) call log%write
-    write (log%msg, '("expected sign of psi''(r): ", sp, i0, ss)') equil%cocos%sgn_dpsi
-    if (log%debug) call log%write
-    write (log%msg, '(i0, " ordering violations for psi")') &
+    if (logger%debug) call logger%write_msg
+    write (logger%msg, '("expected sign of psi''(r): ", sp, i0, ss)') equil%cocos%sgn_dpsi
+    if (logger%debug) call logger%write_msg
+    write (logger%msg, '(i0, " ordering violations for psi")') &
          count((fs%psi(1:) - fs_half%psi) * equil%cocos%sgn_dpsi <= 0d0) + &
          count([(fs_half%psi(1) - fs%psi(0)) * equil%cocos%sgn_dpsi] <= 0d0)
-    if (log%debug) call log%write
-    write (log%msg, '(i0, " ordering violations for rad")') &
+    if (logger%debug) call logger%write_msg
+    write (logger%msg, '(i0, " ordering violations for rad")') &
          count(fs%rad(1:) <= fs_half%rad) + count([fs_half%rad(1)] <= [fs%rad(0)])
-    if (log%debug) call log%write
+    if (logger%debug) call logger%write_msg
   end subroutine flux_func_cache_check
 
 end module magdif_mesh

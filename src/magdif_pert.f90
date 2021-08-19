@@ -567,26 +567,26 @@ contains
   end subroutine AUG_coils_read
 
   subroutine AUG_coils_write_Nemov(directory, ncoil, nseg, XYZ)
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     character(len = *), intent(in) :: directory
     integer, intent(in) :: ncoil, nseg
     real(dp), intent(in), dimension(:, :, :) :: XYZ
     integer :: fid, kc, ks
 
     if (3 /= size(XYZ, 1)) then
-       call log%msg_arg_size('AUG_coils_write_Nemov', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
-       if (log%err) call log%write
+       call logger%msg_arg_size('AUG_coils_write_Nemov', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (nseg /= size(XYZ, 2)) then
-       call log%msg_arg_size('AUG_coils_write_Nemov', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
-       if (log%err) call log%write
+       call logger%msg_arg_size('AUG_coils_write_Nemov', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (2 * ncoil /= size(XYZ, 3)) then
-       call log%msg_arg_size('AUG_coils_write_Nemov', '2 * ncoil', 'size(XYZ, 3)', &
+       call logger%msg_arg_size('AUG_coils_write_Nemov', '2 * ncoil', 'size(XYZ, 3)', &
             2 * ncoil, size(XYZ, 3))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     open(newunit = fid, file = directory // '/co_asd.dd', status = 'replace', &
@@ -604,7 +604,7 @@ contains
   end subroutine AUG_coils_write_Nemov
 
   subroutine AUG_coils_read_Nemov(directory, ncoil, nseg, nwind, XYZ)
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     character(len = *), intent(in) :: directory
     integer, intent(out) :: ncoil, nseg, nwind
     real(dp), intent(out), allocatable, dimension(:, :, :) :: XYZ
@@ -622,9 +622,9 @@ contains
        do ks = 1, nseg
           read (fid, *) XYZ(1, ks, kc), XYZ(2, ks, kc), XYZ(3, ks, kc), rdum, temp
           if (temp /= kc) then
-             write (log%msg, '("Expected coil index ", i0, " in co_asd.dd at line ", ' // &
+             write (logger%msg, '("Expected coil index ", i0, " in co_asd.dd at line ", ' // &
                   'i0, ", but got ", i0)') kc, (kc - 1) * (nseg + 1) + ks + 1, temp
-             if (log%err) call log%write
+             if (logger%err) call logger%write_msg
              error stop
           end if
        end do
@@ -634,26 +634,26 @@ contains
   end subroutine AUG_coils_read_Nemov
 
   subroutine AUG_coils_write_GPEC(directory, ncoil, nseg, nwind, XYZ)
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     character(len = *), intent(in) :: directory
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
     integer :: fid, kc, ks
 
     if (3 /= size(XYZ, 1)) then
-       call log%msg_arg_size('AUG_coils_write_GPEC', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
-       if (log%err) call log%write
+       call logger%msg_arg_size('AUG_coils_write_GPEC', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (nseg /= size(XYZ, 2)) then
-       call log%msg_arg_size('AUG_coils_write_GPEC', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
-       if (log%err) call log%write
+       call logger%msg_arg_size('AUG_coils_write_GPEC', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (2 * ncoil /= size(XYZ, 3)) then
-       call log%msg_arg_size('AUG_coils_write_GPEC', '2 * ncoil', 'size(XYZ, 3)', &
+       call logger%msg_arg_size('AUG_coils_write_GPEC', '2 * ncoil', 'size(XYZ, 3)', &
             2 * ncoil, size(XYZ, 3))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     open(newunit = fid, file = directory // '/aug_bu.dat', status = 'replace', &
@@ -718,7 +718,7 @@ contains
   subroutine AUG_coils_write_Fourier(directory, ncoil, nseg, nwind, XYZ, nmax, &
        Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     character(len = *), intent(in) :: directory
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
@@ -732,25 +732,25 @@ contains
     character(len = 7) :: modename, coilname
 
     if (3 /= size(XYZ, 1)) then
-       call log%msg_arg_size('AUG_coils_write_GPEC', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
-       if (log%err) call log%write
+       call logger%msg_arg_size('AUG_coils_write_GPEC', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (nseg /= size(XYZ, 2)) then
-       call log%msg_arg_size('AUG_coils_write_GPEC', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
-       if (log%err) call log%write
+       call logger%msg_arg_size('AUG_coils_write_GPEC', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (2 * ncoil /= size(XYZ, 3)) then
-       call log%msg_arg_size('AUG_coils_write_GPEC', '2 * ncoil', 'size(XYZ, 3)', &
+       call logger%msg_arg_size('AUG_coils_write_GPEC', '2 * ncoil', 'size(XYZ, 3)', &
             2 * ncoil, size(XYZ, 3))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (nmax > nphi / 4) then
-       write (log%msg, '("Requested nmax = ", i0, ", but only ", i0, " modes available.")') &
+       write (logger%msg, '("Requested nmax = ", i0, ", but only ", i0, " modes available.")') &
             nmax, nphi / 4
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     call Biot_Savart_Fourier(ncoil, nseg, nwind, XYZ, nmax, &
@@ -805,7 +805,7 @@ contains
   subroutine Biot_Savart_sum_coils(ncoil, nseg, nwind, XYZ, Ic, &
        Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ, Bvac)
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     use magdif_util, only: linspace
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
@@ -819,25 +819,25 @@ contains
     real(dp), dimension(size(XYZ, 1), size(XYZ, 2), size(XYZ, 3)) :: cXYZ, dXYZ
 
     if (3 /= size(XYZ, 1)) then
-       call log%msg_arg_size('Biot_Savart_sum_coils', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
-       if (log%err) call log%write
+       call logger%msg_arg_size('Biot_Savart_sum_coils', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (nseg /= size(XYZ, 2)) then
-       call log%msg_arg_size('Biot_Savart_sum_coils', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
-       if (log%err) call log%write
+       call logger%msg_arg_size('Biot_Savart_sum_coils', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (2 * ncoil /= size(XYZ, 3)) then
-       call log%msg_arg_size('Biot_Savart_sum_coils', '2 * ncoil', 'size(XYZ, 3)', &
+       call logger%msg_arg_size('Biot_Savart_sum_coils', '2 * ncoil', 'size(XYZ, 3)', &
             2 * ncoil, size(XYZ, 3))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (2 * ncoil /= size(Ic)) then
-       call log%msg_arg_size('Biot_Savart_sum_coils', '2 * ncoil', 'size(Ic)', &
+       call logger%msg_arg_size('Biot_Savart_sum_coils', '2 * ncoil', 'size(Ic)', &
             2 * ncoil, size(Ic))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     R(:) = linspace(Rmin, Rmax, nR, 0, 0)
@@ -884,7 +884,7 @@ contains
     use FFTW3, only: fftw_alloc_real, fftw_alloc_complex, fftw_plan_dft_r2c_1d, FFTW_PATIENT, &
          FFTW_DESTROY_INPUT, fftw_execute_dft_r2c, fftw_destroy_plan, fftw_free
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     use magdif_util, only: linspace
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
@@ -901,25 +901,25 @@ contains
     complex(c_double_complex), dimension(:), pointer :: BnR, Bnphi, BnZ
 
     if (3 /= size(XYZ, 1)) then
-       call log%msg_arg_size('Biot_Savart_Fourier', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
-       if (log%err) call log%write
+       call logger%msg_arg_size('Biot_Savart_Fourier', '3', 'size(XYZ, 1)', 3, size(XYZ, 1))
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (nseg /= size(XYZ, 2)) then
-       call log%msg_arg_size('Biot_Savart_Fourier', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
-       if (log%err) call log%write
+       call logger%msg_arg_size('Biot_Savart_Fourier', 'nseg', 'size(XYZ, 2)', nseg, size(XYZ, 2))
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (2 * ncoil /= size(XYZ, 3)) then
-       call log%msg_arg_size('Biot_Savart_Fourier', '2 * ncoil', 'size(XYZ, 3)', &
+       call logger%msg_arg_size('Biot_Savart_Fourier', '2 * ncoil', 'size(XYZ, 3)', &
             2 * ncoil, size(XYZ, 3))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     if (nmax > nphi / 4) then
-       write (log%msg, '("Requested nmax = ", i0, ", but only ", i0, " modes available.")') &
+       write (logger%msg, '("Requested nmax = ", i0, ", but only ", i0, " modes available.")') &
             nmax, nphi / 4
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     nfft = nphi / 2 + 1
@@ -1036,7 +1036,7 @@ contains
   end subroutine vector_potential_single_mode
 
   subroutine write_Bvac_Nemov(directory, Rmin, Rmax, Zmin, Zmax, Bvac)
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     use constants, only: pi  ! orbit_mod.f90
     character(len = *), intent(in) :: directory
     real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
@@ -1044,8 +1044,8 @@ contains
     integer :: fid, nR, nphi, nZ, kR, kphi, kZ
 
     if (3 /= size(Bvac, 1)) then
-       call log%msg_arg_size('write_Bnvac_Nemov', '3', 'size(Bvac, 1)', 3, size(Bvac, 1))
-       if (log%err) call log%write
+       call logger%msg_arg_size('write_Bnvac_Nemov', '3', 'size(Bvac, 1)', 3, size(Bvac, 1))
+       if (logger%err) call logger%write_msg
        error stop
     end if
     nZ = size(Bvac, 2)
@@ -1118,7 +1118,7 @@ contains
   subroutine read_Bnvac_GPEC(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bnvac_R, Bnvac_Z)
     use netcdf, only: nf90_open, nf90_nowrite, nf90_noerr, nf90_inq_dimid, nf90_inq_varid, &
          nf90_inquire_dimension, nf90_get_var, nf90_close
-    use magdif_conf, only: conf, log
+    use magdif_conf, only: conf, logger
     use magdif_mesh, only: equil
     integer, intent(out) :: nR, nZ
     real(dp), intent(out) :: Rmin, Rmax, Zmin, Zmax
@@ -1132,9 +1132,9 @@ contains
     write (filename, '("gpec_cylindrical_output_n", i0, ".nc")') conf%n
     inquire(file = filename, exist = file_exists)
     if (.not. file_exists) then
-       write (log%msg, '("File ", a, " not found, cannot read vacuum perturbation field.")') &
+       write (logger%msg, '("File ", a, " not found, cannot read vacuum perturbation field.")') &
          trim(filename)
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     call check_error("nf90_open", nf90_open(filename, nf90_nowrite, ncid_file))
@@ -1178,8 +1178,8 @@ contains
       character(len = *), intent(in) :: funcname
       integer, intent(in) :: status
       if (status /= nf90_noerr) then
-         write (log%msg, '(a, " returned error ", i0)') funcname, status
-         if (log%err) call log%write
+         write (logger%msg, '(a, " returned error ", i0)') funcname, status
+         if (logger%err) call logger%write_msg
          error stop
       end if
     end subroutine check_error
@@ -1188,7 +1188,7 @@ contains
   subroutine read_Bnvac_Fourier(directory, ntor, Ic, nR, nZ, Rmin, Rmax, Zmin, Zmax, &
        Bnvac_R, Bnvac_Z)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     character(len = *), intent(in) :: directory
     integer, intent(in) :: ntor
     real(dp), intent(in), dimension(:) :: Ic
@@ -1205,9 +1205,9 @@ contains
     filename = trim(adjustl(directory)) // '/AUG_B_coils.h5'
     inquire(file = filename, exist = file_exists)
     if (.not. file_exists) then
-       write (log%msg, '("File ", a, " not found, cannot read vacuum perturbation field.")') &
+       write (logger%msg, '("File ", a, " not found, cannot read vacuum perturbation field.")') &
          trim(filename)
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     call h5_open(filename, h5id_root)
@@ -1220,9 +1220,9 @@ contains
     call h5_get(h5id_root, modename // '/nZ', nZ)
     call h5_get(h5id_root, modename // '/ncoil', ncoil)
     if (2 * ncoil /= size(Ic)) then
-       call log%msg_arg_size('read_Bnvac_Fourier', '2 * ncoil', 'size(Ic)', &
+       call logger%msg_arg_size('read_Bnvac_Fourier', '2 * ncoil', 'size(Ic)', &
             2 * ncoil, size(Ic))
-       if (log%err) call log%write
+       if (logger%err) call logger%write_msg
        error stop
     end if
     allocate(Bnvac_R(nR, nZ), Bnvac_Z(nR, nZ), Bn(nR, nZ))
@@ -1240,7 +1240,7 @@ contains
   end subroutine read_Bnvac_Fourier
 
   subroutine compute_Bnvac(Bn)
-    use magdif_conf, only: conf, log, vac_src_nemov, vac_src_gpec, vac_src_fourier
+    use magdif_conf, only: conf, logger, vac_src_nemov, vac_src_gpec, vac_src_fourier
     use magdif_util, only: gauss_legendre_unit_interval
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
@@ -1261,8 +1261,8 @@ contains
        call read_Bnvac_Fourier('.', conf%n, conf%Ic, &
             nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
     case default
-       write (log%msg, '("unknown vacuum field source selection", i0)') conf%vac_src
-       if (log%err) call log%write
+       write (logger%msg, '("unknown vacuum field source selection", i0)') conf%vac_src
+       if (logger%err) call logger%write_msg
        error stop
     end select
     call vector_potential_single_mode(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
@@ -1552,28 +1552,28 @@ contains
   end subroutine kilca_vacuum
 
   subroutine compute_kilca_vac_coeff
-    use magdif_conf, only: conf_arr, log, cmplx_fmt
+    use magdif_conf, only: conf_arr, logger, cmplx_fmt
     use magdif_mesh, only: mesh
     integer :: m
     complex(dp) :: B_rad, B_pol, B_tor
 
     do m = mesh%m_res_min, mesh%m_res_max
        if (abs(conf_arr%kilca_vac_r(m)) <= 0d0) then
-          write (log%msg, '("ignoring kilca_vac_r(", i0, "), ' // &
+          write (logger%msg, '("ignoring kilca_vac_r(", i0, "), ' // &
                'resorting to kilca_vac_coeff(", i0, ")")') m, m
-          if (log%info) call log%write
+          if (logger%info) call logger%write_msg
           cycle
        end if
        call kilca_vacuum_fourier(mesh%n, m, mesh%R_O, conf_arr%kilca_vac_r(m), (1d0, 0d0), &
             B_rad, B_pol, B_tor)
        conf_arr%kilca_vac_coeff(m) = conf_arr%kilca_vac_Bz(m) / B_tor
     end do
-    log%msg = 'effective vacuum perturbation field coefficients:'
-    if (log%info) call log%write
+    logger%msg = 'effective vacuum perturbation field coefficients:'
+    if (logger%info) call logger%write_msg
     do m = mesh%m_res_min, mesh%m_res_max
-       write (log%msg, '("kilca_vac_coeff(", i0, ") = ", ' // cmplx_fmt // ')') m, &
+       write (logger%msg, '("kilca_vac_coeff(", i0, ") = ", ' // cmplx_fmt // ')') m, &
             conf_arr%kilca_vac_coeff(m)
-       if (log%info) call log%write
+       if (logger%info) call logger%write_msg
     end do
   end subroutine compute_kilca_vac_coeff
 
@@ -1596,7 +1596,7 @@ contains
   subroutine kilca_vacuum_fourier(tor_mode, pol_mode, R_0, r, vac_coeff, &
        B_rad, B_pol, B_tor)
     use fgsl, only: fgsl_double, fgsl_int, fgsl_success, fgsl_sf_bessel_icn_array
-    use magdif_conf, only: log
+    use magdif_conf, only: logger
     use magdif_util, only: imun
     integer, intent(in) :: tor_mode, pol_mode
     real(dp), intent(in) :: R_0, r
@@ -1607,9 +1607,9 @@ contains
 
     k_z_r = tor_mode / R_0 * r
     status = fgsl_sf_bessel_icn_array(abs(pol_mode)-1, abs(pol_mode)+1, k_z_r, I_m)
-    if (status /= fgsl_success .and. log%err) then
-       write (log%msg, '("fgsl_sf_bessel_icn_array returned error ", i0)') status
-       call log%write
+    if (status /= fgsl_success .and. logger%err) then
+       write (logger%msg, '("fgsl_sf_bessel_icn_array returned error ", i0)') status
+       call logger%write_msg
     end if
     B_rad = 0.5d0 * (I_m(-1) + I_m(1)) * vac_coeff
     B_pol = imun * pol_mode / k_z_r * I_m(0) * vac_coeff
@@ -1694,7 +1694,7 @@ contains
   end subroutine debug_RT0
 
   subroutine debug_fouriermodes
-    use magdif_conf, only: conf, datafile, log
+    use magdif_conf, only: conf, datafile, logger
     use magdif_util, only: interp1d, linspace, imun
     use magdif_mesh, only: equil
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
@@ -1713,8 +1713,8 @@ contains
     if (.not. file_exists) return
     inquire(file = 'equil_r_q_psi.dat', exist = file_exists)
     if (.not. file_exists) return
-    log%msg = 'Files amn.dat and equil_r_q_psi.dat found, performing Fourier mode comparison.'
-    if (log%info) call log%write
+    logger%msg = 'Files amn.dat and equil_r_q_psi.dat found, performing Fourier mode comparison.'
+    if (logger%info) call logger%write_msg
     open(newunit = fid, form = 'unformatted', file = 'amn.dat', action = 'read')
     read (fid) ntor, mpol, nlabel, flabel_min, flabel_max
     allocate(z3dum(-mpol:mpol, ntor, nlabel), Amn_theta(-mpol:mpol, ntor, nlabel))
