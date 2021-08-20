@@ -118,10 +118,7 @@ module magdif_mesh
      !> Number of unrefined flux surfaces to be replaced by refined ones.
      integer, allocatable :: deletions(:)
 
-     !> Number of refined flux surfaces.
-     integer, allocatable :: additions(:)
-
-     !> Relative size of most refined flux surface.
+     !> Width ratio of neighbouring refined flux surfaces.
      real(dp), allocatable :: refinement(:)
 
      !> Poloidal mode number \f$ m \f$ (dimensionless) in resonance at given flux surface.
@@ -901,13 +898,10 @@ contains
 
     if (allocated(mesh%refinement)) deallocate(mesh%refinement)
     if (allocated(mesh%deletions)) deallocate(mesh%deletions)
-    if (allocated(mesh%additions)) deallocate(mesh%additions)
     allocate(mesh%refinement(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%deletions(mesh%m_res_min:mesh%m_res_max))
-    allocate(mesh%additions(mesh%m_res_min:mesh%m_res_max))
     mesh%refinement(:) = conf_arr%refinement
     mesh%deletions(:) = conf_arr%deletions
-    mesh%additions(:) = conf_arr%additions
     allocate(mask(mesh%m_res_min:mesh%m_res_max))
     mask(:) = 1d0 < mesh%refinement .and. mesh%refinement < 3d0
     ! heuristic: if distance between resonances is less than coarse grid separation,
@@ -1515,19 +1509,19 @@ contains
     use magdif_util, only: linspace, interp_psi_pol
     type(coord_cache_ext), intent(inout) :: sample_Ipar
     integer, intent(in) :: m
-    integer :: kf_min, kf_max, krad, kpol, k
-    real(dp) :: theta(sample_Ipar%npol), rad_eqd(equil%nw), drad_dpsi, dum
+    integer :: krad, kpol, k
+    real(dp) :: rad_min, rad_max, theta(sample_Ipar%npol), rad_eqd(equil%nw), drad_dpsi, dum
     real(dp), dimension(sample_Ipar%nrad) :: rad, psi
 
     sample_Ipar%m = m
     rad_eqd(:) = linspace(fs%rad(0), fs%rad(mesh%nflux), equil%nw, 0, 0)
-    ! res_ind is half-grid, but evaluation limits refer to full-grid indices
-    ! deletions is used to estimate the doubled width of the refined interval
-    kf_min = mesh%res_ind(m) - mesh%additions(m) - mesh%deletions(m) - 1
-    if (kf_min < 0) kf_min = 0
-    kf_max = mesh%res_ind(m) + mesh%additions(m) + mesh%deletions(m)
-    if (kf_max > mesh%nflux) kf_max = mesh%nflux
-    rad(:) = linspace(fs%rad(kf_min), fs%rad(kf_max), sample_Ipar%nrad, 0, 0)
+    rad_min = mesh%rad_norm_res(m) * fs%rad(mesh%nflux) - 2d0 * conf%max_Delta_rad
+    rad_max = mesh%rad_norm_res(m) * fs%rad(mesh%nflux) + 2d0 * conf%max_Delta_rad
+    if (rad_max > fs%rad(mesh%nflux)) then
+       rad_max = fs%rad(mesh%nflux)
+       rad_min = (2d0 * mesh%rad_norm_res(m) - 1d0) * fs%rad(mesh%nflux)
+    end if
+    rad(:) = linspace(rad_min, rad_max, sample_Ipar%nrad, 1, 1)
     ! TODO: replace by dedicated interpolation function
     if (conf%kilca_scale_factor /= 0) then
        psi(:) = [(interp_psi_pol(mesh%R_O, mesh%Z_O + rad(krad)), krad = 1, sample_Ipar%nrad)]
@@ -1813,12 +1807,9 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/deletions', mesh%deletions, &
          lbound(mesh%deletions), ubound(mesh%deletions), &
          comment = 'number of unrefined flux surfaces to be replaced by refined ones')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/additions', mesh%additions, &
-         lbound(mesh%additions), ubound(mesh%additions), &
-         comment = 'number of refined flux surfaces')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/refinement', mesh%refinement, &
          lbound(mesh%refinement), ubound(mesh%refinement), &
-         comment = 'relative size of most refined flux surface')
+         comment = 'width ratio of neighbouring refined flux surfaces')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_res', mesh%m_res, &
          lbound(mesh%m_res), ubound(mesh%m_res), &
          comment = 'poloidal mode number m in resonance at given flux surface')
@@ -1959,7 +1950,6 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_res_max', mesh%m_res_max)
     ! TODO: allocate deferred-shape arrays in hdf5_tools and skip allocation here
     allocate(mesh%deletions(mesh%m_res_min:mesh%m_res_max))
-    allocate(mesh%additions(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%refinement(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%m_res(mesh%nflux))
     allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
@@ -1993,7 +1983,6 @@ contains
     allocate(mesh%R_Omega(mesh%ntri))
     allocate(mesh%Z_Omega(mesh%ntri))
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/deletions', mesh%deletions)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/additions', mesh%additions)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', mesh%refinement)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_res', mesh%m_res)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/res_ind', mesh%res_ind)
@@ -2034,7 +2023,6 @@ contains
     class(mesh_t), intent(inout) :: this
 
     if (allocated(this%deletions)) deallocate(this%deletions)
-    if (allocated(this%additions)) deallocate(this%additions)
     if (allocated(this%refinement)) deallocate(this%refinement)
     if (allocated(this%m_res)) deallocate(this%m_res)
     if (allocated(this%res_ind)) deallocate(this%res_ind)

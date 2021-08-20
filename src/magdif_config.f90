@@ -93,12 +93,6 @@ module magdif_conf
      !> Index of toroidal harmonics of perturbation. Defaults to 2.
      integer :: n = 2
 
-     !> Number of knots per poloidal loop. Defaults to 300.
-     integer :: nkpol = 300
-
-     !> Number of flux surfaces before refinement. Defaults to 100.
-     integer :: nflux_unref = 100
-
      !> Maximum distance between flux surfaces along \f$ \theta = 0 \f$. Defaults
      !> to 0.45 cm.
      real(dp) :: max_Delta_rad = 0.45d0
@@ -152,10 +146,7 @@ module magdif_conf
      !> Number of unrefined flux surfaces to be replaced by refined ones.
      integer, dimension(:), allocatable :: deletions
 
-     !> Number of refined flux surfaces.
-     integer, dimension(:), allocatable :: additions
-
-     !> Relative size of most refined flux surface.
+     !> Width ratio of neighbouring refined flux surfaces.
      real(dp), dimension(:), allocatable :: refinement
 
      !> Free parameters setting the magnitudes of sheet currents.
@@ -237,10 +228,8 @@ contains
          comment = 'threshold for absolute eigenvalues used for Arnoldi preconditioner')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/n', config%n, &
          comment = 'index of toroidal harmonics of perturbation')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nkpol', config%nkpol, &
-         comment = 'knots per poloidal loop')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nflux_unref', config%nflux_unref, &
-         comment = 'number of flux surfaces before refinement')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/max_Delta_rad', config%max_Delta_rad, &
+         comment = 'maximum distance between flux surfaces along theta = 0', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/nrad_Ipar', config%nrad_Ipar, &
          comment = 'radial divisions in radially refined regions for parallel current computations')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/temp_min', config%temp_min, &
@@ -270,17 +259,16 @@ contains
     character(len = *), intent(in) :: filename
     integer, intent(in) :: m_min, m_max
     integer :: fid
-    integer, dimension(m_min:m_max) :: deletions, additions
+    integer, dimension(m_min:m_max) :: deletions
     real(dp), dimension(m_min:m_max) :: refinement, kilca_vac_r
     complex(dp), dimension(m_min:m_max) :: kilca_vac_Bz, kilca_vac_coeff, &
          sheet_current_factor
-    namelist /arrays/ deletions, additions, refinement, sheet_current_factor, &
+    namelist /arrays/ deletions, refinement, sheet_current_factor, &
          kilca_vac_coeff, kilca_vac_r, kilca_vac_Bz
 
     config%m_min = m_min
     config%m_max = m_max
     deletions = 0
-    additions = 0
     refinement = 0d0
     sheet_current_factor = (0d0, 0d0)
     kilca_vac_coeff = (1d0, 0d0)
@@ -292,9 +280,6 @@ contains
     if (allocated(config%deletions)) deallocate(config%deletions)
     allocate(config%deletions(m_min:m_max))
     config%deletions(:) = deletions
-    if (allocated(config%additions)) deallocate(config%additions)
-    allocate(config%additions(m_min:m_max))
-    config%additions(:) = additions
     if (allocated(config%refinement)) deallocate(config%refinement)
     allocate(config%refinement(m_min:m_max))
     config%refinement(:) = refinement
@@ -327,12 +312,9 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/deletions', config%deletions, &
          lbound(config%deletions), ubound(config%deletions), &
          comment = 'number of unrefined flux surfaces to be replaced by refined ones')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/additions', config%additions, &
-         lbound(config%additions), ubound(config%additions), &
-         comment = 'number of refined flux surfaces')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/refinement', config%refinement, &
          lbound(config%refinement), ubound(config%refinement), &
-         comment = 'relative size of most refined flux surface')
+         comment = 'width ratio of neighbouring refined flux surfaces')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor, &
          lbound(config%sheet_current_factor), ubound(config%sheet_current_factor), &
          comment = 'free parameters setting the magnitudes of sheet currents')
@@ -359,14 +341,12 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_min', config%m_min)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_max', config%m_max)
     allocate(config%deletions(config%m_min:config%m_max))
-    allocate(config%additions(config%m_min:config%m_max))
     allocate(config%refinement(config%m_min:config%m_max))
     allocate(config%sheet_current_factor(config%m_min:config%m_max))
     allocate(config%kilca_vac_coeff(config%m_min:config%m_max))
     allocate(config%kilca_vac_r(config%m_min:config%m_max))
     allocate(config%kilca_vac_Bz(config%m_min:config%m_max))
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/deletions', config%deletions)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/additions', config%additions)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', config%refinement)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/kilca_vac_coeff', config%kilca_vac_coeff)
@@ -381,7 +361,6 @@ contains
     config%m_min = 0
     config%m_max = 0
     if (allocated(config%deletions)) deallocate(config%deletions)
-    if (allocated(config%additions)) deallocate(config%additions)
     if (allocated(config%refinement)) deallocate(config%refinement)
     if (allocated(config%sheet_current_factor)) deallocate(config%sheet_current_factor)
     if (allocated(config%kilca_vac_coeff)) deallocate(config%kilca_vac_coeff)

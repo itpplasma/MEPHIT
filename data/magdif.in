@@ -13,6 +13,25 @@
    config%curr_prof = 2
    ! 0: surface integral, 1: field line integral, 2: EQDSK profile
    config%q_prof = 1
+   ! 0: Viktor Nemov's code, 1: GPEC, 2: pre-computed Fourier transform
+   config%vac_src = 2
+   ! AUG B coil currents in statA / c_0; upper coils come first
+   config%Ic(1)  = 131.187744140625
+   config%Ic(2)  = 129.086755371094
+   config%Ic(3)  = -129.713208007812
+   config%Ic(4)  = -130.553356933594
+   config%Ic(5)  = 131.21962890625
+   config%Ic(6)  = 129.259497070312
+   config%Ic(7)  = -130.025708007812
+   config%Ic(8)  = -130.659558105469
+   config%Ic(9)  = 131.417468261719
+   config%Ic(10) = -131.750036621094
+   config%Ic(11) = -128.985974121094
+   config%Ic(12) = 129.154443359375
+   config%Ic(13) = 131.405712890625
+   config%Ic(14) = -131.890246582031
+   config%Ic(15) = -129.251245117188
+   config%Ic(16) = 129.052575683594
 
    ! toroidal mode number of perturbation
    config%n = 2
@@ -22,10 +41,8 @@
    config%nritz = 30
    ! threshold for eigenvalues in preconditioner
    config%ritz_threshold = 0.5d0
-   ! number of knots per poloidal loop
-   config%nkpol = 200
-   ! number of flux surfaces up to and counting LCFS (before refinement)
-   config%nflux_unref = 100
+   ! maximum distance between flux surfaces along theta = 0
+   config%max_Delta_rad = 0.45d0
    ! temperature on magnetic axis
    config%temp_max = 3.d3
    ! minimum temperature
@@ -40,6 +57,26 @@
    config%max_eig_out = 10
 /
 &arrays
+   refinement(3) = 1.414213562373095d0
+   refinement(4) = 1.414213562373095d0
+   refinement(5) = 1.414213562373095d0
+   refinement(6) = 1.414213562373095d0
+   refinement(7) = 1.414213562373095d0
+   refinement(8) = 1.414213562373095d0
+   refinement(9) = 1.414213562373095d0
+   refinement(10) = 1.414213562373095d0
+   refinement(11) = 1.414213562373095d0
+   refinement(12) = 1.414213562373095d0
+   deletions(3) = 1
+   deletions(4) = 1
+   deletions(5) = 1
+   deletions(6) = 1
+   deletions(7) = 1
+   deletions(8) = 1
+   deletions(9) = 1
+   deletions(10) = 1
+   deletions(11) = 1
+   deletions(12) = 1
    ! coefficients for sheet currents
    sheet_current_factor(3) = (-1d3, 0d0)
    sheet_current_factor(4) = (3d2, -3d2)
