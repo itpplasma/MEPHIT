@@ -1048,7 +1048,7 @@ contains
          kf = 1, mesh%nflux)]
     allocate(opt_pol_edge_len(mesh%nflux + 1))
     ! cache averaged radius at half-grid steps
-    opt_pol_edge_len(:mesh%nflux) = sqrt(2d0 * fs_half%rad * fs_half%area / fs_half%perimeter)
+    opt_pol_edge_len(:mesh%nflux) = sqrt(fs_half%area / pi)
     ! extrapolate linearly
     opt_pol_edge_len(mesh%nflux + 1) = 2d0 * opt_pol_edge_len(mesh%nflux) - opt_pol_edge_len(mesh%nflux - 1)
     ! compute successive difference

@@ -1,6 +1,6 @@
 string plasmamesh = "inputformaxwell.msh";
 string extendedmesh = "inputformaxwell_ext.msh";
-real outerborderrefinement = 0.5;
+real outerborderrefinement = 0.125;
 real outerboxscale = 2.0;  // should be larger than sqrt(2.0);
 
 mesh Thinner = readmesh(plasmamesh);
