@@ -776,9 +776,10 @@ contains
     end function q_interp_resonant
   end subroutine compute_resonance_positions
 
-  subroutine refine_eqd_partition(nref, deletions, refinement, resonances, partition, ref_ind)
-    use magdif_conf, only: conf, logger
+  subroutine refine_eqd_partition(coarse_sep, nref, deletions, refinement, resonances, partition, ref_ind)
+    use magdif_conf, only: logger
     use magdif_util, only: linspace
+    real(dp), intent(in) :: coarse_sep
     integer, intent(in) :: nref
     integer, dimension(:), intent(in) :: deletions
     real(dp), dimension(:), intent(in) :: refinement, resonances
@@ -786,12 +787,12 @@ contains
     integer, dimension(:), intent(out) :: ref_ind
     integer :: kref, k, inter(nref + 1)
     integer, dimension(nref) :: additions, add_lo, add_hi, fine_lo, fine_hi
-    real(dp) :: coarse_sep, fine_sep(nref)
+    real(dp), dimension(nref) :: fine_sep
     real(dp), dimension(:, :), allocatable :: geom_ser, fine_pos_lo, fine_pos_hi
 
     if (allocated(partition)) deallocate(partition)
     if (nref < 1) then
-       mesh%nflux = conf%nflux_unref
+       mesh%nflux = ceiling(1d0 / coarse_sep)
        allocate(partition(0:mesh%nflux))
        partition(:) = linspace(0d0, 1d0, mesh%nflux + 1, 0, 0)
        return
@@ -828,7 +829,6 @@ contains
     end if
     additions = ceiling((log(refinement + 1d0) - &
          log(3d0 + dble(2 * deletions) * (1d0 - refinement) - refinement)) / log(refinement)) - 1
-    coarse_sep = 1d0 / dble(conf%nflux_unref)
     fine_sep = coarse_sep * refinement ** (-additions - 1)
     allocate(geom_ser(maxval(additions) + 1, nref))
     geom_ser(:, :) = reshape([(((refinement(kref) ** k - refinement(kref)) / (refinement(kref) - 1d0), &
@@ -891,8 +891,9 @@ contains
     partition(fine_hi(nref):) = linspace(partition(fine_hi(nref)), 1d0, inter(nref+1) + 1, 0, 0)
   end subroutine refine_eqd_partition
 
-  subroutine refine_resonant_surfaces(rho_norm_ref)
-    use magdif_conf, only: conf, conf_arr, logger
+  subroutine refine_resonant_surfaces(coarse_sep, rho_norm_ref)
+    use magdif_conf, only: conf_arr, logger
+    real(dp), intent(in) :: coarse_sep
     real(dp), dimension(:), allocatable, intent(out) :: rho_norm_ref
     integer :: m, m_dense, kref
     integer, dimension(:), allocatable :: ref_ind
@@ -913,13 +914,12 @@ contains
     ! take inner resonance as last to be refined; outside, only the fine separation is used
     m_dense = mesh%m_res_min + 1
     do while (m_dense <= mesh%m_res_max)
-       if (mesh%rad_norm_res(m_dense) - mesh%rad_norm_res(m_dense - 1) &
-            < 1d0 / dble(conf%nflux_unref)) exit
+       if (mesh%rad_norm_res(m_dense) - mesh%rad_norm_res(m_dense - 1) < coarse_sep) exit
        m_dense = m_dense + 1
     end do
     mask(m_dense:mesh%m_res_max) = .false.
     allocate(ref_ind(count(mask)))
-    call refine_eqd_partition(count(mask), pack(mesh%deletions, mask), &
+    call refine_eqd_partition(coarse_sep, count(mask), pack(mesh%deletions, mask), &
          pack(mesh%refinement, mask), pack(mesh%rad_norm_res, mask), rho_norm_ref, ref_ind)
     logger%msg = 'refinement positions:'
     if (logger%debug) call logger%write_msg
@@ -1026,7 +1026,7 @@ contains
 
     call compute_resonance_positions(psisurf(1:) * psipol_max + psi_axis, qsaf, psi2rho_norm)
     call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
-    call refine_resonant_surfaces(rho_norm_ref)
+    call refine_resonant_surfaces(conf%max_Delta_rad / rad_max, rho_norm_ref)
     call fs%init(mesh%nflux, .false.)
     call fs_half%init(mesh%nflux, .true.)
     fs%rad(:) = rho_norm_ref

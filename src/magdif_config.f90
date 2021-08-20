@@ -99,6 +99,10 @@ module magdif_conf
      !> Number of flux surfaces before refinement. Defaults to 100.
      integer :: nflux_unref = 100
 
+     !> Maximum distance between flux surfaces along \f$ \theta = 0 \f$. Defaults
+     !> to 0.45 cm.
+     real(dp) :: max_Delta_rad = 0.45d0
+
      !> Number of radial divisions in radially refined regions for parallel current
      !> computations. Defaults to 2048.
      integer :: nrad_Ipar = 2048
