@@ -170,7 +170,7 @@
      phi = 0.d0
      phiout = h * sigma
 !
-     ymet(1) = r_sep
+     ymet(1) = raxis+hbr*dfloat(nlabel)
      ymet(2) = zaxis
      ymet(3) = 0.d0
      ymet(4) = 0.d0
@@ -201,7 +201,7 @@
     !theta0 = modulo(atan2(theta_axis(2),atan2(theta_axis(1))),2.d0*pi)
     
   else
-    theta_axis = [1.d0, 0.d0] * (r_sep - raxis)
+    theta_axis = [hbr*dfloat(nlabel), 0.d0]
   end if
   theta0 = atan2(theta_axis(2), theta_axis(1))
 !------------------------------------------------------------------------------
