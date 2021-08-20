@@ -193,6 +193,7 @@ contains
 
     step = (hi - lo) / dble(cnt - 1 + excl_lo + excl_hi)
     linspace = lo + [(k * step, k = excl_lo, cnt - 1 + excl_lo)]
+    if (excl_hi == 0) linspace(cnt) = hi
   end function linspace
 
 
