@@ -1445,14 +1445,14 @@ contains
     complex(dp) :: fourier_basis(-m_max:m_max)
 
     allocate(mesh%gpec_jacfac(-m_max:m_max, mesh%nflux))
-    mesh%gpec_jacfac(:, :) = 0d0
+    mesh%gpec_jacfac(:, :) = (0d0, 0d0)
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           associate (s => sample_polmodes)
             fourier_basis = [(exp(-imun * m * s%theta(ktri)), m = -m_max, m_max)]
             mesh%gpec_jacfac(:, kf) = mesh%gpec_jacfac(:, kf) + s%sqrt_g(ktri) * &
-                 s%R(ktri) * hypot(s%B0_Z(ktri), -s%B0_Z(ktri)) * fourier_basis
+                 s%R(ktri) * hypot(s%B0_Z(ktri), -s%B0_R(ktri)) * fourier_basis
           end associate
        end do
        mesh%gpec_jacfac(:, kf) = mesh%gpec_jacfac(:, kf) / mesh%kt_max(kf)
@@ -2064,9 +2064,28 @@ contains
     logical :: file_exists
     integer(HID_T) :: h5id_root
     integer :: ncid_file, ncid, nrad, npol, krad, kpol, idum, fid
-    real(dp) :: dum, B0_R, B0_Z, unit_normal(0:1), q
-    real(dp), allocatable :: psi(:), theta(:), R(:, :), Z(:, :), xi_n(:, :, :), jac(:, :), sqrt_g(:, :)
-    complex(dp), allocatable :: xi_n_R(:), xi_n_Z(:)
+    integer, parameter :: stepsize = 10
+    real(dp) :: dum, B0_R, B0_Z, unit_normal(0:1), q, chi1
+    real(dp), allocatable :: psi(:), theta(:), R(:, :), Z(:, :), xi_n(:, :, :), &
+         jac(:, :), sqrt_g(:, :), delpsi(:, :), grad_psi(:, :), contradenspsi(:, :)
+    complex(dp), allocatable :: xi_n_R(:), xi_n_Z(:), jacfac(:, :)
+
+    write (filename, '("gpec_control_output_n", i0, ".nc")') conf%n
+    inquire(file = filename, exist = file_exists)
+    if (.not. file_exists) return
+    write (logger%msg, '("File ", a, " found, performing GPEC comparison.")') &
+         trim(filename)
+    if (logger%info) call logger%write_msg
+    call check_error("nf90_open", nf90_open(filename, nf90_nowrite, ncid_file))
+    call check_error("nf90_get_att", nf90_get_att(ncid_file, nf90_global, 'chi1', chi1))
+    call check_error("nf90_close", nf90_close(ncid_file))
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, dataset // '/')
+    call h5_add(h5id_root, dataset // '/chi1', chi1, &
+         unit = '?', comment = 'GPEC poloidal flux normalization')
+    call h5_add(h5id_root, dataset // '/psipol_max', psipol_max, &
+         unit = 'Mx', comment = 'MEPHIT poloidal flux normalization')
+    call h5_close(h5id_root)
 
     write (filename, '("gpec_profile_output_n", i0, ".nc")') conf%n
     inquire(file = filename, exist = file_exists)
@@ -2134,6 +2153,67 @@ contains
     call h5_close(h5id_root)
     deallocate(psi, theta, R, Z, xi_n, xi_n_R, xi_n_Z)
 
+    nrad = (nrad - 1 + stepsize) / stepsize
+    allocate(psi(nrad), theta(npol), R(nrad, npol), Z(nrad, npol), sqrt_g(nrad, npol))
+    filename = 'gpec_diagnostics_jacfac_1_fun.out'
+    inquire(file = filename, exist = file_exists)
+    if (.not. file_exists) return
+    logger%msg = 'File ' // trim(filename) // ' found, performing GPEC jacfac comparison.'
+    if (logger%info) call logger%write_msg
+    allocate(jacfac(nrad, npol), contradenspsi(nrad, npol))
+    open(newunit = fid, file = filename, status = 'old', form = 'formatted', action = 'read')
+    read (fid, *)
+    read (fid, *)
+    do krad = 1, nrad
+       do kpol = 1, npol
+          read (fid, '(1x, 4(1x, es16.8))') psi(krad), theta(kpol), jacfac(krad, kpol)
+       end do
+    end do
+    close(fid)
+    psi(:) = psipol_max * psi
+    theta(:) = 2d0 * pi * theta
+    jacfac(:, :) = psipol_max / (2d4 * pi * chi1) * jacfac
+    filename = 'gpec_diagnostics_delpsi_fun.out'
+    inquire(file = filename, exist = file_exists)
+    if (.not. file_exists) return
+    logger%msg = 'File ' // trim(filename) // ' found, performing GPEC grad psi comparison.'
+    if (logger%info) call logger%write_msg
+    allocate(delpsi(nrad, npol), grad_psi(nrad, npol))
+    open(newunit = fid, file = filename, status = 'old', form = 'formatted', action = 'read')
+    read (fid, *)
+    read (fid, *)
+    do krad = 1, nrad
+       do kpol = 1, npol
+          read (fid, '(1x, 3(1x, es16.8))') psi(krad), theta(kpol), delpsi(krad, kpol)
+       end do
+    end do
+    close(fid)
+    psi(:) = psipol_max * psi
+    theta(:) = 2d0 * pi * theta
+    delpsi(:, :) = 1d-2 * psipol_max * delpsi
+    do kpol = 1, npol
+       do krad = 1, nrad
+          call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol), &
+               q, dum, sqrt_g(krad, kpol), dum, dum, R(krad, kpol), dum, dum, Z(krad, kpol), dum, dum)
+          call field(R(krad, kpol), 0d0, Z(krad, kpol), B0_R, dum, B0_Z, &
+               dum, dum, dum, dum, dum, dum, dum, dum, dum)
+          grad_psi(krad, kpol) = R(krad, kpol) * hypot(B0_Z, -B0_R)
+          contradenspsi(krad, kpol) = grad_psi(krad, kpol) * sqrt_g(krad, kpol) * abs(q)
+       end do
+    end do
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, dataset // '/')
+    call h5_add(h5id_root, dataset // '/jacfac', jacfac, lbound(jacfac), ubound(jacfac), &
+         unit = '?', comment = 'GPEC jacfac at (psi, theta)')
+    call h5_add(h5id_root, dataset // '/contradenspsi', contradenspsi, lbound(contradenspsi), ubound(contradenspsi), &
+         unit = 'cm^2', comment = 'MEPHIT jacfac at (psi, theta)')
+    call h5_add(h5id_root, dataset // '/delpsi', delpsi, lbound(delpsi), ubound(delpsi), &
+         unit = 'G cm', comment = 'GPEC grad psi at (psi, theta)')
+    call h5_add(h5id_root, dataset // '/grad_psi', grad_psi, lbound(grad_psi), ubound(grad_psi), &
+         unit = 'G cm', comment = 'MEPHIT grad psi at (psi, theta)')
+    call h5_close(h5id_root)
+    deallocate(psi, theta, R, Z, delpsi, grad_psi, jacfac, sqrt_g)
+
     filename = '2d.out'
     inquire(file = filename, exist = file_exists)
     if (.not. file_exists) return
@@ -2142,11 +2222,13 @@ contains
     if (.not. file_exists) return
     write (logger%msg, '("Files ", a, " and 2d.out found, performing GPEC Jacobian comparison.")') &
          trim(filename)
+    if (logger%info) call logger%write_msg
     call check_error("nf90_open", nf90_open(filename, nf90_nowrite, ncid_file))
     call check_error("nf90_get_att", nf90_get_att(ncid_file, nf90_global, 'mpsi', nrad))
     call check_error("nf90_get_att", nf90_get_att(ncid_file, nf90_global, 'mtheta', npol))
     call check_error("nf90_close", nf90_close(ncid_file))
     nrad = nrad + 1
+    npol = npol + 1
     allocate(psi(nrad), theta(npol), jac(nrad, npol), sqrt_g(nrad, npol), R(nrad, npol), Z(nrad, npol))
     open(newunit = fid, file = '2d.out', status = 'old', form = 'formatted', action = 'read')
     read (fid, *)
@@ -2165,14 +2247,13 @@ contains
                q, dum, sqrt_g(krad, kpol), dum, dum, dum, dum, dum, dum, dum, dum)
           sqrt_g(krad, kpol) = sqrt_g(krad, kpol) * abs(q)
        end do
-       read (fid, *)  ! skip theta = 2 pi
        read (fid, *)
        read (fid, *)
        read (fid, *)
     end do
     R(:, :) = R * 1d2  ! m to cm
     Z(:, :) = Z * 1d2  ! m to cm
-    jac(:, :) = jac * 1d-2  ! m per T to cm per G
+    jac(:, :) = jac / (2d2 * pi * chi1)  ! m per T to cm per G, normalization in GPEC
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, dataset // '/jac/')
     call h5_add(h5id_root, dataset // '/jac/psi', psi, lbound(psi), ubound(psi), &
@@ -2184,9 +2265,9 @@ contains
     call h5_add(h5id_root, dataset // '/jac/Z', Z, lbound(Z), ubound(Z), &
          unit = 'cm', comment = 'Z(psi, theta)')
     call h5_add(h5id_root, dataset // '/jac/sqrt_g', sqrt_g, lbound(sqrt_g), ubound(sqrt_g), &
-         unit = 'cm', comment = 'MEPHIT Jacobian at (psi, theta)')
+         unit = 'cm G^-1', comment = 'MEPHIT Jacobian at (psi, theta)')
     call h5_add(h5id_root, dataset // '/jac/jac', jac, lbound(jac), ubound(jac), &
-         unit = 'cm', comment = 'GPEC Jacobian at (psi, theta)')
+         unit = 'cm G^-1', comment = 'GPEC Jacobian at (psi, theta)')
     call h5_close(h5id_root)
     deallocate(psi, theta, jac, sqrt_g, R, Z)
 

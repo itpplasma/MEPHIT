@@ -60,14 +60,6 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
         workdir, 'GPEC_Bmn_psi_arg.pdf', testcase.config, testcase.data,
         fslabel.psi_norm, psi_arg, partial(np.angle, deg=True), vac, pert, mephit_vac, mephit_pert
     ))
-    testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'debug_Bmn_psi_abs.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, psi_abs, np.abs, vac, mephit_vac
-    ))
-    testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'debug_Bmn_psi_arg.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, psi_arg, partial(np.angle, deg=True), vac, mephit_vac
-    ))
     vacn = polmodes('vacuum perturbation (GPEC)', 'k--')
     vacn.read_GPEC(path.join(workdir, 'gpec_profile_output_n2.nc'), sgn_dpsi, 'b_n_x')
     pertn = polmodes('full perturbation (GPEC)', 'b--')
@@ -87,42 +79,6 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     testcase.plots.append(magdif_poloidal_plots(
         workdir, 'GPEC_Bmn_psin_arg.pdf', testcase.config, testcase.data,
         fslabel.psi_norm, psin_arg, partial(np.angle, deg=True), vacn, pertn, mephit_vacn, mephit_pertn
-    ))
-    testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'debug_Bmn_psin_abs.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, psin_abs, np.abs, vacn, mephit_vacn
-    ))
-    testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'debug_Bmn_psin_arg.pdf', testcase.config, testcase.data,
-        fslabel.psi_norm, psin_arg, partial(np.angle, deg=True), vacn, mephit_vacn
-    ))
-    jacfac = deepcopy(vac)
-    data = np.loadtxt(path.join(workdir, 'gpec_diagnostics_jacfac_1.out'), skiprows=2)
-    m_range = np.unique(data[:, 1].astype(int))
-    npsi = data.shape[0] // m_range.size
-    for m in m_range:
-        jacfac.rho[m] = np.empty((npsi,), dtype='d')
-        jacfac.var[m] = np.empty((npsi,), dtype='D')
-    k = 0
-    for kpsi in np.arange(npsi):
-        for m in m_range:
-            jacfac.rho[m][kpsi] = data[k, 0]
-            jacfac.var[m].real[kpsi] = data[k, 2] * sgn_dpsi
-            jacfac.var[m].imag[kpsi] = data[k, 3] * sgn_dpsi * helicity
-            k += 1
-    mephit_jacfac = polmodes('weighting factor (MEPHIT)', 'r--')
-    mephit_jacfac.read_magdif(testcase.data, fslabel.psi_norm, '/mesh/gpec_jacfac')
-    for m in mephit_jacfac.var.keys():
-        mephit_jacfac.var[m] /= Mx_to_Wb * testcase.data['/mesh/gpec_jacfac'][:, 16]
-    testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'debug_jacfac_abs.pdf', testcase.config, testcase.data, fslabel.psi_norm,
-        r'$\abs [\sqrt{g} \lVert \nabla \psi \rVert]_{m}$ / \si{\square\meter}',
-        np.abs, jacfac, mephit_jacfac
-    ))
-    testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'debug_jacfac_arg.pdf', testcase.config, testcase.data, fslabel.psi_norm,
-        r'$\arg [\sqrt{g} \lVert \nabla \psi \rVert]_{m} $ / \si{\square\meter}',
-        partial(np.angle, deg=True), jacfac, mephit_jacfac
     ))
 
     psi = sgn_dpsi * Mx_to_Wb * testcase.data['/cache/fs/psi'][()]
@@ -151,8 +107,8 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     fig = Figure()
     ax = fig.subplots()
     ax.plot(jac_psi, jac_gpec[:, 0], label=r'GPEC, $\hat{\vartheta} = 0$')
-    ax.plot(jac_psi, jac_gpec[:, jac_npol // 2], label=r'GPEC, $\hat{\vartheta} = 0.5$')
     ax.plot(jac_psi, jac_mephit[:, 0], label=r'MEPHIT, $\hat{\vartheta} = 0$')
+    ax.plot(jac_psi, jac_gpec[:, jac_npol // 2], label=r'GPEC, $\hat{\vartheta} = 0.5$')
     ax.plot(jac_psi, jac_mephit[:, jac_npol // 2], label=r'MEPHIT, $\hat{\vartheta} = 0.5$')
     ax.set_xlabel(psi_n)
     ax.set_ylabel(sqrt_g)
@@ -162,8 +118,8 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     fig = Figure()
     ax = fig.subplots()
     ax.plot(debug_psi, jac_pest[:, 0], label=r'PEST, $\hat{\vartheta} = 0$')
-    ax.plot(debug_psi, jac_pest[:, debug_npol // 2], label=r'PEST, $\hat{\vartheta} = 0.5$')
     ax.plot(jac_psi, jac_mephit[:, 0], label=r'MEPHIT, $\hat{\vartheta} = 0$')
+    ax.plot(debug_psi, jac_pest[:, debug_npol // 2], label=r'PEST, $\hat{\vartheta} = 0.5$')
     ax.plot(jac_psi, jac_mephit[:, jac_npol // 2], label=r'MEPHIT, $\hat{\vartheta} = 0.5$')
     ax.set_xlabel(psi_n)
     ax.set_ylabel(sqrt_g)
@@ -173,8 +129,8 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     fig = Figure()
     ax = fig.subplots()
     ax.plot(jac_theta, jac_gpec[jac_nrad // 2, :], label=r'GPEC, $\hat{\psi} = 0.5$')
-    ax.plot(jac_theta, jac_gpec[jac_nrad // 4 * 3, :], label=r'GPEC, $\hat{\psi} = 0.75$')
     ax.plot(jac_theta, jac_mephit[jac_nrad // 2, :], label=r'MEPHIT, $\hat{\psi} = 0.5$')
+    ax.plot(jac_theta, jac_gpec[jac_nrad // 4 * 3, :], label=r'GPEC, $\hat{\psi} = 0.75$')
     ax.plot(jac_theta, jac_mephit[jac_nrad // 4 * 3, :], label=r'MEPHIT, $\hat{\psi} = 0.75$')
     ax.set_xlabel(theta_n)
     ax.set_ylabel(sqrt_g)
@@ -202,8 +158,8 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     fig = Figure()
     ax = fig.subplots()
     ax.plot(debug_psi, debug_R[:, debug_npol // 4], label=r'GPEC, $\hat{\vartheta} = 0.25$')
-    ax.plot(debug_psi, debug_R[:, debug_npol // 4 * 3], label=r'GPEC, $\hat{\vartheta} = 0.75$')
     ax.plot(debug_psi, R[:, debug_npol // 4], label=r'MEPHIT, $\hat{\vartheta} = 0.25$')
+    ax.plot(debug_psi, debug_R[:, debug_npol // 4 * 3], label=r'GPEC, $\hat{\vartheta} = 0.75$')
     ax.plot(debug_psi, R[:, debug_npol // 4 * 3], label=r'MEPHIT, $\hat{\vartheta} = 0.75$')
     ax.set_xlabel(psi_n)
     ax.set_ylabel(r'$R$ / \si{\meter}')
@@ -261,6 +217,61 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
     canvas = FigureCanvas(fig)
     fig.savefig(path.join(workdir, 'debug_R.pdf'))
 
+    jac_modes_gpec = np.fft.rfft(jac_gpec[:, :-1]) / (jac_npol - 1)
+    jac_modes_mephit = np.fft.rfft(jac_mephit[:, :-1]) / (jac_npol - 1)
+    for m in range(0, 9):
+        fig = Figure()
+        ax = fig.subplots()
+        ax.plot(jac_psi, jac_modes_gpec[:, m].real, label=fr"$\Real \sqrt{{g}}_{{m = {m}}}$ (GPEC)")
+        ax.plot(jac_psi, jac_modes_mephit[:, m].real, label=fr"$\Real \sqrt{{g}}_{{m = {m}}}$ (MEPHIT)")
+        ax.plot(jac_psi, jac_modes_gpec[:, m].imag, label=fr"$\Imag \sqrt{{g}}_{{m = {m}}}$ (GPEC)")
+        ax.plot(jac_psi, jac_modes_mephit[:, m].imag, label=fr"$\Imag \sqrt{{g}}_{{m = {m}}}$ (MEPHIT)")
+        ax.set_xlabel(psi_n)
+        ax.set_ylabel(sqrt_g)
+        ax.legend()
+        canvas = FigureCanvas(fig)
+        fig.savefig(path.join(workdir, f"comp_jac_psi_{m}.pdf"))
+    delpsi = np.transpose(testcase.data['/debug_GPEC/delpsi'][()])
+    grad_psi = np.transpose(testcase.data['/debug_GPEC/grad_psi'][()])
+    modes_delpsi = np.fft.rfft(delpsi[:, :-1]) / (jac_npol - 1)
+    modes_grad_psi = np.fft.rfft(grad_psi[:, :-1]) / (jac_npol - 1)
+    for m in range(0, 9):
+        fig = Figure()
+        ax = fig.subplots()
+        ax.plot(debug_psi[::10], modes_delpsi[:, m].real,
+                label=fr"$\Real \lVert \nabla \psi \rVert_{{m = {m}}}$ (GPEC)")
+        ax.plot(debug_psi[::10], modes_grad_psi[:, m].real,
+                label=fr"$\Real \lVert \nabla \psi \rVert_{{m = {m}}}$ (MEPHIT)")
+        ax.plot(debug_psi[::10], modes_delpsi[:, m].imag,
+                label=fr"$\Imag \lVert \nabla \psi \rVert_{{m = {m}}}$ (GPEC)")
+        ax.plot(debug_psi[::10], modes_grad_psi[:, m].imag,
+                label=fr"$\Imag \lVert \nabla \psi \rVert_{{m = {m}}}$ (MEPHIT)")
+        ax.set_xlabel(psi_n)
+        ax.set_ylabel(r'$\lVert \nabla \psi \rVert$ / \si{\gauss\centi\meter}')
+        ax.legend()
+        canvas = FigureCanvas(fig)
+        fig.savefig(path.join(workdir, f"comp_grad_psi_{m}.pdf"))
+    jacfac = np.transpose(testcase.data['/debug_GPEC/jacfac'][()])
+    contradenspsi = np.transpose(testcase.data['/debug_GPEC/contradenspsi'][()])
+    modes_jacfac = np.fft.fft(jacfac[:, :-1]) / (jac_npol - 1)
+    modes_contradenspsi = np.fft.rfft(contradenspsi[:, :-1]) / (jac_npol - 1)
+    for m in range(0, 9):
+        fig = Figure()
+        ax = fig.subplots()
+        ax.plot(debug_psi[::10], modes_jacfac[:, m].real,
+                label=fr"$\Real \lVert \nabla \psi \rVert_{{m = {m}}}$ (GPEC)")
+        ax.plot(debug_psi[::10], modes_contradenspsi[:, m].real,
+                label=fr"$\Real \lVert \nabla \psi \rVert_{{m = {m}}}$ (MEPHIT)")
+        ax.plot(debug_psi[::10], modes_jacfac[:, m].imag,
+                label=fr"$\Imag \lVert \nabla \psi \rVert_{{m = {m}}}$ (GPEC)")
+        ax.plot(debug_psi[::10], modes_contradenspsi[:, m].imag,
+                label=fr"$\Imag \lVert \nabla \psi \rVert_{{m = {m}}}$ (MEPHIT)")
+        ax.set_xlabel(psi_n)
+        ax.set_ylabel(r'$\sqrt{g} \lVert \nabla \psi \rVert$ / \si{\centi\meter\squared}')
+        ax.legend()
+        canvas = FigureCanvas(fig)
+        fig.savefig(path.join(workdir, f"comp_jacfac_{m}.pdf"))
+    continue
     rootgrp = netCDF4.Dataset(path.join(workdir, 'gpec_cylindrical_output_n2.nc'), 'r')
     R = [testcase.data['/Bnvac/rect_R'][()] * cm_to_m, np.array(rootgrp['R'])]
     Z = [testcase.data['/Bnvac/rect_Z'][()] * cm_to_m, np.array(rootgrp['z'])]
