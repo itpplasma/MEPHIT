@@ -1,8 +1,10 @@
 from os import path
-from numpy import pi, sqrt, zeros
+from numpy import abs, empty, hypot, pi, sqrt, zeros
 from h5py import File
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+from matplotlib.tri import Triangulation
+import colorcet
 import magdifplot
 
 workdir = '/home/patrick/git/NEO-EQ/run/33353_2325'
@@ -64,3 +66,73 @@ ax.set_xlabel(r'$r$ / \si{\centi\meter}')
 ax.set_ylabel(r'$l_{k}$ / \si{\centi\meter}')
 canvas = FigureCanvas(fig)
 fig.savefig(path.join(workdir, 'optpolres.pdf'))
+
+max_rel_err = 0.06
+triangulation = Triangulation(data['/mesh/node_R'], data['/mesh/node_Z'], data['/mesh/tri_node'][()] - 1)
+Bn_pol = empty((data['/mesh/ntri'][()],), dtype='D')
+Bn_pol.real = hypot(data['/debug_RT0/Bn_R'][()].real, data['/debug_RT0/Bn_Z'][()].real)
+Bn_pol.imag = hypot(data['/debug_RT0/Bn_R'][()].imag, data['/debug_RT0/Bn_Z'][()].imag)
+Bn_pol_RT0 = empty((data['/mesh/ntri'][()],), dtype='D')
+Bn_pol_RT0.real = hypot(data['/debug_RT0/Bn_R_RT0'][()].real, data['/debug_RT0/Bn_Z_RT0'][()].real)
+Bn_pol_RT0.imag = hypot(data['/debug_RT0/Bn_R_RT0'][()].imag, data['/debug_RT0/Bn_Z_RT0'][()].imag)
+error = (abs(Bn_pol_RT0) - abs(Bn_pol)) / abs(Bn_pol)
+fig = Figure(figsize=(3.6, 4.4))
+ax = fig.subplots()
+im = ax.tripcolor(triangulation, error, cmap=colorcet.cm.coolwarm)
+ax.set_aspect('equal')
+cbar = fig.colorbar(im)
+im.set_clim([-max_rel_err, max_rel_err])
+ax.set_xlabel(r'$R$ / cm')
+ax.set_ylabel(r'$Z$ / cm')
+canvas = FigureCanvas(fig)
+fig.savefig(path.join(workdir, f"RT0_error_fix.png"), dpi=300)
+
+fig = Figure(figsize=(3.3, 4.4))
+ax = fig.subplots()
+ax.triplot(data['/mesh/node_R'], data['/mesh/node_Z'], data['/mesh/tri_node'][()] - 1, linewidth=0.05)
+ax.set_aspect('equal')
+ax.set_xlabel(r'$R$ / \si{\centi\meter}')
+ax.set_ylabel(r'$Z$ / \si{\centi\meter}')
+canvas = FigureCanvas(fig)
+fig.savefig(path.join(workdir, 'mesh_fix.pdf'), dpi=600)
+
+data.close()
+data = File(path.join(workdir, 'magdif.h5'), 'r')
+triangulation = Triangulation(data['/mesh/node_R'], data['/mesh/node_Z'], data['/mesh/tri_node'][()] - 1)
+Bn_pol = empty((data['/mesh/ntri'][()],), dtype='D')
+Bn_pol.real = hypot(data['/debug_RT0/Bn_R'][()].real, data['/debug_RT0/Bn_Z'][()].real)
+Bn_pol.imag = hypot(data['/debug_RT0/Bn_R'][()].imag, data['/debug_RT0/Bn_Z'][()].imag)
+Bn_pol_RT0 = empty((data['/mesh/ntri'][()],), dtype='D')
+Bn_pol_RT0.real = hypot(data['/debug_RT0/Bn_R_RT0'][()].real, data['/debug_RT0/Bn_Z_RT0'][()].real)
+Bn_pol_RT0.imag = hypot(data['/debug_RT0/Bn_R_RT0'][()].imag, data['/debug_RT0/Bn_Z_RT0'][()].imag)
+error = (abs(Bn_pol_RT0) - abs(Bn_pol)) / abs(Bn_pol)
+fig = Figure(figsize=(3.6, 4.4))
+ax = fig.subplots()
+im = ax.tripcolor(triangulation, error, cmap=colorcet.cm.coolwarm)
+ax.set_aspect('equal')
+cbar = fig.colorbar(im)
+im.set_clim([-max_rel_err, max_rel_err])
+ax.set_xlabel(r'$R$ / cm')
+ax.set_ylabel(r'$Z$ / cm')
+canvas = FigureCanvas(fig)
+fig.savefig(path.join(workdir, f"RT0_error.png"), dpi=300)
+
+fig = Figure(figsize=(3.3, 4.4))
+ax = fig.subplots()
+ax.triplot(data['/mesh/node_R'], data['/mesh/node_Z'], data['/mesh/tri_node'][()] - 1, linewidth=0.05)
+ax.set_aspect('equal')
+ax.set_xlabel(r'$R$ / \si{\centi\meter}')
+ax.set_ylabel(r'$Z$ / \si{\centi\meter}')
+canvas = FigureCanvas(fig)
+fig.savefig(path.join(workdir, 'mesh.pdf'), dpi=600)
+
+fig = Figure()
+ax = fig.subplots()
+ax.plot(data['/mesh/kp_max'][()], '-xk')
+ax.axhline(200.0, color='r', alpha=0.5, lw=0.5)
+ax.set_xlabel(r'flux surface index $k$')
+ax.set_ylabel(r'number of poloidal points $N_{k}^{\text{pol}}$')
+canvas = FigureCanvas(fig)
+fig.savefig(path.join(workdir, 'opt_pol_res.pdf'), dpi=300)
+
+data.close()
