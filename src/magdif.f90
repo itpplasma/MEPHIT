@@ -208,6 +208,7 @@ contains
   end subroutine magdif_single
 
   subroutine magdif_iterate
+    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use magdif_util, only: arnoldi_break
     use magdif_mesh, only: mesh
@@ -216,9 +217,10 @@ contains
     use magdif_conf, only: conf, logger, runmode_precon, runmode_single, datafile, cmplx_fmt
 
     logical :: preconditioned
-    integer :: kiter, niter, ndim, nritz, i, j, info
+    integer :: kiter, niter, maxiter, ndim, nritz, i, j, info
     integer(HID_T) :: h5id_root
-    real(dp), allocatable :: L2int(:)
+    real(dp), allocatable :: L2int_Bn_diff(:)
+    real(dp) :: L2int_Bnvac, rel_err
     type(RT0_t) :: Bn_prev, Bn_diff
     complex(dp), allocatable :: eigvals(:), eigvecs(:, :), Lr(:, :), Yr(:, :)
     integer, allocatable :: ipiv(:)
@@ -232,9 +234,9 @@ contains
     ! runmodes
     preconditioned = runmode_precon == conf%runmode
     if (runmode_single == conf%runmode) then
-       niter = 0
+       maxiter = 0
     else
-       niter = conf%niter
+       maxiter = conf%niter
     end if
     if (preconditioned) then
        ! calculate eigenvectors
@@ -296,13 +298,14 @@ contains
        end if
     end if
 
-    allocate(L2int(0:niter))
-    call FEM_compute_L2int(mesh%nedge, Bnvac%DOF, L2int(0))
+    call FEM_compute_L2int(mesh%nedge, Bnvac%DOF, L2int_Bnvac)
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, 'iter/')
-    call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int(0), &
+    call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int_Bnvac, &
          comment = 'L2 integral of magnetic field (vacuum)', unit = 'Mx')
     call h5_close(h5id_root)
+    allocate(L2int_Bn_diff(0:maxiter))
+    L2int_Bn_diff = ieee_value(0d0, ieee_quiet_nan)
     call vec_polmodes_init(jmn, m_max, mesh%nflux)
     call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
     call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
@@ -313,8 +316,9 @@ contains
             matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF)))
        call RT0_compute_tor_comp(Bn)
     end if
-    do kiter = 0, niter
-       write (logger%msg, '("Iteration ", i2, " of ", i2)') kiter, niter
+    niter = maxiter
+    do kiter = 0, maxiter
+       write (logger%msg, '("Iteration ", i2, " of ", i2)') kiter, maxiter
        if (logger%info) call logger%write_msg
        write (postfix, postfix_fmt) kiter
        Bn_prev%DOF(:) = Bn%DOF
@@ -329,7 +333,7 @@ contains
        call RT0_compute_tor_comp(Bn)
        Bn_diff%DOF(:) = Bn%DOF - Bn_prev%DOF
        Bn_diff%comp_phi(:) = Bn%comp_phi - Bn_prev%comp_phi
-       call FEM_compute_L2int(mesh%nedge, Bn_diff%DOF, L2int(kiter))
+       call FEM_compute_L2int(mesh%nedge, Bn_diff%DOF, L2int_Bn_diff(kiter))
        if (kiter <= 1) then
           call L1_write(pn, datafile, 'iter/pn' // postfix, &
                'pressure (after iteration)', 'dyn cm^-2')
@@ -342,18 +346,37 @@ contains
           call RT0_poloidal_modes(jn, jmn)
           call vec_polmodes_write(jmn, datafile, 'postprocess/jmn' // postfix, &
                'current density (after iteration)', 'statA cm^-2')
+       else
+          if (L2int_Bn_diff(kiter) > conf%ritz_threshold ** kiter * L2int_Bnvac .or. &
+               L2int_Bn_diff(kiter) < conf%iter_rel_err * L2int_Bnvac) then
+             niter = kiter
+             exit
+          end if
        end if
     end do
+    rel_err = L2int_Bn_diff(niter) / L2int_Bnvac
+    write (logger%msg, '("Relative error after ", i0, " iterations: ", es24.16e3)') &
+         niter, rel_err
+    if (logger%info) call logger%write_msg
+    if (rel_err >= conf%iter_rel_err) then
+       write (logger%msg, '("Requested relative error ", es24.16e3, ' // &
+            '" could not be reached within the requested ", i0, " iterations")') &
+            conf%iter_rel_err, conf%niter
+       if (logger%warn) call logger%write_msg
+    end if
     if (preconditioned) then
        deallocate(Lr, eigvals, eigvecs)
     end if
     Bnplas%DOF(:) = Bn%DOF - Bnvac%DOF
     Bnplas%comp_phi(:) = Bn%comp_phi - Bnvac%comp_phi
     call h5_open_rw(datafile, h5id_root)
-    call h5_add(h5id_root, 'iter/L2int_Bn_diff', L2int, lbound(L2int), ubound(L2int), &
+    call h5_add(h5id_root, 'iter/niter', niter, comment = 'actual number of iterations')
+    call h5_add(h5id_root, 'iter/rel_err', rel_err, comment = 'relative error of iterations')
+    call h5_add(h5id_root, 'iter/L2int_Bn_diff', L2int_Bn_diff, &
+         lbound(L2int_Bn_diff), ubound(L2int_Bn_diff), &
          comment = 'L2 integral of magnetic field (difference between iterations)', unit = 'Mx')
     call h5_close(h5id_root)
-    deallocate(L2int)
+    deallocate(L2int_Bn_diff)
     call L1_write(pn, datafile, 'iter/pn', &
          'pressure (full perturbation)', 'dyn cm^-2')
     call RT0_write(Bn, datafile, 'iter/Bn', &

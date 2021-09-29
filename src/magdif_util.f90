@@ -1008,6 +1008,7 @@ contains
          ritzvals(nkrylov), progression(nkrylov, nkrylov), selection(nkrylov), converged(nkrylov))
     ! initialize
     fold = (0d0, 0d0)
+    print '("Iteration 1 of ", i0)', nkrylov
     call next_iteration(fold, fnew)
     fzero(:) = fnew
     qvecs(:, 1) = fnew / sqrt(sum(conjg(fnew) * fnew))
@@ -1019,6 +1020,7 @@ contains
     ! Arnoldi iterations
     n = nkrylov
     do k = 2, nkrylov
+       print '("Iteration ", i0, " of ", i0)', k, nkrylov
        fold(:) = qvecs(:, k-1)
        call next_iteration(fold, fnew)
        qvecs(:, k) = fnew - fzero

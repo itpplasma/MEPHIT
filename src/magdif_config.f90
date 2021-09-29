@@ -78,9 +78,13 @@ module magdif_conf
      !> Coil currents for AUG B coils; upper coils come first
      real(dp), dimension(16) :: Ic = 0d0
 
-     !> Number of iterations. Does not apply when #runmode equals #runmode_single.
-     !> Defaults to 20.
-     integer :: niter = 20
+     !> Maximum number of iterations. Does not apply when #runmode equals
+     !> #runmode_single. Defaults to 50.
+     integer :: niter = 50
+
+     !> Acceptable relative error to consider L^2 integral in fixed-point
+     !> iterations converged. Defaults to 1.0e-12.
+     real(dp) :: iter_rel_err = 1d-12
 
      !> Maxmimum number of iterations in Arnoldi method. Only applies when
      !> #runmode equals #runmode_precon. Defaults to 100.
@@ -225,7 +229,9 @@ contains
          lbound(config%Ic), ubound(config%Ic), unit = 'c_0 statA', &
          comment = 'coil currents for AUG B coils; upper coils come first')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/niter', config%niter, &
-         comment = 'number of iterations')
+         comment = 'maximum number of iterations')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/iter_rel_err', config%iter_rel_err, &
+         comment = 'convergence threshold in L2 integral in fixed-point iteration')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/nkrylov', config%nkrylov, &
          comment = 'maximum number of iterations in Arnoldi method')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/ritz_threshold', config%ritz_threshold, &
