@@ -8,7 +8,8 @@ module magdif_util
 
   public :: pi, clight, imun, get_field_filenames, init_field, deinit_field, interp_psi_pol, &
        pos_angle, linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, binsearch, interleave, &
-       gauss_legendre_unit_interval, heapsort_complex, complex_abs_asc, C_F_string
+       gauss_legendre_unit_interval, heapsort_complex, complex_abs_asc, complex_abs_desc, &
+       arnoldi_break, hessenberg_eigvals, hessenberg_eigvecs, C_F_string
 
   real(dp), parameter :: pi = 4d0 * atan(1d0)
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
@@ -946,6 +947,242 @@ contains
     logical :: complex_abs_asc
     complex_abs_asc = abs(val1) < abs(val2)
   end function complex_abs_asc
+
+  function complex_abs_desc(val1, val2)
+    complex(dp), intent(in) :: val1, val2
+    logical :: complex_abs_desc
+    complex_abs_desc = abs(val1) > abs(val2)
+  end function complex_abs_desc
+
+  !> Find eigenvalues above given magnitude using Arnoldi iterations.
+  !>
+  !> @ndim dimension of the linear operator
+  !> @nkrylov maximum dimension of the Krylov subspace
+  !> @threshold find eigenvalues with absolute value abive this threshold
+  !> @tol consider eigenvalues converged when this relative error is reached
+  !> @next_iteration subroutine yielding matrix-vector product for given input vector
+  !> @ierr error flag
+  !> @nritz number of eigenvalues fulfilling \p threshold condition
+  !> @eigvals sorted eigenvalues fulfilling \p threshold condition
+  !> @eigvecs eigenvectors associated with \p eigvals
+  !>
+  !> If the requested eigenvalues are converged, \p ierr is set to 0. If convergence
+  !> is not reached after \p nkrylov iterations, \p ierr is set to the number of
+  !> converged eigenvalues and \p eigvals and \p eigvecs are not allocated. If the
+  !> LAPACK subroutines fail, \p eigvecs and possibly \p eigvals are not allocated
+  !> and the `info` parameter is propagated via \p ierr.
+  subroutine arnoldi_break(ndim, nkrylov, threshold, tol, next_iteration, &
+       ierr, nritz, eigvals, eigvecs)
+    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+    integer, intent(in) :: ndim, nkrylov
+    real(dp), intent(in) :: threshold, tol
+    interface
+       subroutine next_iteration(old_val, new_val)
+         import :: dp
+         complex(dp), intent(in) :: old_val(:)
+         complex(dp), intent(out) :: new_val(:)
+       end subroutine next_iteration
+    end interface
+    integer, intent(out) :: ierr, nritz
+    complex(dp), intent(out), allocatable :: eigvals(:)
+    complex(dp), intent(out), allocatable, optional :: eigvecs(:, :)
+    real(dp), parameter :: nearzero = 1d0 / huge(1d0)
+    complex(dp), allocatable :: fold(:), fnew(:), fzero(:), &
+         qvecs(:, :), hmat(:, :), ritzvals(:), ritzvecs(:, :), progression(:, :)
+    integer :: j, k, n
+    logical, allocatable :: selection(:), converged(:)
+
+    ierr = 0
+    nritz = 0
+    if (ndim < 1) then
+       ierr = -1
+       print '("arnoldi_break: ndim = ", i0, " < 1")', ndim
+       return
+    end if
+    if (nkrylov < 1) then
+       ierr = -2
+       print '("arnoldi_break: nkrylov = ", i0, " < 1")', ndim
+       return
+    end if
+    allocate(fold(ndim), fnew(ndim), fzero(ndim), qvecs(ndim, nkrylov), hmat(nkrylov, nkrylov), &
+         ritzvals(nkrylov), progression(nkrylov, nkrylov), selection(nkrylov), converged(nkrylov))
+    ! initialize
+    fold = (0d0, 0d0)
+    call next_iteration(fold, fnew)
+    fzero(:) = fnew
+    qvecs(:, 1) = fnew / sqrt(sum(conjg(fnew) * fnew))
+    hmat = (0d0, 0d0)
+    ritzvals = (0d0, 0d0)
+    selection = .false.
+    converged = .false.
+    progression = cmplx(ieee_value(0d0, ieee_quiet_nan), ieee_value(0d0, ieee_quiet_nan), dp)
+    ! Arnoldi iterations
+    n = nkrylov
+    do k = 2, nkrylov
+       fold(:) = qvecs(:, k-1)
+       call next_iteration(fold, fnew)
+       qvecs(:, k) = fnew - fzero
+       do j = 1, k-1
+          hmat(j, k-1) = sum(conjg(qvecs(:, j)) * qvecs(:, k))
+          qvecs(:, k) = qvecs(:, k) - hmat(j, k-1) * qvecs(:, j)
+       end do
+       hmat(k, k-1) = sqrt(sum(conjg(qvecs(:, k)) * qvecs(:, k)))
+       if (abs(hmat(k, k-1)) < nearzero) then
+          n = k
+          exit
+       end if
+       qvecs(:, k) = qvecs(:, k) / hmat(k, k-1)
+       ! calculate Ritz values
+       call hessenberg_eigvals(hmat(:k, :k), ritzvals(:k), ierr)
+       if (ierr /= 0) return
+       progression(:k, k) = ritzvals(:k)
+       selection(:k) = abs(ritzvals(:k)) >= threshold
+       nritz = count(selection)
+       converged(:k) = abs(progression(:k, k) - progression(:k, k - 1)) / &
+            abs(progression(:k, k - 1)) < tol
+       if (all(pack(converged, selection))) then
+          n = k
+          exit
+       end if
+    end do
+    if (.not. all(pack(converged, selection))) then
+       ierr = count(converged)
+       print '("arnoldi_break: only ", i0, " eigenvalues of ", i0, " converged")', &
+            ierr, nritz
+       return
+    end if
+    ! sort eigenvalues in descending order and optionall compute eigenvectors in this order
+    call heapsort_complex(ritzvals(:n), complex_abs_desc)
+    allocate(eigvals(nritz))
+    eigvals(:) = pack(ritzvals, selection)
+    if (present(eigvecs)) then
+       allocate(ritzvecs(n, nritz), eigvecs(ndim, nritz))
+       call hessenberg_eigvecs(hmat(:n, :n), ritzvals(:n), selection(:n), ritzvecs, ierr)
+       if (ierr /= 0) return
+       eigvecs = matmul(qvecs(:, :n), ritzvecs)
+       deallocate(ritzvecs)
+    end if
+    deallocate(fold, fnew, fzero, qvecs, hmat, ritzvals, progression, selection, converged)
+  end subroutine arnoldi_break
+
+  !> Compute eigenvalues of square Hessenberg matrix.
+  !>
+  !> @hmat square Hessenberg matrix
+  !> @eigvals calculated eigenvalues
+  !> @ierr error flag
+  !>
+  !> The `info` parameter from ZHSEQR is propagated via \p ierr on failure.
+  !> Note that no check is performed to verify that \p hmat is indeed a
+  !> Hessenberg matrix.
+  subroutine hessenberg_eigvals(hmat, eigvals, ierr)
+    complex(dp), intent(in) :: hmat(:, :)
+    complex(dp), intent(out) :: eigvals(:)
+    integer, intent(out) :: ierr
+    integer :: ndim, lwork
+    complex(dp), allocatable :: hmat_work(:, :), zdum(:, :), work(:)
+
+    ndim = size(hmat, 2)
+    if (size(hmat, 1) /= ndim) then
+       print '("hessenberg_eigvals: hmat has shape (", i0, ", ", i0, "), ' // &
+            'but expected (", i0, ", ", i0, ")")', shape(hmat), ndim, ndim
+       error stop
+    end if
+    if (size(eigvals, 1) /= ndim) then
+       print '("hessenberg_eigvals: eigvals has shape (", i0, "), ' // &
+            'but expected (", i0, ")")', shape(hmat), ndim
+       error stop
+    end if
+    allocate(hmat_work(ndim, ndim), zdum(1, ndim))
+    hmat_work(:, :) = hmat
+    allocate(work(1))
+    lwork = -1
+    call zhseqr('E', 'N', ndim, 1, ndim, hmat_work, ndim, eigvals, &
+         zdum, 1, work, lwork, ierr)
+    if (ierr /= 0) then
+       if (ierr < 0) then
+          print '("ZHSEQR: illegal value in argument #", i0)', -ierr
+       else
+          print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
+               ierr, ndim
+       end if
+       return
+    end if
+    lwork = int(work(1))
+    deallocate(work)
+    allocate(work(lwork))
+    call zhseqr('E', 'N', ndim, 1, ndim, hmat_work, ndim, eigvals, &
+         zdum, 1, work, lwork, ierr)
+    deallocate(work, hmat_work, zdum)
+    if (ierr /= 0) then
+       if (ierr < 0) then
+          print '("ZHSEQR: illegal value in argument #", i0)', -ierr
+       else
+          print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
+               ierr, ndim
+       end if
+    end if
+  end subroutine hessenberg_eigvals
+
+  !> Compute right eigenvectors of square Hessenberg matrix.
+  !>
+  !> @hmat square Hessenberg matrix
+  !> @eigvals calculated eigenvalues
+  !> @mask selection of eigenvalues for which to compute eigenvectors
+  !> @eigvecs calculated eigenvectors; second dimension is given by count(mask)
+  !> @ierr error flag
+  !>
+  !> The `info` parameter from ZHSEIN is propagated via \p ierr on failure.
+  !> Note that no check is performed to verify that \p hmat is indeed a
+  !> Hessenberg matrix. \p eigvals are assumed to be calculated by ZHSEQR
+  !> via hessenberg_eigvals().
+  subroutine hessenberg_eigvecs(hmat, eigvals, mask, eigvecs, ierr)
+    complex(dp), intent(in) :: hmat(:, :)
+    complex(dp), intent(in) :: eigvals(:)
+    logical, intent(in) :: mask(:)
+    complex(dp), intent(out) :: eigvecs(:, :)
+    integer, intent(out) :: ierr
+    integer :: ndim, neff
+    integer, allocatable :: idum(:), ifailr(:)
+    real(dp), allocatable :: rwork(:)
+    complex(dp), allocatable :: eigvals_work(:), zdum(:, :), work(:, :)
+
+    ndim = size(hmat, 2)
+    if (size(hmat, 1) /= ndim) then
+       print '("hessenberg_eigvecs: hmat has shape (", i0, ", ", i0, "), ' // &
+            'but expected (", i0, ", ", i0, ")")', shape(hmat), ndim, ndim
+       error stop
+    end if
+    if (size(eigvals, 1) /= ndim) then
+       print '("hessenberg_eigvecs: eigvals has shape (", i0, "), ' // &
+            'but expected (", i0, ")")', shape(eigvals), ndim
+       error stop
+    end if
+    if (size(mask, 1) /= ndim) then
+       print '("hessenberg_eigvecs: mask has shape (", i0, "), ' // &
+            'but expected (", i0, ")")', shape(mask), ndim
+       error stop
+    end if
+    if (size(eigvecs, 1) /= ndim .or. size(eigvecs, 2) /= count(mask)) then
+       print '("hessenberg_eigvecs: eigvecs has shape (", i0, ", ", i0, "), ' // &
+            'but expected (", i0, ", ", i0, ")")', shape(eigvecs), ndim, count(mask)
+       error stop
+    end if
+    allocate(eigvals_work(ndim), work(ndim, ndim), rwork(ndim), &
+         zdum(1, count(mask)), idum(count(mask)), ifailr(count(mask)))
+    eigvals_work(:) = eigvals
+    call zhsein('R', 'Q', 'N', mask, ndim, hmat, ndim, eigvals_work, &
+         zdum, 1, eigvecs, ndim, count(mask), neff, work, rwork, &
+         idum, ifailr, ierr)
+    if (ierr /= 0) then
+       if (ierr < 0) then
+          print '("ZHSEIN: illegal value in argument #", i0)', -ierr
+       else
+          print '("ZHSEIN: only ", i0, " of ", i0, " eigenvectors converged")', &
+               ierr, ndim
+       end if
+    end if
+    deallocate(eigvals_work, work, rwork, zdum, idum, ifailr)
+  end subroutine hessenberg_eigvecs
 
   pure function interleave_vv(first_v, second_v, num) result(merged)
     integer, intent(in) :: first_v(:), second_v(:), num

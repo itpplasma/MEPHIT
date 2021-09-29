@@ -208,20 +208,19 @@ contains
   end subroutine magdif_single
 
   subroutine magdif_iterate
-    use arnoldi_mod, only: ieigen, ngrow, tol, eigvecs  ! arnoldi.f90
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use magdif_util, only: arnoldi_break
     use magdif_mesh, only: mesh
     use magdif_pert, only: L1_write, RT0_init, RT0_deinit, RT0_write, RT0_compute_tor_comp, &
          RT0_poloidal_modes, vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write
     use magdif_conf, only: conf, logger, runmode_precon, runmode_single, datafile, cmplx_fmt
 
     logical :: preconditioned
-    integer :: kiter, niter, ndim, i, j, info
+    integer :: kiter, niter, ndim, nritz, i, j, info
     integer(HID_T) :: h5id_root
     real(dp), allocatable :: L2int(:)
     type(RT0_t) :: Bn_prev, Bn_diff
-    complex(dp) :: eigvals(conf%nritz)
-    complex(dp), allocatable :: Lr(:,:), Yr(:,:)
+    complex(dp), allocatable :: eigvals(:), eigvecs(:, :), Lr(:, :), Yr(:, :)
     integer, allocatable :: ipiv(:)
     character(len = 4) :: postfix
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
@@ -238,10 +237,14 @@ contains
        niter = conf%niter
     end if
     if (preconditioned) then
-       tol = conf%ritz_threshold
        ! calculate eigenvectors
-       ieigen = 1
-       call arnoldi(ndim, conf%nritz, eigvals, next_iteration_arnoldi)
+       call arnoldi_break(ndim, conf%nkrylov, conf%ritz_threshold, conf%ritz_rel_err, &
+            next_iteration_arnoldi, info, nritz, eigvals, eigvecs)
+       if (info /= 0) then
+          write (logger%msg, '("Error ", i0, " in routine arnoldi_break")') info
+          if (logger%err) call logger%write_msg
+          error stop
+       end if
        call h5_open_rw(datafile, h5id_root)
        call h5_create_parent_groups(h5id_root, 'iter/')
        call h5_add(h5id_root, 'iter/eigvals', eigvals, lbound(eigvals), ubound(eigvals), &
@@ -249,31 +252,31 @@ contains
        call h5_close(h5id_root)
        if (logger%info) then
           write (logger%msg, '("Arnoldi method yields ", i0, " Ritz eigenvalues > ", f0.2)') &
-               ngrow, tol
+               nritz, conf%ritz_rel_err
           call logger%write_msg
-          do i = 1, ngrow
+          do i = 1, nritz
              write (logger%msg, '("lambda ", i0, ": ", ' // cmplx_fmt // ')') i, eigvals(i)
              call logger%write_msg
           end do
        end if
-       if (ngrow > 0) then
-          do i = 1, min(ngrow, conf%max_eig_out)
+       if (nritz > 0) then
+          do i = 1, min(nritz, conf%max_eig_out)
              write (postfix, postfix_fmt) i
              Bn%DOF(:) = eigvecs(:, i)
              call RT0_compute_tor_comp(Bn)
              call RT0_write(Bn, datafile, 'iter/eigvec' // postfix, &
                   'iteration eigenvector', 'G', 1)
           end do
-          allocate(Lr(ngrow, ngrow), Yr(ngrow, ngrow))
+          allocate(Lr(nritz, nritz), Yr(nritz, nritz))
           Yr = (0d0, 0d0)
-          do i = 1, ngrow
+          do i = 1, nritz
              Yr(i, i) = (1d0, 0d0)
-             do j = 1, ngrow
+             do j = 1, nritz
                 Lr(i, j) = sum(conjg(eigvecs(:, i)) * eigvecs(:, j)) * (eigvals(j) - (1d0, 0d0))
              end do
           end do
-          allocate(ipiv(ngrow))
-          call zgesv(ngrow, ngrow, Lr, ngrow, ipiv, Yr, ngrow, info)
+          allocate(ipiv(nritz))
+          call zgesv(nritz, nritz, Lr, nritz, ipiv, Yr, nritz, info)
           deallocate(ipiv)
           if (info == 0) then
              logger%msg = 'Successfully inverted matrix for preconditioner'
@@ -284,7 +287,7 @@ contains
              if (logger%err) call logger%write_msg
              error stop
           end if
-          do i = 1, ngrow
+          do i = 1, nritz
              Lr(i, :) = eigvals(i) * Yr(i, :)
           end do
           deallocate(Yr)
@@ -306,8 +309,8 @@ contains
     Bn%DOF(:) = Bnvac%DOF
     Bn%comp_phi(:) = Bnvac%comp_phi
     if (preconditioned) then
-       Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
-            matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn%DOF)))
+       Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
+            matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF)))
        call RT0_compute_tor_comp(Bn)
     end if
     do kiter = 0, niter
@@ -316,12 +319,12 @@ contains
        write (postfix, postfix_fmt) kiter
        Bn_prev%DOF(:) = Bn%DOF
        Bn_prev%comp_phi(:) = Bn%comp_phi
-       ! compute B_(n+1) = K*B_n + B_vac ... different from kin2d.f90 and next_iteration_arnoldi
+       ! compute B_(n+1) = K * B_n + B_vac ... different from next_iteration_arnoldi
        call magdif_single
        Bn%DOF(:) = Bn%DOF + Bnvac%DOF
        if (preconditioned) then
-          Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:ngrow), matmul(Lr, &
-               matmul(transpose(conjg(eigvecs(:, 1:ngrow))), Bn%DOF - Bn_prev%DOF)))
+          Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
+               matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF - Bn_prev%DOF)))
        end if
        call RT0_compute_tor_comp(Bn)
        Bn_diff%DOF(:) = Bn%DOF - Bn_prev%DOF
@@ -341,13 +344,16 @@ contains
                'current density (after iteration)', 'statA cm^-2')
        end if
     end do
-    if (allocated(Lr)) deallocate(Lr)
+    if (preconditioned) then
+       deallocate(Lr, eigvals, eigvecs)
+    end if
     Bnplas%DOF(:) = Bn%DOF - Bnvac%DOF
     Bnplas%comp_phi(:) = Bn%comp_phi - Bnvac%comp_phi
     call h5_open_rw(datafile, h5id_root)
     call h5_add(h5id_root, 'iter/L2int_Bn_diff', L2int, lbound(L2int), ubound(L2int), &
          comment = 'L2 integral of magnetic field (difference between iterations)', unit = 'Mx')
     call h5_close(h5id_root)
+    deallocate(L2int)
     call L1_write(pn, datafile, 'iter/pn', &
          'pressure (full perturbation)', 'dyn cm^-2')
     call RT0_write(Bn, datafile, 'iter/Bn', &
@@ -359,24 +365,17 @@ contains
     call RT0_deinit(Bn_prev)
     call RT0_deinit(Bn_diff)
     call vec_polmodes_deinit(jmn)
-    ! TODO: refactor arnoldi_mod?
-    if (preconditioned) then
-       deallocate(L2int, eigvecs)
-    end if
 
   contains
 
-    ! computes B_(n+1) = K*(B_n + B_vac) ... as in kin2d.f90
-    ! next_iteration in arnoldi_mod is still declared external and has no interface,
-    ! so we use explicit-shape arrays here
-    subroutine next_iteration_arnoldi(n, xold, xnew)
-      integer, intent(in) :: n
-      complex(dp), intent(in) :: xold(n)
-      complex(dp), intent(out) :: xnew(n)
-      Bn%DOF(:) = xold + Bnvac%DOF
+    ! computes B_(n+1) = K * (B_n + B_vac) for Arnoldi iterations
+    subroutine next_iteration_arnoldi(old_val, new_val)
+      complex(dp), intent(in) :: old_val(:)
+      complex(dp), intent(out) :: new_val(:)
+      Bn%DOF(:) = old_val + Bnvac%DOF
       call RT0_compute_tor_comp(Bn)
       call magdif_single
-      xnew(:) = Bn%DOF
+      new_val(:) = Bn%DOF
     end subroutine next_iteration_arnoldi
   end subroutine magdif_iterate
 

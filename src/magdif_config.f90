@@ -82,13 +82,17 @@ module magdif_conf
      !> Defaults to 20.
      integer :: niter = 20
 
-     !> Number of Ritz eigenvalues to calculate. Only applies when #runmode equals
-     !> #runmode_precon. Defaults to 30.
-     integer :: nritz = 30
+     !> Maxmimum number of iterations in Arnoldi method. Only applies when
+     !> #runmode equals #runmode_precon. Defaults to 100.
+     integer :: nkrylov = 100
 
-     !> Threshold for absolute eigenvalues used for Arnoldi preconditioner. Defaults to
-     !> 0.5.
+     !> Threshold for eigenvalues' magnitude calculated via Arnoldi method.
+     !> Only applies when #runmode equals #runmode_precon. Defaults to 0.5.
      real(dp) :: ritz_threshold = 0.5d0
+
+     !> Acceptable relative error to consider eigenvalues converged in Arnoldi method.
+     !> Only applies when #runmode equals #runmode_precon. Defaults to 1.0e-12.
+     real(dp) :: ritz_rel_err = 1d-12
 
      !> Index of toroidal harmonics of perturbation. Defaults to 2.
      integer :: n = 2
@@ -222,10 +226,12 @@ contains
          comment = 'coil currents for AUG B coils; upper coils come first')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/niter', config%niter, &
          comment = 'number of iterations')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nritz', config%nritz, &
-         comment = 'number of Ritz eigenvalues')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nkrylov', config%nkrylov, &
+         comment = 'maximum number of iterations in Arnoldi method')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/ritz_threshold', config%ritz_threshold, &
-         comment = 'threshold for absolute eigenvalues used for Arnoldi preconditioner')
+         comment = 'threshold for eigenvalues'' magnitude in Arnoldi method')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ritz_rel_err', config%ritz_rel_err, &
+         comment = 'relative error for eigenvalues in Arnoldi method')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/n', config%n, &
          comment = 'index of toroidal harmonics of perturbation')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/max_Delta_rad', config%max_Delta_rad, &

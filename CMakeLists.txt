@@ -68,7 +68,6 @@ set(COMMON_FORTRAN_SRC_FILES
   src/spline5_RZ.f90
   src/external/netlib_mod.f90
   src/external/d1mach.f
-  src/arnoldi.f90
   src/fftw3.f90
   src/sparse_mod.f90
 )
