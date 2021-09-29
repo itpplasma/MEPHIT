@@ -259,13 +259,13 @@ for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
         fig = Figure()
         ax = fig.subplots()
         ax.plot(debug_psi[::10], modes_jacfac[:, m].real,
-                label=fr"$\Real \lVert \nabla \psi \rVert_{{m = {m}}}$ (GPEC)")
+                label=fr"$\Real \lVert \sqrt{{g}} \nabla \psi \rVert_{{m = {m}}}$ (GPEC)")
         ax.plot(debug_psi[::10], modes_contradenspsi[:, m].real,
-                label=fr"$\Real \lVert \nabla \psi \rVert_{{m = {m}}}$ (MEPHIT)")
+                label=fr"$\Real \lVert \sqrt{{g}} \nabla \psi \rVert_{{m = {m}}}$ (MEPHIT)")
         ax.plot(debug_psi[::10], modes_jacfac[:, m].imag,
-                label=fr"$\Imag \lVert \nabla \psi \rVert_{{m = {m}}}$ (GPEC)")
+                label=fr"$\Imag \lVert \sqrt{{g}} \nabla \psi \rVert_{{m = {m}}}$ (GPEC)")
         ax.plot(debug_psi[::10], modes_contradenspsi[:, m].imag,
-                label=fr"$\Imag \lVert \nabla \psi \rVert_{{m = {m}}}$ (MEPHIT)")
+                label=fr"$\Imag \lVert \sqrt{{g}} \nabla \psi \rVert_{{m = {m}}}$ (MEPHIT)")
         ax.set_xlabel(psi_n)
         ax.set_ylabel(r'$\sqrt{g} \lVert \nabla \psi \rVert$ / \si{\centi\meter\squared}')
         ax.legend()
