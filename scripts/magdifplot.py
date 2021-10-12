@@ -41,8 +41,10 @@ rcParams['ytick.direction'] = 'in'
 rcParams['ytick.right'] = True
 rcParams['lines.linewidth'] = 0.75
 rcParams['axes.formatter.limits'] = (-3, 4)
-rcParams['axes.prop_cycle'] = (cycler('color', ['k', 'tab:orange', 'tab:purple', 'tab:olive', 'tab:cyan']) +
-                               cycler('ls', ['-', '--', ':', '-.', (0, (5, 1.2, 1, 1.2, 1, 1.2))]))
+rcParams['axes.prop_cycle'] = (cycler('color', ['k', 'tab:orange', 'tab:purple', 'tab:red', 'tab:cyan',
+                                                'tab:brown', 'tab:gray', 'tab:green', 'tab:pink', 'tab:blue']) +
+                               cycler('ls', ['-', '--', '-.', ':', (0, (5, 1.2, 1, 1.2, 1, 1.2)),
+                                             '-', '--', '-.', ':', (0, (5, 1.2, 1, 1.2, 1, 1.2))]))
 latex_preamble = path.join(scripts_dir, 'magdifplot.tex')
 rcParams['text.latex.preamble'] = fr"\input{{{latex_preamble}}}"
 
