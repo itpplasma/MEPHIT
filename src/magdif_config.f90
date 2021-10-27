@@ -132,6 +132,9 @@ module magdif_conf
      !> geometry).
      integer :: kilca_pol_mode = 0
 
+     !> KiLCA HDF5 output file from which to infer coefficients of vacuum perturbation.
+     character(len = 1024) :: kilca_vac_output = ''
+
      !> Scaling factor used for comparison with results from KiLCA code. Defaults to 0
      !> (ASDEX geometry).
      !>
@@ -159,15 +162,6 @@ module magdif_conf
 
      !> Free parameters setting the magnitudes of sheet currents.
      complex(dp), dimension(:), allocatable :: sheet_current_factor
-
-     !> Integration constant for resonant vacuum perturbation in KiLCA comparison.
-     complex(dp), dimension(:), allocatable :: kilca_vac_coeff
-
-     !> Data point for resonant vacuum perturbation in KiLCA comparison.
-     real(dp), dimension(:), allocatable :: kilca_vac_r
-
-     !> Data point for resonant vacuum perturbation in KiLCA comparison.
-     complex(dp), dimension(:), allocatable :: kilca_vac_Bz
 
    contains
      procedure :: read => magdif_config_delayed_read
@@ -272,20 +266,15 @@ contains
     integer, intent(in) :: m_min, m_max
     integer :: fid
     integer, dimension(m_min:m_max) :: deletions
-    real(dp), dimension(m_min:m_max) :: refinement, kilca_vac_r
-    complex(dp), dimension(m_min:m_max) :: kilca_vac_Bz, kilca_vac_coeff, &
-         sheet_current_factor
-    namelist /arrays/ deletions, refinement, sheet_current_factor, &
-         kilca_vac_coeff, kilca_vac_r, kilca_vac_Bz
+    real(dp), dimension(m_min:m_max) :: refinement
+    complex(dp), dimension(m_min:m_max) :: sheet_current_factor
+    namelist /arrays/ deletions, refinement, sheet_current_factor
 
     config%m_min = m_min
     config%m_max = m_max
     deletions = 0
     refinement = 0d0
     sheet_current_factor = (0d0, 0d0)
-    kilca_vac_coeff = (1d0, 0d0)
-    kilca_vac_r = 0d0
-    kilca_vac_Bz = (0d0, 0d0)
     open(newunit = fid, file = filename)
     read(fid, nml = arrays)
     close(fid)
@@ -298,15 +287,6 @@ contains
     if (allocated(config%sheet_current_factor)) deallocate(config%sheet_current_factor)
     allocate(config%sheet_current_factor(m_min:m_max))
     config%sheet_current_factor(:) = sheet_current_factor
-    if (allocated(config%kilca_vac_coeff)) deallocate(config%kilca_vac_coeff)
-    allocate(config%kilca_vac_coeff(m_min:m_max))
-    config%kilca_vac_coeff(:) = kilca_vac_coeff
-    if (allocated(config%kilca_vac_r)) deallocate(config%kilca_vac_r)
-    allocate(config%kilca_vac_r(m_min:m_max))
-    config%kilca_vac_r(:) = kilca_vac_r
-    if (allocated(config%kilca_vac_Bz)) deallocate(config%kilca_vac_Bz)
-    allocate(config%kilca_vac_Bz(m_min:m_max))
-    config%kilca_vac_Bz(:) = kilca_vac_Bz
   end subroutine magdif_config_delayed_read
 
   subroutine magdif_config_delayed_export_hdf5(config, file, dataset)
@@ -330,15 +310,6 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor, &
          lbound(config%sheet_current_factor), ubound(config%sheet_current_factor), &
          comment = 'free parameters setting the magnitudes of sheet currents')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_vac_coeff', config%kilca_vac_coeff, &
-         lbound(config%kilca_vac_coeff), ubound(config%kilca_vac_coeff), &
-         comment = 'integration constant for resonant vacuum perturbation in KiLCA comparison')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_vac_r', config%kilca_vac_r, &
-         lbound(config%kilca_vac_r), ubound(config%kilca_vac_r), &
-         comment = 'data point for resonant vacuum perturbation in KiLCA comparison')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_vac_Bz', config%kilca_vac_Bz, &
-         lbound(config%kilca_vac_Bz), ubound(config%kilca_vac_Bz), &
-         comment = 'data point for resonant vacuum perturbation in KiLCA comparison')
     call h5_close(h5id_root)
   end subroutine magdif_config_delayed_export_hdf5
 
@@ -355,15 +326,9 @@ contains
     allocate(config%deletions(config%m_min:config%m_max))
     allocate(config%refinement(config%m_min:config%m_max))
     allocate(config%sheet_current_factor(config%m_min:config%m_max))
-    allocate(config%kilca_vac_coeff(config%m_min:config%m_max))
-    allocate(config%kilca_vac_r(config%m_min:config%m_max))
-    allocate(config%kilca_vac_Bz(config%m_min:config%m_max))
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/deletions', config%deletions)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', config%refinement)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/kilca_vac_coeff', config%kilca_vac_coeff)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/kilca_vac_r', config%kilca_vac_r)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/kilca_vac_Bz', config%kilca_vac_Bz)
     call h5_close(h5id_root)
   end subroutine magdif_config_delayed_import_hdf5
 
@@ -375,9 +340,6 @@ contains
     if (allocated(config%deletions)) deallocate(config%deletions)
     if (allocated(config%refinement)) deallocate(config%refinement)
     if (allocated(config%sheet_current_factor)) deallocate(config%sheet_current_factor)
-    if (allocated(config%kilca_vac_coeff)) deallocate(config%kilca_vac_coeff)
-    if (allocated(config%kilca_vac_r)) deallocate(config%kilca_vac_r)
-    if (allocated(config%kilca_vac_Bz)) deallocate(config%kilca_vac_Bz)
   end subroutine magdif_config_delayed_destructor
 
   !> Associate logfile and open if necessary.

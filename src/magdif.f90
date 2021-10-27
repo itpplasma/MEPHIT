@@ -14,9 +14,6 @@ module magdif
   !> Perturbation field in units of Gauss.
   type(RT0_t) :: Bn
 
-  !> Vacuum perturbation field in units of Gauss.
-  type(RT0_t) :: Bnvac
-
   !> Plasma perturbation field in units of Gauss.
   type(RT0_t) :: Bnplas
 
@@ -60,7 +57,7 @@ contains
     use magdif_mesh, only: equil, fs, fs_half, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
          magdif_mesh_deinit, sample_polmodes, coord_cache_deinit, psi_interpolator, psi_fine_interpolator, &
          B0R_edge, B0phi_edge, B0Z_edge, B0R_Omega, B0phi_Omega, B0Z_Omega, B0_flux, j0phi_edge
-    use magdif_pert, only: generate_vacfield
+    use magdif_pert, only: generate_vacfield, vac, vac_init, vac_deinit, vac_write, vac_read
     use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
     integer(c_int), intent(in), value :: runmode
     type(c_ptr), intent(in), value :: config
@@ -99,7 +96,9 @@ contains
        call generate_mesh
        call mesh_write(mesh, datafile, 'mesh')
        call write_cache
-       call generate_vacfield
+       call vac_init(vac, mesh%nedge, mesh%ntri, mesh%m_res_min, mesh%m_res_max)
+       call generate_vacfield(vac)
+       call vac_write(vac, datafile, 'vac')
        ! pass effective toroidal mode number and runmode to FreeFem++
        call FEM_init(mesh%n, mesh%nedge, runmode_flags)
        call FEM_extend_mesh
@@ -111,6 +110,8 @@ contains
        call mesh_read(mesh, datafile, 'mesh')
        call read_cache
        call load_magdata_in_symfluxcoord
+       call vac_init(vac, mesh%nedge, mesh%ntri, mesh%m_res_min, mesh%m_res_max)
+       call vac_read(vac, datafile, 'vac')
        ! reload config parameters here in case they changed since the meshing phase
        call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
        call conf_arr%export_hdf5(datafile, 'config')
@@ -149,6 +150,7 @@ contains
     call fs_half%deinit
     call magdif_mesh_deinit(mesh)
     call unload_magdata_in_symfluxcoord
+    call vac_deinit(vac)
     call deinit_field
     call equil%deinit
     call conf_arr%deinit
@@ -158,34 +160,23 @@ contains
 
   !> Initialize magdif module
   subroutine magdif_init
-    use magdif_conf, only: logger, datafile
     use magdif_mesh, only: mesh
-    use magdif_pert, only: RT0_init, RT0_read, L1_init
+    use magdif_pert, only: RT0_init, L1_init
 
-    ! initialize perturbation
     call L1_init(pn, mesh%npoint)
     call RT0_init(Bn, mesh%nedge, mesh%ntri)
-    call RT0_init(Bnvac, mesh%nedge, mesh%ntri)
     call RT0_init(Bnplas, mesh%nedge, mesh%ntri)
     call RT0_init(jn, mesh%nedge, mesh%ntri)
-    call RT0_read(Bnvac, datafile, 'Bnvac')
-
-    logger%msg = 'magdif initialized'
-    if (logger%info) call logger%write_msg
   end subroutine magdif_init
 
   !> Deallocates all previously allocated variables.
   subroutine magdif_cleanup
-    use magdif_conf, only: logger
     use magdif_pert, only: L1_deinit, RT0_deinit
 
     call L1_deinit(pn)
     call RT0_deinit(Bn)
-    call RT0_deinit(Bnvac)
     call RT0_deinit(Bnplas)
     call RT0_deinit(jn)
-    logger%msg = 'magdif cleanup finished'
-    if (logger%info) call logger%write_msg
   end subroutine magdif_cleanup
 
   subroutine magdif_read
@@ -213,7 +204,7 @@ contains
     use magdif_util, only: arnoldi_break
     use magdif_mesh, only: mesh
     use magdif_pert, only: L1_write, RT0_init, RT0_deinit, RT0_write, RT0_compute_tor_comp, &
-         RT0_poloidal_modes, vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write
+         RT0_poloidal_modes, vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, vac
     use magdif_conf, only: conf, logger, runmode_precon, runmode_single, datafile, cmplx_fmt
 
     logical :: preconditioned
@@ -298,7 +289,7 @@ contains
        end if
     end if
 
-    call FEM_compute_L2int(mesh%nedge, Bnvac%DOF, L2int_Bnvac)
+    call FEM_compute_L2int(mesh%nedge, vac%Bn%DOF, L2int_Bnvac)
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, 'iter/')
     call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int_Bnvac, &
@@ -309,8 +300,8 @@ contains
     call vec_polmodes_init(jmn, m_max, mesh%nflux)
     call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
     call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
-    Bn%DOF(:) = Bnvac%DOF
-    Bn%comp_phi(:) = Bnvac%comp_phi
+    Bn%DOF(:) = vac%Bn%DOF
+    Bn%comp_phi(:) = vac%Bn%comp_phi
     if (preconditioned) then
        Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
             matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF)))
@@ -325,7 +316,7 @@ contains
        Bn_prev%comp_phi(:) = Bn%comp_phi
        ! compute B_(n+1) = K * B_n + B_vac ... different from next_iteration_arnoldi
        call magdif_single
-       Bn%DOF(:) = Bn%DOF + Bnvac%DOF
+       Bn%DOF(:) = Bn%DOF + vac%Bn%DOF
        if (preconditioned) then
           Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
                matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF - Bn_prev%DOF)))
@@ -367,8 +358,8 @@ contains
     if (preconditioned) then
        deallocate(Lr, eigvals, eigvecs)
     end if
-    Bnplas%DOF(:) = Bn%DOF - Bnvac%DOF
-    Bnplas%comp_phi(:) = Bn%comp_phi - Bnvac%comp_phi
+    Bnplas%DOF(:) = Bn%DOF - vac%Bn%DOF
+    Bnplas%comp_phi(:) = Bn%comp_phi - vac%Bn%comp_phi
     call h5_open_rw(datafile, h5id_root)
     call h5_add(h5id_root, 'iter/niter', niter, comment = 'actual number of iterations')
     call h5_add(h5id_root, 'iter/rel_err', rel_err, comment = 'relative error of iterations')
@@ -395,7 +386,7 @@ contains
     subroutine next_iteration_arnoldi(old_val, new_val)
       complex(dp), intent(in) :: old_val(:)
       complex(dp), intent(out) :: new_val(:)
-      Bn%DOF(:) = old_val + Bnvac%DOF
+      Bn%DOF(:) = old_val + vac%Bn%DOF
       call RT0_compute_tor_comp(Bn)
       call magdif_single
       new_val(:) = Bn%DOF
@@ -641,7 +632,7 @@ contains
     use magdif_mesh, only: mesh, coord_cache_ext, coord_cache_ext_init, coord_cache_ext_deinit, &
          compute_sample_Ipar
     use magdif_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
-         vec_polmodes_write, RT0_poloidal_modes
+         vec_polmodes_write, RT0_poloidal_modes, vac
     integer, parameter :: m_max = 24
     integer :: k
     character(len = 24) :: dataset
@@ -653,7 +644,7 @@ contains
     call RT0_poloidal_modes(Bn, vec_polmodes)
     call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn', &
          'poloidal modes of magnetic field (full perturbation)', 'G')
-    call RT0_poloidal_modes(Bnvac, vec_polmodes)
+    call RT0_poloidal_modes(vac%Bn, vec_polmodes)
     call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn_vac', &
          'poloidal modes of magnetic field (vacuum perturbation)', 'G')
     call RT0_poloidal_modes(Bnplas, vec_polmodes)

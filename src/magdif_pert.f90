@@ -11,7 +11,8 @@ module magdif_pert
        RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
        vec_polmodes_read, vec_polmodes_write, AUG_coils_read, AUG_coils_write_Nemov, &
        AUG_coils_read_Nemov, AUG_coils_write_GPEC, AUG_coils_read_GPEC, AUG_coils_write_Fourier, &
-       read_currents_Nemov, Biot_Savart_sum_coils, write_Bvac_Nemov, generate_vacfield
+       read_currents_Nemov, Biot_Savart_sum_coils, write_Bvac_Nemov, generate_vacfield, &
+       vac_t, vac, vac_init, vac_deinit, vac_write, vac_read
 
   type, public :: L1_t
      !> Number of points on which the L1 are defined
@@ -68,6 +69,22 @@ module magdif_pert
      !> For tokamak and KiLCA geometry, this is the physical phi component.
      complex(dp), allocatable :: coeff_tor(:, :)
   end type vec_polmodes_t
+
+  type, public :: vac_t
+     !> Vacuum perturbation field in units of Gauss.
+     type(RT0_t) :: Bn
+
+     !> Lower and upper bound of of vac_t::kilca_vac_coeff.
+     integer :: m_min, m_max
+
+     !> single poloidal mode number used with KiLCA.
+     integer :: kilca_pol_mode
+
+     !> Integration constant for resonant vacuum perturbation in KiLCA comparison.
+     complex(dp), allocatable :: kilca_vac_coeff(:)
+  end type vac_t
+
+  type(vac_t) :: vac
 
 contains
 
@@ -514,6 +531,76 @@ contains
       end do
     end associate
   end subroutine RT0_poloidal_modes
+
+  subroutine vac_init(this, nedge, ntri, m_min, m_max)
+    use magdif_conf, only: conf
+    class(vac_t), intent(inout) :: this
+    integer, intent(in) :: nedge, ntri, m_min, m_max
+
+    call vac_deinit(this)
+    call RT0_init(this%Bn, nedge, ntri)
+    if (conf%kilca_scale_factor /= 0) then
+       this%m_min = m_min
+       this%m_max = m_max
+       allocate(this%kilca_vac_coeff(m_min:m_max))
+       this%kilca_vac_coeff = (0d0, 0d0)
+    end if
+  end subroutine vac_init
+
+  subroutine vac_deinit(this)
+    class(vac_t), intent(inout) :: this
+
+    call RT0_deinit(this%Bn)
+    this%m_min = 0
+    this%m_max = 0
+    this%kilca_pol_mode = 0
+    if (allocated(this%kilca_vac_coeff)) deallocate(this%kilca_vac_coeff)
+  end subroutine vac_deinit
+
+  subroutine vac_read(this, file, grp_name)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    use magdif_conf, only: conf
+    class(vac_t), intent(inout) :: this
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: grp_name
+    integer(HID_T) :: h5id_root
+
+    call RT0_read(vac%Bn, file, trim(grp_name) // '/Bn')
+    if (conf%kilca_scale_factor /= 0) then
+       call h5_open(file, h5id_root)
+       call h5_get(h5id_root, trim(adjustl(grp_name)) // '/m_min', this%m_max)
+       call h5_get(h5id_root, trim(adjustl(grp_name)) // '/m_max', this%m_max)
+       call h5_get(h5id_root, trim(adjustl(grp_name)) // '/kilca_pol_mode', this%kilca_pol_mode)
+       call h5_get(h5id_root, trim(adjustl(grp_name)) // '/kilca_vac_coeff', this%kilca_vac_coeff)
+       call h5_close(h5id_root)
+    end if
+  end subroutine vac_read
+
+  subroutine vac_write(this, file, grp_name)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
+    use magdif_conf, only: conf
+    class(vac_t), intent(in) :: this
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: grp_name
+    integer(HID_T) :: h5id_root
+
+    call RT0_write(vac%Bn, file, trim(adjustl(grp_name)) // '/Bn', &
+         'magnetic field (vacuum)', 'G', 1)
+    if (conf%kilca_scale_factor /= 0) then
+       ! already called h5_create_parent_groups
+       call h5_open_rw(file, h5id_root)
+       call h5_add(h5id_root, trim(adjustl(grp_name)) // '/m_min', this%m_max, &
+            'minimum poloidal mode number')
+       call h5_add(h5id_root, trim(adjustl(grp_name)) // '/m_max', this%m_max, &
+            'maximal poloidal mode number')
+       call h5_add(h5id_root, trim(adjustl(grp_name)) // '/kilca_pol_mode', this%kilca_pol_mode, &
+            'poloidal mode number of resonance to be considered in pre- and post-processing')
+       call h5_add(h5id_root, trim(adjustl(grp_name)) // '/kilca_vac_coeff', &
+            this%kilca_vac_coeff, lbound(this%kilca_vac_coeff), ubound(this%kilca_vac_coeff), &
+            'coefficient of modified Bessel function of first kind', 'G')
+       call h5_close(h5id_root)
+    end if
+  end subroutine vac_write
 
   subroutine AUG_coils_read(directory, ncoil, nseg, nwind, XYZ)
     character(len = *), intent(in) :: directory
@@ -1286,27 +1373,25 @@ contains
     call RT0_compute_tor_comp(Bn)
   end subroutine compute_Bnvac
 
-  subroutine generate_vacfield
+  subroutine generate_vacfield(vac)
     use bdivfree_mod, only: Rpoi, Zpoi, ipoint, AZnRe, AZnIm, ARnRe, ARnIm
-    use magdif_conf, only: conf, datafile
-    use magdif_mesh, only: mesh
-    type(RT0_t) :: Bn
+    use magdif_conf, only: conf
+    type(vac_t), intent(inout) :: vac
 
-    call RT0_init(Bn, mesh%nedge, mesh%ntri)
     if (conf%kilca_scale_factor /= 0) then
-       call compute_kilca_vac_coeff
-       call compute_kilca_vacuum(Bn)
+       call compute_kilca_vac_coeff(vac)
+       call compute_kilca_vacuum(vac%Bn)
        call debug_Bmnvac_kilca
-       call debug_RT0(Bn)
+       call debug_RT0(vac%Bn)
     else
        if (conf%nonres) then
-          call compute_Bn_nonres(Bn)
+          call compute_Bn_nonres(vac%Bn)
        else
-          call compute_Bnvac(Bn)
+          call compute_Bnvac(vac%Bn)
           call debug_Bnvac_rectplot
           call debug_B0_rectplot
           call debug_Bmnvac
-          call debug_RT0(Bn)
+          call debug_RT0(vac%Bn)
           call debug_fouriermodes
           ! deallocate arrays allocated in vector_potential_single_mode
           if (allocated(Rpoi)) deallocate(Rpoi)
@@ -1318,8 +1403,6 @@ contains
           if (allocated(ARnIm)) deallocate(ARnIm)
        end if
     end if
-    call RT0_write(Bn, datafile, 'Bnvac', 'magnetic field (vacuum)', 'G', 1)
-    call RT0_deinit(Bn)
   end subroutine generate_vacfield
 
   subroutine debug_Bnvac_rectplot
@@ -1528,7 +1611,6 @@ contains
   !> @param B_Z physical component \f$ B_{Z} (r, theta, n) \f$ of the vacuum perturbation
   !> field
   subroutine kilca_vacuum(tor_mode, pol_modes, R_0, r, theta, B_R, B_phi, B_Z)
-    use magdif_conf, only: conf_arr
     use magdif_util, only: imun, straight_cyl2bent_cyl
     integer, intent(in) :: tor_mode, pol_modes(1:)
     real(dp), intent(in) :: R_0, r, theta
@@ -1543,7 +1625,7 @@ contains
     fourier_basis = exp(imun * pol_modes * theta)
     do k = 1, ubound(pol_modes, 1)
        call kilca_vacuum_fourier(tor_mode, pol_modes(k), R_0, r, &
-            conf_arr%kilca_vac_coeff(abs(pol_modes(k))), temp_B_rad, temp_B_pol, temp_B_tor)
+            vac%kilca_vac_coeff(abs(pol_modes(k))), temp_B_rad, temp_B_pol, temp_B_tor)
        B_rad = B_rad + temp_B_rad * fourier_basis(k)
        B_pol = B_pol + temp_B_pol * fourier_basis(k)
        B_tor = B_tor + temp_B_tor * fourier_basis(k)
@@ -1551,28 +1633,53 @@ contains
     call straight_cyl2bent_cyl(B_rad, B_pol, B_tor, theta, B_R, B_phi, B_Z)
   end subroutine kilca_vacuum
 
-  subroutine compute_kilca_vac_coeff
-    use magdif_conf, only: conf_arr, logger, cmplx_fmt
+  subroutine compute_kilca_vac_coeff(vac)
+    use h5lt, only: h5ltget_dataset_info_f
+    use hdf5_tools, only: hid_t, hsize_t, size_t, h5_open, h5_get, h5_exists, h5_close
+    use magdif_conf, only: conf, logger, cmplx_fmt
     use magdif_mesh, only: mesh
-    integer :: m
-    complex(dp) :: B_rad, B_pol, B_tor
+    type(vac_t), intent(inout) :: vac
+    character(len = *), parameter :: grp_ptrn = '("output/postprocessor", i0)'
+    character(len = 32) :: grp_name  ! /output/postprocessor1234567890
+    integer(hid_t) :: h5id_root
+    integer(hsize_t) :: dims(2)
+    integer(size_t) :: type_size
+    integer :: k, m, n, type_id, h5err
+    real(dp) :: r2dum(1, 2), r
+    real(dp), allocatable :: kilca_r(:, :), kilca_Bz(:, :)
+    complex(dp) :: B_rad, B_pol, B_tor, Bz
 
-    do m = mesh%m_res_min, mesh%m_res_max
-       if (abs(conf_arr%kilca_vac_r(m)) <= 0d0) then
-          write (logger%msg, '("ignoring kilca_vac_r(", i0, "), ' // &
-               'resorting to kilca_vac_coeff(", i0, ")")') m, m
-          if (logger%info) call logger%write_msg
-          cycle
+    call h5_open(trim(adjustl(conf%kilca_vac_output)), h5id_root)
+    k = 0
+    do while (.true.)
+       k = k + 1
+       write (grp_name, grp_ptrn) k
+       if (.not. h5_exists(h5id_root, grp_name)) exit
+       call h5_get(h5id_root, trim(grp_name) // '/mode', r2dum)
+       m = int(r2dum(1, 1))
+       n = int(r2dum(1, 2))
+       if (n /= conf%n .or. m > vac%m_max .or. m < vac%m_min) cycle
+       call h5ltget_dataset_info_f(h5id_root, trim(grp_name) // '/Bz', &
+            dims, type_id, type_size, h5err)
+       allocate(kilca_r(dims(1), 1), kilca_Bz(dims(1), dims(2)))
+       call h5_get(h5id_root, trim(grp_name) // '/r', kilca_r)
+       call h5_get(h5id_root, trim(grp_name) // '/Bz', kilca_Bz)
+       r = kilca_r(dims(1), 1)
+       if (dims(2) > 1) then
+          Bz = cmplx(kilca_Bz(dims(1), 1), kilca_Bz(dims(1), 2), dp)
+       else
+          Bz = cmplx(kilca_Bz(dims(1), 1), 0d0, dp)
        end if
-       call kilca_vacuum_fourier(mesh%n, m, mesh%R_O, conf_arr%kilca_vac_r(m), (1d0, 0d0), &
-            B_rad, B_pol, B_tor)
-       conf_arr%kilca_vac_coeff(m) = conf_arr%kilca_vac_Bz(m) / B_tor
+       call kilca_vacuum_fourier(mesh%n, m, mesh%R_O, r, (1d0, 0d0), B_rad, B_pol, B_tor)
+       vac%kilca_vac_coeff(m) = Bz / B_tor
+       deallocate(kilca_r, kilca_Bz)
     end do
+    call h5_close(h5id_root)
     logger%msg = 'effective vacuum perturbation field coefficients:'
     if (logger%info) call logger%write_msg
     do m = mesh%m_res_min, mesh%m_res_max
-       write (logger%msg, '("kilca_vac_coeff(", i0, ") = ", ' // cmplx_fmt // ')') m, &
-            conf_arr%kilca_vac_coeff(m)
+       write (logger%msg, '("vac%kilca_vac_coeff(", i0, ") = ", ' // cmplx_fmt // ')') m, &
+            vac%kilca_vac_coeff(m)
        if (logger%info) call logger%write_msg
     end do
   end subroutine compute_kilca_vac_coeff
@@ -1618,7 +1725,7 @@ contains
 
   subroutine debug_Bmnvac_kilca
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use magdif_conf, only: conf, conf_arr, datafile
+    use magdif_conf, only: conf, datafile
     use magdif_mesh, only: fs_half, mesh
     character(len = *), parameter :: dataset = 'Bmnvac'
     integer(HID_T) :: h5id_root
@@ -1628,9 +1735,9 @@ contains
     abs_pol_mode = abs(conf%kilca_pol_mode)
     do kf = 1, mesh%nflux
        call kilca_vacuum_fourier(mesh%n, -abs_pol_mode, mesh%R_O, fs_half%rad(kf), &
-            conf_arr%kilca_vac_coeff(abs_pol_mode), B_rad_neg(kf), B_pol_neg(kf), B_tor_neg(kf))
+            vac%kilca_vac_coeff(abs_pol_mode), B_rad_neg(kf), B_pol_neg(kf), B_tor_neg(kf))
        call kilca_vacuum_fourier(mesh%n, abs_pol_mode, mesh%R_O, fs_half%rad(kf), &
-            conf_arr%kilca_vac_coeff(abs_pol_mode), B_rad_pos(kf), B_pol_pos(kf), B_tor_pos(kf))
+            vac%kilca_vac_coeff(abs_pol_mode), B_rad_pos(kf), B_pol_pos(kf), B_tor_pos(kf))
     end do
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, dataset // '/')
@@ -1664,7 +1771,7 @@ contains
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           associate (s => sample_polmodes)
-            if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
+            if (conf%kilca_pol_mode /= 0) then
                ! sample_polmodes is evaluated at half-grid steps
                call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, &
                     fs_half%rad(kf), s%theta(ktri), B_R(ktri), B_phi(ktri), B_Z(ktri))
