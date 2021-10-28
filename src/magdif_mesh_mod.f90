@@ -773,13 +773,14 @@ contains
     end function q_interp_resonant
   end subroutine compute_resonance_positions
 
-  subroutine refine_eqd_partition(coarse_sep, nref, deletions, refinement, resonances, partition, ref_ind)
+  subroutine refine_eqd_partition(coarse_sep, nref, deletions, refinement, resonances, diverging_q, partition, ref_ind)
     use magdif_conf, only: logger
     use magdif_util, only: linspace
     real(dp), intent(in) :: coarse_sep
     integer, intent(in) :: nref
     integer, dimension(:), intent(in) :: deletions
     real(dp), dimension(:), intent(in) :: refinement, resonances
+    logical, intent(in) :: diverging_q
     real(dp), dimension(:), allocatable, intent(out) :: partition
     integer, dimension(:), intent(out) :: ref_ind
     integer :: kref, k, inter(nref + 1)
@@ -851,8 +852,14 @@ contains
           end if
        end do
     end do
-    ! continue with fine separation outside last refined region
-    add_hi(nref) = 0
+    if (diverging_q) then
+       ! continue with fine separation outside last refined region
+       add_hi(nref) = 0
+    else
+       do while (1d0 < fine_pos_hi(add_hi(nref) + 1, nref))
+          add_hi(nref) = add_hi(nref) - 1
+       end do
+    end if
     ! compute number of intervals between refined regions
     inter(1) = ceiling(fine_pos_lo(add_lo(1) + 1, 1) / (fine_sep(1) * refinement(1) ** (add_lo(1) + 1)))
     do kref = 2, nref
@@ -860,7 +867,13 @@ contains
             max(fine_sep(kref) * refinement(kref) ** (add_lo(kref) + 1), &
             fine_sep(kref-1) * refinement(kref-1) ** (add_hi(kref-1) + 1)))
     end do
-    inter(nref + 1) = ceiling((1d0 - fine_pos_hi(add_hi(nref) + 1, nref)) / fine_sep(nref))
+    if (diverging_q) then
+       ! continue with fine separation outside last refined region
+       inter(nref + 1) = ceiling((1d0 - fine_pos_hi(add_hi(nref) + 1, nref)) / fine_sep(nref))
+    else
+       inter(nref + 1) = ceiling((1d0 - fine_pos_hi(add_hi(nref) + 1, nref)) / &
+            (fine_sep(nref) * refinement(nref) ** (add_hi(nref) + 1)))
+    end if
     ! compute upper and lower array indices of refined regions
     fine_lo(1) = inter(1)
     fine_hi(1) = fine_lo(1) + add_lo(1) + add_hi(1) + 1
@@ -889,9 +902,10 @@ contains
   end subroutine refine_eqd_partition
 
   subroutine refine_resonant_surfaces(coarse_sep, rho_norm_ref)
-    use magdif_conf, only: conf_arr, logger
+    use magdif_conf, only: conf, conf_arr, logger
     real(dp), intent(in) :: coarse_sep
     real(dp), dimension(:), allocatable, intent(out) :: rho_norm_ref
+    logical :: diverging_q
     integer :: m, m_dense, kref
     integer, dimension(:), allocatable :: ref_ind
     logical, dimension(:), allocatable :: mask
@@ -904,17 +918,22 @@ contains
     mesh%deletions(:) = conf_arr%deletions
     allocate(mask(mesh%m_res_min:mesh%m_res_max))
     mask(:) = 1d0 < mesh%refinement .and. mesh%refinement < 3d0
-    ! heuristic: if distance between resonances is less than coarse grid separation,
-    ! take inner resonance as last to be refined; outside, only the fine separation is used
-    m_dense = mesh%m_res_min + 1
-    do while (m_dense <= mesh%m_res_max)
-       if (mesh%rad_norm_res(m_dense) - mesh%rad_norm_res(m_dense - 1) < coarse_sep) exit
-       m_dense = m_dense + 1
-    end do
-    mask(m_dense:mesh%m_res_max) = .false.
+    if (conf%kilca_scale_factor /= 0) then
+       diverging_q = .false.
+    else
+       diverging_q = .true.
+       ! heuristic: if distance between resonances is less than coarse grid separation,
+       ! take inner resonance as last to be refined; outside, only the fine separation is used
+       m_dense = mesh%m_res_min + 1
+       do while (m_dense <= mesh%m_res_max)
+          if (mesh%rad_norm_res(m_dense) - mesh%rad_norm_res(m_dense - 1) < coarse_sep) exit
+          m_dense = m_dense + 1
+       end do
+       mask(m_dense:mesh%m_res_max) = .false.
+    end if
     allocate(ref_ind(count(mask)))
     call refine_eqd_partition(coarse_sep, count(mask), pack(mesh%deletions, mask), &
-         pack(mesh%refinement, mask), pack(mesh%rad_norm_res, mask), rho_norm_ref, ref_ind)
+         pack(mesh%refinement, mask), pack(mesh%rad_norm_res, mask), diverging_q, rho_norm_ref, ref_ind)
     logger%msg = 'refinement positions:'
     if (logger%debug) call logger%write_msg
     kref = 0
