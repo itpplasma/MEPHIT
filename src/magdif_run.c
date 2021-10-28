@@ -75,7 +75,7 @@ int main(int argc, char *argv[])
     if (!strlen(argv[1])) {
       errno_msg(exit, __FILE__, __LINE__, EINVAL, "Empty string for numeric runmode");
     }
-    runmode = strtol(argv[1], NULL, 0);
+    runmode = (int) strtol(argv[1], NULL, 0);
   } else {
     errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected numeric runmode as first argument");
   }

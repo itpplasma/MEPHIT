@@ -178,6 +178,7 @@ magdif_run() {
             # initialized with previous version of this script
             mv -b -f field_divB0_unprocessed.inp field_divB0.inp
         fi
+        GFORTRAN_ERROR_BACKTRACE=1
         # uncomment to use memcheck
         # valgrind -v --leak-check=full --show-leak-kinds=all --track-origins=yes \
         "$bindir/magdif_run.x" \

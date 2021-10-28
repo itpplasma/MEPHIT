@@ -17,9 +17,10 @@ if ("$ENV{FC}" MATCHES "ifort")
   set(LEGACY_FLAGS "-check noarg_temp_created")
 else ()
   # gfortran configuration
-  set(CMAKE_Fortran_FLAGS "-O2 -cpp -g -fno-realloc-lhs -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow")
-  set(WARNING_FLAGS "-Wall -Wextra")
+  set(CMAKE_Fortran_FLAGS "-O2 -march=native -cpp -g -fno-realloc-lhs -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow")
+  set(WARNING_FLAGS "-Wall -Wextra -pedantic -fmax-errors=1")
   set(LEGACY_FLAGS "-fcheck=no-array-temps")
+  set(CMAKE_C_FLAGS "-O2 -g -march=native -Wconversion -Wfloat-equal -Wshadow -Wredundant-decls -Winline ${WARNING_FLAGS}")
 endif ()
 
 ### Define external paths
@@ -94,7 +95,7 @@ set_source_files_properties(${MAGDIF_FORTRAN_SRC_FILES}
   src/standardise_equilibrium.f90
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS}")
 set_source_files_properties(src/magdif_run.c ${MAGDIF_C_SRC_FILES}
-  PROPERTIES COMPILE_FLAGS "-O2 -g ${WARNING_FLAGS}")
+  PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS}")
 
 ### Define library
 add_library(magdif SHARED

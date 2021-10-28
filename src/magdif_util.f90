@@ -206,8 +206,8 @@ contains
   !> It is not checked whether \p x is ordered; only the first and last value are used
   !> to determine wether the array values are increasing or decrasing.
   subroutine binsearch(x, lb, xi, k)
-    real(dp), intent(in) :: x(lb:)
     integer, intent(in) :: lb
+    real(dp), intent(in) :: x(lb:)
     real(dp), intent(in) :: xi
     integer, intent(out) :: k
     integer :: k_min, k_max, iter

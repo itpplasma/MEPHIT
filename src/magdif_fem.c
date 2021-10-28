@@ -78,8 +78,8 @@ void send_double1_to_FreeFem(const char *namedpipe, const int size, const double
   if (bytes_written < (ssize_t) sizeof(long int)) {
     errno_msg(_exit, __FILE__, __LINE__, errno ? errno : EIO, "Failed to write to pipe %s", namedpipe);
   }
-  bytes_written = write(fd, (void *) double1, size * sizeof(double));
-  if (bytes_written < (ssize_t) (size * sizeof(double))) {
+  bytes_written = write(fd, (void *) double1, (unsigned) size * sizeof(double));
+  if (bytes_written < (ssize_t) ((unsigned) size * sizeof(double))) {
     errno_msg(_exit, __FILE__, __LINE__, errno ? errno : EIO, "Failed to write to pipe %s", namedpipe);
   }
   if (close(fd)) {
@@ -111,10 +111,10 @@ void receive_double1_from_FreeFem(const char *namedpipe, const int size, double 
     errno_msg(_exit, __FILE__, __LINE__, EIO, "Pipe %s only contains %li double precision values, "
             "expected %i.\n", namedpipe, dum, size);
   }
-  bytes_expected = (ssize_t) (size * sizeof(double));
+  bytes_expected = (ssize_t) ((unsigned) size * sizeof(double));
   total_bytes_read = (ssize_t) 0;
   do {
-    bytes_read = read(fd, (void *) double1 + total_bytes_read, bytes_expected - total_bytes_read);
+    bytes_read = read(fd, (char *) double1 + total_bytes_read, (size_t) (bytes_expected - total_bytes_read));
     total_bytes_read += bytes_read;
   } while (bytes_read != 0 && total_bytes_read < bytes_expected);
   if (total_bytes_read < bytes_expected) {
