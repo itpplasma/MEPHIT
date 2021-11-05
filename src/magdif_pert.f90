@@ -7,7 +7,7 @@ module magdif_pert
   private
 
   ! types and associated procedures
-  public :: L1_t, L1_init, L1_deinit, L1_write, L1_read
+  public :: L1_t, L1_init, L1_deinit, L1_write, L1_read, L1_interp
   public :: RT0_t, RT0_init, RT0_deinit, RT0_write, RT0_read, RT0_interp, &
        RT0_compute_tor_comp, RT0_triplot, RT0_rectplot
   public :: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
@@ -147,6 +147,45 @@ contains
     call h5_close(h5id_root)
   end subroutine L1_read
 
+  subroutine L1_interp(ktri, elem, R, Z, comp, comp_dR, comp_dZ)
+    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+    use magdif_mesh, only: mesh
+    integer, intent(in) :: ktri
+    type(L1_t), intent(in) :: elem
+    real(dp), intent(in) :: R, Z
+    complex(dp), intent(out) :: comp
+    complex(dp), intent(out), optional :: comp_dR, comp_dZ
+    integer :: nodes(3)
+    real(dp) :: nan, Delta_R(3), Delta_Z(3)
+
+    if (ktri <= 0 .or. ktri > mesh%ntri) then
+       nan = ieee_value(1d0, ieee_quiet_nan)
+       comp = cmplx(nan, nan, dp)
+       if (present(comp_dR)) then
+          comp_dR = cmplx(nan, nan, dp)
+       end if
+       if (present(comp_dZ)) then
+          comp_dZ = cmplx(nan, nan, dp)
+       end if
+       return
+    end if
+    nodes = mesh%tri_node(:, ktri)
+    Delta_R = mesh%node_R(nodes) - R
+    Delta_Z = mesh%node_Z(nodes) - Z
+    comp = 0.5d0 / mesh%area(ktri) * sum(elem%DOF(nodes) * &
+         [Delta_R(2) * Delta_Z(3) - Delta_R(3) * Delta_Z(2), &
+         Delta_R(3) * Delta_Z(1) - Delta_R(1) * Delta_Z(3), &
+         Delta_R(1) * Delta_Z(2) - Delta_R(2) * Delta_Z(1)])
+    if (present(comp_dR)) then
+       comp_dR = 0.5d0 / mesh%area(ktri) * sum(elem%DOF(nodes) * &
+            [Delta_Z(2) - Delta_Z(3), Delta_Z(3) - Delta_Z(1), Delta_Z(1) - Delta_Z(2)])
+    end if
+    if (present(comp_dZ)) then
+       comp_dZ = 0.5d0 / mesh%area(ktri) * sum(elem%DOF(nodes) * &
+            [Delta_R(3) - Delta_R(2), Delta_R(1) - Delta_R(3), Delta_R(2) - Delta_R(1)])
+    end if
+  end subroutine L1_interp
+
   subroutine RT0_init(this, nedge, ntri)
     type(RT0_t), intent(inout) :: this
     integer, intent(in) :: nedge, ntri
@@ -180,7 +219,7 @@ contains
     integer :: nodes(3)
     real(dp) :: nan
 
-    if (ktri <= 0) then
+    if (ktri <= 0 .or. ktri > mesh%ntri) then
        nan = ieee_value(1d0, ieee_quiet_nan)
        comp_R = cmplx(nan, nan, dp)
        comp_Z = cmplx(nan, nan, dp)
