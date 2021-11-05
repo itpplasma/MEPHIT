@@ -53,4 +53,4 @@ if (Thinner.nv + Thouter.nv - Th.nv != nbe) {
        << Thinner.nv + Thouter.nv - Th.nv << ".\n";
   exit(1);
 }
-plot(Th);
+// plot(Th);

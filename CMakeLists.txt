@@ -47,6 +47,7 @@ find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
 
 ### External source files
 include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
+include_directories(${HDF5_INCLUDE_DIRS})
 
 ### Project source files
 set(COMMON_FORTRAN_SRC_FILES
