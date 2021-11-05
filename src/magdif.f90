@@ -6,7 +6,7 @@ module magdif
 
   private
 
-  public :: magdif_run, magdif_init, magdif_cleanup, magdif_iterate, magdif_postprocess
+  public :: magdif_run
 
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   type(L1_t) :: pn

@@ -6,15 +6,23 @@ module magdif_pert
 
   private
 
-  public :: L1_init, L1_deinit, L1_read, L1_write, RT0_init, RT0_deinit, RT0_read, &
-       RT0_write, RT0_interp, RT0_compute_tor_comp, RT0_triplot, &
-       RT0_rectplot, RT0_poloidal_modes, vec_polmodes_init, vec_polmodes_deinit, &
-       vec_polmodes_read, vec_polmodes_write, AUG_coils_read, AUG_coils_write_Nemov, &
-       AUG_coils_read_Nemov, AUG_coils_write_GPEC, AUG_coils_read_GPEC, AUG_coils_write_Fourier, &
-       read_currents_Nemov, Biot_Savart_sum_coils, write_Bvac_Nemov, generate_vacfield, &
-       vac_t, vac, vac_init, vac_deinit, vac_write, vac_read
+  ! types and associated procedures
+  public :: L1_t, L1_init, L1_deinit, L1_write, L1_read
+  public :: RT0_t, RT0_init, RT0_deinit, RT0_write, RT0_read, RT0_interp, &
+       RT0_compute_tor_comp, RT0_triplot, RT0_rectplot
+  public :: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
+       vec_polmodes_write, vec_polmodes_read, RT0_poloidal_modes
+  public :: vac_t, vac_init, vac_deinit, vac_write, vac_read, generate_vacfield
 
-  type, public :: L1_t
+  ! utility procedures
+  public :: AUG_coils_read, AUG_coils_write_Nemov, AUG_coils_read_Nemov, &
+       AUG_coils_write_GPEC, AUG_coils_read_GPEC, AUG_coils_write_Fourier, &
+       read_currents_Nemov, Biot_Savart_sum_coils, write_Bvac_Nemov
+
+  ! module variables
+  public :: vac
+
+  type :: L1_t
      !> Number of points on which the L1 are defined
      integer :: npoint
 
@@ -22,7 +30,7 @@ module magdif_pert
      complex(dp), allocatable :: DOF(:)
   end type L1_t
 
-  type, public :: RT0_t
+  type :: RT0_t
      !> Number of triangles on which the RT0 elements are defined
      integer :: ntri
 
@@ -39,7 +47,7 @@ module magdif_pert
      complex(dp), allocatable :: comp_phi(:)
   end type RT0_t
 
-  type, public :: vec_polmodes_t
+  type :: vec_polmodes_t
      !> Highest absolute poloidal mode number.
      integer :: m_max
 
@@ -70,7 +78,7 @@ module magdif_pert
      complex(dp), allocatable :: coeff_tor(:, :)
   end type vec_polmodes_t
 
-  type, public :: vac_t
+  type :: vac_t
      !> Vacuum perturbation field in units of Gauss.
      type(RT0_t) :: Bn
 

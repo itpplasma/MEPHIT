@@ -7,20 +7,24 @@ module magdif_mesh
 
   private
 
-  public :: equil, flux_func_cache, fs, fs_half, mesh_t, mesh, B0R_edge, B0phi_edge, B0Z_edge, &
-       B0r_Omega, B0phi_Omega, B0z_Omega, B0_flux, j0phi_edge, coord_cache, sample_polmodes, &
-       coord_cache_ext, coord_cache_ext_init, coord_cache_deinit, compute_sample_Ipar, &
-       coord_cache_ext_write, coord_cache_ext_read, coord_cache_ext_deinit, &
-       flux_func_cache_init, flux_func_cache_check, flux_func_cache_deinit, generate_mesh, &
-       compute_resonance_positions, refine_eqd_partition, refine_resonant_surfaces, write_kilca_convexfile, &
-       create_mesh_points, common_triangles, psi_interpolator, psi_fine_interpolator, &
-       connect_mesh_points, mesh_write, mesh_read, write_cache, read_cache, &
-       magdif_mesh_deinit, init_flux_variables, compute_pres_prof_eps, compute_pres_prof_par, &
-       compute_pres_prof_geqdsk, compute_safety_factor_flux, compute_safety_factor_rot, &
-       compute_safety_factor_geqdsk, check_safety_factor, cache_equilibrium_field, &
-       compute_j0phi, check_curr0, point_location, point_in_triangle
+  ! types and associated procedures
+  public :: flux_func_cache, flux_func_cache_init, flux_func_cache_deinit
+  public :: mesh_t, mesh_write, mesh_read, magdif_mesh_deinit, &
+       generate_mesh, write_cache, read_cache, point_location
+  public :: coord_cache, coord_cache_init, coord_cache_deinit, &
+       coord_cache_write, coord_cache_read
+  public :: coord_cache_ext, coord_cache_ext_init, coord_cache_ext_deinit, &
+       coord_cache_ext_write, coord_cache_ext_read, compute_sample_Ipar
+
+  ! module variables
+  public :: equil, psi_interpolator, psi_fine_interpolator, fs, fs_half, mesh, &
+       sample_polmodes
+  public :: B0R_edge, B0phi_edge, B0Z_edge, B0R_Omega, B0phi_Omega, B0Z_Omega, &
+       B0_flux, j0phi_edge
 
   type(g_eqdsk) :: equil
+  type(interp1d) :: psi_interpolator
+  type(interp1d) :: psi_fine_interpolator
 
   !> Structure containing flux functions evaluated at a specific flux surface, indicated
   !> by a common array index. For details see flux_func_cache_init().
@@ -61,8 +65,6 @@ module magdif_mesh
      procedure :: deinit => flux_func_cache_deinit
   end type flux_func_cache
 
-  type(interp1d) :: psi_interpolator
-  type(interp1d) :: psi_fine_interpolator
   type(flux_func_cache) :: fs
   type(flux_func_cache) :: fs_half
 

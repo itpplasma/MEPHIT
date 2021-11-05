@@ -5,11 +5,22 @@ module magdif_conf
 
   private
 
-  public :: magdif_config, magdif_config_read, magdif_config_export_hdf5, magdif_config_delayed, &
-       logger_t, conf, conf_arr, logger, runmode_single, runmode_direct, runmode_precon, pres_prof_eps, &
-       pres_prof_par, pres_prof_geqdsk, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
-       q_prof_flux, q_prof_rot, q_prof_geqdsk, vac_src_nemov, vac_src_gpec, vac_src_fourier, &
-       decorate_filename, longlines, cmplx_fmt, nl_fmt, datafile
+  ! types and associated procedures
+  public :: magdif_config, magdif_config_read, magdif_config_export_hdf5
+  public :: magdif_config_delayed
+  public :: logger_t
+
+  ! utility procedures
+  public :: decorate_filename
+
+  ! module variables
+  public :: conf, conf_arr, logger
+  public :: longlines, cmplx_fmt, nl_fmt, datafile, &
+       runmode_single, runmode_direct, runmode_precon, &
+       pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
+       curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
+       q_prof_flux, q_prof_rot, q_prof_geqdsk, &
+       vac_src_nemov, vac_src_gpec, vac_src_fourier
 
   character(len = *), parameter :: cmplx_fmt = 'es24.16e3, 1x, sp, es24.16e3, s, " i"'
   character(len = *), parameter :: nl_fmt = '"' // new_line('A') // '"'

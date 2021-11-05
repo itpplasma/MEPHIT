@@ -6,21 +6,31 @@ module magdif_util
 
   private
 
-  public :: pi, clight, imun, get_field_filenames, init_field, deinit_field, interp_psi_pol, &
-       pos_angle, linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, binsearch, interleave, &
-       gauss_legendre_unit_interval, heapsort_complex, complex_abs_asc, complex_abs_desc, &
-       arnoldi_break, hessenberg_eigvals, hessenberg_eigvecs, C_F_string
+  ! types and associated procedures
+  public :: sign_convention, g_eqdsk
+  public :: interp1d
+  public :: neumaier_accumulator_real, neumaier_accumulator_complex
+
+  ! utility procedures
+  public :: get_field_filenames, init_field, deinit_field, interp_psi_pol, &
+       pos_angle, linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, &
+       binsearch, interleave, heapsort_complex, complex_abs_asc, complex_abs_desc, &
+       arnoldi_break, hessenberg_eigvals, hessenberg_eigvecs, &
+       gauss_legendre_unit_interval, C_F_string
+
+  ! module variables
+  public :: pi, clight, imun
 
   real(dp), parameter :: pi = 4d0 * atan(1d0)
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
 
-  type, public :: sign_convention
+  type:: sign_convention
     integer :: exp_Bpol, sgn_cyl, sgn_dpsi, sgn_Btor, sgn_Itor, &
          sgn_F, sgn_q, sgn_Bpol, sgn_pol, index
   end type sign_convention
 
-  type, public :: g_eqdsk
+  type :: g_eqdsk
     type(sign_convention) :: cocos
     character(len = 1024) :: fname
     character(len = 1024) :: convexfile
@@ -55,7 +65,7 @@ module magdif_util
        rescale_fmt = '("Rescaling ", a, "...")'
 
   !> 1D piecewise Lagrange polynomial interpolator
-  type, public :: interp1d
+  type :: interp1d
      private
      integer :: n_lag, n_var
      real(dp), dimension(:), allocatable :: indep_var
@@ -65,7 +75,7 @@ module magdif_util
      procedure :: deinit => interp1d_deinit
   end type interp1d
 
-  type, public :: neumaier_accumulator_real
+  type :: neumaier_accumulator_real
      private
      real(dp) :: sum, c, t
    contains
@@ -74,7 +84,7 @@ module magdif_util
      procedure :: get_sum => neumaier_accumulator_real_get_sum
   end type neumaier_accumulator_real
 
-  type, public :: neumaier_accumulator_complex
+  type :: neumaier_accumulator_complex
      private
      type(neumaier_accumulator_real) :: real_part, imag_part
    contains
