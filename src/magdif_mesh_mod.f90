@@ -123,12 +123,6 @@ module magdif_mesh
      !> Width ratio of neighbouring refined flux surfaces.
      real(dp), allocatable :: refinement(:)
 
-     !> Poloidal mode number \f$ m \f$ (dimensionless) in resonance at given flux surface.
-     !>
-     !> Indexing is the same as for #q, on which the values depend. If no resonances are
-     !> expected at a given index, #m_res is 0.
-     integer, allocatable :: m_res(:)
-
      !> Indices of flux surfaces where resonance corresponding to a poloidal mode (given as
      !> array index) occurs.
      integer, allocatable :: res_ind(:)
@@ -957,20 +951,15 @@ contains
 
     logger%msg = 'resonance positions:'
     if (logger%debug) call logger%write_msg
-    allocate(mesh%m_res(mesh%nflux))
     allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
-    mesh%m_res = 0
     mesh%res_ind = 0
-    ! if more two or more resonance positions are within the same flux surface,
-    ! assign the lowest mode number
-    do m = mesh%m_res_max, mesh%m_res_min, -1
+    do m = mesh%m_res_min, mesh%m_res_max
        call binsearch(fs%psi, 0, mesh%psi_res(m), kf_res)
        if (kf_res <= 1) then
           write (logger%msg, '("Warning: resonance for m = ", i0, " occurs at flux surface index ", i0)') m, kf_res
           if (logger%warn) call logger%write_msg
        end if
        mesh%res_ind(m) = kf_res
-       mesh%m_res(kf_res) = m
        write (logger%msg, '("m = ", i2, ", kf = ", i3, ", rho: ", f19.16, 2(" < ", f19.16))') &
             m, kf_res, fs%rad(kf_res - 1) / fs%rad(mesh%nflux), mesh%rad_norm_res(m), &
             fs%rad(kf_res) / fs%rad(mesh%nflux)
@@ -1831,9 +1820,6 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/refinement', mesh%refinement, &
          lbound(mesh%refinement), ubound(mesh%refinement), &
          comment = 'width ratio of neighbouring refined flux surfaces')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_res', mesh%m_res, &
-         lbound(mesh%m_res), ubound(mesh%m_res), &
-         comment = 'poloidal mode number m in resonance at given flux surface')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/res_ind', mesh%res_ind, &
          lbound(mesh%res_ind), ubound(mesh%res_ind), &
          comment = 'flux surface index in resonance with given poloidal mode number')
@@ -1972,7 +1958,6 @@ contains
     ! TODO: allocate deferred-shape arrays in hdf5_tools and skip allocation here
     allocate(mesh%deletions(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%refinement(mesh%m_res_min:mesh%m_res_max))
-    allocate(mesh%m_res(mesh%nflux))
     allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%psi_res(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%rad_norm_res(mesh%m_res_min:mesh%m_res_max))
@@ -2005,7 +1990,6 @@ contains
     allocate(mesh%Z_Omega(mesh%ntri))
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/deletions', mesh%deletions)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', mesh%refinement)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_res', mesh%m_res)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/res_ind', mesh%res_ind)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi_res', mesh%psi_res)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/rad_norm_res', mesh%rad_norm_res)
@@ -2045,7 +2029,6 @@ contains
 
     if (allocated(this%deletions)) deallocate(this%deletions)
     if (allocated(this%refinement)) deallocate(this%refinement)
-    if (allocated(this%m_res)) deallocate(this%m_res)
     if (allocated(this%res_ind)) deallocate(this%res_ind)
     if (allocated(this%psi_res)) deallocate(this%psi_res)
     if (allocated(this%rad_norm_res)) deallocate(this%rad_norm_res)

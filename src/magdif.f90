@@ -602,26 +602,25 @@ contains
   subroutine add_sheet_current
     use magdif_conf, only: conf_arr
     use magdif_mesh, only: mesh, B0_flux
-    integer :: kf, kt, ktri, ktri_adj, kedge
+    integer :: m, kf, kt, ktri, ktri_adj, kedge
     complex(dp) :: pn_half
 
-    do kf = 1, mesh%nflux
-       if (mesh%m_res(kf) > 0) then
-          if (abs(conf_arr%sheet_current_factor(mesh%m_res(kf))) > 0d0) then
-             do kt = 1, mesh%kt_max(kf)
-                kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
-                ktri = mesh%edge_tri(2, kedge)
-                ktri_adj = mesh%edge_tri(1, kedge)
-                if (mesh%orient(ktri)) then
-                   pn_half = pn%DOF(mesh%edge_node(2, kedge))
-                else
-                   ! edge i is diagonal
-                   pn_half = 0.5d0 * sum(pn%DOF(mesh%edge_node(:, mesh%tri_edge(1, ktri_adj))))
-                end if
-                jn%DOF(kedge) = jn%DOF(kedge) + &
-                     conf_arr%sheet_current_factor(mesh%m_res(kf)) * B0_flux(kedge) * pn_half
-             end do
-          end if
+    do m = mesh%m_res_min, mesh%m_res_max
+       kf = mesh%res_ind(m)
+       if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then
+          do kt = 1, mesh%kt_max(kf)
+             kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
+             ktri = mesh%edge_tri(2, kedge)
+             ktri_adj = mesh%edge_tri(1, kedge)
+             if (mesh%orient(ktri)) then
+                pn_half = pn%DOF(mesh%edge_node(2, kedge))
+             else
+                ! edge i is diagonal
+                pn_half = 0.5d0 * sum(pn%DOF(mesh%edge_node(:, mesh%tri_edge(1, ktri_adj))))
+             end if
+             jn%DOF(kedge) = jn%DOF(kedge) + &
+                  conf_arr%sheet_current_factor(m) * B0_flux(kedge) * pn_half
+          end do
        end if
     end do
   end subroutine add_sheet_current
