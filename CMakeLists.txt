@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.13.4)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR})
 
 ### Define the project
-project(NEO-EQ LANGUAGES Fortran C CXX)
+project(MEPHIT LANGUAGES Fortran C CXX)
 
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
@@ -60,7 +60,6 @@ set(COMMON_FORTRAN_SRC_FILES
   src/lubksb.f
   src/ludcmp.f
   src/magdata_in_symfluxcoord.f90
-  src/mesh_mod.f90
   src/odeint_allroutines.f
   src/orbit_mod.f90
   src/plag_coeff.f90
@@ -73,41 +72,41 @@ set(COMMON_FORTRAN_SRC_FILES
   src/fftw3.f90
   src/sparse_mod.f90
 )
-set(MAGDIF_FORTRAN_SRC_FILES
-  src/magdif.f90
-  src/magdif_config.f90
-  src/magdif_util.f90
-  src/magdif_mesh_mod.f90
-  src/magdif_pert.f90
+set(MEPHIT_FORTRAN_SRC_FILES
+  src/mephit_iter.f90
+  src/mephit_conf.f90
+  src/mephit_util.f90
+  src/mephit_mesh.f90
+  src/mephit_pert.f90
 )
 
-set(MAGDIF_C_SRC_FILES
-  src/magdif_util.c
-  src/magdif_fem.c
+set(MEPHIT_C_SRC_FILES
+  src/mephit_util.c
+  src/mephit_fem.c
 )
 
 ### Set compiler flags
 set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
-set_source_files_properties(${MAGDIF_FORTRAN_SRC_FILES}
-  src/magdif_mesher.f90
-  src/magdif_test.f90
+set_source_files_properties(${MEPHIT_FORTRAN_SRC_FILES}
+  src/mephit_mesher.f90
+  src/mephit_test.f90
   src/vacfield.f90
   src/standardise_equilibrium.f90
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS}")
-set_source_files_properties(src/magdif_run.c ${MAGDIF_C_SRC_FILES}
+set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS}")
 
 ### Define library
-add_library(magdif SHARED
+add_library(mephit SHARED
   ${SUITESPARSE_SRC_FILES}
   # ${SUPERLU_SRC_FILES}
   ${COMMON_FORTRAN_SRC_FILES}
-  ${MAGDIF_FORTRAN_SRC_FILES}
-  ${MAGDIF_C_SRC_FILES}
+  ${MEPHIT_FORTRAN_SRC_FILES}
+  ${MEPHIT_C_SRC_FILES}
 )
-target_include_directories(magdif PUBLIC ${HDF5_tools_include_dir} ${FGSL_INC} ${NETCDF_INCLUDES})
-set(MAGDIF_LIBS
+target_include_directories(mephit PUBLIC ${HDF5_tools_include_dir} ${FGSL_INC} ${NETCDF_INCLUDES})
+set(MEPHIT_LIBS
   # ${SUPERLU_LIBRARIES}
   ${SUITESPARSE_LIBRARIES}
   ${HDF5_tools_lib}
@@ -122,15 +121,15 @@ set(MAGDIF_LIBS
   lapack
   fftw3
 )
-target_link_libraries(magdif ${MAGDIF_LIBS})
+target_link_libraries(mephit ${MEPHIT_LIBS})
 
 ### Define executables
-add_executable(magdif_run.x src/magdif_run.c)
+add_executable(mephit_run.x src/mephit_run.c)
 add_executable(standardise_equilibrium.x src/standardise_equilibrium.f90)
 add_executable(vacfield.x src/vacfield.f90)
-target_link_libraries(magdif_run.x magdif)
-target_link_libraries(standardise_equilibrium.x magdif)
-target_link_libraries(vacfield.x magdif)
+target_link_libraries(mephit_run.x mephit)
+target_link_libraries(standardise_equilibrium.x mephit)
+target_link_libraries(vacfield.x mephit)
 
 ### Add helper script to binaries
-configure_file(scripts/magdif.bash ${EXECUTABLE_OUTPUT_PATH}/magdif @ONLY)
+configure_file(scripts/mephit.bash ${EXECUTABLE_OUTPUT_PATH}/mephit @ONLY)
