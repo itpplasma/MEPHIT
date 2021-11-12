@@ -1,4 +1,4 @@
-module magdif_conf
+module mephit_conf
   use iso_fortran_env, only: dp => real64
 
   implicit none
@@ -6,8 +6,8 @@ module magdif_conf
   private
 
   ! types and associated procedures
-  public :: magdif_config, magdif_config_read, magdif_config_export_hdf5
-  public :: magdif_config_delayed
+  public :: config_t, config_read, config_export_hdf5
+  public :: config_delayed_t
   public :: logger_t
 
   ! utility procedures
@@ -48,7 +48,7 @@ module magdif_conf
   integer, parameter :: vac_src_gpec = 1    !< vacuum field perturbation from GPEC
   integer, parameter :: vac_src_fourier = 2 !< vacuum field perturbation from precomputed Fourier modes
 
-  type :: magdif_config
+  type :: config_t
 
      !> Name of the file the configuration is read from.
      character(len = 1024) :: config_file
@@ -159,9 +159,9 @@ module magdif_conf
      real(dp) :: debug_pol_offset = 0.5d0
      logical :: debug_kilca_geom_theta = .false.
 
-  end type magdif_config
+  end type config_t
 
-  type :: magdif_config_delayed
+  type :: config_delayed_t
 
      integer :: m_min, m_max
 
@@ -175,11 +175,11 @@ module magdif_conf
      complex(dp), dimension(:), allocatable :: sheet_current_factor
 
    contains
-     procedure :: read => magdif_config_delayed_read
-     procedure :: export_hdf5 => magdif_config_delayed_export_hdf5
-     procedure :: import_hdf5 => magdif_config_delayed_import_hdf5
-     procedure :: deinit => magdif_config_delayed_destructor
-  end type magdif_config_delayed
+     procedure :: read => config_delayed_read
+     procedure :: export_hdf5 => config_delayed_export_hdf5
+     procedure :: import_hdf5 => config_delayed_import_hdf5
+     procedure :: deinit => config_delayed_deinit
+  end type config_delayed_t
 
   type :: logger_t
      private
@@ -195,15 +195,15 @@ module magdif_conf
      procedure :: deinit => logger_deinit
   end type logger_t
 
-  type(magdif_config) :: conf
-  type(magdif_config_delayed) :: conf_arr
+  type(config_t) :: conf
+  type(config_delayed_t) :: conf_arr
   type(logger_t) :: logger
 
 contains
 
-  !> Read static configuration file for magdif.
-  subroutine magdif_config_read(config, filename)
-    type(magdif_config), intent(inout) :: config
+  !> Read configuration namelist.
+  subroutine config_read(config, filename)
+    type(config_t), intent(inout) :: config
     character(len = *), intent(in) :: filename
     integer :: fid
     namelist /scalars/ config
@@ -213,11 +213,11 @@ contains
     close(fid)
     ! override if erroneously set in namelist
     config%config_file = trim(filename)
-  end subroutine magdif_config_read
+  end subroutine config_read
 
-  subroutine magdif_config_export_hdf5(config, file, dataset)
+  subroutine config_export_hdf5(config, file, dataset)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    type(magdif_config), intent(in) :: config
+    type(config_t), intent(in) :: config
     character(len = *), intent(in) :: file, dataset
     integer(HID_T) :: h5id_root
 
@@ -268,11 +268,11 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/debug_pol_offset', config%debug_pol_offset)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/debug_kilca_geom_theta', config%debug_kilca_geom_theta)
     call h5_close(h5id_root)
-  end subroutine magdif_config_export_hdf5
+  end subroutine config_export_hdf5
 
-  !> Read dynamic configuration from configuration file for magdif.
-  subroutine magdif_config_delayed_read(config, filename, m_min, m_max)
-    class(magdif_config_delayed), intent(inout) :: config
+  !> Read configuration arrays from namelist.
+  subroutine config_delayed_read(config, filename, m_min, m_max)
+    class(config_delayed_t), intent(inout) :: config
     character(len = *), intent(in) :: filename
     integer, intent(in) :: m_min, m_max
     integer :: fid
@@ -298,11 +298,11 @@ contains
     if (allocated(config%sheet_current_factor)) deallocate(config%sheet_current_factor)
     allocate(config%sheet_current_factor(m_min:m_max))
     config%sheet_current_factor(:) = sheet_current_factor
-  end subroutine magdif_config_delayed_read
+  end subroutine config_delayed_read
 
-  subroutine magdif_config_delayed_export_hdf5(config, file, dataset)
+  subroutine config_delayed_export_hdf5(config, file, dataset)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    class(magdif_config_delayed), intent(in) :: config
+    class(config_delayed_t), intent(in) :: config
     character(len = *), intent(in) :: file, dataset
     integer(HID_T) :: h5id_root
 
@@ -322,16 +322,16 @@ contains
          lbound(config%sheet_current_factor), ubound(config%sheet_current_factor), &
          comment = 'free parameters setting the magnitudes of sheet currents')
     call h5_close(h5id_root)
-  end subroutine magdif_config_delayed_export_hdf5
+  end subroutine config_delayed_export_hdf5
 
-  subroutine magdif_config_delayed_import_hdf5(config, file, dataset)
+  subroutine config_delayed_import_hdf5(config, file, dataset)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
-    class(magdif_config_delayed), intent(inout) :: config
+    class(config_delayed_t), intent(inout) :: config
     character(len = *), intent(in) :: file, dataset
     integer(HID_T) :: h5id_root
 
     call h5_open(file, h5id_root)
-    call magdif_config_delayed_destructor(config)
+    call config_delayed_deinit(config)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_min', config%m_min)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_max', config%m_max)
     allocate(config%deletions(config%m_min:config%m_max))
@@ -341,17 +341,17 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', config%refinement)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor)
     call h5_close(h5id_root)
-  end subroutine magdif_config_delayed_import_hdf5
+  end subroutine config_delayed_import_hdf5
 
-  subroutine magdif_config_delayed_destructor(config)
-    class(magdif_config_delayed), intent(inout) :: config
+  subroutine config_delayed_deinit(config)
+    class(config_delayed_t), intent(inout) :: config
 
     config%m_min = 0
     config%m_max = 0
     if (allocated(config%deletions)) deallocate(config%deletions)
     if (allocated(config%refinement)) deallocate(config%refinement)
     if (allocated(config%sheet_current_factor)) deallocate(config%sheet_current_factor)
-  end subroutine magdif_config_delayed_destructor
+  end subroutine config_delayed_deinit
 
   !> Associate logfile and open if necessary.
   subroutine logger_init(this, filename, log_level, quiet)
@@ -440,4 +440,4 @@ contains
     out_name = in_name(:basename_start-1) // prefix // in_name(basename_start: &
          basename_end) // postfix // in_name(basename_end+1:name_end)
   end function decorate_filename
-end module magdif_conf
+end module mephit_conf

@@ -27,7 +27,7 @@ replace_first_in_line() {
 }
 
 
-magdif_init() {
+mephit_init() {
     config=
     geqdsk=
     convexwall=
@@ -94,7 +94,7 @@ magdif_init() {
     done
 }
 
-magdif_convert() {
+mephit_convert() {
     in_type=$1
     out_type=$2
     in_dir=$3
@@ -126,9 +126,9 @@ magdif_convert() {
     fi
 }
 
-magdif_run() {
+mephit_run() {
     config=magdif.inp
-    log=magdif.log
+    log=mephit.log
     analysis=0
     iterations=0
     meshing=0
@@ -181,7 +181,7 @@ magdif_run() {
         GFORTRAN_ERROR_BACKTRACE=1
         # uncomment to use memcheck
         # valgrind -v --leak-check=full --show-leak-kinds=all --track-origins=yes \
-        "$bindir/magdif_run.x" \
+        "$bindir/mephit_run.x" \
             $runmode \
             "$config" \
             "$tmpdir" \
@@ -189,7 +189,7 @@ magdif_run() {
             2>&1 | tee -a "$log"
         lasterr=$?
         if [ "$lasterr" -ne 0 ]; then
-            echo "$scriptname: magdif_run.x exited with code $lasterr during run in $workdir" | tee -a "$log" >&2
+            echo "$scriptname: mephit_run.x exited with code $lasterr during run in $workdir" | tee -a "$log" >&2
             popd
             anyerr=$lasterr
             continue
@@ -198,10 +198,10 @@ magdif_run() {
     done
 }
 
-magdif_plot() {
+mephit_plot() {
     config=magdif.inp
     data=magdif.h5
-    log=magdif.log
+    log=mephit.log
 
     for workdir; do
         pushd "$workdir"
@@ -210,18 +210,18 @@ magdif_plot() {
     done
 }
 
-magdif_clean() {
+mephit_clean() {
     for workdir; do
         pushd "$workdir"
-        # files from magdif_run
-        rm -f fort.* magdif.h5 magdif.log inputformaxwell_ext.msh inputformaxwell.msh box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat
-        # files from magdif_plot
+        # files from mephit_run
+        rm -f fort.* magdif.h5 mephit.log inputformaxwell_ext.msh inputformaxwell.msh box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat
+        # files from mephit_plot
         rm -f plot*.pdf convergence.pdf Bmn*.pdf currmn*.pdf
         popd
     done
 }
 
-magdif_help() {
+mephit_help() {
     echo For now, please look at the README.md for how to run this script...
 }
 
@@ -243,15 +243,15 @@ case "$1" in
     init|convert|run|plot|clean)
         mode=$1
         shift
-        magdif_$mode "$@"
+        mephit_$mode "$@"
         ;;
     'help'|'--help'|'-h'|'-?')
         shift
-        magdif_help "$@"
+        mephit_help "$@"
         ;;
     *)
         echo "$scriptname: unrecognized mode '$1'"
-        magdif_help "$@"
+        mephit_help "$@"
         exit 1
         ;;
 esac

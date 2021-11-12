@@ -1,6 +1,6 @@
 program standardise_equilibrium
-  use magdif_conf, only: logger
-  use magdif_util, only: g_eqdsk
+  use mephit_conf, only: logger
+  use mephit_util, only: g_eqdsk
 
   implicit none
 

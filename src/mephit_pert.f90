@@ -1,4 +1,4 @@
-module magdif_pert
+module mephit_pert
 
   use iso_fortran_env, only: dp => real64
 
@@ -114,7 +114,7 @@ contains
   end subroutine L1_deinit
 
   !> Real and imaginary part of \p scalar_dof (e.g. #presn) are written, in that order,
-  !> to \p outfile (e.g. #magdif_conf::presn_file), where line number corresponds to the
+  !> to \p outfile (e.g. #mephit_conf::presn_file), where line number corresponds to the
   !> knot index in #mesh_mod::mesh_point.
   subroutine L1_write(elem, file, dataset, comment, unit)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
@@ -149,7 +149,7 @@ contains
 
   subroutine L1_interp(ktri, elem, R, Z, comp, comp_dR, comp_dZ)
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
-    use magdif_mesh, only: mesh
+    use mephit_mesh, only: mesh
     integer, intent(in) :: ktri
     type(L1_t), intent(in) :: elem
     real(dp), intent(in) :: R, Z
@@ -209,7 +209,7 @@ contains
   subroutine RT0_interp(ktri, elem, R, Z, comp_R, comp_Z, comp_phi, &
        comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ)
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
-    use magdif_mesh, only: mesh
+    use mephit_mesh, only: mesh
     integer, intent(in) :: ktri
     type(RT0_t), intent(in) :: elem
     real(dp), intent(in) :: r, z
@@ -238,7 +238,7 @@ contains
        return
     end if
     nodes = mesh%tri_node(:, ktri)
-    ! indices of nodes and opposite edges as defined in magdif_mesh::connect_mesh_points
+    ! indices of nodes and opposite edges as defined in mephit_mesh::connect_mesh_points
     if (mesh%orient(ktri)) then
        comp_R = 0.5d0 / mesh%area(ktri) / R * ( &
             elem%DOF(mesh%tri_edge(1, ktri)) * (R - mesh%node_R(nodes(3))) + &
@@ -292,8 +292,8 @@ contains
   end subroutine RT0_interp
 
   pure subroutine RT0_compute_tor_comp(elem)
-    use magdif_util, only: imun
-    use magdif_mesh, only: mesh
+    use mephit_util, only: imun
+    use mephit_mesh, only: mesh
     type(RT0_t), intent(inout) :: elem
     integer :: ktri
 
@@ -321,7 +321,7 @@ contains
   end subroutine RT0_read
 
   pure function jacobian(kf, kt, r) result(metric_det)
-    use magdif_mesh, only: equil, fs_half, mesh, B0phi_Omega
+    use mephit_mesh, only: equil, fs_half, mesh, B0phi_Omega
     integer, intent(in) :: kf, kt
     real(dp), intent(in) :: r
     real(dp) :: metric_det
@@ -399,7 +399,7 @@ contains
   end subroutine RT0_write
 
   subroutine RT0_triplot(elem, comp_R, comp_Z, comp_psi_contravar_dens, comp_theta_covar)
-    use magdif_mesh, only: equil, mesh, B0R_Omega, B0Z_Omega
+    use mephit_mesh, only: equil, mesh, B0R_Omega, B0Z_Omega
     type(RT0_t), intent(in) :: elem
     complex(dp), intent(out), dimension(:), allocatable :: comp_R, comp_Z, &
          comp_psi_contravar_dens, comp_theta_covar
@@ -425,7 +425,7 @@ contains
   end subroutine RT0_triplot
 
   subroutine RT0_rectplot(elem, rect_R, rect_Z, comp_R, comp_phi, comp_Z)
-    use magdif_mesh, only: equil, mesh, point_location
+    use mephit_mesh, only: equil, mesh, point_location
     type(RT0_t), intent(in) :: elem
     real(dp), intent(out), dimension(:), allocatable :: rect_R, rect_Z
     complex(dp), intent(out), dimension(:, :), allocatable :: comp_R, comp_phi, comp_Z
@@ -492,7 +492,7 @@ contains
 
   subroutine vec_polmodes_write(vec_polmodes, file, dataset, comment, unit)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use magdif_conf, only: conf
+    use mephit_conf, only: conf
     type(vec_polmodes_t), intent(in) :: vec_polmodes
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
@@ -535,9 +535,9 @@ contains
   end subroutine vec_polmodes_write
 
   subroutine RT0_poloidal_modes(elem, vec_polmodes)
-    use magdif_conf, only: conf
-    use magdif_util, only: imun, bent_cyl2straight_cyl
-    use magdif_mesh, only: equil, mesh, sample_polmodes
+    use mephit_conf, only: conf
+    use mephit_util, only: imun, bent_cyl2straight_cyl
+    use mephit_mesh, only: equil, mesh, sample_polmodes
     type(RT0_t), intent(in) :: elem
     type(vec_polmodes_t), intent(inout) :: vec_polmodes
     integer :: kf, kt, ktri, m
@@ -580,7 +580,7 @@ contains
   end subroutine RT0_poloidal_modes
 
   subroutine vac_init(this, nedge, ntri, m_min, m_max)
-    use magdif_conf, only: conf
+    use mephit_conf, only: conf
     class(vac_t), intent(inout) :: this
     integer, intent(in) :: nedge, ntri, m_min, m_max
 
@@ -606,7 +606,7 @@ contains
 
   subroutine vac_read(this, file, grp_name)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
-    use magdif_conf, only: conf
+    use mephit_conf, only: conf
     class(vac_t), intent(inout) :: this
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: grp_name
@@ -625,7 +625,7 @@ contains
 
   subroutine vac_write(this, file, grp_name)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
-    use magdif_conf, only: conf
+    use mephit_conf, only: conf
     class(vac_t), intent(in) :: this
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: grp_name
@@ -701,7 +701,7 @@ contains
   end subroutine AUG_coils_read
 
   subroutine AUG_coils_write_Nemov(directory, ncoil, nseg, XYZ)
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     character(len = *), intent(in) :: directory
     integer, intent(in) :: ncoil, nseg
     real(dp), intent(in), dimension(:, :, :) :: XYZ
@@ -738,7 +738,7 @@ contains
   end subroutine AUG_coils_write_Nemov
 
   subroutine AUG_coils_read_Nemov(directory, ncoil, nseg, nwind, XYZ)
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     character(len = *), intent(in) :: directory
     integer, intent(out) :: ncoil, nseg, nwind
     real(dp), intent(out), allocatable, dimension(:, :, :) :: XYZ
@@ -768,7 +768,7 @@ contains
   end subroutine AUG_coils_read_Nemov
 
   subroutine AUG_coils_write_GPEC(directory, ncoil, nseg, nwind, XYZ)
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     character(len = *), intent(in) :: directory
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
@@ -852,7 +852,7 @@ contains
   subroutine AUG_coils_write_Fourier(directory, ncoil, nseg, nwind, XYZ, nmax, &
        Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     character(len = *), intent(in) :: directory
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
@@ -939,8 +939,8 @@ contains
   subroutine Biot_Savart_sum_coils(ncoil, nseg, nwind, XYZ, Ic, &
        Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ, Bvac)
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_conf, only: logger
-    use magdif_util, only: linspace
+    use mephit_conf, only: logger
+    use mephit_util, only: linspace
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
     real(dp), intent(in), dimension(:) :: Ic
@@ -1018,8 +1018,8 @@ contains
     use FFTW3, only: fftw_alloc_real, fftw_alloc_complex, fftw_plan_dft_r2c_1d, FFTW_PATIENT, &
          FFTW_DESTROY_INPUT, fftw_execute_dft_r2c, fftw_destroy_plan, fftw_free
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_conf, only: logger
-    use magdif_util, only: linspace
+    use mephit_conf, only: logger
+    use mephit_util, only: linspace
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
     integer, intent(in) :: nmax
@@ -1130,8 +1130,8 @@ contains
   subroutine vector_potential_single_mode(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
     use bdivfree_mod, only: nR_mod => nr, nZ_mod => nz, Rmin_mod => rmin, Zmin_mod => zmin, &
          ntor, icp, ipoint, hr, hz, rpoi, zpoi, aznre, aznim, arnre, arnim
-    use magdif_util, only: imun, linspace
-    use magdif_conf, only: conf
+    use mephit_util, only: imun, linspace
+    use mephit_conf, only: conf
     integer, intent(in) :: nR, nZ
     real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
     complex(dp), intent(in) :: Bn_R(:, :), Bn_Z(:, :)
@@ -1170,7 +1170,7 @@ contains
   end subroutine vector_potential_single_mode
 
   subroutine write_Bvac_Nemov(directory, Rmin, Rmax, Zmin, Zmax, Bvac)
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     use constants, only: pi  ! orbit_mod.f90
     character(len = *), intent(in) :: directory
     real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
@@ -1209,8 +1209,8 @@ contains
 
   subroutine read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bnvac_R, Bnvac_Z)
     use input_files, only: pfile
-    use magdif_conf, only: conf
-    use magdif_util, only: imun, linspace, get_field_filenames
+    use mephit_conf, only: conf
+    use mephit_util, only: imun, linspace, get_field_filenames
     use constants, only: pi  ! orbit_mod.f90
     character(len = 1024) :: gfile, convexfile
     integer, intent(out) :: nR, nZ
@@ -1252,8 +1252,8 @@ contains
   subroutine read_Bnvac_GPEC(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bnvac_R, Bnvac_Z)
     use netcdf, only: nf90_open, nf90_nowrite, nf90_noerr, nf90_inq_dimid, nf90_inq_varid, &
          nf90_inquire_dimension, nf90_get_var, nf90_close
-    use magdif_conf, only: conf, logger
-    use magdif_mesh, only: equil
+    use mephit_conf, only: conf, logger
+    use mephit_mesh, only: equil
     integer, intent(out) :: nR, nZ
     real(dp), intent(out) :: Rmin, Rmax, Zmin, Zmax
     complex(dp), intent(out), dimension(:, :), allocatable :: Bnvac_R, Bnvac_Z
@@ -1322,7 +1322,7 @@ contains
   subroutine read_Bnvac_Fourier(directory, ntor, Ic, nR, nZ, Rmin, Rmax, Zmin, Zmax, &
        Bnvac_R, Bnvac_Z)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     character(len = *), intent(in) :: directory
     integer, intent(in) :: ntor
     real(dp), intent(in), dimension(:) :: Ic
@@ -1374,8 +1374,8 @@ contains
   end subroutine read_Bnvac_Fourier
 
   subroutine compute_Bnvac(Bn)
-    use magdif_conf, only: conf, logger, vac_src_nemov, vac_src_gpec, vac_src_fourier
-    use magdif_mesh, only: mesh
+    use mephit_conf, only: conf, logger, vac_src_nemov, vac_src_gpec, vac_src_fourier
+    use mephit_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
     integer :: nR, nZ, kedge, k
     real(dp) :: Rmin, Rmax, Zmin, Zmax, edge_R, edge_Z, node_R(2), node_Z(2)
@@ -1417,7 +1417,7 @@ contains
 
   subroutine generate_vacfield(vac)
     use bdivfree_mod, only: Rpoi, Zpoi, ipoint, AZnRe, AZnIm, ARnRe, ARnIm
-    use magdif_conf, only: conf
+    use mephit_conf, only: conf
     type(vac_t), intent(inout) :: vac
 
     if (conf%kilca_scale_factor /= 0) then
@@ -1450,7 +1450,7 @@ contains
   subroutine debug_Bnvac_rectplot
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use bdivfree_mod, only: nR, nZ, Rpoi, Zpoi
-    use magdif_conf, only: conf, datafile
+    use mephit_conf, only: conf, datafile
     character(len=*), parameter :: dataset = 'Bnvac'
     integer :: kR, kZ
     integer(HID_T) :: h5id_root
@@ -1482,7 +1482,7 @@ contains
   subroutine debug_B0_rectplot
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use bdivfree_mod, only: nR, nZ, Rpoi, Zpoi
-    use magdif_conf, only: datafile
+    use mephit_conf, only: datafile
     character(len = *), parameter :: dataset = 'equil'
     integer :: kR, kZ
     integer(HID_T) :: h5id_root
@@ -1515,9 +1515,9 @@ contains
 
   subroutine debug_Bmnvac
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use magdif_conf, only: conf, datafile
-    use magdif_util, only: imun
-    use magdif_mesh, only: equil, mesh, sample_polmodes
+    use mephit_conf, only: conf, datafile
+    use mephit_util, only: imun
+    use mephit_mesh, only: equil, mesh, sample_polmodes
     character(len = *), parameter :: dataset = 'Bmnvac'
     integer, parameter :: m_max = 24
     integer :: kf, kt, ktri, m
@@ -1556,8 +1556,8 @@ contains
   end subroutine debug_Bmnvac
 
   subroutine compute_Bn_nonres(Bn)
-    use magdif_conf, only: conf
-    use magdif_mesh, only: mesh, B0R_edge, B0phi_edge, B0Z_edge
+    use mephit_conf, only: conf
+    use mephit_mesh, only: mesh, B0R_edge, B0phi_edge, B0Z_edge
     type(RT0_t), intent(inout) :: Bn
     integer :: base, tip, kedge
     real(dp) :: lR, lZ
@@ -1578,8 +1578,8 @@ contains
   end subroutine compute_Bn_nonres
 
   subroutine avg_flux_on_quad(elem)
-    use magdif_util, only: imun
-    use magdif_mesh, only: mesh
+    use mephit_util, only: imun
+    use mephit_mesh, only: mesh
     type(RT0_t), intent(inout) :: elem
 
     integer :: kf, kt, kedge, ktri1, ktri2
@@ -1604,8 +1604,8 @@ contains
 
   ! calculate resonant vacuum perturbation
   subroutine compute_kilca_vacuum(Bn)
-    use magdif_conf, only: conf
-    use magdif_mesh, only: mesh
+    use mephit_conf, only: conf
+    use mephit_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
     integer :: kedge, k, pol_modes(2)
     real(dp) :: rho, theta, edge_R, edge_Z, node_R(2), node_Z(2)
@@ -1633,11 +1633,11 @@ contains
   !> Calculate the vacuum perturbation field in cylindrical coordinates from the Fourier
   !> series of all given modes.
   !>
-  !> @param tor_mode toroidal mode number, scaled by magdif_config::kilca_scale_factor
-  !> (usually magdif_config::n)
+  !> @param tor_mode toroidal mode number, scaled by mephit_conf::kilca_scale_factor
+  !> (usually mephit_conf::n)
   !> @param pol_modes array of poloidal mode numbers
   !> @param R_0 distance of straight cylinder axis to torus axis (usually
-  !> magdif_util::g_eqdsk::rcentr)
+  !> mephit_util::g_eqdsk::rcentr)
   !> @param r radial distance \f$ r \f$ from magnetic axis
   !> @param theta geometrical poloidal angle \f$ theta \f$ (coinciding with symmetry flux
   !> coordinates' poloidal angle in this geometry)
@@ -1648,7 +1648,7 @@ contains
   !> @param B_Z physical component \f$ B_{Z} (r, theta, n) \f$ of the vacuum perturbation
   !> field
   subroutine kilca_vacuum(tor_mode, pol_modes, R_0, r, theta, B_R, B_phi, B_Z)
-    use magdif_util, only: imun, straight_cyl2bent_cyl
+    use mephit_util, only: imun, straight_cyl2bent_cyl
     integer, intent(in) :: tor_mode, pol_modes(1:)
     real(dp), intent(in) :: R_0, r, theta
     complex(dp), intent(out) :: B_R, B_phi, B_Z
@@ -1673,8 +1673,8 @@ contains
   subroutine compute_kilca_vac_coeff(vac)
     use h5lt, only: h5ltget_dataset_info_f
     use hdf5_tools, only: hid_t, hsize_t, size_t, h5_open, h5_get, h5_exists, h5_close
-    use magdif_conf, only: conf, logger, cmplx_fmt
-    use magdif_mesh, only: mesh
+    use mephit_conf, only: conf, logger, cmplx_fmt
+    use mephit_mesh, only: mesh
     type(vac_t), intent(inout) :: vac
     character(len = *), parameter :: grp_ptrn = '("output/postprocessor", i0)'
     character(len = 32) :: grp_name  ! /output/postprocessor1234567890
@@ -1724,11 +1724,11 @@ contains
   !> Calculate the Fourier coefficient of the vacuum perturbation field for a given
   !> toroidal-poloidal mode.
   !>
-  !> @param tor_mode toroidal mode number, scaled by magdif_config::kilca_scale_factor
-  !> (usually magdif_config::n)
+  !> @param tor_mode toroidal mode number, scaled by mephit_conf::kilca_scale_factor
+  !> (usually mephit_conf::n)
   !> @param pol_mode poloidal mode number
   !> @param R_0 distance of straight cylinder axis to torus axis (usually
-  !> magdif_util::g_eqdsk::rcentr)
+  !> mephit_util::g_eqdsk::rcentr)
   !> @param r radial distance \f$ r \f$ from magnetic axis
   !> @param vac_coeff coefficient of modified Bessel functions (integration constant)
   !> @param B_rad physical component \f$ B_{r} (r, m, n) \f$ of the vacuum perturbation
@@ -1740,8 +1740,8 @@ contains
   subroutine kilca_vacuum_fourier(tor_mode, pol_mode, R_0, r, vac_coeff, &
        B_rad, B_pol, B_tor)
     use fgsl, only: fgsl_double, fgsl_int, fgsl_success, fgsl_sf_bessel_icn_array
-    use magdif_conf, only: logger
-    use magdif_util, only: imun
+    use mephit_conf, only: logger
+    use mephit_util, only: imun
     integer, intent(in) :: tor_mode, pol_mode
     real(dp), intent(in) :: R_0, r
     complex(dp), intent(in) :: vac_coeff
@@ -1762,8 +1762,8 @@ contains
 
   subroutine debug_Bmnvac_kilca
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use magdif_conf, only: conf, datafile
-    use magdif_mesh, only: fs_half, mesh
+    use mephit_conf, only: conf, datafile
+    use mephit_mesh, only: fs_half, mesh
     character(len = *), parameter :: dataset = 'Bmnvac'
     integer(HID_T) :: h5id_root
     complex(dp), dimension(mesh%nflux) :: B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
@@ -1795,8 +1795,8 @@ contains
 
   subroutine debug_RT0(Bn)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use magdif_conf, only: conf, datafile
-    use magdif_mesh, only: mesh, fs_half, sample_polmodes
+    use mephit_conf, only: conf, datafile
+    use mephit_mesh, only: mesh, fs_half, sample_polmodes
     type(RT0_t), intent(in) :: Bn
     character(len = *), parameter :: dataset = 'debug_RT0'
     integer(HID_T) :: h5id_root
@@ -1838,9 +1838,9 @@ contains
   end subroutine debug_RT0
 
   subroutine debug_fouriermodes
-    use magdif_conf, only: conf, datafile, logger
-    use magdif_util, only: interp1d, linspace, imun
-    use magdif_mesh, only: equil
+    use mephit_conf, only: conf, datafile, logger
+    use mephit_util, only: interp1d, linspace, imun
+    use mephit_mesh, only: equil
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     logical :: file_exists
     integer :: fid, ntor, mpol, nlabel, nsqpsi, k
@@ -1914,4 +1914,4 @@ contains
     end subroutine extract
   end subroutine debug_fouriermodes
 
-end module magdif_pert
+end module mephit_pert

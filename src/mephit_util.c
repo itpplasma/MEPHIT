@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include "magdif_util.h"
+#include "mephit_util.h"
 
 void errno_msg(void (*exit_func)(int), const char *file, int line, int errnum, const char *msg_fmt, ...)
 {

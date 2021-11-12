@@ -1,7 +1,7 @@
-module magdif_mesh
+module mephit_mesh
 
   use iso_fortran_env, only: dp => real64
-  use magdif_util, only: g_eqdsk, interp1d
+  use mephit_util, only: g_eqdsk, interp1d
 
   implicit none
 
@@ -9,7 +9,7 @@ module magdif_mesh
 
   ! types and associated procedures
   public :: flux_func_cache, flux_func_cache_init, flux_func_cache_deinit
-  public :: mesh_t, mesh_write, mesh_read, magdif_mesh_deinit, &
+  public :: mesh_t, mesh_write, mesh_read, mesh_deinit, &
        generate_mesh, write_cache, read_cache, point_location
   public :: coord_cache, coord_cache_init, coord_cache_deinit, &
        coord_cache_write, coord_cache_read
@@ -94,7 +94,7 @@ module magdif_mesh
      !> Maximal Z value on computational grid in cm.
      real(dp) :: Z_max
 
-     !> Number of flux surfaces. May differ from #magdif_conf::magdif_config::nflux due
+     !> Number of flux surfaces. May differ from #mephit_conf::mephit_conf::nflux due
      !> to refinement of flux surfaces.
      integer :: nflux
 
@@ -107,7 +107,7 @@ module magdif_mesh
      !> Number of triangle edges.
      integer :: nedge
 
-     !> Toroidal mode number. May differ from #magdif_conf::magdif_config#n due to large
+     !> Toroidal mode number. May differ from #mephit_conf::config_t#n due to large
      !> aspect ratio scaling.
      integer :: n
 
@@ -142,13 +142,13 @@ module magdif_mesh
      !> Number of knots on the flux surface given by the array index.
      !>
      !> The array index ranges from 1 for the innermost flux surface to
-     !> #magdif_config::nflux for the last closed flux surface.
+     !> #mephit_conf::nflux for the last closed flux surface.
      integer, allocatable :: kp_max(:)
 
      !> Number of triangles inside the flux surface given by the array index.
      !>
      !> The array index ranges from 1 for the innermost flux surface to
-     !> #magdif_config::nflux for the last closed flux surface.
+     !> #mephit_conf::nflux for the last closed flux surface.
      integer, allocatable :: kt_max(:)
 
      !> Global index of the last knot of the previous flux surface given by the array index.
@@ -157,7 +157,7 @@ module magdif_mesh
      !> #kp_low (kf)+1 to #kp_low (kf)+#kp_max (kf), so #kp_low is determined by cumulatively
      !> adding consecutive values of #kp_max. The array index ranges from 1, giving the
      !> global index of the knot on the magnetic axis (which has to be 1), to
-     !> #magdif_config::nflux+1, effectively giving the last knot on the last closed
+     !> #mephit_conf::nflux+1, effectively giving the last knot on the last closed
      !> flux surface.
      integer, allocatable :: kp_low(:)
 
@@ -168,7 +168,7 @@ module magdif_mesh
      !> runs from #kt_low (kf)+1 to #kt_low (kf)+#kt_max (kf), so #kt_low is determined by
      !> cumulatively adding consecutive values of #kt_max. The array index ranges from 1,
      !> giving the global index of the non-existent triangle on the magnetic axis (which is
-     !> therefore 0), to #magdif_config::nflux+1, giving the last triangle inside the last
+     !> therefore 0), to #mephit_conf::nflux+1, giving the last triangle inside the last
      !> closed flux surface.
      integer, allocatable :: kt_low(:)
 
@@ -274,7 +274,7 @@ contains
   !> For full-grid quantities, values are taken on flux surfaces with indices running
   !> from 0 to \p nflux, i.e. from the magnetic axis to the separatrix. An exception is
   !> made for \psi, where the index runs up to \p nflux +1. This value is extrapolated for
-  !> finite differences in magdif::compute_presn() and magdif::compute_bn_nonres().
+  !> finite differences in mephit_iter::compute_presn() and mephit_iter::compute_bn_nonres().
   !> For half-grid quantities, values are taken between two flux surfaces with indices
   !> running from 1 to \p nflux, i.e. from the triangle strip surrounding the magnetic
   !> axis to the triangle strip just inside the separatrix.
@@ -632,7 +632,7 @@ contains
   end subroutine coord_cache_ext_read
 
   subroutine generate_mesh
-    use magdif_conf, only: conf
+    use mephit_conf, only: conf
 
     if (conf%kilca_scale_factor /= 0) then
        mesh%n = conf%n * conf%kilca_scale_factor
@@ -658,7 +658,7 @@ contains
 
   subroutine write_cache
     use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
-    use magdif_conf, only: conf_arr, datafile
+    use mephit_conf, only: conf_arr, datafile
     integer(HID_T) :: h5id_root
 
     call conf_arr%export_hdf5(datafile, 'config')
@@ -690,7 +690,7 @@ contains
 
   subroutine read_cache
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
-    use magdif_conf, only: datafile
+    use mephit_conf, only: datafile
     integer(HID_T) :: h5id_root
 
     call flux_func_cache_init(fs, mesh%nflux, .false.)
@@ -721,8 +721,8 @@ contains
   end subroutine read_cache
 
   subroutine compute_resonance_positions(psi_sample, q_sample, psi2rho_norm)
-    use magdif_conf, only: conf, logger
-    use magdif_util, only: interp1d
+    use mephit_conf, only: conf, logger
+    use mephit_util, only: interp1d
     use netlib_mod, only: zeroin
     real(dp), dimension(:), intent(in) :: psi_sample
     real(dp), dimension(:), intent(in) :: q_sample
@@ -779,8 +779,8 @@ contains
   end subroutine compute_resonance_positions
 
   subroutine refine_eqd_partition(coarse_sep, nref, deletions, refinement, resonances, diverging_q, partition, ref_ind)
-    use magdif_conf, only: logger
-    use magdif_util, only: linspace
+    use mephit_conf, only: logger
+    use mephit_util, only: linspace
     real(dp), intent(in) :: coarse_sep
     integer, intent(in) :: nref
     integer, dimension(:), intent(in) :: deletions
@@ -907,7 +907,7 @@ contains
   end subroutine refine_eqd_partition
 
   subroutine refine_resonant_surfaces(coarse_sep, rho_norm_ref)
-    use magdif_conf, only: conf, conf_arr, logger
+    use mephit_conf, only: conf, conf_arr, logger
     real(dp), intent(in) :: coarse_sep
     real(dp), dimension(:), allocatable, intent(out) :: rho_norm_ref
     logical :: diverging_q
@@ -954,8 +954,8 @@ contains
   end subroutine refine_resonant_surfaces
 
   subroutine cache_resonance_positions
-    use magdif_conf, only: logger
-    use magdif_util, only: binsearch
+    use mephit_conf, only: logger
+    use mephit_util, only: binsearch
     integer :: m, kf_res
 
     logger%msg = 'resonance positions:'
@@ -995,8 +995,8 @@ contains
   end subroutine write_kilca_convexfile
 
   subroutine create_mesh_points
-    use magdif_conf, only: conf, conf_arr, logger
-    use magdif_util, only: interp_psi_pol, pi, pos_angle
+    use mephit_conf, only: conf, conf_arr, logger
+    use mephit_util, only: interp_psi_pol, pi, pos_angle
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
          rsmall, circumf, raxis, zaxis, load_magdata_in_symfluxcoord
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, theta0_at_xpoint
@@ -1163,7 +1163,7 @@ contains
   !> The program is halted if the input data is invalid, i.e. if more than two triangles
   !> appear to share the edge.
   subroutine common_triangles(knot1, knot2, common_tri)
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     integer, intent(in) :: knot1, knot2
     integer, intent(out) :: common_tri(2)
     logical :: tri_mask(mesh%ntri)
@@ -1189,8 +1189,8 @@ contains
   end subroutine common_triangles
 
   subroutine connect_mesh_points
-    use magdif_conf, only: logger
-    use magdif_util, only: pi, gauss_legendre_unit_interval
+    use mephit_conf, only: logger
+    use mephit_util, only: pi, gauss_legendre_unit_interval
     integer :: kf, kp, kp_lo, kp_hi, kt, ktri, ktri_adj, kedge, nodes(4), k
     real(dp) :: mat(3, 3), points(mesh%GL_order)
 
@@ -1336,7 +1336,7 @@ contains
   end subroutine connect_mesh_points
 
   pure elemental function upper_branch(angle)
-    use magdif_util, only: pi
+    use mephit_util, only: pi
     real(dp), intent(in) :: angle
     real(dp) :: upper_branch
     if (angle <= 0d0) then
@@ -1370,7 +1370,7 @@ contains
   end subroutine ring_centered_avg_coord
 
   subroutine check_mesh
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     integer :: kedge, ktri, ktri_check, k_min, k_max, discrepancies, &
          edge_count(mesh%nedge), tri_count(0:mesh%ntri), common_tri(2)
 
@@ -1467,7 +1467,7 @@ contains
   end subroutine check_mesh
 
   subroutine compute_gpec_jacfac
-    use magdif_util, only: imun
+    use mephit_util, only: imun
     integer, parameter :: m_max = 16
     integer :: kf, kt, ktri, m
     complex(dp) :: fourier_basis(-m_max:m_max)
@@ -1491,7 +1491,7 @@ contains
   subroutine compute_sample_polmodes
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
-    use magdif_conf, only: conf
+    use mephit_conf, only: conf
     integer :: ktri, kf, kt
     real(dp) :: dum, q
 
@@ -1533,8 +1533,8 @@ contains
   subroutine compute_sample_Ipar(sample_Ipar, m)
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: psipol_max, magdata_in_symfluxcoord_ext
-    use magdif_conf, only: conf
-    use magdif_util, only: linspace, interp_psi_pol
+    use mephit_conf, only: conf
+    use mephit_util, only: linspace, interp_psi_pol
     type(coord_cache_ext), intent(inout) :: sample_Ipar
     integer, intent(in) :: m
     integer :: krad, kpol, k
@@ -1608,7 +1608,7 @@ contains
   end subroutine compute_sample_Ipar
 
   function point_location(R, Z, hint_psi) result(location)
-    use magdif_util, only: interp_psi_pol, binsearch, pos_angle
+    use mephit_util, only: interp_psi_pol, binsearch, pos_angle
     real(dp), intent(in) :: R, Z
     real(dp), intent(in), optional :: hint_psi
     integer :: location
@@ -1689,7 +1689,7 @@ contains
   end function point_location
 
   function point_location_check(R, Z, hint_psi) result(location)
-    use magdif_util, only: interp_psi_pol, binsearch, pos_angle
+    use mephit_util, only: interp_psi_pol, binsearch, pos_angle
     real(dp), intent(in) :: R, Z
     real(dp), intent(in), optional :: hint_psi
     integer :: location
@@ -1943,7 +1943,7 @@ contains
             mesh%kp_low(mesh%nflux) + mod(kp, mesh%kp_max(mesh%nflux)) + 1, 1
     end do
     close(fid)
-    ! edge numbering as defined in magdif_mesh::connect_mesh_points
+    ! edge numbering as defined in mephit_mesh::connect_mesh_points
     open(newunit = fid, file = 'edgemap.dat', status = 'replace', form = 'formatted', action = 'write')
     ! poloidal edges: node indices are sorted in ascending order except for the last triangle
     do kedge = 1, mesh%npoint - 1
@@ -1959,14 +1959,14 @@ contains
 
   subroutine mesh_read(mesh, file, dataset)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
-    use magdif_conf, only: conf
+    use mephit_conf, only: conf
     type(mesh_t), intent(inout) :: mesh
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
     integer(HID_T) :: h5id_root
     integer, allocatable :: orient(:)
 
-    call magdif_mesh_deinit(mesh)
+    call mesh_deinit(mesh)
     call h5_open(file, h5id_root)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_O', mesh%R_O)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_O', mesh%Z_O)
@@ -2059,7 +2059,7 @@ contains
     deallocate(orient)
   end subroutine mesh_read
 
-  subroutine magdif_mesh_deinit(this)
+  subroutine mesh_deinit(this)
     class(mesh_t), intent(inout) :: this
 
     if (allocated(this%deletions)) deallocate(this%deletions)
@@ -2092,7 +2092,7 @@ contains
     if (allocated(this%area)) deallocate(this%area)
     if (allocated(this%R_Omega)) deallocate(this%R_Omega)
     if (allocated(this%Z_Omega)) deallocate(this%Z_Omega)
-  end subroutine magdif_mesh_deinit
+  end subroutine mesh_deinit
 
   subroutine compare_gpec_coordinates
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
@@ -2100,7 +2100,7 @@ contains
          nf90_inquire_dimension, nf90_get_var, nf90_close, nf90_global, nf90_get_att
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext, psipol_max
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_conf, only: conf, logger, datafile
+    use mephit_conf, only: conf, logger, datafile
     character(len = *), parameter :: dataset = 'debug_GPEC'
     character(len = 1024) :: filename
     logical :: file_exists
@@ -2328,7 +2328,7 @@ contains
   subroutine write_illustration_data(npsi, ntheta, nrad, npol)
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext, psipol_max
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_util, only: linspace
+    use mephit_util, only: linspace
     integer, intent(in) :: npsi, ntheta, nrad, npol
     integer :: fid, krad, kpol
     real(dp) :: dum
@@ -2377,7 +2377,7 @@ contains
   end subroutine write_illustration_data
 
   subroutine init_flux_variables
-    use magdif_conf, only: conf, logger, pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
+    use mephit_conf, only: conf, logger, pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
          q_prof_flux, q_prof_rot, q_prof_geqdsk
     integer :: kf
 
@@ -2418,7 +2418,7 @@ contains
 
   subroutine compute_pres_prof_eps
     use constants, only: ev2erg  ! orbit_mod.f90
-    use magdif_conf, only: conf, logger
+    use mephit_conf, only: conf, logger
     real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
 
     ! Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
@@ -2453,7 +2453,7 @@ contains
 
   subroutine compute_pres_prof_par
     use constants, only: ev2erg  ! orbit_mod.f90
-    use magdif_conf, only: conf
+    use mephit_conf, only: conf
     real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
 
     ! Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
@@ -2498,7 +2498,7 @@ contains
 
   subroutine compute_safety_factor_flux
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_util, only: interp1d
+    use mephit_util, only: interp1d
     integer :: kf, kt, ktri
     type(interp1d) :: psi_half_interpolator
 
@@ -2533,7 +2533,7 @@ contains
   end subroutine compute_safety_factor_geqdsk
 
   subroutine check_resonance_positions
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     integer :: m, kf
     real(dp), dimension(mesh%nflux) :: abs_err
 
@@ -2552,7 +2552,7 @@ contains
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: psisurf, qsaf
-    use magdif_conf, only: datafile
+    use mephit_conf, only: datafile
     character(len = *), parameter :: grp = 'debug_q'
     integer(HID_T) :: h5id_root
 
@@ -2621,7 +2621,7 @@ contains
   end subroutine cache_equilibrium_field
 
   subroutine compute_j0phi
-    use magdif_conf, only: conf, logger, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk
+    use mephit_conf, only: conf, logger, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk
     real(dp) :: plot_j0phi(mesh%ntri)
 
     allocate(j0phi_edge(mesh%nedge))
@@ -2642,7 +2642,7 @@ contains
   end subroutine compute_j0phi
 
   subroutine compute_j0phi_ps(plot_j0phi)
-    use magdif_util, only: clight
+    use mephit_util, only: clight
     real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kt, ktri, kp, kedge
     real(dp), dimension(mesh%nflux) :: B2avg, B2avg_half
@@ -2691,7 +2691,7 @@ contains
 
   subroutine compute_j0phi_rot(plot_j0phi)
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_util, only: clight
+    use mephit_util, only: clight
     real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kt, ktri, kedge
     real(dp) :: dum, dB0R_dZ, dB0Z_dR
@@ -2715,7 +2715,7 @@ contains
 
   subroutine compute_j0phi_geqdsk(plot_j0phi)
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_util, only: clight
+    use mephit_util, only: clight
     real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kp, kt, ktri, kedge
 
@@ -2749,8 +2749,8 @@ contains
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
-    use magdif_conf, only: datafile
-    use magdif_util, only: clight, linspace
+    use mephit_conf, only: datafile
+    use mephit_util, only: clight, linspace
     character(len = *), parameter :: grp = 'debug_equil'
     integer, parameter :: ntheta = 512
     integer(HID_T) :: h5id_root
@@ -2825,7 +2825,7 @@ contains
   end subroutine check_curr0
 
   subroutine flux_func_cache_check
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     logger%msg = 'checking flux_func_cache...'
     if (logger%debug) call logger%write_msg
     write (logger%msg, '("array bounds: fs%psi(", i0, ":", i0, "), ' // &
@@ -2845,4 +2845,4 @@ contains
     if (logger%debug) call logger%write_msg
   end subroutine flux_func_cache_check
 
-end module magdif_mesh
+end module mephit_mesh

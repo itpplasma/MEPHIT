@@ -1,12 +1,12 @@
-module magdif
+module mephit_iter
   use iso_fortran_env, only: dp => real64
-  use magdif_pert, only: L1_t, RT0_t
+  use mephit_pert, only: L1_t, RT0_t
 
   implicit none
 
   private
 
-  public :: magdif_run
+  public :: mephit_run
 
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   type(L1_t) :: pn
@@ -49,15 +49,15 @@ module magdif
 
 contains
 
-  subroutine magdif_run(runmode, config) bind(C, name = 'magdif_run')
+  subroutine mephit_run(runmode, config) bind(C, name = 'mephit_run')
     use iso_c_binding, only: c_int, c_ptr
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord, unload_magdata_in_symfluxcoord
-    use magdif_util, only: C_F_string, get_field_filenames, init_field, deinit_field
-    use magdif_conf, only: conf, magdif_config_read, magdif_config_export_hdf5, conf_arr, logger, datafile
-    use magdif_mesh, only: equil, fs, fs_half, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
-         magdif_mesh_deinit, sample_polmodes, coord_cache_deinit, psi_interpolator, psi_fine_interpolator, &
+    use mephit_util, only: C_F_string, get_field_filenames, init_field, deinit_field
+    use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
+    use mephit_mesh, only: equil, fs, fs_half, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
+         mesh_deinit, sample_polmodes, coord_cache_deinit, psi_interpolator, psi_fine_interpolator, &
          B0R_edge, B0phi_edge, B0Z_edge, B0R_Omega, B0phi_Omega, B0Z_Omega, B0_flux, j0phi_edge
-    use magdif_pert, only: generate_vacfield, vac, vac_init, vac_deinit, vac_write, vac_read
+    use mephit_pert, only: generate_vacfield, vac, vac_init, vac_deinit, vac_write, vac_read
     use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
     integer(c_int), intent(in), value :: runmode
     type(c_ptr), intent(in), value :: config
@@ -76,11 +76,11 @@ contains
        runmode_flags = ior(ior(ishft(1, 0), ishft(1, 1)), ishft(1, 2))
     end if
     call C_F_string(config, config_filename)
-    call magdif_config_read(conf, config_filename)
+    call config_read(conf, config_filename)
     call logger%init('-', conf%log_level, conf%quiet)
     call h5_init
     h5overwrite = .true.
-    call magdif_config_export_hdf5(conf, datafile, 'config')
+    call config_export_hdf5(conf, datafile, 'config')
     if (meshing) then
        ! initialize equilibrium field
        call get_field_filenames(gfile, pfile, convexfile)
@@ -119,21 +119,21 @@ contains
        call FEM_init(mesh%n, mesh%nedge, runmode)
     end if
     if (iterations .or. analysis) then
-       call magdif_init
+       call iter_init
        if (iterations) then
-          call magdif_iterate
+          call mephit_iterate
           call FEM_deinit
        else
           if (analysis) then
-             call magdif_read
+             call iter_read
           end if
           ! FEM_deinit is not needed because scripts/maxwell_daemon.edp exits
           ! if iterations are not requested
        end if
        if (analysis) then
-          call magdif_postprocess
+          call mephit_postprocess
        end if
-       call magdif_cleanup
+       call iter_deinit
     end if
     if (allocated(B0R_edge)) deallocate(B0R_edge)
     if (allocated(B0phi_edge)) deallocate(B0phi_edge)
@@ -148,7 +148,7 @@ contains
     call coord_cache_deinit(sample_polmodes)
     call fs%deinit
     call fs_half%deinit
-    call magdif_mesh_deinit(mesh)
+    call mesh_deinit(mesh)
     call unload_magdata_in_symfluxcoord
     call vac_deinit(vac)
     call deinit_field
@@ -156,56 +156,54 @@ contains
     call conf_arr%deinit
     call logger%deinit
     call h5_deinit
-  end subroutine magdif_run
+  end subroutine mephit_run
 
-  !> Initialize magdif module
-  subroutine magdif_init
-    use magdif_mesh, only: mesh
-    use magdif_pert, only: RT0_init, L1_init
+  subroutine iter_init
+    use mephit_mesh, only: mesh
+    use mephit_pert, only: RT0_init, L1_init
 
     call L1_init(pn, mesh%npoint)
     call RT0_init(Bn, mesh%nedge, mesh%ntri)
     call RT0_init(Bnplas, mesh%nedge, mesh%ntri)
     call RT0_init(jn, mesh%nedge, mesh%ntri)
-  end subroutine magdif_init
+  end subroutine iter_init
 
-  !> Deallocates all previously allocated variables.
-  subroutine magdif_cleanup
-    use magdif_pert, only: L1_deinit, RT0_deinit
+  subroutine iter_deinit
+    use mephit_pert, only: L1_deinit, RT0_deinit
 
     call L1_deinit(pn)
     call RT0_deinit(Bn)
     call RT0_deinit(Bnplas)
     call RT0_deinit(jn)
-  end subroutine magdif_cleanup
+  end subroutine iter_deinit
 
-  subroutine magdif_read
-    use magdif_conf, only: datafile
-    use magdif_pert, only: L1_read, RT0_read
+  subroutine iter_read
+    use mephit_conf, only: datafile
+    use mephit_pert, only: L1_read, RT0_read
 
     call L1_read(pn, datafile, 'iter/pn')
     call RT0_read(Bn, datafile, 'iter/Bn')
     call RT0_read(Bnplas, datafile, 'iter/Bnplas')
     call RT0_read(jn, datafile, 'iter/jn')
-  end subroutine magdif_read
+  end subroutine iter_read
 
-  subroutine magdif_single
+  subroutine iter_step
     ! compute pressure based on previous perturbation field
     call compute_presn
     ! compute currents based on previous perturbation field
     call compute_currn
     ! use field code to generate new field from currents
     call compute_Bn
-  end subroutine magdif_single
+  end subroutine iter_step
 
-  subroutine magdif_iterate
+  subroutine mephit_iterate
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use magdif_util, only: arnoldi_break
-    use magdif_mesh, only: mesh
-    use magdif_pert, only: L1_write, RT0_init, RT0_deinit, RT0_write, RT0_compute_tor_comp, &
+    use mephit_util, only: arnoldi_break
+    use mephit_mesh, only: mesh
+    use mephit_pert, only: L1_write, RT0_init, RT0_deinit, RT0_write, RT0_compute_tor_comp, &
          RT0_poloidal_modes, vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, vac
-    use magdif_conf, only: conf, logger, runmode_precon, runmode_single, datafile, cmplx_fmt
+    use mephit_conf, only: conf, logger, runmode_precon, runmode_single, datafile, cmplx_fmt
 
     logical :: preconditioned
     integer :: kiter, niter, maxiter, ndim, nritz, i, j, info
@@ -315,7 +313,7 @@ contains
        Bn_prev%DOF(:) = Bn%DOF
        Bn_prev%comp_phi(:) = Bn%comp_phi
        ! compute B_(n+1) = K * B_n + B_vac ... different from next_iteration_arnoldi
-       call magdif_single
+       call iter_step
        Bn%DOF(:) = Bn%DOF + vac%Bn%DOF
        if (preconditioned) then
           Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
@@ -388,17 +386,17 @@ contains
       complex(dp), intent(out) :: new_val(:)
       Bn%DOF(:) = old_val + vac%Bn%DOF
       call RT0_compute_tor_comp(Bn)
-      call magdif_single
+      call iter_step
       new_val(:) = Bn%DOF
     end subroutine next_iteration_arnoldi
-  end subroutine magdif_iterate
+  end subroutine mephit_iterate
 
   !> Computes #bnflux and #bnphi from #jnflux and #jnphi.
   !>
   !> This subroutine calls a C function that pipes the data to/from FreeFem.
   subroutine compute_Bn
-    use magdif_mesh, only: mesh
-    use magdif_pert, only: RT0_compute_tor_comp
+    use mephit_mesh, only: mesh
+    use mephit_pert, only: RT0_compute_tor_comp
 
     call FEM_compute_Bn(mesh%nedge, jn%DOF, Bn%DOF)
     call RT0_compute_tor_comp(Bn)
@@ -407,9 +405,9 @@ contains
   !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
   subroutine compute_presn
     use sparse_mod, only: sparse_solve, sparse_matmul
-    use magdif_conf, only: conf, logger
-    use magdif_util, only: imun
-    use magdif_mesh, only: fs, mesh, B0R_edge, B0phi_edge, B0Z_edge
+    use mephit_conf, only: conf, logger
+    use mephit_util, only: imun
+    use mephit_mesh, only: fs, mesh, B0R_edge, B0phi_edge, B0Z_edge
     real(dp) :: lr, lz  ! edge vector components
     complex(dp), dimension(maxval(mesh%kp_max)) :: a, b, x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
@@ -491,13 +489,13 @@ contains
   !> #presn, #bnflux and #bnphi.
   !>
   !> This subroutine computes the fluxes through each triangle, separately for each flux
-  !> surface. The result is written to #magdif_conf::currn_file.
+  !> surface. The result is written to #mephit_conf::currn_file.
   subroutine compute_currn
     use sparse_mod, only: sparse_solve, sparse_matmul
-    use magdif_conf, only: conf, logger
-    use magdif_mesh, only: fs, mesh, B0phi_edge, B0_flux, j0phi_edge
-    use magdif_pert, only: RT0_compute_tor_comp
-    use magdif_util, only: imun, clight
+    use mephit_conf, only: conf, logger
+    use mephit_mesh, only: fs, mesh, B0phi_edge, B0_flux, j0phi_edge
+    use mephit_pert, only: RT0_compute_tor_comp
+    use mephit_util, only: imun, clight
     complex(dp), dimension(maxval(mesh%kt_max)) :: x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(maxval(mesh%kt_max)) :: rel_err
@@ -600,9 +598,9 @@ contains
   end subroutine compute_currn
 
   subroutine add_sheet_current
-    use magdif_conf, only: conf_arr
-    use magdif_mesh, only: mesh
-    use magdif_pert, only: L1_interp
+    use mephit_conf, only: conf_arr
+    use mephit_mesh, only: mesh
+    use mephit_pert, only: L1_interp
     integer :: m, kf, kt, kedge, ktri, k
     real(dp) :: edge_R, edge_Z, node_R(2), node_Z(2), B0_R, B0_Z, dum
     complex(dp) :: edge_pn
@@ -630,12 +628,12 @@ contains
     end do
   end subroutine add_sheet_current
 
-  subroutine magdif_postprocess
+  subroutine mephit_postprocess
     use magdata_in_symfluxcoor_mod, only: ntheta
-    use magdif_conf, only: conf, datafile
-    use magdif_mesh, only: mesh, coord_cache_ext, coord_cache_ext_init, coord_cache_ext_deinit, &
+    use mephit_conf, only: conf, datafile
+    use mephit_mesh, only: mesh, coord_cache_ext, coord_cache_ext_init, coord_cache_ext_deinit, &
          compute_sample_Ipar
-    use magdif_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
+    use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
          vec_polmodes_write, RT0_poloidal_modes, vac
     integer, parameter :: m_max = 24
     integer :: k
@@ -672,13 +670,13 @@ contains
        end if
     end do
     call coord_cache_ext_deinit(sample_Ipar)
-  end subroutine magdif_postprocess
+  end subroutine mephit_postprocess
 
   subroutine check_furth(jn, Bmn_plas)
-    use magdif_conf, only: conf, datafile
-    use magdif_util, only: imun, clight
-    use magdif_mesh, only: equil, fs_half, mesh, sample_polmodes
-    use magdif_pert, only: RT0_t, vec_polmodes_t
+    use mephit_conf, only: conf, datafile
+    use mephit_util, only: imun, clight
+    use mephit_mesh, only: equil, fs_half, mesh, sample_polmodes
+    use mephit_pert, only: RT0_t, vec_polmodes_t
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(RT0_t), intent(in) :: jn
     type(vec_polmodes_t), intent(in) :: Bmn_plas
@@ -719,10 +717,10 @@ contains
   !> calculate parallel current (density) on a finer grid
   subroutine write_Ipar_symfluxcoord(s, file, dataset)
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_conf, only: conf
-    use magdif_util, only: imun, clight
-    use magdif_mesh, only: coord_cache_ext
-    use magdif_pert, only: RT0_interp
+    use mephit_conf, only: conf
+    use mephit_util, only: imun, clight
+    use mephit_mesh, only: coord_cache_ext
+    use mephit_pert, only: RT0_interp
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(coord_cache_ext), intent(in) :: s  ! shorten names
     character(len = *), intent(in) :: file, dataset
@@ -870,9 +868,9 @@ contains
   !> calculate parallel current (density) on a finer grid
   subroutine write_Ipar(s, file, dataset)
     use constants, only: pi  ! orbit_mod.f90
-    use magdif_util, only: imun, clight, bent_cyl2straight_cyl
-    use magdif_mesh, only: mesh, coord_cache_ext
-    use magdif_pert, only: RT0_interp
+    use mephit_util, only: imun, clight, bent_cyl2straight_cyl
+    use mephit_mesh, only: mesh, coord_cache_ext
+    use mephit_pert, only: RT0_interp
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(coord_cache_ext), intent(in) :: s  ! shorten names
     character(len = *), intent(in) :: file, dataset
@@ -965,4 +963,4 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_neg', bndry_neg, &
          lbound(bndry_neg), ubound(bndry_neg))
   end subroutine write_Ipar
-end module magdif
+end module mephit_iter

@@ -5,8 +5,8 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include "magdif_util.h"
-#include "magdif_fem.h"
+#include "mephit_util.h"
+#include "mephit_fem.h"
 
 char shared_namedpipe[path_max];
 

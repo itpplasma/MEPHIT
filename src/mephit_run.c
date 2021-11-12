@@ -8,7 +8,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <signal.h>
-#include "magdif_util.h"
+#include "mephit_util.h"
 
 static volatile sig_atomic_t caught_signal = 0;
 
@@ -60,7 +60,7 @@ void wait_for_exit(child_process_t *child, const char *name)
   }
 }
 
-extern void magdif_run(const int runmode, const char* config_file);
+extern void mephit_run(const int runmode, const char* config_file);
 extern char shared_namedpipe[path_max];
 
 int main(int argc, char *argv[])
@@ -103,7 +103,7 @@ int main(int argc, char *argv[])
   } else {
     errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to FreeFem script file as fourth argument");
   }
-  /* TODO: if exclusive flock on magdif.h5 fails, exit with error; else, release acquired lock */
+  /* TODO: if exclusive flock on mephit.h5 fails, exit with error; else, release acquired lock */
   bytes_written = snprintf(shared_namedpipe, path_max, "%s/MEPHIT_0x%.8x.dat", tmpdir, getpid());
   if (bytes_written < 0) {
     errno_msg(exit, __FILE__, __LINE__, errno, "Failed to generate FIFO name");
@@ -139,7 +139,7 @@ int main(int argc, char *argv[])
   }
   mephit.pid = fork();
   if (mephit.pid == (pid_t) 0) {
-    magdif_run(runmode, config);
+    mephit_run(runmode, config);
     exit(0);
   } else if (mephit.pid == (pid_t) -1) {
     errno_save = errno;

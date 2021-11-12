@@ -1,5 +1,5 @@
-#ifndef MAGDIF_FEM_H
-#define MAGDIF_FEM_H
+#ifndef MEPHIT_FEM_H
+#define MEPHIT_FEM_H
 
 #ifdef __cplusplus
   #include <complex>
@@ -27,4 +27,4 @@ void FEM_deinit(void);
 }
 #endif
 
-#endif  // MAGDIF_FEM_H
+#endif  // MEPHIT_FEM_H

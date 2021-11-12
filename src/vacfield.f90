@@ -2,8 +2,8 @@ program vacfield
 
   use iso_fortran_env, only: dp => real64
   use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
-  use magdif_conf, only: logger
-  use magdif_pert, only: AUG_coils_read, AUG_coils_write_Nemov, AUG_coils_read_Nemov, &
+  use mephit_conf, only: logger
+  use mephit_pert, only: AUG_coils_read, AUG_coils_write_Nemov, AUG_coils_read_Nemov, &
        AUG_coils_write_GPEC, AUG_coils_read_GPEC, AUG_coils_write_Fourier, read_currents_Nemov, &
        Biot_Savart_sum_coils, write_Bvac_Nemov
 

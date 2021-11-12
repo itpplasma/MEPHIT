@@ -1,4 +1,4 @@
-module magdif_util
+module mephit_util
 
   use iso_fortran_env, only: dp => real64
 
@@ -130,7 +130,7 @@ contains
     ! compute equiibrium field
     ipert = 0
     iequil = 1
-    ! default values - TODO: options in magdif_conf
+    ! default values - TODO: options in config_t
     nwindow_r = 0
     nwindow_z = 0
     ! don't let subroutine field read from input file
@@ -249,7 +249,7 @@ contains
   end subroutine binsearch
 
   subroutine gauss_legendre_unit_interval(order, points, weights)
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     use fgsl, only: fgsl_size_t, fgsl_double, fgsl_int, fgsl_success, &
          fgsl_integration_glfixed_point, fgsl_integration_glfixed_table, &
          fgsl_integration_glfixed_table_alloc, fgsl_integration_glfixed_table_free
@@ -403,7 +403,7 @@ contains
 
   subroutine g_eqdsk_check_consistency(this)
     use constants, only: pi  ! src/orbit_mod.f90
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
     integer, parameter :: ignore = 3
     type(interp1d) :: psi_interpolator
@@ -466,7 +466,7 @@ contains
   !> Estimates terms of Grad-Shafranov equation to determine sign_convention::exp_bpol.
   function g_eqdsk_grad_shafranov_normalization(this) result(gs_factor)
     use constants, only: pi  ! src/orbit_mod.f90
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
     real(dp) :: gs_factor
     type(interp1d) :: psi_interpolator
@@ -495,7 +495,7 @@ contains
   end function g_eqdsk_grad_shafranov_normalization
 
   function sign_array(array, name, most)
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     real(dp), intent(in), dimension(:) :: array
     character(len = *), intent(in) :: name
     logical, intent(in), optional :: most
@@ -522,7 +522,7 @@ contains
 
   subroutine g_eqdsk_classify(this)
     use constants, only: pi  ! src/orbit_mod.f90
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
 
     this%cocos = sign_convention(0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
@@ -565,7 +565,7 @@ contains
 
   subroutine g_eqdsk_standardise(this)
     use constants, only: pi  ! src/orbit_mod.f90
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
 
     if (this%cocos%sgn_Bpol == +1) then
@@ -805,7 +805,7 @@ contains
   end subroutine g_eqdsk_deinit
 
   subroutine interp1d_init(this, n_lag, indep_var)
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     class(interp1d), intent(inout) :: this
     integer, intent(in) :: n_lag
     real(dp), intent(in), dimension(:) :: indep_var
@@ -824,7 +824,7 @@ contains
   end subroutine interp1d_init
 
   function interp1d_eval(this, sample, position, deriv) result(interp)
-    use magdif_conf, only: logger
+    use mephit_conf, only: logger
     class(interp1d) :: this
     real(dp), intent(in) :: sample(:)
     real(dp), intent(in) :: position
@@ -1248,4 +1248,4 @@ contains
     end if
   end subroutine C_F_string
 
-end module magdif_util
+end module mephit_util

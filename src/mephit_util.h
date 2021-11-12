@@ -1,5 +1,5 @@
-#ifndef MAGDIF_UTIL_H
-#define MAGDIF_UTIL_H
+#ifndef MEPHIT_UTIL_H
+#define MEPHIT_UTIL_H
 
 #ifdef __cplusplus
 #include <cstdarg>
@@ -19,4 +19,4 @@ void errno_msg(void (*exit_func)(int), const char *file, int line, int errnum, c
 }
 #endif
 
-#endif  // MAGDIF_UTIL_H
+#endif  // MEPHIT_UTIL_H
