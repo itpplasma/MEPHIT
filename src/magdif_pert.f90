@@ -1375,13 +1375,10 @@ contains
 
   subroutine compute_Bnvac(Bn)
     use magdif_conf, only: conf, logger, vac_src_nemov, vac_src_gpec, vac_src_fourier
-    use magdif_util, only: gauss_legendre_unit_interval
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
-    integer, parameter :: order = 2
     integer :: nR, nZ, kedge, k
-    real(dp) :: Rmin, Rmax, Zmin, Zmax, R, Z, edge_R, edge_Z, node_R(2), node_Z(2)
-    real(dp), dimension(order) :: points, weights
+    real(dp) :: Rmin, Rmax, Zmin, Zmax, edge_R, edge_Z, node_R(2), node_Z(2)
     complex(dp) :: B_R, B_phi, B_Z
     complex(dp), dimension(:, :), allocatable :: Bn_R, Bn_Z
 
@@ -1402,18 +1399,16 @@ contains
     call vector_potential_single_mode(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
     deallocate(Bn_R, Bn_Z)
     ! project to finite elements
-    call gauss_legendre_unit_interval(order, points, weights)
     Bn%DOF = (0d0, 0d0)
     do kedge = 1, mesh%nedge
        node_R = mesh%node_R(mesh%edge_node(:, kedge))
        node_Z = mesh%node_Z(mesh%edge_node(:, kedge))
        edge_R = node_R(2) - node_R(1)
        edge_Z = node_Z(2) - node_Z(1)
-       do k = 1, order
-          R = node_R(1) * points(k) + node_R(2) * points(order - k + 1)
-          Z = node_Z(1) * points(k) + node_Z(2) * points(order - k + 1)
-          call spline_bn(conf%n, R, Z, B_R, B_phi, B_Z)
-          Bn%DOF(kedge) = Bn%DOF(kedge) + weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
+       do k = 1, mesh%GL_order
+          call spline_bn(conf%n, mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), B_R, B_phi, B_Z)
+          Bn%DOF(kedge) = Bn%DOF(kedge) + mesh%GL_weights(k) * &
+               (B_R * edge_Z - B_Z * edge_R) * mesh%GL_R(k, kedge)
        end do
     end do
     ! toroidal flux via zero divergence
@@ -1610,30 +1605,25 @@ contains
   ! calculate resonant vacuum perturbation
   subroutine compute_kilca_vacuum(Bn)
     use magdif_conf, only: conf
-    use magdif_util, only: gauss_legendre_unit_interval
     use magdif_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
-    integer, parameter :: order = 2
     integer :: kedge, k, pol_modes(2)
-    real(dp) :: R, Z, rho, theta, edge_R, edge_Z, node_R(2), node_Z(2)
-    real(dp), dimension(order) :: points, weights
+    real(dp) :: rho, theta, edge_R, edge_Z, node_R(2), node_Z(2)
     complex(dp) :: B_R, B_phi, B_Z
 
     pol_modes = [conf%kilca_pol_mode, -conf%kilca_pol_mode]
-    call gauss_legendre_unit_interval(order, points, weights)
     Bn%DOF = (0d0, 0d0)
     do kedge = 1, mesh%nedge
        node_R = mesh%node_R(mesh%edge_node(:, kedge))
        node_Z = mesh%node_Z(mesh%edge_node(:, kedge))
        edge_R = node_R(2) - node_R(1)
        edge_Z = node_Z(2) - node_Z(1)
-       do k = 1, order
-          R = node_R(1) * points(k) + node_R(2) * points(order - k + 1)
-          Z = node_Z(1) * points(k) + node_Z(2) * points(order - k + 1)
-          rho = hypot(R - mesh%R_O, Z - mesh%Z_O)
-          theta = atan2(Z - mesh%Z_O, R - mesh%R_O)
+       do k = 1, mesh%GL_order
+          rho = hypot(mesh%GL_R(k, kedge) - mesh%R_O, mesh%GL_Z(k, kedge) - mesh%Z_O)
+          theta = atan2(mesh%GL_Z(k, kedge) - mesh%Z_O, mesh%GL_R(k, kedge) - mesh%R_O)
           call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, rho, theta, B_R, B_phi, B_Z)
-          Bn%DOF(kedge) = Bn%DOF(kedge) + weights(k) * (B_R * edge_Z - B_Z * edge_R) * R
+          Bn%DOF(kedge) = Bn%DOF(kedge) + mesh%GL_weights(k) * &
+               (B_R * edge_Z - B_Z * edge_R) * mesh%GL_R(k, kedge)
        end do
     end do
     ! toroidal flux via zero divergence

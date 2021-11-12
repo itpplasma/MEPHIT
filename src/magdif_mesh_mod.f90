@@ -191,6 +191,15 @@ module magdif_mesh
      real(dp), allocatable :: edge_R(:)
      real(dp), allocatable :: edge_Z(:)
 
+     !> Order of Gauss-Legendre quadrature
+     integer :: GL_order = 2
+     !> Weights of Gauss-Legendre quadrature
+     real(dp), allocatable :: GL_weights(:)
+     !> R coordinate of Gauss-Legendre quadrature point on edge
+     real(dp), allocatable :: GL_R(:, :)
+     !> Z coordinate of Gauss-Legendre quadrature point on edge
+     real(dp), allocatable :: GL_Z(:, :)
+
      !> Surface integral Jacobian used for normalization of poloidal modes in GPEC
      complex(dp), allocatable :: gpec_jacfac(:, :)
 
@@ -1181,9 +1190,9 @@ contains
 
   subroutine connect_mesh_points
     use magdif_conf, only: logger
-    use magdif_util, only: pi
-    integer :: kf, kp, kp_lo, kp_hi, kt, ktri, ktri_adj, kedge, nodes(4)
-    real(dp) :: mat(3, 3)
+    use magdif_util, only: pi, gauss_legendre_unit_interval
+    integer :: kf, kp, kp_lo, kp_hi, kt, ktri, ktri_adj, kedge, nodes(4), k
+    real(dp) :: mat(3, 3), points(mesh%GL_order)
 
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
@@ -1308,12 +1317,21 @@ contains
        call ring_centered_avg_coord(ktri, mesh%R_Omega(ktri), mesh%Z_Omega(ktri))
        mesh%area(ktri) = tri_area(ktri)
     end do
-    ! cache edge midpoints
+    ! cache edge midpoints and Gauss-Legendre quadrature evaluation points
     allocate(mesh%edge_R(mesh%nedge))
     allocate(mesh%edge_Z(mesh%nedge))
+    allocate(mesh%GL_weights(mesh%GL_order))
+    allocate(mesh%GL_R(mesh%GL_order, mesh%nedge), mesh%GL_Z(mesh%GL_order, mesh%nedge))
+    call gauss_legendre_unit_interval(mesh%GL_order, points, mesh%GL_weights)
     do kedge = 1, mesh%nedge
        mesh%edge_R(kedge) = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
        mesh%edge_Z(kedge) = sum(mesh%node_Z(mesh%edge_node(:, kedge))) * 0.5d0
+       do k = 1, mesh%GL_order
+          mesh%GL_R(k, kedge) = mesh%node_R(mesh%edge_node(1, kedge)) * points(k) + &
+               mesh%node_R(mesh%edge_node(2, kedge)) * points(mesh%GL_order - k + 1)
+          mesh%GL_Z(k, kedge) = mesh%node_Z(mesh%edge_node(1, kedge)) * points(k) + &
+               mesh%node_Z(mesh%edge_node(2, kedge)) * points(mesh%GL_order - k + 1)
+       end do
     end do
   end subroutine connect_mesh_points
 
@@ -1883,6 +1901,16 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_Z', mesh%edge_Z, &
          lbound(mesh%edge_Z), ubound(mesh%edge_Z), &
          comment = 'Z coordinate of edge midpoint', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_order', mesh%GL_order)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_weights', mesh%GL_weights, &
+         lbound(mesh%GL_weights), ubound(mesh%GL_weights), &
+         comment = 'weights of Gauss-Legendre quadrature', unit = '1')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_R', mesh%GL_R, &
+         lbound(mesh%GL_R), ubound(mesh%GL_R), &
+         comment = 'R coordinate of Gauss-Legendre points on edge', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_Z', mesh%GL_Z, &
+         lbound(mesh%GL_Z), ubound(mesh%GL_Z), &
+         comment = 'Z coordinate of Gauss-Legendre points on edge', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega, &
          lbound(mesh%R_Omega), ubound(mesh%R_Omega), &
          comment = 'R coordinate of triangle ''centroid''', unit = 'cm')
@@ -1955,6 +1983,7 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/n', mesh%n)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_res_min', mesh%m_res_min)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_res_max', mesh%m_res_max)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_order', mesh%GL_order)
     ! TODO: allocate deferred-shape arrays in hdf5_tools and skip allocation here
     allocate(mesh%deletions(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%refinement(mesh%m_res_min:mesh%m_res_max))
@@ -1984,6 +2013,9 @@ contains
     allocate(mesh%tri_edge(3, mesh%ntri))
     allocate(mesh%edge_R(mesh%nedge))
     allocate(mesh%edge_Z(mesh%nedge))
+    allocate(mesh%GL_weights(mesh%GL_order))
+    allocate(mesh%GL_R(mesh%GL_order, mesh%nedge))
+    allocate(mesh%GL_Z(mesh%GL_order, mesh%nedge))
     allocate(mesh%gpec_jacfac(-16:16, mesh%nflux))
     allocate(mesh%area(mesh%ntri))
     allocate(mesh%R_Omega(mesh%ntri))
@@ -2011,6 +2043,9 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_edge', mesh%tri_edge)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_R', mesh%edge_R)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_Z', mesh%edge_Z)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_weights', mesh%GL_weights)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_R', mesh%GL_R)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_Z', mesh%GL_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_Omega', mesh%Z_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area)
@@ -2050,6 +2085,9 @@ contains
     if (allocated(this%tri_edge)) deallocate(this%tri_edge)
     if (allocated(this%edge_R)) deallocate(this%edge_R)
     if (allocated(this%edge_Z)) deallocate(this%edge_Z)
+    if (allocated(this%GL_weights)) deallocate(this%GL_weights)
+    if (allocated(this%GL_R)) deallocate(this%GL_R)
+    if (allocated(this%GL_Z)) deallocate(this%GL_Z)
     if (allocated(this%gpec_jacfac)) deallocate(this%gpec_jacfac)
     if (allocated(this%area)) deallocate(this%area)
     if (allocated(this%R_Omega)) deallocate(this%R_Omega)

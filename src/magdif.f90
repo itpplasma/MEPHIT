@@ -601,16 +601,12 @@ contains
 
   subroutine add_sheet_current
     use magdif_conf, only: conf_arr
-    use magdif_util, only: gauss_legendre_unit_interval
     use magdif_mesh, only: mesh
     use magdif_pert, only: L1_interp
-    integer, parameter :: order = 2
     integer :: m, kf, kt, kedge, ktri, k
-    real(dp) :: points(order), weights(order), R, Z, edge_R, edge_Z, node_R(2), node_Z(2), &
-         B0_R, B0_Z, dum
+    real(dp) :: edge_R, edge_Z, node_R(2), node_Z(2), B0_R, B0_Z, dum
     complex(dp) :: edge_pn
 
-    call gauss_legendre_unit_interval(order, points, weights)
     do m = mesh%m_res_min, mesh%m_res_max
        kf = mesh%res_ind(m)
        if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then
@@ -621,15 +617,13 @@ contains
              node_Z = mesh%node_Z(mesh%edge_node(:, kedge))
              edge_R = node_R(2) - node_R(1)
              edge_Z = node_Z(2) - node_Z(1)
-             do k = 1, order
-                R = node_R(1) * points(k) + node_R(2) * points(order - k + 1)
-                Z = node_Z(1) * points(k) + node_Z(2) * points(order - k + 1)
-                call field(R, 0d0, Z, B0_R, dum, B0_Z, dum, dum, dum, &
-                     dum, dum, dum, dum, dum, dum)
-                call L1_interp(ktri, pn, R, Z, edge_pn)
-                jn%DOF(kedge) = jn%DOF(kedge) + weights(k) * &
+             do k = 1, mesh%GL_order
+                call field(mesh%GL_R(k, kedge), 0d0, mesh%GL_Z(k, kedge), B0_R, dum, B0_Z, &
+                     dum, dum, dum, dum, dum, dum, dum, dum, dum)
+                call L1_interp(ktri, pn, mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), edge_pn)
+                jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * &
                      conf_arr%sheet_current_factor(m) * edge_pn * &
-                     (B0_R * edge_Z - B0_Z * edge_R) * R
+                     (B0_R * edge_Z - B0_Z * edge_R) * mesh%GL_R(k, kedge)
              end do
           end do
        end if
