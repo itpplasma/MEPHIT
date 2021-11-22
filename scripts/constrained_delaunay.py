@@ -37,7 +37,7 @@ def remove_pop(lst):
 
 
 work_dir = run_dir + '/33353_2325'
-testcase = h5py.File(path.join(work_dir, 'magdif.h5'), 'r')
+testcase = h5py.File(path.join(work_dir, 'mephit.h5'), 'r')
 ktri_lo = testcase['/mesh/kt_low'][5] + 11
 ktri_hi = ktri_lo + 8
 tris = testcase['/mesh/tri_node'][ktri_lo:ktri_hi, :] - 1

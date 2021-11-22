@@ -508,7 +508,7 @@ RT0_comp = {'/comp_R': {'file': '_R', 'math': lambda vec: fr"{vec}^{{R}}"},
 
 class magdif:
 
-    def __init__(self, datadir, datafile='magdif.h5'):
+    def __init__(self, datadir, datafile='mephit.h5'):
         self.plots = []
         self.datadir = datadir
         self.datafile = datafile
@@ -519,7 +519,7 @@ class magdif:
         self.triangulation = Triangulation(self.data['/mesh/node_R'], self.data['/mesh/node_Z'],
                                            self.data['/mesh/tri_node'][()] - 1)
 
-    def read_convexwall(self, file=scripts_dir+'/../data/convexwall.asdex'):
+    def read_convexwall(self, file=scripts_dir+'/../data/convexwall_asdex.dat'):
         print(f"reading contents of {file}")
         self.convexwall = np.loadtxt(file)
 

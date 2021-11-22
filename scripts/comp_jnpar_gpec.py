@@ -21,7 +21,7 @@ work_dir = run_dir + '/30835_3200_ed6'
 m_min = 3
 m_max = 9
 
-magdif = h5py.File(path.join(work_dir, 'magdif.h5'), 'r')
+magdif = h5py.File(path.join(work_dir, 'mephit.h5'), 'r')
 nrad = magdif['/config/nrad_Ipar'][()]
 rad_max = magdif['/cache/fs/rad'][-1]
 rad_res = {}

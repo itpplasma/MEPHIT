@@ -8,7 +8,7 @@ import colorcet
 from magdifplot import run_dir
 
 workdir = run_dir + '/33353_2325'
-data = File(path.join(workdir, 'magdif_fix.h5'), 'r')
+data = File(path.join(workdir, 'mephit_fix.h5'), 'r')
 nflux = data['/mesh/nflux'][()]
 rad = data['/cache/fs/rad'][()]
 A = data['/cache/fs/area'][()]
@@ -97,7 +97,7 @@ canvas = FigureCanvas(fig)
 fig.savefig(path.join(workdir, 'mesh_fix.pdf'), dpi=600)
 
 data.close()
-data = File(path.join(workdir, 'magdif.h5'), 'r')
+data = File(path.join(workdir, 'mephit.h5'), 'r')
 triangulation = Triangulation(data['/mesh/node_R'], data['/mesh/node_Z'], data['/mesh/tri_node'][()] - 1)
 Bn_pol = empty((data['/mesh/ntri'][()],), dtype='D')
 Bn_pol.real = hypot(data['/debug_RT0/Bn_R'][()].real, data['/debug_RT0/Bn_Z'][()].real)

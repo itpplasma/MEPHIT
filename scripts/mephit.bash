@@ -80,7 +80,7 @@ mephit_init() {
         if [ "$type" != "kilca" ]; then
             ln -s "$datadir/AUG_B_coils.h5" "$workdir/AUG_B_coils.h5"
         fi
-        cp $(absolutize "$config") "$workdir/magdif.inp"
+        cp $(absolutize "$config") "$workdir/mephit.in"
         replace_first_in_line "$workdir/field_divB0.inp" 7 "'${geqdsk##*/}'"     # gfile
         replace_first_in_line "$workdir/field_divB0.inp" 9 "'${convexwall##*/}'" # convex
     done
@@ -119,7 +119,7 @@ mephit_convert() {
 }
 
 mephit_run() {
-    config=magdif.inp
+    config=mephit.in
     log=mephit.log
     analysis=0
     iterations=0
@@ -191,8 +191,8 @@ mephit_run() {
 }
 
 mephit_plot() {
-    config=magdif.inp
-    data=magdif.h5
+    config=mephit.in
+    data=mephit.h5
     log=mephit.log
 
     for workdir; do
@@ -206,7 +206,7 @@ mephit_clean() {
     for workdir; do
         pushd "$workdir"
         # files from mephit_run
-        rm -f fort.* magdif.h5 mephit.log inputformaxwell_ext.msh inputformaxwell.msh box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat
+        rm -f fort.* mephit.h5 mephit.log inputformaxwell_ext.msh inputformaxwell.msh box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat
         # files from mephit_plot
         rm -f plot*.pdf convergence.pdf Bmn*.pdf currmn*.pdf
         popd

@@ -24,7 +24,7 @@ m_min = 3
 m_max = 9
 m_range = range(m_min, m_max + 1)
 
-magdif = h5py.File(path.join(work_dir, 'magdif.h5'), 'r')
+magdif = h5py.File(path.join(work_dir, 'mephit.h5'), 'r')
 nrad = magdif['/config/nrad_Ipar'][()]
 rad_max = magdif['/cache/fs/rad'][-1]
 rad_res = {}
@@ -33,7 +33,7 @@ for k, m in enumerate(range(magdif['/mesh/rad_norm_res'].attrs['lbounds'][0],
     rad_res[m] = magdif['/mesh/rad_norm_res'][k] * rad_max
 h5_files = {}
 for m in m_range:
-    h5_files[m] = h5py.File(path.join(test_dir, f"TCFP_Ipar_{m}/magdif.h5"), 'r')
+    h5_files[m] = h5py.File(path.join(test_dir, f"TCFP_Ipar_{m}/mephit.h5"), 'r')
 cylcoor = parcurr()
 cylcoor.process_magdif(lambda m: h5_files[m], m_range, nrad, rad_res, symfluxcoord=False)
 fluxcoor = parcurr()

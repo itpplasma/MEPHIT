@@ -7,7 +7,7 @@ import h5py
 from os import path
 
 work_dir = run_dir + '/Bvac_ImBm_g33353.2325'
-magdif = h5py.File(path.join(work_dir, 'magdif.h5'), 'r')
+magdif = h5py.File(path.join(work_dir, 'mephit.h5'), 'r')
 
 ZMID = -1.8
 R_O = magdif['/mesh/R_O'][()]

@@ -114,5 +114,5 @@ def compare(datafile, outdir, prefix, subtitle, m):
 
 
 workdir = run_dir + '/33353_2325'
-compare(path.join(workdir, 'magdif_fix.h5'), workdir, 'res_fix', 'with fixed poloidal resolution', 6)
-compare(path.join(workdir, 'magdif.h5'), workdir, 'res_opt', 'with optimized poloidal resolution', 6)
+compare(path.join(workdir, 'mephit_fix.h5'), workdir, 'res_fix', 'with fixed poloidal resolution', 6)
+compare(path.join(workdir, 'mephit.h5'), workdir, 'res_opt', 'with optimized poloidal resolution', 6)

@@ -24,7 +24,7 @@ module mephit_conf
 
   character(len = *), parameter :: cmplx_fmt = 'es24.16e3, 1x, sp, es24.16e3, s, " i"'
   character(len = *), parameter :: nl_fmt = '"' // new_line('A') // '"'
-  character(len = *), parameter :: datafile = 'magdif.h5'
+  character(len = *), parameter :: datafile = 'mephit.h5'
 
   integer, parameter :: longlines = 1024
 
