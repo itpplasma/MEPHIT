@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-import magdifplot
+from magdifplot import run_dir
 import matplotlib.pyplot as plt
 import h5py
 from os import path
 
-work_dir = '/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'
+work_dir = run_dir + '/Bvac_ImBm_g33353.2325'
 magdif = h5py.File(path.join(work_dir, 'magdif.h5'), 'r')
 
 ZMID = -1.8

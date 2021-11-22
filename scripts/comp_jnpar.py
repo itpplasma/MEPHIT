@@ -6,7 +6,7 @@ Created on Mon May 25 19:27:00 2020
 @author: patrick
 """
 
-from magdifplot import parcurr, statA_per_cm2_to_A_per_m2, c1_statA_per_cm2_to_A_per_m2
+from magdifplot import run_dir, parcurr, statA_per_cm2_to_A_per_m2, c1_statA_per_cm2_to_A_per_m2
 import numpy as np
 import h5py
 from matplotlib import rcParams
@@ -18,8 +18,8 @@ figsize = (6.6, 3.6)
 res = 300
 thin = 0.5
 
-test_dir = '/home/patrick/itp-temp/git/NEO-EQ/run'
-work_dir = '/home/patrick/git/NEO-EQ/run/geomint_TCFP'
+test_dir = run_dir
+work_dir = run_dir + '/geomint_TCFP'
 m_min = 3
 m_max = 9
 m_range = range(m_min, m_max + 1)

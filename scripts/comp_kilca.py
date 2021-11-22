@@ -8,9 +8,9 @@ Created on Thu Nov 19 23:04:25 2020
 
 from os import path
 import numpy as np
-from magdifplot import magdif, fslabel, polmodes, magdif_poloidal_plots
+from magdifplot import run_dir, magdif, fslabel, polmodes, magdif_poloidal_plots
 
-workdir = '/home/patrick/git/NEO-EQ/run/geomint_TCFP'
+workdir = run_dir + '/geomint_TCFP'
 kilcafile = 'TCFP_flre_hic.hdf5'
 ylabel = r'perpendicular perturbation field $\lvert B_{mn}^{r} \rvert$ / \si{\gauss}'
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from magdifplot import magdif, statA_per_cm2_to_A_per_m2
+from magdifplot import run_dir, magdif
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 from os import path
@@ -9,7 +9,7 @@ from numpy import clip
 
 dyn_per_cm3_to_N_per_m3 = 10.0
 latex_coord = {'R': 'R', 'Z': 'Z', 'phi': r'\varphi'}
-work_dir = "/temp/lainer_p/git/NEO-EQ/run/g33353.2325"
+work_dir = run_dir + '/g33353.2325'
 
 equil_base = magdif(work_dir)
 equil_base.read_datafile()

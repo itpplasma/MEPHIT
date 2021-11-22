@@ -7,7 +7,7 @@ Created on Tue Jun 30 13:48:52 2020
 """
 
 from numpy import clip
-from magdifplot import magdif
+from magdifplot import run_dir, magdif
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.ticker import MultipleLocator
@@ -15,7 +15,7 @@ from os import path
 from glob import iglob
 
 q_max = 10.0
-for work_dir in iglob('/temp/lainer_p/git/NEO-EQ/run/g*'):
+for work_dir in iglob(run_dir + '/g*'):
     try:
         testcase = magdif(work_dir)
         testcase.read_datafile()

@@ -26,6 +26,7 @@ from multiprocessing import Pool
 
 # supply path to scripts directory
 scripts_dir = path.dirname(path.realpath(__file__))
+run_dir = path.realpath(scripts_dir + '/../run')
 
 # complex values are stored as compound types in libneo/hdf5tools
 h5py_hack().complex_names = ('real', 'imag')

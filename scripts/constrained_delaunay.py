@@ -11,7 +11,7 @@ from os import path
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_pdf import PdfPages
 from matplotlib.patches import Circle
-import magdifplot
+from magdifplot import run_dir
 import numpy as np
 
 
@@ -36,7 +36,7 @@ def remove_pop(lst):
     lst.clear()
 
 
-work_dir = '/home/patrick/git/NEO-EQ/run/33353_2325'
+work_dir = run_dir + '/33353_2325'
 testcase = h5py.File(path.join(work_dir, 'magdif.h5'), 'r')
 ktri_lo = testcase['/mesh/kt_low'][5] + 11
 ktri_hi = ktri_lo + 8

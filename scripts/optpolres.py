@@ -5,9 +5,9 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.tri import Triangulation
 import colorcet
-import magdifplot
+from magdifplot import run_dir
 
-workdir = '/home/patrick/git/NEO-EQ/run/33353_2325'
+workdir = run_dir + '/33353_2325'
 data = File(path.join(workdir, 'magdif_fix.h5'), 'r')
 nflux = data['/mesh/nflux'][()]
 rad = data['/cache/fs/rad'][()]

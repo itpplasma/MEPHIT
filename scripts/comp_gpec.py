@@ -11,7 +11,8 @@ from glob import iglob
 import numpy as np
 from copy import deepcopy
 from functools import partial
-from magdifplot import magdif, fslabel, polmodes, magdif_poloidal_plots, magdif_2d_rectplots, cm_to_m, G_to_T, Mx_to_Wb
+from magdifplot import run_dir, magdif, fslabel, polmodes, magdif_poloidal_plots, magdif_2d_rectplots, \
+    cm_to_m, G_to_T, Mx_to_Wb
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.path import Path as Polygon
@@ -29,7 +30,7 @@ psi_n = r'$\hat{\psi}$'
 theta_n = r'$\hat{\vartheta}$'
 sqrt_g = r'$\sqrt{g}$ / \si{\meter\per\tesla}'
 
-for workdir in iglob('/temp/lainer_p/git/NEO-EQ/run/Bvac_ImBm_g33353.2325'):
+for workdir in iglob(run_dir + '/Bvac_ImBm_g33353.2325'):
     testcase = magdif(workdir)
     testcase.read_configfile()
     testcase.read_datafile()

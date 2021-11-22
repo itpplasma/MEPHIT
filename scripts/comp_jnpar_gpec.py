@@ -6,7 +6,7 @@ Created on Mon Nov 16 10:19:58 2020
 @author: patrick
 """
 
-from magdifplot import parcurr
+from magdifplot import run_dir, parcurr
 import numpy as np
 import h5py
 from matplotlib.figure import Figure
@@ -17,7 +17,7 @@ figsize = (6.6, 3.6)
 res = 300
 thin = 0.5
 
-work_dir = '/home/patrick/git/NEO-EQ/run/30835_3200_ed6'
+work_dir = run_dir + '/30835_3200_ed6'
 m_min = 3
 m_max = 9
 

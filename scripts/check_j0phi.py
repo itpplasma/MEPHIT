@@ -6,7 +6,7 @@ Created on Tue Jul  7 11:34:35 2020
 @author: patrick
 """
 
-from magdifplot import magdif, statA_per_cm2_to_A_per_m2
+from magdifplot import run_dir, magdif, statA_per_cm2_to_A_per_m2
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 from os import path
@@ -14,7 +14,7 @@ from glob import iglob
 
 dyn_per_cm3_to_N_per_m3 = 10.0
 latex_coord = {'R': 'R', 'Z': 'Z', 'phi': r'\varphi'}
-for work_dir in iglob("/temp/lainer_p/git/NEO-EQ/run/g*"):
+for work_dir in iglob(run_dir + '/g*'):
     try:
         testcase = magdif(work_dir)
         testcase.read_datafile()

@@ -1,10 +1,10 @@
-from magdifplot import magdif
+from magdifplot import run_dir, magdif
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 from os import path
 import numpy as np
 
-work_dir = '/home/patrick/git/NEO-EQ/run/geomint_TCFP'
+work_dir = run_dir + '/geomint_TCFP'
 testcase = magdif(work_dir)
 testcase.read_datafile()
 rad = testcase.data['/debug_furth/rad'][()]

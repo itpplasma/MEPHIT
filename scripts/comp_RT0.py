@@ -8,7 +8,7 @@ Created on Mon May  4 15:56:57 2020
 
 from os import path
 from h5py import File
-import magdifplot
+from magdifplot import run_dir
 from matplotlib import ticker
 from matplotlib.figure import Figure
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
@@ -113,6 +113,6 @@ def compare(datafile, outdir, prefix, subtitle, m):
     fig.savefig(fname + '_Bn_phi_Im.pdf')
 
 
-workdir = '/home/patrick/git/NEO-EQ/run/33353_2325'
+workdir = run_dir + '/33353_2325'
 compare(path.join(workdir, 'magdif_fix.h5'), workdir, 'res_fix', 'with fixed poloidal resolution', 6)
 compare(path.join(workdir, 'magdif.h5'), workdir, 'res_opt', 'with optimized poloidal resolution', 6)
