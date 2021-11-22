@@ -35,12 +35,16 @@
 
    ! toroidal mode number of perturbation
    config%n = 2
-   ! number of iteration steps
-   config%niter = 20
-   ! number of Ritz eigenvalues
-   config%nritz = 30
+   ! maximum number of iteration steps
+   config%niter = 50
+   ! maximum relative error in fixed-point iteration
+   config%iter_rel_err = 1d-12
+   ! maximum number of iterations in Arnoldi method
+   config%nkrylov = 100
    ! threshold for eigenvalues in preconditioner
    config%ritz_threshold = 0.5d0
+   ! maximim relative error for eigenvalues in preconditioner
+   config%ritz_rel_err = 1d-10
    ! maximum distance between flux surfaces along theta = 0
    config%max_Delta_rad = 0.45d0
    ! temperature on magnetic axis
