@@ -15,7 +15,6 @@ kilcafile = 'TCFP_flre_hic.hdf5'
 ylabel = r'perpendicular perturbation field $\lvert B_{mn}^{r} \rvert$ / \si{\gauss}'
 
 testcase = magdif(workdir)
-testcase.read_configfile()
 testcase.read_datafile()
 
 pert = polmodes('full perturbation (MEPHIT)', 'k-')
@@ -26,7 +25,7 @@ kilca = polmodes('full perturbation (KiLCA)', 'b-.')
 kilca.read_KiLCA(path.join(workdir, kilcafile), 'Br')
 
 testcase.plots.append(magdif_poloidal_plots(
-    workdir, 'KiLCA_Bmn_r.pdf', testcase.config, testcase.data,
+    workdir, 'KiLCA_Bmn_r.pdf', testcase.data,
     fslabel.r, ylabel, np.abs, vac, pert, kilca
 ))
 

@@ -12,7 +12,6 @@ from enum import Enum
 import netCDF4
 from h5py import get_config as h5py_hack
 import h5pickle as h5py
-import f90nml.parser
 from cycler import cycler
 from matplotlib import rcParams
 from matplotlib.figure import Figure
@@ -163,8 +162,7 @@ class magdif_1d_cutplot:
 
 
 class magdif_conv_plot:
-    def __init__(self, config, data, filename, xlim=None, ylim=None, title=None):
-        self.config = config
+    def __init__(self, data, filename, xlim=None, ylim=None, title=None):
         self.data = data
         self.filename = filename
         self.xlim = xlim
@@ -173,7 +171,7 @@ class magdif_conv_plot:
 
     def dump_plot(self):
         print(f"plotting {self.filename}")
-        sup_eigval = self.config['ritz_threshold']
+        sup_eigval = self.data['/config/ritz_threshold']
         L2int_Bnvac = self.data['/iter/L2int_Bnvac'][()]
         L2int_Bn_diff = self.data['/iter/L2int_Bn_diff'][()]
         kiter = np.arange(0, len(L2int_Bn_diff))
@@ -274,10 +272,9 @@ class polmodes:
 
 
 class magdif_poloidal_plots:
-    def __init__(self, datadir, filename, config, data, rad_coord, ylabel, comp, *poldata):
+    def __init__(self, datadir, filename, data, rad_coord, ylabel, comp, *poldata):
         self.datadir = datadir
         self.filename = filename
-        self.config = config
         self.data = data
         self.rad_coord = rad_coord
         self.xlabel = self.rad_coord.value
@@ -511,17 +508,10 @@ RT0_comp = {'/comp_R': {'file': '_R', 'math': lambda vec: fr"{vec}^{{R}}"},
 
 class magdif:
 
-    def __init__(self, datadir, configfile='magdif.inp', datafile='magdif.h5'):
+    def __init__(self, datadir, datafile='magdif.h5'):
         self.plots = []
         self.datadir = datadir
-        self.configfile = configfile
         self.datafile = datafile
-
-    def read_configfile(self):
-        print(f"reading configuration from {self.configfile}")
-        p = f90nml.parser.Parser()
-        nml = p.read(path.join(self.datadir, self.configfile))
-        self.config = {**nml['scalars']['config'], **nml['arrays']}
 
     def read_datafile(self):
         print(f"reading contents of {self.datafile}")
@@ -629,13 +619,10 @@ class magdif:
                                   'plot_pn_001.png')
 
         self.plots.append(magdif_conv_plot(
-            self.config, self.data, path.join(self.datadir, 'convergence.pdf'))
+            self.data, path.join(self.datadir, 'convergence.pdf'))
         )
 
-        if 'kilca_scale_factor' in self.config:
-            kilca_scale_factor = self.config['kilca_scale_factor']
-        else:
-            kilca_scale_factor = 0
+        kilca_scale_factor = self.data['/config/kilca_scale_factor'][()]
         grp = '/postprocess'
         if kilca_scale_factor == 0:
             pert = polmodes('full perturbation', 'k-')
@@ -643,14 +630,14 @@ class magdif:
             vac = polmodes('vacuum perturbation', 'r--')
             vac.read_magdif(self.data, fslabel.psi_norm, grp + '/Bmn_vac/coeff_rad')
             self.plots.append(magdif_poloidal_plots(self.datadir,
-                    'Bmn_psi.pdf', self.config, self.data, fslabel.psi_norm,
+                    'Bmn_psi.pdf', self.data, fslabel.psi_norm,
                     r'$\lvert \sqrt{g} B_{mn}^{\psi} \rvert$ / \si{\maxwell}',
                     np.abs, pert, vac
             ))
             pert = polmodes('initial perturbation', 'k-')
             pert.read_magdif(self.data, fslabel.psi_norm, grp + '/jmn_000/coeff_pol')
             self.plots.append(magdif_poloidal_plots(self.datadir,
-                    'jmn_000_theta.pdf', self.config, self.data, fslabel.psi_norm,
+                    'jmn_000_theta.pdf', self.data, fslabel.psi_norm,
                     r'$\lvert J_{mn \theta}^{(0)} \rvert$'
                     + r' / \si{\statampere\per\centi\meter}', np.abs, pert
             ))
@@ -661,7 +648,7 @@ class magdif:
             vac = polmodes('vacuum perturbation', 'r--')
             vac.read_magdif(self.data, fslabel.r, grp + '/Bmn_vac/coeff_rad')
             self.plots.append(magdif_poloidal_plots(self.datadir, 'Bmn_r.pdf',
-                    self.config, self.data, fslabel.r,
+                    self.data, fslabel.r,
                     r'$\lvert B_{mn}^{r} \rvert$ / \si{\gauss}',
                     np.abs, pert, vac
             ))
@@ -679,8 +666,7 @@ class magdif:
 
 
 if __name__ == '__main__':
-    testcase = magdif(argv[1], argv[2], argv[3])
-    testcase.read_configfile()
+    testcase = magdif(argv[1], argv[2])
     testcase.read_datafile()
     testcase.generate_default_plots()
     testcase.dump_plots_parallel()

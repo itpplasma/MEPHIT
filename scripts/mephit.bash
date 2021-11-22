@@ -205,7 +205,7 @@ mephit_plot() {
 
     for workdir; do
         pushd "$workdir"
-        python3 "$scriptdir/magdifplot.py" $(absolutize .) "$config" "$data"
+        python3 "$scriptdir/magdifplot.py" $(absolutize .) "$data"
         popd
     done
 }

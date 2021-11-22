@@ -32,13 +32,11 @@ sqrt_g = r'$\sqrt{g}$ / \si{\meter\per\tesla}'
 
 for workdir in iglob(run_dir + '/Bvac_ImBm_g33353.2325'):
     testcase = magdif(workdir)
-    testcase.read_configfile()
     testcase.read_datafile()
     sgn_dpsi = np.sign(testcase.data['/cache/fs/psi'][-1] -
                        testcase.data['/cache/fs/psi'][0])
     helicity = -np.sign(testcase.data['/cache/fs/q'][-1])
     nemov = magdif(workdir, datafile='magdif_nemov.h5')
-    nemov.read_configfile()
     nemov.read_datafile()
 
     vac = polmodes('vacuum perturbation (GPEC)', 'k--')
@@ -54,19 +52,19 @@ for workdir in iglob(run_dir + '/Bvac_ImBm_g33353.2325'):
     for m in mephit_pert.var.keys():
         mephit_pert.var[m] /= testcase.data['/mesh/gpec_jacfac'][:, 16] * cm_to_m ** 2
     testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'GPEC_Bmn_psi_abs.pdf', testcase.config, testcase.data,
+        workdir, 'GPEC_Bmn_psi_abs.pdf', testcase.data,
         fslabel.psi_norm, psi_abs, np.abs, vac, pert, mephit_vac, mephit_pert
     ))
     testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'GPEC_Bmn_psi_arg.pdf', testcase.config, testcase.data,
+        workdir, 'GPEC_Bmn_psi_arg.pdf', testcase.data,
         fslabel.psi_norm, psi_arg, partial(np.angle, deg=True), vac, pert, mephit_vac, mephit_pert
     ))
     testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'debug_Bmn_psi_abs.pdf', testcase.config, testcase.data,
+        workdir, 'debug_Bmn_psi_abs.pdf', testcase.data,
         fslabel.psi_norm, psi_abs, np.abs, vac, mephit_vac
     ))
     testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'debug_Bmn_psi_arg.pdf', testcase.config, testcase.data,
+        workdir, 'debug_Bmn_psi_arg.pdf', testcase.data,
         fslabel.psi_norm, psi_arg, partial(np.angle, deg=True), vac, mephit_vac
     ))
     vacn = polmodes('vacuum perturbation (GPEC)', 'k--')
@@ -82,19 +80,19 @@ for workdir in iglob(run_dir + '/Bvac_ImBm_g33353.2325'):
     for m in mephit_pertn.var.keys():
         mephit_pertn.var[m] /= cm_to_m ** 2
     testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'GPEC_Bmn_psin_abs.pdf', testcase.config, testcase.data,
+        workdir, 'GPEC_Bmn_psin_abs.pdf', testcase.data,
         fslabel.psi_norm, psin_abs, np.abs, vacn, pertn, mephit_vacn, mephit_pertn
     ))
     testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'GPEC_Bmn_psin_arg.pdf', testcase.config, testcase.data,
+        workdir, 'GPEC_Bmn_psin_arg.pdf', testcase.data,
         fslabel.psi_norm, psin_arg, partial(np.angle, deg=True), vacn, pertn, mephit_vacn, mephit_pertn
     ))
     testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'debug_Bmn_psin_abs.pdf', testcase.config, testcase.data,
+        workdir, 'debug_Bmn_psin_abs.pdf', testcase.data,
         fslabel.psi_norm, psin_abs, np.abs, vacn, mephit_vacn
     ))
     testcase.plots.append(magdif_poloidal_plots(
-        workdir, 'debug_Bmn_psin_arg.pdf', testcase.config, testcase.data,
+        workdir, 'debug_Bmn_psin_arg.pdf', testcase.data,
         fslabel.psi_norm, psin_arg, partial(np.angle, deg=True), vacn, mephit_vacn
     ))
 
