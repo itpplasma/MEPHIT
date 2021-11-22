@@ -30,9 +30,8 @@ replace_first_in_line() {
 mephit_init() {
     config=
     geqdsk=
-    convexwall=
-    vacfield=
-    TEMP=$(getopt -o 'c:g:v:w:' --long 'config:,g-eqdsk:,vacuum-field:,convex-wall:' -n "$scriptname" -- "$@")
+    type=
+    TEMP=$(getopt -o 'c:g:t:' --long 'config:,g-eqdsk:,type:' -n "$scriptname" -- "$@")
     eval set -- "$TEMP"
     unset TEMP
     while true; do
@@ -47,13 +46,8 @@ mephit_init() {
                 shift 2
                 continue
                 ;;
-            '-w'|'--convex-wall')
-                convexwall=$2
-                shift 2
-                continue
-                ;;
-            '-v'|'--vacuum-field')
-                vacfield=$2
+            '-t'|'--type')
+                type=$2
                 shift 2
                 continue
                 ;;
@@ -67,6 +61,7 @@ mephit_init() {
                 ;;
         esac
     done
+    convexwall=$datadir/convexwall_$type.dat
 
     for workdir; do
         if [ -d "$workdir" ]; then
@@ -80,16 +75,13 @@ mephit_init() {
         cp -t "$workdir" \
            "$datadir/field_divB0.inp" \
            "$datadir/preload_for_SYNCH.inp" \
-           $(absolutize "$config") \
-           $(absolutize "$geqdsk") \
-           $(absolutize "$convexwall")
-        if [ -n "$vacfield" ]; then
-            ln -s $(absolutize "$vacfield") "$workdir/${vacfield##*/}"
+           "$convexwall" \
+           $(absolutize "$geqdsk")
+        if [ "$type" != "kilca" ]; then
+            ln -s "$datadir/AUG_B_coils.h5" "$workdir/AUG_B_coils.h5"
         fi
-
-        mv "$workdir/${config##*/}" "$workdir/magdif.inp"
+        cp $(absolutize "$config") "$workdir/magdif.inp"
         replace_first_in_line "$workdir/field_divB0.inp" 7 "'${geqdsk##*/}'"     # gfile
-        replace_first_in_line "$workdir/field_divB0.inp" 8 "'${vacfield##*/}'"   # pfile
         replace_first_in_line "$workdir/field_divB0.inp" 9 "'${convexwall##*/}'" # convex
     done
 }

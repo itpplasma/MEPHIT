@@ -2,6 +2,7 @@
 .idea
 build/
 run/
+data/AUG_B_coils.h5
 \#*\#
 *~
 *.mod
