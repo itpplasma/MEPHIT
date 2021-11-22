@@ -8,6 +8,7 @@ project(MEPHIT LANGUAGES Fortran C CXX)
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
+set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
 
 ### Set compiler flags
 if ("$ENV{FC}" MATCHES "ifort")
@@ -24,7 +25,33 @@ else ()
 endif ()
 
 ### Define external paths
-include(${CMAKE_SOURCE_DIR}/ProjectConfig.cmake.in)
+if ("${CMAKE_SYSTEM}" MATCHES "Darwin")
+  set(tmpdir $TMPDIR)
+else ()
+  if ("$ENV{XDG_RUNTIME_DIR}" STREQUAL "")
+    set(tmpdir /tmp/runtime-$USER)
+  else ()
+    set(tmpdir $XDG_RUNTIME_DIR)
+  endif ()
+endif ()
+
+if ("$ENV{LIBNEO_DIR}" STREQUAL "")
+  set(LIBNEO_DIR "${CMAKE_SOURCE_DIR}/../libneo")
+else ()
+  set(LIBNEO_DIR "$ENV{LIBNEO_DIR}")
+endif ()
+set(HDF5_tools_include_dir ${LIBNEO_DIR}/build)
+set(HDF5_tools_lib_dir ${LIBNEO_DIR}/build/src/hdf5_tools)
+
+if ("$ENV{FGSL_PATH}" STREQUAL "")
+  if ("${CMAKE_SYSTEM}" MATCHES "Darwin")
+    set(FGSL_PATH /usr/local)
+  else ()
+    set(FGSL_PATH /usr)
+  endif ()
+else ()
+  set(FGSL_PATH $ENV{FGSL_PATH})
+endif ()
 
 ### Find dependencies in standard directories
 find_package(SuiteSparse REQUIRED)
