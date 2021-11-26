@@ -212,9 +212,9 @@ class polmodes:
         self.type = 'MEPHIT'
         self.rad_coord = rad_coord
         if self.rad_coord is fslabel.psi_norm:
-            rho = data['/cache/fs_half/psi'][()]
-            # normalize psi
-            rho = (rho - rho[0]) / (rho[-1] - rho[0])
+            psi_axis = data['/cache/fs/psi'][0]
+            psi_edge = data['/cache/fs/psi'][-1]
+            rho = (data['/cache/fs_half/psi'][()] - psi_axis) / (psi_edge - psi_axis)
         else:
             rho = data['/cache/fs_half/rad'][()]
         self.m_max = (data[var_name].shape[1] - 1) // 2
@@ -622,8 +622,9 @@ class magdif:
             self.data, path.join(self.datadir, 'convergence.pdf'))
         )
 
-        kilca_scale_factor = self.data['/config/kilca_scale_factor'][()]
         grp = '/postprocess'
+        kilca_scale_factor = self.data['/config/kilca_scale_factor'][()]
+        fsl = fslabel.psi_norm if (kilca_scale_factor == 0) else fslabel.r
         if kilca_scale_factor == 0:
             pert = polmodes('full perturbation', 'k-')
             pert.read_magdif(self.data, fslabel.psi_norm, grp + '/Bmn/coeff_rad')
@@ -652,6 +653,21 @@ class magdif:
                     r'$\lvert B_{mn}^{r} \rvert$ / \si{\gauss}',
                     np.abs, pert, vac
             ))
+        pmn_initial = polmodes('initial iteration', 'k--')
+        pmn_initial.read_magdif(self.data, fsl, grp + '/pmn_000/coeff')
+        for k in pmn_initial.var.keys():
+            pmn_initial.rho[k] = (self.data['/cache/fs/psi'][()] - self.data['/cache/fs/psi'][0]) /\
+                                 (self.data['/cache/fs/psi'][-1] - self.data['/cache/fs/psi'][0])
+            pmn_initial.var[k] /= Mx_to_Wb
+        pmn_final = polmodes('final iteration', 'r--')
+        pmn_final.read_magdif(self.data, fsl.psi_norm, grp + '/pmn/coeff')
+        for k in pmn_final.var.keys():
+            pmn_final.rho[k] = (self.data['/cache/fs/psi'][()] - self.data['/cache/fs/psi'][0]) /\
+                               (self.data['/cache/fs/psi'][-1] - self.data['/cache/fs/psi'][0])
+            pmn_final.var[k] /= Mx_to_Wb
+        self.plots.append(magdif_poloidal_plots(self.datadir, 'pmn.pdf', self.data, fsl,
+                                                r'$\lvert p_{mn} \rvert$ / \si{\dyne\per\centi\meter\squared}',
+                                                np.abs, pmn_initial, pmn_final))
 
     def dump_plots(self):
         for p in self.plots:
