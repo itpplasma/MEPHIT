@@ -246,7 +246,7 @@ contains
          comment = 'iteration eigenvalues')
        call h5_close(h5id_root)
        if (logger%info) then
-          write (logger%msg, '("Arnoldi method yields ", i0, " Ritz eigenvalues > ", f0.2)') &
+          write (logger%msg, '("Arnoldi method yields ", i0, " Ritz eigenvalues > ", es24.16e3)') &
                nritz, conf%ritz_rel_err
           call logger%write_msg
           do i = 1, nritz

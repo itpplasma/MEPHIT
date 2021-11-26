@@ -951,7 +951,7 @@ contains
     do m = mesh%m_res_min, mesh%m_res_max
        if (.not. mask(m)) cycle
        kref = kref + 1
-       write (logger%msg, '("m = ", i0, ", kf = ", i0, ' // &
+       write (logger%msg, '("m = ", i2, ", kf = ", i3, ' // &
             '", rho: ", f19.16, 2(" < ", f19.16))') m, ref_ind(kref), &
             rho_norm_ref(ref_ind(kref) - 1), mesh%rad_norm_res(m), rho_norm_ref(ref_ind(kref))
        if (logger%debug) call logger%write_msg
@@ -2857,7 +2857,7 @@ contains
     logger%msg = 'checking flux_func_cache...'
     if (logger%debug) call logger%write_msg
     write (logger%msg, '("array bounds: fs%psi(", i0, ":", i0, "), ' // &
-         ' fs%rad(", i0, ":", i0, "), fs_half%psi(", i0, ":", i0, "), ' // &
+         'fs%rad(", i0, ":", i0, "), fs_half%psi(", i0, ":", i0, "), ' // &
          'fs_half%rad(", i0, ":", i0, ")")') lbound(fs%psi, 1), ubound(fs%psi, 1), &
          lbound(fs%rad, 1), ubound(fs%rad, 1), lbound(fs_half%psi, 1), &
          ubound(fs_half%psi, 1), lbound(fs_half%rad, 1), ubound(fs_half%rad, 1)
