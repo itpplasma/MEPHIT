@@ -1,3 +1,4 @@
+\usepackage{etoolbox}
 \usepackage{xparse}
 \usepackage{siunitx}
 \usepackage{amsmath}
@@ -8,7 +9,16 @@
 \else
   \usepackage{fixmath}
 \fi
-\NewDocumentCommand\subscript{mm}{\csname magdif_subscript:nnn\endcsname{#1}{#2}{_}}
+
+% matplotlib now does \usepackage[strings]{underscore},
+% so we need to reproduce an activated underscore character
+% for search-and-replace to work as expected
+\begingroup
+  \catcode`\_=\active
+  \gdef\magdif@underscore{_}
+\endgroup
+% command for merging subscripts, based on https://tex.stackexchange.com/a/257867
+\NewDocumentCommand\subscript{mm}{\csname magdif_subscript:nno\endcsname{#1}{#2}{\magdif@underscore}}
 \ExplSyntaxOn
 \cs_new_protected:Npn \magdif_subscript:nnn #1 #2 #3 {
   \tl_set:Nn \l_tmpa_tl { #1 }
@@ -22,7 +32,9 @@
 \cs_new_protected:Npn \magdif_mergesub:nn #1 #2 {
   \sb { #2 #1 }
 }
+\cs_generate_variant:Nn \magdif_subscript:nnn { nno }
 \ExplSyntaxOff
+
 \DeclareMathOperator\Real{Re}
 \DeclareMathOperator\Imag{Im}
 \DeclareMathOperator\abs{abs}
