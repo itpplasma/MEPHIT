@@ -10,6 +10,8 @@ module mephit_pert
   public :: L1_t, L1_init, L1_deinit, L1_write, L1_read, L1_interp
   public :: RT0_t, RT0_init, RT0_deinit, RT0_write, RT0_read, RT0_interp, &
        RT0_compute_tor_comp, RT0_triplot, RT0_rectplot
+  public :: polmodes_t, polmodes_init, polmodes_deinit, &
+       polmodes_write, polmodes_read, L1_poloidal_modes
   public :: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
        vec_polmodes_write, vec_polmodes_read, RT0_poloidal_modes
   public :: vac_t, vac_init, vac_deinit, vac_write, vac_read, generate_vacfield
@@ -46,6 +48,17 @@ module mephit_pert
      !> Values are taken at each triangle.
      complex(dp), allocatable :: comp_phi(:)
   end type RT0_t
+
+  type :: polmodes_t
+     !> Highest absolute poloidal mode number.
+     integer :: m_max
+
+     !> Number of flux surfaces, i.e., radial divisions.
+     integer :: nflux
+
+     !> Fourier coefficient indexed by poloidal mode number and flux surface.
+     complex(dp), allocatable :: coeff(:, :)
+  end type polmodes_t
 
   type :: vec_polmodes_t
      !> Highest absolute poloidal mode number.
@@ -450,6 +463,56 @@ contains
     end do
   end subroutine RT0_rectplot
 
+  subroutine polmodes_init(this, m_max, nflux)
+    type(polmodes_t), intent(inout) :: this
+    integer, intent(in) :: m_max
+    integer, intent(in) :: nflux
+
+    call polmodes_deinit(this)
+    this%m_max = abs(m_max)
+    this%nflux = nflux
+    allocate(this%coeff(-this%m_max:this%m_max, 0:nflux))
+  end subroutine polmodes_init
+
+  subroutine polmodes_deinit(this)
+    type(polmodes_t), intent(inout) :: this
+
+    this%m_max = 0
+    this%nflux = 0
+    if (allocated(this%coeff)) deallocate(this%coeff)
+  end subroutine polmodes_deinit
+
+  subroutine polmodes_read(polmodes, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    type(polmodes_t), intent(inout) :: polmodes
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
+
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff', polmodes%coeff)
+    call h5_close(h5id_root)
+  end subroutine polmodes_read
+
+  subroutine polmodes_write(polmodes, file, dataset, comment, unit)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    type(polmodes_t), intent(in) :: polmodes
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    character(len = *), intent(in) :: comment
+    character(len = *), intent(in) :: unit
+    integer(HID_T) :: h5id_root
+
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_max', polmodes%m_max, &
+         'maximal absolute poloidal mode number')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff', &
+         polmodes%coeff, lbound(polmodes%coeff), ubound(polmodes%coeff), &
+         comment = trim(adjustl(comment)), unit = trim(adjustl(unit)))
+    call h5_close(h5id_root)
+  end subroutine polmodes_write
+
   subroutine vec_polmodes_init(this, m_max, nflux)
     type(vec_polmodes_t), intent(inout) :: this
     integer, intent(in) :: m_max
@@ -534,10 +597,33 @@ contains
     call h5_close(h5id_root)
   end subroutine vec_polmodes_write
 
+  subroutine L1_poloidal_modes(elem, polmodes)
+    use mephit_util, only: imun
+    use mephit_mesh, only: mesh, sample_polmodes
+    type(L1_t), intent(in) :: elem
+    type(polmodes_t), intent(inout) :: polmodes
+    integer :: kf, kp, kpoi, m
+    complex(dp) :: comp, fourier_basis(-polmodes%m_max:polmodes%m_max)
+
+    polmodes%coeff(:, :) = (0d0, 0d0)
+    polmodes%coeff(0, 0) = elem%DOF(1)
+    associate (s => sample_polmodes, p => polmodes)
+      do kf = 1, mesh%nflux
+         do kp = 1, mesh%kp_max(kf)
+            kpoi = mesh%kp_low(kf) + kp
+            fourier_basis = [(exp(-imun * m * s%theta(kpoi)), m = -p%m_max, p%m_max)]
+            call L1_interp(s%ktri(kpoi), elem, s%R(kpoi), s%Z(kpoi), comp)
+            p%coeff(:, kf) = p%coeff(:, kf) + comp * fourier_basis
+         end do
+         p%coeff(:, kf) = p%coeff(:, kf) / mesh%kp_max(kf)
+      end do
+    end associate
+  end subroutine L1_poloidal_modes
+
   subroutine RT0_poloidal_modes(elem, vec_polmodes)
     use mephit_conf, only: conf
     use mephit_util, only: imun, bent_cyl2straight_cyl
-    use mephit_mesh, only: equil, mesh, sample_polmodes
+    use mephit_mesh, only: equil, mesh, sample_polmodes_half
     type(RT0_t), intent(in) :: elem
     type(vec_polmodes_t), intent(inout) :: vec_polmodes
     integer :: kf, kt, ktri, m
@@ -548,7 +634,7 @@ contains
     vec_polmodes%coeff_n(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_pol(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_tor(:, :) = (0d0, 0d0)
-    associate (s => sample_polmodes, v => vec_polmodes)
+    associate (s => sample_polmodes_half, v => vec_polmodes)
       do kf = 1, mesh%nflux
          do kt = 1, mesh%kt_max(kf)
             ktri = mesh%kt_low(kf) + kt
@@ -1517,7 +1603,7 @@ contains
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, datafile
     use mephit_util, only: imun
-    use mephit_mesh, only: equil, mesh, sample_polmodes
+    use mephit_mesh, only: equil, mesh, sample_polmodes_half
     character(len = *), parameter :: dataset = 'Bmnvac'
     integer, parameter :: m_max = 24
     integer :: kf, kt, ktri, m
@@ -1528,7 +1614,7 @@ contains
 
     Bmn_contradenspsi(:, :) = (0d0, 0d0)
     Bmn_n(:, :) = (0d0, 0d0)
-    associate (s => sample_polmodes)
+    associate (s => sample_polmodes_half)
       do kf = 1, mesh%nflux
          do kt = 1, mesh%kt_max(kf)
             ktri = mesh%kt_low(kf) + kt
@@ -1796,7 +1882,7 @@ contains
   subroutine debug_RT0(Bn)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, datafile
-    use mephit_mesh, only: mesh, fs_half, sample_polmodes
+    use mephit_mesh, only: mesh, fs_half, sample_polmodes_half
     type(RT0_t), intent(in) :: Bn
     character(len = *), parameter :: dataset = 'debug_RT0'
     integer(HID_T) :: h5id_root
@@ -1807,9 +1893,8 @@ contains
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          associate (s => sample_polmodes)
+          associate (s => sample_polmodes_half)
             if (conf%kilca_pol_mode /= 0) then
-               ! sample_polmodes is evaluated at half-grid steps
                call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, &
                     fs_half%rad(kf), s%theta(ktri), B_R(ktri), B_phi(ktri), B_Z(ktri))
             else

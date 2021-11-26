@@ -55,7 +55,7 @@ contains
     use mephit_util, only: C_F_string, get_field_filenames, init_field, deinit_field
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
     use mephit_mesh, only: equil, fs, fs_half, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
-         mesh_deinit, sample_polmodes, coord_cache_deinit, psi_interpolator, psi_fine_interpolator, &
+         mesh_deinit, sample_polmodes_half, sample_polmodes, coord_cache_deinit, psi_interpolator, psi_fine_interpolator, &
          B0R_edge, B0phi_edge, B0Z_edge, B0R_Omega, B0phi_Omega, B0Z_Omega, B0_flux, j0phi_edge
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_deinit, vac_write, vac_read
     use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
@@ -145,6 +145,7 @@ contains
     if (allocated(j0phi_edge)) deallocate(j0phi_edge)
     call psi_interpolator%deinit
     call psi_fine_interpolator%deinit
+    call coord_cache_deinit(sample_polmodes_half)
     call coord_cache_deinit(sample_polmodes)
     call fs%deinit
     call fs_half%deinit
@@ -202,7 +203,9 @@ contains
     use mephit_util, only: arnoldi_break
     use mephit_mesh, only: mesh
     use mephit_pert, only: L1_write, RT0_init, RT0_deinit, RT0_write, RT0_compute_tor_comp, &
-         RT0_poloidal_modes, vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, vac
+         vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, &
+         polmodes_t, polmodes_init, polmodes_deinit, polmodes_write, &
+         L1_poloidal_modes, RT0_poloidal_modes, vac
     use mephit_conf, only: conf, logger, runmode_precon, runmode_single, datafile, cmplx_fmt
 
     logical :: preconditioned
@@ -216,6 +219,7 @@ contains
     character(len = 4) :: postfix
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
     integer, parameter :: m_max = 24
+    type(polmodes_t) :: pmn
     type(vec_polmodes_t) :: jmn
 
     ! system dimension: number of non-redundant edges in core plasma
@@ -295,6 +299,7 @@ contains
     call h5_close(h5id_root)
     allocate(L2int_Bn_diff(0:maxiter))
     L2int_Bn_diff = ieee_value(0d0, ieee_quiet_nan)
+    call polmodes_init(pmn, m_max, mesh%nflux)
     call vec_polmodes_init(jmn, m_max, mesh%nflux)
     call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
     call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
@@ -332,6 +337,9 @@ contains
                'magnetic field (after iteration)', 'G', 1)
           call RT0_write(Bn_diff, datafile, 'iter/Bn_diff' // postfix, &
                'magnetic field (difference between iterations)', 'G', 1)
+          call L1_poloidal_modes(pn, pmn)
+          call polmodes_write(pmn, datafile, 'postprocess/pmn' // postfix, &
+               'pressure (after iteration)', 'dyn cm^-2')
           call RT0_poloidal_modes(jn, jmn)
           call vec_polmodes_write(jmn, datafile, 'postprocess/jmn' // postfix, &
                'current density (after iteration)', 'statA cm^-2')
@@ -376,6 +384,7 @@ contains
          'current density (full perturbation)', 'statA cm^-2', 1)
     call RT0_deinit(Bn_prev)
     call RT0_deinit(Bn_diff)
+    call polmodes_deinit(pmn)
     call vec_polmodes_deinit(jmn)
 
   contains
@@ -633,15 +642,22 @@ contains
     use mephit_conf, only: conf, datafile
     use mephit_mesh, only: mesh, coord_cache_ext, coord_cache_ext_init, coord_cache_ext_deinit, &
          compute_sample_Ipar
-    use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
-         vec_polmodes_write, RT0_poloidal_modes, vac
+    use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, &
+         polmodes_t, polmodes_init, polmodes_deinit, polmodes_write, &
+         L1_poloidal_modes, RT0_poloidal_modes, vac
     integer, parameter :: m_max = 24
     integer :: k
     character(len = 24) :: dataset
+    type(polmodes_t) :: polmodes
     type(vec_polmodes_t) :: vec_polmodes
     type(coord_cache_ext) :: sample_Ipar
 
     ! poloidal modes
+    call polmodes_init(polmodes, m_max, mesh%nflux)
+    call L1_poloidal_modes(pn, polmodes)
+    call polmodes_write(polmodes, datafile, 'postprocess/pmn', &
+         'poloidal modes of pressure perturbation', 'dyn cm^-2')
+    call polmodes_deinit(polmodes)
     call vec_polmodes_init(vec_polmodes, m_max, mesh%nflux)
     call RT0_poloidal_modes(Bn, vec_polmodes)
     call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn', &
@@ -675,7 +691,7 @@ contains
   subroutine check_furth(jn, Bmn_plas)
     use mephit_conf, only: conf, datafile
     use mephit_util, only: imun, clight
-    use mephit_mesh, only: equil, fs_half, mesh, sample_polmodes
+    use mephit_mesh, only: equil, fs_half, mesh, sample_polmodes_half
     use mephit_pert, only: RT0_t, vec_polmodes_t
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(RT0_t), intent(in) :: jn
@@ -693,9 +709,9 @@ contains
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          ktri_eff = sample_polmodes%ktri(ktri)
+          ktri_eff = sample_polmodes_half%ktri(ktri)
           sheet_flux(kf) = sheet_flux(kf) + mesh%area(ktri_eff) * jn%comp_phi(ktri_eff) * &
-               exp(-imun * kilca_m_res * sample_polmodes%theta(ktri))
+               exp(-imun * kilca_m_res * sample_polmodes_half%theta(ktri))
        end do
     end do
     sheet_flux(:) = -2d0 * imun / clight / k_theta * sheet_flux

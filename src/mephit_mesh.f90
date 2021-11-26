@@ -18,7 +18,7 @@ module mephit_mesh
 
   ! module variables
   public :: equil, psi_interpolator, psi_fine_interpolator, fs, fs_half, mesh, &
-       sample_polmodes
+       sample_polmodes_half, sample_polmodes
   public :: B0R_edge, B0phi_edge, B0Z_edge, B0R_Omega, B0phi_Omega, B0Z_Omega, &
        B0_flux, j0phi_edge
 
@@ -255,6 +255,7 @@ module mephit_mesh
           dR_dtheta, dZ_dtheta
   end type coord_cache
 
+  type(coord_cache) :: sample_polmodes_half
   type(coord_cache) :: sample_polmodes
 
   type, extends(coord_cache) :: coord_cache_ext
@@ -645,7 +646,8 @@ contains
     call connect_mesh_points
     call check_mesh
     call write_FreeFem_mesh
-    call compute_sample_polmodes
+    call compute_sample_polmodes(sample_polmodes_half, .true.)
+    call compute_sample_polmodes(sample_polmodes, .false.)
     call compute_gpec_jacfac
     call cache_equilibrium_field
     call init_flux_variables
@@ -664,8 +666,10 @@ contains
     call conf_arr%export_hdf5(datafile, 'config')
     call flux_func_cache_write(fs, datafile, 'cache/fs', 'on flux surfaces')
     call flux_func_cache_write(fs_half, datafile, 'cache/fs_half', 'between flux surfaces')
+    call coord_cache_write(sample_polmodes_half, datafile, 'cache/sample_polmodes_half', &
+         'poloidal mode sampling points between flux surfaces')
     call coord_cache_write(sample_polmodes, datafile, 'cache/sample_polmodes', &
-         'poloidal mode sampling points')
+         'poloidal mode sampling points on flux surfaces')
     ! TODO: put in separate subroutine for edge_cache_type
     call h5_open_rw(datafile, h5id_root)
     ! TODO: revise naming and indexing when edge_cache type is working for GL quadrature in compute_currn
@@ -695,9 +699,11 @@ contains
 
     call flux_func_cache_init(fs, mesh%nflux, .false.)
     call flux_func_cache_init(fs_half, mesh%nflux, .true.)
-    call coord_cache_init(sample_polmodes, mesh%ntri)
+    call coord_cache_init(sample_polmodes_half, mesh%ntri)
+    call coord_cache_init(sample_polmodes, mesh%npoint)
     call flux_func_cache_read(fs, datafile, 'cache/fs')
     call flux_func_cache_read(fs_half, datafile, 'cache/fs_half')
+    call coord_cache_read(sample_polmodes_half, datafile, 'cache/sample_polmodes_half')
     call coord_cache_read(sample_polmodes, datafile, 'cache/sample_polmodes')
     ! TODO: revise naming and indexing when edge_cache type is working for GL quadrature in compute_currn
     allocate(B0R_edge(mesh%nedge))
@@ -1477,7 +1483,7 @@ contains
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          associate (s => sample_polmodes)
+          associate (s => sample_polmodes_half)
             fourier_basis = [(exp(-imun * m * s%theta(ktri)), m = -m_max, m_max)]
             mesh%gpec_jacfac(:, kf) = mesh%gpec_jacfac(:, kf) + s%sqrt_g(ktri) * &
                  s%R(ktri) * hypot(s%B0_Z(ktri), -s%B0_R(ktri)) * fourier_basis
@@ -1487,44 +1493,66 @@ contains
     end do
   end subroutine compute_gpec_jacfac
 
-  !> Compute coarse grid for poloidal mode sampling points - one point per triangle.
-  subroutine compute_sample_polmodes
+  !> Compute coarse grid for poloidal mode sampling points - one point per edge.
+  subroutine compute_sample_polmodes(s, half_grid)
     use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
     use mephit_conf, only: conf
-    integer :: ktri, kf, kt
+    class(coord_cache), intent(inout) :: s
+    logical, intent(in) :: half_grid
+    integer :: kf, ke, k
     real(dp) :: dum, q
+    integer, allocatable, dimension(:) :: ke_low, ke_max
+    real(dp), allocatable, dimension(:) :: psi, rad
 
-    call coord_cache_init(sample_polmodes, mesh%ntri)
+    if (half_grid) then
+       call coord_cache_init(s, mesh%ntri)
+       allocate(ke_low, source = mesh%kt_low)
+       allocate(ke_max, source = mesh%kt_max)
+       allocate(psi, source = fs_half%psi)
+       allocate(rad, source = fs_half%rad)
+    else
+       call coord_cache_init(s, mesh%npoint)
+       allocate(ke_low, source = mesh%kp_low)
+       allocate(ke_max, source = mesh%kp_max)
+       allocate(psi, source = fs%psi)
+       allocate(rad, source = fs%rad)
+       ! set values at axis manually
+       s%psi(1) = psi(0)
+       s%theta(1) = 0d0
+       s%R(1) = mesh%R_O
+       s%Z(1) = mesh%Z_O
+       s%dR_dtheta(1) = 0d0
+       s%dZ_dtheta(1) = 0d0
+       s%sqrt_g(1) = 0d0
+    end if
     do kf = 1, mesh%nflux
-       do kt = 1, mesh%kt_max(kf)
-          ktri = mesh%kt_low(kf) + kt
-          associate (s => sample_polmodes)
-            s%psi(ktri) = fs_half%psi(kf)
-            s%theta(ktri) = 2d0 * pi * dble(kt - 1) / dble(mesh%kt_max(kf))
-            if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
-               s%R(ktri) = mesh%R_O + fs_half%rad(kf) * cos(s%theta(ktri))
-               s%Z(ktri) = mesh%Z_O + fs_half%rad(kf) * sin(s%theta(ktri))
-               s%dR_dtheta(ktri) = -fs_half%rad(kf) * sin(s%theta(ktri))
-               s%dZ_dtheta(ktri) =  fs_half%rad(kf) * cos(s%theta(ktri))
-            else
-               ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
-               call magdata_in_symfluxcoord_ext(2, dum, s%psi(ktri) - fs%psi(0), s%theta(ktri), &
-                    q, dum, s%sqrt_g(ktri), dum, dum, &
-                    s%R(ktri), dum, s%dR_dtheta(ktri), s%Z(ktri), dum, s%dZ_dtheta(ktri))
-            end if
-            s%ktri(ktri) = point_location(s%R(ktri), s%Z(ktri))
-            call field(s%R(ktri), 0d0, s%Z(ktri), s%B0_R(ktri), dum, s%B0_Z(ktri), &
-                 dum, dum, dum, dum, dum, dum, dum, dum, dum)
-            if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
-               s%sqrt_g(ktri) = equil%cocos%sgn_dpsi * fs_half%rad(kf) / &
-                    (-s%B0_R(ktri) * sin(s%theta(ktri)) + s%B0_Z(ktri) * cos(s%theta(ktri)))
-            else
-               ! sqrt_g misses a factor of q and the signs of dpsi_drad and B0_phi
-               ! taken together, these three always yield a positive sign in COCOS 3
-               s%sqrt_g(ktri) = s%sqrt_g(ktri) * abs(q)
-            end if
-          end associate
+       do ke = 1, ke_max(kf)
+          k = ke_low(kf) + ke
+          s%psi(k) = psi(kf)
+          s%theta(k) = 2d0 * pi * dble(ke - 1) / dble(ke_max(kf))
+          if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
+             s%R(k) = mesh%R_O + rad(kf) * cos(s%theta(k))
+             s%Z(k) = mesh%Z_O + rad(kf) * sin(s%theta(k))
+             s%dR_dtheta(k) = -rad(kf) * sin(s%theta(k))
+             s%dZ_dtheta(k) =  rad(kf) * cos(s%theta(k))
+          else
+             ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
+             call magdata_in_symfluxcoord_ext(2, dum, s%psi(k) - fs%psi(0), s%theta(k), &
+                  q, dum, s%sqrt_g(k), dum, dum, &
+                  s%R(k), dum, s%dR_dtheta(k), s%Z(k), dum, s%dZ_dtheta(k))
+          end if
+          s%ktri(k) = point_location(s%R(k), s%Z(k))
+          call field(s%R(k), 0d0, s%Z(k), s%B0_R(k), dum, s%B0_Z(k), &
+               dum, dum, dum, dum, dum, dum, dum, dum, dum)
+          if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
+             s%sqrt_g(k) = equil%cocos%sgn_dpsi * rad(kf) / &
+                  (-s%B0_R(k) * sin(s%theta(k)) + s%B0_Z(k) * cos(s%theta(k)))
+          else
+             ! sqrt_g misses a factor of q and the signs of dpsi_drad and B0_phi
+             ! taken together, these three always yield a positive sign in COCOS 3
+             s%sqrt_g(k) = s%sqrt_g(k) * abs(q)
+          end if
        end do
     end do
   end subroutine compute_sample_polmodes
