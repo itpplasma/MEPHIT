@@ -1537,7 +1537,7 @@ contains
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use bdivfree_mod, only: nR, nZ, Rpoi, Zpoi
     use mephit_conf, only: conf, datafile
-    character(len=*), parameter :: dataset = 'Bnvac'
+    character(len=*), parameter :: dataset = 'vac/Bn'
     integer :: kR, kZ
     integer(HID_T) :: h5id_root
     complex(dp), dimension(nR, nZ) :: Bn_R, Bn_phi, Bn_Z
@@ -1604,7 +1604,7 @@ contains
     use mephit_conf, only: conf, datafile
     use mephit_util, only: imun
     use mephit_mesh, only: equil, mesh, sample_polmodes_half
-    character(len = *), parameter :: dataset = 'Bmnvac'
+    character(len = *), parameter :: dataset = 'vac/Bn'
     integer, parameter :: m_max = 24
     integer :: kf, kt, ktri, m
     integer(HID_T) :: h5id_root

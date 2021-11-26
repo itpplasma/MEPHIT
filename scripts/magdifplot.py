@@ -596,7 +596,7 @@ class magdif:
                 'pressure', path.join(self.datadir, 'plot_p0.pdf')
         ))
         # TODO: j0phi edge plot
-        self.generate_RT0_triplots('/Bnvac', r'B_{n}', r'\gauss',
+        self.generate_RT0_triplots('/vac/Bn', r'B_{n}', r'\gauss',
                                    'plot_Bnvac.png')
         self.generate_RT0_triplots('/iter/Bnplas', r'B_{n}', r'\gauss',
                                    'plot_Bnplas.png')

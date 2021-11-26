@@ -44,7 +44,7 @@ for workdir in iglob(run_dir + '/Bvac_ImBm_g33353.2325'):
     pert = polmodes('full perturbation (GPEC)', 'b--')
     pert.read_GPEC(path.join(workdir, 'gpec_profile_output_n2.nc'), sgn_dpsi, 'Jbgradpsi')
     mephit_vac = polmodes('vacuum perturbation (MEPHIT)', 'r--')
-    mephit_vac.read_magdif(testcase.data, fslabel.psi_norm, '/Bmnvac/comp_psi_contravar_dens')
+    mephit_vac.read_magdif(testcase.data, fslabel.psi_norm, '/vac/Bn/comp_psi_contravar_dens')
     for m in mephit_vac.var.keys():
         mephit_vac.var[m] /= testcase.data['/mesh/gpec_jacfac'][:, 16] * cm_to_m ** 2
     mephit_pert = polmodes('full perturbation (MEPHIT)', 'g--')
@@ -72,7 +72,7 @@ for workdir in iglob(run_dir + '/Bvac_ImBm_g33353.2325'):
     pertn = polmodes('full perturbation (GPEC)', 'b--')
     pertn.read_GPEC(path.join(workdir, 'gpec_profile_output_n2.nc'), sgn_dpsi, 'b_n')
     mephit_vacn = polmodes('vacuum perturbation (MEPHIT)', 'r--')
-    mephit_vacn.read_magdif(testcase.data, fslabel.psi_norm, '/Bmnvac/comp_n')
+    mephit_vacn.read_magdif(testcase.data, fslabel.psi_norm, '/vac/Bn/comp_n')
     for m in mephit_vacn.var.keys():
         mephit_vacn.var[m] /= cm_to_m ** 2
     mephit_pertn = polmodes('full perturbation (MEPHIT)', 'g--')
@@ -288,8 +288,8 @@ for workdir in iglob(run_dir + '/Bvac_ImBm_g33353.2325'):
         fig.savefig(path.join(workdir, f"comp_jacfac_{m}.pdf"))
     continue
     rootgrp = netCDF4.Dataset(path.join(workdir, 'gpec_cylindrical_output_n2.nc'), 'r')
-    R = [testcase.data['/Bnvac/rect_R'][()] * cm_to_m, np.array(rootgrp['R'])]
-    Z = [testcase.data['/Bnvac/rect_Z'][()] * cm_to_m, np.array(rootgrp['z'])]
+    R = [testcase.data['/vac/Bn/rect_R'][()] * cm_to_m, np.array(rootgrp['R'])]
+    Z = [testcase.data['/vac/Bn/rect_Z'][()] * cm_to_m, np.array(rootgrp['z'])]
     gpec_dataset = {'R': 'b_r', 'Z': 'b_z', 'phi': 'b_t'}
     latex_coord = {'R': 'R', 'Z': 'Z', 'phi': r'\varphi'}
     latex_cmplx = {'Re': r'\Real', 'Im': r'\Imag'}
@@ -307,9 +307,9 @@ for workdir in iglob(run_dir + '/Bvac_ImBm_g33353.2325'):
     Bnvac = {}
     for coord, dataset in gpec_dataset.items():
         covar = np.ones(RR.shape) if coord != 'phi' else RR
-        Bnvac['Re'] = [covar * testcase.data['/Bnvac/rect_comp_' + coord][()].real * G_to_T,
+        Bnvac['Re'] = [covar * testcase.data['/vac/Bn/rect_comp_' + coord][()].real * G_to_T,
                        covar * np.array(rootgrp[dataset][0, :, :] - rootgrp[dataset + '_plasma'][0, :, :]) * 0.5]
-        Bnvac['Im'] = [covar * testcase.data['/Bnvac/rect_comp_' + coord][()].imag * G_to_T,
+        Bnvac['Im'] = [covar * testcase.data['/vac/Bn/rect_comp_' + coord][()].imag * G_to_T,
                        covar * np.array(rootgrp[dataset][1, :, :] - rootgrp[dataset + '_plasma'][1, :, :]) * -0.5]
         B0 = [covar * testcase.data['/equil/B0_' + coord][()] * G_to_T, covar * rootgrp[dataset + '_equil'][:, :]]
         for part in latex_cmplx.keys():
@@ -342,9 +342,9 @@ for workdir in iglob(run_dir + '/Bvac_ImBm_g33353.2325'):
         testcase.plots.append(magdif_2d_rectplots(R, Z, B0_diff, label, title=title,
                                                   filename=path.join(workdir, f'debug_B0_{coord}_absdiff.pdf')))
 
-        Nemov_Re = covar * nemov.data['/Bnvac/rect_comp_' + coord][()].real * G_to_T
+        Nemov_Re = covar * nemov.data['/vac/Bn/rect_comp_' + coord][()].real * G_to_T
         Nemov_Re[nan_mask] = np.nan
-        Nemov_Im = covar * nemov.data['/Bnvac/rect_comp_' + coord][()].imag * G_to_T
+        Nemov_Im = covar * nemov.data['/vac/Bn/rect_comp_' + coord][()].imag * G_to_T
         Nemov_Im[nan_mask] = np.nan
         fig = Figure()
         axs = fig.subplots(1, 2, sharex='all', sharey='all')
