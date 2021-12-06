@@ -2,7 +2,7 @@ module points_2d
 implicit none
 private
 double precision, parameter :: pi = 3.14159265358979d0
-public :: create_points_2d, scaling_func
+public :: create_points_2d, scaling_func, theta_geom2theta_flux
 double precision, public :: s_min =  1.d-1
 double precision, dimension(:),allocatable,public,protected :: r_frac_mod !in each element of n_theta is written how many theta fragments for that r-cut exist
 integer, dimension(:),allocatable,public,protected :: n_theta_vec

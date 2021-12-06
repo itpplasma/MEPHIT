@@ -200,6 +200,12 @@ module mephit_mesh
      !> Z coordinate of Gauss-Legendre quadrature point on edge
      real(dp), allocatable :: GL_Z(:, :)
 
+     !> Triangle indexing for resonant flux surfaces only.
+     integer, allocatable :: shielding_kt_low(:)
+     !> Symmetry flux poloidal angles of Gauss-Legemdre quadrature points on edge
+     !> for resonant flux surfaces.
+     real(dp), allocatable :: shielding_GL_theta(:, :)
+
      !> Surface integral Jacobian used for normalization of poloidal modes in GPEC
      complex(dp), allocatable :: gpec_jacfac(:, :)
 
@@ -645,6 +651,7 @@ contains
     call write_illustration_data(5, 8, 256, 256)
     call connect_mesh_points
     call check_mesh
+    call compute_shielding_auxiliaries
     call write_FreeFem_mesh
     call compute_sample_polmodes(sample_polmodes_half, .true.)
     call compute_sample_polmodes(sample_polmodes, .false.)
@@ -1472,6 +1479,41 @@ contains
     end do
   end subroutine check_mesh
 
+  subroutine compute_shielding_auxiliaries
+    use points_2d, only: theta_geom2theta_flux
+    use mephit_util, only: pi, interp_psi_pol
+    integer :: kf, kt, kedge, k, m
+    real(dp) :: s, psi
+    real(dp), dimension(:), allocatable :: theta_geom, theta_flux
+
+    allocate(mesh%shielding_kt_low(mesh%m_res_min:mesh%m_res_max))
+    mesh%shielding_kt_low(mesh%m_res_min) = 0
+    do m = mesh%m_res_min + 1, mesh%m_res_max
+       mesh%shielding_kt_low(m) = mesh%shielding_kt_low(m-1) + mesh%kt_max(mesh%res_ind(m-1))
+    end do
+    allocate(mesh%shielding_GL_theta(mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
+    allocate(theta_geom(maxval(mesh%kt_max(mesh%res_ind)) + 1), &
+         theta_flux(maxval(mesh%kt_max(mesh%res_ind)) + 1))
+    do m = mesh%m_res_min, mesh%m_res_max
+       kf = mesh%res_ind(m)
+       do k = 1, mesh%GL_order
+          theta_geom(:) = 0d0
+          do kt = 2, mesh%kt_max(kf)
+             kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
+             theta_geom(kt) = atan2(mesh%GL_Z(k, kedge), mesh%GL_R(k, kedge))
+          end do
+          theta_geom(mesh%kt_max(kf) + 1) = 2d0 * pi
+          kedge = mesh%npoint + mesh%kt_low(kf)
+          psi = interp_psi_pol(mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge)) - fs%psi(0)
+          ! inp_label = 2 to use poloidal flux psi
+          call theta_geom2theta_flux(2, s, psi, theta_geom(:mesh%kt_max(kf)+1), theta_flux(:mesh%kt_max(kf)+1))
+          mesh%shielding_GL_theta(k, (mesh%shielding_kt_low(m) + 1):&
+               (mesh%shielding_kt_low(m) + mesh%kt_max(kf))) = theta_flux(:mesh%kt_max(kf))
+       end do
+    end do
+    deallocate(theta_geom, theta_flux)
+  end subroutine compute_shielding_auxiliaries
+
   subroutine compute_gpec_jacfac
     use mephit_util, only: imun
     integer, parameter :: m_max = 16
@@ -1939,6 +1981,12 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_Z', mesh%GL_Z, &
          lbound(mesh%GL_Z), ubound(mesh%GL_Z), &
          comment = 'Z coordinate of Gauss-Legendre points on edge', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_kt_low', mesh%shielding_kt_low, &
+         lbound(mesh%shielding_kt_low), ubound(mesh%shielding_kt_low), &
+         comment = 'triangle indexing for resonant flux surfaces only')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_GL_theta', mesh%shielding_GL_theta, &
+         lbound(mesh%shielding_GL_theta), ubound(mesh%shielding_GL_theta), unit = 'rad', &
+         comment = 'flux poloidal angles of Gauss-Legendre quadrature points on edges for resonant flux surfaces')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega, &
          lbound(mesh%R_Omega), ubound(mesh%R_Omega), &
          comment = 'R coordinate of triangle ''centroid''', unit = 'cm')
@@ -2044,6 +2092,7 @@ contains
     allocate(mesh%GL_weights(mesh%GL_order))
     allocate(mesh%GL_R(mesh%GL_order, mesh%nedge))
     allocate(mesh%GL_Z(mesh%GL_order, mesh%nedge))
+    allocate(mesh%shielding_kt_low(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%gpec_jacfac(-16:16, mesh%nflux))
     allocate(mesh%area(mesh%ntri))
     allocate(mesh%R_Omega(mesh%ntri))
@@ -2074,6 +2123,9 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_weights', mesh%GL_weights)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_R', mesh%GL_R)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_Z', mesh%GL_Z)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_kt_low', mesh%shielding_kt_low)
+    allocate(mesh%shielding_GL_theta(mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_GL_theta', mesh%shielding_GL_theta)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_Omega', mesh%Z_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area)
@@ -2116,6 +2168,8 @@ contains
     if (allocated(this%GL_weights)) deallocate(this%GL_weights)
     if (allocated(this%GL_R)) deallocate(this%GL_R)
     if (allocated(this%GL_Z)) deallocate(this%GL_Z)
+    if (allocated(this%shielding_kt_low)) deallocate(this%shielding_kt_low)
+    if (allocated(this%shielding_GL_theta)) deallocate(this%shielding_GL_theta)
     if (allocated(this%gpec_jacfac)) deallocate(this%gpec_jacfac)
     if (allocated(this%area)) deallocate(this%area)
     if (allocated(this%R_Omega)) deallocate(this%R_Omega)
