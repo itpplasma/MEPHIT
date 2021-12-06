@@ -14,7 +14,7 @@ module mephit_util
   ! utility procedures
   public :: get_field_filenames, init_field, deinit_field, interp_psi_pol, &
        pos_angle, linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, &
-       binsearch, interleave, heapsort_complex, complex_abs_asc, complex_abs_desc, &
+       binsearch, interleave, heapsort_real, heapsort_complex, complex_abs_asc, complex_abs_desc, &
        arnoldi_break, hessenberg_eigvals, hessenberg_eigvecs, &
        gauss_legendre_unit_interval, C_F_string
 
@@ -908,6 +908,68 @@ contains
     acc = cmplx(this%real_part%get_sum(), this%imag_part%get_sum(), dp)
   end function neumaier_accumulator_complex_get_sum
 
+  subroutine heapsort_real(array, ascending, permutation)
+    use mephit_conf, only: logger
+    real(dp), intent(inout) :: array(0:)
+    logical, intent(in) :: ascending
+    integer, intent(out), optional :: permutation(0:)
+    integer :: n, k, child, root, itemp
+    real(dp) :: temp
+
+    n = size(array)
+    if (present(permutation)) then
+       if (n /= size(permutation)) then
+          call logger%msg_arg_size('heapsort_real', 'size(array)', 'size(permutation)', &
+               n, size(permutation))
+          if (logger%err) call logger%write_msg
+          error stop
+       end if
+       permutation = [(k, k = 1, n)]
+    end if
+    do k = (n - 2) / 2, 0, -1
+       call siftdown(k, n)
+    end do
+    do k = n - 1, 1, -1
+       temp = array(0)
+       array(0) = array(k)
+       array(k) = temp
+       if (present(permutation)) then
+          itemp = permutation(0)
+          permutation(0) = permutation(k)
+          permutation(k) = itemp
+       end if
+       call siftdown(0, k)
+    end do
+  contains
+    subroutine siftdown(start, bottom)
+      integer, intent(in) :: start, bottom
+      root = start
+      do while (root * 2 + 1 < bottom)
+         child = root * 2 + 1
+         if (child + 1 < bottom) then
+            if ((ascending .and. array(child) < array(child+1)) .or. &
+                 (.not. ascending .and. array(child) > array(child+1))) then
+               child = child + 1
+            end if
+         end if
+         if ((ascending .and. array(root) < array(child)) .or. &
+              (.not. ascending .and. array(root) > array(child))) then
+            temp = array(child)
+            array(child) = array(root)
+            array(root) = temp
+            if (present(permutation)) then
+               itemp = permutation(child)
+               permutation(child) = permutation(root)
+               permutation(root) = itemp
+            end if
+            root = child
+         else
+            return
+         end if
+      end do
+    end subroutine siftdown
+  end subroutine heapsort_real
+
   subroutine heapsort_complex(array, comparison)
     complex(dp), intent(inout) :: array(0:)
     interface
@@ -921,12 +983,12 @@ contains
     complex(dp) :: temp
     n = size(array)
     do k = (n - 2) / 2, 0, -1
-       call siftdown(k, n);
+       call siftdown(k, n)
     end do
     do k = n - 1, 1, -1
        temp = array(0)
        array(0) = array(k)
-       array(k) = temp;
+       array(k) = temp
        call siftdown(0, k)
     end do
   contains
@@ -942,7 +1004,7 @@ contains
          end if
          if (comparison(array(root), array(child))) then
             temp = array(child)
-            array(child) = array (root)
+            array(child) = array(root)
             array(root) = temp
             root = child
          else
