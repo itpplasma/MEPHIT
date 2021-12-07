@@ -202,9 +202,14 @@ module mephit_mesh
 
      !> Triangle indexing for resonant flux surfaces only.
      integer, allocatable :: shielding_kt_low(:)
-     !> Symmetry flux poloidal angles of Gauss-Legemdre quadrature points on edge
-     !> for resonant flux surfaces.
-     real(dp), allocatable :: shielding_GL_theta(:, :)
+     !> Local node index for shielding pressure evaluation points.
+     integer, allocatable :: shielding_L1_kp(:, :, :)
+     !> Weighting factor for shielding pressure evaluation points.
+     real(dp), allocatable :: shielding_L1_weight(:, :, :)
+     !> R coordinate of shielding pressure evaluation points.
+     real(dp), allocatable :: shielding_L1_R(:, :, :)
+     !> Z coordinate of shielding pressure evaluation points.
+     real(dp), allocatable :: shielding_L1_Z(:, :, :)
 
      !> Surface integral Jacobian used for normalization of poloidal modes in GPEC
      complex(dp), allocatable :: gpec_jacfac(:, :)
@@ -1480,10 +1485,11 @@ contains
   end subroutine check_mesh
 
   subroutine compute_shielding_auxiliaries
+    use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
     use points_2d, only: theta_geom2theta_flux
-    use mephit_util, only: pi, interp_psi_pol
-    integer :: kf, kt, kedge, k, m
-    real(dp) :: s, psi
+    use mephit_util, only: pi, interp_psi_pol, binsearch, pos_angle
+    integer :: m, kf, kt, kedge, kgl, kp, k
+    real(dp) :: s, psi, dum, R, Z, theta
     real(dp), dimension(:), allocatable :: theta_geom, theta_flux
 
     allocate(mesh%shielding_kt_low(mesh%m_res_min:mesh%m_res_max))
@@ -1491,24 +1497,46 @@ contains
     do m = mesh%m_res_min + 1, mesh%m_res_max
        mesh%shielding_kt_low(m) = mesh%shielding_kt_low(m-1) + mesh%kt_max(mesh%res_ind(m-1))
     end do
-    allocate(mesh%shielding_GL_theta(mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
+    allocate(mesh%shielding_L1_kp(-1:0, mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
+    allocate(mesh%shielding_L1_weight(-1:0, mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
+    allocate(mesh%shielding_L1_R(-1:0, mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
+    allocate(mesh%shielding_L1_Z(-1:0, mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
     allocate(theta_geom(maxval(mesh%kt_max(mesh%res_ind)) + 1), &
          theta_flux(maxval(mesh%kt_max(mesh%res_ind)) + 1))
     do m = mesh%m_res_min, mesh%m_res_max
        kf = mesh%res_ind(m)
-       do k = 1, mesh%GL_order
+       do kgl = 1, mesh%GL_order
           theta_geom(:) = 0d0
           do kt = 2, mesh%kt_max(kf)
              kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
-             theta_geom(kt) = atan2(mesh%GL_Z(k, kedge), mesh%GL_R(k, kedge))
+             theta_geom(kt) = pos_angle(atan2(mesh%GL_Z(kgl, kedge) - mesh%Z_O, &
+                  mesh%GL_R(kgl, kedge) - mesh%R_O))
           end do
           theta_geom(mesh%kt_max(kf) + 1) = 2d0 * pi
           kedge = mesh%npoint + mesh%kt_low(kf)
-          psi = interp_psi_pol(mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge)) - fs%psi(0)
+          psi = interp_psi_pol(mesh%GL_R(kgl, kedge), mesh%GL_Z(kgl, kedge)) - fs%psi(0)
           ! inp_label = 2 to use poloidal flux psi
-          call theta_geom2theta_flux(2, s, psi, theta_geom(:mesh%kt_max(kf)+1), theta_flux(:mesh%kt_max(kf)+1))
-          mesh%shielding_GL_theta(k, (mesh%shielding_kt_low(m) + 1):&
-               (mesh%shielding_kt_low(m) + mesh%kt_max(kf))) = theta_flux(:mesh%kt_max(kf))
+          call theta_geom2theta_flux(2, s, psi, theta_geom(:mesh%kt_max(kf) + 1), &
+               theta_flux(:mesh%kt_max(kf) + 1))
+          ! loop over inner and outer flux surface
+          do k = -1, 0
+             psi = fs%psi(kf+k) - fs%psi(0)
+             theta_geom(:mesh%kp_max(kf+k)) = mesh%node_theta_geom((mesh%kp_low(kf+k) + 1):&
+                  (mesh%kp_low(kf+k) + mesh%kp_max(kf+k)))
+             theta_geom(mesh%kp_max(kf+k) + 1) = 2d0 * pi
+             do kt = 1, mesh%kt_max(kf)
+                ! inp_label = 2 to use poloidal flux psi
+                call magdata_in_symfluxcoord_ext(2, dum, psi, theta_flux(kt), &
+                     dum, dum, dum, dum, dum, R, dum, dum, Z, dum, dum)
+                mesh%shielding_L1_R(k, kgl, mesh%shielding_kt_low(m) + kt) = R
+                mesh%shielding_L1_Z(k, kgl, mesh%shielding_kt_low(m) + kt) = Z
+                theta = pos_angle(atan2(Z - mesh%Z_O, R - mesh%R_O))
+                call binsearch(theta_geom(:mesh%kp_max(kf+k) + 1), 0, theta, kp)
+                mesh%shielding_L1_kp(k, kgl, mesh%shielding_kt_low(m) + kt) = kp
+                mesh%shielding_L1_weight(k, kgl, mesh%shielding_kt_low(m) + kt) = &
+                     (theta - theta_geom(kp)) / (theta_geom(kp + 1) - theta_geom(kp))
+             end do
+          end do
        end do
     end do
     deallocate(theta_geom, theta_flux)
@@ -1984,9 +2012,18 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_kt_low', mesh%shielding_kt_low, &
          lbound(mesh%shielding_kt_low), ubound(mesh%shielding_kt_low), &
          comment = 'triangle indexing for resonant flux surfaces only')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_GL_theta', mesh%shielding_GL_theta, &
-         lbound(mesh%shielding_GL_theta), ubound(mesh%shielding_GL_theta), unit = 'rad', &
-         comment = 'flux poloidal angles of Gauss-Legendre quadrature points on edges for resonant flux surfaces')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_L1_kp', mesh%shielding_L1_kp, &
+         lbound(mesh%shielding_L1_kp), ubound(mesh%shielding_L1_kp), &
+         comment = 'local node index for shielding pressure evaluation points')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_L1_weight', mesh%shielding_L1_weight, &
+         lbound(mesh%shielding_L1_weight), ubound(mesh%shielding_L1_weight), unit = '1', &
+         comment = 'weighting factor for shielding pressure evaluation points')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_L1_R', mesh%shielding_L1_R, &
+         lbound(mesh%shielding_L1_R), ubound(mesh%shielding_L1_R), unit = 'cm', &
+         comment = 'R coordinate of shielding pressure evaluation points')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_L1_Z', mesh%shielding_L1_Z, &
+         lbound(mesh%shielding_L1_Z), ubound(mesh%shielding_L1_Z), unit = 'cm', &
+         comment = 'Z coordinate of shielding pressure evaluation points')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega, &
          lbound(mesh%R_Omega), ubound(mesh%R_Omega), &
          comment = 'R coordinate of triangle ''centroid''', unit = 'cm')
@@ -2124,8 +2161,14 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_R', mesh%GL_R)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_Z', mesh%GL_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_kt_low', mesh%shielding_kt_low)
-    allocate(mesh%shielding_GL_theta(mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_GL_theta', mesh%shielding_GL_theta)
+    allocate(mesh%shielding_L1_kp(-1:0, mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_L1_kp', mesh%shielding_L1_kp)
+    allocate(mesh%shielding_L1_weight(-1:0, mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_L1_weight', mesh%shielding_L1_weight)
+    allocate(mesh%shielding_L1_R(-1:0, mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_L1_R', mesh%shielding_L1_R)
+    allocate(mesh%shielding_L1_Z(-1:0, mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_L1_Z', mesh%shielding_L1_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_Omega', mesh%Z_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area)
@@ -2169,7 +2212,10 @@ contains
     if (allocated(this%GL_R)) deallocate(this%GL_R)
     if (allocated(this%GL_Z)) deallocate(this%GL_Z)
     if (allocated(this%shielding_kt_low)) deallocate(this%shielding_kt_low)
-    if (allocated(this%shielding_GL_theta)) deallocate(this%shielding_GL_theta)
+    if (allocated(this%shielding_L1_kp)) deallocate(this%shielding_L1_kp)
+    if (allocated(this%shielding_L1_weight)) deallocate(this%shielding_L1_weight)
+    if (allocated(this%shielding_L1_R)) deallocate(this%shielding_L1_R)
+    if (allocated(this%shielding_L1_Z)) deallocate(this%shielding_L1_Z)
     if (allocated(this%gpec_jacfac)) deallocate(this%gpec_jacfac)
     if (allocated(this%area)) deallocate(this%area)
     if (allocated(this%R_Omega)) deallocate(this%R_Omega)
