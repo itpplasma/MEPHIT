@@ -609,17 +609,16 @@ contains
   subroutine add_sheet_current
     use mephit_conf, only: conf_arr
     use mephit_mesh, only: mesh
-    use mephit_pert, only: L1_interp
-    integer :: m, kf, kt, kedge, ktri, k
+    integer :: m, kf, kt, kedge, ke, k
     real(dp) :: edge_R, edge_Z, node_R(2), node_Z(2), B0_R, B0_Z, dum
-    complex(dp) :: edge_pn
+    complex(dp) :: pn_outer, pn_inner
 
     do m = mesh%m_res_min, mesh%m_res_max
        kf = mesh%res_ind(m)
        if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then
           do kt = 1, mesh%kt_max(kf)
              kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
-             ktri = mesh%edge_tri(2, kedge)
+             ke = mesh%shielding_kt_low(m) + kt
              node_R = mesh%node_R(mesh%edge_node(:, kedge))
              node_Z = mesh%node_Z(mesh%edge_node(:, kedge))
              edge_R = node_R(2) - node_R(1)
@@ -627,9 +626,16 @@ contains
              do k = 1, mesh%GL_order
                 call field(mesh%GL_R(k, kedge), 0d0, mesh%GL_Z(k, kedge), B0_R, dum, B0_Z, &
                      dum, dum, dum, dum, dum, dum, dum, dum, dum)
-                call L1_interp(ktri, pn, mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), edge_pn)
+                pn_outer = sum(pn%DOF(mesh%kp_low(kf) + [mesh%shielding_L1_kp(0, k, ke), &
+                     mod(mesh%shielding_L1_kp(0, k, ke), mesh%kp_max(kf)) + 1]) * &
+                     [mesh%shielding_L1_weight(0, k, ke), &
+                     1d0 - mesh%shielding_L1_weight(0, k, ke)])
+                pn_inner = sum(pn%DOF(mesh%kp_low(kf-1) + [mesh%shielding_L1_kp(-1, k, ke), &
+                     mod(mesh%shielding_L1_kp(-1, k, ke), mesh%kp_max(kf-1)) + 1]) * &
+                     [mesh%shielding_L1_weight(-1, k, ke), &
+                     1d0 - mesh%shielding_L1_weight(-1, k, ke)])
                 jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * &
-                     conf_arr%sheet_current_factor(m) * edge_pn * &
+                     conf_arr%sheet_current_factor(m) * (pn_outer - pn_inner) * &
                      (B0_R * edge_Z - B0_Z * edge_R) * mesh%GL_R(k, kedge)
              end do
           end do
