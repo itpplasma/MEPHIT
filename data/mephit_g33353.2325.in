@@ -38,7 +38,7 @@
    ! maximum number of iteration steps
    config%niter = 50
    ! maximum relative error in fixed-point iteration
-   config%iter_rel_err = 1d-12
+   config%iter_rel_err = 1d-9
    ! maximum number of iterations in Arnoldi method
    config%nkrylov = 100
    ! threshold for eigenvalues in preconditioner
@@ -82,9 +82,14 @@
    deletions(11) = 1
    deletions(12) = 1
    ! coefficients for sheet currents
-   sheet_current_factor(3) = (-1d3, 0d0)
-   sheet_current_factor(4) = (3d2, -3d2)
-   sheet_current_factor(5) = (-1d2, 1d2)
-   sheet_current_factor(6) = (-1d2, 1d2)
-   sheet_current_factor(7) = (-1d2, 1d2)
+   sheet_current_factor(3) = 1d0
+   sheet_current_factor(4) = 1d0
+   sheet_current_factor(5) = 1d0
+   sheet_current_factor(6) = 1d0
+   sheet_current_factor(7) = 1d0
+   sheet_current_factor(8) = 1d0
+   sheet_current_factor(9) = 1d0
+   sheet_current_factor(10) = 1d0
+   sheet_current_factor(11) = 1d0
+   sheet_current_factor(12) = 0d0
 /

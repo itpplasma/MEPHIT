@@ -210,6 +210,8 @@ module mephit_mesh
      real(dp), allocatable :: shielding_L1_R(:, :, :)
      !> Z coordinate of shielding pressure evaluation points.
      real(dp), allocatable :: shielding_L1_Z(:, :, :)
+     !> Free parameter in the compensated scheme for shielding
+     real(dp), allocatable :: shielding_coeff(:)
 
      !> Surface integral Jacobian used for normalization of poloidal modes in GPEC
      complex(dp), allocatable :: gpec_jacfac(:, :)
@@ -656,7 +658,6 @@ contains
     call write_illustration_data(5, 8, 256, 256)
     call connect_mesh_points
     call check_mesh
-    call compute_shielding_auxiliaries
     call write_FreeFem_mesh
     call compute_sample_polmodes(sample_polmodes_half, .true.)
     call compute_sample_polmodes(sample_polmodes, .false.)
@@ -666,6 +667,7 @@ contains
     call flux_func_cache_check
     call check_safety_factor
     call check_resonance_positions
+    call compute_shielding_auxiliaries
     call compute_j0phi
     call check_curr0
   end subroutine generate_mesh
@@ -1487,9 +1489,9 @@ contains
   subroutine compute_shielding_auxiliaries
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
     use points_2d, only: theta_geom2theta_flux
-    use mephit_util, only: pi, interp_psi_pol, binsearch, pos_angle
+    use mephit_util, only: pi, clight, interp_psi_pol, binsearch, pos_angle
     integer :: m, kf, kt, kedge, kgl, kp, k
-    real(dp) :: s, psi, dum, R, Z, theta
+    real(dp) :: s, psi, dum, R, Z, theta, dq_dpsi
     real(dp), dimension(:), allocatable :: theta_geom, theta_flux
 
     allocate(mesh%shielding_kt_low(mesh%m_res_min:mesh%m_res_max))
@@ -1540,6 +1542,14 @@ contains
        end do
     end do
     deallocate(theta_geom, theta_flux)
+    allocate(mesh%shielding_coeff(mesh%m_res_min:mesh%m_res_max))
+    do m = mesh%m_res_min, mesh%m_res_max
+       kf = mesh%res_ind(m)
+       dq_dpsi = psi_interpolator%eval(equil%qpsi, fs_half%psi(kf), .true.)
+       mesh%shielding_coeff(m) = clight * mesh%n / (4d0 * pi * mesh%R_O) * &
+            abs(dq_dpsi / (fs_half%q(kf) * fs_half%dp_dpsi(kf))) / &
+            (mesh%n * abs(fs%q(kf) - fs%q(kf-1)))
+    end do
   end subroutine compute_shielding_auxiliaries
 
   subroutine compute_gpec_jacfac
@@ -2024,6 +2034,9 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_L1_Z', mesh%shielding_L1_Z, &
          lbound(mesh%shielding_L1_Z), ubound(mesh%shielding_L1_Z), unit = 'cm', &
          comment = 'Z coordinate of shielding pressure evaluation points')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_coeff', mesh%shielding_coeff, &
+         lbound(mesh%shielding_coeff), ubound(mesh%shielding_coeff), unit = 'g^-1 cm s', &
+         comment = 'Coefficient in the compensated scheme for shielding')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega, &
          lbound(mesh%R_Omega), ubound(mesh%R_Omega), &
          comment = 'R coordinate of triangle ''centroid''', unit = 'cm')
@@ -2130,6 +2143,7 @@ contains
     allocate(mesh%GL_R(mesh%GL_order, mesh%nedge))
     allocate(mesh%GL_Z(mesh%GL_order, mesh%nedge))
     allocate(mesh%shielding_kt_low(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%shielding_coeff(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%gpec_jacfac(-16:16, mesh%nflux))
     allocate(mesh%area(mesh%ntri))
     allocate(mesh%R_Omega(mesh%ntri))
@@ -2169,6 +2183,7 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_L1_R', mesh%shielding_L1_R)
     allocate(mesh%shielding_L1_Z(-1:0, mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_L1_Z', mesh%shielding_L1_Z)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_coeff', mesh%shielding_coeff)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_Omega', mesh%Z_Omega)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area)
@@ -2216,6 +2231,7 @@ contains
     if (allocated(this%shielding_L1_weight)) deallocate(this%shielding_L1_weight)
     if (allocated(this%shielding_L1_R)) deallocate(this%shielding_L1_R)
     if (allocated(this%shielding_L1_Z)) deallocate(this%shielding_L1_Z)
+    if (allocated(this%shielding_coeff)) deallocate(this%shielding_coeff)
     if (allocated(this%gpec_jacfac)) deallocate(this%gpec_jacfac)
     if (allocated(this%area)) deallocate(this%area)
     if (allocated(this%R_Omega)) deallocate(this%R_Omega)

@@ -247,7 +247,7 @@ contains
        call h5_close(h5id_root)
        if (logger%info) then
           write (logger%msg, '("Arnoldi method yields ", i0, " Ritz eigenvalues > ", es24.16e3)') &
-               nritz, conf%ritz_rel_err
+               nritz, conf%ritz_threshold
           call logger%write_msg
           do i = 1, nritz
              write (logger%msg, '("lambda ", i0, ": ", ' // cmplx_fmt // ')') i, eigvals(i)
@@ -635,7 +635,7 @@ contains
                      [mesh%shielding_L1_weight(-1, k, ke), &
                      1d0 - mesh%shielding_L1_weight(-1, k, ke)])
                 jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * &
-                     conf_arr%sheet_current_factor(m) * (pn_outer - pn_inner) * &
+                     mesh%shielding_coeff(m) * conf_arr%sheet_current_factor(m) * (pn_outer - pn_inner) * &
                      (B0_R * edge_Z - B0_Z * edge_R) * mesh%GL_R(k, kedge)
              end do
           end do

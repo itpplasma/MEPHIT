@@ -114,7 +114,7 @@ module mephit_conf
 
      !> Maximum distance between flux surfaces along \f$ \theta = 0 \f$. Defaults
      !> to 0.45 cm.
-     real(dp) :: max_Delta_rad = 0.45d0
+     real(dp) :: max_Delta_rad = 0.2d0
 
      !> Number of radial divisions in radially refined regions for parallel current
      !> computations. Defaults to 2048.
@@ -172,7 +172,7 @@ module mephit_conf
      real(dp), dimension(:), allocatable :: refinement
 
      !> Free parameters setting the magnitudes of sheet currents.
-     complex(dp), dimension(:), allocatable :: sheet_current_factor
+     real(dp), dimension(:), allocatable :: sheet_current_factor
 
    contains
      procedure :: read => config_delayed_read
@@ -277,15 +277,14 @@ contains
     integer, intent(in) :: m_min, m_max
     integer :: fid
     integer, dimension(m_min:m_max) :: deletions
-    real(dp), dimension(m_min:m_max) :: refinement
-    complex(dp), dimension(m_min:m_max) :: sheet_current_factor
+    real(dp), dimension(m_min:m_max) :: refinement, sheet_current_factor
     namelist /arrays/ deletions, refinement, sheet_current_factor
 
     config%m_min = m_min
     config%m_max = m_max
     deletions = 0
     refinement = 0d0
-    sheet_current_factor = (0d0, 0d0)
+    sheet_current_factor = 0d0
     open(newunit = fid, file = filename)
     read(fid, nml = arrays)
     close(fid)
