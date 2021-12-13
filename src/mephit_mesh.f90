@@ -995,24 +995,6 @@ contains
     end do
   end subroutine cache_resonance_positions
 
-  subroutine write_kilca_convexfile(rho_max, convexfile)
-    use constants, only: pi  ! PRELOAD/SRC/orbit_mod.f90
-
-    integer, parameter :: nrz = 96  ! at most 100 values are read in by field_divB0.f90
-    real(dp), intent(in) :: rho_max
-    character(len = *), intent(in) :: convexfile
-    real(dp) :: theta
-    integer :: fid, kp
-
-    open(newunit = fid, file = convexfile, status = 'replace', form = 'formatted', action = 'write')
-    do kp = 1, nrz
-       theta = dble(kp) / dble(nrz) * 2d0 * pi
-       write (fid, '(2(1x, es24.16e3))') equil%rmaxis + rho_max * cos(theta), &
-            equil%zmaxis + rho_max * sin(theta)
-    end do
-    close(fid)
-  end subroutine write_kilca_convexfile
-
   subroutine create_mesh_points
     use mephit_conf, only: conf, conf_arr, logger
     use mephit_util, only: interp_psi_pol, pi, pos_angle
@@ -1034,7 +1016,6 @@ contains
             equil%rleft + equil%rdim - equil%rmaxis, &
             equil%zdim * 0.5d0 + equil%zmid - equil%zmaxis, &
             equil%zdim * 0.5d0 - equil%zmid + equil%zmaxis)
-       call write_kilca_convexfile(rad_max, equil%convexfile)
        o_point = [equil%rmaxis, equil%zmaxis]
        x_point = o_point + [rad_max, 0d0]
     end if
@@ -1574,9 +1555,9 @@ contains
 
   !> Compute coarse grid for poloidal mode sampling points - one point per edge.
   subroutine compute_sample_polmodes(s, half_grid)
-    use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
     use mephit_conf, only: conf
+    use mephit_util, only: pi
     class(coord_cache), intent(inout) :: s
     logical, intent(in) :: half_grid
     integer :: kf, ke, k
@@ -1641,10 +1622,9 @@ contains
 
   !> Compute fine grid for parallel current sampling points.
   subroutine compute_sample_Ipar(sample_Ipar, m)
-    use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: psipol_max, magdata_in_symfluxcoord_ext
     use mephit_conf, only: conf
-    use mephit_util, only: linspace, interp_psi_pol
+    use mephit_util, only: pi, linspace, interp_psi_pol
     type(coord_cache_ext), intent(inout) :: sample_Ipar
     integer, intent(in) :: m
     integer :: krad, kpol, k
@@ -2245,8 +2225,8 @@ contains
     use netcdf, only: nf90_open, nf90_nowrite, nf90_noerr, nf90_inq_dimid, nf90_inq_varid, &
          nf90_inquire_dimension, nf90_get_var, nf90_close, nf90_global, nf90_get_att
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext, psipol_max
-    use constants, only: pi  ! orbit_mod.f90
     use mephit_conf, only: conf, logger, datafile
+    use mephit_util, only: pi
     character(len = *), parameter :: dataset = 'debug_GPEC'
     character(len = 1024) :: filename
     logical :: file_exists
@@ -2473,8 +2453,7 @@ contains
 
   subroutine write_illustration_data(npsi, ntheta, nrad, npol)
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext, psipol_max
-    use constants, only: pi  ! orbit_mod.f90
-    use mephit_util, only: linspace
+    use mephit_util, only: pi, linspace
     integer, intent(in) :: npsi, ntheta, nrad, npol
     integer :: fid, krad, kpol
     real(dp) :: dum
@@ -2563,8 +2542,8 @@ contains
   end subroutine init_flux_variables
 
   subroutine compute_pres_prof_eps
-    use constants, only: ev2erg  ! orbit_mod.f90
     use mephit_conf, only: conf, logger
+    use mephit_util, only: ev2erg
     real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
 
     ! Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
@@ -2598,8 +2577,8 @@ contains
   end subroutine compute_pres_prof_eps
 
   subroutine compute_pres_prof_par
-    use constants, only: ev2erg  ! orbit_mod.f90
     use mephit_conf, only: conf
+    use mephit_util, only: ev2erg
     real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
 
     ! Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
@@ -2643,8 +2622,7 @@ contains
   end subroutine compute_pres_prof_geqdsk
 
   subroutine compute_safety_factor_flux
-    use constants, only: pi  ! orbit_mod.f90
-    use mephit_util, only: interp1d
+    use mephit_util, only: pi, interp1d
     integer :: kf, kt, ktri
     type(interp1d) :: psi_half_interpolator
 
@@ -2696,9 +2674,9 @@ contains
 
   subroutine check_safety_factor
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: psisurf, qsaf
     use mephit_conf, only: datafile
+    use mephit_util, only: pi
     character(len = *), parameter :: grp = 'debug_q'
     integer(HID_T) :: h5id_root
 
@@ -2836,8 +2814,7 @@ contains
   end subroutine compute_j0phi_ps
 
   subroutine compute_j0phi_rot(plot_j0phi)
-    use constants, only: pi  ! orbit_mod.f90
-    use mephit_util, only: clight
+    use mephit_util, only: clight, pi
     real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kt, ktri, kedge
     real(dp) :: dum, dB0R_dZ, dB0Z_dR
@@ -2860,8 +2837,7 @@ contains
   end subroutine compute_j0phi_rot
 
   subroutine compute_j0phi_geqdsk(plot_j0phi)
-    use constants, only: pi  ! orbit_mod.f90
-    use mephit_util, only: clight
+    use mephit_util, only: clight, pi
     real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kp, kt, ktri, kedge
 
@@ -2893,10 +2869,9 @@ contains
 
   subroutine check_curr0
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use constants, only: pi  ! orbit_mod.f90
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
     use mephit_conf, only: datafile
-    use mephit_util, only: clight, linspace
+    use mephit_util, only: clight, pi, linspace
     character(len = *), parameter :: grp = 'debug_equil'
     integer, parameter :: ntheta = 512
     integer(HID_T) :: h5id_root

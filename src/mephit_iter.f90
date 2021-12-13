@@ -749,9 +749,8 @@ contains
 
   !> calculate parallel current (density) on a finer grid
   subroutine write_Ipar_symfluxcoord(s, file, dataset)
-    use constants, only: pi  ! orbit_mod.f90
     use mephit_conf, only: conf
-    use mephit_util, only: imun, clight
+    use mephit_util, only: imun, pi, clight
     use mephit_mesh, only: coord_cache_ext
     use mephit_pert, only: RT0_interp
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
@@ -900,8 +899,7 @@ contains
 
   !> calculate parallel current (density) on a finer grid
   subroutine write_Ipar(s, file, dataset)
-    use constants, only: pi  ! orbit_mod.f90
-    use mephit_util, only: imun, clight, bent_cyl2straight_cyl
+    use mephit_util, only: imun, pi, clight, bent_cyl2straight_cyl
     use mephit_mesh, only: mesh, coord_cache_ext
     use mephit_pert, only: RT0_interp
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close

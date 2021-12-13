@@ -19,10 +19,11 @@ module mephit_util
        gauss_legendre_unit_interval, C_F_string
 
   ! module variables
-  public :: pi, clight, imun
+  public :: pi, clight, ev2erg, imun
 
   real(dp), parameter :: pi = 4d0 * atan(1d0)
   real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
+  real(dp), parameter :: ev2erg = 1.6021766d-12      !< convert eV to erg
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
 
   type:: sign_convention
@@ -402,7 +403,6 @@ contains
   end subroutine g_eqdsk_read
 
   subroutine g_eqdsk_check_consistency(this)
-    use constants, only: pi  ! src/orbit_mod.f90
     use mephit_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
     integer, parameter :: ignore = 3
@@ -465,7 +465,6 @@ contains
 
   !> Estimates terms of Grad-Shafranov equation to determine sign_convention::exp_bpol.
   function g_eqdsk_grad_shafranov_normalization(this) result(gs_factor)
-    use constants, only: pi  ! src/orbit_mod.f90
     use mephit_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
     real(dp) :: gs_factor
@@ -521,7 +520,6 @@ contains
   end function sign_array
 
   subroutine g_eqdsk_classify(this)
-    use constants, only: pi  ! src/orbit_mod.f90
     use mephit_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
 
@@ -564,7 +562,6 @@ contains
   end subroutine g_eqdsk_classify
 
   subroutine g_eqdsk_standardise(this)
-    use constants, only: pi  ! src/orbit_mod.f90
     use mephit_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
 

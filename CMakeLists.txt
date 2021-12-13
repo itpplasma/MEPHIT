@@ -88,7 +88,6 @@ set(COMMON_FORTRAN_SRC_FILES
   src/ludcmp.f
   src/magdata_in_symfluxcoord.f90
   src/odeint_allroutines.f
-  src/orbit_mod.f90
   src/plag_coeff.f90
   src/points_2d.f90
   src/preload_for_SYNCH.f90
