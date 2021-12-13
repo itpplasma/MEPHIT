@@ -16,6 +16,10 @@ module mephit_mesh
   public :: coord_cache_ext, coord_cache_ext_init, coord_cache_ext_deinit, &
        coord_cache_ext_write, coord_cache_ext_read, compute_sample_Ipar
 
+  ! testing and debugging procedures
+  public :: check_mesh, write_illustration_data, flux_func_cache_check, &
+       check_safety_factor, check_curr0
+
   ! module variables
   public :: equil, psi_interpolator, psi_fine_interpolator, fs, fs_half, mesh, &
        sample_polmodes_half, sample_polmodes
@@ -655,21 +659,16 @@ contains
     end if
     call create_mesh_points
     call compare_gpec_coordinates
-    call write_illustration_data(5, 8, 256, 256)
     call connect_mesh_points
-    call check_mesh
     call write_FreeFem_mesh
     call compute_sample_polmodes(sample_polmodes_half, .true.)
     call compute_sample_polmodes(sample_polmodes, .false.)
     call compute_gpec_jacfac
     call cache_equilibrium_field
     call init_flux_variables
-    call flux_func_cache_check
-    call check_safety_factor
     call check_resonance_positions
     call compute_shielding_auxiliaries
     call compute_j0phi
-    call check_curr0
   end subroutine generate_mesh
 
   subroutine write_cache

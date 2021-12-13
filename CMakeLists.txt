@@ -152,9 +152,11 @@ target_link_libraries(mephit ${MEPHIT_LIBS})
 
 ### Define executables
 add_executable(mephit_run.x src/mephit_run.c)
+add_executable(mephit_test.x src/mephit_test.f90)
 add_executable(standardise_equilibrium.x src/standardise_equilibrium.f90)
 add_executable(vacfield.x src/vacfield.f90)
 target_link_libraries(mephit_run.x mephit)
+target_link_libraries(mephit_test.x mephit)
 target_link_libraries(standardise_equilibrium.x mephit)
 target_link_libraries(vacfield.x mephit)
 

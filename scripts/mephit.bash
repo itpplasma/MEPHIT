@@ -190,6 +190,29 @@ mephit_run() {
     done
 }
 
+mephit_test() {
+    config=mephit.in
+    log=mephit.log
+
+    for workdir; do
+        pushd "$workdir"
+        GFORTRAN_ERROR_BACKTRACE=1
+        # uncomment to use memcheck
+        # valgrind -v --leak-check=full --show-leak-kinds=all --track-origins=yes \
+        "$bindir/mephit_test.x" \
+            "$config" \
+            2>&1 | tee -a "$log"
+        lasterr=$?
+        if [ "$lasterr" -ne 0 ]; then
+            echo "$scriptname: mephit_test.x exited with code $lasterr during run in $workdir" | tee -a "$log" >&2
+            popd
+            anyerr=$lasterr
+            continue
+        fi
+        popd
+    done
+}
+
 mephit_plot() {
     config=mephit.in
     data=mephit.h5
@@ -232,7 +255,7 @@ set -o pipefail
 scriptname=$0
 anyerr=0
 case "$1" in
-    init|convert|run|plot|clean)
+    init|convert|run|test|plot|clean)
         mode=$1
         shift
         mephit_$mode "$@"

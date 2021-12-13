@@ -6,7 +6,7 @@ module mephit_iter
 
   private
 
-  public :: mephit_run
+  public :: mephit_run, mephit_deinit
 
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   type(L1_t) :: pn
@@ -51,14 +51,12 @@ contains
 
   subroutine mephit_run(runmode, config) bind(C, name = 'mephit_run')
     use iso_c_binding, only: c_int, c_ptr
-    use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord, unload_magdata_in_symfluxcoord
-    use mephit_util, only: C_F_string, get_field_filenames, init_field, deinit_field
+    use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
+    use mephit_util, only: C_F_string, get_field_filenames, init_field
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
-    use mephit_mesh, only: equil, fs, fs_half, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
-         mesh_deinit, sample_polmodes_half, sample_polmodes, coord_cache_deinit, psi_interpolator, psi_fine_interpolator, &
-         B0R_edge, B0phi_edge, B0Z_edge, B0R_Omega, B0phi_Omega, B0Z_Omega, B0_flux, j0phi_edge
-    use mephit_pert, only: generate_vacfield, vac, vac_init, vac_deinit, vac_write, vac_read
-    use hdf5_tools, only: h5_init, h5_deinit, h5overwrite
+    use mephit_mesh, only: equil, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache
+    use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
+    use hdf5_tools, only: h5_init, h5overwrite
     integer(c_int), intent(in), value :: runmode
     type(c_ptr), intent(in), value :: config
     integer(c_int) :: runmode_flags
@@ -135,6 +133,19 @@ contains
        end if
        call iter_deinit
     end if
+    call mephit_deinit
+  end subroutine mephit_run
+
+  subroutine mephit_deinit
+    use magdata_in_symfluxcoor_mod, only: unload_magdata_in_symfluxcoord
+    use hdf5_tools, only: h5_deinit
+    use mephit_conf, only: conf_arr, logger
+    use mephit_util, only: deinit_field
+    use mephit_mesh, only: equil, fs, fs_half, psi_interpolator, psi_fine_interpolator, &
+         mesh, sample_polmodes, sample_polmodes_half, mesh_deinit, coord_cache_deinit, &
+         B0R_edge, B0phi_edge, B0Z_edge, B0R_Omega, B0phi_Omega, B0Z_Omega, B0_flux, j0phi_edge
+    use mephit_pert, only: vac, vac_deinit
+
     if (allocated(B0R_edge)) deallocate(B0R_edge)
     if (allocated(B0phi_edge)) deallocate(B0phi_edge)
     if (allocated(B0Z_edge)) deallocate(B0Z_edge)
@@ -157,7 +168,7 @@ contains
     call conf_arr%deinit
     call logger%deinit
     call h5_deinit
-  end subroutine mephit_run
+  end subroutine mephit_deinit
 
   subroutine iter_init
     use mephit_mesh, only: mesh
