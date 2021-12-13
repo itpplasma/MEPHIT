@@ -46,7 +46,7 @@
    ! maximim relative error for eigenvalues in preconditioner
    config%ritz_rel_err = 1d-10
    ! maximum distance between flux surfaces along theta = 0
-   config%max_Delta_rad = 0.45d0
+   config%max_Delta_rad = 0.2d0
    ! temperature on magnetic axis
    config%temp_max = 3.d3
    ! minimum temperature

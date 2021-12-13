@@ -1605,6 +1605,9 @@ contains
        s%dR_dtheta(1) = 0d0
        s%dZ_dtheta(1) = 0d0
        s%sqrt_g(1) = 0d0
+       s%B0_R(1) = 0d0
+       s%B0_Z(1) = 0d0
+       s%ktri(1) = 0
     end if
     do kf = 1, mesh%nflux
        do ke = 1, ke_max(kf)
