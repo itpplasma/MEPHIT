@@ -1024,9 +1024,8 @@ contains
 
   subroutine Biot_Savart_sum_coils(ncoil, nseg, nwind, XYZ, Ic, &
        Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ, Bvac)
-    use constants, only: pi  ! orbit_mod.f90
     use mephit_conf, only: logger
-    use mephit_util, only: linspace
+    use mephit_util, only: pi, linspace
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
     real(dp), intent(in), dimension(:) :: Ic
@@ -1103,9 +1102,8 @@ contains
     use iso_c_binding, only: c_ptr, c_double, c_double_complex, c_size_t, c_f_pointer
     use FFTW3, only: fftw_alloc_real, fftw_alloc_complex, fftw_plan_dft_r2c_1d, FFTW_PATIENT, &
          FFTW_DESTROY_INPUT, fftw_execute_dft_r2c, fftw_destroy_plan, fftw_free
-    use constants, only: pi  ! orbit_mod.f90
     use mephit_conf, only: logger
-    use mephit_util, only: linspace
+    use mephit_util, only: pi, linspace
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
     integer, intent(in) :: nmax
@@ -1257,7 +1255,7 @@ contains
 
   subroutine write_Bvac_Nemov(directory, Rmin, Rmax, Zmin, Zmax, Bvac)
     use mephit_conf, only: logger
-    use constants, only: pi  ! orbit_mod.f90
+    use mephit_util, only: pi
     character(len = *), intent(in) :: directory
     real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
     real(dp), intent(in), dimension(:, :, :, :) :: Bvac
@@ -1296,8 +1294,7 @@ contains
   subroutine read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bnvac_R, Bnvac_Z)
     use input_files, only: pfile
     use mephit_conf, only: conf
-    use mephit_util, only: imun, linspace, get_field_filenames
-    use constants, only: pi  ! orbit_mod.f90
+    use mephit_util, only: imun, pi, linspace, get_field_filenames
     character(len = 1024) :: gfile, convexfile
     integer, intent(out) :: nR, nZ
     real(dp), intent(out) :: Rmin, Rmax, Zmin, Zmax
