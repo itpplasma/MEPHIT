@@ -31,6 +31,7 @@ mephit_init() {
     config=
     geqdsk=
     type=
+    convexwall=
     TEMP=$(getopt -o 'c:g:t:' --long 'config:,g-eqdsk:,type:' -n "$scriptname" -- "$@")
     eval set -- "$TEMP"
     unset TEMP
@@ -61,7 +62,38 @@ mephit_init() {
                 ;;
         esac
     done
-    convexwall=$datadir/convexwall_$type.dat
+
+    if [ -z "$config" ]; then
+        echo "$scriptname: no config file given" >&2
+        anyerr+=1
+    elif [ ! -r $(absolutize "$config") ]; then
+        echo "$scriptname: cannot read config file '$config'" >&2
+        anyerr+=1
+    fi
+    if [ -z "$geqdsk" ]; then
+        echo "$scriptname: no GEQDSK file given" >&2
+        anyerr+=1
+    elif [ ! -r $(absolutize "$geqdsk") ]; then
+        echo "$scriptname: cannot read GEQDSK file '$geqdsk'" >&2
+        anyerr+=1
+    fi
+    if [ -z "$type" ]; then
+        echo "$scriptname: no type given" >&2
+        anyerr+=1
+    else
+        case "$type" in
+            asdex|kilca)
+                convexwall=$datadir/convexwall_$type.dat
+                ;;
+            *)
+                echo "$scriptname: unrecognized type '$type'" >&2
+                anyerr+=1
+                ;;
+        esac
+    fi
+    if [ $anyerr > 0 ]; then
+        exit 1
+    fi
 
     for workdir; do
         if [ -d "$workdir" ]; then
@@ -170,7 +202,7 @@ mephit_run() {
             # initialized with previous version of this script
             mv -b -f field_divB0_unprocessed.inp field_divB0.inp
         fi
-        GFORTRAN_ERROR_BACKTRACE=1
+        export GFORTRAN_ERROR_BACKTRACE=1
         # uncomment to use memcheck
         # valgrind -v --leak-check=full --show-leak-kinds=all --track-origins=yes \
         "$bindir/mephit_run.x" \
@@ -196,7 +228,7 @@ mephit_test() {
 
     for workdir; do
         pushd "$workdir"
-        GFORTRAN_ERROR_BACKTRACE=1
+        export GFORTRAN_ERROR_BACKTRACE=1
         # uncomment to use memcheck
         # valgrind -v --leak-check=full --show-leak-kinds=all --track-origins=yes \
         "$bindir/mephit_test.x" \
