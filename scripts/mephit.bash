@@ -91,7 +91,7 @@ mephit_init() {
                 ;;
         esac
     fi
-    if [ $anyerr > 0 ]; then
+    if [ $anyerr -gt 0 ]; then
         exit 1
     fi
 

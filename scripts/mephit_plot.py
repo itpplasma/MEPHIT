@@ -56,7 +56,7 @@ class Mephit:
         self.post['triangulation'] = Triangulation(self.data['/mesh/node_R'][()], self.data['/mesh/node_Z'][()],
                                                    self.data['/mesh/tri_node'][()] - 1)
         self.post['psi_norm'] = self.normalize_psi(self.data['/cache/fs/psi'][()])
-        self.post['sgn_m_res'] = sign(self.data['/cache/fs/q'][-1])
+        self.post['sgn_m_res'] = int(sign(-self.data['/cache/fs/q'][-1]))
         m_res = arange(self.data['/mesh/m_res_min'][()], self.data['/mesh/m_res_max'][()] + 1) * self.post['sgn_m_res']
         self.post['psi_norm_res'] = dict(zip(m_res, self.normalize_psi(self.data['/mesh/psi_res'][()])))
 
@@ -190,6 +190,7 @@ class Plot1D(PlotObject):
 class PolmodePlots(PlotObject):
     def do_plot(self):
         from matplotlib.figure import Figure
+        from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
         from matplotlib.backends.backend_pdf import PdfPages
         from numpy import any
         super().do_plot()
@@ -204,7 +205,7 @@ class PolmodePlots(PlotObject):
         for data in self.config['poldata']:
             if m in data['var'].keys():
                 axs[0].plot(data['rho'][m], self.config['comp'](data['var'][m]), label=data['label'])
-        axs[0].legend(fontsize='x-small')
+        axs[0].legend(loc='upper left', fontsize='x-small')
         axs[0].set_title(f"$m = {m}$")
         axs[0].set_xlabel(self.config['xlabel'])
         axs[0].set_ylabel(self.config['ylabel'])
@@ -217,6 +218,7 @@ class PolmodePlots(PlotObject):
             axs[1].set_ylim(top=0.0)
         axs[1].set_xlabel(self.config['xlabel'])
         axs[1].set_ylabel(r'$q$')
+        canvas = FigureCanvas(fig)
         fig.savefig(pdf, format='pdf', dpi=300)
         # plot non-symmetric modes
         m_max = min(map(lambda d: d['m_max'], self.config['poldata']))
@@ -233,10 +235,11 @@ class PolmodePlots(PlotObject):
                 for data in self.config['poldata']:
                     if m in data['var'].keys():
                         axs[k].plot(data['rho'][m], self.config['comp'](data['var'][m]), label=data['label'])
-                axs[k].legend(fontsize='x-small')
+                axs[k].legend(loc='upper left', fontsize='x-small')
                 axs[k].set_title(('resonant ' if m in self.config['resonances'] else 'non-resonant ') + fr"$m = {m}$")
                 axs[k].set_xlabel(self.config['xlabel'])
                 axs[k].set_ylabel(self.config['ylabel'])
             axs[1].yaxis.set_tick_params(labelleft=True)
+            canvas = FigureCanvas(fig)
             fig.savefig(pdf, format='pdf', dpi=300)
         pdf.close()
