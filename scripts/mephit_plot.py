@@ -68,11 +68,11 @@ class Mephit:
             kf_max = min(res_ind[m - m_res_min] + 3, nflux - 1)
             self.post['psi_norm_res_neighbourhood'][m] = self.post['psi_norm'][kf_min:kf_max+1]
 
-    def get_polmodes(self, label, var_name='/postprocess/Bmn/coeff_rad', conversion=1.0):
+    def get_polmodes(self, label, var_name='/postprocess/Bmn/coeff_rad', conversion=1.0, L1=False):
         from numpy import array
         polmodes = {'m_max': 0, 'label': label, 'rho': dict(), 'var': dict()}
         polmodes['m_max'] = (self.data[var_name].shape[1] - 1) // 2
-        rho = self.normalize_psi(self.data['/cache/fs_half/psi'][()])
+        rho = self.post['psi_norm'] if L1 else self.normalize_psi(self.data['/cache/fs_half/psi'][()])
         for m in range(-polmodes['m_max'], polmodes['m_max'] + 1):
             polmodes['rho'][m] = rho
             polmodes['var'][m] = array(self.data[var_name][:, m + polmodes['m_max']], dtype='D') * conversion

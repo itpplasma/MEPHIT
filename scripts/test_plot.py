@@ -1,5 +1,6 @@
 from mephit_plot import Gpec, Mephit, ParallelPlotter, PolmodePlots, Plot1D, run_dir, set_matplotlib_defaults
-from numpy import abs, sign
+from numpy import abs, angle, sign
+from functools import partial
 
 
 if __name__ == "__main__":
@@ -28,6 +29,27 @@ if __name__ == "__main__":
         'res_neighbourhood': testcase.post['psi_norm_res_neighbourhood']
     }
     plotter.plot_objects.put(PolmodePlots(work_dir, 'GPEC_Bmn_psi_abs.pdf', config))
+    config['comp'] = partial(angle, deg=True)
+    config['ylabel'] = r'$\arg [B_{n}^{\perp} \sqrt{g} \lVert \nabla \psi \rVert]_{m} A^{-1}$ / \si{\degree}'
+    plotter.plot_objects.put(PolmodePlots(work_dir, 'GPEC_Bmn_psi_arg.pdf', config))
+    mephit_jmn_000 = testcase.get_polmodes('initial perturbation', '/postprocess/jmn_000/coeff_pol')
+    mephit_jmn = testcase.get_polmodes('full perturbation', '/postprocess/jmn/coeff_pol')
+    config['comp'] = abs
+    config['ylabel'] = r'$\abs J_{mn\vartheta}$ / \si{\statampere\per\centi\meter\cubed}'
+    config['poldata'] = [mephit_jmn_000, mephit_jmn]
+    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_jmn_theta_abs.pdf', config))
+    config['comp'] = partial(angle, deg=True)
+    config['ylabel'] = r'$\arg J_{mn\vartheta}$ / \si{\degree}'
+    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_jmn_theta_arg.pdf', config))
+    mephit_pmn_000 = testcase.get_polmodes('initial perturbation', '/postprocess/pmn_000/coeff', L1=True)
+    mephit_pmn = testcase.get_polmodes('full perturbation', '/postprocess/pmn/coeff', L1=True)
+    config['comp'] = abs
+    config['ylabel'] = r'$\abs p_{mn}$ / \si{\dyne\per\centi\meter\squared}'
+    config['poldata'] = [mephit_pmn_000, mephit_pmn]
+    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_pmn_abs.pdf', config))
+    config['comp'] = partial(angle, deg=True)
+    config['ylabel'] = r'$\arg p_{mn}$ / \si{\degree}'
+    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_pmn_arg.pdf', config))
     niter = testcase.data['/iter/niter'][()]
     sup_eigval = testcase.data['/config/ritz_threshold'][()]
     L2int_Bnvac = testcase.data['/iter/L2int_Bnvac'][()]
