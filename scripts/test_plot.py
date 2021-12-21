@@ -1,4 +1,4 @@
-from mephit_plot import Gpec, Mephit, ParallelPlotter, PolmodePlots, run_dir, set_matplotlib_defaults
+from mephit_plot import Gpec, Mephit, ParallelPlotter, PolmodePlots, Plot1D, run_dir, set_matplotlib_defaults
 from numpy import abs, sign
 
 
@@ -27,5 +27,11 @@ if __name__ == "__main__":
         'poldata': [mephit_Bmn_vac, gpec_Bmn_vac, mephit_Bmn, gpec_Bmn], 'comp': abs
     }
     plotter.plot_objects.put(PolmodePlots(work_dir, 'GPEC_Bmn_psi_abs.pdf', config))
+    niter = testcase.data['/iter/niter'][()]
+    sup_eigval = testcase.data['/config/ritz_threshold'][()]
+    L2int_Bnvac = testcase.data['/iter/L2int_Bnvac'][()]
+    L2int_Bn_diff = testcase.data['/iter/L2int_Bn_diff'][:niter]
+    rel_err = testcase.data['/config/iter_rel_err'][()]
+    plotter.plot_objects.put(Plot1D.conv_plot(work_dir, sup_eigval, L2int_Bnvac, L2int_Bn_diff, rel_err))
 
     plotter.finish()

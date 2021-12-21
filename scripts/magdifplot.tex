@@ -6,8 +6,10 @@
 \usepackage{iftex}
 \ifLuaTeX
   \usepackage[math-style=ISO, bold-style=ISO]{unicode-math}
+  \global\let\V\mathbf
 \else
   \usepackage{fixmath}
+  \global\let\V\mathbold
 \fi
 
 % matplotlib now does \usepackage[strings]{underscore},

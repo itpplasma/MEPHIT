@@ -162,6 +162,28 @@ class ParallelPlotter:
         return
 
 
+class XTicks:
+    def __init__(self, ticks):
+        self.ticks = ticks
+
+    def __call__(self, fig, ax):
+        ax.set_xticks(self.ticks)
+
+
+class LogY:
+    def __call__(self, fig, ax):
+        ax.set_yscale('log')
+
+
+class HLine:
+    def __init__(self, pos, **kwargs):
+        self.pos = pos
+        self.kwargs = kwargs
+
+    def __call__(self, fig, ax):
+        ax.axhline(self.pos, **self.kwargs)
+
+
 class Plot1D(PlotObject):
     def do_plot(self):
         from matplotlib.figure import Figure
@@ -172,6 +194,9 @@ class Plot1D(PlotObject):
         ax = fig.subplots()
         for plotdata in self.config['plotdata']:
             ax.plot(plotdata['x'], plotdata['y'], **plotdata['args'])
+        if 'postprocess' in self.config.keys():
+            for f in self.config['postprocess']:
+                f(fig, ax)
         if 'xlabel' in self.config.keys():
             ax.set_xlabel(self.config['xlabel'])
         if 'ylabel' in self.config.keys():
@@ -180,11 +205,27 @@ class Plot1D(PlotObject):
             ax.legend(**self.config['legend'])
         if 'title' in self.config.keys():
             ax.set_title(self.config['title'])
-        if 'postprocess' in self.config.keys():
-            for f in self.config['postprocess']:
-                f(fig, ax)
         canvas = FigureCanvas(fig)
         fig.savefig(path.join(self.work_dir, self.filename))
+
+    @classmethod
+    def conv_plot(cls, work_dir, sup_eigval, L2int_Bnvac, L2int_Bn_diff, rel_err):
+        from numpy import arange
+        from functools import partial
+        kiter = arange(0, L2int_Bn_diff.shape[0])
+        config = {
+            'xlabel': 'iteration step $k$', 'ylabel': r'$\lVert \V{B}_{n} \rVert_{2}$ / \si{\maxwell}',
+            'legend': {'loc': 'upper right'}, 'title': 'Convergence Estimation',
+            'plotdata': [
+                {'x': kiter, 'y': L2int_Bnvac * sup_eigval ** kiter,
+                 'args': {'label': r'$\lvert \lambda_{\text{max}} \rvert^{k} \lVert \V{B}_{n}^{(0)} \rVert_{2}$'}},
+                {'x': kiter, 'y': L2int_Bn_diff, 'args': {'label': r'$\lVert \upDelta \V{B}_{n}^{(k)} \rVert_{2}$',
+                                                          'ls': '', 'marker': 'x'}}
+            ],
+            'postprocess': [XTicks(kiter), LogY(),
+                            HLine(rel_err * L2int_Bnvac, label='breaking condition', lw=0.5, ls='--')]
+        }
+        return cls(work_dir, 'plot_conv.pdf', config)
 
 
 class PolmodePlots(PlotObject):
