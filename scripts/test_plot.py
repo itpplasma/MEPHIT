@@ -24,7 +24,8 @@ if __name__ == "__main__":
         'ylabel': r'$\abs [B_{n}^{\perp} \sqrt{g} \lVert \nabla \psi \rVert]_{m} A^{-1}$ / \si{\tesla}',
         'rho': testcase.post['psi_norm'], 'q': testcase.data['/cache/fs/q'][()],
         'resonances': testcase.post['psi_norm_res'], 'sgn_m_res': testcase.post['sgn_m_res'], 'omit_res': False,
-        'poldata': [mephit_Bmn_vac, gpec_Bmn_vac, mephit_Bmn, gpec_Bmn], 'comp': abs
+        'poldata': [mephit_Bmn_vac, gpec_Bmn_vac, mephit_Bmn, gpec_Bmn], 'comp': abs,
+        'res_neighbourhood': testcase.post['psi_norm_res_neighbourhood']
     }
     plotter.plot_objects.put(PolmodePlots(work_dir, 'GPEC_Bmn_psi_abs.pdf', config))
     niter = testcase.data['/iter/niter'][()]

@@ -59,6 +59,14 @@ class Mephit:
         self.post['sgn_m_res'] = int(sign(-self.data['/cache/fs/q'][-1]))
         m_res = arange(self.data['/mesh/m_res_min'][()], self.data['/mesh/m_res_max'][()] + 1) * self.post['sgn_m_res']
         self.post['psi_norm_res'] = dict(zip(m_res, self.normalize_psi(self.data['/mesh/psi_res'][()])))
+        m_res_min = self.data['/mesh/m_res_min'][()]
+        res_ind = self.data['/mesh/res_ind'][()] - 1
+        nflux = self.data['/mesh/nflux'][()]
+        self.post['psi_norm_res_neighbourhood'] = {}
+        for m in m_res:
+            kf_min = res_ind[m - m_res_min] - 2
+            kf_max = min(res_ind[m - m_res_min] + 3, nflux - 1)
+            self.post['psi_norm_res_neighbourhood'][m] = self.post['psi_norm'][kf_min:kf_max+1]
 
     def get_polmodes(self, label, var_name='/postprocess/Bmn/coeff_rad', conversion=1.0):
         from numpy import array
@@ -273,6 +281,9 @@ class PolmodePlots(PlotObject):
                 if m in self.config['resonances'] and not self.config['omit_res']:
                     axs[k].axvline(self.config['resonances'][m],
                                    color='b', alpha=0.5, lw=0.5, label='resonance position')
+                if m in self.config['resonances'] and 'res_neighbourhood' in self.config.keys():
+                    for pos in self.config['res_neighbourhood'][m]:
+                        axs[k].axvline(pos, color='k', alpha=0.5, lw=0.25)
                 for data in self.config['poldata']:
                     if m in data['var'].keys():
                         axs[k].plot(data['rho'][m], self.config['comp'](data['var'][m]), label=data['label'])
