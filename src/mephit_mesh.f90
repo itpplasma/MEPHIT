@@ -11,10 +11,8 @@ module mephit_mesh
   public :: flux_func_cache, flux_func_cache_init, flux_func_cache_deinit
   public :: mesh_t, mesh_write, mesh_read, mesh_deinit, &
        generate_mesh, write_cache, read_cache, point_location
-  public :: coord_cache, coord_cache_init, coord_cache_deinit, &
-       coord_cache_write, coord_cache_read
-  public :: coord_cache_ext, coord_cache_ext_init, coord_cache_ext_deinit, &
-       coord_cache_ext_write, coord_cache_ext_read, compute_sample_Ipar
+  public :: coord_cache_t, coord_cache_ext_t, cache_t, cache_init, cache_deinit, &
+       cache_write, cache_read, compute_sample_Ipar
 
   ! testing and debugging procedures
   public :: check_mesh, write_illustration_data, flux_func_cache_check, &
@@ -22,7 +20,7 @@ module mephit_mesh
 
   ! module variables
   public :: equil, psi_interpolator, psi_fine_interpolator, fs, fs_half, mesh, &
-       sample_polmodes_half, sample_polmodes
+       cache
   public :: B0R_edge, B0phi_edge, B0Z_edge, B0R_Omega, B0phi_Omega, B0Z_Omega, &
        B0_flux, j0phi_edge
 
@@ -265,22 +263,22 @@ module mephit_mesh
   !> in statampere cm^-2.
   real(dp), allocatable :: j0phi_edge(:)
 
-  type :: coord_cache
-     integer :: n
-     integer, allocatable, dimension(:) :: ktri
-     real(dp), allocatable, dimension(:) :: R, Z, psi, theta, sqrt_g, B0_R, B0_Z, &
-          dR_dtheta, dZ_dtheta
-  end type coord_cache
+  type :: coord_cache_t
+     integer :: ktri
+     real(dp) :: R, Z, psi, theta, sqrt_g, B0_R, B0_Z, dR_dtheta, dZ_dtheta
+  end type coord_cache_t
 
-  type(coord_cache) :: sample_polmodes_half
-  type(coord_cache) :: sample_polmodes
+  type, extends(coord_cache_t) :: coord_cache_ext_t
+     real(dp) :: rad, q, dq_dpsi, dR_dpsi, dZ_dpsi, d2R_dpsi_dtheta, d2Z_dpsi_dtheta, &
+          B0_phi, dB0R_dR, dB0R_dZ, dB0phi_dR, dB0phi_dZ, dB0Z_dR, dB0Z_dZ, B0_2
+  end type coord_cache_ext_t
 
-  type, extends(coord_cache) :: coord_cache_ext
-     integer :: nrad, npol, m
-     real(dp), allocatable, dimension(:) :: rad, q, dq_dpsi, dR_dpsi, dZ_dpsi, &
-          d2R_dpsi_dtheta, d2Z_dpsi_dtheta, B0_phi, dB0R_dR, dB0R_dZ, dB0phi_dR, &
-          dB0phi_dZ, dB0Z_dR, dB0Z_dZ, B0_2
-  end type coord_cache_ext
+  type :: cache_t
+     integer :: nrad, npol
+     type(coord_cache_t), allocatable :: sample_polmodes_half(:, :), sample_polmodes(:, :)
+  end type cache_t
+
+  type(cache_t) :: cache
 
 contains
 
@@ -408,43 +406,9 @@ contains
     call h5_close(h5id_root)
   end subroutine flux_func_cache_read
 
-  subroutine coord_cache_init(this, n)
-    class(coord_cache), intent(inout) :: this
-    integer, intent(in) :: n
-
-    call coord_cache_deinit(this)
-    this%n = n
-    allocate(this%ktri(this%n))
-    allocate(this%R(this%n))
-    allocate(this%Z(this%n))
-    allocate(this%psi(this%n))
-    allocate(this%theta(this%n))
-    allocate(this%sqrt_g(this%n))
-    allocate(this%B0_R(this%n))
-    allocate(this%B0_Z(this%n))
-    allocate(this%dR_dtheta(this%n))
-    allocate(this%dZ_dtheta(this%n))
-  end subroutine coord_cache_init
-
-  subroutine coord_cache_deinit(this)
-    class(coord_cache), intent(inout) :: this
-
-    this%n = 0
-    if (allocated(this%ktri)) deallocate(this%ktri)
-    if (allocated(this%R)) deallocate(this%R)
-    if (allocated(this%Z)) deallocate(this%Z)
-    if (allocated(this%psi)) deallocate(this%psi)
-    if (allocated(this%theta)) deallocate(this%theta)
-    if (allocated(this%sqrt_g)) deallocate(this%sqrt_g)
-    if (allocated(this%B0_R)) deallocate(this%B0_R)
-    if (allocated(this%B0_Z)) deallocate(this%B0_Z)
-    if (allocated(this%dR_dtheta)) deallocate(this%dR_dtheta)
-    if (allocated(this%dZ_dtheta)) deallocate(this%dZ_dtheta)
-  end subroutine coord_cache_deinit
-
   subroutine coord_cache_write(cache, file, dataset, comment)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    class(coord_cache), intent(in) :: cache
+    class(coord_cache_t), dimension(:, :), intent(in) :: cache
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
     character(len = *), intent(in) :: comment
@@ -453,41 +417,41 @@ contains
     call h5_open_rw(file, h5id_root)
     call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/ktri', cache%ktri, &
-         lbound(cache%ktri), ubound(cache%ktri), &
+         lbound(cache), ubound(cache), &
          comment = 'triangle index of ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/R', cache%R, &
-         lbound(cache%R), ubound(cache%R), unit = 'cm', &
+         lbound(cache), ubound(cache), unit = 'cm', &
          comment = 'R coordinate of ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z', cache%Z, &
-         lbound(cache%Z), ubound(cache%Z), unit = 'cm', &
+         lbound(cache), ubound(cache), unit = 'cm', &
          comment = 'Z coordinate of ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache%theta, &
-         lbound(cache%psi), ubound(cache%psi), unit = 'Mx', &
+         lbound(cache), ubound(cache), unit = 'Mx', &
          comment = 'poloidal flux at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta', cache%theta, &
-         lbound(cache%theta), ubound(cache%theta), unit = 'rad', &
+         lbound(cache), ubound(cache), unit = 'rad', &
          comment = 'flux poloidal angle at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/sqrt_g', cache%sqrt_g, &
-         lbound(cache%sqrt_g), ubound(cache%sqrt_g), unit = 'cm G^-1', &
+         lbound(cache), ubound(cache), unit = 'cm G^-1', &
          comment = 'Jacobian at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache%B0_R, &
-         lbound(cache%B0_R), ubound(cache%B0_R), unit = 'G', &
+         lbound(cache), ubound(cache), unit = 'G', &
          comment = 'R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache%B0_Z, &
-         lbound(cache%B0_Z), ubound(cache%B0_Z), unit = 'G', &
+         lbound(cache), ubound(cache), unit = 'G', &
          comment = 'Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dR_dtheta', cache%dR_dtheta, &
-         lbound(cache%dR_dtheta), ubound(cache%dR_dtheta), unit = 'cm rad^-1', &
+         lbound(cache), ubound(cache), unit = 'cm rad^-1', &
          comment = 'Jacobian element (R, theta) at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dZ_dtheta', cache%dZ_dtheta, &
-         lbound(cache%dZ_dtheta), ubound(cache%dZ_dtheta), unit = 'cm rad^-1', &
+         lbound(cache), ubound(cache), unit = 'cm rad^-1', &
          comment = 'Jacobian element (Z, theta) at ' // trim(adjustl(comment)))
     call h5_close(h5id_root)
   end subroutine coord_cache_write
 
   subroutine coord_cache_read(cache, file, dataset)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
-    class(coord_cache), intent(inout) :: cache
+    class(coord_cache_t), dimension(:, :), intent(inout) :: cache
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
     integer(HID_T) :: h5id_root
@@ -506,59 +470,9 @@ contains
     call h5_close(h5id_root)
   end subroutine coord_cache_read
 
-  subroutine coord_cache_ext_init(this, nrad, npol)
-    type(coord_cache_ext), intent(inout) :: this
-    integer, intent(in) :: nrad, npol
-
-    call coord_cache_ext_deinit(this)
-    call coord_cache_init(this, nrad * npol)
-    this%nrad = nrad
-    this%npol = npol
-    this%m = 0
-    allocate(this%rad(this%n))
-    allocate(this%q(this%n))
-    allocate(this%dq_dpsi(this%n))
-    allocate(this%dR_dpsi(this%n))
-    allocate(this%dZ_dpsi(this%n))
-    allocate(this%d2R_dpsi_dtheta(this%n))
-    allocate(this%d2Z_dpsi_dtheta(this%n))
-    allocate(this%B0_phi(this%n))
-    allocate(this%dB0R_dR(this%n))
-    allocate(this%dB0R_dZ(this%n))
-    allocate(this%dB0phi_dR(this%n))
-    allocate(this%dB0phi_dZ(this%n))
-    allocate(this%dB0Z_dR(this%n))
-    allocate(this%dB0Z_dZ(this%n))
-    allocate(this%B0_2(this%n))
-  end subroutine coord_cache_ext_init
-
-  subroutine coord_cache_ext_deinit(this)
-    type(coord_cache_ext), intent(inout) :: this
-
-    call coord_cache_deinit(this)
-    this%nrad = 0
-    this%npol = 0
-    this%m = 0
-    if (allocated(this%rad)) deallocate(this%rad)
-    if (allocated(this%q)) deallocate(this%q)
-    if (allocated(this%dq_dpsi)) deallocate(this%dq_dpsi)
-    if (allocated(this%dR_dpsi)) deallocate(this%dR_dpsi)
-    if (allocated(this%dZ_dpsi)) deallocate(this%dZ_dpsi)
-    if (allocated(this%d2R_dpsi_dtheta)) deallocate(this%d2R_dpsi_dtheta)
-    if (allocated(this%d2Z_dpsi_dtheta)) deallocate(this%d2Z_dpsi_dtheta)
-    if (allocated(this%B0_phi)) deallocate(this%B0_phi)
-    if (allocated(this%dB0R_dR)) deallocate(this%dB0R_dR)
-    if (allocated(this%dB0R_dZ)) deallocate(this%dB0R_dZ)
-    if (allocated(this%dB0phi_dR)) deallocate(this%dB0phi_dR)
-    if (allocated(this%dB0phi_dZ)) deallocate(this%dB0phi_dZ)
-    if (allocated(this%dB0Z_dR)) deallocate(this%dB0Z_dR)
-    if (allocated(this%dB0Z_dZ)) deallocate(this%dB0Z_dZ)
-    if (allocated(this%B0_2)) deallocate(this%B0_2)
-  end subroutine coord_cache_ext_deinit
-
   subroutine coord_cache_ext_write(cache, file, dataset, comment)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
-    type(coord_cache_ext), intent(in) :: cache
+    type(coord_cache_ext_t), dimension(:, :), intent(in) :: cache
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
     character(len = *), intent(in) :: comment
@@ -566,72 +480,63 @@ contains
 
     call coord_cache_write(cache, file, dataset, comment)
     call h5_open_rw(file, h5id_root)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nrad', cache%nrad, &
-         comment = 'number of radial divisions for ' // trim(adjustl(comment)))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/npol', cache%npol, &
-         comment = 'number of poloidal divisions for ' // trim(adjustl(comment)))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m', cache%m, &
-         comment = 'poloidal mode number of ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad', cache%rad, &
-         lbound(cache%rad), ubound(cache%rad), unit = 'cm', &
-         comment = 'minor radius (on OX line) at ' // trim(adjustl(comment)))
+         lbound(cache), ubound(cache), unit = 'cm', &
+         comment = 'minor radius (along theta = 0) at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/q', cache%q, &
-         lbound(cache%q), ubound(cache%q), unit = '1', &
+         lbound(cache), ubound(cache), unit = '1', &
          comment = 'safety factor q at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dq_dpsi', cache%dq_dpsi, &
-         lbound(cache%dq_dpsi), ubound(cache%dq_dpsi), unit = 'Mx^-1', &
+         lbound(cache), ubound(cache), unit = 'Mx^-1', &
          comment = 'q''(psi) at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dR_dpsi', cache%dR_dpsi, &
-         lbound(cache%dR_dpsi), ubound(cache%dR_dpsi), unit = 'cm Mx^-1', &
+         lbound(cache), ubound(cache), unit = 'cm Mx^-1', &
          comment = 'Jacobian element (R, psi) at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dZ_dpsi', cache%dZ_dpsi, &
-         lbound(cache%dZ_dpsi), ubound(cache%dZ_dpsi), unit = 'cm Mx^-1', &
+         lbound(cache), ubound(cache), unit = 'cm Mx^-1', &
          comment = 'Jacobian element (Z, psi) at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/d2R_dpsi_dtheta', cache%d2R_dpsi_dtheta, &
-         lbound(cache%d2R_dpsi_dtheta), ubound(cache%d2R_dpsi_dtheta), unit = 'cm Mx^-1 rad^-1', &
+         lbound(cache), ubound(cache), unit = 'cm Mx^-1 rad^-1', &
          comment = 'Hessian element (psi, theta) of R at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/d2Z_dpsi_dtheta', cache%d2Z_dpsi_dtheta, &
-         lbound(cache%d2Z_dpsi_dtheta), ubound(cache%d2Z_dpsi_dtheta), unit = 'cm Mx^-1 rad^-1', &
+         lbound(cache), ubound(cache), unit = 'cm Mx^-1 rad^-1', &
          comment = 'Hessian element (psi, theta) of Z at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache%B0_phi, &
-         lbound(cache%B0_phi), ubound(cache%B0_phi), unit = 'G', &
+         lbound(cache), ubound(cache), unit = 'G', &
          comment = 'physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0R_dR', cache%dB0R_dR, &
-         lbound(cache%dB0R_dR), ubound(cache%dB0R_dR), unit = 'G cm^-1', &
+         lbound(cache), ubound(cache), unit = 'G cm^-1', &
          comment = 'R derivative of B0_R at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0R_dZ', cache%dB0R_dZ, &
-         lbound(cache%dB0R_dZ), ubound(cache%dB0R_dZ), unit = 'G cm^-1', &
+         lbound(cache), ubound(cache), unit = 'G cm^-1', &
          comment = 'Z derivative of B0_R at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dR', cache%dB0phi_dR, &
-         lbound(cache%dB0phi_dR), ubound(cache%dB0phi_dR), unit = 'G cm^-1', &
+         lbound(cache), ubound(cache), unit = 'G cm^-1', &
          comment = 'R derivative of B0_phi at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dZ', cache%dB0phi_dZ, &
-         lbound(cache%dB0phi_dZ), ubound(cache%dB0phi_dZ), unit = 'G cm^-1', &
+         lbound(cache), ubound(cache), unit = 'G cm^-1', &
          comment = 'Z derivative of B0_phi at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dR', cache%dB0Z_dR, &
-         lbound(cache%dB0Z_dR), ubound(cache%dB0Z_dR), unit = 'G cm^-1', &
+         lbound(cache), ubound(cache), unit = 'G cm^-1', &
          comment = 'R derivative of B0_Z at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dZ', cache%dB0Z_dZ, &
-         lbound(cache%dB0Z_dZ), ubound(cache%dB0Z_dZ), unit = 'G cm^-1', &
+         lbound(cache), ubound(cache), unit = 'G cm^-1', &
          comment = 'Z derivative of B0_Z at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_2', cache%B0_2, &
-         lbound(cache%B0_2), ubound(cache%B0_2), unit = 'G^2', &
+         lbound(cache), ubound(cache), unit = 'G^2', &
          comment = 'square of equilibrium magnetic field  at ' // trim(adjustl(comment)))
     call h5_close(h5id_root)
   end subroutine coord_cache_ext_write
 
   subroutine coord_cache_ext_read(cache, file, dataset)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
-    type(coord_cache_ext), intent(inout) :: cache
+    type(coord_cache_ext_t), dimension(:, :), intent(inout) :: cache
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
     integer(HID_T) :: h5id_root
 
     call coord_cache_read(cache, file, dataset)
     call h5_open(file, h5id_root)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/nrad', cache%nrad)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/npol', cache%npol)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/m', cache%m)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/q', cache%q)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/dq_dpsi', cache%dq_dpsi)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/dR_dpsi', cache%dR_dpsi)
@@ -649,6 +554,65 @@ contains
     call h5_close(h5id_root)
   end subroutine coord_cache_ext_read
 
+  subroutine cache_init(cache, nrad, npol)
+    type(cache_t), intent(inout) :: cache
+    integer, intent(in) :: nrad, npol
+
+    call cache_deinit(cache)
+    cache%nrad = nrad
+    cache%npol = npol
+    allocate(cache%sample_polmodes(npol, nrad), cache%sample_polmodes_half(npol, nrad))
+  end subroutine cache_init
+
+  subroutine cache_deinit(cache)
+    type(cache_t), intent(inout) :: cache
+
+    cache%nrad = 0
+    cache%npol = 0
+    if (allocated(cache%sample_polmodes)) deallocate(cache%sample_polmodes)
+    if (allocated(cache%sample_polmodes_half)) deallocate(cache%sample_polmodes_half)
+  end subroutine cache_deinit
+
+  subroutine cache_write(cache, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
+    type(cache_t), intent(in) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
+
+    call coord_cache_write(cache%sample_polmodes_half, file, &
+         trim(adjustl(dataset)) // '/sample_polmodes_half', &
+         'poloidal mode sampling points between flux surfaces')
+    call coord_cache_write(cache%sample_polmodes, file, &
+         trim(adjustl(dataset)) // '/sample_polmodes', &
+         'poloidal mode sampling points on flux surfaces')
+    call h5_open_rw(file, h5id_root)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nrad', cache%nrad, &
+         comment = 'number of radial divisions for poloidal mode sampling points')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/npol', cache%npol, &
+         comment = 'number of poloidal divisions for poloidal mode sampling points')
+    call h5_close(h5id_root)
+  end subroutine cache_write
+
+  subroutine cache_read(cache, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    type(cache_t), intent(inout) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
+    integer :: nrad, npol
+
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/nrad', nrad)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/npol', npol)
+    call h5_close(h5id_root)
+    call cache_init(cache, nrad, npol)
+    call coord_cache_read(cache%sample_polmodes_half, file, &
+         trim(adjustl(dataset)) // '/sample_polmodes_half')
+    call coord_cache_read(cache%sample_polmodes, file, &
+         trim(adjustl(dataset)) // '/sample_polmodes')
+  end subroutine cache_read
+
   subroutine generate_mesh
     use mephit_conf, only: conf
 
@@ -661,8 +625,9 @@ contains
     call compare_gpec_coordinates
     call connect_mesh_points
     call write_FreeFem_mesh
-    call compute_sample_polmodes(sample_polmodes_half, .true.)
-    call compute_sample_polmodes(sample_polmodes, .false.)
+    call cache_init(cache, mesh%nflux, 512)
+    call compute_sample_polmodes(cache%sample_polmodes_half, cache%npol, .true.)
+    call compute_sample_polmodes(cache%sample_polmodes, cache%npol, .false.)
     call compute_gpec_jacfac
     call cache_equilibrium_field
     call init_flux_variables
@@ -679,10 +644,7 @@ contains
     call conf_arr%export_hdf5(datafile, 'config')
     call flux_func_cache_write(fs, datafile, 'cache/fs', 'on flux surfaces')
     call flux_func_cache_write(fs_half, datafile, 'cache/fs_half', 'between flux surfaces')
-    call coord_cache_write(sample_polmodes_half, datafile, 'cache/sample_polmodes_half', &
-         'poloidal mode sampling points between flux surfaces')
-    call coord_cache_write(sample_polmodes, datafile, 'cache/sample_polmodes', &
-         'poloidal mode sampling points on flux surfaces')
+    call cache_write(cache, datafile, 'cache')
     ! TODO: put in separate subroutine for edge_cache_type
     call h5_open_rw(datafile, h5id_root)
     ! TODO: revise naming and indexing when edge_cache type is working for GL quadrature in compute_currn
@@ -712,12 +674,9 @@ contains
 
     call flux_func_cache_init(fs, mesh%nflux, .false.)
     call flux_func_cache_init(fs_half, mesh%nflux, .true.)
-    call coord_cache_init(sample_polmodes_half, mesh%ntri)
-    call coord_cache_init(sample_polmodes, mesh%npoint)
     call flux_func_cache_read(fs, datafile, 'cache/fs')
     call flux_func_cache_read(fs_half, datafile, 'cache/fs_half')
-    call coord_cache_read(sample_polmodes_half, datafile, 'cache/sample_polmodes_half')
-    call coord_cache_read(sample_polmodes, datafile, 'cache/sample_polmodes')
+    call cache_read(cache, datafile, 'cache')
     ! TODO: revise naming and indexing when edge_cache type is working for GL quadrature in compute_currn
     allocate(B0R_edge(mesh%nedge))
     allocate(B0phi_edge(mesh%nedge))
@@ -1535,89 +1494,75 @@ contains
   subroutine compute_gpec_jacfac
     use mephit_util, only: imun
     integer, parameter :: m_max = 16
-    integer :: kf, kt, ktri, m
+    integer :: kf, kpol, m
     complex(dp) :: fourier_basis(-m_max:m_max)
 
     allocate(mesh%gpec_jacfac(-m_max:m_max, mesh%nflux))
     mesh%gpec_jacfac(:, :) = (0d0, 0d0)
     do kf = 1, mesh%nflux
-       do kt = 1, mesh%kt_max(kf)
-          ktri = mesh%kt_low(kf) + kt
-          associate (s => sample_polmodes_half)
-            fourier_basis = [(exp(-imun * m * s%theta(ktri)), m = -m_max, m_max)]
-            mesh%gpec_jacfac(:, kf) = mesh%gpec_jacfac(:, kf) + s%sqrt_g(ktri) * &
-                 s%R(ktri) * hypot(s%B0_Z(ktri), -s%B0_R(ktri)) * fourier_basis
+       do kpol = 1, cache%npol
+          associate (s => cache%sample_polmodes_half(kpol, kf))
+            fourier_basis = [(exp(-imun * m * s%theta), m = -m_max, m_max)]
+            mesh%gpec_jacfac(:, kf) = mesh%gpec_jacfac(:, kf) + s%sqrt_g * &
+                 s%R * hypot(s%B0_Z, -s%B0_R) * fourier_basis
           end associate
        end do
-       mesh%gpec_jacfac(:, kf) = mesh%gpec_jacfac(:, kf) / mesh%kt_max(kf)
     end do
+    mesh%gpec_jacfac(:, :) = mesh%gpec_jacfac / cache%npol
   end subroutine compute_gpec_jacfac
 
-  !> Compute coarse grid for poloidal mode sampling points - one point per edge.
-  subroutine compute_sample_polmodes(s, half_grid)
+  !> Compute coarse grid for poloidal mode sampling points
+  subroutine compute_sample_polmodes(sample, npol, half_grid)
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
     use mephit_conf, only: conf
     use mephit_util, only: pi
-    class(coord_cache), intent(inout) :: s
+    type(coord_cache_t), dimension(:, :), allocatable, intent(inout) :: sample
+    integer, intent(in) :: npol
     logical, intent(in) :: half_grid
-    integer :: kf, ke, k
+    integer :: kf, kpol
     real(dp) :: dum, q
-    integer, allocatable, dimension(:) :: ke_low, ke_max
     real(dp), allocatable, dimension(:) :: psi, rad
 
+    if (allocated(sample)) deallocate(sample)
+    allocate(sample(npol, mesh%nflux))
     if (half_grid) then
-       call coord_cache_init(s, mesh%ntri)
-       allocate(ke_low, source = mesh%kt_low)
-       allocate(ke_max, source = mesh%kt_max)
        allocate(psi, source = fs_half%psi)
        allocate(rad, source = fs_half%rad)
     else
-       call coord_cache_init(s, mesh%npoint)
-       allocate(ke_low, source = mesh%kp_low)
-       allocate(ke_max, source = mesh%kp_max)
        allocate(psi, source = fs%psi)
        allocate(rad, source = fs%rad)
-       ! set values at axis manually
-       s%psi(1) = psi(0)
-       s%theta(1) = 0d0
-       s%R(1) = mesh%R_O
-       s%Z(1) = mesh%Z_O
-       s%dR_dtheta(1) = 0d0
-       s%dZ_dtheta(1) = 0d0
-       s%sqrt_g(1) = 0d0
-       s%B0_R(1) = 0d0
-       s%B0_Z(1) = 0d0
-       s%ktri(1) = 0
     end if
     do kf = 1, mesh%nflux
-       do ke = 1, ke_max(kf)
-          k = ke_low(kf) + ke
-          s%psi(k) = psi(kf)
-          s%theta(k) = 2d0 * pi * dble(ke - 1) / dble(ke_max(kf))
-          if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
-             s%R(k) = mesh%R_O + rad(kf) * cos(s%theta(k))
-             s%Z(k) = mesh%Z_O + rad(kf) * sin(s%theta(k))
-             s%dR_dtheta(k) = -rad(kf) * sin(s%theta(k))
-             s%dZ_dtheta(k) =  rad(kf) * cos(s%theta(k))
-          else
-             ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
-             call magdata_in_symfluxcoord_ext(2, dum, s%psi(k) - fs%psi(0), s%theta(k), &
-                  q, dum, s%sqrt_g(k), dum, dum, &
-                  s%R(k), dum, s%dR_dtheta(k), s%Z(k), dum, s%dZ_dtheta(k))
-          end if
-          s%ktri(k) = point_location(s%R(k), s%Z(k))
-          call field(s%R(k), 0d0, s%Z(k), s%B0_R(k), dum, s%B0_Z(k), &
-               dum, dum, dum, dum, dum, dum, dum, dum, dum)
-          if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
-             s%sqrt_g(k) = equil%cocos%sgn_dpsi * rad(kf) / &
-                  (-s%B0_R(k) * sin(s%theta(k)) + s%B0_Z(k) * cos(s%theta(k)))
-          else
-             ! sqrt_g misses a factor of q and the signs of dpsi_drad and B0_phi
-             ! taken together, these three always yield a positive sign in COCOS 3
-             s%sqrt_g(k) = s%sqrt_g(k) * abs(q)
-          end if
+       do kpol = 1, npol
+          associate (s => sample(kpol, kf))
+            s%psi = psi(kf)
+            s%theta = 2d0 * pi * dble(kpol - 1) / dble(npol)
+            if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
+               s%R = mesh%R_O + rad(kf) * cos(s%theta)
+               s%Z = mesh%Z_O + rad(kf) * sin(s%theta)
+               s%dR_dtheta = -rad(kf) * sin(s%theta)
+               s%dZ_dtheta =  rad(kf) * cos(s%theta)
+            else
+               ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
+               call magdata_in_symfluxcoord_ext(2, dum, s%psi - fs%psi(0), s%theta, &
+                    q, dum, s%sqrt_g, dum, dum, &
+                    s%R, dum, s%dR_dtheta, s%Z, dum, s%dZ_dtheta)
+            end if
+            s%ktri = point_location(s%R, s%Z)
+            call field(s%R, 0d0, s%Z, s%B0_R, dum, s%B0_Z, &
+                 dum, dum, dum, dum, dum, dum, dum, dum, dum)
+            if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
+               s%sqrt_g = equil%cocos%sgn_dpsi * rad(kf) / &
+                    (-s%B0_R * sin(s%theta) + s%B0_Z * cos(s%theta))
+            else
+               ! sqrt_g misses a factor of q and the signs of dpsi_drad and B0_phi
+               ! taken together, these three always yield a positive sign in COCOS 3
+               s%sqrt_g = s%sqrt_g * abs(q)
+            end if
+          end associate
        end do
     end do
+    deallocate(psi, rad)
   end subroutine compute_sample_polmodes
 
   !> Compute fine grid for parallel current sampling points.
@@ -1625,13 +1570,14 @@ contains
     use magdata_in_symfluxcoor_mod, only: psipol_max, magdata_in_symfluxcoord_ext
     use mephit_conf, only: conf
     use mephit_util, only: pi, linspace, interp_psi_pol
-    type(coord_cache_ext), intent(inout) :: sample_Ipar
+    type(coord_cache_ext_t), dimension(:, :), intent(inout) :: sample_Ipar
     integer, intent(in) :: m
-    integer :: krad, kpol, k
-    real(dp) :: rad_min, rad_max, theta(sample_Ipar%npol), rad_eqd(equil%nw), drad_dpsi, dum
-    real(dp), dimension(sample_Ipar%nrad) :: rad, psi
+    integer :: nrad, npol, krad, kpol
+    real(dp) :: rad_min, rad_max, rad_eqd(equil%nw), drad_dpsi, dum
+    real(dp), dimension(:), allocatable :: rad, psi, theta
 
-    sample_Ipar%m = m
+    npol = size(sample_Ipar, 1)
+    nrad = size(sample_Ipar, 2)
     rad_eqd(:) = linspace(fs%rad(0), fs%rad(mesh%nflux), equil%nw, 0, 0)
     rad_min = mesh%rad_norm_res(m) * fs%rad(mesh%nflux) - 2d0 * conf%max_Delta_rad
     rad_max = mesh%rad_norm_res(m) * fs%rad(mesh%nflux) + 2d0 * conf%max_Delta_rad
@@ -1639,62 +1585,63 @@ contains
        rad_max = fs%rad(mesh%nflux)
        rad_min = (2d0 * mesh%rad_norm_res(m) - 1d0) * fs%rad(mesh%nflux)
     end if
-    rad(:) = linspace(rad_min, rad_max, sample_Ipar%nrad, 1, 1)
+    allocate(rad(nrad), psi(nrad), theta(npol))
+    rad(:) = linspace(rad_min, rad_max, nrad, 1, 1)
     ! TODO: replace by dedicated interpolation function
     if (conf%kilca_scale_factor /= 0) then
-       psi(:) = [(interp_psi_pol(mesh%R_O, mesh%Z_O + rad(krad)), krad = 1, sample_Ipar%nrad)]
+       psi(:) = [(interp_psi_pol(mesh%R_O, mesh%Z_O + rad(krad)), krad = 1, nrad)]
     else
-       psi(:) = [(interp_psi_pol(mesh%R_O + rad(krad), mesh%Z_O), krad = 1, sample_Ipar%nrad)]
+       psi(:) = [(interp_psi_pol(mesh%R_O + rad(krad), mesh%Z_O), krad = 1, nrad)]
     end if
-    theta(:) = 2d0 * pi * [(dble(kpol) - 0.5d0, kpol = 1, sample_Ipar%npol)] / dble(sample_Ipar%npol)
-    do krad = 1, sample_Ipar%nrad
-       do kpol = 1, sample_Ipar%npol
-          associate (s => sample_Ipar)
-            k = (krad - 1) * s%npol + kpol
-            s%rad(k) = rad(krad)
-            s%psi(k) = psi(krad)
-            s%theta(k) = theta(kpol)
+    theta(:) = 2d0 * pi * [(dble(kpol - 1), kpol = 1, npol)] / dble(npol)
+    do krad = 1, nrad
+       do kpol = 1, npol
+          associate (s => sample_Ipar(kpol, krad))
+            s%rad = rad(krad)
+            s%psi = psi(krad)
+            s%theta = theta(kpol)
             if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
-               s%R(k) = mesh%R_O + rad(krad) * cos(theta(kpol))
-               s%Z(k) = mesh%Z_O + rad(krad) * sin(theta(kpol))
-               s%dR_dtheta(k) = -rad(krad) * sin(theta(kpol))
-               s%dZ_dtheta(k) =  rad(krad) * cos(theta(kpol))
-               s%dq_dpsi(k) = psi_interpolator%eval(equil%qpsi, psi(krad))
+               s%R = mesh%R_O + rad(krad) * cos(theta(kpol))
+               s%Z = mesh%Z_O + rad(krad) * sin(theta(kpol))
+               s%dR_dtheta = -rad(krad) * sin(theta(kpol))
+               s%dZ_dtheta =  rad(krad) * cos(theta(kpol))
+               s%dq_dpsi = psi_interpolator%eval(equil%qpsi, psi(krad))
                drad_dpsi = 1d0 / psi_interpolator%eval(rad_eqd, psi(krad))
-               s%dR_dpsi(k) = drad_dpsi * cos(theta(kpol))
-               s%dZ_dpsi(k) = drad_dpsi * sin(theta(kpol))
-               s%d2R_dpsi_dtheta(k) = -drad_dpsi * sin(theta(kpol))
-               s%d2Z_dpsi_dtheta(k) =  drad_dpsi * cos(theta(kpol))
+               s%dR_dpsi = drad_dpsi * cos(theta(kpol))
+               s%dZ_dpsi = drad_dpsi * sin(theta(kpol))
+               s%d2R_dpsi_dtheta = -drad_dpsi * sin(theta(kpol))
+               s%d2Z_dpsi_dtheta =  drad_dpsi * cos(theta(kpol))
             else
                ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
                call magdata_in_symfluxcoord_ext(2, dum, psi(krad) - fs%psi(0), theta(kpol), &
-                    s%q(k), s%dq_dpsi(k), s%sqrt_g(k), dum, dum, &
-                    s%R(k), s%dR_dpsi(k), s%dR_dtheta(k), &
-                    s%Z(k), s%dZ_dpsi(k), s%dZ_dtheta(k), &
-                    s%d2R_dpsi_dtheta(k), s%d2Z_dpsi_dtheta(k))
+                    s%q, s%dq_dpsi, s%sqrt_g, dum, dum, &
+                    s%R, s%dR_dpsi, s%dR_dtheta, &
+                    s%Z, s%dZ_dpsi, s%dZ_dtheta, &
+                    s%d2R_dpsi_dtheta, s%d2Z_dpsi_dtheta)
                ! psi is normalized in derivatives - rescale
-               s%dq_dpsi(k) = s%dq_dpsi(k) / psipol_max
-               s%dR_dpsi(k) = s%dR_dpsi(k) / psipol_max
-               s%dZ_dpsi(k) = s%dZ_dpsi(k) / psipol_max
-               s%d2R_dpsi_dtheta(k) = s%d2R_dpsi_dtheta(k) / psipol_max
-               s%d2Z_dpsi_dtheta(k) = s%d2Z_dpsi_dtheta(k) / psipol_max
+               s%dq_dpsi = s%dq_dpsi / psipol_max
+               s%dR_dpsi = s%dR_dpsi / psipol_max
+               s%dZ_dpsi = s%dZ_dpsi / psipol_max
+               s%d2R_dpsi_dtheta = s%d2R_dpsi_dtheta / psipol_max
+               s%d2Z_dpsi_dtheta = s%d2Z_dpsi_dtheta / psipol_max
             end if
-            s%ktri(k) = point_location(s%R(k), s%Z(k))
-            call field(s%R(k), 0d0, s%Z(k), s%B0_R(k), s%B0_phi(k), s%B0_Z(k), &
-                 s%dB0R_dR(k), dum, s%dB0R_dZ(k), s%dB0phi_dR(k), dum, s%dB0phi_dZ(k), &
-                 s%dB0Z_dR(k), dum, s%dB0Z_dZ(k))
-            s%B0_2(k) = s%B0_R(k) ** 2 + s%B0_Z(k) ** 2 + s%B0_phi(k) ** 2
+            s%ktri = point_location(s%R, s%Z)
+            call field(s%R, 0d0, s%Z, s%B0_R, s%B0_phi, s%B0_Z, &
+                 s%dB0R_dR, dum, s%dB0R_dZ, s%dB0phi_dR, dum, s%dB0phi_dZ, &
+                 s%dB0Z_dR, dum, s%dB0Z_dZ)
+            s%B0_2 = s%B0_R ** 2 + s%B0_Z ** 2 + s%B0_phi ** 2
             if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
-               s%sqrt_g(k) = equil%cocos%sgn_dpsi * s%rad(k) / &
-                    (-s%B0_R(k) * sin(s%theta(k)) + s%B0_Z(k) * cos(s%theta(k)))
+               s%sqrt_g = equil%cocos%sgn_dpsi * s%rad / &
+                    (-s%B0_R * sin(s%theta) + s%B0_Z * cos(s%theta))
             else
                ! sqrt_g misses a factor of q and the signs of dpsi_drad and B0_phi
                ! taken together, these three always yield a positive sign in COCOS 3
-               s%sqrt_g(k) = s%sqrt_g(k) * abs(s%q(k))
+               s%sqrt_g = s%sqrt_g * abs(s%q)
             end if
           end associate
        end do
     end do
+    deallocate(rad, psi, theta)
   end subroutine compute_sample_Ipar
 
   function point_location(R, Z, hint_psi) result(location)
