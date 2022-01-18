@@ -51,7 +51,6 @@ class Mephit:
 
     def postprocess(self):
         from matplotlib.tri import Triangulation
-        from scipy import interpolate
         from numpy import arange, sign
         self.post['triangulation'] = Triangulation(self.data['/mesh/node_R'][()], self.data['/mesh/node_Z'][()],
                                                    self.data['/mesh/tri_node'][()] - 1)
@@ -136,7 +135,7 @@ class ParallelPlotter:
         self.manager = self.ctx.Manager()
         self.plot_objects = self.manager.Queue()
         self.results = self.manager.Queue()
-        self.num_processes = max(1, mp.cpu_count() - 1)
+        self.num_processes = min(4, max(1, mp.cpu_count() - 1))  # use 1 to 4 processes
         self.pool = self.ctx.Pool(processes=self.num_processes)
         self.processes = []
 
