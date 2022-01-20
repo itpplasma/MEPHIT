@@ -202,6 +202,15 @@ module mephit_mesh
      !> Z coordinate of Gauss-Legendre quadrature point on edge
      real(dp), allocatable :: GL_Z(:, :)
 
+     !> Number of 2D Gauss-Legendre quadrature points on triangle
+     integer :: GL2_order = 6
+     !> Weights of Gauss-Legendre quadrature
+     real(dp), allocatable :: GL2_weights(:)
+     !> R coordinate of Gauss-Legendre quadrature point on triangle
+     real(dp), allocatable :: GL2_R(:, :)
+     !> Z coordinate of Gauss-Legendre quadrature point on triangle
+     real(dp), allocatable :: GL2_Z(:, :)
+
      !> Triangle indexing for resonant flux surfaces only.
      integer, allocatable :: shielding_kt_low(:)
      !> Local node index for shielding pressure evaluation points.
@@ -273,9 +282,14 @@ module mephit_mesh
           B0_phi, dB0R_dR, dB0R_dZ, dB0phi_dR, dB0phi_dZ, dB0Z_dR, dB0Z_dZ, B0_2
   end type coord_cache_ext_t
 
+  type :: field_cache_t
+     real(dp) :: psi, B0_R, B0_Z, B0_phi, j0_phi, dp0_dpsi
+  end type field_cache_t
+
   type :: cache_t
      integer :: nrad, npol
      type(coord_cache_t), allocatable :: sample_polmodes_half(:, :), sample_polmodes(:, :)
+     type(field_cache_t), allocatable :: edge_fields(:, :), area_fields(:, :)
   end type cache_t
 
   type(cache_t) :: cache
@@ -554,6 +568,54 @@ contains
     call h5_close(h5id_root)
   end subroutine coord_cache_ext_read
 
+  subroutine field_cache_write(cache, file, dataset, comment)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    class(field_cache_t), dimension(:, :), intent(in) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    character(len = *), intent(in) :: comment
+    integer(HID_T) :: h5id_root
+
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache%psi, &
+         lbound(cache), ubound(cache), unit = 'Mx', &
+         comment = 'poloidal flux at ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache%B0_R, &
+         lbound(cache), ubound(cache), unit = 'G', &
+         comment = 'R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache%B0_Z, &
+         lbound(cache), ubound(cache), unit = 'G', &
+         comment = 'Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache%B0_phi, &
+         lbound(cache), ubound(cache), unit = 'G', &
+         comment = 'physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache%j0_phi, &
+         lbound(cache), ubound(cache), unit = 'statA', &
+         comment = 'physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/dp0_dpsi', cache%dp0_dpsi, &
+         lbound(cache), ubound(cache), unit = 'dyn cm^-2 Mx^-1', &
+         comment = 'psi component of equilibrium pressure gradient at ' // trim(adjustl(comment)))
+    call h5_close(h5id_root)
+  end subroutine field_cache_write
+
+  subroutine field_cache_read(cache, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    class(field_cache_t), dimension(:, :), intent(inout) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
+
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache%psi)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache%B0_R)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache%B0_Z)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache%B0_phi)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache%j0_phi)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/dp0_dpsi', cache%dp0_dpsi)
+    call h5_close(h5id_root)
+  end subroutine field_cache_read
+
   subroutine cache_init(cache, nrad, npol)
     type(cache_t), intent(inout) :: cache
     integer, intent(in) :: nrad, npol
@@ -562,6 +624,7 @@ contains
     cache%nrad = nrad
     cache%npol = npol
     allocate(cache%sample_polmodes(npol, nrad), cache%sample_polmodes_half(npol, nrad))
+    allocate(cache%edge_fields(mesh%GL_order, mesh%nedge), cache%area_fields(mesh%GL2_order, mesh%ntri))
   end subroutine cache_init
 
   subroutine cache_deinit(cache)
@@ -571,6 +634,8 @@ contains
     cache%npol = 0
     if (allocated(cache%sample_polmodes)) deallocate(cache%sample_polmodes)
     if (allocated(cache%sample_polmodes_half)) deallocate(cache%sample_polmodes_half)
+    if (allocated(cache%edge_fields)) deallocate(cache%edge_fields)
+    if (allocated(cache%area_fields)) deallocate(cache%area_fields)
   end subroutine cache_deinit
 
   subroutine cache_write(cache, file, dataset)
@@ -586,6 +651,12 @@ contains
     call coord_cache_write(cache%sample_polmodes, file, &
          trim(adjustl(dataset)) // '/sample_polmodes', &
          'poloidal mode sampling points on flux surfaces')
+    call field_cache_write(cache%edge_fields, file, &
+         trim(adjustl(dataset)) // '/edge_fields', &
+         'GL quadrature points on triangle edges')
+    call field_cache_write(cache%area_fields, file, &
+         trim(adjustl(dataset)) // '/edge_fields', &
+         'GL quadrature points on triangle areas')
     call h5_open_rw(file, h5id_root)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/nrad', cache%nrad, &
          comment = 'number of radial divisions for poloidal mode sampling points')
@@ -611,6 +682,8 @@ contains
          trim(adjustl(dataset)) // '/sample_polmodes_half')
     call coord_cache_read(cache%sample_polmodes, file, &
          trim(adjustl(dataset)) // '/sample_polmodes')
+    call field_cache_read(cache%edge_fields, file, trim(adjustl(dataset)) // '/edge_fields')
+    call field_cache_read(cache%area_fields, file, trim(adjustl(dataset)) // '/area_fields')
   end subroutine cache_read
 
   subroutine generate_mesh
@@ -1151,7 +1224,7 @@ contains
     use mephit_conf, only: logger
     use mephit_util, only: pi, gauss_legendre_unit_interval
     integer :: kf, kp, kp_lo, kp_hi, kt, ktri, ktri_adj, kedge, nodes(4), k
-    real(dp) :: mat(3, 3), points(mesh%GL_order)
+    real(dp) :: mat(3, 3), points(mesh%GL_order), points2(3, mesh%GL2_order)
 
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
@@ -1290,6 +1363,24 @@ contains
                mesh%node_R(mesh%edge_node(2, kedge)) * points(mesh%GL_order - k + 1)
           mesh%GL_Z(k, kedge) = mesh%node_Z(mesh%edge_node(1, kedge)) * points(k) + &
                mesh%node_Z(mesh%edge_node(2, kedge)) * points(mesh%GL_order - k + 1)
+       end do
+    end do
+    allocate(mesh%GL2_weights(mesh%GL2_order))
+    allocate(mesh%GL2_R(mesh%GL2_order, mesh%ntri), mesh%GL2_Z(mesh%GL2_order, mesh%ntri))
+    mesh%GL2_weights(:) = [0.109951743655322d0, 0.109951743655322d0, 0.109951743655322d0, &
+                           0.223381589678011d0, 0.223381589678011d0, 0.223381589678011d0]
+    points2(:, :) = reshape([ &
+         0.816847572980459d0, 0.091576213509771d0, 0.091576213509771d0, &
+         0.091576213509771d0, 0.816847572980459d0, 0.091576213509771d0, &
+         0.091576213509771d0, 0.091576213509771d0, 0.816847572980459d0, &
+         0.108103018168070d0, 0.445948490915965d0, 0.445948490915965d0, &
+         0.445948490915965d0, 0.108103018168070d0, 0.445948490915965d0, &
+         0.445948490915965d0, 0.445948490915965d0, 0.108103018168070d0 &
+         ], [3, mesh%GL2_order])
+    do ktri = 1, mesh%ntri
+       do k = 1, mesh%GL2_order
+          mesh%GL2_R(k, ktri) = sum(mesh%node_R(mesh%tri_node(:, ktri)) * points2(:, k))
+          mesh%GL2_Z(k, ktri) = sum(mesh%node_Z(mesh%tri_node(:, ktri)) * points2(:, k))
        end do
     end do
   end subroutine connect_mesh_points
@@ -1938,7 +2029,8 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_Z', mesh%edge_Z, &
          lbound(mesh%edge_Z), ubound(mesh%edge_Z), &
          comment = 'Z coordinate of edge midpoint', unit = 'cm')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_order', mesh%GL_order)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_order', mesh%GL_order, &
+         comment = 'order of Gauss-Legendre quadrature')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_weights', mesh%GL_weights, &
          lbound(mesh%GL_weights), ubound(mesh%GL_weights), &
          comment = 'weights of Gauss-Legendre quadrature', unit = '1')
@@ -1948,6 +2040,17 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_Z', mesh%GL_Z, &
          lbound(mesh%GL_Z), ubound(mesh%GL_Z), &
          comment = 'Z coordinate of Gauss-Legendre points on edge', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL2_order', mesh%GL2_order, &
+         comment = 'number of Gauss-Legendre quadrature points on triangle')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL2_weights', mesh%GL2_weights, &
+         lbound(mesh%GL2_weights), ubound(mesh%GL2_weights), &
+         comment = 'weights of 2D Gauss-Legendre quadrature', unit = '1')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL2_R', mesh%GL2_R, &
+         lbound(mesh%GL2_R), ubound(mesh%GL2_R), &
+         comment = 'R coordinate of Gauss-Legendre points on triangle', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL2_Z', mesh%GL2_Z, &
+         lbound(mesh%GL2_Z), ubound(mesh%GL2_Z), &
+         comment = 'Z coordinate of Gauss-Legendre points on triangle', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_kt_low', mesh%shielding_kt_low, &
          lbound(mesh%shielding_kt_low), ubound(mesh%shielding_kt_low), &
          comment = 'triangle indexing for resonant flux surfaces only')
@@ -2039,6 +2142,7 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_res_min', mesh%m_res_min)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_res_max', mesh%m_res_max)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_order', mesh%GL_order)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL2_order', mesh%GL2_order)
     ! TODO: allocate deferred-shape arrays in hdf5_tools and skip allocation here
     allocate(mesh%deletions(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%refinement(mesh%m_res_min:mesh%m_res_max))
@@ -2071,6 +2175,9 @@ contains
     allocate(mesh%GL_weights(mesh%GL_order))
     allocate(mesh%GL_R(mesh%GL_order, mesh%nedge))
     allocate(mesh%GL_Z(mesh%GL_order, mesh%nedge))
+    allocate(mesh%GL2_weights(mesh%GL2_order))
+    allocate(mesh%GL2_R(mesh%GL2_order, mesh%nedge))
+    allocate(mesh%GL2_Z(mesh%GL2_order, mesh%nedge))
     allocate(mesh%shielding_kt_low(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%shielding_coeff(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%gpec_jacfac(-16:16, mesh%nflux))
@@ -2103,6 +2210,9 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_weights', mesh%GL_weights)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_R', mesh%GL_R)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_Z', mesh%GL_Z)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL2_weights', mesh%GL2_weights)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL2_R', mesh%GL2_R)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL2_Z', mesh%GL2_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_kt_low', mesh%shielding_kt_low)
     allocate(mesh%shielding_L1_kp(-1:0, mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_L1_kp', mesh%shielding_L1_kp)
@@ -2155,6 +2265,9 @@ contains
     if (allocated(this%GL_weights)) deallocate(this%GL_weights)
     if (allocated(this%GL_R)) deallocate(this%GL_R)
     if (allocated(this%GL_Z)) deallocate(this%GL_Z)
+    if (allocated(this%GL2_weights)) deallocate(this%GL2_weights)
+    if (allocated(this%GL2_R)) deallocate(this%GL2_R)
+    if (allocated(this%GL2_Z)) deallocate(this%GL2_Z)
     if (allocated(this%shielding_kt_low)) deallocate(this%shielding_kt_low)
     if (allocated(this%shielding_L1_kp)) deallocate(this%shielding_L1_kp)
     if (allocated(this%shielding_L1_weight)) deallocate(this%shielding_L1_weight)
@@ -2491,6 +2604,7 @@ contains
   subroutine compute_pres_prof_eps
     use mephit_conf, only: conf, logger
     use mephit_util, only: ev2erg
+    integer :: kedge, ktri, k
     real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
 
     ! Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
@@ -2521,11 +2635,30 @@ contains
     temp(1:) = (fs_half%psi - psi_ext) / psi_int * conf%temp_max + conf%temp_min
     fs_half%p(:) = dens(1:) * temp(1:) * ev2erg
     fs_half%dp_dpsi(:) = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
+    ! Gauss-Legendre evaluation points on edges
+    do kedge = 1, mesh%nedge
+       do k = 1, mesh%GL_order
+          ! reuse variables
+          dens(0) = (cache%edge_fields(k, kedge)%psi - psi_ext) / psi_int * conf%dens_max + conf%dens_min
+          temp(0) = (cache%edge_fields(k, kedge)%psi - psi_ext) / psi_int * conf%temp_max + conf%temp_min
+          cache%edge_fields(k, kedge)%dp0_dpsi = (dens(0) * dtemp_dpsi + ddens_dpsi * temp(0)) * ev2erg
+       end do
+    end do
+    ! Gauss-Legendre evaluation points on triangles
+    do ktri = 1, mesh%ntri
+       do k = 1, mesh%GL2_order
+          ! reuse variables
+          dens(0) = (cache%area_fields(k, ktri)%psi - psi_ext) / psi_int * conf%dens_max + conf%dens_min
+          temp(0) = (cache%area_fields(k, ktri)%psi - psi_ext) / psi_int * conf%temp_max + conf%temp_min
+          cache%area_fields(k, ktri)%dp0_dpsi = (dens(0) * dtemp_dpsi + ddens_dpsi * temp(0)) * ev2erg
+       end do
+    end do
   end subroutine compute_pres_prof_eps
 
   subroutine compute_pres_prof_par
     use mephit_conf, only: conf
     use mephit_util, only: ev2erg
+    integer :: kedge, ktri, k
     real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
 
     ! Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
@@ -2557,15 +2690,49 @@ contains
          (conf%temp_max - conf%temp_min) + conf%temp_min
     fs_half%p(:) = dens(1:) * temp(1:) * ev2erg
     fs_half%dp_dpsi(:) = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
+    ! Gauss-Legendre evaluation points on edges
+    do kedge = 1, mesh%nedge
+       do k = 1, mesh%GL_order
+          ! reuse variables
+          dens(0) = (cache%edge_fields(k, kedge)%psi - psi_ext) / (psi_int - psi_ext) &
+               * (conf%dens_max - conf%dens_min) + conf%dens_min
+          temp(0) = (cache%edge_fields(k, kedge)%psi - psi_ext) / (psi_int - psi_ext) &
+               * (conf%temp_max - conf%temp_min) + conf%temp_min
+          cache%edge_fields(k, kedge)%dp0_dpsi = (dens(0) * dtemp_dpsi + ddens_dpsi * temp(0)) * ev2erg
+       end do
+    end do
+    ! Gauss-Legendre evaluation points on triangles
+    do ktri = 1, mesh%ntri
+       do k = 1, mesh%GL2_order
+          ! reuse variables
+          dens(0) = (cache%area_fields(k, ktri)%psi - psi_ext) / (psi_int - psi_ext) &
+               * (conf%dens_max - conf%dens_min) + conf%dens_min
+          temp(0) = (cache%area_fields(k, ktri)%psi - psi_ext) / (psi_int - psi_ext) &
+               * (conf%temp_max - conf%temp_min) + conf%temp_min
+          cache%area_fields(k, ktri)%dp0_dpsi = (dens(0) * dtemp_dpsi + ddens_dpsi * temp(0)) * ev2erg
+       end do
+    end do
   end subroutine compute_pres_prof_par
 
   subroutine compute_pres_prof_geqdsk
-    integer :: kf
+    integer :: kf, kedge, ktri, k
 
     fs%p(:) = [(psi_interpolator%eval(equil%pres, fs%psi(kf)), kf = 0, mesh%nflux)]
     fs%dp_dpsi(:) = [(psi_interpolator%eval(equil%pprime, fs%psi(kf)), kf = 0, mesh%nflux)]
     fs_half%p(:) = [(psi_interpolator%eval(equil%pres, fs_half%psi(kf)), kf = 1, mesh%nflux)]
     fs_half%dp_dpsi(:) = [(psi_interpolator%eval(equil%pprime, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    ! Gauss-Legendre evaluation points on edges
+    do kedge = 1, mesh%nedge
+       do k = 1, mesh%GL_order
+          cache%edge_fields(k, kedge)%dp0_dpsi = psi_interpolator%eval(equil%pprime, cache%edge_fields(k, kedge)%psi)
+       end do
+    end do
+    ! Gauss-Legendre evaluation points on triangles
+    do ktri = 1, mesh%ntri
+       do k = 1, mesh%GL2_order
+          cache%area_fields(k, ktri)%dp0_dpsi = psi_interpolator%eval(equil%pprime, cache%area_fields(k, ktri)%psi)
+       end do
+    end do
   end subroutine compute_pres_prof_geqdsk
 
   subroutine compute_safety_factor_flux
@@ -2661,7 +2828,8 @@ contains
   end subroutine check_safety_factor
 
   subroutine cache_equilibrium_field
-    integer :: kf, kt, ktri, kedge, base, tip
+    use field_eq_mod, only: psif, psib
+    integer :: kf, kt, ktri, kedge, k, base, tip
     real(dp) :: dum, n_R, n_Z
 
     allocate(B0R_edge(mesh%nedge))
@@ -2689,6 +2857,26 @@ contains
                B0R_Omega(ktri), B0phi_Omega(ktri), B0Z_Omega(ktri), dum, dum, dum, dum, dum, dum, dum, dum, dum)
        end do
     end do
+    ! Gauss-Legendre evaluation points on edges
+    do kedge = 1, mesh%nedge
+       do k = 1, mesh%GL_order
+          call field(mesh%GL_R(k, kedge), 0d0, mesh%GL_Z(k, kedge), &
+               cache%edge_fields(k, kedge)%B0_R, cache%edge_fields(k, kedge)%B0_phi, cache%edge_fields(k, kedge)%B0_Z, &
+               dum, dum, dum, dum, dum, dum, dum, dum, dum)
+          ! see intperp_psi_pol in mephit_util
+          cache%edge_fields(k, kedge)%psi = psif - psib
+       end do
+    end do
+    ! Gauss-Legendre evaluation points on triangles
+    do ktri = 1, mesh%ntri
+       do k = 1, mesh%GL2_order
+          call field(mesh%GL2_R(k, ktri), 0d0, mesh%GL2_Z(k, ktri), &
+               cache%area_fields(k, ktri)%B0_R, cache%area_fields(k, ktri)%B0_phi, cache%area_fields(k, ktri)%B0_Z, &
+               dum, dum, dum, dum, dum, dum, dum, dum, dum)
+          ! see intperp_psi_pol in mephit_util
+          cache%area_fields(k, ktri)%psi = psif - psib
+       end do
+    end do
   end subroutine cache_equilibrium_field
 
   subroutine compute_j0phi
@@ -2699,7 +2887,9 @@ contains
     j0phi_edge = 0d0
     select case (conf%curr_prof)
     case (curr_prof_ps)
-       call compute_j0phi_ps(plot_j0phi)
+       write (logger%msg, '("current profile selection ", i0, " currently not supported.")') conf%curr_prof
+       if (logger%err) call logger%write_msg
+       error stop
     case (curr_prof_rot)
        call compute_j0phi_rot(plot_j0phi)
     case (curr_prof_geqdsk)
@@ -2712,6 +2902,7 @@ contains
     ! TODO: write out plot_j0phi when edge_cache type is working
   end subroutine compute_j0phi
 
+  ! TODO: debugging routine to calculate PS current
   subroutine compute_j0phi_ps(plot_j0phi)
     use mephit_util, only: clight
     real(dp), intent(out) :: plot_j0phi(:)
@@ -2763,7 +2954,7 @@ contains
   subroutine compute_j0phi_rot(plot_j0phi)
     use mephit_util, only: clight, pi
     real(dp), intent(out) :: plot_j0phi(:)
-    integer :: kf, kt, ktri, kedge
+    integer :: kf, kt, ktri, kedge, k
     real(dp) :: dum, dB0R_dZ, dB0Z_dR
 
     ! edges
@@ -2781,12 +2972,29 @@ contains
           plot_j0phi(ktri) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
        end do
     end do
+    ! Gauss-Legendre evaluation points on edges
+    do kedge = 1, mesh%nedge
+       do k = 1, mesh%GL_order
+          call field(mesh%GL_R(k, kedge), 0d0, mesh%GL_Z(k, kedge), &
+               dum, dum, dum, dum, dum, dB0R_dZ, dum, dum, dum, dB0Z_dR, dum, dum)
+          cache%edge_fields(k, kedge)%j0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+       end do
+    end do
+    ! Gauss-Legendre evaluation points on triangles
+    do ktri = 1, mesh%ntri
+       do k = 1, mesh%GL2_order
+          call field(mesh%GL2_R(k, ktri), 0d0, mesh%GL2_Z(k, ktri), &
+               dum, dum, dum, dum, dum, dB0R_dZ, dum, dum, dum, dB0Z_dR, dum, dum)
+          cache%area_fields(k, ktri)%j0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+       end do
+    end do
   end subroutine compute_j0phi_rot
 
   subroutine compute_j0phi_geqdsk(plot_j0phi)
     use mephit_util, only: clight, pi
     real(dp), intent(out) :: plot_j0phi(:)
-    integer :: kf, kp, kt, ktri, kedge
+    integer :: kf, kp, kt, ktri, kedge, k
+    real(dp) :: dp0_dpsi, FdF_dpsi
 
     ! edges in poloidal direction
     do kf = 1, mesh%nflux
@@ -2810,6 +3018,24 @@ contains
           ktri = mesh%kt_low(kf) + kt
           plot_j0phi(ktri) = clight * (fs_half%dp_dpsi(kf) * mesh%R_Omega(ktri) + &
                0.25d0 / pi * fs_half%FdF_dpsi(kf) / mesh%R_Omega(ktri))
+       end do
+    end do
+    ! Gauss-Legendre evaluation points on edges
+    do kedge = 1, mesh%nedge
+       do k = 1, mesh%GL_order
+          dp0_dpsi = psi_interpolator%eval(equil%pprime, cache%edge_fields(k, kedge)%psi)
+          FdF_dpsi = psi_interpolator%eval(equil%ffprim, cache%edge_fields(k, kedge)%psi)
+          cache%edge_fields(k, kedge)%j0_phi = clight * (dp0_dpsi * mesh%GL_R(k, kedge) + &
+               0.25d0 / pi * FdF_dpsi / mesh%GL_R(k, kedge))
+       end do
+    end do
+    ! Gauss-Legendre evaluation points on triangles
+    do ktri = 1, mesh%ntri
+       do k = 1, mesh%GL2_order
+          dp0_dpsi = psi_interpolator%eval(equil%pprime, cache%area_fields(k, ktri)%psi)
+          FdF_dpsi = psi_interpolator%eval(equil%ffprim, cache%area_fields(k, ktri)%psi)
+          cache%area_fields(k, ktri)%j0_phi = clight * (dp0_dpsi * mesh%GL2_R(k, ktri) + &
+               0.25d0 / pi * FdF_dpsi / mesh%GL2_R(k, ktri))
        end do
     end do
   end subroutine compute_j0phi_geqdsk
