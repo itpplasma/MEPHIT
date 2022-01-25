@@ -613,9 +613,8 @@ contains
 
   subroutine add_sheet_current
     use mephit_conf, only: conf_arr
-    use mephit_mesh, only: mesh
+    use mephit_mesh, only: mesh, cache
     integer :: m, kf, kt, kedge, ke, k
-    real(dp) :: B0_R, B0_Z, dum
     complex(dp) :: pn_outer, pn_inner
 
     do m = mesh%m_res_min, mesh%m_res_max
@@ -625,8 +624,6 @@ contains
              kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
              ke = mesh%shielding_kt_low(m) + kt
              do k = 1, mesh%GL_order
-                call field(mesh%GL_R(k, kedge), 0d0, mesh%GL_Z(k, kedge), B0_R, dum, B0_Z, &
-                     dum, dum, dum, dum, dum, dum, dum, dum, dum)
                 pn_outer = sum(pn%DOF(mesh%kp_low(kf) + [mesh%shielding_L1_kp(0, k, ke), &
                      mod(mesh%shielding_L1_kp(0, k, ke), mesh%kp_max(kf)) + 1]) * &
                      [mesh%shielding_L1_weight(0, k, ke), &
@@ -636,8 +633,10 @@ contains
                      [mesh%shielding_L1_weight(-1, k, ke), &
                      1d0 - mesh%shielding_L1_weight(-1, k, ke)])
                 jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * &
-                     mesh%shielding_coeff(m) * conf_arr%sheet_current_factor(m) * (pn_outer - pn_inner) * &
-                     (B0_R * mesh%edge_Z(kedge) - B0_Z * mesh%edge_R(kedge)) * mesh%GL_R(k, kedge)
+                     mesh%shielding_coeff(m) * conf_arr%sheet_current_factor(m) * &
+                     (pn_outer - pn_inner) * mesh%GL_R(k, kedge) * &
+                     (cache%edge_fields(k, kedge)%B0_R * mesh%edge_Z(kedge) - &
+                     cache%edge_fields(k, kedge)%B0_Z * mesh%edge_R(kedge))
              end do
           end do
        end if
