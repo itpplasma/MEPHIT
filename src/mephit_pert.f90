@@ -1457,7 +1457,7 @@ contains
     use mephit_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
     integer :: nR, nZ, kedge, k
-    real(dp) :: Rmin, Rmax, Zmin, Zmax, edge_R, edge_Z, node_R(2), node_Z(2)
+    real(dp) :: Rmin, Rmax, Zmin, Zmax
     complex(dp) :: B_R, B_phi, B_Z
     complex(dp), dimension(:, :), allocatable :: Bn_R, Bn_Z
 
@@ -1480,14 +1480,10 @@ contains
     ! project to finite elements
     Bn%DOF = (0d0, 0d0)
     do kedge = 1, mesh%nedge
-       node_R = mesh%node_R(mesh%edge_node(:, kedge))
-       node_Z = mesh%node_Z(mesh%edge_node(:, kedge))
-       edge_R = node_R(2) - node_R(1)
-       edge_Z = node_Z(2) - node_Z(1)
        do k = 1, mesh%GL_order
           call spline_bn(conf%n, mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), B_R, B_phi, B_Z)
           Bn%DOF(kedge) = Bn%DOF(kedge) + mesh%GL_weights(k) * &
-               (B_R * edge_Z - B_Z * edge_R) * mesh%GL_R(k, kedge)
+               (B_R * mesh%edge_Z(kedge) - B_Z * mesh%edge_R(kedge)) * mesh%GL_R(k, kedge)
        end do
     end do
     ! toroidal flux via zero divergence
@@ -1637,19 +1633,15 @@ contains
     use mephit_conf, only: conf
     use mephit_mesh, only: mesh, B0R_edge, B0phi_edge, B0Z_edge
     type(RT0_t), intent(inout) :: Bn
-    integer :: base, tip, kedge
-    real(dp) :: lR, lZ
+    integer :: kedge
     complex(dp) :: Bnpsi
 
     ! fluxes in poloidal direction are set to zero
     Bn%DOF = (0d0, 0d0)
     do kedge = 1, mesh%npoint - 1
-       base = mesh%edge_node(1, kedge)
-       tip = mesh%edge_node(2, kedge)
-       lR = mesh%node_R(tip) - mesh%node_R(base)
-       lZ = mesh%node_Z(tip) - mesh%node_Z(base)
-       Bnpsi = -mesh%R_O * B0phi_edge(kedge) / mesh%edge_R(kedge)
-       Bn%DOF(kedge) = Bnpsi * (lR ** 2 + lZ ** 2) / (B0R_edge(kedge) * lR + B0Z_edge(kedge) * lZ)
+       Bnpsi = -mesh%R_O * B0phi_edge(kedge) / mesh%mid_R(kedge)
+       Bn%DOF(kedge) = Bnpsi * (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2) / &
+            (B0R_edge(kedge) * mesh%edge_R(kedge) + B0Z_edge(kedge) * mesh%edge_Z(kedge))
     end do
     call RT0_compute_tor_comp(Bn)
     if (conf%quad_avg) call avg_flux_on_quad(Bn)
@@ -1686,22 +1678,18 @@ contains
     use mephit_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
     integer :: kedge, k, pol_modes(2)
-    real(dp) :: rho, theta, edge_R, edge_Z, node_R(2), node_Z(2)
+    real(dp) :: rho, theta
     complex(dp) :: B_R, B_phi, B_Z
 
     pol_modes = [conf%kilca_pol_mode, -conf%kilca_pol_mode]
     Bn%DOF = (0d0, 0d0)
     do kedge = 1, mesh%nedge
-       node_R = mesh%node_R(mesh%edge_node(:, kedge))
-       node_Z = mesh%node_Z(mesh%edge_node(:, kedge))
-       edge_R = node_R(2) - node_R(1)
-       edge_Z = node_Z(2) - node_Z(1)
        do k = 1, mesh%GL_order
           rho = hypot(mesh%GL_R(k, kedge) - mesh%R_O, mesh%GL_Z(k, kedge) - mesh%Z_O)
           theta = atan2(mesh%GL_Z(k, kedge) - mesh%Z_O, mesh%GL_R(k, kedge) - mesh%R_O)
           call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, rho, theta, B_R, B_phi, B_Z)
           Bn%DOF(kedge) = Bn%DOF(kedge) + mesh%GL_weights(k) * &
-               (B_R * edge_Z - B_Z * edge_R) * mesh%GL_R(k, kedge)
+               (B_R * mesh%edge_Z(kedge) - B_Z * mesh%edge_R(kedge)) * mesh%GL_R(k, kedge)
        end do
     end do
     ! toroidal flux via zero divergence

@@ -427,7 +427,6 @@ contains
     use mephit_conf, only: conf, logger
     use mephit_util, only: imun
     use mephit_mesh, only: fs, mesh, B0R_edge, B0phi_edge, B0Z_edge
-    real(dp) :: lr, lz  ! edge vector components
     complex(dp), dimension(maxval(mesh%kp_max)) :: a, b, x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(maxval(mesh%kp_max)) :: rel_err
@@ -435,7 +434,6 @@ contains
     integer :: kf, kp, kedge, k
     integer, dimension(2 * maxval(mesh%kp_max)) :: irow, icol
     complex(dp), dimension(2 * maxval(mesh%kp_max)) :: aval
-    integer :: base, tip
     real(dp), parameter :: small = tiny(0d0)
 
     max_rel_err = 0d0
@@ -447,13 +445,10 @@ contains
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
           ! use midpoint of poloidal edge
-          base = mesh%edge_node(1, kedge)
-          tip = mesh%edge_node(2, kedge)
-          lR = mesh%node_R(tip) - mesh%node_R(base)
-          lZ = mesh%node_Z(tip) - mesh%node_Z(base)
-          a(kp) = (B0R_edge(kedge) * lR + B0Z_edge(kedge) * lZ) / (lR ** 2 + lZ ** 2)
+          a(kp) = (B0R_edge(kedge) * mesh%edge_R(kedge) + B0Z_edge(kedge) * mesh%edge_Z(kedge)) / &
+               (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
           x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bn%DOF(kedge)
-          b(kp) = imun * (mesh%n + imun * conf%damp) * B0phi_edge(kedge) / mesh%edge_R(kedge)
+          b(kp) = imun * (mesh%n + imun * conf%damp) * B0phi_edge(kedge) / mesh%mid_R(kedge)
        end do
        d = -a + b * 0.5d0
        du = a + b * 0.5d0
@@ -532,7 +527,7 @@ contains
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
           jn%DOF(kedge) = j0phi_edge(kedge) / B0phi_edge(kedge) * Bn%DOF(kedge) + &
-               clight * mesh%edge_R(kedge) / B0phi_edge(kedge) * &
+               clight * mesh%mid_R(kedge) / B0phi_edge(kedge) * &
                (pn%DOF(mesh%edge_node(2, kedge)) - pn%DOF(mesh%edge_node(1, kedge)))
        end do
     end do
@@ -556,7 +551,7 @@ contains
           d(ke) = -1d0 - imun * (mesh%n + imun * conf%damp) * &
                mesh%area(ktri) * 0.5d0 * B0phi_edge(kedge) / B0_flux(kedge)
           ! additional term from edge i on source side
-          x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%edge_R(kedge) / B0_flux(kedge) * &
+          x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%mid_R(kedge) / B0_flux(kedge) * &
                (Bnphi_edge / B0phi_edge(kedge) * Delta_p0 - Delta_pn) + j0phi_edge(kedge) * &
                (Bnphi_edge / B0phi_edge(kedge) - Bn%DOF(kedge) / B0_flux(kedge)))
           ! superdiagonal matrix element - edge o
@@ -565,7 +560,7 @@ contains
           du(ke) = 1d0 + imun * (mesh%n + imun * conf%damp) * &
                mesh%area(ktri) * 0.5d0 * B0phi_edge(kedge) / (-B0_flux(kedge))
           ! additional term from edge o on source side
-          x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%edge_R(kedge) / (-B0_flux(kedge)) * &
+          x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%mid_R(kedge) / (-B0_flux(kedge)) * &
                (Bnphi_edge / B0phi_edge(kedge) * (-Delta_p0) - (-Delta_pn)) + j0phi_edge(kedge) * &
                (Bnphi_edge / B0phi_edge(kedge) - (-Bn%DOF(kedge)) / (-B0_flux(kedge))))
        end do
@@ -620,7 +615,7 @@ contains
     use mephit_conf, only: conf_arr
     use mephit_mesh, only: mesh
     integer :: m, kf, kt, kedge, ke, k
-    real(dp) :: edge_R, edge_Z, node_R(2), node_Z(2), B0_R, B0_Z, dum
+    real(dp) :: B0_R, B0_Z, dum
     complex(dp) :: pn_outer, pn_inner
 
     do m = mesh%m_res_min, mesh%m_res_max
@@ -629,10 +624,6 @@ contains
           do kt = 1, mesh%kt_max(kf)
              kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
              ke = mesh%shielding_kt_low(m) + kt
-             node_R = mesh%node_R(mesh%edge_node(:, kedge))
-             node_Z = mesh%node_Z(mesh%edge_node(:, kedge))
-             edge_R = node_R(2) - node_R(1)
-             edge_Z = node_Z(2) - node_Z(1)
              do k = 1, mesh%GL_order
                 call field(mesh%GL_R(k, kedge), 0d0, mesh%GL_Z(k, kedge), B0_R, dum, B0_Z, &
                      dum, dum, dum, dum, dum, dum, dum, dum, dum)
@@ -646,7 +637,7 @@ contains
                      1d0 - mesh%shielding_L1_weight(-1, k, ke)])
                 jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * &
                      mesh%shielding_coeff(m) * conf_arr%sheet_current_factor(m) * (pn_outer - pn_inner) * &
-                     (B0_R * edge_Z - B0_Z * edge_R) * mesh%GL_R(k, kedge)
+                     (B0_R * mesh%edge_Z(kedge) - B0_Z * mesh%edge_R(kedge)) * mesh%GL_R(k, kedge)
              end do
           end do
        end if

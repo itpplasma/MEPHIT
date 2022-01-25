@@ -190,6 +190,8 @@ module mephit_mesh
      !> Edges [f, o, i] for a given triangle
      integer, allocatable :: tri_edge(:, :)
 
+     real(dp), allocatable :: mid_R(:)
+     real(dp), allocatable :: mid_Z(:)
      real(dp), allocatable :: edge_R(:)
      real(dp), allocatable :: edge_Z(:)
 
@@ -1350,14 +1352,18 @@ contains
        mesh%area(ktri) = tri_area(ktri)
     end do
     ! cache edge midpoints and Gauss-Legendre quadrature evaluation points
+    allocate(mesh%mid_R(mesh%nedge))
+    allocate(mesh%mid_Z(mesh%nedge))
     allocate(mesh%edge_R(mesh%nedge))
     allocate(mesh%edge_Z(mesh%nedge))
     allocate(mesh%GL_weights(mesh%GL_order))
     allocate(mesh%GL_R(mesh%GL_order, mesh%nedge), mesh%GL_Z(mesh%GL_order, mesh%nedge))
     call gauss_legendre_unit_interval(mesh%GL_order, points, mesh%GL_weights)
     do kedge = 1, mesh%nedge
-       mesh%edge_R(kedge) = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
-       mesh%edge_Z(kedge) = sum(mesh%node_Z(mesh%edge_node(:, kedge))) * 0.5d0
+       mesh%mid_R(kedge) = sum(mesh%node_R(mesh%edge_node(:, kedge))) * 0.5d0
+       mesh%mid_Z(kedge) = sum(mesh%node_Z(mesh%edge_node(:, kedge))) * 0.5d0
+       mesh%edge_R(kedge) = mesh%node_R(mesh%edge_node(2, kedge)) - mesh%node_R(mesh%edge_node(1, kedge))
+       mesh%edge_Z(kedge) = mesh%node_Z(mesh%edge_node(2, kedge)) - mesh%node_Z(mesh%edge_node(1, kedge))
        do k = 1, mesh%GL_order
           mesh%GL_R(k, kedge) = mesh%node_R(mesh%edge_node(1, kedge)) * points(k) + &
                mesh%node_R(mesh%edge_node(2, kedge)) * points(mesh%GL_order - k + 1)
@@ -2023,12 +2029,18 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/tri_edge', mesh%tri_edge, &
          lbound(mesh%tri_edge), ubound(mesh%tri_edge), &
          comment = 'global edge indices for triangles')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/mid_R', mesh%mid_R, &
+         lbound(mesh%mid_R), ubound(mesh%mid_R), &
+         comment = 'R coordinate of edge midpoint', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/mid_Z', mesh%mid_Z, &
+         lbound(mesh%mid_Z), ubound(mesh%mid_Z), &
+         comment = 'Z coordinate of edge midpoint', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_R', mesh%edge_R, &
          lbound(mesh%edge_R), ubound(mesh%edge_R), &
-         comment = 'R coordinate of edge midpoint', unit = 'cm')
+         comment = 'R coordinate of edge vector', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_Z', mesh%edge_Z, &
          lbound(mesh%edge_Z), ubound(mesh%edge_Z), &
-         comment = 'Z coordinate of edge midpoint', unit = 'cm')
+         comment = 'Z coordinate of edge vector', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_order', mesh%GL_order, &
          comment = 'order of Gauss-Legendre quadrature')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_weights', mesh%GL_weights, &
@@ -2170,6 +2182,8 @@ contains
     allocate(mesh%edge_node(2, mesh%nedge))
     allocate(mesh%edge_tri(2, mesh%nedge))
     allocate(mesh%tri_edge(3, mesh%ntri))
+    allocate(mesh%mid_R(mesh%nedge))
+    allocate(mesh%mid_Z(mesh%nedge))
     allocate(mesh%edge_R(mesh%nedge))
     allocate(mesh%edge_Z(mesh%nedge))
     allocate(mesh%GL_weights(mesh%GL_order))
@@ -2205,6 +2219,8 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_node', mesh%edge_node)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_tri', mesh%edge_tri)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_edge', mesh%tri_edge)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/mid_R', mesh%mid_R)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/mid_Z', mesh%mid_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_R', mesh%edge_R)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_Z', mesh%edge_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_weights', mesh%GL_weights)
@@ -2260,6 +2276,8 @@ contains
     if (allocated(this%edge_node)) deallocate(this%edge_node)
     if (allocated(this%edge_tri)) deallocate(this%edge_tri)
     if (allocated(this%tri_edge)) deallocate(this%tri_edge)
+    if (allocated(this%mid_R)) deallocate(this%mid_R)
+    if (allocated(this%mid_Z)) deallocate(this%mid_Z)
     if (allocated(this%edge_R)) deallocate(this%edge_R)
     if (allocated(this%edge_Z)) deallocate(this%edge_Z)
     if (allocated(this%GL_weights)) deallocate(this%GL_weights)
@@ -2829,8 +2847,8 @@ contains
 
   subroutine cache_equilibrium_field
     use field_eq_mod, only: psif, psib
-    integer :: kf, kt, ktri, kedge, k, base, tip
-    real(dp) :: dum, n_R, n_Z
+    integer :: kf, kt, ktri, kedge, k
+    real(dp) :: dum
 
     allocate(B0R_edge(mesh%nedge))
     allocate(B0phi_edge(mesh%nedge))
@@ -2841,13 +2859,10 @@ contains
     allocate(B0_flux(mesh%nedge))
     ! edges
     do kedge = 1, mesh%nedge
-       call field(mesh%edge_R(kedge), 0d0, mesh%edge_Z(kedge), &
+       call field(mesh%mid_R(kedge), 0d0, mesh%mid_Z(kedge), &
             B0R_edge(kedge), B0phi_edge(kedge), B0Z_edge(kedge), dum, dum, dum, dum, dum, dum, dum, dum, dum)
-       base = mesh%edge_node(1, kedge)
-       tip = mesh%edge_node(2, kedge)
-       n_R = mesh%node_Z(tip) - mesh%node_Z(base)
-       n_Z = mesh%node_R(base) - mesh%node_R(tip)
-       B0_flux(kedge) = mesh%edge_R(kedge) * (B0R_edge(kedge) * n_R + B0Z_edge(kedge) * n_Z)
+       B0_flux(kedge) = mesh%mid_R(kedge) * &
+            (B0R_edge(kedge) * mesh%edge_Z(kedge) - B0Z_edge(kedge) * mesh%edge_R(kedge))
     end do
     ! centroids
     do kf = 1, mesh%nflux
@@ -2929,7 +2944,7 @@ contains
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
-          j0phi_edge(kedge) = clight * mesh%edge_R(kedge) * fs%dp_dpsi(kf) * &
+          j0phi_edge(kedge) = clight * mesh%mid_R(kedge) * fs%dp_dpsi(kf) * &
                (1d0 - B0phi_edge(kedge) ** 2 / B2avg(kf))
        end do
     end do
@@ -2937,7 +2952,7 @@ contains
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
-          j0phi_edge(kedge) = clight * mesh%edge_R(kedge) * fs_half%dp_dpsi(kf) * &
+          j0phi_edge(kedge) = clight * mesh%mid_R(kedge) * fs_half%dp_dpsi(kf) * &
                (1d0 - B0phi_edge(kedge) ** 2 / B2avg_half(kf))
        end do
     end do
@@ -2959,7 +2974,7 @@ contains
 
     ! edges
     do kedge = 1, mesh%nedge
-       call field(mesh%edge_R(kedge), 0d0, mesh%edge_Z(kedge), &
+       call field(mesh%mid_R(kedge), 0d0, mesh%mid_Z(kedge), &
             dum, dum, dum, dum, dum, dB0R_dZ, dum, dum, dum, dB0Z_dR, dum, dum)
        j0phi_edge(kedge) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
     end do
@@ -3000,16 +3015,16 @@ contains
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
-          j0phi_edge(kedge) = clight * (fs%dp_dpsi(kf) * mesh%edge_R(kedge) + &
-               0.25d0 / pi * fs%FdF_dpsi(kf) / mesh%edge_R(kedge))
+          j0phi_edge(kedge) = clight * (fs%dp_dpsi(kf) * mesh%mid_R(kedge) + &
+               0.25d0 / pi * fs%FdF_dpsi(kf) / mesh%mid_R(kedge))
        end do
     end do
     ! edges in radial direction
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
-          j0phi_edge(kedge) = clight * (fs_half%dp_dpsi(kf) * mesh%edge_R(kedge) + &
-               0.25d0 / pi * fs_half%FdF_dpsi(kf) / mesh%edge_R(kedge))
+          j0phi_edge(kedge) = clight * (fs_half%dp_dpsi(kf) * mesh%mid_R(kedge) + &
+               0.25d0 / pi * fs_half%FdF_dpsi(kf) / mesh%mid_R(kedge))
        end do
     end do
     ! centroid
