@@ -657,7 +657,7 @@ contains
          trim(adjustl(dataset)) // '/edge_fields', &
          'GL quadrature points on triangle edges')
     call field_cache_write(cache%area_fields, file, &
-         trim(adjustl(dataset)) // '/edge_fields', &
+         trim(adjustl(dataset)) // '/area_fields', &
          'GL quadrature points on triangle areas')
     call h5_open_rw(file, h5id_root)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/nrad', cache%nrad, &
