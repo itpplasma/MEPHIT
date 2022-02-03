@@ -9,7 +9,7 @@ module mephit_pert
   ! types and associated procedures
   public :: L1_t, L1_init, L1_deinit, L1_write, L1_read, L1_interp
   public :: RT0_t, RT0_init, RT0_deinit, RT0_write, RT0_read, RT0_interp, &
-       RT0_compute_tor_comp, RT0_triplot, RT0_rectplot
+       RT0_compute_tor_comp, RT0_L2int_num, RT0_L2int, RT0_triplot, RT0_rectplot
   public :: polmodes_t, polmodes_init, polmodes_deinit, &
        polmodes_write, polmodes_read, L1_poloidal_modes
   public :: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
@@ -295,6 +295,60 @@ contains
             - elem%DOF(mesh%tri_edge(2, ktri)) + elem%DOF(mesh%tri_edge(3, ktri)))
     end forall
   end subroutine RT0_compute_tor_comp
+
+  function RT0_L2int_num(elem)
+    use mephit_mesh, only: mesh
+    type(RT0_t), intent(in) :: elem
+    real(dp) :: RT0_L2int_num
+    integer :: ktri, k
+    complex(dp) :: comp_R, comp_Z
+    real(dp) :: series
+
+    RT0_L2int_num = 0d0
+    do ktri = 1, mesh%ntri
+       series = 0d0
+       do k = 1, mesh%GL2_order
+          call RT0_interp(ktri, elem, mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), comp_R, comp_Z)
+          series = series + mesh%GL2_weights(k) * mesh%GL2_R(k, ktri) ** 2 * &
+               (comp_R%re ** 2 + comp_R%im ** 2 + comp_Z%re ** 2 + comp_Z%im ** 2)
+       end do
+       RT0_L2int_num = RT0_L2int_num + series * mesh%area(ktri)
+    end do
+    RT0_L2int_num = sqrt(RT0_L2int_num)
+  end function RT0_L2int_num
+
+  function RT0_L2int(elem)
+    use mephit_mesh, only: mesh
+    type(RT0_t), intent(in) :: elem
+    real(dp) :: RT0_L2int
+    integer :: ktri
+    real(dp) :: prods(6)
+
+    RT0_L2int = 0d0
+    do ktri = 1, mesh%ntri
+       associate (R => mesh%edge_R, Z => mesh%edge_Z, f => mesh%tri_edge(1, ktri), &
+            o => mesh%tri_edge(2, ktri), i => mesh%tri_edge(3, ktri))
+         prods = [elem%DOF(o)%re ** 2 + elem%DOF(o)%im ** 2, &
+              elem%DOF(f)%re ** 2 + elem%DOF(f)%im ** 2, &
+              elem%DOF(i)%re ** 2 + elem%DOF(i)%im ** 2, &
+              2d0 * (elem%DOF(f)%re * elem%DOF(i)%re + elem%DOF(f)%im * elem%DOF(i)%im), &
+              2d0 * (elem%DOF(i)%re * elem%DOF(o)%re + elem%DOF(i)%im * elem%DOF(o)%im), &
+              2d0 * (elem%DOF(o)%re * elem%DOF(f)%re + elem%DOF(o)%im * elem%DOF(f)%im)]
+         if (mesh%orient(ktri)) then
+            prods(5:6) = -prods(5:6)  ! negate DOF(o)
+         else
+            prods(4:5) = -prods(4:5)  ! negate DOF(o) and DOF(f)
+         end if
+         ! negate R(o) and Z(o) because edge o points in clockwise direction locally
+         RT0_L2int = RT0_L2int + ( &
+              (sum([3, 1, 1, 1, -1, -1] * prods)) * (R(i) ** 2 + Z(i) ** 2) - &
+              (sum([3, -1, 3, 1, -3, 1] * prods)) * (R(i) * R(o) + Z(i) * Z(o)) + &
+              (sum([1, 1, 3, -1, -1, 1] * prods)) * (R(o) ** 2 + Z(o) ** 2) &
+              ) / (24 * mesh%area(ktri))
+       end associate
+    end do
+    RT0_L2int = sqrt(RT0_L2int)
+  end function RT0_L2int
 
   subroutine RT0_read(elem, file, dataset)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close

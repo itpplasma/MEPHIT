@@ -212,7 +212,8 @@ contains
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_util, only: arnoldi_break
     use mephit_mesh, only: mesh
-    use mephit_pert, only: L1_write, RT0_init, RT0_deinit, RT0_write, RT0_compute_tor_comp, &
+    use mephit_pert, only: L1_write, &
+         RT0_init, RT0_deinit, RT0_write, RT0_compute_tor_comp, RT0_L2int, &
          vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, &
          polmodes_t, polmodes_init, polmodes_deinit, polmodes_write, &
          L1_poloidal_modes, RT0_poloidal_modes, vac
@@ -301,7 +302,7 @@ contains
        end if
     end if
 
-    call FEM_compute_L2int(mesh%nedge, vac%Bn%DOF, L2int_Bnvac)
+    L2int_Bnvac = RT0_L2int(vac%Bn)
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, 'iter/')
     call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int_Bnvac, &
@@ -337,7 +338,7 @@ contains
        call RT0_compute_tor_comp(Bn)
        Bn_diff%DOF(:) = Bn%DOF - Bn_prev%DOF
        Bn_diff%comp_phi(:) = Bn%comp_phi - Bn_prev%comp_phi
-       call FEM_compute_L2int(mesh%nedge, Bn_diff%DOF, L2int_Bn_diff(kiter))
+       L2int_Bn_diff(kiter) = RT0_L2int(Bn_diff)
        if (kiter <= 1) then
           call L1_write(pn, datafile, 'iter/pn' // postfix, &
                'pressure (after iteration)', 'dyn cm^-2')
