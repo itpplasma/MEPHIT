@@ -231,6 +231,7 @@ contains
          comp_Z_dR, comp_Z_dZ
     integer :: nodes(3)
     real(dp) :: nan
+    complex(dp) :: DOF(3)
 
     if (ktri <= 0 .or. ktri > mesh%ntri) then
        nan = ieee_value(1d0, ieee_quiet_nan)
@@ -250,42 +251,23 @@ contains
        end if
        return
     end if
-    nodes = mesh%tri_node(:, ktri)
     ! indices of nodes and opposite edges as defined in mephit_mesh::connect_mesh_points
+    nodes = mesh%tri_node(:, ktri)
+    DOF = elem%DOF(mesh%tri_edge(:, ktri))
     if (mesh%orient(ktri)) then
-       comp_R = 0.5d0 / mesh%area(ktri) / R * ( &
-            elem%DOF(mesh%tri_edge(1, ktri)) * (R - mesh%node_R(nodes(3))) + &
-            (-elem%DOF(mesh%tri_edge(2, ktri))) * (R - mesh%node_R(nodes(1))) + &
-            elem%DOF(mesh%tri_edge(3, ktri)) * (R - mesh%node_R(nodes(2))))
-       comp_Z = 0.5d0 / mesh%area(ktri) / R * ( &
-            elem%DOF(mesh%tri_edge(1, ktri)) * (Z - mesh%node_Z(nodes(3))) + &
-            (-elem%DOF(mesh%tri_edge(2, ktri))) * (Z - mesh%node_Z(nodes(1))) + &
-            elem%DOF(mesh%tri_edge(3, ktri)) * (Z - mesh%node_Z(nodes(2))))
+       nodes = nodes([3, 1, 2])
+       DOF(2) = -DOF(2)
     else
-       comp_R = 0.5d0 / mesh%area(ktri) / R * ( &
-            (-elem%DOF(mesh%tri_edge(1, ktri))) * (R - mesh%node_R(nodes(1))) + &
-            (-elem%DOF(mesh%tri_edge(2, ktri))) * (R - mesh%node_R(nodes(3))) + &
-            elem%DOF(mesh%tri_edge(3, ktri)) * (R - mesh%node_R(nodes(2))))
-       comp_Z = 0.5d0 / mesh%area(ktri) / R * ( &
-            (-elem%DOF(mesh%tri_edge(1, ktri))) * (Z - mesh%node_Z(nodes(1))) + &
-            (-elem%DOF(mesh%tri_edge(2, ktri))) * (Z - mesh%node_Z(nodes(3))) + &
-            elem%DOF(mesh%tri_edge(3, ktri)) * (Z - mesh%node_Z(nodes(2))))
+       nodes = nodes([1, 3, 2])
+       DOF(1:2) = -DOF(1:2)
     end if
+    comp_R = 0.5d0 / mesh%area(ktri) / R * sum(DOF * (R - mesh%node_R(nodes)))
+    comp_Z = 0.5d0 / mesh%area(ktri) / R * sum(DOF * (Z - mesh%node_Z(nodes)))
     if (present(comp_phi)) then
        comp_phi = elem%comp_phi(ktri)
     end if
     if (present(comp_R_dR)) then
-       if (mesh%orient(ktri)) then
-          comp_R_dR = 0.5d0 / mesh%area(ktri) / R ** 2 * ( &
-               elem%DOF(mesh%tri_edge(1, ktri)) * mesh%node_R(nodes(3)) + &
-               (-elem%DOF(mesh%tri_edge(2, ktri))) * mesh%node_R(nodes(1)) + &
-               elem%DOF(mesh%tri_edge(3, ktri)) * mesh%node_R(nodes(2)))
-       else
-          comp_R = 0.5d0 / mesh%area(ktri) / R * ( &
-               (-elem%DOF(mesh%tri_edge(1, ktri))) * (R - mesh%node_R(nodes(1))) + &
-               (-elem%DOF(mesh%tri_edge(2, ktri))) * (R - mesh%node_R(nodes(3))) + &
-               elem%DOF(mesh%tri_edge(3, ktri)) * (R - mesh%node_R(nodes(2))))
-       end if
+       comp_R_dR = 0.5d0 / mesh%area(ktri) / R ** 2 * sum(DOF * mesh%node_R(nodes))
     end if
     if (present(comp_R_dZ)) then
        comp_R_dZ = (0d0, 0d0)
@@ -294,13 +276,7 @@ contains
        comp_Z_dR = -comp_Z / R
     end if
     if (present(comp_Z_dZ)) then
-       if (mesh%orient(ktri)) then
-          comp_Z_dZ = 0.5d0 / mesh%area(ktri) / R * (elem%DOF(mesh%tri_edge(1, ktri)) &
-               - elem%DOF(mesh%tri_edge(2, ktri)) + elem%DOF(mesh%tri_edge(3, ktri)))
-       else
-          comp_Z_dZ = 0.5d0 / mesh%area(ktri) / R * (-elem%DOF(mesh%tri_edge(1, ktri)) &
-               - elem%DOF(mesh%tri_edge(2, ktri)) + elem%DOF(mesh%tri_edge(3, ktri)))
-       end if
+       comp_Z_dZ = 0.5d0 / mesh%area(ktri) / R * sum(DOF)
     end if
   end subroutine RT0_interp
 
