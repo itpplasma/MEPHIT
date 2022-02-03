@@ -1631,17 +1631,22 @@ contains
 
   subroutine compute_Bn_nonres(Bn)
     use mephit_conf, only: conf
-    use mephit_mesh, only: mesh, B0R_edge, B0phi_edge, B0Z_edge
+    use mephit_mesh, only: mesh, cache
     type(RT0_t), intent(inout) :: Bn
-    integer :: kedge
+    integer :: kedge, k
     complex(dp) :: Bnpsi
 
     ! fluxes in poloidal direction are set to zero
     Bn%DOF = (0d0, 0d0)
     do kedge = 1, mesh%npoint - 1
-       Bnpsi = -mesh%R_O * B0phi_edge(kedge) / mesh%mid_R(kedge)
-       Bn%DOF(kedge) = Bnpsi * (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2) / &
-            (B0R_edge(kedge) * mesh%edge_R(kedge) + B0Z_edge(kedge) * mesh%edge_Z(kedge))
+       do k = 1, mesh%GL_order
+          associate (f => cache%edge_fields(k, kedge))
+            Bnpsi = -mesh%R_O * f%B0_phi / mesh%GL_R(k, kedge)
+            Bn%DOF(kedge) = Bn%DOF(kedge) + mesh%GL_weights(k) * &
+                 Bnpsi * (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2) / &
+                 (f%B0_R * mesh%edge_R(kedge) + f%B0_Z * mesh%edge_Z(kedge))
+          end associate
+       end do
     end do
     call RT0_compute_tor_comp(Bn)
     if (conf%quad_avg) call avg_flux_on_quad(Bn)
