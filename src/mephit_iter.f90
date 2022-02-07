@@ -199,10 +199,15 @@ contains
   end subroutine iter_read
 
   subroutine iter_step
+    use mephit_conf, only: conf
     ! compute pressure based on previous perturbation field
     call compute_presn
     ! compute currents based on previous perturbation field
-    call compute_currn
+    if (conf%currn_GL) then
+       call compute_currn_GL
+    else
+       call compute_currn
+    end if
     ! use field code to generate new field from currents
     call compute_Bn
   end subroutine iter_step
@@ -611,6 +616,153 @@ contains
     call add_sheet_current
     call RT0_compute_tor_comp(jn)
   end subroutine compute_currn
+
+  subroutine compute_currn_GL
+    use sparse_mod, only: sparse_solve, sparse_matmul
+    use mephit_conf, only: logger
+    use mephit_mesh, only: mesh, cache
+    use mephit_pert, only: L1_interp, RT0_interp, RT0_compute_tor_comp
+    use mephit_util, only: imun, clight
+    real(dp), parameter :: small = tiny(0d0)
+    integer :: kf, kp, kt, ktri, kedge, k, nodes(3)
+    complex(dp) :: series, dum, dpn_dR, dpn_dZ, Bn_R, Bn_Z, Bn_phi
+    complex(dp), dimension(maxval(mesh%kt_max)) :: x, d, du, inhom
+    integer, dimension(2 * maxval(mesh%kt_max)) :: irow, icol
+    complex(dp), dimension(2 * maxval(mesh%kt_max)) :: aval
+    complex(dp), dimension(:), allocatable :: resid
+    real(dp), dimension(maxval(mesh%kt_max)) :: rel_err
+    real(dp) :: max_rel_err, avg_rel_err
+
+    max_rel_err = 0d0
+    avg_rel_err = 0d0
+    jn%DOF(:) = (0d0, 0d0)
+    do kf = 1, mesh%nflux
+       do kp = 1, mesh%kp_max(kf)
+          kedge = mesh%kp_low(kf) + kp - 1
+          ktri = mesh%edge_tri(1, kedge)
+          do k = 1, mesh%GL_order
+             call L1_interp(ktri, pn, mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), &
+                  dum, dpn_dR, dpn_dZ)
+             call RT0_interp(ktri, Bn, mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), &
+                  Bn_R, Bn_Z)
+             associate (f => cache%edge_fields(k, kedge))
+               jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * mesh%GL_R(k, kedge) * &
+                    ((clight * dpn_dZ + f%j0_phi * Bn_R) * mesh%edge_Z(kedge) - &
+                    (-clight * dpn_dR + f%j0_phi * Bn_Z) * mesh%edge_R(kedge)) / f%B0_phi
+             end associate
+          end do
+       end do
+    end do
+    do kf = 1, mesh%nflux
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          ! indices F, O, I of nodes as defined in mephit_pert::RT0_interp
+          if (mesh%orient(ktri)) then
+             nodes = mesh%tri_node([3, 1, 2], ktri)
+          else
+             nodes = mesh%tri_node([1, 3, 2], ktri)
+          end if
+          ! area contribution to inhomogeneity
+          series = (0d0, 0d0)
+          do k = 1, mesh%GL2_order
+             call L1_interp(ktri, pn, mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), &
+                  dum, dpn_dR, dpn_dZ)
+             call RT0_interp(ktri, Bn, mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), &
+                  Bn_R, Bn_Z, Bn_phi)
+             associate (f => cache%area_fields(k, ktri))
+               series = series + mesh%GL2_weights(k) / (f%B0_R ** 2 + f%B0_Z ** 2) * &
+                    ((Bn_phi * f%j0_R - f%j0_phi * Bn_R - clight * dpn_dZ) * f%B0_R + &
+                    (Bn_phi * f%j0_Z - f%j0_phi * Bn_Z + clight * dpn_dR) * f%B0_Z)
+             end associate
+          end do
+          x(kt) = imun * mesh%n * mesh%area(ktri) * series
+          ! edge f contribution to inhomogeneity
+          kedge = mesh%tri_edge(1, ktri)
+          series = (0d0, 0d0)
+          do k = 1, mesh%GL2_order
+             associate (f => cache%area_fields(k, ktri))
+               series = series + mesh%GL2_weights(k) * f%B0_phi / mesh%GL2_R(k, ktri) * &
+                    ((mesh%GL2_R(k, ktri) - mesh%node_R(nodes(1))) * f%B0_R + &
+                    (mesh%GL2_Z(k, ktri) - mesh%node_Z(nodes(1))) * f%B0_Z) / &
+                    (f%B0_R ** 2 + f%B0_Z ** 2)
+             end associate
+          end do
+          if (mesh%orient(ktri)) then
+             x(kt) = x(kt) - jn%DOF(ktri) * (1d0 + imun * mesh%n * 0.5d0 * series)
+          else
+             x(kt) = x(kt) + jn%DOF(ktri) * (1d0 + imun * mesh%n * 0.5d0 * series)
+          end if
+          ! edge i contribution to diagonal element
+          kedge = mesh%tri_edge(3, ktri)
+          series = (0d0, 0d0)
+          do k = 1, mesh%GL2_order
+             associate (f => cache%area_fields(k, ktri))
+               series = series + mesh%GL2_weights(k) * f%B0_phi / mesh%GL2_R(k, ktri) * &
+                    ((mesh%GL2_R(k, ktri) - mesh%node_R(nodes(3))) * f%B0_R + &
+                    (mesh%GL2_Z(k, ktri) - mesh%node_Z(nodes(3))) * f%B0_Z) / &
+                    (f%B0_R ** 2 + f%B0_Z ** 2)
+             end associate
+          end do
+          d(kt) = -1d0 - imun * mesh%n * 0.5d0 * series
+          ! edge o contribution to upper diagonal element
+          kedge = mesh%tri_edge(2, ktri)
+          series = (0d0, 0d0)
+          do k = 1, mesh%GL2_order
+             associate (f => cache%area_fields(k, ktri))
+               series = series + mesh%GL2_weights(k) * f%B0_phi / mesh%GL2_R(k, ktri) * &
+                    ((mesh%GL2_R(k, ktri) - mesh%node_R(nodes(2))) * f%B0_R + &
+                    (mesh%GL2_Z(k, ktri) - mesh%node_Z(nodes(2))) * f%B0_Z) / &
+                    (f%B0_R ** 2 + f%B0_Z ** 2)
+             end associate
+          end do
+          du(kt) = 1d0 + imun * mesh%n * 0.5d0 * series
+       end do
+       associate (ndim => mesh%kt_max(kf), nz => 2 * mesh%kt_max(kf))
+         ! assemble sparse matrix (COO format)
+         ! first column, diagonal
+         irow(1) = 1
+         icol(1) = 1
+         aval(1) = d(1)
+         ! first column, off-diagonal
+         irow(2) = ndim
+         icol(2) = 1
+         aval(2) = du(ndim)
+         do k = 2, ndim
+            ! off-diagonal
+            irow(2*k-1) = k-1
+            icol(2*k-1) = k
+            aval(2*k-1) = du(k-1)
+            ! diagonal
+            irow(2*k) = k
+            icol(2*k) = k
+            aval(2*k) = d(k)
+         end do
+         inhom = x  ! remember inhomogeneity before x is overwritten with the solution
+         call sparse_solve(ndim, ndim, nz, irow(:nz), icol(:nz), aval(:nz), x(:ndim))
+         call sparse_matmul(ndim, ndim, irow(:nz), icol(:nz), aval(:nz), x(:ndim), resid)
+         resid(:) = resid - inhom(:ndim)
+         where (abs(inhom(:ndim)) >= small)
+            rel_err(:ndim) = abs(resid(:ndim)) / abs(inhom(:ndim))
+         elsewhere
+            rel_err(:ndim) = 0d0
+         end where
+         max_rel_err = max(max_rel_err, maxval(rel_err(:ndim)))
+         avg_rel_err = avg_rel_err + sum(rel_err(:ndim))
+       end associate
+       do kt = 1, mesh%kt_max(kf)
+          kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
+          jn%DOF(kedge) = -x(kt)
+       end do
+    end do
+    avg_rel_err = avg_rel_err / dble(mesh%ntri)
+    write (logger%msg, '("compute_currn_GL: diagonalization max_rel_err = ", ' // &
+         'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
+    if (logger%debug) call logger%write_msg
+    if (allocated(resid)) deallocate(resid)
+
+    call add_sheet_current
+    call RT0_compute_tor_comp(jn)
+  end subroutine compute_currn_GL
 
   subroutine add_sheet_current
     use mephit_conf, only: conf_arr

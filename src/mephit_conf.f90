@@ -80,6 +80,9 @@ module mephit_conf
      !> and #vac_src_gpec.
      integer :: vac_src = vac_src_nemov
 
+     !> Use mephit_iter::compute_currn_GL() instead of mephit_iter::compute_currn()
+     logical :: currn_GL = .false.
+
      !> Generate non-resonant vacuum perturbation for testing. Defaults to false.
      logical :: nonres = .false.
 
@@ -228,6 +231,7 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/curr_prof', config%curr_prof)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/q_prof', config%q_prof)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/vac_src', config%vac_src)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/currn_GL', config%currn_GL)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/nonres', config%nonres)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/quad_avg', config%quad_avg)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Ic', config%Ic, &
