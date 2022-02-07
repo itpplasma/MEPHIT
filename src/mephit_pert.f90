@@ -183,19 +183,17 @@ contains
        return
     end if
     nodes = mesh%tri_node(:, ktri)
-    Delta_R = mesh%node_R(nodes) - R
-    Delta_Z = mesh%node_Z(nodes) - Z
-    comp = 0.5d0 / mesh%area(ktri) * sum(elem%DOF(nodes) * &
-         [Delta_R(2) * Delta_Z(3) - Delta_R(3) * Delta_Z(2), &
-         Delta_R(3) * Delta_Z(1) - Delta_R(1) * Delta_Z(3), &
-         Delta_R(1) * Delta_Z(2) - Delta_R(2) * Delta_Z(1)])
+    Delta_R = R - mesh%node_R(nodes)
+    Delta_Z = Z - mesh%node_Z(nodes)
+    comp = sum(elem%DOF(nodes) * (Delta_R([2, 3, 1]) * Delta_Z([3, 1, 2]) - &
+         Delta_R([3, 1, 2]) * Delta_Z([2, 3, 1]))) * 0.5d0 / mesh%area(ktri)
     if (present(comp_dR)) then
-       comp_dR = 0.5d0 / mesh%area(ktri) * sum(elem%DOF(nodes) * &
-            [Delta_Z(2) - Delta_Z(3), Delta_Z(3) - Delta_Z(1), Delta_Z(1) - Delta_Z(2)])
+       comp_dR = sum(elem%DOF(nodes) * (Delta_Z([3, 1, 2]) - Delta_Z([2, 3, 1]))) * &
+            0.5d0 / mesh%area(ktri)
     end if
     if (present(comp_dZ)) then
-       comp_dZ = 0.5d0 / mesh%area(ktri) * sum(elem%DOF(nodes) * &
-            [Delta_R(3) - Delta_R(2), Delta_R(1) - Delta_R(3), Delta_R(2) - Delta_R(1)])
+       comp_dZ = sum(elem%DOF(nodes) * (Delta_R([2, 3, 1]) - Delta_R([3, 1, 2]))) * &
+            0.5d0 / mesh%area(ktri)
     end if
   end subroutine L1_interp
 
