@@ -285,7 +285,7 @@ module mephit_mesh
   end type coord_cache_ext_t
 
   type :: field_cache_t
-     real(dp) :: psi, B0_R, B0_Z, B0_phi, j0_phi, dp0_dpsi
+     real(dp) :: psi, B0_R, B0_Z, B0_phi, j0_R, j0_Z, j0_phi
   end type field_cache_t
 
   type :: cache_t
@@ -592,12 +592,15 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache%B0_phi, &
          lbound(cache), ubound(cache), unit = 'G', &
          comment = 'physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache%j0_R, &
+         lbound(cache), ubound(cache), unit = 'statA', &
+         comment = 'R component of equilibrium current density at ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache%j0_Z, &
+         lbound(cache), ubound(cache), unit = 'statA', &
+         comment = 'Z component of equilibrium current density at ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache%j0_phi, &
          lbound(cache), ubound(cache), unit = 'statA', &
          comment = 'physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/dp0_dpsi', cache%dp0_dpsi, &
-         lbound(cache), ubound(cache), unit = 'dyn cm^-2 Mx^-1', &
-         comment = 'psi component of equilibrium pressure gradient at ' // trim(adjustl(comment)))
     call h5_close(h5id_root)
   end subroutine field_cache_write
 
@@ -613,8 +616,9 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache%B0_R)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache%B0_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache%B0_phi)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache%j0_R)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache%j0_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache%j0_phi)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/dp0_dpsi', cache%dp0_dpsi)
     call h5_close(h5id_root)
   end subroutine field_cache_read
 
@@ -2622,7 +2626,6 @@ contains
   subroutine compute_pres_prof_eps
     use mephit_conf, only: conf, logger
     use mephit_util, only: ev2erg
-    integer :: kedge, ktri, k
     real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
 
     ! Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
@@ -2653,30 +2656,11 @@ contains
     temp(1:) = (fs_half%psi - psi_ext) / psi_int * conf%temp_max + conf%temp_min
     fs_half%p(:) = dens(1:) * temp(1:) * ev2erg
     fs_half%dp_dpsi(:) = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
-    ! Gauss-Legendre evaluation points on edges
-    do kedge = 1, mesh%nedge
-       do k = 1, mesh%GL_order
-          ! reuse variables
-          dens(0) = (cache%edge_fields(k, kedge)%psi - psi_ext) / psi_int * conf%dens_max + conf%dens_min
-          temp(0) = (cache%edge_fields(k, kedge)%psi - psi_ext) / psi_int * conf%temp_max + conf%temp_min
-          cache%edge_fields(k, kedge)%dp0_dpsi = (dens(0) * dtemp_dpsi + ddens_dpsi * temp(0)) * ev2erg
-       end do
-    end do
-    ! Gauss-Legendre evaluation points on triangles
-    do ktri = 1, mesh%ntri
-       do k = 1, mesh%GL2_order
-          ! reuse variables
-          dens(0) = (cache%area_fields(k, ktri)%psi - psi_ext) / psi_int * conf%dens_max + conf%dens_min
-          temp(0) = (cache%area_fields(k, ktri)%psi - psi_ext) / psi_int * conf%temp_max + conf%temp_min
-          cache%area_fields(k, ktri)%dp0_dpsi = (dens(0) * dtemp_dpsi + ddens_dpsi * temp(0)) * ev2erg
-       end do
-    end do
   end subroutine compute_pres_prof_eps
 
   subroutine compute_pres_prof_par
     use mephit_conf, only: conf
     use mephit_util, only: ev2erg
-    integer :: kedge, ktri, k
     real(dp) :: ddens_dpsi, dtemp_dpsi, psi_int, psi_ext
 
     ! Density \f$ \frac{N}{V} \f$ on flux surface in cm^-3.
@@ -2708,49 +2692,15 @@ contains
          (conf%temp_max - conf%temp_min) + conf%temp_min
     fs_half%p(:) = dens(1:) * temp(1:) * ev2erg
     fs_half%dp_dpsi(:) = (dens(1:) * dtemp_dpsi + ddens_dpsi * temp(1:)) * ev2erg
-    ! Gauss-Legendre evaluation points on edges
-    do kedge = 1, mesh%nedge
-       do k = 1, mesh%GL_order
-          ! reuse variables
-          dens(0) = (cache%edge_fields(k, kedge)%psi - psi_ext) / (psi_int - psi_ext) &
-               * (conf%dens_max - conf%dens_min) + conf%dens_min
-          temp(0) = (cache%edge_fields(k, kedge)%psi - psi_ext) / (psi_int - psi_ext) &
-               * (conf%temp_max - conf%temp_min) + conf%temp_min
-          cache%edge_fields(k, kedge)%dp0_dpsi = (dens(0) * dtemp_dpsi + ddens_dpsi * temp(0)) * ev2erg
-       end do
-    end do
-    ! Gauss-Legendre evaluation points on triangles
-    do ktri = 1, mesh%ntri
-       do k = 1, mesh%GL2_order
-          ! reuse variables
-          dens(0) = (cache%area_fields(k, ktri)%psi - psi_ext) / (psi_int - psi_ext) &
-               * (conf%dens_max - conf%dens_min) + conf%dens_min
-          temp(0) = (cache%area_fields(k, ktri)%psi - psi_ext) / (psi_int - psi_ext) &
-               * (conf%temp_max - conf%temp_min) + conf%temp_min
-          cache%area_fields(k, ktri)%dp0_dpsi = (dens(0) * dtemp_dpsi + ddens_dpsi * temp(0)) * ev2erg
-       end do
-    end do
   end subroutine compute_pres_prof_par
 
   subroutine compute_pres_prof_geqdsk
-    integer :: kf, kedge, ktri, k
+    integer :: kf
 
     fs%p(:) = [(psi_interpolator%eval(equil%pres, fs%psi(kf)), kf = 0, mesh%nflux)]
     fs%dp_dpsi(:) = [(psi_interpolator%eval(equil%pprime, fs%psi(kf)), kf = 0, mesh%nflux)]
     fs_half%p(:) = [(psi_interpolator%eval(equil%pres, fs_half%psi(kf)), kf = 1, mesh%nflux)]
     fs_half%dp_dpsi(:) = [(psi_interpolator%eval(equil%pprime, fs_half%psi(kf)), kf = 1, mesh%nflux)]
-    ! Gauss-Legendre evaluation points on edges
-    do kedge = 1, mesh%nedge
-       do k = 1, mesh%GL_order
-          cache%edge_fields(k, kedge)%dp0_dpsi = psi_interpolator%eval(equil%pprime, cache%edge_fields(k, kedge)%psi)
-       end do
-    end do
-    ! Gauss-Legendre evaluation points on triangles
-    do ktri = 1, mesh%ntri
-       do k = 1, mesh%GL2_order
-          cache%area_fields(k, ktri)%dp0_dpsi = psi_interpolator%eval(equil%pprime, cache%area_fields(k, ktri)%psi)
-       end do
-    end do
   end subroutine compute_pres_prof_geqdsk
 
   subroutine compute_safety_factor_flux
@@ -2970,7 +2920,7 @@ contains
     use mephit_util, only: clight, pi
     real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kt, ktri, kedge, k
-    real(dp) :: dum, dB0R_dZ, dB0Z_dR
+    real(dp) :: dum, B0_phi, dB0R_dZ, dB0Z_dR, dB0phi_dR, dB0phi_dZ
 
     ! edges
     do kedge = 1, mesh%nedge
@@ -2990,17 +2940,25 @@ contains
     ! Gauss-Legendre evaluation points on edges
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
-          call field(mesh%GL_R(k, kedge), 0d0, mesh%GL_Z(k, kedge), &
-               dum, dum, dum, dum, dum, dB0R_dZ, dum, dum, dum, dB0Z_dR, dum, dum)
-          cache%edge_fields(k, kedge)%j0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+          call field(mesh%GL_R(k, kedge), 0d0, mesh%GL_Z(k, kedge), dum, B0_phi, dum, &
+               dum, dum, dB0R_dZ, dB0phi_dR, dum, dB0phi_dZ, dB0Z_dR, dum, dum)
+          associate (f => cache%edge_fields(k, kedge))
+            f%j0_R = -0.25d0 / pi * clight * dB0phi_dZ
+            f%j0_Z = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / mesh%GL_R(k, kedge))
+            f%j0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+          end associate
        end do
     end do
     ! Gauss-Legendre evaluation points on triangles
     do ktri = 1, mesh%ntri
        do k = 1, mesh%GL2_order
-          call field(mesh%GL2_R(k, ktri), 0d0, mesh%GL2_Z(k, ktri), &
-               dum, dum, dum, dum, dum, dB0R_dZ, dum, dum, dum, dB0Z_dR, dum, dum)
-          cache%area_fields(k, ktri)%j0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+          call field(mesh%GL2_R(k, ktri), 0d0, mesh%GL2_Z(k, ktri), dum, B0_phi, dum, &
+               dum, dum, dB0R_dZ, dB0phi_dR, dum, dB0phi_dZ, dB0Z_dR, dum, dum)
+          associate (f => cache%area_fields(k, ktri))
+            f%j0_R = -0.25d0 / pi * clight * dB0phi_dZ
+            f%j0_Z = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / mesh%GL2_R(k, ktri))
+            f%j0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+          end associate
        end do
     end do
   end subroutine compute_j0phi_rot
@@ -3009,7 +2967,7 @@ contains
     use mephit_util, only: clight, pi
     real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kp, kt, ktri, kedge, k
-    real(dp) :: dp0_dpsi, FdF_dpsi
+    real(dp) :: dp0_dpsi, FdF_dpsi, F
 
     ! edges in poloidal direction
     do kf = 1, mesh%nflux
@@ -3038,19 +2996,29 @@ contains
     ! Gauss-Legendre evaluation points on edges
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
-          dp0_dpsi = psi_interpolator%eval(equil%pprime, cache%edge_fields(k, kedge)%psi)
-          FdF_dpsi = psi_interpolator%eval(equil%ffprim, cache%edge_fields(k, kedge)%psi)
-          cache%edge_fields(k, kedge)%j0_phi = clight * (dp0_dpsi * mesh%GL_R(k, kedge) + &
-               0.25d0 / pi * FdF_dpsi / mesh%GL_R(k, kedge))
+          associate (c => cache%edge_fields(k, kedge))
+            dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
+            FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
+            F = psi_interpolator%eval(equil%fpol, c%psi)
+            c%j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_R
+            c%j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_Z
+            c%j0_phi = clight * (dp0_dpsi * mesh%GL_R(k, kedge) + &
+                 0.25d0 / pi * FdF_dpsi / mesh%GL_R(k, kedge))
+          end associate
        end do
     end do
     ! Gauss-Legendre evaluation points on triangles
     do ktri = 1, mesh%ntri
        do k = 1, mesh%GL2_order
-          dp0_dpsi = psi_interpolator%eval(equil%pprime, cache%area_fields(k, ktri)%psi)
-          FdF_dpsi = psi_interpolator%eval(equil%ffprim, cache%area_fields(k, ktri)%psi)
-          cache%area_fields(k, ktri)%j0_phi = clight * (dp0_dpsi * mesh%GL2_R(k, ktri) + &
-               0.25d0 / pi * FdF_dpsi / mesh%GL2_R(k, ktri))
+          associate (c => cache%area_fields(k, ktri))
+            dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
+            FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
+            F = psi_interpolator%eval(equil%fpol, c%psi)
+            c%j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_R
+            c%j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_Z
+            c%j0_phi = clight * (dp0_dpsi * mesh%GL2_R(k, ktri) + &
+                 0.25d0 / pi * FdF_dpsi / mesh%GL2_R(k, ktri))
+          end associate
        end do
     end do
   end subroutine compute_j0phi_geqdsk
