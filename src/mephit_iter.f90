@@ -526,6 +526,9 @@ contains
     complex(dp) :: Bnphi_edge, Delta_pn
     real(dp) :: Delta_p0
     real(dp), parameter :: small = tiny(0d0)
+    ! hack: first call in mephit_iter() is always without plasma response
+    ! and without additional shielding currents
+    logical, save :: first_call = .true.
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
@@ -613,6 +616,10 @@ contains
     if (logger%debug) call logger%write_msg
     if (allocated(resid)) deallocate(resid)
 
+    if (first_call) then
+       first_call = .false.
+       call debug_currn
+    end if
     call add_sheet_current
     call RT0_compute_tor_comp(jn)
   end subroutine compute_currn
@@ -624,6 +631,9 @@ contains
     use mephit_pert, only: L1_interp, RT0_interp, RT0_compute_tor_comp
     use mephit_util, only: imun, clight
     real(dp), parameter :: small = tiny(0d0)
+    ! hack: first call in mephit_iter() is always without plasma response
+    ! and without additional shielding currents
+    logical, save :: first_call = .true.
     integer :: kf, kp, kt, ktri, kedge, k, nodes(3)
     complex(dp) :: series, dum, dpn_dR, dpn_dZ, Bn_R, Bn_Z, Bn_phi
     complex(dp), dimension(maxval(mesh%kt_max)) :: x, d, du, inhom
@@ -675,7 +685,7 @@ contains
                     (Bn_phi * f%j0_Z - f%j0_phi * Bn_Z + clight * dpn_dR) * f%B0_Z)
              end associate
           end do
-          x(kt) = imun * mesh%n * mesh%area(ktri) * series
+          x(kt) = -imun * mesh%n * mesh%area(ktri) * series
           ! edge f contribution to inhomogeneity
           kedge = mesh%tri_edge(1, ktri)
           series = (0d0, 0d0)
@@ -760,9 +770,34 @@ contains
     if (logger%debug) call logger%write_msg
     if (allocated(resid)) deallocate(resid)
 
+    if (first_call) then
+       first_call = .false.
+       call debug_currn
+    end if
     call add_sheet_current
     call RT0_compute_tor_comp(jn)
   end subroutine compute_currn_GL
+
+  subroutine debug_currn
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use mephit_conf, only: datafile
+    use mephit_mesh, only: mesh
+    character(len = *), parameter :: dataset = 'debug_currn/avg_abs_In_pol'
+    integer(HID_T) :: h5id_root
+    integer :: kf, kedge_lo, kedge_hi
+    real(dp) :: I_pol(mesh%nflux)
+
+    do kf = 1, mesh%nflux
+       kedge_lo = mesh%npoint + mesh%kt_low(kf)
+       kedge_hi = mesh%npoint + mesh%kt_low(kf) + mesh%kt_max(kf) - 1
+       I_pol(kf) = sum(abs(jn%DOF(kedge_lo:kedge_hi))) / mesh%kt_max(kf)
+    end do
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, dataset)
+    call h5_add(h5id_root, dataset, I_pol, lbound(I_pol), ubound(I_pol), &
+         comment = 'mean absolute poloidal perturbation current', unit = 'statA')
+    call h5_close(h5id_root)
+  end subroutine debug_currn
 
   subroutine add_sheet_current
     use mephit_conf, only: conf_arr
