@@ -627,7 +627,8 @@ contains
 
     if (first_call) then
        first_call = .false.
-       call debug_currn(jn, debug_x, debug_d, debug_du)
+       call RT0_compute_tor_comp(jn)
+       call debug_currn(pn, Bn, jn, debug_x, debug_d, debug_du)
        deallocate(debug_x, debug_d, debug_du)
     end if
     call add_sheet_current
@@ -790,25 +791,58 @@ contains
 
     if (first_call) then
        first_call = .false.
-       call debug_currn(jn, debug_x, debug_d, debug_du, coeff_f)
+       call RT0_compute_tor_comp(jn)
+       call debug_currn(pn, Bn, jn, debug_x, debug_d, debug_du, coeff_f)
        deallocate(debug_x, debug_d, debug_du, coeff_f)
     end if
     call add_sheet_current
     call RT0_compute_tor_comp(jn)
   end subroutine compute_currn_GL
 
-  subroutine debug_currn(jn, x, d, du, coeff_f)
+  subroutine debug_currn(p_n, B_n, j_n, x, d, du, coeff_f)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: datafile
-    type(RT0_t), intent(in) :: jn
+    use mephit_util, only: clight, imun, pi
+    use mephit_mesh, only: mesh, fs_half, B0R_Omega, B0Z_Omega, B0phi_Omega
+    use mephit_pert, only: RT0_interp, L1_interp
+    type(L1_t), intent(in) :: p_n
+    type(RT0_t), intent(in) :: B_n, j_n
     complex(dp), intent(in) :: x(:), d(:), du(:)
     complex(dp), intent(in), optional :: coeff_f(:)
     character(len = *), parameter :: grp = 'debug_currn'
     integer(HID_T) :: h5id_root
+    integer :: kf, kt, ktri
+    real(dp) :: j0_R, j0_Z, j0_phi
+    complex(dp) :: pn, dpn_dR, dpn_dZ, Bn_R, Bn_Z, Bn_phi, jn_R, jn_Z, jn_phi
+    complex(dp), dimension(3, mesh%ntri) :: grad_pn, lorentz
 
+    do kf = 1, mesh%nflux
+       do kt = 1, mesh%kt_max(kf)
+          ktri = mesh%kt_low(kf) + kt
+          associate (R => mesh%R_Omega(ktri), Z => mesh%Z_Omega(ktri), &
+               F => fs_half%F(kf), FdF_dpsi => fs_half%FdF_dpsi(kf), dp0_dpsi => fs_half%dp_dpsi(kf), &
+               B0_R => B0R_Omega(ktri), B0_Z => B0Z_Omega(ktri), B0_phi => B0phi_Omega(ktri))
+            j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * B0_R
+            j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * B0_Z
+            j0_phi = clight * (dp0_dpsi * R + 0.25d0 / pi * FdF_dpsi / R)
+            call L1_interp(ktri, p_n, R, Z, pn, dpn_dR, dpn_dZ)
+            call RT0_interp(ktri, B_n, R, Z, Bn_R, Bn_Z, Bn_phi)
+            call RT0_interp(ktri, j_n, R, Z, jn_R, jn_Z, jn_phi)
+            grad_pn(:, ktri) = [dpn_dR, imun * mesh%n * pn / R, dpn_dZ]
+            lorentz(:, ktri) = 1d0 / clight * &
+                 [jn_phi * B0_Z - jn_Z * B0_phi + j0_phi * Bn_Z - j0_Z * Bn_phi, &
+                 jn_Z * B0_R - jn_R * B0_Z + j0_Z * Bn_R - j0_R * Bn_Z, &
+                 jn_R * B0_phi - jn_phi * B0_R + j0_R * Bn_phi - j0_phi * Bn_R]
+          end associate
+       end do
+    end do
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, grp // '/')
-    call h5_add(h5id_root, grp // '/I', jn%DOF, lbound(jn%DOF), ubound(jn%DOF), &
+    call h5_add(h5id_root, grp // '/grad_pn', grad_pn, lbound(grad_pn), ubound(grad_pn), &
+         comment = 'perturbation pressure gradient', unit = 'dyn cm^-2')
+    call h5_add(h5id_root, grp // '/lorentz', lorentz, lbound(lorentz), ubound(lorentz), &
+         comment = 'perturbation Lorentz force density', unit = 'dyn cm^-2')
+    call h5_add(h5id_root, grp // '/I', j_n%DOF, lbound(j_n%DOF), ubound(j_n%DOF), &
          comment = 'perturbation current density degrees of freedom', unit = 'statA')
     call h5_add(h5id_root, grp // '/x', x, lbound(x), ubound(x), &
          comment = 'inhomogeneities of linear systems of equations', unit = 'statA')
