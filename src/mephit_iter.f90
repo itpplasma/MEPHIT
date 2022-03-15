@@ -529,6 +529,7 @@ contains
     ! hack: first call in mephit_iter() is always without plasma response
     ! and without additional shielding currents
     logical, save :: first_call = .true.
+    complex(dp), dimension(:), allocatable :: debug_x, debug_d, debug_du
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
@@ -540,6 +541,9 @@ contains
                (pn%DOF(mesh%edge_node(2, kedge)) - pn%DOF(mesh%edge_node(1, kedge)))
        end do
     end do
+    if (first_call) then
+       allocate(debug_x(mesh%ntri), debug_d(mesh%ntri), debug_du(mesh%ntri))
+    end if
     do kf = 1, mesh%nflux
        Delta_p0 = fs%p(kf) - fs%p(kf-1)
        x = (0d0, 0d0)
@@ -573,7 +577,12 @@ contains
                (Bnphi_edge / B0phi_edge(kedge) * (-Delta_p0) - (-Delta_pn)) + j0phi_edge(kedge) * &
                (Bnphi_edge / B0phi_edge(kedge) - (-Bn%DOF(kedge)) / (-B0_flux(kedge))))
        end do
-       associate (ndim => mesh%kt_max(kf), nz => 2 * mesh%kt_max(kf))
+       associate (ndim => mesh%kt_max(kf), nz => 2 * mesh%kt_max(kf), k_min => mesh%kt_low(kf))
+         if (first_call) then
+            debug_x(k_min+1:k_min+ndim) = x(1:ndim)
+            debug_d(k_min+1:k_min+ndim) = d(1:ndim)
+            debug_du(k_min+1:k_min+ndim) = du(1:ndim)
+         end if
          ! assemble sparse matrix (COO format)
          ! first column, diagonal
          irow(1) = 1
@@ -618,7 +627,8 @@ contains
 
     if (first_call) then
        first_call = .false.
-       call debug_currn
+       call debug_currn(jn, debug_x, debug_d, debug_du)
+       deallocate(debug_x, debug_d, debug_du)
     end if
     call add_sheet_current
     call RT0_compute_tor_comp(jn)
@@ -637,6 +647,7 @@ contains
     integer :: kf, kp, kt, ktri, kedge, k, nodes(3)
     complex(dp) :: series, dum, dpn_dR, dpn_dZ, Bn_R, Bn_Z, Bn_phi
     complex(dp), dimension(maxval(mesh%kt_max)) :: x, d, du, inhom
+    complex(dp), dimension(:), allocatable :: debug_x, debug_d, debug_du, coeff_f
     integer, dimension(2 * maxval(mesh%kt_max)) :: irow, icol
     complex(dp), dimension(2 * maxval(mesh%kt_max)) :: aval
     complex(dp), dimension(:), allocatable :: resid
@@ -646,6 +657,9 @@ contains
     max_rel_err = 0d0
     avg_rel_err = 0d0
     jn%DOF(:) = (0d0, 0d0)
+    if (first_call) then
+       allocate(debug_x(mesh%ntri), debug_d(mesh%ntri), debug_du(mesh%ntri), coeff_f(mesh%ntri))
+    end if
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
@@ -697,11 +711,13 @@ contains
                     (f%B0_R ** 2 + f%B0_Z ** 2)
              end associate
           end do
+          if (first_call) coeff_f(mesh%kt_low(kf) + kt) = (1d0 + imun * mesh%n * 0.5d0 * series)
           if (mesh%orient(ktri)) then
              x(kt) = x(kt) - jn%DOF(ktri) * (1d0 + imun * mesh%n * 0.5d0 * series)
           else
              x(kt) = x(kt) + jn%DOF(ktri) * (1d0 + imun * mesh%n * 0.5d0 * series)
           end if
+          if (first_call) debug_x(mesh%kt_low(kf) + kt) = x(kt)
           ! edge i contribution to diagonal element
           kedge = mesh%tri_edge(3, ktri)
           series = (0d0, 0d0)
@@ -714,6 +730,7 @@ contains
              end associate
           end do
           d(kt) = -1d0 - imun * mesh%n * 0.5d0 * series
+          if (first_call) debug_d(mesh%kt_low(kf) + kt) = d(kt)
           ! edge o contribution to upper diagonal element
           kedge = mesh%tri_edge(2, ktri)
           series = (0d0, 0d0)
@@ -726,6 +743,7 @@ contains
              end associate
           end do
           du(kt) = 1d0 + imun * mesh%n * 0.5d0 * series
+          if (first_call) debug_du(mesh%kt_low(kf) + kt) = du(kt)
        end do
        associate (ndim => mesh%kt_max(kf), nz => 2 * mesh%kt_max(kf))
          ! assemble sparse matrix (COO format)
@@ -772,30 +790,36 @@ contains
 
     if (first_call) then
        first_call = .false.
-       call debug_currn
+       call debug_currn(jn, debug_x, debug_d, debug_du, coeff_f)
+       deallocate(debug_x, debug_d, debug_du, coeff_f)
     end if
     call add_sheet_current
     call RT0_compute_tor_comp(jn)
   end subroutine compute_currn_GL
 
-  subroutine debug_currn
+  subroutine debug_currn(jn, x, d, du, coeff_f)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: datafile
-    use mephit_mesh, only: mesh
-    character(len = *), parameter :: dataset = 'debug_currn/avg_abs_In_pol'
+    type(RT0_t), intent(in) :: jn
+    complex(dp), intent(in) :: x(:), d(:), du(:)
+    complex(dp), intent(in), optional :: coeff_f(:)
+    character(len = *), parameter :: grp = 'debug_currn'
     integer(HID_T) :: h5id_root
-    integer :: kf, kedge_lo, kedge_hi
-    real(dp) :: I_pol(mesh%nflux)
 
-    do kf = 1, mesh%nflux
-       kedge_lo = mesh%npoint + mesh%kt_low(kf)
-       kedge_hi = mesh%npoint + mesh%kt_low(kf) + mesh%kt_max(kf) - 1
-       I_pol(kf) = sum(abs(jn%DOF(kedge_lo:kedge_hi))) / mesh%kt_max(kf)
-    end do
     call h5_open_rw(datafile, h5id_root)
-    call h5_create_parent_groups(h5id_root, dataset)
-    call h5_add(h5id_root, dataset, I_pol, lbound(I_pol), ubound(I_pol), &
-         comment = 'mean absolute poloidal perturbation current', unit = 'statA')
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/I', jn%DOF, lbound(jn%DOF), ubound(jn%DOF), &
+         comment = 'perturbation current density degrees of freedom', unit = 'statA')
+    call h5_add(h5id_root, grp // '/x', x, lbound(x), ubound(x), &
+         comment = 'inhomogeneities of linear systems of equations', unit = 'statA')
+    call h5_add(h5id_root, grp // '/d', d, lbound(d), ubound(d), &
+         comment = 'main diagonals of linear systems of equations', unit = '1')
+    call h5_add(h5id_root, grp // '/du', du, lbound(du), ubound(du), &
+         comment = 'upper diagonals of linear systems of equations', unit = '1')
+    if (present(coeff_f)) then
+       call h5_add(h5id_root, grp // '/coeff_f', coeff_f, lbound(coeff_f), ubound(coeff_f), &
+            comment = 'coefficients of radial currents', unit = '1')
+    end if
     call h5_close(h5id_root)
   end subroutine debug_currn
 
