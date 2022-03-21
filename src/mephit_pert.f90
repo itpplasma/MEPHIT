@@ -361,12 +361,13 @@ contains
     call h5_close(h5id_root)
   end subroutine RT0_read
 
-  pure function jacobian(kf, kt, r) result(metric_det)
-    use mephit_mesh, only: equil, fs_half, mesh, B0phi_Omega
+  pure function jacobian(kf, kt, R) result(metric_det)
+    use mephit_mesh, only: equil, fs_half, mesh, cache
     integer, intent(in) :: kf, kt
-    real(dp), intent(in) :: r
+    real(dp), intent(in) :: R
     real(dp) :: metric_det
-    metric_det = equil%cocos%sgn_dpsi * fs_half%q(kf) * r / B0phi_Omega(mesh%kt_low(kf) + kt)
+    metric_det = equil%cocos%sgn_dpsi * fs_half%q(kf) * R / &
+         cache%cntr_fields(mesh%kt_low(kf) + kt)%B0_phi
   end function jacobian
 
   subroutine RT0_write(elem, file, dataset, comment, unit, plots)
@@ -440,27 +441,26 @@ contains
   end subroutine RT0_write
 
   subroutine RT0_triplot(elem, comp_R, comp_Z, comp_psi_contravar_dens, comp_theta_covar)
-    use mephit_mesh, only: equil, mesh, B0R_Omega, B0Z_Omega
+    use mephit_mesh, only: equil, mesh, cache
     type(RT0_t), intent(in) :: elem
     complex(dp), intent(out), dimension(:), allocatable :: comp_R, comp_Z, &
          comp_psi_contravar_dens, comp_theta_covar
     integer :: kf, kt, ktri
-    real(dp) :: R, Z
 
     allocate(comp_R(mesh%ntri), comp_Z(mesh%ntri), &
          comp_psi_contravar_dens(mesh%ntri), comp_theta_covar(mesh%ntri))
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          R = mesh%R_Omega(ktri)
-          Z = mesh%Z_Omega(ktri)
-          call RT0_interp(ktri, elem, R, Z, comp_R(ktri), comp_Z(ktri))
-          ! projection to contravariant psi component
-          comp_psi_contravar_dens(ktri) = (comp_R(ktri) * B0Z_Omega(ktri) - &
-               comp_Z(ktri) * B0R_Omega(ktri)) * R * jacobian(kf, kt, R)
-          ! projection to covariant theta component
-          comp_theta_covar(ktri) = equil%cocos%sgn_dpsi * (comp_R(ktri) * B0R_Omega(ktri) + &
-               comp_Z(ktri) * B0Z_Omega(ktri)) * jacobian(kf, kt, R)
+          associate (R => mesh%cntr_R(ktri), Z => mesh%cntr_Z(ktri), f => cache%cntr_fields(ktri))
+            call RT0_interp(ktri, elem, R, Z, comp_R(ktri), comp_Z(ktri))
+            ! projection to contravariant psi component
+            comp_psi_contravar_dens(ktri) = (comp_R(ktri) * f%B0_Z - &
+                 comp_Z(ktri) * f%B0_R) * R * jacobian(kf, kt, R)
+            ! projection to covariant theta component
+            comp_theta_covar(ktri) = equil%cocos%sgn_dpsi * jacobian(kf, kt, R) * &
+                 (comp_R(ktri) * f%B0_R + comp_Z(ktri) * f%B0_Z)
+          end associate
        end do
     end do
   end subroutine RT0_triplot

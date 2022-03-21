@@ -142,18 +142,9 @@ contains
     use mephit_conf, only: conf_arr, logger
     use mephit_util, only: deinit_field
     use mephit_mesh, only: equil, fs, fs_half, psi_interpolator, psi_fine_interpolator, &
-         mesh, cache, mesh_deinit, cache_deinit, &
-         B0R_edge, B0phi_edge, B0Z_edge, B0R_Omega, B0phi_Omega, B0Z_Omega, B0_flux, j0phi_edge
+         mesh, cache, mesh_deinit, cache_deinit
     use mephit_pert, only: vac, vac_deinit
 
-    if (allocated(B0R_edge)) deallocate(B0R_edge)
-    if (allocated(B0phi_edge)) deallocate(B0phi_edge)
-    if (allocated(B0Z_edge)) deallocate(B0Z_edge)
-    if (allocated(B0r_Omega)) deallocate(B0r_Omega)
-    if (allocated(B0phi_Omega)) deallocate(B0phi_Omega)
-    if (allocated(B0z_Omega)) deallocate(B0z_Omega)
-    if (allocated(B0_flux)) deallocate(B0_flux)
-    if (allocated(j0phi_edge)) deallocate(j0phi_edge)
     call psi_interpolator%deinit
     call psi_fine_interpolator%deinit
     call cache_deinit(cache)
@@ -432,7 +423,7 @@ contains
     use sparse_mod, only: sparse_solve, sparse_matmul
     use mephit_conf, only: conf, logger
     use mephit_util, only: imun
-    use mephit_mesh, only: fs, mesh, B0R_edge, B0phi_edge, B0Z_edge
+    use mephit_mesh, only: fs, mesh, cache
     complex(dp), dimension(maxval(mesh%kp_max)) :: a, b, x, d, du, inhom
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(maxval(mesh%kp_max)) :: rel_err
@@ -451,10 +442,12 @@ contains
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
           ! use midpoint of poloidal edge
-          a(kp) = (B0R_edge(kedge) * mesh%edge_R(kedge) + B0Z_edge(kedge) * mesh%edge_Z(kedge)) / &
-               (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
-          x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bn%DOF(kedge)
-          b(kp) = imun * (mesh%n + imun * conf%damp) * B0phi_edge(kedge) / mesh%mid_R(kedge)
+          associate (f => cache%mid_fields(kedge))
+            a(kp) = (f%B0_R * mesh%edge_R(kedge) + f%B0_Z * mesh%edge_Z(kedge)) / &
+                 (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
+            x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bn%DOF(kedge)
+            b(kp) = imun * (mesh%n + imun * conf%damp) * f%B0_phi / mesh%mid_R(kedge)
+          end associate
        end do
        d = -a + b * 0.5d0
        du = a + b * 0.5d0
@@ -513,7 +506,7 @@ contains
   subroutine compute_currn
     use sparse_mod, only: sparse_solve, sparse_matmul
     use mephit_conf, only: conf, logger
-    use mephit_mesh, only: fs, mesh, B0phi_edge, B0_flux, j0phi_edge
+    use mephit_mesh, only: fs, mesh, cache
     use mephit_pert, only: RT0_compute_tor_comp
     use mephit_util, only: imun, clight
     complex(dp), dimension(maxval(mesh%kt_max)) :: x, d, du, inhom
@@ -536,9 +529,10 @@ contains
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
-          jn%DOF(kedge) = j0phi_edge(kedge) / B0phi_edge(kedge) * Bn%DOF(kedge) + &
-               clight * mesh%mid_R(kedge) / B0phi_edge(kedge) * &
-               (pn%DOF(mesh%edge_node(2, kedge)) - pn%DOF(mesh%edge_node(1, kedge)))
+          associate (f => cache%mid_fields(kedge), nodes => mesh%edge_node(:, kedge))
+            jn%DOF(kedge) = (f%j0_phi * Bn%DOF(kedge) + clight * mesh%mid_R(kedge) * &
+                 (pn%DOF(nodes(2)) - pn%DOF(nodes(1)))) / f%B0_phi
+          end associate
        end do
     end do
     if (first_call) then
@@ -560,22 +554,24 @@ contains
           else
              x(ke) = x(ke) + jn%DOF(mesh%tri_edge(1, ktri))
           end if
-          ! diagonal matrix element - edge i
-          d(ke) = -1d0 - imun * (mesh%n + imun * conf%damp) * &
-               mesh%area(ktri) * 0.5d0 * B0phi_edge(kedge) / B0_flux(kedge)
-          ! additional term from edge i on source side
-          x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%mid_R(kedge) / B0_flux(kedge) * &
-               (Bnphi_edge / B0phi_edge(kedge) * Delta_p0 - Delta_pn) + j0phi_edge(kedge) * &
-               (Bnphi_edge / B0phi_edge(kedge) - Bn%DOF(kedge) / B0_flux(kedge)))
-          ! superdiagonal matrix element - edge o
-          ktri = mesh%edge_tri(1, kedge)
-          ke = mod(kt + mesh%kt_max(kf) - 2, mesh%kt_max(kf)) + 1
-          du(ke) = 1d0 + imun * (mesh%n + imun * conf%damp) * &
-               mesh%area(ktri) * 0.5d0 * B0phi_edge(kedge) / (-B0_flux(kedge))
-          ! additional term from edge o on source side
-          x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%mid_R(kedge) / (-B0_flux(kedge)) * &
-               (Bnphi_edge / B0phi_edge(kedge) * (-Delta_p0) - (-Delta_pn)) + j0phi_edge(kedge) * &
-               (Bnphi_edge / B0phi_edge(kedge) - (-Bn%DOF(kedge)) / (-B0_flux(kedge))))
+          associate (f => cache%mid_fields(kedge), B0_flux => cache%B0_flux(kedge))
+            ! diagonal matrix element - edge i
+            d(ke) = -1d0 - imun * (mesh%n + imun * conf%damp) * &
+                 mesh%area(ktri) * 0.5d0 * f%B0_phi / B0_flux
+            ! additional term from edge i on source side
+            x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%mid_R(kedge) / B0_flux * &
+                 (Bnphi_edge / f%B0_phi * Delta_p0 - Delta_pn) + f%j0_phi * &
+                 (Bnphi_edge / f%B0_phi - Bn%DOF(kedge) / B0_flux))
+            ! superdiagonal matrix element - edge o
+            ktri = mesh%edge_tri(1, kedge)
+            ke = mod(kt + mesh%kt_max(kf) - 2, mesh%kt_max(kf)) + 1
+            du(ke) = 1d0 + imun * (mesh%n + imun * conf%damp) * &
+                 mesh%area(ktri) * 0.5d0 * f%B0_phi / (-B0_flux)
+            ! additional term from edge o on source side
+            x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%mid_R(kedge) / (-B0_flux) * &
+                 (Bnphi_edge / f%B0_phi * (-Delta_p0) - (-Delta_pn)) + f%j0_phi * &
+                 (Bnphi_edge / f%B0_phi - (-Bn%DOF(kedge)) / (-B0_flux)))
+          end associate
        end do
        associate (ndim => mesh%kt_max(kf), nz => 2 * mesh%kt_max(kf), k_min => mesh%kt_low(kf))
          if (first_call) then
@@ -803,7 +799,7 @@ contains
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: datafile
     use mephit_util, only: clight, imun, pi
-    use mephit_mesh, only: mesh, fs_half, B0R_Omega, B0Z_Omega, B0phi_Omega
+    use mephit_mesh, only: mesh, fs_half, cache
     use mephit_pert, only: RT0_interp, L1_interp
     type(L1_t), intent(in) :: p_n
     type(RT0_t), intent(in) :: B_n, j_n
@@ -819,20 +815,19 @@ contains
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          associate (R => mesh%R_Omega(ktri), Z => mesh%Z_Omega(ktri), &
-               F => fs_half%F(kf), FdF_dpsi => fs_half%FdF_dpsi(kf), dp0_dpsi => fs_half%dp_dpsi(kf), &
-               B0_R => B0R_Omega(ktri), B0_Z => B0Z_Omega(ktri), B0_phi => B0phi_Omega(ktri))
-            j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * B0_R
-            j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * B0_Z
+          associate (R => mesh%cntr_R(ktri), Z => mesh%cntr_Z(ktri), c => cache%cntr_fields(ktri), &
+               F => fs_half%F(kf), FdF_dpsi => fs_half%FdF_dpsi(kf), dp0_dpsi => fs_half%dp_dpsi(kf))
+            j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_R
+            j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_Z
             j0_phi = clight * (dp0_dpsi * R + 0.25d0 / pi * FdF_dpsi / R)
             call L1_interp(ktri, p_n, R, Z, pn, dpn_dR, dpn_dZ)
             call RT0_interp(ktri, B_n, R, Z, Bn_R, Bn_Z, Bn_phi)
             call RT0_interp(ktri, j_n, R, Z, jn_R, jn_Z, jn_phi)
             grad_pn(:, ktri) = [dpn_dR, imun * mesh%n * pn / R, dpn_dZ]
             lorentz(:, ktri) = 1d0 / clight * &
-                 [jn_phi * B0_Z - jn_Z * B0_phi + j0_phi * Bn_Z - j0_Z * Bn_phi, &
-                 jn_Z * B0_R - jn_R * B0_Z + j0_Z * Bn_R - j0_R * Bn_Z, &
-                 jn_R * B0_phi - jn_phi * B0_R + j0_R * Bn_phi - j0_phi * Bn_R]
+                 [jn_phi * c%B0_Z - jn_Z * c%B0_phi + j0_phi * Bn_Z - j0_Z * Bn_phi, &
+                 jn_Z * c%B0_R - jn_R * c%B0_Z + j0_Z * Bn_R - j0_R * Bn_Z, &
+                 jn_R * c%B0_phi - jn_phi * c%B0_R + j0_R * Bn_phi - j0_phi * Bn_R]
           end associate
        end do
     end do

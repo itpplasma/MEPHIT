@@ -21,8 +21,6 @@ module mephit_mesh
   ! module variables
   public :: equil, psi_interpolator, psi_fine_interpolator, fs, fs_half, mesh, &
        cache
-  public :: B0R_edge, B0phi_edge, B0Z_edge, B0R_Omega, B0phi_Omega, B0Z_Omega, &
-       B0_flux, j0phi_edge
 
   type(g_eqdsk) :: equil
   type(interp1d) :: psi_interpolator
@@ -194,6 +192,9 @@ module mephit_mesh
      real(dp), allocatable :: mid_Z(:)
      real(dp), allocatable :: edge_R(:)
      real(dp), allocatable :: edge_Z(:)
+     real(dp), allocatable :: area(:)
+     real(dp), allocatable :: cntr_R(:)
+     real(dp), allocatable :: cntr_Z(:)
 
      !> Order of Gauss-Legendre quadrature
      integer :: GL_order = 2
@@ -229,50 +230,9 @@ module mephit_mesh
      !> Surface integral Jacobian used for normalization of poloidal modes in GPEC
      complex(dp), allocatable :: gpec_jacfac(:, :)
 
-     real(dp), allocatable :: area(:)
-     real(dp), allocatable :: R_Omega(:)
-     real(dp), allocatable :: Z_Omega(:)
-
   end type mesh_t
 
   type(mesh_t) :: mesh
-
-  !> \f$ R \f$ component of equilibrium magnetic field \f$ B_{0} \f$ on each edge.
-  real(dp), allocatable :: B0R_edge(:)
-
-  !> \f$ \phi \f$ component of equilibrium magnetic field \f$ B_{0} \f$ on each edge.
-  real(dp), allocatable :: B0phi_edge(:)
-
-  !> \f$ Z \f$ component of equilibrium magnetic field \f$ B_{0} \f$ on each edge.
-  real(dp), allocatable :: B0Z_edge(:)
-
-  !> \f$ \phi \f$ component of equilibrium magnetic field \f$ B_{0} (\Omega) \f$.
-  !>
-  !> Values are stored seprately for each triangle and the indexing scheme is the same as
-  !> for #mesh_mod::mesh_element.
-  real(dp), allocatable :: B0r_Omega(:)
-
-  !> \f$ Z \f$ component of equilibrium magnetic field \f$ B_{0} (\Omega) \f$.
-  !>
-  !> Values are stored seprately for each triangle and the indexing scheme is the same as
-  !> for #mesh_mod::mesh_element.
-  real(dp), allocatable :: B0phi_Omega(:)
-
-  !> \f$ R \f$ component of equilibrium magnetic field \f$ B_{0} (\Omega) \f$.
-  !>
-  !> Values are stored seprately for each triangle and the indexing scheme is the same as
-  !> for #mesh_mod::mesh_element.
-  real(dp), allocatable :: B0z_Omega(:)
-
-  !> Equilibrium flux \f$ \vec{B}_{0} \cdot \vec{n} \f$ through triangle edges.
-  !>
-  !> The normal vector points to the right of the edge vector. Thus on poloidal edges,
-  !> it points radially outward, and on radial edges, it points in poloidally clockwise direction.
-  real(dp), allocatable :: B0_flux(:)
-
-  !> Physical toroidal component of equilibrium current \f$ j_{0 (\phi)} \f$  on each edge
-  !> in statampere cm^-2.
-  real(dp), allocatable :: j0phi_edge(:)
 
   type :: coord_cache_t
      integer :: ktri
@@ -291,7 +251,8 @@ module mephit_mesh
   type :: cache_t
      integer :: nrad, npol
      type(coord_cache_t), allocatable :: sample_polmodes_half(:, :), sample_polmodes(:, :)
-     type(field_cache_t), allocatable :: edge_fields(:, :), area_fields(:, :)
+     type(field_cache_t), allocatable :: edge_fields(:, :), area_fields(:, :), mid_fields(:), cntr_fields(:)
+     real(dp), allocatable :: B0_flux(:)
   end type cache_t
 
   type(cache_t) :: cache
@@ -572,7 +533,7 @@ contains
 
   subroutine field_cache_write(cache, file, dataset, comment)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    class(field_cache_t), dimension(:, :), intent(in) :: cache
+    class(field_cache_t), dimension(..), intent(in) :: cache
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
     character(len = *), intent(in) :: comment
@@ -580,45 +541,85 @@ contains
 
     call h5_open_rw(file, h5id_root)
     call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache%psi, &
-         lbound(cache), ubound(cache), unit = 'Mx', &
-         comment = 'poloidal flux at ' // trim(adjustl(comment)))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache%B0_R, &
-         lbound(cache), ubound(cache), unit = 'G', &
-         comment = 'R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache%B0_Z, &
-         lbound(cache), ubound(cache), unit = 'G', &
-         comment = 'Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache%B0_phi, &
-         lbound(cache), ubound(cache), unit = 'G', &
-         comment = 'physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache%j0_R, &
-         lbound(cache), ubound(cache), unit = 'statA', &
-         comment = 'R component of equilibrium current density at ' // trim(adjustl(comment)))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache%j0_Z, &
-         lbound(cache), ubound(cache), unit = 'statA', &
-         comment = 'Z component of equilibrium current density at ' // trim(adjustl(comment)))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache%j0_phi, &
-         lbound(cache), ubound(cache), unit = 'statA', &
-         comment = 'physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
+    select rank (cache)
+    rank (1)
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:)%psi, &
+            lbound(cache), ubound(cache), unit = 'Mx', &
+            comment = 'poloidal flux at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:)%B0_R, &
+            lbound(cache), ubound(cache), unit = 'G', &
+            comment = 'R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:)%B0_Z, &
+            lbound(cache), ubound(cache), unit = 'G', &
+            comment = 'Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:)%B0_phi, &
+            lbound(cache), ubound(cache), unit = 'G', &
+            comment = 'physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache(:)%j0_R, &
+            lbound(cache), ubound(cache), unit = 'statA', &
+            comment = 'R component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache(:)%j0_Z, &
+            lbound(cache), ubound(cache), unit = 'statA', &
+            comment = 'Z component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache(:)%j0_phi, &
+            lbound(cache), ubound(cache), unit = 'statA', &
+            comment = 'physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
+    rank (2)
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:, :)%psi, &
+            lbound(cache), ubound(cache), unit = 'Mx', &
+            comment = 'poloidal flux at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:, :)%B0_R, &
+            lbound(cache), ubound(cache), unit = 'G', &
+            comment = 'R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:, :)%B0_Z, &
+            lbound(cache), ubound(cache), unit = 'G', &
+            comment = 'Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:, :)%B0_phi, &
+            lbound(cache), ubound(cache), unit = 'G', &
+            comment = 'physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache(:, :)%j0_R, &
+            lbound(cache), ubound(cache), unit = 'statA', &
+            comment = 'R component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache(:, :)%j0_Z, &
+            lbound(cache), ubound(cache), unit = 'statA', &
+            comment = 'Z component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache(:, :)%j0_phi, &
+            lbound(cache), ubound(cache), unit = 'statA', &
+            comment = 'physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
+    rank default
+       error stop 'field_cache_write: rank-1 or rank-2 array expected for argument ''cache'''
+    end select
     call h5_close(h5id_root)
   end subroutine field_cache_write
 
   subroutine field_cache_read(cache, file, dataset)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
-    class(field_cache_t), dimension(:, :), intent(inout) :: cache
+    class(field_cache_t), dimension(..), intent(inout) :: cache
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
     integer(HID_T) :: h5id_root
 
     call h5_open(file, h5id_root)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache%psi)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache%B0_R)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache%B0_Z)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache%B0_phi)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache%j0_R)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache%j0_Z)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache%j0_phi)
+    select rank (cache)
+    rank (1)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:)%psi)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:)%B0_R)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:)%B0_Z)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:)%B0_phi)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache(:)%j0_R)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache(:)%j0_Z)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache(:)%j0_phi)
+    rank (2)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:, :)%psi)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:, :)%B0_R)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:, :)%B0_Z)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:, :)%B0_phi)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache(:, :)%j0_R)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache(:, :)%j0_Z)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache(:, :)%j0_phi)
+    rank default
+       error stop 'field_cache_read: rank-1 or rank-2 array expected for argument ''cache'''
+    end select
     call h5_close(h5id_root)
   end subroutine field_cache_read
 
@@ -631,6 +632,7 @@ contains
     cache%npol = npol
     allocate(cache%sample_polmodes(npol, nrad), cache%sample_polmodes_half(npol, nrad))
     allocate(cache%edge_fields(mesh%GL_order, mesh%nedge), cache%area_fields(mesh%GL2_order, mesh%ntri))
+    allocate(cache%mid_fields(mesh%nedge), cache%cntr_fields(mesh%ntri), cache%B0_flux(mesh%nedge))
   end subroutine cache_init
 
   subroutine cache_deinit(cache)
@@ -642,6 +644,9 @@ contains
     if (allocated(cache%sample_polmodes_half)) deallocate(cache%sample_polmodes_half)
     if (allocated(cache%edge_fields)) deallocate(cache%edge_fields)
     if (allocated(cache%area_fields)) deallocate(cache%area_fields)
+    if (allocated(cache%mid_fields)) deallocate(cache%mid_fields)
+    if (allocated(cache%cntr_fields)) deallocate(cache%cntr_fields)
+    if (allocated(cache%B0_flux)) deallocate(cache%B0_flux)
   end subroutine cache_deinit
 
   subroutine cache_write(cache, file, dataset)
@@ -663,11 +668,20 @@ contains
     call field_cache_write(cache%area_fields, file, &
          trim(adjustl(dataset)) // '/area_fields', &
          'GL quadrature points on triangle areas')
+    call field_cache_write(cache%mid_fields, file, &
+         trim(adjustl(dataset)) // '/mid_fields', &
+         'triangle edge midpoints')
+    call field_cache_write(cache%cntr_fields, file, &
+         trim(adjustl(dataset)) // '/cntr_fields', &
+         'weighted triangle centroids')
     call h5_open_rw(file, h5id_root)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/nrad', cache%nrad, &
          comment = 'number of radial divisions for poloidal mode sampling points')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/npol', cache%npol, &
          comment = 'number of poloidal divisions for poloidal mode sampling points')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_flux', cache%B0_flux, &
+         lbound(cache%B0_flux), ubound(cache%B0_flux), &
+         comment = 'equilibrium magnetic flux through triangle edge', unit = 'G cm^2')
     call h5_close(h5id_root)
   end subroutine cache_write
 
@@ -682,14 +696,17 @@ contains
     call h5_open(file, h5id_root)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/nrad', nrad)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/npol', npol)
-    call h5_close(h5id_root)
     call cache_init(cache, nrad, npol)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_flux', cache%B0_flux)
+    call h5_close(h5id_root)
     call coord_cache_read(cache%sample_polmodes_half, file, &
          trim(adjustl(dataset)) // '/sample_polmodes_half')
     call coord_cache_read(cache%sample_polmodes, file, &
          trim(adjustl(dataset)) // '/sample_polmodes')
     call field_cache_read(cache%edge_fields, file, trim(adjustl(dataset)) // '/edge_fields')
     call field_cache_read(cache%area_fields, file, trim(adjustl(dataset)) // '/area_fields')
+    call field_cache_read(cache%mid_fields, file, trim(adjustl(dataset)) // '/mid_fields')
+    call field_cache_read(cache%cntr_fields, file, trim(adjustl(dataset)) // '/cntr_fields')
   end subroutine cache_read
 
   subroutine generate_mesh
@@ -712,69 +729,26 @@ contains
     call init_flux_variables
     call check_resonance_positions
     call compute_shielding_auxiliaries
-    call compute_j0phi
+    call compute_curr0
   end subroutine generate_mesh
 
   subroutine write_cache
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
     use mephit_conf, only: conf_arr, datafile
-    integer(HID_T) :: h5id_root
 
     call conf_arr%export_hdf5(datafile, 'config')
     call flux_func_cache_write(fs, datafile, 'cache/fs', 'on flux surfaces')
     call flux_func_cache_write(fs_half, datafile, 'cache/fs_half', 'between flux surfaces')
     call cache_write(cache, datafile, 'cache')
-    ! TODO: put in separate subroutine for edge_cache_type
-    call h5_open_rw(datafile, h5id_root)
-    ! TODO: revise naming and indexing when edge_cache type is working for GL quadrature in compute_currn
-    call h5_add(h5id_root, 'cache/B0R_edge', B0R_edge, lbound(B0R_edge), ubound(B0R_edge), &
-         comment = 'R component of equilibrium magnetic field on triangle edge', unit = 'G')
-    call h5_add(h5id_root, 'cache/B0phi_edge', B0phi_edge, lbound(B0phi_edge), ubound(B0phi_edge), &
-         comment = 'phi component of equilibrium magnetic field on triangle edge', unit = 'G')
-    call h5_add(h5id_root, 'cache/B0Z_edge', B0Z_edge, lbound(B0Z_edge), ubound(B0Z_edge), &
-         comment = 'Z component of equilibrium magnetic field on triangle edge', unit = 'G')
-    call h5_add(h5id_root, 'cache/B0_flux', B0_flux, lbound(B0_flux), ubound(B0_flux), &
-         comment = 'Equilibrium magnetic flux through triangle edge', unit = 'G cm^2')
-    call h5_add(h5id_root, 'cache/B0R_centr', B0R_Omega, lbound(B0R_Omega), ubound(B0R_Omega), &
-         comment = 'R component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
-    call h5_add(h5id_root, 'cache/B0phi_centr', B0phi_Omega, lbound(B0phi_Omega), ubound(B0phi_Omega), &
-         comment = 'phi component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
-    call h5_add(h5id_root, 'cache/B0Z_centr', B0Z_Omega, lbound(B0Z_Omega), ubound(B0Z_Omega), &
-         comment = 'Z component of equilibrium magnetic field on triangle ''centroid''', unit = 'G')
-    call h5_add(h5id_root, 'cache/j0phi_edge', j0phi_edge, lbound(j0phi_edge), ubound(j0phi_edge), &
-         comment = 'phi component of equilibrium current density on triangle edge', unit = 'statA cm^-2')
-    call h5_close(h5id_root)
   end subroutine write_cache
 
   subroutine read_cache
-    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
     use mephit_conf, only: datafile
-    integer(HID_T) :: h5id_root
 
     call flux_func_cache_init(fs, mesh%nflux, .false.)
     call flux_func_cache_init(fs_half, mesh%nflux, .true.)
     call flux_func_cache_read(fs, datafile, 'cache/fs')
     call flux_func_cache_read(fs_half, datafile, 'cache/fs_half')
     call cache_read(cache, datafile, 'cache')
-    ! TODO: revise naming and indexing when edge_cache type is working for GL quadrature in compute_currn
-    allocate(B0R_edge(mesh%nedge))
-    allocate(B0phi_edge(mesh%nedge))
-    allocate(B0Z_edge(mesh%nedge))
-    allocate(B0R_Omega(mesh%ntri))
-    allocate(B0phi_Omega(mesh%ntri))
-    allocate(B0Z_Omega(mesh%ntri))
-    allocate(B0_flux(mesh%nedge))
-    allocate(j0phi_edge(mesh%nedge))
-    call h5_open(datafile, h5id_root)
-    call h5_get(h5id_root, 'cache/B0R_edge', B0R_edge)
-    call h5_get(h5id_root, 'cache/B0phi_edge', B0phi_edge)
-    call h5_get(h5id_root, 'cache/B0Z_edge', B0Z_edge)
-    call h5_get(h5id_root, 'cache/B0_flux', B0_flux)
-    call h5_get(h5id_root, 'cache/B0R_centr', B0R_Omega)
-    call h5_get(h5id_root, 'cache/B0phi_centr', B0phi_Omega)
-    call h5_get(h5id_root, 'cache/B0Z_centr', B0Z_Omega)
-    call h5_get(h5id_root, 'cache/j0phi_edge', j0phi_edge)
-    call h5_close(h5id_root)
   end subroutine read_cache
 
   subroutine compute_resonance_positions(psi_sample, q_sample, psi2rho_norm)
@@ -1348,11 +1322,11 @@ contains
     ! nodes for radial edges
     mesh%edge_node(:, mesh%npoint:) = mesh%tri_node([3, 1], :)
     ! cache areas and 'centroids'
-    allocate(mesh%R_Omega(mesh%ntri))
-    allocate(mesh%Z_Omega(mesh%ntri))
+    allocate(mesh%cntr_R(mesh%ntri))
+    allocate(mesh%cntr_Z(mesh%ntri))
     allocate(mesh%area(mesh%ntri))
     do ktri = 1, mesh%ntri
-       call ring_centered_avg_coord(ktri, mesh%R_Omega(ktri), mesh%Z_Omega(ktri))
+       call ring_centered_avg_coord(ktri, mesh%cntr_R(ktri), mesh%cntr_Z(ktri))
        mesh%area(ktri) = tri_area(ktri)
     end do
     ! cache edge midpoints and Gauss-Legendre quadrature evaluation points
@@ -1513,12 +1487,12 @@ contains
     end do
     ! check point locations
     do ktri = 1, mesh%ntri
-       ktri_check = point_location(mesh%R_Omega(ktri), mesh%Z_Omega(ktri))
+       ktri_check = point_location(mesh%cntr_R(ktri), mesh%cntr_Z(ktri))
        if (ktri /= ktri_check) then
           write (logger%msg, '("point_location returns ", i0, " for centroid of triangle ", i0)') ktri_check, ktri
           if (logger%debug) call logger%write_msg
        end if
-       ktri_check = point_location_check(mesh%R_Omega(ktri), mesh%Z_Omega(ktri))
+       ktri_check = point_location_check(mesh%cntr_R(ktri), mesh%cntr_Z(ktri))
        if (ktri /= ktri_check) then
           write (logger%msg, '("point_location_check returns ", i0, " for centroid of triangle ", i0)') ktri_check, ktri
           if (logger%debug) call logger%write_msg
@@ -2045,6 +2019,15 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/edge_Z', mesh%edge_Z, &
          lbound(mesh%edge_Z), ubound(mesh%edge_Z), &
          comment = 'Z coordinate of edge vector', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area, &
+         lbound(mesh%area), ubound(mesh%area), &
+         comment = 'triangle area', unit = 'cm^2')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cntr_R', mesh%cntr_R, &
+         lbound(mesh%cntr_R), ubound(mesh%cntr_R), &
+         comment = 'R coordinate of triangle ''centroid''', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/cntr_Z', mesh%cntr_Z, &
+         lbound(mesh%cntr_Z), ubound(mesh%cntr_Z), &
+         comment = 'Z coordinate of triangle ''centroid''', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_order', mesh%GL_order, &
          comment = 'order of Gauss-Legendre quadrature')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_weights', mesh%GL_weights, &
@@ -2085,15 +2068,6 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_coeff', mesh%shielding_coeff, &
          lbound(mesh%shielding_coeff), ubound(mesh%shielding_coeff), unit = 'g^-1 cm s', &
          comment = 'Coefficient in the compensated scheme for shielding')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega, &
-         lbound(mesh%R_Omega), ubound(mesh%R_Omega), &
-         comment = 'R coordinate of triangle ''centroid''', unit = 'cm')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_Omega', mesh%Z_Omega, &
-         lbound(mesh%Z_Omega), ubound(mesh%Z_Omega), &
-         comment = 'Z coordinate of triangle ''centroid''', unit = 'cm')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area, &
-         lbound(mesh%area), ubound(mesh%area), &
-         comment = 'triangle area', unit = 'cm^2')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/gpec_jacfac', mesh%gpec_jacfac, &
          lbound(mesh%gpec_jacfac), ubound(mesh%gpec_jacfac), unit = 'cm^2', &
          comment = 'Jacobian surface factor between flux surfaces')
@@ -2200,8 +2174,8 @@ contains
     allocate(mesh%shielding_coeff(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%gpec_jacfac(-16:16, mesh%nflux))
     allocate(mesh%area(mesh%ntri))
-    allocate(mesh%R_Omega(mesh%ntri))
-    allocate(mesh%Z_Omega(mesh%ntri))
+    allocate(mesh%cntr_R(mesh%ntri))
+    allocate(mesh%cntr_Z(mesh%ntri))
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/deletions', mesh%deletions)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', mesh%refinement)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/res_ind', mesh%res_ind)
@@ -2227,6 +2201,9 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/mid_Z', mesh%mid_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_R', mesh%edge_R)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_Z', mesh%edge_Z)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cntr_R', mesh%cntr_R)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/cntr_Z', mesh%cntr_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_weights', mesh%GL_weights)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_R', mesh%GL_R)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_Z', mesh%GL_Z)
@@ -2243,9 +2220,6 @@ contains
     allocate(mesh%shielding_L1_Z(-1:0, mesh%GL_order, sum(mesh%kt_max(mesh%res_ind))))
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_L1_Z', mesh%shielding_L1_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/shielding_coeff', mesh%shielding_coeff)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_Omega', mesh%R_Omega)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_Omega', mesh%Z_Omega)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/area', mesh%area)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/gpec_jacfac', mesh%gpec_jacfac)
     call h5_close(h5id_root)
     where (orient == 1)
@@ -2284,6 +2258,9 @@ contains
     if (allocated(this%mid_Z)) deallocate(this%mid_Z)
     if (allocated(this%edge_R)) deallocate(this%edge_R)
     if (allocated(this%edge_Z)) deallocate(this%edge_Z)
+    if (allocated(this%area)) deallocate(this%area)
+    if (allocated(this%cntr_R)) deallocate(this%cntr_R)
+    if (allocated(this%cntr_Z)) deallocate(this%cntr_Z)
     if (allocated(this%GL_weights)) deallocate(this%GL_weights)
     if (allocated(this%GL_R)) deallocate(this%GL_R)
     if (allocated(this%GL_Z)) deallocate(this%GL_Z)
@@ -2297,9 +2274,6 @@ contains
     if (allocated(this%shielding_L1_Z)) deallocate(this%shielding_L1_Z)
     if (allocated(this%shielding_coeff)) deallocate(this%shielding_coeff)
     if (allocated(this%gpec_jacfac)) deallocate(this%gpec_jacfac)
-    if (allocated(this%area)) deallocate(this%area)
-    if (allocated(this%R_Omega)) deallocate(this%R_Omega)
-    if (allocated(this%Z_Omega)) deallocate(this%Z_Omega)
   end subroutine mesh_deinit
 
   subroutine compare_gpec_coordinates
@@ -2712,7 +2686,7 @@ contains
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          fs_half%q(kf) = fs_half%q(kf) + B0phi_Omega(ktri) * mesh%area(ktri)
+          fs_half%q(kf) = fs_half%q(kf) + cache%cntr_fields(ktri)%B0_phi * mesh%area(ktri)
        end do
        fs_half%q(kf) = fs_half%q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
     end do
@@ -2769,7 +2743,7 @@ contains
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          step_q(kf) = step_q(kf) + B0phi_Omega(ktri) * mesh%area(ktri)
+          step_q(kf) = step_q(kf) + cache%cntr_fields(ktri)%B0_phi * mesh%area(ktri)
        end do
        step_q(kf) = step_q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
     end do
@@ -2797,88 +2771,83 @@ contains
 
   subroutine cache_equilibrium_field
     use field_eq_mod, only: psif, psib
-    integer :: kf, kt, ktri, kedge, k
+    integer :: ktri, kedge, k
     real(dp) :: dum
 
-    allocate(B0R_edge(mesh%nedge))
-    allocate(B0phi_edge(mesh%nedge))
-    allocate(B0Z_edge(mesh%nedge))
-    allocate(B0R_Omega(mesh%ntri))
-    allocate(B0phi_Omega(mesh%ntri))
-    allocate(B0Z_Omega(mesh%ntri))
-    allocate(B0_flux(mesh%nedge))
-    ! edges
+    ! edge midpoints
     do kedge = 1, mesh%nedge
-       call field(mesh%mid_R(kedge), 0d0, mesh%mid_Z(kedge), &
-            B0R_edge(kedge), B0phi_edge(kedge), B0Z_edge(kedge), dum, dum, dum, dum, dum, dum, dum, dum, dum)
-       B0_flux(kedge) = mesh%mid_R(kedge) * &
-            (B0R_edge(kedge) * mesh%edge_Z(kedge) - B0Z_edge(kedge) * mesh%edge_R(kedge))
+       associate (f => cache%mid_fields(kedge))
+         call field(mesh%mid_R(kedge), 0d0, mesh%mid_Z(kedge), &
+              f%B0_R, f%B0_phi, f%B0_Z, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+         f%psi = psif - psib  ! see intperp_psi_pol in mephit_util
+         cache%B0_flux(kedge) = mesh%mid_R(kedge) * &
+              (f%B0_R * mesh%edge_Z(kedge) - f%B0_Z * mesh%edge_R(kedge))
+       end associate
     end do
-    ! centroids
-    do kf = 1, mesh%nflux
-       do kt = 1, mesh%kt_max(kf)
-          ktri = mesh%kt_low(kf) + kt
-          call field(mesh%R_Omega(ktri), 0d0, mesh%Z_Omega(ktri), &
-               B0R_Omega(ktri), B0phi_Omega(ktri), B0Z_Omega(ktri), dum, dum, dum, dum, dum, dum, dum, dum, dum)
-       end do
+    ! weighted triangle centroids
+    do ktri = 1, mesh%ntri
+       associate (f => cache%cntr_fields(ktri))
+         call field(mesh%cntr_R(ktri), 0d0, mesh%cntr_Z(ktri), &
+              f%B0_R, f%B0_phi, f%B0_Z, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+         f%psi = psif - psib  ! see intperp_psi_pol in mephit_util
+       end associate
     end do
-    ! Gauss-Legendre evaluation points on edges
+    ! Gauss-Legendre evaluation points on triangle edges
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
-          call field(mesh%GL_R(k, kedge), 0d0, mesh%GL_Z(k, kedge), &
-               cache%edge_fields(k, kedge)%B0_R, cache%edge_fields(k, kedge)%B0_phi, cache%edge_fields(k, kedge)%B0_Z, &
-               dum, dum, dum, dum, dum, dum, dum, dum, dum)
-          ! see intperp_psi_pol in mephit_util
-          cache%edge_fields(k, kedge)%psi = psif - psib
+          associate (f => cache%edge_fields(k, kedge))
+            call field(mesh%GL_R(k, kedge), 0d0, mesh%GL_Z(k, kedge), &
+                 f%B0_R, f%B0_phi, f%B0_Z, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+            f%psi = psif - psib  ! see intperp_psi_pol in mephit_util
+          end associate
        end do
     end do
-    ! Gauss-Legendre evaluation points on triangles
+    ! Gauss-Legendre evaluation points on triangle areas
     do ktri = 1, mesh%ntri
        do k = 1, mesh%GL2_order
-          call field(mesh%GL2_R(k, ktri), 0d0, mesh%GL2_Z(k, ktri), &
-               cache%area_fields(k, ktri)%B0_R, cache%area_fields(k, ktri)%B0_phi, cache%area_fields(k, ktri)%B0_Z, &
-               dum, dum, dum, dum, dum, dum, dum, dum, dum)
-          ! see intperp_psi_pol in mephit_util
-          cache%area_fields(k, ktri)%psi = psif - psib
+          associate (f => cache%area_fields(k, ktri))
+            call field(mesh%GL2_R(k, ktri), 0d0, mesh%GL2_Z(k, ktri), &
+                 f%B0_R, f%B0_phi, f%B0_Z, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+            f%psi = psif - psib  ! see intperp_psi_pol in mephit_util
+          end associate
        end do
     end do
   end subroutine cache_equilibrium_field
 
-  subroutine compute_j0phi
+  subroutine compute_curr0
     use mephit_conf, only: conf, logger, curr_prof_ps, curr_prof_rot, curr_prof_geqdsk
-    real(dp) :: plot_j0phi(mesh%ntri)
 
-    allocate(j0phi_edge(mesh%nedge))
-    j0phi_edge = 0d0
     select case (conf%curr_prof)
     case (curr_prof_ps)
        write (logger%msg, '("current profile selection ", i0, " currently not supported.")') conf%curr_prof
        if (logger%err) call logger%write_msg
        error stop
     case (curr_prof_rot)
-       call compute_j0phi_rot(plot_j0phi)
+       call compute_curr0_rot
     case (curr_prof_geqdsk)
-       call compute_j0phi_geqdsk(plot_j0phi)
+       call compute_curr0_geqdsk
     case default
        write (logger%msg, '("unknown current profile selection: ", i0)') conf%curr_prof
        if (logger%err) call logger%write_msg
        error stop
     end select
-    ! TODO: write out plot_j0phi when edge_cache type is working
-  end subroutine compute_j0phi
+  end subroutine compute_curr0
 
   ! TODO: debugging routine to calculate PS current
-  subroutine compute_j0phi_ps(plot_j0phi)
+  subroutine compute_curr0_ps
+    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use mephit_util, only: clight
-    real(dp), intent(out) :: plot_j0phi(:)
     integer :: kf, kt, ktri, kp, kedge
+    real(dp) :: nan
     real(dp), dimension(mesh%nflux) :: B2avg, B2avg_half
 
     B2avg = 0d0
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
-          B2avg(kf) = B2avg(kf) + B0R_edge(kedge) ** 2 + B0phi_edge(kedge) ** 2 + B0Z_edge(kedge) ** 2
+          associate (f => cache%mid_fields(kedge))
+            B2avg(kf) = B2avg(kf) + f%B0_R ** 2 + f%B0_phi ** 2 + f%B0_Z ** 2
+          end associate
        end do
        B2avg(kf) = B2avg(kf) / mesh%kp_max(kf)
     end do
@@ -2886,7 +2855,9 @@ contains
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
-          B2avg_half(kf) = B2avg_half(kf) + B0R_edge(kedge) ** 2 + B0phi_edge(kedge) ** 2 + B0Z_edge(kedge) ** 2
+          associate (f => cache%mid_fields(kedge))
+            B2avg_half(kf) = B2avg_half(kf) + f%B0_R ** 2 + f%B0_phi ** 2 + f%B0_Z ** 2
+          end associate
        end do
        B2avg_half(kf) = B2avg_half(kf) / mesh%kt_max(kf)
     end do
@@ -2894,134 +2865,146 @@ contains
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
-          j0phi_edge(kedge) = clight * mesh%mid_R(kedge) * fs%dp_dpsi(kf) * &
-               (1d0 - B0phi_edge(kedge) ** 2 / B2avg(kf))
+          associate (f => cache%mid_fields(kedge))
+            f%j0_phi = clight * mesh%mid_R(kedge) * fs%dp_dpsi(kf) * &
+                 (1d0 - f%B0_phi ** 2 / B2avg(kf))
+          end associate
        end do
     end do
     ! edges in radial direction
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
-          j0phi_edge(kedge) = clight * mesh%mid_R(kedge) * fs_half%dp_dpsi(kf) * &
-               (1d0 - B0phi_edge(kedge) ** 2 / B2avg_half(kf))
+          associate (f => cache%mid_fields(kedge))
+            f%j0_phi = clight * mesh%mid_R(kedge) * fs_half%dp_dpsi(kf) * &
+                 (1d0 - f%B0_phi ** 2 / B2avg_half(kf))
+          end associate
        end do
     end do
-    ! centroid
+    ! weighted triangle centroids
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          plot_j0phi(ktri) = clight * mesh%R_Omega(ktri) * fs_half%dp_dpsi(kf) * &
-               (1d0 - B0phi_Omega(ktri) ** 2 / B2avg_half(kf))
+          associate (f => cache%cntr_fields(ktri))
+            f%j0_phi = clight * mesh%cntr_R(ktri) * fs_half%dp_dpsi(kf) * &
+                 (1d0 - f%B0_phi ** 2 / B2avg_half(kf))
+          end associate
        end do
     end do
-  end subroutine compute_j0phi_ps
+    nan = ieee_value(1d0, ieee_quiet_nan)
+    cache%mid_fields(:)%j0_R = nan
+    cache%mid_fields(:)%j0_Z = nan
+    cache%cntr_fields(:)%j0_R = nan
+    cache%cntr_fields(:)%j0_Z = nan
+    cache%edge_fields(:, :)%j0_R = nan
+    cache%edge_fields(:, :)%j0_Z = nan
+    cache%edge_fields(:, :)%j0_phi = nan
+    cache%area_fields(:, :)%j0_R = nan
+    cache%area_fields(:, :)%j0_Z = nan
+    cache%area_fields(:, :)%j0_phi = nan
+  end subroutine compute_curr0_ps
 
-  subroutine compute_j0phi_rot(plot_j0phi)
+  subroutine compute_curr0_rot
     use mephit_util, only: clight, pi
-    real(dp), intent(out) :: plot_j0phi(:)
-    integer :: kf, kt, ktri, kedge, k
+    integer :: ktri, kedge, k
     real(dp) :: dum, B0_phi, dB0R_dZ, dB0Z_dR, dB0phi_dR, dB0phi_dZ
 
-    ! edges
+    ! edge midpoints
     do kedge = 1, mesh%nedge
-       call field(mesh%mid_R(kedge), 0d0, mesh%mid_Z(kedge), &
-            dum, dum, dum, dum, dum, dB0R_dZ, dum, dum, dum, dB0Z_dR, dum, dum)
-       j0phi_edge(kedge) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+       associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge))
+         call field(R, 0d0, Z, dum, B0_phi, dum, dum, dum, dB0R_dZ, dB0phi_dR, dum, dB0phi_dZ, dB0Z_dR, dum, dum)
+         f%j0_R = -0.25d0 / pi * clight * dB0phi_dZ
+         f%j0_Z = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
+         f%j0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+       end associate
     end do
-    ! centroid
-    do kf = 1, mesh%nflux
-       do kt = 1, mesh%kt_max(kf)
-          ktri = mesh%kt_low(kf) + kt
-          call field(mesh%R_Omega(ktri), 0d0, mesh%Z_Omega(ktri), dum, dum, dum, &
-               dum, dum, dB0R_dZ, dum, dum, dum, dB0Z_dR, dum, dum)
-          plot_j0phi(ktri) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
-       end do
+    ! weighted triangle centroids
+    do ktri = 1, mesh%ntri
+       associate (f => cache%cntr_fields(ktri), R => mesh%cntr_R(ktri), Z => mesh%cntr_Z(ktri))
+         call field(R, 0d0, Z, dum, B0_phi, dum, dum, dum, dB0R_dZ, dB0phi_dR, dum, dB0phi_dZ, dB0Z_dR, dum, dum)
+         f%j0_R = -0.25d0 / pi * clight * dB0phi_dZ
+         f%j0_Z = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
+         f%j0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+       end associate
     end do
-    ! Gauss-Legendre evaluation points on edges
+    ! Gauss-Legendre evaluation points on triangle edges
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
-          call field(mesh%GL_R(k, kedge), 0d0, mesh%GL_Z(k, kedge), dum, B0_phi, dum, &
-               dum, dum, dB0R_dZ, dB0phi_dR, dum, dB0phi_dZ, dB0Z_dR, dum, dum)
-          associate (f => cache%edge_fields(k, kedge))
+          associate (f => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge), Z => mesh%GL_Z(k, kedge))
+            call field(R, 0d0, Z, dum, B0_phi, dum, dum, dum, dB0R_dZ, dB0phi_dR, dum, dB0phi_dZ, dB0Z_dR, dum, dum)
             f%j0_R = -0.25d0 / pi * clight * dB0phi_dZ
-            f%j0_Z = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / mesh%GL_R(k, kedge))
+            f%j0_Z = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
             f%j0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
           end associate
        end do
     end do
-    ! Gauss-Legendre evaluation points on triangles
+    ! Gauss-Legendre evaluation points on triangle areas
     do ktri = 1, mesh%ntri
        do k = 1, mesh%GL2_order
-          call field(mesh%GL2_R(k, ktri), 0d0, mesh%GL2_Z(k, ktri), dum, B0_phi, dum, &
-               dum, dum, dB0R_dZ, dB0phi_dR, dum, dB0phi_dZ, dB0Z_dR, dum, dum)
-          associate (f => cache%area_fields(k, ktri))
+          associate (f => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri), Z => mesh%GL2_Z(k, ktri))
+            call field(R, 0d0, Z, dum, B0_phi, dum, dum, dum, dB0R_dZ, dB0phi_dR, dum, dB0phi_dZ, dB0Z_dR, dum, dum)
             f%j0_R = -0.25d0 / pi * clight * dB0phi_dZ
-            f%j0_Z = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / mesh%GL2_R(k, ktri))
+            f%j0_Z = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
             f%j0_phi = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
           end associate
        end do
     end do
-  end subroutine compute_j0phi_rot
+  end subroutine compute_curr0_rot
 
-  subroutine compute_j0phi_geqdsk(plot_j0phi)
+  subroutine compute_curr0_geqdsk
     use mephit_util, only: clight, pi
-    real(dp), intent(out) :: plot_j0phi(:)
-    integer :: kf, kp, kt, ktri, kedge, k
+    integer :: ktri, kedge, k
     real(dp) :: dp0_dpsi, FdF_dpsi, F
 
-    ! edges in poloidal direction
-    do kf = 1, mesh%nflux
-       do kp = 1, mesh%kp_max(kf)
-          kedge = mesh%kp_low(kf) + kp - 1
-          j0phi_edge(kedge) = clight * (fs%dp_dpsi(kf) * mesh%mid_R(kedge) + &
-               0.25d0 / pi * fs%FdF_dpsi(kf) / mesh%mid_R(kedge))
-       end do
+    ! edge midpoints
+    do kedge = 1, mesh%nedge
+       associate (c => cache%mid_fields(kedge), R => mesh%mid_R(kedge))
+         dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
+         FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
+         F = psi_interpolator%eval(equil%fpol, c%psi)
+         c%j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_R
+         c%j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_Z
+         c%j0_phi = clight * (dp0_dpsi * R + 0.25d0 / pi * FdF_dpsi / R)
+       end associate
     end do
-    ! edges in radial direction
-    do kf = 1, mesh%nflux
-       do kt = 1, mesh%kt_max(kf)
-          kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
-          j0phi_edge(kedge) = clight * (fs_half%dp_dpsi(kf) * mesh%mid_R(kedge) + &
-               0.25d0 / pi * fs_half%FdF_dpsi(kf) / mesh%mid_R(kedge))
-       end do
+    ! weighted triangle centroids
+    do ktri = 1, mesh%ntri
+       associate (c => cache%cntr_fields(ktri), R => mesh%cntr_R(ktri))
+         dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
+         FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
+         F = psi_interpolator%eval(equil%fpol, c%psi)
+         c%j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_R
+         c%j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_Z
+         c%j0_phi = clight * (dp0_dpsi * R + 0.25d0 / pi * FdF_dpsi / R)
+       end associate
     end do
-    ! centroid
-    do kf = 1, mesh%nflux
-       do kt = 1, mesh%kt_max(kf)
-          ktri = mesh%kt_low(kf) + kt
-          plot_j0phi(ktri) = clight * (fs_half%dp_dpsi(kf) * mesh%R_Omega(ktri) + &
-               0.25d0 / pi * fs_half%FdF_dpsi(kf) / mesh%R_Omega(ktri))
-       end do
-    end do
-    ! Gauss-Legendre evaluation points on edges
+    ! Gauss-Legendre evaluation points on triangle edges
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
-          associate (c => cache%edge_fields(k, kedge))
+          associate (c => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge))
             dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
             FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
             F = psi_interpolator%eval(equil%fpol, c%psi)
             c%j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_R
             c%j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_Z
-            c%j0_phi = clight * (dp0_dpsi * mesh%GL_R(k, kedge) + &
-                 0.25d0 / pi * FdF_dpsi / mesh%GL_R(k, kedge))
+            c%j0_phi = clight * (dp0_dpsi * R + 0.25d0 / pi * FdF_dpsi / R)
           end associate
        end do
     end do
-    ! Gauss-Legendre evaluation points on triangles
+    ! Gauss-Legendre evaluation points on triangle areas
     do ktri = 1, mesh%ntri
        do k = 1, mesh%GL2_order
-          associate (c => cache%area_fields(k, ktri))
+          associate (c => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri))
             dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
             FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
             F = psi_interpolator%eval(equil%fpol, c%psi)
             c%j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_R
             c%j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_Z
-            c%j0_phi = clight * (dp0_dpsi * mesh%GL2_R(k, ktri) + &
-                 0.25d0 / pi * FdF_dpsi / mesh%GL2_R(k, ktri))
+            c%j0_phi = clight * (dp0_dpsi * R + 0.25d0 / pi * FdF_dpsi / R)
           end associate
        end do
     end do
-  end subroutine compute_j0phi_geqdsk
+  end subroutine compute_curr0_geqdsk
 
   subroutine check_curr0
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
