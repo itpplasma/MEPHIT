@@ -27,7 +27,7 @@ program mephit_test
   call load_magdata_in_symfluxcoord
   call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
 
-  call check_mesh
+  if (conf%check_mesh) call check_mesh
   call write_illustration_data(5, 8, 256, 256)
   call flux_func_cache_check
   call check_safety_factor

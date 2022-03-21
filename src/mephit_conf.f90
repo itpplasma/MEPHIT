@@ -159,6 +159,9 @@ module mephit_conf
      !> Maximum number of eigenvectors to be dumped in #eigvec_file. Defaults to 10.
      integer :: max_eig_out = 10
 
+     !> Check mesh in mephit_test.f90 (expensive)
+     logical :: check_mesh = .false.
+
      real(dp) :: debug_pol_offset = 0.5d0
      logical :: debug_kilca_geom_theta = .false.
 
