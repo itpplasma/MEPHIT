@@ -371,7 +371,7 @@ contains
     write (logger%msg, '("Relative error after ", i0, " iterations: ", es24.16e3)') &
          niter, rel_err
     if (logger%info) call logger%write_msg
-    if (rel_err >= conf%iter_rel_err) then
+    if (maxiter > 0 .and. rel_err >= conf%iter_rel_err) then
        write (logger%msg, '("Requested relative error ", es24.16e3, ' // &
             '" could not be reached within the requested ", i0, " iterations")') &
             conf%iter_rel_err, conf%niter
