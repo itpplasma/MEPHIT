@@ -522,7 +522,7 @@ contains
     ! hack: first call in mephit_iter() is always without plasma response
     ! and without additional shielding currents
     logical, save :: first_call = .true.
-    complex(dp), dimension(:), allocatable :: debug_x, debug_d, debug_du
+    complex(dp), allocatable :: debug_x(:), debug_d(:), debug_du(:), debug_terms(:, :, :)
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
@@ -536,7 +536,7 @@ contains
        end do
     end do
     if (first_call) then
-       allocate(debug_x(mesh%ntri), debug_d(mesh%ntri), debug_du(mesh%ntri))
+       allocate(debug_x(mesh%ntri), debug_d(mesh%ntri), debug_du(mesh%ntri), debug_terms(3, 2, mesh%ntri))
     end if
     do kf = 1, mesh%nflux
        Delta_p0 = fs%p(kf) - fs%p(kf-1)
@@ -562,6 +562,11 @@ contains
             x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%mid_R(kedge) / B0_flux * &
                  (Bnphi_edge / f%B0_phi * Delta_p0 - Delta_pn) + f%j0_phi * &
                  (Bnphi_edge / f%B0_phi - Bn%DOF(kedge) / B0_flux))
+            if (first_call) then
+               debug_terms(:, 1, ktri) = -imun * mesh%n * mesh%area(ktri) * 0.5d0 * &
+                    [(clight * mesh%mid_R(kedge) / B0_flux * Delta_p0 + f%j0_phi) * Bnphi_edge / f%B0_phi, &
+                    -f%j0_phi * Bn%DOF(kedge) / B0_flux, -clight * mesh%mid_R(kedge) / B0_flux * Delta_pn]
+            end if
             ! superdiagonal matrix element - edge o
             ktri = mesh%edge_tri(1, kedge)
             ke = mod(kt + mesh%kt_max(kf) - 2, mesh%kt_max(kf)) + 1
@@ -571,6 +576,11 @@ contains
             x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%mid_R(kedge) / (-B0_flux) * &
                  (Bnphi_edge / f%B0_phi * (-Delta_p0) - (-Delta_pn)) + f%j0_phi * &
                  (Bnphi_edge / f%B0_phi - (-Bn%DOF(kedge)) / (-B0_flux)))
+            if (first_call) then
+               debug_terms(:, 2, ktri) = -imun * mesh%n * mesh%area(ktri) * 0.5d0 * &
+                    [(clight * mesh%mid_R(kedge) / B0_flux * Delta_p0 + f%j0_phi) * Bnphi_edge / f%B0_phi, &
+                    -f%j0_phi * Bn%DOF(kedge) / B0_flux, -clight * mesh%mid_R(kedge) / B0_flux * Delta_pn]
+            end if
           end associate
        end do
        associate (ndim => mesh%kt_max(kf), nz => 2 * mesh%kt_max(kf), k_min => mesh%kt_low(kf))
@@ -624,8 +634,8 @@ contains
     if (first_call) then
        first_call = .false.
        call RT0_compute_tor_comp(jn)
-       call debug_currn(pn, Bn, jn, debug_x, debug_d, debug_du)
-       deallocate(debug_x, debug_d, debug_du)
+       call debug_currn(pn, Bn, jn, debug_x, debug_d, debug_du, debug_terms)
+       deallocate(debug_x, debug_d, debug_du, debug_terms)
     end if
     call add_sheet_current
     call RT0_compute_tor_comp(jn)
@@ -644,7 +654,7 @@ contains
     integer :: kf, kp, kt, ktri, kedge, k, nodes(3)
     complex(dp) :: series, dum, dpn_dR, dpn_dZ, Bn_R, Bn_Z, Bn_phi
     complex(dp), dimension(maxval(mesh%kt_max)) :: x, d, du, inhom
-    complex(dp), dimension(:), allocatable :: debug_x, debug_d, debug_du, coeff_f
+    complex(dp), allocatable :: debug_x(:), debug_d(:), debug_du(:), coeff_f(:), debug_terms(:, :, :)
     integer, dimension(2 * maxval(mesh%kt_max)) :: irow, icol
     complex(dp), dimension(2 * maxval(mesh%kt_max)) :: aval
     complex(dp), dimension(:), allocatable :: resid
@@ -655,7 +665,8 @@ contains
     avg_rel_err = 0d0
     jn%DOF(:) = (0d0, 0d0)
     if (first_call) then
-       allocate(debug_x(mesh%ntri), debug_d(mesh%ntri), debug_du(mesh%ntri), coeff_f(mesh%ntri))
+       allocate(debug_x(mesh%ntri), debug_d(mesh%ntri), debug_du(mesh%ntri), coeff_f(mesh%ntri), &
+            debug_terms(3, mesh%GL2_order, mesh%ntri))
     end if
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
@@ -694,6 +705,12 @@ contains
                series = series + mesh%GL2_weights(k) / (f%B0_R ** 2 + f%B0_Z ** 2) * &
                     ((Bn_phi * f%j0_R - f%j0_phi * Bn_R - clight * dpn_dZ) * f%B0_R + &
                     (Bn_phi * f%j0_Z - f%j0_phi * Bn_Z + clight * dpn_dR) * f%B0_Z)
+               if (first_call) then
+                  debug_terms(:, k, ktri) = -imun * mesh%n * mesh%area(ktri) * mesh%GL2_weights(k) * &
+                       [Bn_phi * f%j0_R * f%B0_R + Bn_phi * f%j0_Z * f%B0_Z, &
+                       -f%j0_phi * Bn_R * f%B0_R - f%j0_phi * Bn_Z * f%B0_Z, &
+                       -clight * dpn_dZ * f%B0_R + clight * dpn_dR * f%B0_Z] / (f%B0_R ** 2 + f%B0_Z ** 2)
+               end if
              end associate
           end do
           x(kt) = -imun * mesh%n * mesh%area(ktri) * series
@@ -788,46 +805,41 @@ contains
     if (first_call) then
        first_call = .false.
        call RT0_compute_tor_comp(jn)
-       call debug_currn(pn, Bn, jn, debug_x, debug_d, debug_du, coeff_f)
-       deallocate(debug_x, debug_d, debug_du, coeff_f)
+       call debug_currn(pn, Bn, jn, debug_x, debug_d, debug_du, debug_terms, coeff_f)
+       deallocate(debug_x, debug_d, debug_du, debug_terms, coeff_f)
     end if
     call add_sheet_current
     call RT0_compute_tor_comp(jn)
   end subroutine compute_currn_GL
 
-  subroutine debug_currn(p_n, B_n, j_n, x, d, du, coeff_f)
+  subroutine debug_currn(p_n, B_n, j_n, x, d, du, terms, coeff_f)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: datafile
-    use mephit_util, only: clight, imun, pi
-    use mephit_mesh, only: mesh, fs_half, cache
+    use mephit_util, only: clight, imun
+    use mephit_mesh, only: mesh, cache
     use mephit_pert, only: RT0_interp, L1_interp
     type(L1_t), intent(in) :: p_n
     type(RT0_t), intent(in) :: B_n, j_n
-    complex(dp), intent(in) :: x(:), d(:), du(:)
+    complex(dp), intent(in) :: x(:), d(:), du(:), terms(:, :, :)
     complex(dp), intent(in), optional :: coeff_f(:)
     character(len = *), parameter :: grp = 'debug_currn'
     integer(HID_T) :: h5id_root
     integer :: kf, kt, ktri
-    real(dp) :: j0_R, j0_Z, j0_phi
     complex(dp) :: pn, dpn_dR, dpn_dZ, Bn_R, Bn_Z, Bn_phi, jn_R, jn_Z, jn_phi
     complex(dp), dimension(3, mesh%ntri) :: grad_pn, lorentz
 
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
-          associate (R => mesh%cntr_R(ktri), Z => mesh%cntr_Z(ktri), c => cache%cntr_fields(ktri), &
-               F => fs_half%F(kf), FdF_dpsi => fs_half%FdF_dpsi(kf), dp0_dpsi => fs_half%dp_dpsi(kf))
-            j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_R
-            j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_Z
-            j0_phi = clight * (dp0_dpsi * R + 0.25d0 / pi * FdF_dpsi / R)
+          associate (R => mesh%cntr_R(ktri), Z => mesh%cntr_Z(ktri), c => cache%cntr_fields(ktri))
             call L1_interp(ktri, p_n, R, Z, pn, dpn_dR, dpn_dZ)
             call RT0_interp(ktri, B_n, R, Z, Bn_R, Bn_Z, Bn_phi)
             call RT0_interp(ktri, j_n, R, Z, jn_R, jn_Z, jn_phi)
             grad_pn(:, ktri) = [dpn_dR, imun * mesh%n * pn / R, dpn_dZ]
             lorentz(:, ktri) = 1d0 / clight * &
-                 [jn_phi * c%B0_Z - jn_Z * c%B0_phi + j0_phi * Bn_Z - j0_Z * Bn_phi, &
-                 jn_Z * c%B0_R - jn_R * c%B0_Z + j0_Z * Bn_R - j0_R * Bn_Z, &
-                 jn_R * c%B0_phi - jn_phi * c%B0_R + j0_R * Bn_phi - j0_phi * Bn_R]
+                 [jn_phi * c%B0_Z - jn_Z * c%B0_phi + c%j0_phi * Bn_Z - c%j0_Z * Bn_phi, &
+                 jn_Z * c%B0_R - jn_R * c%B0_Z + c%j0_Z * Bn_R - c%j0_R * Bn_Z, &
+                 jn_R * c%B0_phi - jn_phi * c%B0_R + c%j0_R * Bn_phi - c%j0_phi * Bn_R]
           end associate
        end do
     end do
@@ -845,6 +857,8 @@ contains
          comment = 'main diagonals of linear systems of equations', unit = '1')
     call h5_add(h5id_root, grp // '/du', du, lbound(du), ubound(du), &
          comment = 'upper diagonals of linear systems of equations', unit = '1')
+    call h5_add(h5id_root, grp // '/terms', terms, lbound(terms), ubound(terms), &
+         comment = 'individual terms of area integral approximation', unit = 'statA')
     if (present(coeff_f)) then
        call h5_add(h5id_root, grp // '/coeff_f', coeff_f, lbound(coeff_f), ubound(coeff_f), &
             comment = 'coefficients of radial currents', unit = '1')
