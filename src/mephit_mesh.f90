@@ -245,7 +245,9 @@ module mephit_mesh
   end type coord_cache_ext_t
 
   type :: field_cache_t
-     real(dp) :: psi, B0_R, B0_Z, B0_phi, j0_R, j0_Z, j0_phi
+     real(dp) :: psi, B0_R, B0_Z, B0_phi, j0_R, j0_Z, j0_phi, B0, dB0_dR, dB0_dZ, &
+          dB0R_dR, dB0R_dZ, dB0phi_dR, dB0phi_dZ, dB0Z_dR, dB0Z_dZ, &
+          dj0R_dR, dj0R_dZ, dj0phi_dR, dj0phi_dZ, dj0Z_dR, dj0Z_dZ
   end type field_cache_t
 
   type :: cache_t
@@ -539,6 +541,7 @@ contains
     character(len = *), intent(in) :: comment
     integer(HID_T) :: h5id_root
 
+
     call h5_open_rw(file, h5id_root)
     call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
     select rank (cache)
@@ -564,6 +567,51 @@ contains
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache(:)%j0_phi, &
             lbound(cache), ubound(cache), unit = 'statA', &
             comment = 'physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0', cache(:)%B0, &
+            lbound(cache), ubound(cache), unit = 'G', &
+            comment = 'magnitude of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0_dR', cache(:)%dB0_dR, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'R derivative of magnitude of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0_dZ', cache(:)%dB0_dZ, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'Z derivative of magnitude of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0R_dR', cache(:)%dB0R_dR, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'R derivative of R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0R_dZ', cache(:)%dB0R_dZ, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'Z derivative of R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dR', cache(:)%dB0phi_dR, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'R derivative of physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dZ', cache(:)%dB0phi_dZ, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'Z derivative of physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dR', cache(:)%dB0Z_dR, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'R derivative of Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dZ', cache(:)%dB0Z_dZ, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'Z derivative of Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0R_dR', cache(:)%dj0R_dR, &
+            lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+            comment = 'R derivative of R component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0R_dZ', cache(:)%dj0R_dZ, &
+            lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+            comment = 'Z derivative of R component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dR', cache(:)%dj0phi_dR, &
+            lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+            comment = 'R derivative of physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dZ', cache(:)%dj0phi_dZ, &
+            lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+            comment = 'Z derivative of physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dR', cache(:)%dj0Z_dR, &
+            lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+            comment = 'R derivative of Z component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dZ', cache(:)%dj0Z_dZ, &
+            lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+            comment = 'Z derivative of Z component of equilibrium current density at ' // trim(adjustl(comment)))
     rank (2)
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:, :)%psi, &
             lbound(cache), ubound(cache), unit = 'Mx', &
@@ -586,6 +634,51 @@ contains
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache(:, :)%j0_phi, &
             lbound(cache), ubound(cache), unit = 'statA', &
             comment = 'physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0', cache(:, :)%B0, &
+            lbound(cache), ubound(cache), unit = 'G', &
+            comment = 'magnitude of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0_dR', cache(:, :)%dB0_dR, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'R derivative of magnitude of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0_dZ', cache(:, :)%dB0_dZ, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'Z derivative of magnitude of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0R_dR', cache(:, :)%dB0R_dR, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'R derivative of R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0R_dZ', cache(:, :)%dB0R_dZ, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'Z derivative of R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dR', cache(:, :)%dB0phi_dR, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'R derivative of physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dZ', cache(:, :)%dB0phi_dZ, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'Z derivative of physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dR', cache(:, :)%dB0Z_dR, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'R derivative of Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dZ', cache(:, :)%dB0Z_dZ, &
+            lbound(cache), ubound(cache), unit = 'G cm^-1', &
+            comment = 'Z derivative of Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0R_dR', cache(:, :)%dj0R_dR, &
+            lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+            comment = 'R derivative of R component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0R_dZ', cache(:, :)%dj0R_dZ, &
+            lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+            comment = 'Z derivative of R component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dR', cache(:, :)%dj0phi_dR, &
+            lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+            comment = 'R derivative of physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dZ', cache(:, :)%dj0phi_dZ, &
+            lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+            comment = 'Z derivative of physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dR', cache(:, :)%dj0Z_dR, &
+            lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+            comment = 'R derivative of Z component of equilibrium current density at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dZ', cache(:, :)%dj0Z_dZ, &
+            lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+            comment = 'Z derivative of Z component of equilibrium current density at ' // trim(adjustl(comment)))
     rank default
        error stop 'field_cache_write: rank-1 or rank-2 array expected for argument ''cache'''
     end select
@@ -609,6 +702,21 @@ contains
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache(:)%j0_R)
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache(:)%j0_Z)
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache(:)%j0_phi)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0', cache(:)%B0)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0_dR', cache(:)%dB0_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0_dZ', cache(:)%dB0_dZ)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0R_dR', cache(:)%dB0R_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0R_dZ', cache(:)%dB0R_dZ)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dR', cache(:)%dB0phi_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dZ', cache(:)%dB0phi_dZ)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dR', cache(:)%dB0Z_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dZ', cache(:)%dB0Z_dZ)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0R_dR', cache(:)%dj0R_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0R_dZ', cache(:)%dj0R_dZ)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dR', cache(:)%dj0phi_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dZ', cache(:)%dj0phi_dZ)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dR', cache(:)%dj0Z_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dZ', cache(:)%dj0Z_dZ)
     rank (2)
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:, :)%psi)
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:, :)%B0_R)
@@ -617,6 +725,21 @@ contains
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache(:, :)%j0_R)
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache(:, :)%j0_Z)
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache(:, :)%j0_phi)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0', cache(:, :)%B0)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0_dR', cache(:, :)%dB0_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0_dZ', cache(:, :)%dB0_dZ)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0R_dR', cache(:, :)%dB0R_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0R_dZ', cache(:, :)%dB0R_dZ)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dR', cache(:, :)%dB0phi_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dZ', cache(:, :)%dB0phi_dZ)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dR', cache(:, :)%dB0Z_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dZ', cache(:, :)%dB0Z_dZ)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0R_dR', cache(:, :)%dj0R_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0R_dZ', cache(:, :)%dj0R_dZ)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dR', cache(:, :)%dj0phi_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dZ', cache(:, :)%dj0phi_dZ)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dR', cache(:, :)%dj0Z_dR)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dZ', cache(:, :)%dj0Z_dZ)
     rank default
        error stop 'field_cache_read: rank-1 or rank-2 array expected for argument ''cache'''
     end select
@@ -2776,39 +2899,50 @@ contains
 
     ! edge midpoints
     do kedge = 1, mesh%nedge
-       associate (f => cache%mid_fields(kedge))
-         call field(mesh%mid_R(kedge), 0d0, mesh%mid_Z(kedge), &
-              f%B0_R, f%B0_phi, f%B0_Z, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+       associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge))
+         call field(R, 0d0, Z, f%B0_R, f%B0_phi, f%B0_Z, &
+              f%dB0R_dR, dum, f%dB0R_dZ, f%dB0phi_dR, dum, f%dB0phi_dZ, f%dB0Z_dR, dum, f%dB0Z_dZ)
          f%psi = psif - psib  ! see intperp_psi_pol in mephit_util
-         cache%B0_flux(kedge) = mesh%mid_R(kedge) * &
-              (f%B0_R * mesh%edge_Z(kedge) - f%B0_Z * mesh%edge_R(kedge))
+         f%B0 = sqrt(f%B0_R ** 2 + f%B0_phi ** 2 + f%B0_Z ** 2)
+         f%dB0_dR = (f%B0_R * f%dB0R_dR + f%B0_phi * f%dB0phi_dR + f%B0_Z * f%dB0Z_dR) / f%B0
+         f%dB0_dZ = (f%B0_R * f%dB0R_dZ + f%B0_phi * f%dB0phi_dZ + f%B0_Z * f%dB0Z_dZ) / f%B0
+         cache%B0_flux(kedge) = R * (f%B0_R * mesh%edge_Z(kedge) - f%B0_Z * mesh%edge_R(kedge))
        end associate
     end do
     ! weighted triangle centroids
     do ktri = 1, mesh%ntri
-       associate (f => cache%cntr_fields(ktri))
-         call field(mesh%cntr_R(ktri), 0d0, mesh%cntr_Z(ktri), &
-              f%B0_R, f%B0_phi, f%B0_Z, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+       associate (f => cache%cntr_fields(ktri), R => mesh%cntr_R(ktri), Z => mesh%cntr_Z(ktri))
+         call field(R, 0d0, Z, f%B0_R, f%B0_phi, f%B0_Z, &
+              f%dB0R_dR, dum, f%dB0R_dZ, f%dB0phi_dR, dum, f%dB0phi_dZ, f%dB0Z_dR, dum, f%dB0Z_dZ)
          f%psi = psif - psib  ! see intperp_psi_pol in mephit_util
+         f%B0 = sqrt(f%B0_R ** 2 + f%B0_phi ** 2 + f%B0_Z ** 2)
+         f%dB0_dR = (f%B0_R * f%dB0R_dR + f%B0_phi * f%dB0phi_dR + f%B0_Z * f%dB0Z_dR) / f%B0
+         f%dB0_dZ = (f%B0_R * f%dB0R_dZ + f%B0_phi * f%dB0phi_dZ + f%B0_Z * f%dB0Z_dZ) / f%B0
        end associate
     end do
     ! Gauss-Legendre evaluation points on triangle edges
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
-          associate (f => cache%edge_fields(k, kedge))
-            call field(mesh%GL_R(k, kedge), 0d0, mesh%GL_Z(k, kedge), &
-                 f%B0_R, f%B0_phi, f%B0_Z, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+          associate (f => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge), Z => mesh%GL_Z(k, kedge))
+            call field(R, 0d0, Z, f%B0_R, f%B0_phi, f%B0_Z, &
+                 f%dB0R_dR, dum, f%dB0R_dZ, f%dB0phi_dR, dum, f%dB0phi_dZ, f%dB0Z_dR, dum, f%dB0Z_dZ)
             f%psi = psif - psib  ! see intperp_psi_pol in mephit_util
+            f%B0 = sqrt(f%B0_R ** 2 + f%B0_phi ** 2 + f%B0_Z ** 2)
+            f%dB0_dR = (f%B0_R * f%dB0R_dR + f%B0_phi * f%dB0phi_dR + f%B0_Z * f%dB0Z_dR) / f%B0
+            f%dB0_dZ = (f%B0_R * f%dB0R_dZ + f%B0_phi * f%dB0phi_dZ + f%B0_Z * f%dB0Z_dZ) / f%B0
           end associate
        end do
     end do
     ! Gauss-Legendre evaluation points on triangle areas
     do ktri = 1, mesh%ntri
        do k = 1, mesh%GL2_order
-          associate (f => cache%area_fields(k, ktri))
-            call field(mesh%GL2_R(k, ktri), 0d0, mesh%GL2_Z(k, ktri), &
-                 f%B0_R, f%B0_phi, f%B0_Z, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+          associate (f => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri), Z => mesh%GL2_Z(k, ktri))
+            call field(R, 0d0, Z, f%B0_R, f%B0_phi, f%B0_Z, &
+                 f%dB0R_dR, dum, f%dB0R_dZ, f%dB0phi_dR, dum, f%dB0phi_dZ, f%dB0Z_dR, dum, f%dB0Z_dZ)
             f%psi = psif - psib  ! see intperp_psi_pol in mephit_util
+            f%B0 = sqrt(f%B0_R ** 2 + f%B0_phi ** 2 + f%B0_Z ** 2)
+            f%dB0_dR = (f%B0_R * f%dB0R_dR + f%B0_phi * f%dB0phi_dR + f%B0_Z * f%dB0Z_dR) / f%B0
+            f%dB0_dZ = (f%B0_R * f%dB0R_dZ + f%B0_phi * f%dB0phi_dZ + f%B0_Z * f%dB0Z_dZ) / f%B0
           end associate
        end do
     end do
@@ -2894,20 +3028,45 @@ contains
     nan = ieee_value(1d0, ieee_quiet_nan)
     cache%mid_fields(:)%j0_R = nan
     cache%mid_fields(:)%j0_Z = nan
+    cache%mid_fields(:)%dj0R_dR = nan
+    cache%mid_fields(:)%dj0R_dZ = nan
+    cache%mid_fields(:)%dj0phi_dR = nan
+    cache%mid_fields(:)%dj0phi_dZ = nan
+    cache%mid_fields(:)%dj0Z_dR = nan
+    cache%mid_fields(:)%dj0Z_dZ = nan
     cache%cntr_fields(:)%j0_R = nan
     cache%cntr_fields(:)%j0_Z = nan
+    cache%cntr_fields(:)%dj0R_dR = nan
+    cache%cntr_fields(:)%dj0R_dZ = nan
+    cache%cntr_fields(:)%dj0phi_dR = nan
+    cache%cntr_fields(:)%dj0phi_dZ = nan
+    cache%cntr_fields(:)%dj0Z_dR = nan
+    cache%cntr_fields(:)%dj0Z_dZ = nan
     cache%edge_fields(:, :)%j0_R = nan
     cache%edge_fields(:, :)%j0_Z = nan
     cache%edge_fields(:, :)%j0_phi = nan
+    cache%edge_fields(:, :)%dj0R_dR = nan
+    cache%edge_fields(:, :)%dj0R_dZ = nan
+    cache%edge_fields(:, :)%dj0phi_dR = nan
+    cache%edge_fields(:, :)%dj0phi_dZ = nan
+    cache%edge_fields(:, :)%dj0Z_dR = nan
+    cache%edge_fields(:, :)%dj0Z_dZ = nan
     cache%area_fields(:, :)%j0_R = nan
     cache%area_fields(:, :)%j0_Z = nan
     cache%area_fields(:, :)%j0_phi = nan
+    cache%area_fields(:, :)%dj0R_dR = nan
+    cache%area_fields(:, :)%dj0R_dZ = nan
+    cache%area_fields(:, :)%dj0phi_dR = nan
+    cache%area_fields(:, :)%dj0phi_dZ = nan
+    cache%area_fields(:, :)%dj0Z_dR = nan
+    cache%area_fields(:, :)%dj0Z_dZ = nan
   end subroutine compute_curr0_ps
 
   subroutine compute_curr0_rot
+    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use mephit_util, only: clight, pi
     integer :: ktri, kedge, k
-    real(dp) :: dum, B0_phi, dB0R_dZ, dB0Z_dR, dB0phi_dR, dB0phi_dZ
+    real(dp) :: nan, dum, B0_phi, dB0R_dZ, dB0Z_dR, dB0phi_dR, dB0phi_dZ
 
     ! edge midpoints
     do kedge = 1, mesh%nedge
@@ -2949,33 +3108,89 @@ contains
           end associate
        end do
     end do
+    nan = ieee_value(1d0, ieee_quiet_nan)
+    cache%mid_fields(:)%dj0R_dR = nan
+    cache%mid_fields(:)%dj0R_dZ = nan
+    cache%mid_fields(:)%dj0phi_dR = nan
+    cache%mid_fields(:)%dj0phi_dZ = nan
+    cache%mid_fields(:)%dj0Z_dR = nan
+    cache%mid_fields(:)%dj0Z_dZ = nan
+    cache%cntr_fields(:)%dj0R_dR = nan
+    cache%cntr_fields(:)%dj0R_dZ = nan
+    cache%cntr_fields(:)%dj0phi_dR = nan
+    cache%cntr_fields(:)%dj0phi_dZ = nan
+    cache%cntr_fields(:)%dj0Z_dR = nan
+    cache%cntr_fields(:)%dj0Z_dZ = nan
+    cache%edge_fields(:, :)%dj0R_dR = nan
+    cache%edge_fields(:, :)%dj0R_dZ = nan
+    cache%edge_fields(:, :)%dj0phi_dR = nan
+    cache%edge_fields(:, :)%dj0phi_dZ = nan
+    cache%edge_fields(:, :)%dj0Z_dR = nan
+    cache%edge_fields(:, :)%dj0Z_dZ = nan
+    cache%area_fields(:, :)%dj0R_dR = nan
+    cache%area_fields(:, :)%dj0R_dZ = nan
+    cache%area_fields(:, :)%dj0phi_dR = nan
+    cache%area_fields(:, :)%dj0phi_dZ = nan
+    cache%area_fields(:, :)%dj0Z_dR = nan
+    cache%area_fields(:, :)%dj0Z_dZ = nan
   end subroutine compute_curr0_rot
 
   subroutine compute_curr0_geqdsk
     use mephit_util, only: clight, pi
     integer :: ktri, kedge, k
-    real(dp) :: dp0_dpsi, FdF_dpsi, F
+    real(dp) :: dp0_dpsi, d2p0_dpsi2, F, dF_dpsi, FdF_dpsi, d2F_dpsi2, fprime(equil%nw)
 
+    fprime = equil%ffprim / equil%fpol
     ! edge midpoints
     do kedge = 1, mesh%nedge
        associate (c => cache%mid_fields(kedge), R => mesh%mid_R(kedge))
          dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
-         FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
+         d2p0_dpsi2 = psi_interpolator%eval(equil%pprime, c%psi, .true.)
          F = psi_interpolator%eval(equil%fpol, c%psi)
-         c%j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_R
-         c%j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_Z
-         c%j0_phi = clight * (dp0_dpsi * R + 0.25d0 / pi * FdF_dpsi / R)
+         FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
+         dF_dpsi = psi_interpolator%eval(fprime, c%psi)
+         d2F_dpsi2 = psi_interpolator%eval(fprime, c%psi, .true.)
+         c%j0_R = 0.25d0 / pi * clight * dF_dpsi * c%B0_R
+         c%j0_Z = 0.25d0 / pi * clight * dF_dpsi * c%B0_Z
+         c%j0_phi = clight * (dp0_dpsi * R + 0.25d0 / (pi * R) * FdF_dpsi)
+         c%dj0R_dR = 0.25d0 / pi * clight * (dF_dpsi * c%dB0R_dR &
+              + R * c%B0_Z * c%B0_R * d2F_dpsi2)
+         c%dj0R_dZ = 0.25d0 / pi * clight * (dF_dpsi * c%dB0R_dZ &
+              - R * c%B0_R * c%B0_R * d2F_dpsi2)
+         c%dj0Z_dR = 0.25d0 / pi * clight * (dF_dpsi * c%dB0Z_dR &
+              + R * c%B0_Z * c%B0_Z * d2F_dpsi2)
+         c%dj0Z_dZ = 0.25d0 / pi * clight * (dF_dpsi * c%dB0Z_dZ &
+              - R * c%B0_R * c%B0_Z * d2F_dpsi2)
+         c%dj0phi_dR = clight * (dp0_dpsi + d2p0_dpsi2 * R * R * c%B0_Z + &
+              0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2 - FdF_dpsi / R))
+         c%dj0phi_dZ = clight * (-d2p0_dpsi2 * R * R * c%B0_R + &
+              0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2))
        end associate
     end do
     ! weighted triangle centroids
     do ktri = 1, mesh%ntri
        associate (c => cache%cntr_fields(ktri), R => mesh%cntr_R(ktri))
          dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
-         FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
+         d2p0_dpsi2 = psi_interpolator%eval(equil%pprime, c%psi, .true.)
          F = psi_interpolator%eval(equil%fpol, c%psi)
-         c%j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_R
-         c%j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_Z
-         c%j0_phi = clight * (dp0_dpsi * R + 0.25d0 / pi * FdF_dpsi / R)
+         FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
+         dF_dpsi = psi_interpolator%eval(fprime, c%psi)
+         d2F_dpsi2 = psi_interpolator%eval(fprime, c%psi, .true.)
+         c%j0_R = 0.25d0 / pi * clight * dF_dpsi * c%B0_R
+         c%j0_Z = 0.25d0 / pi * clight * dF_dpsi * c%B0_Z
+         c%j0_phi = clight * (dp0_dpsi * R + 0.25d0 / (pi * R) * FdF_dpsi)
+         c%dj0R_dR = 0.25d0 / pi * clight * (dF_dpsi * c%dB0R_dR &
+              + R * c%B0_Z * c%B0_R * d2F_dpsi2)
+         c%dj0R_dZ = 0.25d0 / pi * clight * (dF_dpsi * c%dB0R_dZ &
+              - R * c%B0_R * c%B0_R * d2F_dpsi2)
+         c%dj0Z_dR = 0.25d0 / pi * clight * (dF_dpsi * c%dB0Z_dR &
+              + R * c%B0_Z * c%B0_Z * d2F_dpsi2)
+         c%dj0Z_dZ = 0.25d0 / pi * clight * (dF_dpsi * c%dB0Z_dZ &
+              - R * c%B0_R * c%B0_Z * d2F_dpsi2)
+         c%dj0phi_dR = clight * (dp0_dpsi + d2p0_dpsi2 * R * R * c%B0_Z + &
+              0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2 - FdF_dpsi / R))
+         c%dj0phi_dZ = clight * (-d2p0_dpsi2 * R * R * c%B0_R + &
+              0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2))
        end associate
     end do
     ! Gauss-Legendre evaluation points on triangle edges
@@ -2983,11 +3198,26 @@ contains
        do k = 1, mesh%GL_order
           associate (c => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge))
             dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
-            FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
+            d2p0_dpsi2 = psi_interpolator%eval(equil%pprime, c%psi, .true.)
             F = psi_interpolator%eval(equil%fpol, c%psi)
-            c%j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_R
-            c%j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_Z
-            c%j0_phi = clight * (dp0_dpsi * R + 0.25d0 / pi * FdF_dpsi / R)
+            FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
+            dF_dpsi = psi_interpolator%eval(fprime, c%psi)
+            d2F_dpsi2 = psi_interpolator%eval(fprime, c%psi, .true.)
+            c%j0_R = 0.25d0 / pi * clight * dF_dpsi * c%B0_R
+            c%j0_Z = 0.25d0 / pi * clight * dF_dpsi * c%B0_Z
+            c%j0_phi = clight * (dp0_dpsi * R + 0.25d0 / (pi * R) * FdF_dpsi)
+            c%dj0R_dR = 0.25d0 / pi * clight * (dF_dpsi * c%dB0R_dR &
+                 + R * c%B0_Z * c%B0_R * d2F_dpsi2)
+            c%dj0R_dZ = 0.25d0 / pi * clight * (dF_dpsi * c%dB0R_dZ &
+                 - R * c%B0_R * c%B0_R * d2F_dpsi2)
+            c%dj0Z_dR = 0.25d0 / pi * clight * (dF_dpsi * c%dB0Z_dR &
+                 + R * c%B0_Z * c%B0_Z * d2F_dpsi2)
+            c%dj0Z_dZ = 0.25d0 / pi * clight * (dF_dpsi * c%dB0Z_dZ &
+                 - R * c%B0_R * c%B0_Z * d2F_dpsi2)
+            c%dj0phi_dR = clight * (dp0_dpsi + d2p0_dpsi2 * R * R * c%B0_Z + &
+                 0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2 - FdF_dpsi / R))
+            c%dj0phi_dZ = clight * (-d2p0_dpsi2 * R * R * c%B0_R + &
+                 0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2))
           end associate
        end do
     end do
@@ -2996,11 +3226,26 @@ contains
        do k = 1, mesh%GL2_order
           associate (c => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri))
             dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
-            FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
+            d2p0_dpsi2 = psi_interpolator%eval(equil%pprime, c%psi, .true.)
             F = psi_interpolator%eval(equil%fpol, c%psi)
-            c%j0_R = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_R
-            c%j0_Z = 0.25d0 / pi * clight * FdF_dpsi / F * c%B0_Z
-            c%j0_phi = clight * (dp0_dpsi * R + 0.25d0 / pi * FdF_dpsi / R)
+            FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
+            dF_dpsi = psi_interpolator%eval(fprime, c%psi)
+            d2F_dpsi2 = psi_interpolator%eval(fprime, c%psi, .true.)
+            c%j0_R = 0.25d0 / pi * clight * dF_dpsi * c%B0_R
+            c%j0_Z = 0.25d0 / pi * clight * dF_dpsi * c%B0_Z
+            c%j0_phi = clight * (dp0_dpsi * R + 0.25d0 / (pi * R) * FdF_dpsi)
+            c%dj0R_dR = 0.25d0 / pi * clight * (dF_dpsi * c%dB0R_dR &
+                 + R * c%B0_Z * c%B0_R * d2F_dpsi2)
+            c%dj0R_dZ = 0.25d0 / pi * clight * (dF_dpsi * c%dB0R_dZ &
+                 - R * c%B0_R * c%B0_R * d2F_dpsi2)
+            c%dj0Z_dR = 0.25d0 / pi * clight * (dF_dpsi * c%dB0Z_dR &
+                 + R * c%B0_Z * c%B0_Z * d2F_dpsi2)
+            c%dj0Z_dZ = 0.25d0 / pi * clight * (dF_dpsi * c%dB0Z_dZ &
+                 - R * c%B0_R * c%B0_Z * d2F_dpsi2)
+            c%dj0phi_dR = clight * (dp0_dpsi + d2p0_dpsi2 * R * R * c%B0_Z + &
+                 0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2 - FdF_dpsi / R))
+            c%dj0phi_dZ = clight * (-d2p0_dpsi2 * R * R * c%B0_R + &
+                 0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2))
           end associate
        end do
     end do
