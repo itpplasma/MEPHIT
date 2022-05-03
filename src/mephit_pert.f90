@@ -218,7 +218,7 @@ contains
   end subroutine RT0_deinit
 
   subroutine RT0_interp(ktri, elem, R, Z, comp_R, comp_Z, comp_phi, &
-       comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ)
+       comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ, comp_phi_dR, comp_phi_dZ)
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use mephit_mesh, only: mesh
     integer, intent(in) :: ktri
@@ -226,7 +226,7 @@ contains
     real(dp), intent(in) :: r, z
     complex(dp), intent(out) :: comp_R, comp_Z
     complex(dp), intent(out), optional :: comp_phi, comp_R_dR, comp_R_dZ, &
-         comp_Z_dR, comp_Z_dZ
+         comp_Z_dR, comp_Z_dZ, comp_phi_dR, comp_phi_dZ
     integer :: nodes(3)
     real(dp) :: nan
     complex(dp) :: DOF(3)
@@ -246,6 +246,12 @@ contains
        end if
        if (present(comp_Z_dZ)) then
           comp_Z_dZ = cmplx(nan, nan, dp)
+       end if
+       if (present(comp_phi_dR)) then
+          comp_phi_dR = cmplx(nan, nan, dp)
+       end if
+       if (present(comp_phi_dZ)) then
+          comp_phi_dZ = cmplx(nan, nan, dp)
        end if
        return
     end if
@@ -275,6 +281,12 @@ contains
     end if
     if (present(comp_Z_dZ)) then
        comp_Z_dZ = 0.5d0 / mesh%area(ktri) / R * sum(DOF)
+    end if
+    if (present(comp_phi_dR)) then
+       comp_phi_dR = (0d0, 0d0)
+    end if
+    if (present(comp_phi_dZ)) then
+       comp_phi_dZ = (0d0, 0d0)
     end if
   end subroutine RT0_interp
 

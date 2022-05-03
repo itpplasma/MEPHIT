@@ -20,7 +20,8 @@ module mephit_conf
        pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
        curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
        q_prof_flux, q_prof_rot, q_prof_geqdsk, &
-       vac_src_nemov, vac_src_gpec, vac_src_fourier
+       vac_src_nemov, vac_src_gpec, vac_src_fourier, &
+       currn_eps, currn_gl, currn_mde
 
   character(len = *), parameter :: cmplx_fmt = 'es24.16e3, 1x, sp, es24.16e3, s, " i"'
   character(len = *), parameter :: nl_fmt = '"' // new_line('A') // '"'
@@ -47,6 +48,10 @@ module mephit_conf
   integer, parameter :: vac_src_nemov = 0   !< vacuum field perturbation from Viktor Nemov's code
   integer, parameter :: vac_src_gpec = 1    !< vacuum field perturbation from GPEC
   integer, parameter :: vac_src_fourier = 2 !< vacuum field perturbation from precomputed Fourier modes
+
+  integer, parameter :: currn_eps = 0  !< current perturbation from EPS paper
+  integer, parameter :: currn_gl = 1   !< current perturbation generalized to GL quadrature
+  integer, parameter :: currn_mde = 2  !< current perturbation from magnetic differential equation
 
   type :: config_t
 
@@ -80,8 +85,9 @@ module mephit_conf
      !> and #vac_src_gpec.
      integer :: vac_src = vac_src_nemov
 
-     !> Use mephit_iter::compute_currn_GL() instead of mephit_iter::compute_currn()
-     logical :: currn_GL = .false.
+     !> Select mephit_iter::compute_currn(), mephit_iter::compute_currn_GL(),
+     !> or mephit_iter::compute_currn_MDE()
+     integer :: currn = currn_eps
 
      !> Generate non-resonant vacuum perturbation for testing. Defaults to false.
      logical :: nonres = .false.
@@ -234,7 +240,7 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/curr_prof', config%curr_prof)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/q_prof', config%q_prof)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/vac_src', config%vac_src)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/currn_GL', config%currn_GL)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/currn', config%currn)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/nonres', config%nonres)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/quad_avg', config%quad_avg)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Ic', config%Ic, &

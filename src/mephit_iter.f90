@@ -20,6 +20,9 @@ module mephit_iter
   !> Current density perturbation in units of statampere cm^-2.
   type(RT0_t) :: jn
 
+  !> Parallel current density perturbation in units of statampere cm^-2 G^-1.
+  type(L1_t) :: jnpar_B0
+
   interface
      subroutine FEM_init(tormode, nedge, runmode) bind(C, name = 'FEM_init')
        use iso_c_binding, only: c_int
@@ -168,6 +171,7 @@ contains
     call RT0_init(Bn, mesh%nedge, mesh%ntri)
     call RT0_init(Bnplas, mesh%nedge, mesh%ntri)
     call RT0_init(jn, mesh%nedge, mesh%ntri)
+    call L1_init(jnpar_B0, mesh%npoint)
   end subroutine iter_init
 
   subroutine iter_deinit
@@ -177,6 +181,7 @@ contains
     call RT0_deinit(Bn)
     call RT0_deinit(Bnplas)
     call RT0_deinit(jn)
+    call L1_deinit(jnpar_B0)
   end subroutine iter_deinit
 
   subroutine iter_read
@@ -187,18 +192,26 @@ contains
     call RT0_read(Bn, datafile, 'iter/Bn')
     call RT0_read(Bnplas, datafile, 'iter/Bnplas')
     call RT0_read(jn, datafile, 'iter/jn')
+    call L1_read(jnpar_B0, datafile, 'iter/jnpar_B0')
   end subroutine iter_read
 
   subroutine iter_step
-    use mephit_conf, only: conf
+    use mephit_conf, only: conf, currn_eps, currn_gl, currn_mde, logger
     ! compute pressure based on previous perturbation field
     call compute_presn
     ! compute currents based on previous perturbation field
-    if (conf%currn_GL) then
-       call compute_currn_GL
-    else
+    select case (conf%currn)
+    case (currn_eps)
        call compute_currn
-    end if
+    case (currn_gl)
+       call compute_currn_GL
+    case (currn_mde)
+       call compute_currn_MDE
+    case default
+       write (logger%msg, '("unknown current perturbation selection: ", i0)') conf%curr_prof
+       if (logger%err) call logger%write_msg
+       error stop
+    end select
     ! use field code to generate new field from currents
     call compute_Bn
   end subroutine iter_step
@@ -812,6 +825,145 @@ contains
     call RT0_compute_tor_comp(jn)
   end subroutine compute_currn_GL
 
+  subroutine compute_currn_MDE
+    use sparse_mod, only: sparse_solve, sparse_matmul
+    use mephit_conf, only: conf, logger
+    use mephit_mesh, only: mesh, cache
+    use mephit_pert, only: L1_interp, RT0_interp, RT0_compute_tor_comp
+    use mephit_util, only: imun, pi, clight
+    real(dp), parameter :: small = tiny(0d0)
+    ! hack: first call in mephit_iter() is always without plasma response
+    ! and without additional shielding currents
+    logical, save :: first_call = .true.
+    integer :: kf, kp, ktri, kedge, k
+    real(dp), dimension(3) :: grad_J0B0, B0_grad_B0, B02_cross_grad_B0
+    complex(dp) :: B0_jnpar
+    complex(dp), dimension(3) :: grad_pn, B_n, dBn_dR, dBn_dZ, dBn_dphi, grad_BnB0, B0_cross_grad_pn
+    complex(dp), dimension(maxval(mesh%kp_max)) :: a, b, x, d, du, inhom
+    complex(dp), allocatable :: debug_x(:), debug_d(:), debug_du(:)
+    integer, dimension(2 * maxval(mesh%kp_max)) :: irow, icol
+    complex(dp), dimension(2 * maxval(mesh%kp_max)) :: aval
+    complex(dp), dimension(:), allocatable :: resid
+    real(dp), dimension(maxval(mesh%kp_max)) :: rel_err
+    real(dp) :: max_rel_err, avg_rel_err
+
+    max_rel_err = 0d0
+    avg_rel_err = 0d0
+    jn%DOF(:) = (0d0, 0d0)
+    jnpar_B0%DOF(:) = (0d0, 0d0)
+    if (first_call) then
+       allocate(debug_x(mesh%npoint), debug_d(mesh%npoint), debug_du(mesh%npoint))
+    end if
+    a = (0d0, 0d0)
+    b = (0d0, 0d0)
+    x = (0d0, 0d0)
+    do kf = 1, mesh%nflux
+       do kp = 1, mesh%kp_max(kf)
+          kedge = mesh%kp_low(kf) + kp - 1
+          ktri = mesh%edge_tri(1, kedge)
+          ! use midpoint of poloidal edge
+          associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge))
+            a(kp) = (f%B0_R * mesh%edge_R(kedge) + f%B0_Z * mesh%edge_Z(kedge)) / &
+                 (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
+            b(kp) = imun * (mesh%n + imun * conf%damp) * f%B0_phi / R
+            call L1_interp(ktri, pn, R, Z, grad_pn(3), grad_pn(1), grad_pn(2))
+            grad_pn(3) = imun * mesh%n / R * grad_pn(3)
+            call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(2), B_n(3), &
+                 dBn_dR(1), dBn_dZ(1), dBn_dR(2), dBn_dZ(2), dBn_dR(3), dBn_dZ(3))
+            dBn_dphi = imun * mesh%n / R * B_n
+            associate (B_0 => [f%B0_R, f%B0_Z, f%B0_phi], J_0 => [f%J0_R, f%J0_Z, f%J0_phi], &
+                 dB0_dR => [f%dB0R_dR, f%dB0Z_dR, f%dB0phi_dR], dB0_dZ => [f%dB0R_dZ, f%dB0Z_dZ, f%dB0phi_dZ], &
+                 dJ0_dR => [f%dJ0R_dR, f%dJ0Z_dR, f%dJ0phi_dR], dJ0_dZ => [f%dJ0R_dZ, f%dJ0Z_dZ, f%dJ0phi_dZ])
+              grad_J0B0 = [sum(dJ0_dR * B_0 + dB0_dR * J_0), sum(dJ0_dZ * B_0 + dB0_dZ * J_0), 0d0]
+              grad_BnB0 = [sum(dBn_dR * B_0 + dB0_dR * B_n), sum(dBn_dZ * B_0 + dB0_dZ * B_n), sum(dBn_dphi * B_0)]
+              B0_grad_B0 = [sum(dB0_dR * B_0), sum(dB0_dZ * B_0), 0d0]
+              B02_cross_grad_B0 = [B0_grad_B0(2) * f%B0_phi, -B0_grad_B0(1) * f%B0_phi, &
+                   B0_grad_B0(1) * f%B0_Z - B0_grad_B0(2) * f%B0_R]
+              x(kp) = (4d0 * pi * sum(grad_pn * J_0) + sum(B_n * grad_J0B0 - J_0 * grad_BnB0)) / f%B0 ** 2 + &
+                   2d0 * (clight * sum(grad_pn * B02_cross_grad_B0) + &
+                   sum(B_n * B_0) * sum(J_0 * B0_grad_B0) - sum(J_0 * B_0) * sum(B_n * B0_grad_B0)) / f%B0 ** 4
+            end associate
+          end associate
+       end do
+       d = -a + b * 0.5d0
+       du = a + b * 0.5d0
+       associate (ndim => mesh%kp_max(kf), nz => 2 * mesh%kp_max(kf))
+         ! assemble sparse matrix (COO format)
+         ! first column, diagonal
+         irow(1) = 1
+         icol(1) = 1
+         aval(1) = d(1)
+         ! first column, off-diagonal
+         irow(2) = ndim
+         icol(2) = 1
+         aval(2) = du(ndim)
+         do k = 2, ndim
+            ! off-diagonal
+            irow(2*k-1) = k-1
+            icol(2*k-1) = k
+            aval(2*k-1) = du(k-1)
+            ! diagonal
+            irow(2*k) = k
+            icol(2*k) = k
+            aval(2*k) = d(k)
+         end do
+         inhom = x  ! remember inhomogeneity before x is overwritten with the solution
+         call sparse_solve(ndim, ndim, nz, irow(:nz), icol(:nz), aval(:nz), x(:ndim))
+         call sparse_matmul(ndim, ndim, irow(:nz), icol(:nz), aval(:nz), x(:ndim), resid)
+         resid(:) = resid - inhom(:ndim)
+         where (abs(inhom(:ndim)) >= small)
+            rel_err(:ndim) = abs(resid(:ndim)) / abs(inhom(:ndim))
+         elsewhere
+            rel_err(:ndim) = 0d0
+         end where
+         max_rel_err = max(max_rel_err, maxval(rel_err(:ndim)))
+         avg_rel_err = avg_rel_err + sum(rel_err(:ndim))
+       end associate
+       if (kf == 1) then ! first point on axis - average over enclosing flux surface
+          jnpar_B0%DOF(1) = sum(x(:mesh%kp_max(1))) / dble(mesh%kp_max(1))
+       end if
+       do kp = 1, mesh%kp_max(kf)
+          jnpar_B0%DOF(mesh%kp_low(kf) + kp) = x(kp)
+       end do
+    end do
+    do kedge = 1, mesh%nedge
+       do k = 1, mesh%GL_order
+          ktri = mesh%edge_tri(1, kedge)
+          associate (f => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge), Z => mesh%GL_Z(k, kedge), &
+               n_f => [mesh%edge_Z(kedge), -mesh%edge_R(kedge), 0d0])
+            call L1_interp(ktri, pn, R, Z, grad_pn(3), grad_pn(1), grad_pn(2))
+            grad_pn(3) = imun * mesh%n / R * grad_pn(3)
+            call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(2), B_n(3))
+            call L1_interp(ktri, jnpar_B0, R, Z, B0_jnpar)
+            B0_jnpar = B0_jnpar * f%B0 ** 2
+            associate (B_0 => [f%B0_R, f%B0_Z, f%B0_phi], J_0 => [f%J0_R, f%J0_Z, f%J0_phi])
+              B0_cross_grad_pn = [B_0(2) * grad_pn(3) - B_0(3) * grad_pn(2), &
+                   B_0(3) * grad_pn(1) - B_0(1) * grad_pn(3), &
+                   B_0(1) * grad_pn(2) - B_0(2) * grad_pn(1)]
+              jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * R * &
+                   (B0_jnpar * sum(B_0 * n_f) + clight * sum(B0_cross_grad_pn * n_f) + &
+                   sum(J_0 * B_0) * sum(B_n * n_f) - sum(B_n * B_0) * sum(J_0 * n_f)) / f%B0 ** 2
+            end associate
+          end associate
+       end do
+    end do
+
+    avg_rel_err = avg_rel_err / dble(mesh%npoint - 1)
+    write (logger%msg, '("compute_currn_MDE: diagonalization max_rel_err = ", ' // &
+         'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
+    if (logger%debug) call logger%write_msg
+    if (allocated(resid)) deallocate(resid)
+
+    if (first_call) then
+       first_call = .false.
+       call RT0_compute_tor_comp(jn)
+       call debug_currn(pn, Bn, jn, debug_x, debug_d, debug_du)
+       deallocate(debug_x, debug_d, debug_du)
+    end if
+    call add_sheet_current
+    call RT0_compute_tor_comp(jn)
+  end subroutine compute_currn_MDE
+
   subroutine debug_currn(p_n, B_n, j_n, x, d, du, terms, coeff_f)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: datafile
@@ -820,8 +972,8 @@ contains
     use mephit_pert, only: RT0_interp, L1_interp
     type(L1_t), intent(in) :: p_n
     type(RT0_t), intent(in) :: B_n, j_n
-    complex(dp), intent(in) :: x(:), d(:), du(:), terms(:, :, :)
-    complex(dp), intent(in), optional :: coeff_f(:)
+    complex(dp), intent(in) :: x(:), d(:), du(:)
+    complex(dp), intent(in), optional :: terms(:, :, :), coeff_f(:)
     character(len = *), parameter :: grp = 'debug_currn'
     integer(HID_T) :: h5id_root
     integer :: kf, kt, ktri
@@ -857,8 +1009,10 @@ contains
          comment = 'main diagonals of linear systems of equations', unit = '1')
     call h5_add(h5id_root, grp // '/du', du, lbound(du), ubound(du), &
          comment = 'upper diagonals of linear systems of equations', unit = '1')
-    call h5_add(h5id_root, grp // '/terms', terms, lbound(terms), ubound(terms), &
-         comment = 'individual terms of area integral approximation', unit = 'statA')
+    if (present(terms)) then
+       call h5_add(h5id_root, grp // '/terms', terms, lbound(terms), ubound(terms), &
+            comment = 'individual terms of area integral approximation', unit = 'statA')
+    end if
     if (present(coeff_f)) then
        call h5_add(h5id_root, grp // '/coeff_f', coeff_f, lbound(coeff_f), ubound(coeff_f), &
             comment = 'coefficients of radial currents', unit = '1')
