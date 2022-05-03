@@ -836,7 +836,7 @@ contains
     ! and without additional shielding currents
     logical, save :: first_call = .true.
     integer :: kf, kp, ktri, kedge, k
-    real(dp), dimension(3) :: grad_J0B0, B0_grad_B0, B02_cross_grad_B0
+    real(dp), dimension(3) :: grad_j0B0, B0_grad_B0, B02_cross_grad_B0
     complex(dp) :: B0_jnpar
     complex(dp), dimension(3) :: grad_pn, B_n, dBn_dR, dBn_dZ, dBn_dphi, grad_BnB0, B0_cross_grad_pn
     complex(dp), dimension(maxval(mesh%kp_max)) :: a, b, x, d, du, inhom
@@ -871,17 +871,17 @@ contains
             call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(2), B_n(3), &
                  dBn_dR(1), dBn_dZ(1), dBn_dR(2), dBn_dZ(2), dBn_dR(3), dBn_dZ(3))
             dBn_dphi = imun * mesh%n / R * B_n
-            associate (B_0 => [f%B0_R, f%B0_Z, f%B0_phi], J_0 => [f%J0_R, f%J0_Z, f%J0_phi], &
+            associate (B_0 => [f%B0_R, f%B0_Z, f%B0_phi], j_0 => [f%j0_R, f%j0_Z, f%j0_phi], &
                  dB0_dR => [f%dB0R_dR, f%dB0Z_dR, f%dB0phi_dR], dB0_dZ => [f%dB0R_dZ, f%dB0Z_dZ, f%dB0phi_dZ], &
-                 dJ0_dR => [f%dJ0R_dR, f%dJ0Z_dR, f%dJ0phi_dR], dJ0_dZ => [f%dJ0R_dZ, f%dJ0Z_dZ, f%dJ0phi_dZ])
-              grad_J0B0 = [sum(dJ0_dR * B_0 + dB0_dR * J_0), sum(dJ0_dZ * B_0 + dB0_dZ * J_0), 0d0]
+                 dj0_dR => [f%dj0R_dR, f%dj0Z_dR, f%dj0phi_dR], dj0_dZ => [f%dj0R_dZ, f%dj0Z_dZ, f%dj0phi_dZ])
+              grad_j0B0 = [sum(dj0_dR * B_0 + dB0_dR * j_0), sum(dj0_dZ * B_0 + dB0_dZ * j_0), 0d0]
               grad_BnB0 = [sum(dBn_dR * B_0 + dB0_dR * B_n), sum(dBn_dZ * B_0 + dB0_dZ * B_n), sum(dBn_dphi * B_0)]
               B0_grad_B0 = [sum(dB0_dR * B_0), sum(dB0_dZ * B_0), 0d0]
               B02_cross_grad_B0 = [B0_grad_B0(2) * f%B0_phi, -B0_grad_B0(1) * f%B0_phi, &
                    B0_grad_B0(1) * f%B0_Z - B0_grad_B0(2) * f%B0_R]
-              x(kp) = (4d0 * pi * sum(grad_pn * J_0) + sum(B_n * grad_J0B0 - J_0 * grad_BnB0)) / f%B0 ** 2 + &
+              x(kp) = (4d0 * pi * sum(grad_pn * j_0) + sum(B_n * grad_j0B0 - j_0 * grad_BnB0)) / f%B0 ** 2 + &
                    2d0 * (clight * sum(grad_pn * B02_cross_grad_B0) + &
-                   sum(B_n * B_0) * sum(J_0 * B0_grad_B0) - sum(J_0 * B_0) * sum(B_n * B0_grad_B0)) / f%B0 ** 4
+                   sum(B_n * B_0) * sum(j_0 * B0_grad_B0) - sum(j_0 * B_0) * sum(B_n * B0_grad_B0)) / f%B0 ** 4
             end associate
           end associate
        end do
@@ -936,13 +936,13 @@ contains
             call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(2), B_n(3))
             call L1_interp(ktri, jnpar_B0, R, Z, B0_jnpar)
             B0_jnpar = B0_jnpar * f%B0 ** 2
-            associate (B_0 => [f%B0_R, f%B0_Z, f%B0_phi], J_0 => [f%J0_R, f%J0_Z, f%J0_phi])
+            associate (B_0 => [f%B0_R, f%B0_Z, f%B0_phi], j_0 => [f%j0_R, f%j0_Z, f%j0_phi])
               B0_cross_grad_pn = [B_0(2) * grad_pn(3) - B_0(3) * grad_pn(2), &
                    B_0(3) * grad_pn(1) - B_0(1) * grad_pn(3), &
                    B_0(1) * grad_pn(2) - B_0(2) * grad_pn(1)]
               jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * R * &
                    (B0_jnpar * sum(B_0 * n_f) + clight * sum(B0_cross_grad_pn * n_f) + &
-                   sum(J_0 * B_0) * sum(B_n * n_f) - sum(B_n * B_0) * sum(J_0 * n_f)) / f%B0 ** 2
+                   sum(j_0 * B_0) * sum(B_n * n_f) - sum(B_n * B_0) * sum(j_0 * n_f)) / f%B0 ** 2
             end associate
           end associate
        end do
