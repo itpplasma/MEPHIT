@@ -111,6 +111,10 @@ set(MEPHIT_C_SRC_FILES
   src/mephit_fem.c
 )
 
+set(MEPHIT_CPP_SRC_FILES
+  src/mephit_fem.cpp
+)
+
 ### Set compiler flags
 set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
@@ -120,7 +124,7 @@ set_source_files_properties(${MEPHIT_FORTRAN_SRC_FILES}
   src/vacfield.f90
   src/standardise_equilibrium.f90
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS}")
-set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES}
+set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS}")
 
 ### Define library
@@ -130,6 +134,7 @@ add_library(mephit SHARED
   ${COMMON_FORTRAN_SRC_FILES}
   ${MEPHIT_FORTRAN_SRC_FILES}
   ${MEPHIT_C_SRC_FILES}
+  ${MEPHIT_CPP_SRC_FILES}
 )
 target_include_directories(mephit PUBLIC ${HDF5_tools_include_dir} ${FGSL_INC} ${NETCDF_INCLUDES})
 set(MEPHIT_LIBS

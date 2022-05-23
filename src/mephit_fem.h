@@ -2,12 +2,16 @@
 #define MEPHIT_FEM_H
 
 #ifdef __cplusplus
-  #include <complex>
-  typedef complex<double> complex_double;
+  #if __cplusplus >= 201103L
+    #include <complex>
+    typedef std::complex<double> complex_double;
+  #else
+    #error "need at least C++11 for binary compatibility with C99 _Complex"
+  #endif
 #else
   #if defined(__STDC_VERSION__) && __STDC_VERSION__ >= 199901L
     #include <complex.h>
-    typedef complex double complex_double;
+    typedef _Complex double complex_double;
   #else
     #error "need at least C99 for complex number support"
   #endif
@@ -19,9 +23,22 @@ extern "C" {
 
 void FEM_init(const int tormode, const int nedge, const int runmode);
 void FEM_extend_mesh(void);
-void FEM_compute_Bn(const int nedge, const complex_double *restrict Jn, complex_double *restrict Bn);
-void FEM_compute_L2int(const int nedge, const complex_double *restrict elem, double *restrict L2int);
+void FEM_compute_Bn(const int nedge, const complex_double *Jn, complex_double *Bn);
+void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2int);
 void FEM_deinit(void);
+
+typedef void real_vector_field(const double R,
+                               const double Z,
+                               double *vector);
+typedef void complex_scalar_field(const double R,
+                                  const double Z,
+                                  complex_double *scalar);
+int FEM_test(const char *mesh_file,
+             const int tor_mode,
+             const int n_dof,
+             complex_double *dof,
+             real_vector_field *unit_B0,
+             complex_scalar_field *MDE_inhom);
 
 #ifdef __cplusplus
 }

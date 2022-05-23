@@ -23,6 +23,22 @@ module mephit_iter
   !> Parallel current density perturbation in units of statampere cm^-2 G^-1.
   type(L1_t) :: jnpar_B0
 
+  abstract interface
+     subroutine real_vector_field(R, Z, vector) bind(C)
+       use iso_c_binding, only: c_double
+       real(c_double), intent(in), value :: R
+       real(c_double), intent(in), value :: Z
+       real(c_double), intent(out) :: vector(3)
+     end subroutine real_vector_field
+
+     subroutine complex_scalar_field(R, Z, scalar) bind(C)
+       use iso_c_binding, only: c_double, c_double_complex
+       real(c_double), intent(in), value :: R
+       real(c_double), intent(in), value :: Z
+       complex(c_double_complex), intent(out) :: scalar
+     end subroutine complex_scalar_field
+  end interface
+
   interface
      subroutine FEM_init(tormode, nedge, runmode) bind(C, name = 'FEM_init')
        use iso_c_binding, only: c_int
@@ -48,6 +64,18 @@ module mephit_iter
 
      subroutine FEM_deinit() bind(C, name = 'FEM_deinit')
      end subroutine FEM_deinit
+
+     function FEM_test(mesh_file, tor_mode, n_dof, dof, unit_B0, MDE_inhom) &
+          bind(C, name = 'FEM_test')
+       use iso_c_binding, only: c_int, c_char, c_double_complex, c_funptr
+       character(c_char), intent(in) :: mesh_file(*)
+       integer(c_int), intent(in), value :: tor_mode
+       integer(c_int), intent(in), value :: n_dof
+       complex(c_double_complex), intent(inout) :: dof(1:n_dof)
+       type(c_funptr), intent(in), value :: unit_B0
+       type(c_funptr), intent(in), value :: MDE_inhom
+       integer(c_int) :: FEM_test
+     end function FEM_test
   end interface
 
 contains
@@ -57,7 +85,7 @@ contains
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use mephit_util, only: C_F_string, get_field_filenames, init_field
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
-    use mephit_mesh, only: equil, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache
+    use mephit_mesh, only: equil, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, psi_interpolator
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
     use hdf5_tools, only: h5_init, h5overwrite
     integer(c_int), intent(in), value :: runmode
@@ -107,6 +135,7 @@ contains
        ! initialize equilibrium field
        call equil%import_hdf5(datafile, 'equil')
        call init_field(equil)
+       call psi_interpolator%init(4, equil%psi_eqd)
        ! read in preprocessed data
        call mesh_read(mesh, datafile, 'mesh')
        call read_cache
@@ -122,6 +151,7 @@ contains
     if (iterations .or. analysis) then
        call iter_init
        if (iterations) then
+          call MFEM_test
           call mephit_iterate
           call FEM_deinit
        else
@@ -430,6 +460,69 @@ contains
     call FEM_compute_Bn(mesh%nedge, jn%DOF, Bn%DOF)
     call RT0_compute_tor_comp(Bn)
   end subroutine compute_Bn
+
+  subroutine unit_B0(R, Z, vector) bind(C, name = 'unit_B0')
+    use iso_c_binding, only: c_double
+    use mephit_conf, only: logger
+    real(c_double), intent(in), value :: R
+    real(c_double), intent(in), value :: Z
+    real(c_double), intent(out) :: vector(3)
+    real(dp) :: dum
+
+    if (logger%debug) then
+       logger%msg = 'called unit_B0'
+       call logger%write_msg
+    end if
+    call field(R, 0d0, Z, vector(1), vector(3), vector(2), &
+         dum, dum, dum, dum, dum, dum, dum, dum, dum)
+    dum = sqrt(sum(vector * vector))
+    vector = vector / dum
+  end subroutine unit_B0
+
+  subroutine presn_inhom(R, Z, scalar) bind(C, name = 'presn_inhom')
+    use iso_c_binding, only: c_double, c_double_complex
+    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+    use field_eq_mod, only: psif, psib
+    use mephit_conf, only: logger
+    use mephit_mesh, only: equil, psi_interpolator, mesh, point_location
+    use mephit_pert, only: RT0_interp, vac
+    real(c_double), intent(in), value :: R
+    real(c_double), intent(in), value :: Z
+    complex(c_double_complex), intent(out) :: scalar
+    real(dp) :: B_0(3), dum, psi, dp0_dpsi
+    integer :: ktri
+    complex(dp) :: Bn_R, Bn_Z
+
+    if (logger%debug) then
+       logger%msg = 'called presn_inhom'
+       call logger%write_msg
+    end if
+    call field(R, 0d0, Z, B_0(1), B_0(2), B_0(3), &
+         dum, dum, dum, dum, dum, dum, dum, dum, dum)
+    psi = psif - psib  ! see intperp_psi_pol in mephit_util
+    dp0_dpsi = psi_interpolator%eval(equil%pprime, psi)
+    ktri = point_location(R, Z)
+    if (ktri <= 0 .or. ktri > mesh%ntri) then
+       scalar = cmplx(ieee_value(0d0, ieee_quiet_nan), ieee_value(0d0, ieee_quiet_nan), dp)
+       return
+    end if
+    call RT0_interp(ktri, vac%Bn, R, Z, Bn_R, Bn_Z)
+    scalar = -dp0_dpsi * (Bn_R * B_0(3) - Bn_Z * B_0(1)) * R / sqrt(sum(B_0 * B_0))
+  end subroutine presn_inhom
+
+  subroutine MFEM_test()
+    use iso_c_binding, only: c_int, c_null_char, c_loc, c_funloc
+    use mephit_conf, only: conf, logger
+    character(len = *), parameter :: mesh_file = 'core_plasma.mesh'
+    integer(c_int) :: status
+
+    status = FEM_test(trim(mesh_file) // c_null_char, conf%n, size(pn%DOF), &
+         pn%DOF, c_funloc(unit_B0), c_funloc(presn_inhom))
+    if (logger%debug) then
+       write (logger%msg, '("FEM_test return status: ", i0)') status
+       call logger%write_msg
+    end if
+  end subroutine MFEM_test
 
   !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
   subroutine compute_presn

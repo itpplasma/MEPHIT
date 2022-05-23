@@ -148,7 +148,7 @@ void FEM_extend_mesh(void)
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
 }
 
-void FEM_compute_Bn(const int nedge, const complex_double *restrict Jn, complex_double *restrict Bn)
+void FEM_compute_Bn(const int nedge, const complex_double *Jn, complex_double *Bn)
 {
   long int flag = -1L;
   int size = 2 * nedge;
@@ -159,7 +159,7 @@ void FEM_compute_Bn(const int nedge, const complex_double *restrict Jn, complex_
   receive_double1_from_FreeFem(shared_namedpipe, size, (double *) Bn);
 }
 
-void FEM_compute_L2int(const int nedge, const complex_double *restrict elem, double *restrict L2int)
+void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2int)
 {
   long int flag = -2L;
   int size = 2 * nedge;
