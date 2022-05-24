@@ -538,7 +538,14 @@ contains
     integer, dimension(2 * maxval(mesh%kp_max)) :: irow, icol
     complex(dp), dimension(2 * maxval(mesh%kp_max)) :: aval
     real(dp), parameter :: small = tiny(0d0)
+    ! hack: first call in mephit_iter() is always without plasma response
+    ! and without additional shielding currents
+    logical, save :: first_call = .true.
+    complex(dp), allocatable :: debug_x(:), debug_d(:), debug_du(:)
 
+    if (first_call) then
+       allocate(debug_x(mesh%npoint), debug_d(mesh%npoint), debug_du(mesh%npoint))
+    end if
     max_rel_err = 0d0
     avg_rel_err = 0d0
     a = (0d0, 0d0)
@@ -557,7 +564,12 @@ contains
        end do
        d = -a + b * 0.5d0
        du = a + b * 0.5d0
-       associate (ndim => mesh%kp_max(kf), nz => 2 * mesh%kp_max(kf))
+       associate (ndim => mesh%kp_max(kf), nz => 2 * mesh%kp_max(kf), k_min => mesh%kp_low(kf))
+         if (first_call) then
+            debug_x(k_min+1:k_min+ndim) = x(1:ndim)
+            debug_d(k_min+1:k_min+ndim) = d(1:ndim)
+            debug_du(k_min+1:k_min+ndim) = du(1:ndim)
+         end if
          ! assemble sparse matrix (COO format)
          ! first column, diagonal
          irow(1) = 1
@@ -602,7 +614,58 @@ contains
          'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (logger%debug) call logger%write_msg
     if (allocated(resid)) deallocate(resid)
+    if (first_call) then
+       first_call = .false.
+       call debug_presn(pn, Bn, debug_x, debug_d, debug_du)
+       deallocate(debug_x, debug_d, debug_du)
+    end if
   end subroutine compute_presn
+
+  subroutine debug_presn(p_n, B_n, x, d, du)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use mephit_conf, only: datafile
+    use mephit_util, only: imun
+    use mephit_mesh, only: mesh, cache
+    use mephit_pert, only: L1_t, L1_interp, RT0_t, RT0_interp
+    type(L1_t), intent(in) :: p_n
+    type(RT0_t), intent(in) :: B_n
+    complex(dp), intent(in) :: x(:), d(:), du(:)
+    character(len = *), parameter :: grp = 'debug_presn'
+    integer(HID_T) :: h5id_root
+    integer :: kf, kp, kedge
+    complex(dp) :: pn, dpn_dR, dpn_dZ, grad_pn(3, mesh%npoint), &
+         Bn_R, Bn_Z, Bn_psi_contravar(mesh%npoint)
+
+    grad_pn = (0d0, 0d0)
+    Bn_psi_contravar = (0d0, 0d0)
+    do kf = 1, mesh%nflux
+       do kp = 1, mesh%kp_max(kf)
+          kedge = mesh%kp_low(kf) + kp - 1
+          associate (R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge), &
+               c => cache%mid_fields(kedge), ktri => mesh%edge_tri(1, kedge))
+            call L1_interp(ktri, p_n, R, Z, pn, dpn_dR, dpn_dZ)
+            call RT0_interp(ktri, B_n, R, Z, Bn_R, Bn_Z)
+            grad_pn(:, kedge + 1) = [dpn_dR, imun * mesh%n * pn / R, dpn_dZ]
+            Bn_psi_contravar(kedge + 1) = R * (Bn_R * c%B0_Z - Bn_Z * c%B0_R)
+          end associate
+       end do
+    end do
+
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/x', x, lbound(x), ubound(x), &
+         comment = 'inhomogeneities of linear systems of equations', unit = 'statA')
+    call h5_add(h5id_root, grp // '/d', d, lbound(d), ubound(d), &
+         comment = 'main diagonals of linear systems of equations', unit = '1')
+    call h5_add(h5id_root, grp // '/du', du, lbound(du), ubound(du), &
+         comment = 'upper diagonals of linear systems of equations', unit = '1')
+    call h5_add(h5id_root, grp // '/grad_pn', grad_pn, lbound(grad_pn), ubound(grad_pn), &
+         comment = 'perturbation pressure gradient', unit = 'dyn cm^-2')
+    call h5_add(h5id_root, grp // '/Bn_psi_contravar', Bn_psi_contravar, &
+         lbound(Bn_psi_contravar), ubound(Bn_psi_contravar), &
+         comment = 'perturbation pressure gradient', unit = 'G^2 cm')
+    call h5_close(h5id_root)
+  end subroutine debug_presn
 
   !> Computes current perturbation #jnflux and #jnphi from equilibrium quantities,
   !> #presn, #bnflux and #bnphi.
