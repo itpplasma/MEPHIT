@@ -65,7 +65,7 @@ extern char shared_namedpipe[path_max];
 
 int main(int argc, char *argv[])
 {
-  const char ff[] = "FreeFem++-mpi";
+  const char ff[] = "FreeFem++";
   const char *ssh_client, *display;
   char *config = NULL, *tmpdir = NULL, *scriptpath = NULL;
   int runmode = 0, bytes_written, errno_save, graphical;
