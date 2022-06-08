@@ -24,10 +24,10 @@ Prerequisites for running NEO-EQ are as follows.
 
 ## Initial build
 
-Set the environment variables `LIBNEO_DIR` and `FGSL_PATH` if libneo and FGSL are not in their default location (adjacent to MEPHIT and in the system default, respectively). At ITPcp, you can put the following into your `~/.bashrc` for testing:
+Set the environment variables `LIBNEO_DIR` and `FGSL_PATH` if libneo and FGSL are not in their default location (adjacent to MEPHIT and in the system default, respectively). At ITPcp, you can put the following into your `~/.bashrc`:
 
-    export LIBNEO_DIR=/temp/lainer_p/git/libneo
-    export FGSL_PATH=/temp/lainer_p/fgsl-1.2.0/LIB
+    export LIBNEO_DIR=/temp/AG-plasma/codes/libneo/build-master
+    export FGSL_PATH=/temp/AG-plasma/codes/contrib/fgsl-1.5.0/LIB
 
 To build MEPHIT, run
 
