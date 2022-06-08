@@ -65,10 +65,8 @@ extern char shared_namedpipe[path_max];
 
 int main(int argc, char *argv[])
 {
-  const char ff[] = "FreeFem++";
-  const char *ssh_client, *display;
   char *config = NULL, *tmpdir = NULL, *scriptpath = NULL;
-  int runmode = 0, bytes_written, errno_save, graphical;
+  int runmode = 0, bytes_written, errno_save;
   struct sigaction infanticide, prev_sigint, prev_sigterm;
 
   if (argc > 1) {
@@ -115,24 +113,7 @@ int main(int argc, char *argv[])
   }
   fem.pid = fork();
   if (fem.pid == (pid_t) 0) {
-    // when connected via SSH or not working in an X environmnent,
-    // suppress graphics to avoid setting an error code
-    graphical = 1;
-    ssh_client = getenv("SSH_CLIENT");
-    display = getenv("DISPLAY");
-    if (ssh_client && strlen(ssh_client)) {
-      fprintf(stdout, "Environment variable SSH_CLIENT is set, disabling FreeFem++ graphics.\n");
-      graphical = 0;
-    }
-    if (!(display && strlen(display))) {
-      fprintf(stdout, "Environment variable DISPLAY is not set, disabling FreeFem++ graphics.\n");
-      graphical = 0;
-    }
-    if (graphical) {
-      execlp(ff, ff, "-ne", "-wg", "-wait", scriptpath, "-P", shared_namedpipe, (char *) NULL);
-    } else {
-      execlp(ff, ff, "-ne", "-nw", scriptpath, "-P", shared_namedpipe, (char *) NULL);
-    }
+    execl(scriptpath, scriptpath, shared_namedpipe, (char *) NULL);
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to execute FreeFem");
   } else if (fem.pid == (pid_t) -1) {
     errno_msg(exit, __FILE__, __LINE__, errno, "Failed to create child process for FreeFem");

@@ -6,7 +6,7 @@
 //
 
 load "BinaryIO"
-load "MUMPS_seq"
+load "MUMPS"
 
 real c = 29979245800.0; // speed of light
 

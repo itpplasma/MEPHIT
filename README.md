@@ -29,10 +29,6 @@ Set the environment variables `LIBNEO_DIR` and `FGSL_PATH` if libneo and FGSL ar
     export LIBNEO_DIR=/temp/lainer_p/git/libneo
     export FGSL_PATH=/temp/lainer_p/fgsl-1.2.0/LIB
 
-For FreeFem++, you may have to add
-
-    export FF_LOADPATH=/usr/lib/freefem++
-
 To build MEPHIT, run
 
     mkdir build

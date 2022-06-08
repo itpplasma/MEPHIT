@@ -209,7 +209,7 @@ mephit_run() {
             $runmode \
             "$config" \
             "$tmpdir" \
-            "$scriptdir/maxwell_daemon.edp" \
+            "$scriptdir/ff-mephit.bash" \
             2>&1 | tee -a "$log"
         lasterr=$?
         if [ "$lasterr" -ne 0 ]; then
