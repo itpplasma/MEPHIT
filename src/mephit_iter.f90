@@ -538,14 +538,7 @@ contains
     integer, dimension(2 * maxval(mesh%kp_max)) :: irow, icol
     complex(dp), dimension(2 * maxval(mesh%kp_max)) :: aval
     real(dp), parameter :: small = tiny(0d0)
-    ! hack: first call in mephit_iter() is always without plasma response
-    ! and without additional shielding currents
-    logical, save :: first_call = .true.
-    complex(dp), allocatable :: debug_x(:), debug_d(:), debug_du(:)
 
-    if (first_call) then
-       allocate(debug_x(mesh%npoint), debug_d(mesh%npoint), debug_du(mesh%npoint))
-    end if
     max_rel_err = 0d0
     avg_rel_err = 0d0
     a = (0d0, 0d0)
@@ -564,12 +557,7 @@ contains
        end do
        d = -a + b * 0.5d0
        du = a + b * 0.5d0
-       associate (ndim => mesh%kp_max(kf), nz => 2 * mesh%kp_max(kf), k_min => mesh%kp_low(kf))
-         if (first_call) then
-            debug_x(k_min+1:k_min+ndim) = x(1:ndim)
-            debug_d(k_min+1:k_min+ndim) = d(1:ndim)
-            debug_du(k_min+1:k_min+ndim) = du(1:ndim)
-         end if
+       associate (ndim => mesh%kp_max(kf), nz => 2 * mesh%kp_max(kf))
          ! assemble sparse matrix (COO format)
          ! first column, diagonal
          irow(1) = 1
@@ -614,58 +602,86 @@ contains
          'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (logger%debug) call logger%write_msg
     if (allocated(resid)) deallocate(resid)
-    if (first_call) then
-       first_call = .false.
-       call debug_presn(pn, Bn, debug_x, debug_d, debug_du)
-       deallocate(debug_x, debug_d, debug_du)
-    end if
   end subroutine compute_presn
 
-  subroutine debug_presn(p_n, B_n, x, d, du)
+  subroutine debug_MDE(p_n, B_n, jn_par)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use mephit_conf, only: datafile
-    use mephit_util, only: imun
-    use mephit_mesh, only: mesh, cache
+    use field_eq_mod, only: psif, psib
+    use mephit_conf, only: conf, datafile
+    use mephit_util, only: imun, pi, clight, zd_cross
+    use mephit_mesh, only: equil, mesh, cache, psi_interpolator, point_location
     use mephit_pert, only: L1_t, L1_interp, RT0_t, RT0_interp
     type(L1_t), intent(in) :: p_n
     type(RT0_t), intent(in) :: B_n
-    complex(dp), intent(in) :: x(:), d(:), du(:)
-    character(len = *), parameter :: grp = 'debug_presn'
+    type(L1_t), intent(in) :: jn_par
+    character(len = *), parameter :: grp = 'debug_MDE'
     integer(HID_T) :: h5id_root
-    integer :: kf, kp, kedge
+    integer :: kf, kp, kedge, ktri, k
+    real(dp) :: dum, psi, B_0(3), j_0(3), stencil_R(5), stencil_Z(5), &
+         dp0_dpsi, dF_dpsi, FdF_dpsi, fprime(equil%nw)
     complex(dp) :: pn, dpn_dR, dpn_dZ, grad_pn(3, mesh%npoint), &
-         Bn_R, Bn_Z, Bn_psi_contravar(mesh%npoint)
+         Bn_R, Bn_Z, Bn_phi, Bn_psi_contravar(mesh%npoint), &
+         jnpar, djnpar_dR, djnpar_dZ, grad_jnpar(3, mesh%npoint), &
+         jnperp(3, 5), div_jnperp(mesh%npoint)
 
+    fprime = equil%ffprim / equil%fpol
     grad_pn = (0d0, 0d0)
     Bn_psi_contravar = (0d0, 0d0)
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
-          associate (R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge), &
-               c => cache%mid_fields(kedge), ktri => mesh%edge_tri(1, kedge))
+          ktri = mesh%edge_tri(1, kedge)
+          associate (R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge), c => cache%mid_fields(kedge))
             call L1_interp(ktri, p_n, R, Z, pn, dpn_dR, dpn_dZ)
             call RT0_interp(ktri, B_n, R, Z, Bn_R, Bn_Z)
+            call L1_interp(ktri, jn_par, R, Z, jnpar, djnpar_dR, djnpar_dZ)
             grad_pn(:, kedge + 1) = [dpn_dR, imun * mesh%n * pn / R, dpn_dZ]
             Bn_psi_contravar(kedge + 1) = R * (Bn_R * c%B0_Z - Bn_Z * c%B0_R)
+            grad_jnpar(:, kedge + 1) = [djnpar_dR, imun * mesh%n * jnpar / R, djnpar_dZ]
           end associate
+          if (kf < mesh%nflux) then
+             stencil_R = mesh%mid_R(kedge) + [0, 1, -1, 0, 0] * 0.2d0 * conf%max_Delta_rad
+             stencil_Z = mesh%mid_Z(kedge) + [0, 0, 0, 1, -1] * 0.2d0 * conf%max_Delta_rad
+             do k = 1, 5
+                call field(stencil_R(k), 0d0, stencil_Z(k), B_0(1), B_0(2), B_0(3), &
+                     dum, dum, dum, dum, dum, dum, dum, dum, dum)
+                psi = psif - psib  ! see intperp_psi_pol in mephit_util
+                dp0_dpsi = psi_interpolator%eval(equil%pprime, psi)
+                FdF_dpsi = psi_interpolator%eval(equil%ffprim, psi)
+                dF_dpsi = psi_interpolator%eval(fprime, psi)
+                j_0(1) = 0.25d0 / pi * clight * dF_dpsi * B_0(1)
+                j_0(2) = clight * (dp0_dpsi * stencil_R(k) + 0.25d0 / (pi * stencil_R(k)) * FdF_dpsi)
+                j_0(3) = 0.25d0 / pi * clight * dF_dpsi * B_0(3)
+                ktri = point_location(stencil_R(k), stencil_Z(k), psi)
+                call L1_interp(ktri, p_n, stencil_R(k), stencil_Z(k), pn, dpn_dR, dpn_dZ)
+                call RT0_interp(ktri, B_n, stencil_R(k), stencil_Z(k), Bn_R, Bn_Z, Bn_phi)
+                jnperp(:, k) = (sum(B_0 * J_0) * [Bn_R, Bn_phi, Bn_Z] - &
+                     sum(B_0 * [Bn_R, Bn_phi, Bn_Z]) * J_0 + clight * &
+                     zd_cross([dpn_dR, imun * mesh%n * pn / stencil_R(k), dpn_dZ], B_0)) / &
+                     sum(B_0 ** 2)
+             end do
+             div_jnperp(kedge + 1) = imun * mesh%n / stencil_R(1) * jnperp(2, 1) + &
+                  (jnperp(1, 2) - jnperp(1, 3) + jnperp(3, 4) - jnperp(3, 5)) / &
+                  (0.4d0 * conf%max_Delta_rad)
+          end if
        end do
     end do
 
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, grp // '/')
-    call h5_add(h5id_root, grp // '/x', x, lbound(x), ubound(x), &
-         comment = 'inhomogeneities of linear systems of equations', unit = 'statA')
-    call h5_add(h5id_root, grp // '/d', d, lbound(d), ubound(d), &
-         comment = 'main diagonals of linear systems of equations', unit = '1')
-    call h5_add(h5id_root, grp // '/du', du, lbound(du), ubound(du), &
-         comment = 'upper diagonals of linear systems of equations', unit = '1')
     call h5_add(h5id_root, grp // '/grad_pn', grad_pn, lbound(grad_pn), ubound(grad_pn), &
          comment = 'perturbation pressure gradient', unit = 'dyn cm^-2')
     call h5_add(h5id_root, grp // '/Bn_psi_contravar', Bn_psi_contravar, &
          lbound(Bn_psi_contravar), ubound(Bn_psi_contravar), &
          comment = 'perturbation pressure gradient', unit = 'G^2 cm')
+    call h5_add(h5id_root, grp // '/grad_jnpar', grad_jnpar, &
+         lbound(grad_jnpar), ubound(grad_jnpar), unit = 'cm^-1 s^-1', &
+         comment = 'parallel perturbation current density gradient')
+    call h5_add(h5id_root, grp // '/div_jnperp', div_jnperp, &
+         lbound(div_jnperp), ubound(div_jnperp), unit = 'statA cm^-3', &
+         comment = 'perpendicular perturbation current density divergence')
     call h5_close(h5id_root)
-  end subroutine debug_presn
+  end subroutine debug_MDE
 
   !> Computes current perturbation #jnflux and #jnphi from equilibrium quantities,
   !> #presn, #bnflux and #bnphi.
@@ -986,7 +1002,7 @@ contains
     use mephit_conf, only: conf, logger
     use mephit_mesh, only: mesh, cache
     use mephit_pert, only: L1_interp, RT0_interp, RT0_compute_tor_comp
-    use mephit_util, only: imun, pi, clight
+    use mephit_util, only: imun, pi, clight, zd_cross
     real(dp), parameter :: small = tiny(0d0)
     ! hack: first call in mephit_iter() is always without plasma response
     ! and without additional shielding currents
@@ -1089,7 +1105,7 @@ contains
             grad_pn(3) = imun * mesh%n / R * grad_pn(3)
             call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(2), B_n(3))
             call L1_interp(ktri, jnpar_B0, R, Z, B0_jnpar)
-            B0_jnpar = B0_jnpar * f%B0 ** 2
+            B0_jnpar = (0d0, 0d0)  ! B0_jnpar * f%B0 ** 2  ! hack to omit parallel component
             associate (B_0 => [f%B0_R, f%B0_Z, f%B0_phi], j_0 => [f%j0_R, f%j0_Z, f%j0_phi])
               jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * R * &
                    (B0_jnpar * sum(B_0 * n_f) - clight * sum(zd_cross(grad_pn, B_0) * n_f) + &
@@ -1109,19 +1125,11 @@ contains
        first_call = .false.
        call RT0_compute_tor_comp(jn)
        call debug_currn(pn, Bn, jn, debug_x, debug_d, debug_du)
+       call debug_MDE(pn, Bn, jnpar_B0)
        deallocate(debug_x, debug_d, debug_du)
     end if
     call add_sheet_current
     call RT0_compute_tor_comp(jn)
-
-  contains
-    function zd_cross(z, d)
-      complex(dp), intent(in) :: z(3)
-      real(dp), intent(in) :: d(3)
-      complex(dp) :: zd_cross(3)
-
-      zd_cross = z([2, 3, 1]) * d([3, 1, 2]) - z([3, 1, 2]) * d([2, 3, 1])
-    end function zd_cross
   end subroutine compute_currn_MDE
 
   subroutine debug_currn(p_n, B_n, j_n, x, d, du, terms, coeff_f)

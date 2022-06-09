@@ -70,7 +70,7 @@ for k = 1:3
   semilogy(abs(lorentz_mde(k, :)), '--b');
   semilogy(abs(grad_pn_mde(k, :)), '-.g');
   hold off;
-  legend('old', 'new', 'MDE', 'grad pn');
+  legend('old', 'new', 'MDE', 'grad p_{n}');
   ylabel(['abs f_{', coords{k}, '} / dyn cm^{-2}']);
   subplot(1, 2, 2);
   hold on;
@@ -79,6 +79,6 @@ for k = 1:3
   plot(arg(lorentz_mde(k, :)), '--b');
   plot(arg(grad_pn_mde(k, :)), '-.g');
   hold off;
-  legend('old', 'new', 'MDE', 'grad pn');
+  legend('old', 'new', 'MDE', 'grad p_{n}');
   ylabel(['arg f_{', coords{k}, '} / dyn cm^{-2}']);
 end

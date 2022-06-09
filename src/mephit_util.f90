@@ -13,7 +13,7 @@ module mephit_util
 
   ! utility procedures
   public :: get_field_filenames, init_field, deinit_field, interp_psi_pol, &
-       pos_angle, linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, &
+       pos_angle, linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, zd_cross, &
        binsearch, interleave, heapsort_real, heapsort_complex, complex_abs_asc, complex_abs_desc, &
        arnoldi_break, hessenberg_eigvals, hessenberg_eigvecs, &
        gauss_legendre_unit_interval, C_F_string
@@ -327,6 +327,14 @@ contains
     comp_pol = comp_Z * cos(theta) - comp_R * sin(theta)
     comp_tor = comp_phi ! / (1d0 + r / R_0 * cos(theta))  ! exact version
   end subroutine bent_cyl2straight_cyl
+
+  function zd_cross(z, d)
+    complex(dp), intent(in) :: z(3)
+    real(dp), intent(in) :: d(3)
+    complex(dp) :: zd_cross(3)
+
+    zd_cross = z([2, 3, 1]) * d([3, 1, 2]) - z([3, 1, 2]) * d([2, 3, 1])
+  end function zd_cross
 
   subroutine g_eqdsk_read(this, fname, convexfile)
     class(g_eqdsk), intent(inout) :: this

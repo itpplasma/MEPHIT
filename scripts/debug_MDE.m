@@ -1,19 +1,22 @@
-mde = load('../run/33353_2325/mephit.h5');
-n = double(mde.mesh.n);
+data = load('../run/33353_2325/mephit.h5');
+n = double(data.mesh.n);
 
 kf = 151;
 % poloidal edge index = point index - 1
-k_min = mde.mesh.kp_low(kf);
-k_max = mde.mesh.kp_low(kf) + mde.mesh.kp_max(kf) - 1;
+k_min = data.mesh.kp_low(kf);
+k_max = data.mesh.kp_low(kf) + data.mesh.kp_max(kf) - 1;
 
-B0 = mde.cache.mid_fields.B0(k_min:k_max);
-h = [mde.cache.mid_fields.B0_R(k_min:k_max); ...
-     mde.cache.mid_fields.B0_phi(k_min:k_max); ...
-     mde.cache.mid_fields.B0_Z(k_min:k_max)];
-dp0_dpsi = mde.cache.fs.dp_dpsi(kf);
-Bn_psi = mde.debug_presn.Bn_psi_contravar(k_min+1:k_max+1);
-grad_pn_mde = mde.debug_presn.grad_pn(:, k_min+1:k_max+1);
-lhs = dot(h, grad_pn_mde) ./ B0;
+B0 = data.cache.mid_fields.B0(k_min:k_max);
+h = [data.cache.mid_fields.B0_R(k_min:k_max) ./ B0; ...
+     data.cache.mid_fields.B0_phi(k_min:k_max) ./ B0; ...
+     data.cache.mid_fields.B0_Z(k_min:k_max) ./ B0];
+dp0_dpsi = data.cache.fs.dp_dpsi(kf);
+Bn_psi = data.debug_MDE.Bn_psi_contravar(k_min+1:k_max+1);
+grad_pn = data.debug_MDE.grad_pn(:, k_min+1:k_max+1);
+div_jnperp = data.debug_MDE.div_jnperp(k_min+1:k_max+1);
+grad_jnpar = data.debug_MDE.grad_jnpar(:, k_min+1:k_max+1);
+
+lhs = dot(h, grad_pn);
 rhs = -Bn_psi ./ B0 * dp0_dpsi;
 
 figure;
@@ -35,18 +38,55 @@ ylabel('arg MDE p_{n} / dyn cm^{-3}');
 figure;
 subplot(1, 2, 1);
 hold on;
-semilogy(abs(grad_pn_mde(1, :)), '-k');
-semilogy(abs(grad_pn_mde(2, :)), ':b');
-semilogy(abs(grad_pn_mde(3, :)), '--r');
+semilogy(abs(grad_pn(1, :)), '-k');
+semilogy(abs(grad_pn(2, :)), ':b');
+semilogy(abs(grad_pn(3, :)), '--r');
 hold off;
 legend('R', 'phi', 'Z');
 ylabel('abs grad p_{n} / dyn cm^{-3}');
 subplot(1, 2, 2);
 hold on;
-plot(arg(grad_pn_mde(1, :)), '-k');
-plot(arg(grad_pn_mde(2, :)), ':b');
-plot(arg(grad_pn_mde(3, :)), '--r');
+plot(arg(grad_pn(1, :)), '-k');
+plot(arg(grad_pn(2, :)), ':b');
+plot(arg(grad_pn(3, :)), '--r');
 hold off;
 legend('R', 'phi', 'Z');
 ylabel('arg grad p_{n} / dyn cm^{-3}');
+
+lhs = dot(h, grad_jnpar);
+rhs = -div_jnperp ./ B0;
+
+figure;
+subplot(1, 2, 1);
+hold on;
+semilogy(abs(lhs), '-k');
+semilogy(abs(rhs), '--r');
+hold off;
+legend('LHS', 'RHS');
+ylabel('abs MDE j_{n}^{\parallel} / statA cm^{-3}');
+subplot(1, 2, 2);
+hold on;
+plot(arg(lhs), '-k');
+plot(arg(rhs), '--r');
+hold off;
+legend('LHS', 'RHS');
+ylabel('arg MDE j_{n}^{\parallel} / statA cm^{-3}');
+
+figure;
+subplot(1, 2, 1);
+hold on;
+semilogy(abs(grad_jnpar(1, :)), '-k');
+semilogy(abs(grad_jnpar(2, :)), ':b');
+semilogy(abs(grad_jnpar(3, :)), '--r');
+hold off;
+legend('R', 'phi', 'Z');
+ylabel('abs grad j_{n}^{\parallel} / statA cm^{-3}');
+subplot(1, 2, 2);
+hold on;
+plot(arg(grad_jnpar(1, :)), '-k');
+plot(arg(grad_jnpar(2, :)), ':b');
+plot(arg(grad_jnpar(3, :)), '--r');
+hold off;
+legend('R', 'phi', 'Z');
+ylabel('arg grad j_{n}^{\parallel} / statA cm^{-3}');
 
