@@ -604,7 +604,7 @@ contains
     if (allocated(resid)) deallocate(resid)
   end subroutine compute_presn
 
-  subroutine debug_MDE(p_n, B_n, jn_par)
+  subroutine debug_MDE(p_n, B_n, jn_perp, jn_par)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use field_eq_mod, only: psif, psib
     use mephit_conf, only: conf, datafile
@@ -613,18 +613,22 @@ contains
     use mephit_pert, only: L1_t, L1_interp, RT0_t, RT0_interp
     type(L1_t), intent(in) :: p_n
     type(RT0_t), intent(in) :: B_n
+    type(RT0_t), intent(in) :: jn_perp
     type(L1_t), intent(in) :: jn_par
     character(len = *), parameter :: grp = 'debug_MDE'
     integer(HID_T) :: h5id_root
-    integer :: kf, kp, kedge, ktri, k
+    integer :: ndim, kf, kp, kedge, ktri, k
     real(dp) :: dum, psi, B_0(3), j_0(3), stencil_R(5), stencil_Z(5), &
          dp0_dpsi, dF_dpsi, FdF_dpsi, fprime(equil%nw)
-    complex(dp) :: pn, dpn_dR, dpn_dZ, grad_pn(3, mesh%npoint), &
-         Bn_R, Bn_Z, Bn_phi, Bn_psi_contravar(mesh%npoint), &
-         jnpar, djnpar_dR, djnpar_dZ, grad_jnpar(3, mesh%npoint), &
-         jnperp(3, 5), div_jnperp(mesh%npoint)
+    complex(dp) :: zdum, pn, dpn_dR, dpn_dZ, Bn_R, Bn_Z, Bn_phi, &
+         jnpar, djnpar_dR, djnpar_dZ, jnperp(3, 5), jn_R, jn_phi, djnR_dR, djnZ_dZ
+    complex(dp), allocatable :: grad_pn(:, :), Bn_psi_contravar(:), grad_jnpar(:, :), &
+         div_jnperp(:), div_jnperp_RT0(:)
 
     fprime = equil%ffprim / equil%fpol
+    ndim = mesh%npoint - 1
+    allocate(grad_pn(3, ndim), Bn_psi_contravar(ndim), grad_jnpar(3, ndim), &
+         div_jnperp(ndim), div_jnperp_RT0(ndim))
     grad_pn = (0d0, 0d0)
     Bn_psi_contravar = (0d0, 0d0)
     do kf = 1, mesh%nflux
@@ -635,9 +639,11 @@ contains
             call L1_interp(ktri, p_n, R, Z, pn, dpn_dR, dpn_dZ)
             call RT0_interp(ktri, B_n, R, Z, Bn_R, Bn_Z)
             call L1_interp(ktri, jn_par, R, Z, jnpar, djnpar_dR, djnpar_dZ)
-            grad_pn(:, kedge + 1) = [dpn_dR, imun * mesh%n * pn / R, dpn_dZ]
-            Bn_psi_contravar(kedge + 1) = R * (Bn_R * c%B0_Z - Bn_Z * c%B0_R)
-            grad_jnpar(:, kedge + 1) = [djnpar_dR, imun * mesh%n * jnpar / R, djnpar_dZ]
+            call RT0_interp(ktri, jn_perp, R, Z, jn_R, zdum, jn_phi, djnR_dR, comp_Z_dZ = djnZ_dZ)
+            grad_pn(:, kedge) = [dpn_dR, imun * mesh%n * pn / R, dpn_dZ]
+            Bn_psi_contravar(kedge) = R * (Bn_R * c%B0_Z - Bn_Z * c%B0_R)
+            grad_jnpar(:, kedge) = [djnpar_dR, imun * mesh%n * jnpar / R, djnpar_dZ]
+            div_jnperp_RT0(kedge) = jn_R / R + djnR_dR + djnZ_dZ + imun * mesh%n / R * jn_phi
           end associate
           if (kf < mesh%nflux) then
              stencil_R = mesh%mid_R(kedge) + [0, 1, -1, 0, 0] * 0.2d0 * conf%max_Delta_rad
@@ -660,9 +666,9 @@ contains
                      zd_cross([dpn_dR, imun * mesh%n * pn / stencil_R(k), dpn_dZ], B_0)) / &
                      sum(B_0 ** 2)
              end do
-             div_jnperp(kedge + 1) = imun * mesh%n / stencil_R(1) * jnperp(2, 1) + &
+             div_jnperp(kedge) = imun * mesh%n / stencil_R(1) * jnperp(2, 1) + &
                   (jnperp(1, 2) - jnperp(1, 3) + jnperp(3, 4) - jnperp(3, 5)) / &
-                  (0.4d0 * conf%max_Delta_rad)
+                  (0.4d0 * conf%max_Delta_rad) + jnperp(1, 1) / stencil_R(1)
           end if
        end do
     end do
@@ -679,8 +685,13 @@ contains
          comment = 'parallel perturbation current density gradient')
     call h5_add(h5id_root, grp // '/div_jnperp', div_jnperp, &
          lbound(div_jnperp), ubound(div_jnperp), unit = 'statA cm^-3', &
-         comment = 'perpendicular perturbation current density divergence')
+         comment = 'perpendicular perturbation current density divergence (five-point stencil)')
+    call h5_add(h5id_root, grp // '/div_jnperp_RT0', div_jnperp_RT0, &
+         lbound(div_jnperp_RT0), ubound(div_jnperp_RT0), unit = 'statA cm^-3', &
+         comment = 'perpendicular perturbation current density divergence (RT0 interpolation)')
     call h5_close(h5id_root)
+
+    deallocate(grad_pn, Bn_psi_contravar, grad_jnpar, div_jnperp, div_jnperp_RT0)
   end subroutine debug_MDE
 
   !> Computes current perturbation #jnflux and #jnphi from equilibrium quantities,
@@ -1022,6 +1033,7 @@ contains
     max_rel_err = 0d0
     avg_rel_err = 0d0
     jn%DOF(:) = (0d0, 0d0)
+    jn%comp_phi(:) = (0d0, 0d0)
     jnpar_B0%DOF(:) = (0d0, 0d0)
     if (first_call) then
        allocate(debug_x(mesh%npoint), debug_d(mesh%npoint), debug_du(mesh%npoint))
@@ -1114,6 +1126,22 @@ contains
           end associate
        end do
     end do
+    do ktri = 1, mesh%ntri
+       do k = 1, mesh%GL2_order
+          associate (f => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri), Z => mesh%GL2_Z(k, ktri))
+            call L1_interp(ktri, pn, R, Z, grad_pn(3), grad_pn(1), grad_pn(2))
+            grad_pn(3) = imun * mesh%n / R * grad_pn(3)
+            call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(2), B_n(3))
+            call L1_interp(ktri, jnpar_B0, R, Z, B0_jnpar)
+            B0_jnpar = (0d0, 0d0)  ! B0_jnpar * f%B0 ** 2  ! hack to omit parallel component
+            associate (B_0 => [f%B0_R, f%B0_Z, f%B0_phi], j_0 => [f%j0_R, f%j0_Z, f%j0_phi], n_f => [0d0, 0d0, 1d0])
+              jn%comp_phi(ktri) = jn%comp_phi(ktri) + mesh%GL2_weights(k) * &
+                   (B0_jnpar * sum(B_0 * n_f) - clight * sum(zd_cross(grad_pn, B_0) * n_f) + &
+                   sum(j_0 * B_0) * sum(B_n * n_f) - sum(B_n * B_0) * sum(j_0 * n_f)) / f%B0 ** 2
+            end associate
+          end associate
+       end do
+    end do
 
     avg_rel_err = avg_rel_err / dble(mesh%npoint - 1)
     write (logger%msg, '("compute_currn_MDE: diagonalization max_rel_err = ", ' // &
@@ -1123,13 +1151,11 @@ contains
 
     if (first_call) then
        first_call = .false.
-       call RT0_compute_tor_comp(jn)
        call debug_currn(pn, Bn, jn, debug_x, debug_d, debug_du)
-       call debug_MDE(pn, Bn, jnpar_B0)
+       call debug_MDE(pn, Bn, jn, jnpar_B0)
        deallocate(debug_x, debug_d, debug_du)
     end if
     call add_sheet_current
-    call RT0_compute_tor_comp(jn)
   end subroutine compute_currn_MDE
 
   subroutine debug_currn(p_n, B_n, j_n, x, d, du, terms, coeff_f)
