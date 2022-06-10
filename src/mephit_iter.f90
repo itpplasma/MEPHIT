@@ -1069,7 +1069,12 @@ contains
        end do
        d = -a + b * 0.5d0
        du = a + b * 0.5d0
-       associate (ndim => mesh%kp_max(kf), nz => 2 * mesh%kp_max(kf))
+       associate (ndim => mesh%kp_max(kf), nz => 2 * mesh%kp_max(kf), k_min => mesh%kp_low(kf))
+         if (first_call) then
+            debug_x(k_min+1:k_min+ndim) = x(1:ndim)
+            debug_d(k_min+1:k_min+ndim) = d(1:ndim)
+            debug_du(k_min+1:k_min+ndim) = du(1:ndim)
+         end if
          ! assemble sparse matrix (COO format)
          ! first column, diagonal
          irow(1) = 1
