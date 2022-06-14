@@ -379,7 +379,7 @@ contains
     real(dp), intent(in) :: R
     real(dp) :: metric_det
     metric_det = equil%cocos%sgn_dpsi * fs_half%q(kf) * R / &
-         cache%cntr_fields(mesh%kt_low(kf) + kt)%B0_phi
+         cache%cntr_fields(mesh%kt_low(kf) + kt)%B0(2)
   end function jacobian
 
   subroutine RT0_write(elem, file, dataset, comment, unit, plots)
@@ -467,11 +467,11 @@ contains
           associate (R => mesh%cntr_R(ktri), Z => mesh%cntr_Z(ktri), f => cache%cntr_fields(ktri))
             call RT0_interp(ktri, elem, R, Z, comp_R(ktri), comp_Z(ktri))
             ! projection to contravariant psi component
-            comp_psi_contravar_dens(ktri) = (comp_R(ktri) * f%B0_Z - &
-                 comp_Z(ktri) * f%B0_R) * R * jacobian(kf, kt, R)
+            comp_psi_contravar_dens(ktri) = (comp_R(ktri) * f%B0(3) - &
+                 comp_Z(ktri) * f%B0(1)) * R * jacobian(kf, kt, R)
             ! projection to covariant theta component
             comp_theta_covar(ktri) = equil%cocos%sgn_dpsi * jacobian(kf, kt, R) * &
-                 (comp_R(ktri) * f%B0_R + comp_Z(ktri) * f%B0_Z)
+                 (comp_R(ktri) * f%B0(1) + comp_Z(ktri) * f%B0(3))
           end associate
        end do
     end do
@@ -1681,10 +1681,10 @@ contains
     do kedge = 1, mesh%npoint - 1
        do k = 1, mesh%GL_order
           associate (f => cache%edge_fields(k, kedge))
-            Bnpsi = -mesh%R_O * f%B0_phi / mesh%GL_R(k, kedge)
+            Bnpsi = -mesh%R_O * f%B0(2) / mesh%GL_R(k, kedge)
             Bn%DOF(kedge) = Bn%DOF(kedge) + mesh%GL_weights(k) * &
                  Bnpsi * (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2) / &
-                 (f%B0_R * mesh%edge_R(kedge) + f%B0_Z * mesh%edge_Z(kedge))
+                 (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge))
           end associate
        end do
     end do

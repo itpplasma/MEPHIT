@@ -549,10 +549,10 @@ contains
           kedge = mesh%kp_low(kf) + kp - 1
           ! use midpoint of poloidal edge
           associate (f => cache%mid_fields(kedge))
-            a(kp) = (f%B0_R * mesh%edge_R(kedge) + f%B0_Z * mesh%edge_Z(kedge)) / &
+            a(kp) = (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
                  (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
             x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bn%DOF(kedge)
-            b(kp) = imun * (mesh%n + imun * conf%damp) * f%B0_phi / mesh%mid_R(kedge)
+            b(kp) = imun * (mesh%n + imun * conf%damp) * f%B0(2) / mesh%mid_R(kedge)
           end associate
        end do
        d = -a + b * 0.5d0
@@ -641,7 +641,7 @@ contains
             call L1_interp(ktri, jn_par, R, Z, jnpar, djnpar_dR, djnpar_dZ)
             call RT0_interp(ktri, jn_perp, R, Z, jn_R, zdum, jn_phi, djnR_dR, comp_Z_dZ = djnZ_dZ)
             grad_pn(:, kedge) = [dpn_dR, imun * mesh%n * pn / R, dpn_dZ]
-            Bn_psi_contravar(kedge) = R * (Bn_R * c%B0_Z - Bn_Z * c%B0_R)
+            Bn_psi_contravar(kedge) = R * (Bn_R * c%B0(3) - Bn_Z * c%B0(1))
             grad_jnpar(:, kedge) = [djnpar_dR, imun * mesh%n * jnpar / R, djnpar_dZ]
             div_jnperp_RT0(kedge) = jn_R / R + djnR_dR + djnZ_dZ + imun * mesh%n / R * jn_phi
           end associate
@@ -726,8 +726,8 @@ contains
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
           associate (f => cache%mid_fields(kedge), nodes => mesh%edge_node(:, kedge))
-            jn%DOF(kedge) = (f%j0_phi * Bn%DOF(kedge) + clight * mesh%mid_R(kedge) * &
-                 (pn%DOF(nodes(2)) - pn%DOF(nodes(1)))) / f%B0_phi
+            jn%DOF(kedge) = (f%j0(2) * Bn%DOF(kedge) + clight * mesh%mid_R(kedge) * &
+                 (pn%DOF(nodes(2)) - pn%DOF(nodes(1)))) / f%B0(2)
           end associate
        end do
     end do
@@ -753,29 +753,29 @@ contains
           associate (f => cache%mid_fields(kedge), B0_flux => cache%B0_flux(kedge))
             ! diagonal matrix element - edge i
             d(ke) = -1d0 - imun * (mesh%n + imun * conf%damp) * &
-                 mesh%area(ktri) * 0.5d0 * f%B0_phi / B0_flux
+                 mesh%area(ktri) * 0.5d0 * f%B0(2) / B0_flux
             ! additional term from edge i on source side
             x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%mid_R(kedge) / B0_flux * &
-                 (Bnphi_edge / f%B0_phi * Delta_p0 - Delta_pn) + f%j0_phi * &
-                 (Bnphi_edge / f%B0_phi - Bn%DOF(kedge) / B0_flux))
+                 (Bnphi_edge / f%B0(2) * Delta_p0 - Delta_pn) + f%j0(2) * &
+                 (Bnphi_edge / f%B0(2) - Bn%DOF(kedge) / B0_flux))
             if (first_call) then
                debug_terms(:, 1, ktri) = -imun * mesh%n * mesh%area(ktri) * 0.5d0 * &
-                    [(clight * mesh%mid_R(kedge) / B0_flux * Delta_p0 + f%j0_phi) * Bnphi_edge / f%B0_phi, &
-                    -f%j0_phi * Bn%DOF(kedge) / B0_flux, -clight * mesh%mid_R(kedge) / B0_flux * Delta_pn]
+                    [(clight * mesh%mid_R(kedge) / B0_flux * Delta_p0 + f%j0(2)) * Bnphi_edge / f%B0(2), &
+                    -f%j0(2) * Bn%DOF(kedge) / B0_flux, -clight * mesh%mid_R(kedge) / B0_flux * Delta_pn]
             end if
             ! superdiagonal matrix element - edge o
             ktri = mesh%edge_tri(1, kedge)
             ke = mod(kt + mesh%kt_max(kf) - 2, mesh%kt_max(kf)) + 1
             du(ke) = 1d0 + imun * (mesh%n + imun * conf%damp) * &
-                 mesh%area(ktri) * 0.5d0 * f%B0_phi / (-B0_flux)
+                 mesh%area(ktri) * 0.5d0 * f%B0(2) / (-B0_flux)
             ! additional term from edge o on source side
             x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%mid_R(kedge) / (-B0_flux) * &
-                 (Bnphi_edge / f%B0_phi * (-Delta_p0) - (-Delta_pn)) + f%j0_phi * &
-                 (Bnphi_edge / f%B0_phi - (-Bn%DOF(kedge)) / (-B0_flux)))
+                 (Bnphi_edge / f%B0(2) * (-Delta_p0) - (-Delta_pn)) + f%j0(2) * &
+                 (Bnphi_edge / f%B0(2) - (-Bn%DOF(kedge)) / (-B0_flux)))
             if (first_call) then
                debug_terms(:, 2, ktri) = -imun * mesh%n * mesh%area(ktri) * 0.5d0 * &
-                    [(clight * mesh%mid_R(kedge) / B0_flux * Delta_p0 + f%j0_phi) * Bnphi_edge / f%B0_phi, &
-                    -f%j0_phi * Bn%DOF(kedge) / B0_flux, -clight * mesh%mid_R(kedge) / B0_flux * Delta_pn]
+                    [(clight * mesh%mid_R(kedge) / B0_flux * Delta_p0 + f%j0(2)) * Bnphi_edge / f%B0(2), &
+                    -f%j0(2) * Bn%DOF(kedge) / B0_flux, -clight * mesh%mid_R(kedge) / B0_flux * Delta_pn]
             end if
           end associate
        end do
@@ -875,8 +875,8 @@ contains
                   Bn_R, Bn_Z)
              associate (f => cache%edge_fields(k, kedge))
                jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * mesh%GL_R(k, kedge) * &
-                    ((clight * dpn_dZ + f%j0_phi * Bn_R) * mesh%edge_Z(kedge) - &
-                    (-clight * dpn_dR + f%j0_phi * Bn_Z) * mesh%edge_R(kedge)) / f%B0_phi
+                    ((clight * dpn_dZ + f%j0(2) * Bn_R) * mesh%edge_Z(kedge) - &
+                    (-clight * dpn_dR + f%j0(2) * Bn_Z) * mesh%edge_R(kedge)) / f%B0(2)
              end associate
           end do
        end do
@@ -898,14 +898,14 @@ contains
              call RT0_interp(ktri, Bn, mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), &
                   Bn_R, Bn_Z, Bn_phi)
              associate (f => cache%area_fields(k, ktri))
-               series = series + mesh%GL2_weights(k) / (f%B0_R ** 2 + f%B0_Z ** 2) * &
-                    ((Bn_phi * f%j0_R - f%j0_phi * Bn_R - clight * dpn_dZ) * f%B0_R + &
-                    (Bn_phi * f%j0_Z - f%j0_phi * Bn_Z + clight * dpn_dR) * f%B0_Z)
+               series = series + mesh%GL2_weights(k) / (f%B0(1) ** 2 + f%B0(3) ** 2) * &
+                    ((Bn_phi * f%j0(1) - f%j0(2) * Bn_R - clight * dpn_dZ) * f%B0(1) + &
+                    (Bn_phi * f%j0(3) - f%j0(2) * Bn_Z + clight * dpn_dR) * f%B0(3))
                if (first_call) then
                   debug_terms(:, k, ktri) = -imun * mesh%n * mesh%area(ktri) * mesh%GL2_weights(k) * &
-                       [Bn_phi * f%j0_R * f%B0_R + Bn_phi * f%j0_Z * f%B0_Z, &
-                       -f%j0_phi * Bn_R * f%B0_R - f%j0_phi * Bn_Z * f%B0_Z, &
-                       -clight * dpn_dZ * f%B0_R + clight * dpn_dR * f%B0_Z] / (f%B0_R ** 2 + f%B0_Z ** 2)
+                       [Bn_phi * f%j0(1) * f%B0(1) + Bn_phi * f%j0(3) * f%B0(3), &
+                       -f%j0(2) * Bn_R * f%B0(1) - f%j0(2) * Bn_Z * f%B0(3), &
+                       -clight * dpn_dZ * f%B0(1) + clight * dpn_dR * f%B0(3)] / (f%B0(1) ** 2 + f%B0(3) ** 2)
                end if
              end associate
           end do
@@ -915,10 +915,10 @@ contains
           series = (0d0, 0d0)
           do k = 1, mesh%GL2_order
              associate (f => cache%area_fields(k, ktri))
-               series = series + mesh%GL2_weights(k) * f%B0_phi / mesh%GL2_R(k, ktri) * &
-                    ((mesh%GL2_R(k, ktri) - mesh%node_R(nodes(1))) * f%B0_R + &
-                    (mesh%GL2_Z(k, ktri) - mesh%node_Z(nodes(1))) * f%B0_Z) / &
-                    (f%B0_R ** 2 + f%B0_Z ** 2)
+               series = series + mesh%GL2_weights(k) * f%B0(2) / mesh%GL2_R(k, ktri) * &
+                    ((mesh%GL2_R(k, ktri) - mesh%node_R(nodes(1))) * f%B0(1) + &
+                    (mesh%GL2_Z(k, ktri) - mesh%node_Z(nodes(1))) * f%B0(3)) / &
+                    (f%B0(1) ** 2 + f%B0(3) ** 2)
              end associate
           end do
           if (first_call) coeff_f(mesh%kt_low(kf) + kt) = (1d0 + imun * mesh%n * 0.5d0 * series)
@@ -933,10 +933,10 @@ contains
           series = (0d0, 0d0)
           do k = 1, mesh%GL2_order
              associate (f => cache%area_fields(k, ktri))
-               series = series + mesh%GL2_weights(k) * f%B0_phi / mesh%GL2_R(k, ktri) * &
-                    ((mesh%GL2_R(k, ktri) - mesh%node_R(nodes(3))) * f%B0_R + &
-                    (mesh%GL2_Z(k, ktri) - mesh%node_Z(nodes(3))) * f%B0_Z) / &
-                    (f%B0_R ** 2 + f%B0_Z ** 2)
+               series = series + mesh%GL2_weights(k) * f%B0(2) / mesh%GL2_R(k, ktri) * &
+                    ((mesh%GL2_R(k, ktri) - mesh%node_R(nodes(3))) * f%B0(1) + &
+                    (mesh%GL2_Z(k, ktri) - mesh%node_Z(nodes(3))) * f%B0(3)) / &
+                    (f%B0(1) ** 2 + f%B0(3) ** 2)
              end associate
           end do
           d(kt) = -1d0 - imun * mesh%n * 0.5d0 * series
@@ -946,10 +946,10 @@ contains
           series = (0d0, 0d0)
           do k = 1, mesh%GL2_order
              associate (f => cache%area_fields(k, ktri))
-               series = series + mesh%GL2_weights(k) * f%B0_phi / mesh%GL2_R(k, ktri) * &
-                    ((mesh%GL2_R(k, ktri) - mesh%node_R(nodes(2))) * f%B0_R + &
-                    (mesh%GL2_Z(k, ktri) - mesh%node_Z(nodes(2))) * f%B0_Z) / &
-                    (f%B0_R ** 2 + f%B0_Z ** 2)
+               series = series + mesh%GL2_weights(k) * f%B0(2) / mesh%GL2_R(k, ktri) * &
+                    ((mesh%GL2_R(k, ktri) - mesh%node_R(nodes(2))) * f%B0(1) + &
+                    (mesh%GL2_Z(k, ktri) - mesh%node_Z(nodes(2))) * f%B0(3)) / &
+                    (f%B0(1) ** 2 + f%B0(3) ** 2)
              end associate
           end do
           du(kt) = 1d0 + imun * mesh%n * 0.5d0 * series
@@ -1019,7 +1019,7 @@ contains
     ! and without additional shielding currents
     logical, save :: first_call = .true.
     integer :: kf, kp, ktri, kedge, k
-    real(dp), dimension(3) :: grad_j0B0, B0_grad_B0
+    real(dp), dimension(3) :: n_f, grad_j0B0, B0_grad_B0
     complex(dp) :: B0_jnpar
     complex(dp), dimension(3) :: grad_pn, B_n, dBn_dR, dBn_dZ, dBn_dphi, grad_BnB0
     complex(dp), dimension(maxval(mesh%kp_max)) :: a, b, x, d, du, inhom
@@ -1047,24 +1047,20 @@ contains
           ktri = mesh%edge_tri(1, kedge)
           ! use midpoint of poloidal edge
           associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge))
-            a(kp) = (f%B0_R * mesh%edge_R(kedge) + f%B0_Z * mesh%edge_Z(kedge)) / &
+            a(kp) = (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
                  (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
-            b(kp) = imun * (mesh%n + imun * conf%damp) * f%B0_phi / R
-            call L1_interp(ktri, pn, R, Z, grad_pn(3), grad_pn(1), grad_pn(2))
-            grad_pn(3) = imun * mesh%n / R * grad_pn(3)
-            call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(2), B_n(3), &
-                 dBn_dR(1), dBn_dZ(1), dBn_dR(2), dBn_dZ(2), dBn_dR(3), dBn_dZ(3))
+            b(kp) = imun * (mesh%n + imun * conf%damp) * f%B0(2) / R
+            call L1_interp(ktri, pn, R, Z, grad_pn(2), grad_pn(1), grad_pn(3))
+            grad_pn(2) = imun * mesh%n / R * grad_pn(2)
+            call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(3), B_n(2), &
+                 dBn_dR(1), dBn_dZ(1), dBn_dR(3), dBn_dZ(3), dBn_dR(2), dBn_dZ(2))
             dBn_dphi = imun * mesh%n / R * B_n
-            associate (B_0 => [f%B0_R, f%B0_Z, f%B0_phi], j_0 => [f%j0_R, f%j0_Z, f%j0_phi], &
-                 dB0_dR => [f%dB0R_dR, f%dB0Z_dR, f%dB0phi_dR], dB0_dZ => [f%dB0R_dZ, f%dB0Z_dZ, f%dB0phi_dZ], &
-                 dj0_dR => [f%dj0R_dR, f%dj0Z_dR, f%dj0phi_dR], dj0_dZ => [f%dj0R_dZ, f%dj0Z_dZ, f%dj0phi_dZ])
-              grad_j0B0 = [sum(dj0_dR * B_0 + dB0_dR * j_0), sum(dj0_dZ * B_0 + dB0_dZ * j_0), 0d0]
-              grad_BnB0 = [sum(dBn_dR * B_0 + dB0_dR * B_n), sum(dBn_dZ * B_0 + dB0_dZ * B_n), sum(dBn_dphi * B_0)]
-              B0_grad_B0 = [sum(dB0_dR * B_0), sum(dB0_dZ * B_0), 0d0]
-              x(kp) = (2d0  / f%B0 ** 2 * (clight * sum(zd_cross(grad_pn, B_0) * B0_grad_B0) + &
-                   sum(B_n * B_0) * sum(j_0 * B0_grad_B0) - sum(B_n * B0_grad_B0) * sum(j_0 * B_0)) + &
-                   sum(grad_BnB0 * j_0 - B_n * grad_j0B0) - 4d0 * pi * sum(grad_pn * j_0)) / f%B0 ** 2
-            end associate
+            grad_j0B0 = [sum(f%dj0_dR * f%B0 + f%dB0_dR * f%j0), 0d0, sum(f%dj0_dZ * f%B0 + f%dB0_dZ * f%j0)]
+            grad_BnB0 = [sum(dBn_dR * f%B0 + f%dB0_dR * B_n), sum(dBn_dphi * f%B0), sum(dBn_dZ * f%B0 + f%dB0_dZ * B_n)]
+            B0_grad_B0 = [sum(f%dB0_dR * f%B0), 0d0, sum(f%dB0_dZ * f%B0)]
+            x(kp) = (2d0  / f%Bmod ** 2 * (clight * sum(zd_cross(grad_pn, f%B0) * B0_grad_B0) + &
+                 sum(B_n * f%B0) * sum(f%j0 * B0_grad_B0) - sum(B_n * B0_grad_B0) * sum(f%j0 * f%B0)) + &
+                 sum(grad_BnB0 * f%j0 - B_n * grad_j0B0) - 4d0 * pi * sum(grad_pn * f%j0)) / f%Bmod ** 2
           end associate
        end do
        d = -a + b * 0.5d0
@@ -1116,34 +1112,31 @@ contains
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
           ktri = mesh%edge_tri(1, kedge)
-          associate (f => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge), Z => mesh%GL_Z(k, kedge), &
-               n_f => [mesh%edge_Z(kedge), -mesh%edge_R(kedge), 0d0])
-            call L1_interp(ktri, pn, R, Z, grad_pn(3), grad_pn(1), grad_pn(2))
-            grad_pn(3) = imun * mesh%n / R * grad_pn(3)
-            call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(2), B_n(3))
+          n_f = [mesh%edge_Z(kedge), 0d0, -mesh%edge_R(kedge)]
+          associate (f => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge), Z => mesh%GL_Z(k, kedge))
+            call L1_interp(ktri, pn, R, Z, grad_pn(2), grad_pn(1), grad_pn(3))
+            grad_pn(2) = imun * mesh%n / R * grad_pn(2)
+            call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(3), B_n(2))
             call L1_interp(ktri, jnpar_B0, R, Z, B0_jnpar)
             B0_jnpar = (0d0, 0d0)  ! B0_jnpar * f%B0 ** 2  ! hack to omit parallel component
-            associate (B_0 => [f%B0_R, f%B0_Z, f%B0_phi], j_0 => [f%j0_R, f%j0_Z, f%j0_phi])
-              jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * R * &
-                   (B0_jnpar * sum(B_0 * n_f) - clight * sum(zd_cross(grad_pn, B_0) * n_f) + &
-                   sum(j_0 * B_0) * sum(B_n * n_f) - sum(B_n * B_0) * sum(j_0 * n_f)) / f%B0 ** 2
-            end associate
+            jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * R * &
+                 (B0_jnpar * sum(f%B0 * n_f) - clight * sum(zd_cross(grad_pn, f%B0) * n_f) + &
+                 sum(f%j0 * f%B0) * sum(B_n * n_f) - sum(B_n * f%B0) * sum(f%j0 * n_f)) / f%Bmod ** 2
           end associate
        end do
     end do
+    n_f = [0d0, 1d0, 0d0]
     do ktri = 1, mesh%ntri
        do k = 1, mesh%GL2_order
           associate (f => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri), Z => mesh%GL2_Z(k, ktri))
-            call L1_interp(ktri, pn, R, Z, grad_pn(3), grad_pn(1), grad_pn(2))
-            grad_pn(3) = imun * mesh%n / R * grad_pn(3)
-            call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(2), B_n(3))
+            call L1_interp(ktri, pn, R, Z, grad_pn(2), grad_pn(1), grad_pn(3))
+            grad_pn(2) = imun * mesh%n / R * grad_pn(2)
+            call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(3), B_n(2))
             call L1_interp(ktri, jnpar_B0, R, Z, B0_jnpar)
             B0_jnpar = (0d0, 0d0)  ! B0_jnpar * f%B0 ** 2  ! hack to omit parallel component
-            associate (B_0 => [f%B0_R, f%B0_Z, f%B0_phi], j_0 => [f%j0_R, f%j0_Z, f%j0_phi], n_f => [0d0, 0d0, 1d0])
-              jn%comp_phi(ktri) = jn%comp_phi(ktri) + mesh%GL2_weights(k) * &
-                   (B0_jnpar * sum(B_0 * n_f) - clight * sum(zd_cross(grad_pn, B_0) * n_f) + &
-                   sum(j_0 * B_0) * sum(B_n * n_f) - sum(B_n * B_0) * sum(j_0 * n_f)) / f%B0 ** 2
-            end associate
+            jn%comp_phi(ktri) = jn%comp_phi(ktri) + mesh%GL2_weights(k) * &
+                 (B0_jnpar * sum(f%B0 * n_f) - clight * sum(zd_cross(grad_pn, f%B0) * n_f) + &
+                 sum(f%j0 * f%B0) * sum(B_n * n_f) - sum(B_n * f%B0) * sum(f%j0 * n_f)) / f%Bmod ** 2
           end associate
        end do
     end do
@@ -1188,9 +1181,9 @@ contains
             call RT0_interp(ktri, j_n, R, Z, jn_R, jn_Z, jn_phi)
             grad_pn(:, ktri) = [dpn_dR, imun * mesh%n * pn / R, dpn_dZ]
             lorentz(:, ktri) = 1d0 / clight * &
-                 [jn_phi * c%B0_Z - jn_Z * c%B0_phi + c%j0_phi * Bn_Z - c%j0_Z * Bn_phi, &
-                 jn_Z * c%B0_R - jn_R * c%B0_Z + c%j0_Z * Bn_R - c%j0_R * Bn_Z, &
-                 jn_R * c%B0_phi - jn_phi * c%B0_R + c%j0_R * Bn_phi - c%j0_phi * Bn_R]
+                 [jn_phi * c%B0(3) - jn_Z * c%B0(2) + c%j0(2) * Bn_Z - c%j0(3) * Bn_phi, &
+                 jn_Z * c%B0(1) - jn_R * c%B0(3) + c%j0(3) * Bn_R - c%j0(1) * Bn_Z, &
+                 jn_R * c%B0(2) - jn_phi * c%B0(1) + c%j0(1) * Bn_phi - c%j0(2) * Bn_R]
           end associate
        end do
     end do
@@ -1243,8 +1236,8 @@ contains
                 jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * &
                      mesh%shielding_coeff(m) * conf_arr%sheet_current_factor(m) * &
                      (pn_outer - pn_inner) * mesh%GL_R(k, kedge) * &
-                     (cache%edge_fields(k, kedge)%B0_R * mesh%edge_Z(kedge) - &
-                     cache%edge_fields(k, kedge)%B0_Z * mesh%edge_R(kedge))
+                     (cache%edge_fields(k, kedge)%B0(1) * mesh%edge_Z(kedge) - &
+                     cache%edge_fields(k, kedge)%B0(3) * mesh%edge_R(kedge))
              end do
           end do
        end if
