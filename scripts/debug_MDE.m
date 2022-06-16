@@ -1,7 +1,7 @@
 data = load('../run/33353_2325/mephit.h5');
 n = double(data.mesh.n);
 
-kf = 30;
+kf = 151;
 % poloidal edge index = point index - 1
 k_min = data.mesh.kp_low(kf);
 k_max = data.mesh.kp_low(kf) + data.mesh.kp_max(kf) - 1;

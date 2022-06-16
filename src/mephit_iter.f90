@@ -491,7 +491,7 @@ contains
     complex(c_double_complex), intent(out) :: scalar
     real(dp) :: B_0(3), dum, psi, dp0_dpsi
     integer :: ktri
-    complex(dp) :: Bn_R, Bn_Z
+    complex(dp) :: B_n(3)
 
     if (logger%debug) then
        logger%msg = 'called presn_inhom'
@@ -506,8 +506,8 @@ contains
        scalar = cmplx(ieee_value(0d0, ieee_quiet_nan), ieee_value(0d0, ieee_quiet_nan), dp)
        return
     end if
-    call RT0_interp(ktri, vac%Bn, R, Z, Bn_R, Bn_Z)
-    scalar = -dp0_dpsi * (Bn_R * B_0(3) - Bn_Z * B_0(1)) * R / sqrt(sum(B_0 * B_0))
+    call RT0_interp(vac%Bn, ktri, R, Z, B_n)
+    scalar = -dp0_dpsi * (B_n(1) * B_0(3) - B_n(3) * B_0(1)) * R / sqrt(sum(B_0 * B_0))
   end subroutine presn_inhom
 
   subroutine MFEM_test()
@@ -604,24 +604,23 @@ contains
     if (allocated(resid)) deallocate(resid)
   end subroutine compute_presn
 
-  subroutine debug_MDE(p_n, B_n, jn_perp, jn_par)
+  subroutine debug_MDE(presn, magfn, currn_perp, currn_par)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use field_eq_mod, only: psif, psib
     use mephit_conf, only: conf, datafile
     use mephit_util, only: imun, pi, clight, zd_cross
     use mephit_mesh, only: equil, mesh, cache, psi_interpolator, point_location
     use mephit_pert, only: L1_t, L1_interp, RT0_t, RT0_interp
-    type(L1_t), intent(in) :: p_n
-    type(RT0_t), intent(in) :: B_n
-    type(RT0_t), intent(in) :: jn_perp
-    type(L1_t), intent(in) :: jn_par
+    type(L1_t), intent(in) :: presn
+    type(RT0_t), intent(in) :: magfn
+    type(RT0_t), intent(in) :: currn_perp
+    type(L1_t), intent(in) :: currn_par
     character(len = *), parameter :: grp = 'debug_MDE'
     integer(HID_T) :: h5id_root
     integer :: ndim, kf, kp, kedge, ktri, k
     real(dp) :: dum, psi, B_0(3), j_0(3), stencil_R(5), stencil_Z(5), &
          dp0_dpsi, dF_dpsi, FdF_dpsi, fprime(equil%nw)
-    complex(dp) :: zdum, pn, dpn_dR, dpn_dZ, Bn_R, Bn_Z, Bn_phi, &
-         jnpar, djnpar_dR, djnpar_dZ, jnperp(3, 5), jn_R, jn_phi, djnR_dR, djnZ_dZ
+    complex(dp) :: zdum, B_n(3), jnperp(3, 5), grad_p_n(3)
     complex(dp), allocatable :: grad_pn(:, :), Bn_psi_contravar(:), grad_jnpar(:, :), &
          div_jnperp(:), div_jnperp_RT0(:)
 
@@ -629,21 +628,20 @@ contains
     ndim = mesh%npoint - 1
     allocate(grad_pn(3, ndim), Bn_psi_contravar(ndim), grad_jnpar(3, ndim), &
          div_jnperp(ndim), div_jnperp_RT0(ndim))
-    grad_pn = (0d0, 0d0)
-    Bn_psi_contravar = (0d0, 0d0)
+    div_jnperp(:) = (0d0, 0d0)
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
           ktri = mesh%edge_tri(1, kedge)
           associate (R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge), c => cache%mid_fields(kedge))
-            call L1_interp(ktri, p_n, R, Z, pn, dpn_dR, dpn_dZ)
-            call RT0_interp(ktri, B_n, R, Z, Bn_R, Bn_Z)
-            call L1_interp(ktri, jn_par, R, Z, jnpar, djnpar_dR, djnpar_dZ)
-            call RT0_interp(ktri, jn_perp, R, Z, jn_R, zdum, jn_phi, djnR_dR, comp_Z_dZ = djnZ_dZ)
-            grad_pn(:, kedge) = [dpn_dR, imun * mesh%n * pn / R, dpn_dZ]
-            Bn_psi_contravar(kedge) = R * (Bn_R * c%B0(3) - Bn_Z * c%B0(1))
-            grad_jnpar(:, kedge) = [djnpar_dR, imun * mesh%n * jnpar / R, djnpar_dZ]
-            div_jnperp_RT0(kedge) = jn_R / R + djnR_dR + djnZ_dZ + imun * mesh%n / R * jn_phi
+            call L1_interp(presn, ktri, R, Z, zdum, grad_pn(:, kedge))
+            call RT0_interp(magfn, ktri, R, Z, B_n)
+            call L1_interp(currn_par, ktri, R, Z, zdum, grad_jnpar(:, kedge))
+            call RT0_interp(currn_perp, ktri, R, Z, jnperp(:, 4), &
+                 jnperp(:, 1), jnperp(:, 2), jnperp(:, 3))
+            Bn_psi_contravar(kedge) = R * (B_n(1) * c%B0(3) - B_n(3) * c%B0(1))
+            div_jnperp_RT0(kedge) = jnperp(1, 1) + jnperp(2, 2) + jnperp(3, 3) + &
+                 jnperp(1, 4) / R
           end associate
           if (kf < mesh%nflux) then
              stencil_R = mesh%mid_R(kedge) + [0, 1, -1, 0, 0] * 0.2d0 * conf%max_Delta_rad
@@ -659,12 +657,10 @@ contains
                 j_0(2) = clight * (dp0_dpsi * stencil_R(k) + 0.25d0 / (pi * stencil_R(k)) * FdF_dpsi)
                 j_0(3) = 0.25d0 / pi * clight * dF_dpsi * B_0(3)
                 ktri = point_location(stencil_R(k), stencil_Z(k), psi)
-                call L1_interp(ktri, p_n, stencil_R(k), stencil_Z(k), pn, dpn_dR, dpn_dZ)
-                call RT0_interp(ktri, B_n, stencil_R(k), stencil_Z(k), Bn_R, Bn_Z, Bn_phi)
-                jnperp(:, k) = (sum(B_0 * J_0) * [Bn_R, Bn_phi, Bn_Z] - &
-                     sum(B_0 * [Bn_R, Bn_phi, Bn_Z]) * J_0 + clight * &
-                     zd_cross([dpn_dR, imun * mesh%n * pn / stencil_R(k), dpn_dZ], B_0)) / &
-                     sum(B_0 ** 2)
+                call L1_interp(presn, ktri, stencil_R(k), stencil_Z(k), zdum, grad_p_n)
+                call RT0_interp(magfn, ktri, stencil_R(k), stencil_Z(k), B_n)
+                jnperp(:, k) = (sum(B_0 * J_0) * B_n - sum(B_0 * B_n) * J_0 + clight * &
+                     zd_cross(grad_p_n, B_0)) / sum(B_0 ** 2)
              end do
              div_jnperp(kedge) = imun * mesh%n / stencil_R(1) * jnperp(2, 1) + &
                   (jnperp(1, 2) - jnperp(1, 3) + jnperp(3, 4) - jnperp(3, 5)) / &
@@ -848,7 +844,7 @@ contains
     ! and without additional shielding currents
     logical, save :: first_call = .true.
     integer :: kf, kp, kt, ktri, kedge, k, nodes(3)
-    complex(dp) :: series, dum, dpn_dR, dpn_dZ, Bn_R, Bn_Z, Bn_phi
+    complex(dp) :: series, zdum, grad_pn(3), B_n(3)
     complex(dp), dimension(maxval(mesh%kt_max)) :: x, d, du, inhom
     complex(dp), allocatable :: debug_x(:), debug_d(:), debug_du(:), coeff_f(:), debug_terms(:, :, :)
     integer, dimension(2 * maxval(mesh%kt_max)) :: irow, icol
@@ -869,14 +865,12 @@ contains
           kedge = mesh%kp_low(kf) + kp - 1
           ktri = mesh%edge_tri(1, kedge)
           do k = 1, mesh%GL_order
-             call L1_interp(ktri, pn, mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), &
-                  dum, dpn_dR, dpn_dZ)
-             call RT0_interp(ktri, Bn, mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), &
-                  Bn_R, Bn_Z)
+             call L1_interp(pn, ktri, mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), zdum, grad_pn)
+             call RT0_interp(Bn, ktri, mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), B_n)
              associate (f => cache%edge_fields(k, kedge))
                jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * mesh%GL_R(k, kedge) * &
-                    ((clight * dpn_dZ + f%j0(2) * Bn_R) * mesh%edge_Z(kedge) - &
-                    (-clight * dpn_dR + f%j0(2) * Bn_Z) * mesh%edge_R(kedge)) / f%B0(2)
+                    ((clight * grad_pn(3) + f%j0(2) * B_n(1)) * mesh%edge_Z(kedge) - &
+                    (-clight * grad_pn(1) + f%j0(2) * B_n(3)) * mesh%edge_R(kedge)) / f%B0(2)
              end associate
           end do
        end do
@@ -893,19 +887,18 @@ contains
           ! area contribution to inhomogeneity
           series = (0d0, 0d0)
           do k = 1, mesh%GL2_order
-             call L1_interp(ktri, pn, mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), &
-                  dum, dpn_dR, dpn_dZ)
-             call RT0_interp(ktri, Bn, mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), &
-                  Bn_R, Bn_Z, Bn_phi)
+             call L1_interp(pn, ktri, mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), zdum, grad_pn)
+             call RT0_interp(Bn, ktri, mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), B_n)
              associate (f => cache%area_fields(k, ktri))
                series = series + mesh%GL2_weights(k) / (f%B0(1) ** 2 + f%B0(3) ** 2) * &
-                    ((Bn_phi * f%j0(1) - f%j0(2) * Bn_R - clight * dpn_dZ) * f%B0(1) + &
-                    (Bn_phi * f%j0(3) - f%j0(2) * Bn_Z + clight * dpn_dR) * f%B0(3))
+                    ((B_n(2) * f%j0(1) - f%j0(2) * B_n(1) - clight * grad_pn(3)) * f%B0(1) + &
+                    (B_n(2) * f%j0(3) - f%j0(2) * B_n(3) + clight * grad_pn(1)) * f%B0(3))
                if (first_call) then
                   debug_terms(:, k, ktri) = -imun * mesh%n * mesh%area(ktri) * mesh%GL2_weights(k) * &
-                       [Bn_phi * f%j0(1) * f%B0(1) + Bn_phi * f%j0(3) * f%B0(3), &
-                       -f%j0(2) * Bn_R * f%B0(1) - f%j0(2) * Bn_Z * f%B0(3), &
-                       -clight * dpn_dZ * f%B0(1) + clight * dpn_dR * f%B0(3)] / (f%B0(1) ** 2 + f%B0(3) ** 2)
+                       [B_n(2) * f%j0(1) * f%B0(1) + B_n(2) * f%j0(3) * f%B0(3), &
+                       -f%j0(2) * B_n(1) * f%B0(1) - f%j0(2) * B_n(3) * f%B0(3), &
+                       -clight * grad_pn(3) * f%B0(1) + clight * grad_pn(1) * f%B0(3)] &
+                       / (f%B0(1) ** 2 + f%B0(3) ** 2)
                end if
              end associate
           end do
@@ -1020,7 +1013,7 @@ contains
     logical, save :: first_call = .true.
     integer :: kf, kp, ktri, kedge, k
     real(dp), dimension(3) :: n_f, grad_j0B0, B0_grad_B0
-    complex(dp) :: B0_jnpar
+    complex(dp) :: zdum, B0_jnpar
     complex(dp), dimension(3) :: grad_pn, B_n, dBn_dR, dBn_dZ, dBn_dphi, grad_BnB0
     complex(dp), dimension(maxval(mesh%kp_max)) :: a, b, x, d, du, inhom
     complex(dp), allocatable :: debug_x(:), debug_d(:), debug_du(:)
@@ -1050,11 +1043,8 @@ contains
             a(kp) = (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
                  (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
             b(kp) = imun * (mesh%n + imun * conf%damp) * f%B0(2) / R
-            call L1_interp(ktri, pn, R, Z, grad_pn(2), grad_pn(1), grad_pn(3))
-            grad_pn(2) = imun * mesh%n / R * grad_pn(2)
-            call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(3), B_n(2), &
-                 dBn_dR(1), dBn_dZ(1), dBn_dR(3), dBn_dZ(3), dBn_dR(2), dBn_dZ(2))
-            dBn_dphi = imun * mesh%n / R * B_n
+            call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
+            call RT0_interp(Bn, ktri, R, Z, B_n, dBn_dR, dBn_dphi, dBn_dZ)
             grad_j0B0 = [sum(f%dj0_dR * f%B0 + f%dB0_dR * f%j0), 0d0, sum(f%dj0_dZ * f%B0 + f%dB0_dZ * f%j0)]
             grad_BnB0 = [sum(dBn_dR * f%B0 + f%dB0_dR * B_n), sum(dBn_dphi * f%B0), sum(dBn_dZ * f%B0 + f%dB0_dZ * B_n)]
             B0_grad_B0 = [sum(f%dB0_dR * f%B0), 0d0, sum(f%dB0_dZ * f%B0)]
@@ -1114,10 +1104,9 @@ contains
           ktri = mesh%edge_tri(1, kedge)
           n_f = [mesh%edge_Z(kedge), 0d0, -mesh%edge_R(kedge)]
           associate (f => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge), Z => mesh%GL_Z(k, kedge))
-            call L1_interp(ktri, pn, R, Z, grad_pn(2), grad_pn(1), grad_pn(3))
-            grad_pn(2) = imun * mesh%n / R * grad_pn(2)
-            call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(3), B_n(2))
-            call L1_interp(ktri, jnpar_B0, R, Z, B0_jnpar)
+            call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
+            call RT0_interp(Bn, ktri, R, Z, B_n)
+            call L1_interp(jnpar_B0, ktri, R, Z, B0_jnpar)
             B0_jnpar = (0d0, 0d0)  ! B0_jnpar * f%B0 ** 2  ! hack to omit parallel component
             jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * R * &
                  (B0_jnpar * sum(f%B0 * n_f) - clight * sum(zd_cross(grad_pn, f%B0) * n_f) + &
@@ -1129,10 +1118,9 @@ contains
     do ktri = 1, mesh%ntri
        do k = 1, mesh%GL2_order
           associate (f => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri), Z => mesh%GL2_Z(k, ktri))
-            call L1_interp(ktri, pn, R, Z, grad_pn(2), grad_pn(1), grad_pn(3))
-            grad_pn(2) = imun * mesh%n / R * grad_pn(2)
-            call RT0_interp(ktri, Bn, R, Z, B_n(1), B_n(3), B_n(2))
-            call L1_interp(ktri, jnpar_B0, R, Z, B0_jnpar)
+            call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
+            call RT0_interp(Bn, ktri, R, Z, B_n)
+            call L1_interp(jnpar_B0, ktri, R, Z, B0_jnpar)
             B0_jnpar = (0d0, 0d0)  ! B0_jnpar * f%B0 ** 2  ! hack to omit parallel component
             jn%comp_phi(ktri) = jn%comp_phi(ktri) + mesh%GL2_weights(k) * &
                  (B0_jnpar * sum(f%B0 * n_f) - clight * sum(zd_cross(grad_pn, f%B0) * n_f) + &
@@ -1156,34 +1144,33 @@ contains
     call add_sheet_current
   end subroutine compute_currn_MDE
 
-  subroutine debug_currn(p_n, B_n, j_n, x, d, du, terms, coeff_f)
+  subroutine debug_currn(presn, magfn, currn, x, d, du, terms, coeff_f)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: datafile
-    use mephit_util, only: clight, imun
+    use mephit_util, only: clight
     use mephit_mesh, only: mesh, cache
     use mephit_pert, only: RT0_interp, L1_interp
-    type(L1_t), intent(in) :: p_n
-    type(RT0_t), intent(in) :: B_n, j_n
+    type(L1_t), intent(in) :: presn
+    type(RT0_t), intent(in) :: magfn, currn
     complex(dp), intent(in) :: x(:), d(:), du(:)
     complex(dp), intent(in), optional :: terms(:, :, :), coeff_f(:)
     character(len = *), parameter :: grp = 'debug_currn'
     integer(HID_T) :: h5id_root
     integer :: kf, kt, ktri
-    complex(dp) :: pn, dpn_dR, dpn_dZ, Bn_R, Bn_Z, Bn_phi, jn_R, jn_Z, jn_phi
+    complex(dp) :: zdum, Bn(3), jn(3)
     complex(dp), dimension(3, mesh%ntri) :: grad_pn, lorentz
 
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           associate (R => mesh%cntr_R(ktri), Z => mesh%cntr_Z(ktri), c => cache%cntr_fields(ktri))
-            call L1_interp(ktri, p_n, R, Z, pn, dpn_dR, dpn_dZ)
-            call RT0_interp(ktri, B_n, R, Z, Bn_R, Bn_Z, Bn_phi)
-            call RT0_interp(ktri, j_n, R, Z, jn_R, jn_Z, jn_phi)
-            grad_pn(:, ktri) = [dpn_dR, imun * mesh%n * pn / R, dpn_dZ]
+            call L1_interp(presn, ktri, R, Z, zdum, grad_pn(:, ktri))
+            call RT0_interp(magfn, ktri, R, Z, Bn)
+            call RT0_interp(currn, ktri, R, Z, jn)
             lorentz(:, ktri) = 1d0 / clight * &
-                 [jn_phi * c%B0(3) - jn_Z * c%B0(2) + c%j0(2) * Bn_Z - c%j0(3) * Bn_phi, &
-                 jn_Z * c%B0(1) - jn_R * c%B0(3) + c%j0(3) * Bn_R - c%j0(1) * Bn_Z, &
-                 jn_R * c%B0(2) - jn_phi * c%B0(1) + c%j0(1) * Bn_phi - c%j0(2) * Bn_R]
+                 [jn(2) * c%B0(3) - jn(3) * c%B0(2) + c%j0(2) * Bn(3) - c%j0(3) * Bn(2), &
+                 jn(3) * c%B0(1) - jn(1) * c%B0(3) + c%j0(3) * Bn(1) - c%j0(1) * Bn(3), &
+                 jn(1) * c%B0(2) - jn(2) * c%B0(1) + c%j0(1) * Bn(2) - c%j0(2) * Bn(1)]
           end associate
        end do
     end do
@@ -1193,7 +1180,7 @@ contains
          comment = 'perturbation pressure gradient', unit = 'dyn cm^-2')
     call h5_add(h5id_root, grp // '/lorentz', lorentz, lbound(lorentz), ubound(lorentz), &
          comment = 'perturbation Lorentz force density', unit = 'dyn cm^-2')
-    call h5_add(h5id_root, grp // '/I', j_n%DOF, lbound(j_n%DOF), ubound(j_n%DOF), &
+    call h5_add(h5id_root, grp // '/I', currn%DOF, lbound(currn%DOF), ubound(currn%DOF), &
          comment = 'perturbation current density degrees of freedom', unit = 'statA')
     call h5_add(h5id_root, grp // '/x', x, lbound(x), ubound(x), &
          comment = 'inhomogeneities of linear systems of equations', unit = 'statA')
@@ -1292,13 +1279,13 @@ contains
     end do
   end subroutine mephit_postprocess
 
-  subroutine check_furth(jn, Bmn_plas)
+  subroutine check_furth(currn, Bmn_plas)
     use mephit_conf, only: conf, datafile
     use mephit_util, only: imun, clight
     use mephit_mesh, only: equil, fs_half, mesh, cache
     use mephit_pert, only: RT0_t, vec_polmodes_t
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    type(RT0_t), intent(in) :: jn
+    type(RT0_t), intent(in) :: currn
     type(vec_polmodes_t), intent(in) :: Bmn_plas
     character(len = *), parameter :: dataset = 'debug_furth'
     integer(HID_T) :: h5id_root
@@ -1313,7 +1300,7 @@ contains
     do kf = 1, mesh%nflux
        do kpol = 1, cache%npol
           associate (s => cache%sample_polmodes_half(kpol, kf))
-            sheet_flux(kf) = sheet_flux(kf) + mesh%area(s%ktri) * jn%comp_phi(s%ktri) * &
+            sheet_flux(kf) = sheet_flux(kf) + mesh%area(s%ktri) * currn%comp_phi(s%ktri) * &
                  exp(-imun * kilca_m_res * s%theta)
           end associate
        end do
@@ -1350,7 +1337,8 @@ contains
          B0_dB0_dpsi, dhphi2_dpsi, B0_theta, dB0R_dtheta, dB0phi_dtheta, dB0Z_dtheta, &
          B0_dB0_dtheta, dhphi2_dtheta, common_term, dB0theta_dpsi, dB0psi_dtheta, &
          dhphihtheta_dpsi, dhphihpsi_dtheta
-    complex(dp) :: jn_R, jn_Z, jn_phi, jn_par, Bn_R, Bn_Z, Bn_phi, &
+    complex(dp) :: vec(3), dvec_dR(3), dvec_dZ(3), &
+         jn_R, jn_Z, jn_phi, jn_par, Bn_R, Bn_Z, Bn_phi, &
          dBnR_dR, dBnR_dZ, dBnZ_dR, dBnZ_dZ, &
          Bn_psi, dBnpsi_dpsi, Bn_theta, Delta_mn, part_int, bndry
     real(dp), dimension(size(sample_Ipar, 2)) :: rad, psi, I_char
@@ -1373,15 +1361,24 @@ contains
     do krad = 1, nrad
        do kpol = 1, npol
           associate (s => sample_Ipar(kpol, krad))
-            call RT0_interp(s%ktri, jn, s%R, s%Z, jn_R, jn_Z, jn_phi)
+            call RT0_interp(jn, s%ktri, s%R, s%Z, vec)
+            jn_R = vec(1)
+            jn_phi = vec(2)
+            jn_Z = vec(3)
             ! include h^phi in current density
             jn_par = (jn_R * s%B0_R + jn_Z * s%B0_Z + jn_phi * s%B0_phi) * &
                  s%B0_phi / s%B0_2 * s%sqrt_g / s%R
             jmn_par_neg(krad) = jmn_par_neg(krad) + jn_par * exp(imun * abs(m) * s%theta)
             jmn_par_pos(krad) = jmn_par_pos(krad) + jn_par * exp(-imun * abs(m) * s%theta)
             ! comparison with indirect calculation (Boozer and Nuehrenberg 2006)
-            call RT0_interp(s%ktri, Bn, s%R, s%Z, Bn_R, Bn_Z, Bn_phi, &
-                 dBnR_dR, dBnR_dZ, dBnZ_dR, dBnZ_dZ)
+            call RT0_interp(Bn, s%ktri, s%R, s%Z, vec, dvec_dR = dvec_dR, dvec_dZ = dvec_dZ)
+            Bn_R = vec(1)
+            Bn_phi = vec(2)
+            Bn_Z = vec(3)
+            dBnR_dR = dvec_dR(1)
+            dBnZ_dR = dvec_dR(3)
+            dBnR_dZ = dvec_dZ(1)
+            dBnZ_dZ = dvec_dZ(3)
             dB0phi_dpsi = (s%dB0phi_dR * s%dR_dpsi + s%dB0phi_dZ * s%dZ_dpsi) / s%R - &
                  s%B0_phi * s%dR_dpsi / s%R ** 2
             Bn_psi = s%R * (Bn_R * s%B0_Z - Bn_Z * s%B0_R)
@@ -1493,7 +1490,7 @@ contains
     integer :: nrad, npol, krad, kpol
     real(dp) :: dB0R_drad, dB0phi_drad, dB0Z_drad, B0_dB0_drad, &
          B0_theta, dB0theta_drad, dhz2_drad, dradhthetahz_drad
-    complex(dp) :: jn_R, jn_Z, jn_phi, jn_par, Bn_R, Bn_Z, Bn_phi, &
+    complex(dp) :: vec(3), jn_R, jn_Z, jn_phi, jn_par, Bn_R, Bn_Z, Bn_phi, &
          Bn_rad, Bn_pol, Bn_tor, part_int, bndry
     real(dp), dimension(size(sample_Ipar, 2)) :: rad, psi
     complex(dp), dimension(size(sample_Ipar, 2)) :: jmn_par_neg, jmn_par_pos, &
@@ -1512,7 +1509,10 @@ contains
     do krad = 1, nrad
        do kpol = 1, npol
           associate (s => sample_Ipar(kpol, krad))
-            call RT0_interp(s%ktri, jn, s%R, s%Z, jn_R, jn_Z, jn_phi)
+            call RT0_interp(jn, s%ktri, s%R, s%Z, vec)
+            jn_R = vec(1)
+            jn_phi = vec(2)
+            jn_Z = vec(3)
             ! include h^z in current density
             jn_par = (jn_R * s%B0_R + jn_Z * s%B0_Z + jn_phi * s%B0_phi) * s%B0_phi / s%B0_2
             jmn_par_neg(krad) = jmn_par_neg(krad) + jn_par * exp(imun * abs(m) * s%theta)
@@ -1530,7 +1530,10 @@ contains
             dradhthetahz_drad = B0_theta * s%B0_phi / s%B0_2 + rad(krad) * &
                  ((B0_theta * dB0phi_drad + dB0theta_drad * s%B0_phi) / s%B0_2 - &
                  2d0 * B0_theta * s%B0_phi * B0_dB0_drad / s%B0_2 ** 2)
-            call RT0_interp(s%ktri, Bn, s%R, s%Z, Bn_R, Bn_Z, Bn_phi)
+            call RT0_interp(Bn, s%ktri, s%R, s%Z, vec)
+            Bn_R = vec(1)
+            Bn_phi = vec(2)
+            Bn_Z = vec(3)
             call bent_cyl2straight_cyl(Bn_R, Bn_phi, Bn_Z, s%theta, &
                  Bn_rad, Bn_pol, Bn_tor)
             part_int = -rad(krad) * Bn_pol * dhz2_drad + Bn_tor * dradhthetahz_drad

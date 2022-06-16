@@ -160,39 +160,44 @@ contains
     call h5_close(h5id_root)
   end subroutine L1_read
 
-  subroutine L1_interp(ktri, elem, R, Z, comp, comp_dR, comp_dZ)
+  subroutine L1_interp(elem, ktri, R, Z, val, grad_val)
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+    use mephit_conf, only: logger
+    use mephit_util, only: imun
     use mephit_mesh, only: mesh
     integer, intent(in) :: ktri
     type(L1_t), intent(in) :: elem
     real(dp), intent(in) :: R, Z
-    complex(dp), intent(out) :: comp
-    complex(dp), intent(out), optional :: comp_dR, comp_dZ
+    complex(dp), intent(out) :: val
+    complex(dp), intent(out), dimension(:), optional :: grad_val
     integer :: nodes(3)
     real(dp) :: nan, Delta_R(3), Delta_Z(3)
 
+    if (present(grad_val)) then
+       if (3 /= size(grad_val)) then
+          call logger%msg_arg_size('L1_interp', '3', 'size(grad_val)', 3, size(grad_val))
+          if (logger%err) call logger%write_msg
+          error stop
+       end if
+    end if
     if (ktri <= 0 .or. ktri > mesh%ntri) then
        nan = ieee_value(1d0, ieee_quiet_nan)
-       comp = cmplx(nan, nan, dp)
-       if (present(comp_dR)) then
-          comp_dR = cmplx(nan, nan, dp)
-       end if
-       if (present(comp_dZ)) then
-          comp_dZ = cmplx(nan, nan, dp)
+       val = cmplx(nan, nan, dp)
+       if (present(grad_val)) then
+          grad_val(:) = cmplx(nan, nan, dp)
        end if
        return
     end if
     nodes = mesh%tri_node(:, ktri)
     Delta_R = R - mesh%node_R(nodes)
     Delta_Z = Z - mesh%node_Z(nodes)
-    comp = sum(elem%DOF(nodes) * (Delta_R([2, 3, 1]) * Delta_Z([3, 1, 2]) - &
+    val = sum(elem%DOF(nodes) * (Delta_R([2, 3, 1]) * Delta_Z([3, 1, 2]) - &
          Delta_R([3, 1, 2]) * Delta_Z([2, 3, 1]))) * 0.5d0 / mesh%area(ktri)
-    if (present(comp_dR)) then
-       comp_dR = sum(elem%DOF(nodes) * (Delta_Z([3, 1, 2]) - Delta_Z([2, 3, 1]))) * &
+    if (present(grad_val)) then
+       grad_val(1) = sum(elem%DOF(nodes) * (Delta_Z([3, 1, 2]) - Delta_Z([2, 3, 1]))) * &
             0.5d0 / mesh%area(ktri)
-    end if
-    if (present(comp_dZ)) then
-       comp_dZ = sum(elem%DOF(nodes) * (Delta_R([2, 3, 1]) - Delta_R([3, 1, 2]))) * &
+       grad_val(2) = imun * mesh%n / R * val
+       grad_val(3) = sum(elem%DOF(nodes) * (Delta_R([2, 3, 1]) - Delta_R([3, 1, 2]))) * &
             0.5d0 / mesh%area(ktri)
     end if
   end subroutine L1_interp
@@ -217,41 +222,57 @@ contains
     if (allocated(this%comp_phi)) deallocate(this%comp_phi)
   end subroutine RT0_deinit
 
-  subroutine RT0_interp(ktri, elem, R, Z, comp_R, comp_Z, comp_phi, &
-       comp_R_dR, comp_R_dZ, comp_Z_dR, comp_Z_dZ, comp_phi_dR, comp_phi_dZ)
+  subroutine RT0_interp(elem, ktri, R, Z, vec, dvec_dR, dvec_dphi, dvec_dZ)
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+    use mephit_conf, only: logger
+    use mephit_util, only: imun
     use mephit_mesh, only: mesh
-    integer, intent(in) :: ktri
     type(RT0_t), intent(in) :: elem
-    real(dp), intent(in) :: r, z
-    complex(dp), intent(out) :: comp_R, comp_Z
-    complex(dp), intent(out), optional :: comp_phi, comp_R_dR, comp_R_dZ, &
-         comp_Z_dR, comp_Z_dZ, comp_phi_dR, comp_phi_dZ
+    integer, intent(in) :: ktri
+    real(dp), intent(in) :: R, Z
+    complex(dp), dimension(:), intent(out) :: vec
+    complex(dp), dimension(:), intent(out), optional :: dvec_dR, dvec_dphi, dvec_dZ
     integer :: nodes(3)
     real(dp) :: nan
     complex(dp) :: DOF(3)
 
+    if (3 /= size(vec)) then
+       call logger%msg_arg_size('RT0_interp', '3', 'size(vec)', 3, size(vec))
+       if (logger%err) call logger%write_msg
+       error stop
+    end if
+    if (present(dvec_dR)) then
+       if (3 /= size(dvec_dR)) then
+          call logger%msg_arg_size('RT0_interp', '3', 'size(dvec_dR)', 3, size(dvec_dR))
+          if (logger%err) call logger%write_msg
+          error stop
+       end if
+    end if
+    if (present(dvec_dphi)) then
+       if (3 /= size(dvec_dphi)) then
+          call logger%msg_arg_size('RT0_interp', '3', 'size(dvec_dphi)', 3, size(dvec_dphi))
+          if (logger%err) call logger%write_msg
+          error stop
+       end if
+    end if
+    if (present(dvec_dZ)) then
+       if (3 /= size(dvec_dZ)) then
+          call logger%msg_arg_size('RT0_interp', '3', 'size(dvec_dZ)', 3, size(dvec_dZ))
+          if (logger%err) call logger%write_msg
+          error stop
+       end if
+    end if
     if (ktri <= 0 .or. ktri > mesh%ntri) then
        nan = ieee_value(1d0, ieee_quiet_nan)
-       comp_R = cmplx(nan, nan, dp)
-       comp_Z = cmplx(nan, nan, dp)
-       if (present(comp_phi)) then
-          comp_phi = cmplx(nan, nan, dp)
+       vec(:) = cmplx(nan, nan, dp)
+       if (present(dvec_dR)) then
+          dvec_dR(:) = cmplx(nan, nan, dp)
        end if
-       if (present(comp_R_dZ)) then
-          comp_R_dZ = (0d0, 0d0)
+       if (present(dvec_dphi)) then
+          dvec_dphi(:) = cmplx(nan, nan, dp)
        end if
-       if (present(comp_Z_dR)) then
-          comp_Z_dR = cmplx(nan, nan, dp)
-       end if
-       if (present(comp_Z_dZ)) then
-          comp_Z_dZ = cmplx(nan, nan, dp)
-       end if
-       if (present(comp_phi_dR)) then
-          comp_phi_dR = cmplx(nan, nan, dp)
-       end if
-       if (present(comp_phi_dZ)) then
-          comp_phi_dZ = cmplx(nan, nan, dp)
+       if (present(dvec_dZ)) then
+          dvec_dZ(:) = cmplx(nan, nan, dp)
        end if
        return
     end if
@@ -265,28 +286,21 @@ contains
        nodes = nodes([1, 3, 2])
        DOF(1:2) = -DOF(1:2)
     end if
-    comp_R = 0.5d0 / mesh%area(ktri) / R * sum(DOF * (R - mesh%node_R(nodes)))
-    comp_Z = 0.5d0 / mesh%area(ktri) / R * sum(DOF * (Z - mesh%node_Z(nodes)))
-    if (present(comp_phi)) then
-       comp_phi = elem%comp_phi(ktri)
+    vec(1) = 0.5d0 / mesh%area(ktri) / R * sum(DOF * (R - mesh%node_R(nodes)))
+    vec(2) = elem%comp_phi(ktri)
+    vec(3) = 0.5d0 / mesh%area(ktri) / R * sum(DOF * (Z - mesh%node_Z(nodes)))
+    if (present(dvec_dR)) then
+       dvec_dR(1) = 0.5d0 / mesh%area(ktri) / R ** 2 * sum(DOF * mesh%node_R(nodes))
+       dvec_dR(2) = (0d0, 0d0)
+       dvec_dR(3) = -vec(3) / R
     end if
-    if (present(comp_R_dR)) then
-       comp_R_dR = 0.5d0 / mesh%area(ktri) / R ** 2 * sum(DOF * mesh%node_R(nodes))
+    if (present(dvec_dphi)) then
+       dvec_dphi(:) = imun * mesh%n / R * vec
     end if
-    if (present(comp_R_dZ)) then
-       comp_R_dZ = (0d0, 0d0)
-    end if
-    if (present(comp_Z_dR)) then
-       comp_Z_dR = -comp_Z / R
-    end if
-    if (present(comp_Z_dZ)) then
-       comp_Z_dZ = 0.5d0 / mesh%area(ktri) / R * sum(DOF)
-    end if
-    if (present(comp_phi_dR)) then
-       comp_phi_dR = (0d0, 0d0)
-    end if
-    if (present(comp_phi_dZ)) then
-       comp_phi_dZ = (0d0, 0d0)
+    if (present(dvec_dZ)) then
+       dvec_dZ(1) = (0d0, 0d0)
+       dvec_dZ(2) = (0d0, 0d0)
+       dvec_dZ(3) = 0.5d0 / mesh%area(ktri) / R * sum(DOF)
     end if
   end subroutine RT0_interp
 
@@ -311,16 +325,16 @@ contains
     type(RT0_t), intent(in) :: elem
     real(dp) :: RT0_L2int_num
     integer :: ktri, k
-    complex(dp) :: comp_R, comp_Z
+    complex(dp) :: vec(3)
     real(dp) :: series
 
     RT0_L2int_num = 0d0
     do ktri = 1, mesh%ntri
        series = 0d0
        do k = 1, mesh%GL2_order
-          call RT0_interp(ktri, elem, mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), comp_R, comp_Z)
+          call RT0_interp(elem, ktri, mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), vec)
           series = series + mesh%GL2_weights(k) * mesh%GL2_R(k, ktri) ** 2 * &
-               (comp_R%re ** 2 + comp_R%im ** 2 + comp_Z%re ** 2 + comp_Z%im ** 2)
+               (vec(1)%re ** 2 + vec(1)%im ** 2 + vec(3)%re ** 2 + vec(3)%im ** 2)
        end do
        RT0_L2int_num = RT0_L2int_num + series * mesh%area(ktri)
     end do
@@ -458,6 +472,7 @@ contains
     complex(dp), intent(out), dimension(:), allocatable :: comp_R, comp_Z, &
          comp_psi_contravar_dens, comp_theta_covar
     integer :: kf, kt, ktri
+    complex(dp) :: vec(3)
 
     allocate(comp_R(mesh%ntri), comp_Z(mesh%ntri), &
          comp_psi_contravar_dens(mesh%ntri), comp_theta_covar(mesh%ntri))
@@ -465,7 +480,9 @@ contains
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           associate (R => mesh%cntr_R(ktri), Z => mesh%cntr_Z(ktri), f => cache%cntr_fields(ktri))
-            call RT0_interp(ktri, elem, R, Z, comp_R(ktri), comp_Z(ktri))
+            call RT0_interp(elem, ktri, R, Z, vec)
+            comp_R(ktri) = vec(1)
+            comp_Z(ktri) = vec(3)
             ! projection to contravariant psi component
             comp_psi_contravar_dens(ktri) = (comp_R(ktri) * f%B0(3) - &
                  comp_Z(ktri) * f%B0(1)) * R * jacobian(kf, kt, R)
@@ -483,6 +500,7 @@ contains
     real(dp), intent(out), dimension(:), allocatable :: rect_R, rect_Z
     complex(dp), intent(out), dimension(:, :), allocatable :: comp_R, comp_phi, comp_Z
     integer :: kw, kh, ktri
+    complex(dp) :: vec(3)
 
     allocate(rect_R(equil%nw), rect_Z(equil%nh))
     rect_R(:) = equil%R_eqd
@@ -492,8 +510,10 @@ contains
        do kh = 1, equil%nh
           ktri = point_location(rect_R(kw), rect_Z(kh))
           if (ktri > mesh%kt_low(1) .and. ktri <= mesh%ntri) then
-             call RT0_interp(ktri, elem, rect_R(kw), rect_Z(kh), &
-                  comp_R(kw, kh), comp_Z(kw, kh), comp_phi(kw, kh))
+             call RT0_interp(elem, ktri, rect_R(kw), rect_Z(kh), vec)
+             comp_R(kw, kh) = vec(1)
+             comp_phi(kw, kh) = vec(2)
+             comp_Z(kw, kh) = vec(3)
           else
              comp_R(kw, kh) = (0d0, 0d0)
              comp_phi(kw, kh) = (0d0, 0d0)
@@ -651,7 +671,7 @@ contains
        do kpol = 1, cache%npol
           associate (s => cache%sample_polmodes(kpol, kf))
             fourier_basis = [(exp(-imun * m * s%theta), m = -polmodes%m_max, polmodes%m_max)]
-            call L1_interp(s%ktri, elem, s%R, s%Z, comp)
+            call L1_interp(elem, s%ktri, s%R, s%Z, comp)
             polmodes%coeff(:, kf) = polmodes%coeff(:, kf) + comp * fourier_basis
           end associate
        end do
@@ -667,7 +687,7 @@ contains
     type(vec_polmodes_t), intent(inout) :: vec_polmodes
     integer :: kf, kpol, m
     complex(dp) :: fourier_basis(-vec_polmodes%m_max:vec_polmodes%m_max)
-    complex(dp) :: comp_R, comp_Z, comp_phi, comp_rad, comp_n, comp_pol, comp_tor
+    complex(dp) :: cyl_vec(3), comp_rad, comp_n, comp_pol, comp_tor
 
     vec_polmodes%coeff_rad(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_n(:, :) = (0d0, 0d0)
@@ -677,16 +697,16 @@ contains
        do kpol = 1, cache%npol
           associate (s => cache%sample_polmodes_half(kpol, kf))
             fourier_basis = [(exp(-imun * m * s%theta), m = -vec_polmodes%m_max, vec_polmodes%m_max)]
-            call RT0_interp(s%ktri, elem, s%R, s%Z, comp_R, comp_Z, comp_phi)
+            call RT0_interp(elem, s%ktri, s%R, s%Z, cyl_vec)
             if (conf%kilca_scale_factor /= 0) then
-               call bent_cyl2straight_cyl(comp_R, comp_phi, comp_Z, &
+               call bent_cyl2straight_cyl(cyl_vec(1), cyl_vec(2), cyl_vec(3), &
                     s%theta, comp_rad, comp_pol, comp_tor)
                comp_n = comp_rad
             else
-               comp_rad = s%sqrt_g * (comp_R * s%B0_Z - comp_Z * s%B0_R) * s%R
-               comp_n = (comp_R * s%B0_Z - comp_Z * s%B0_R) / hypot(s%B0_R, s%B0_Z)
-               comp_pol = comp_R * s%dR_dtheta + comp_Z * s%dZ_dtheta
-               comp_tor = comp_phi
+               comp_rad = s%sqrt_g * (cyl_vec(1) * s%B0_Z - cyl_vec(3) * s%B0_R) * s%R
+               comp_n = (cyl_vec(1) * s%B0_Z - cyl_vec(3) * s%B0_R) / hypot(s%B0_R, s%B0_Z)
+               comp_pol = cyl_vec(1) * s%dR_dtheta + cyl_vec(3) * s%dZ_dtheta
+               comp_tor = cyl_vec(2)
             end if
             vec_polmodes%coeff_rad(:, kf) = vec_polmodes%coeff_rad(:, kf) + comp_rad * fourier_basis
             vec_polmodes%coeff_n(:, kf) = vec_polmodes%coeff_n(:, kf) + comp_n * fourier_basis
@@ -1912,6 +1932,7 @@ contains
     character(len = *), parameter :: dataset = 'debug_RT0'
     integer(HID_T) :: h5id_root
     integer :: kf, kpol, pol_modes(2)
+    complex(dp) :: B_interp(3)
     complex(dp), dimension(cache%npol, mesh%nflux) :: B_R, B_Z, B_phi, &
          B_R_interp, B_Z_interp, B_phi_interp
 
@@ -1925,8 +1946,10 @@ contains
             else
                call spline_bn(conf%n, s%R, s%Z, B_R(kpol, kf), B_phi(kpol, kf), B_Z(kpol, kf))
             end if
-            call RT0_interp(s%ktri, Bn, s%R, s%Z, &
-                 B_R_interp(kpol, kf), B_Z_interp(kpol, kf), B_phi_interp(kpol, kf))
+            call RT0_interp(Bn, s%ktri, s%R, s%Z, B_interp)
+            B_R_interp(kpol, kf) = B_interp(1)
+            B_phi_interp(kpol, kf) = B_interp(2)
+            B_Z_interp(kpol, kf) = B_interp(3)
           end associate
        end do
     end do
