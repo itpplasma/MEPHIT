@@ -745,7 +745,6 @@ contains
     ! hack: first call in mephit_iter() is always without plasma response
     ! and without additional shielding currents
     logical, save :: first_call = .true.
-    complex(dp), allocatable :: debug_x(:), debug_d(:), debug_du(:), debug_terms(:, :, :)
 
     max_rel_err = 0d0
     avg_rel_err = 0d0
@@ -758,9 +757,6 @@ contains
           end associate
        end do
     end do
-    if (first_call) then
-       allocate(debug_x(mesh%ntri), debug_d(mesh%ntri), debug_du(mesh%ntri), debug_terms(3, 2, mesh%ntri))
-    end if
     do kf = 1, mesh%nflux
        Delta_p0 = fs%p(kf) - fs%p(kf-1)
        x = (0d0, 0d0)
@@ -785,11 +781,6 @@ contains
             x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%mid_R(kedge) / B0_flux * &
                  (Bnphi_edge / f%B0(2) * Delta_p0 - Delta_pn) + f%j0(2) * &
                  (Bnphi_edge / f%B0(2) - Bn%DOF(kedge) / B0_flux))
-            if (first_call) then
-               debug_terms(:, 1, ktri) = -imun * mesh%n * mesh%area(ktri) * 0.5d0 * &
-                    [(clight * mesh%mid_R(kedge) / B0_flux * Delta_p0 + f%j0(2)) * Bnphi_edge / f%B0(2), &
-                    -f%j0(2) * Bn%DOF(kedge) / B0_flux, -clight * mesh%mid_R(kedge) / B0_flux * Delta_pn]
-            end if
             ! superdiagonal matrix element - edge o
             ktri = mesh%edge_tri(1, kedge)
             ke = mod(kt + mesh%kt_max(kf) - 2, mesh%kt_max(kf)) + 1
@@ -799,19 +790,9 @@ contains
             x(ke) = x(ke) - imun * mesh%n * mesh%area(ktri) * 0.5d0 * (clight * mesh%mid_R(kedge) / (-B0_flux) * &
                  (Bnphi_edge / f%B0(2) * (-Delta_p0) - (-Delta_pn)) + f%j0(2) * &
                  (Bnphi_edge / f%B0(2) - (-Bn%DOF(kedge)) / (-B0_flux)))
-            if (first_call) then
-               debug_terms(:, 2, ktri) = -imun * mesh%n * mesh%area(ktri) * 0.5d0 * &
-                    [(clight * mesh%mid_R(kedge) / B0_flux * Delta_p0 + f%j0(2)) * Bnphi_edge / f%B0(2), &
-                    -f%j0(2) * Bn%DOF(kedge) / B0_flux, -clight * mesh%mid_R(kedge) / B0_flux * Delta_pn]
-            end if
           end associate
        end do
-       associate (ndim => mesh%kt_max(kf), nz => 2 * mesh%kt_max(kf), k_min => mesh%kt_low(kf))
-         if (first_call) then
-            debug_x(k_min+1:k_min+ndim) = x(1:ndim)
-            debug_d(k_min+1:k_min+ndim) = d(1:ndim)
-            debug_du(k_min+1:k_min+ndim) = du(1:ndim)
-         end if
+       associate (ndim => mesh%kt_max(kf), nz => 2 * mesh%kt_max(kf))
          ! assemble sparse matrix (COO format)
          ! first column, diagonal
          irow(1) = 1
@@ -857,8 +838,7 @@ contains
     if (first_call) then
        first_call = .false.
        call RT0_compute_tor_comp(jn)
-       call debug_currn(pn, Bn, jn, debug_x, debug_d, debug_du, debug_terms)
-       deallocate(debug_x, debug_d, debug_du, debug_terms)
+       call debug_currn(pn, Bn, jn)
     end if
     call add_sheet_current
     call RT0_compute_tor_comp(jn)
@@ -877,7 +857,6 @@ contains
     integer :: kf, kp, kt, ktri, kedge, k, nodes(3)
     complex(dp) :: series, zdum, grad_pn(3), B_n(3)
     complex(dp), dimension(maxval(mesh%kt_max)) :: x, d, du, inhom
-    complex(dp), allocatable :: debug_x(:), debug_d(:), debug_du(:), coeff_f(:), debug_terms(:, :, :)
     integer, dimension(2 * maxval(mesh%kt_max)) :: irow, icol
     complex(dp), dimension(2 * maxval(mesh%kt_max)) :: aval
     complex(dp), dimension(:), allocatable :: resid
@@ -887,10 +866,6 @@ contains
     max_rel_err = 0d0
     avg_rel_err = 0d0
     jn%DOF(:) = (0d0, 0d0)
-    if (first_call) then
-       allocate(debug_x(mesh%ntri), debug_d(mesh%ntri), debug_du(mesh%ntri), coeff_f(mesh%ntri), &
-            debug_terms(3, mesh%GL2_order, mesh%ntri))
-    end if
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
@@ -924,13 +899,6 @@ contains
                series = series + mesh%GL2_weights(k) / (f%B0(1) ** 2 + f%B0(3) ** 2) * &
                     ((B_n(2) * f%j0(1) - f%j0(2) * B_n(1) - clight * grad_pn(3)) * f%B0(1) + &
                     (B_n(2) * f%j0(3) - f%j0(2) * B_n(3) + clight * grad_pn(1)) * f%B0(3))
-               if (first_call) then
-                  debug_terms(:, k, ktri) = -imun * mesh%n * mesh%area(ktri) * mesh%GL2_weights(k) * &
-                       [B_n(2) * f%j0(1) * f%B0(1) + B_n(2) * f%j0(3) * f%B0(3), &
-                       -f%j0(2) * B_n(1) * f%B0(1) - f%j0(2) * B_n(3) * f%B0(3), &
-                       -clight * grad_pn(3) * f%B0(1) + clight * grad_pn(1) * f%B0(3)] &
-                       / (f%B0(1) ** 2 + f%B0(3) ** 2)
-               end if
              end associate
           end do
           x(kt) = -imun * mesh%n * mesh%area(ktri) * series
@@ -945,13 +913,11 @@ contains
                     (f%B0(1) ** 2 + f%B0(3) ** 2)
              end associate
           end do
-          if (first_call) coeff_f(mesh%kt_low(kf) + kt) = (1d0 + imun * mesh%n * 0.5d0 * series)
           if (mesh%orient(ktri)) then
              x(kt) = x(kt) - jn%DOF(ktri) * (1d0 + imun * mesh%n * 0.5d0 * series)
           else
              x(kt) = x(kt) + jn%DOF(ktri) * (1d0 + imun * mesh%n * 0.5d0 * series)
           end if
-          if (first_call) debug_x(mesh%kt_low(kf) + kt) = x(kt)
           ! edge i contribution to diagonal element
           kedge = mesh%tri_edge(3, ktri)
           series = (0d0, 0d0)
@@ -964,7 +930,6 @@ contains
              end associate
           end do
           d(kt) = -1d0 - imun * mesh%n * 0.5d0 * series
-          if (first_call) debug_d(mesh%kt_low(kf) + kt) = d(kt)
           ! edge o contribution to upper diagonal element
           kedge = mesh%tri_edge(2, ktri)
           series = (0d0, 0d0)
@@ -977,7 +942,6 @@ contains
              end associate
           end do
           du(kt) = 1d0 + imun * mesh%n * 0.5d0 * series
-          if (first_call) debug_du(mesh%kt_low(kf) + kt) = du(kt)
        end do
        associate (ndim => mesh%kt_max(kf), nz => 2 * mesh%kt_max(kf))
          ! assemble sparse matrix (COO format)
@@ -1025,8 +989,7 @@ contains
     if (first_call) then
        first_call = .false.
        call RT0_compute_tor_comp(jn)
-       call debug_currn(pn, Bn, jn, debug_x, debug_d, debug_du, debug_terms, coeff_f)
-       deallocate(debug_x, debug_d, debug_du, debug_terms, coeff_f)
+       call debug_currn(pn, Bn, jn)
     end if
     call add_sheet_current
     call RT0_compute_tor_comp(jn)
@@ -1098,13 +1061,13 @@ contains
 
     if (first_call) then
        first_call = .false.
-       call debug_currn(pn, Bn, jn, inhom, [(0d0, 0d0)], [(0d0, 0d0)])
+       call debug_currn(pn, Bn, jn, inhom)
        call debug_MDE(pn, Bn, jn, jnpar_B0)
     end if
     call add_sheet_current
   end subroutine compute_currn_MDE
 
-  subroutine debug_currn(presn, magfn, currn, x, d, du, terms, coeff_f)
+  subroutine debug_currn(presn, magfn, currn, inhom)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: datafile
     use mephit_util, only: clight, zd_cross
@@ -1112,8 +1075,7 @@ contains
     use mephit_pert, only: RT0_interp, L1_interp
     type(L1_t), intent(in) :: presn
     type(RT0_t), intent(in) :: magfn, currn
-    complex(dp), intent(in) :: x(:), d(:), du(:)
-    complex(dp), intent(in), optional :: terms(:, :, :), coeff_f(:)
+    complex(dp), intent(in), optional :: inhom(:)
     character(len = *), parameter :: grp = 'debug_currn'
     integer(HID_T) :: h5id_root
     integer :: kf, kt, ktri
@@ -1139,19 +1101,9 @@ contains
          comment = 'perturbation Lorentz force density', unit = 'dyn cm^-2')
     call h5_add(h5id_root, grp // '/I', currn%DOF, lbound(currn%DOF), ubound(currn%DOF), &
          comment = 'perturbation current density degrees of freedom', unit = 'statA')
-    call h5_add(h5id_root, grp // '/x', x, lbound(x), ubound(x), &
-         comment = 'inhomogeneities of linear systems of equations', unit = 'statA')
-    call h5_add(h5id_root, grp // '/d', d, lbound(d), ubound(d), &
-         comment = 'main diagonals of linear systems of equations', unit = '1')
-    call h5_add(h5id_root, grp // '/du', du, lbound(du), ubound(du), &
-         comment = 'upper diagonals of linear systems of equations', unit = '1')
-    if (present(terms)) then
-       call h5_add(h5id_root, grp // '/terms', terms, lbound(terms), ubound(terms), &
-            comment = 'individual terms of area integral approximation', unit = 'statA')
-    end if
-    if (present(coeff_f)) then
-       call h5_add(h5id_root, grp // '/coeff_f', coeff_f, lbound(coeff_f), ubound(coeff_f), &
-            comment = 'coefficients of radial currents', unit = '1')
+    if (present(inhom)) then
+       call h5_add(h5id_root, grp // '/inhom', inhom, lbound(inhom), ubound(inhom), &
+            comment = 'inhomogeneities of linear systems of equations', unit = 'statA cm^-3')
     end if
     call h5_close(h5id_root)
   end subroutine debug_currn
