@@ -524,13 +524,14 @@ contains
     end if
   end subroutine MFEM_test
 
-  !> Computes pressure perturbation #presn from equilibrium quantities and #bnflux.
-  subroutine compute_presn
+  subroutine solve_MDE(inhom, solution)
     use sparse_mod, only: sparse_solve, sparse_matmul
     use mephit_conf, only: conf, logger
     use mephit_util, only: imun
-    use mephit_mesh, only: fs, mesh, cache
-    complex(dp), dimension(maxval(mesh%kp_max)) :: a, b, x, d, du, inhom
+    use mephit_mesh, only: mesh, cache
+    complex(dp), dimension(:), intent(in) :: inhom
+    complex(dp), dimension(:), intent(out) :: solution
+    complex(dp), dimension(maxval(mesh%kp_max)) :: a, b, x, d, du
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(maxval(mesh%kp_max)) :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
@@ -539,8 +540,19 @@ contains
     complex(dp), dimension(2 * maxval(mesh%kp_max)) :: aval
     real(dp), parameter :: small = tiny(0d0)
 
+    if (size(inhom) /= mesh%npoint) then
+       call logger%msg_arg_size('solve_MDE', 'size(inhom)', 'mesh%npoint', size(inhom), mesh%npoint)
+       if (logger%err) call logger%write_msg
+       error stop
+    end if
+    if (size(solution) /= mesh%npoint) then
+       call logger%msg_arg_size('solve_MDE', 'size(solution)', 'mesh%npoint', size(solution), mesh%npoint)
+       if (logger%err) call logger%write_msg
+       error stop
+    end if
     max_rel_err = 0d0
     avg_rel_err = 0d0
+    solution(:) = (0d0, 0d0)
     a = (0d0, 0d0)
     b = (0d0, 0d0)
     x = (0d0, 0d0)
@@ -548,16 +560,17 @@ contains
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
           ! use midpoint of poloidal edge
-          associate (f => cache%mid_fields(kedge))
+          associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge))
             a(kp) = (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
                  (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
-            x(kp) = -fs%dp_dpsi(kf) * a(kp) * Bn%DOF(kedge)
-            b(kp) = imun * (mesh%n + imun * conf%damp) * f%B0(2) / mesh%mid_R(kedge)
+            b(kp) = imun * (mesh%n + imun * conf%damp) * f%B0(2) / R
+            x(kp) = inhom(kedge + 1)
           end associate
        end do
        d = -a + b * 0.5d0
        du = a + b * 0.5d0
-       associate (ndim => mesh%kp_max(kf), nz => 2 * mesh%kp_max(kf))
+       associate (ndim => mesh%kp_max(kf), nz => 2 * mesh%kp_max(kf), &
+            k_min => mesh%kp_low(kf) + 1, k_max => mesh%kp_low(kf) + mesh%kp_max(kf))
          ! assemble sparse matrix (COO format)
          ! first column, diagonal
          irow(1) = 1
@@ -577,12 +590,11 @@ contains
             icol(2*k) = k
             aval(2*k) = d(k)
          end do
-         inhom = x  ! remember inhomogeneity before x is overwritten with the solution
          call sparse_solve(ndim, ndim, nz, irow(:nz), icol(:nz), aval(:nz), x(:ndim))
          call sparse_matmul(ndim, ndim, irow(:nz), icol(:nz), aval(:nz), x(:ndim), resid)
-         resid(:) = resid - inhom(:ndim)
-         where (abs(inhom(:ndim)) >= small)
-            rel_err(:ndim) = abs(resid(:ndim)) / abs(inhom(:ndim))
+         resid(:) = resid - inhom(k_min:k_max)
+         where (abs(inhom(k_min:k_max)) >= small)
+            rel_err(:ndim) = abs(resid(:ndim)) / abs(inhom(k_min:k_max))
          elsewhere
             rel_err(:ndim) = 0d0
          end where
@@ -590,18 +602,37 @@ contains
          avg_rel_err = avg_rel_err + sum(rel_err(:ndim))
        end associate
        if (kf == 1) then ! first point on axis - average over enclosing flux surface
-          pn%DOF(1) = sum(x(:mesh%kp_max(1))) / dble(mesh%kp_max(1))
+          solution(1) = sum(x(:mesh%kp_max(1))) / dble(mesh%kp_max(1))
        end if
        do kp = 1, mesh%kp_max(kf)
-          pn%DOF(mesh%kp_low(kf) + kp) = x(kp)
+          solution(mesh%kp_low(kf) + kp) = x(kp)
        end do
     end do
-
     avg_rel_err = avg_rel_err / dble(mesh%npoint - 1)
-    write (logger%msg, '("compute_presn: diagonalization max_rel_err = ", ' // &
+    write (logger%msg, '("solve_MDE: diagonalization max_rel_err = ", ' // &
          'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (logger%debug) call logger%write_msg
     if (allocated(resid)) deallocate(resid)
+  end subroutine solve_MDE
+
+  subroutine compute_presn
+    use mephit_mesh, only: fs, mesh, cache
+    complex(dp), dimension(mesh%npoint) :: inhom
+    integer :: kf, kp, kedge
+
+    inhom = (0d0, 0d0)
+    do kf = 1, mesh%nflux
+       do kp = 1, mesh%kp_max(kf)
+          kedge = mesh%kp_low(kf) + kp - 1
+          ! use midpoint of poloidal edge
+          associate (f => cache%mid_fields(kedge))
+            inhom(kedge + 1) = -fs%dp_dpsi(kf) * Bn%DOF(kedge) * &
+                 (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
+                 (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
+          end associate
+       end do
+    end do
+    call solve_MDE(inhom, pn%DOF)
   end subroutine compute_presn
 
   subroutine debug_MDE(presn, magfn, currn_perp, currn_par)
@@ -1002,12 +1033,9 @@ contains
   end subroutine compute_currn_GL
 
   subroutine compute_currn_MDE
-    use sparse_mod, only: sparse_solve, sparse_matmul
-    use mephit_conf, only: conf, logger
     use mephit_mesh, only: mesh, cache
-    use mephit_pert, only: L1_interp, RT0_interp, RT0_compute_tor_comp
-    use mephit_util, only: imun, pi, clight, zd_cross
-    real(dp), parameter :: small = tiny(0d0)
+    use mephit_pert, only: L1_interp, RT0_interp
+    use mephit_util, only: pi, clight, zd_cross
     ! hack: first call in mephit_iter() is always without plasma response
     ! and without additional shielding currents
     logical, save :: first_call = .true.
@@ -1015,90 +1043,29 @@ contains
     real(dp), dimension(3) :: n_f, grad_j0B0, B0_grad_B0
     complex(dp) :: zdum, B0_jnpar
     complex(dp), dimension(3) :: grad_pn, B_n, dBn_dR, dBn_dZ, dBn_dphi, grad_BnB0
-    complex(dp), dimension(maxval(mesh%kp_max)) :: a, b, x, d, du, inhom
-    complex(dp), allocatable :: debug_x(:), debug_d(:), debug_du(:)
-    integer, dimension(2 * maxval(mesh%kp_max)) :: irow, icol
-    complex(dp), dimension(2 * maxval(mesh%kp_max)) :: aval
-    complex(dp), dimension(:), allocatable :: resid
-    real(dp), dimension(maxval(mesh%kp_max)) :: rel_err
-    real(dp) :: max_rel_err, avg_rel_err
+    complex(dp), dimension(mesh%npoint) :: inhom
 
-    max_rel_err = 0d0
-    avg_rel_err = 0d0
     jn%DOF(:) = (0d0, 0d0)
     jn%comp_phi(:) = (0d0, 0d0)
     jnpar_B0%DOF(:) = (0d0, 0d0)
-    if (first_call) then
-       allocate(debug_x(mesh%npoint), debug_d(mesh%npoint), debug_du(mesh%npoint))
-    end if
-    a = (0d0, 0d0)
-    b = (0d0, 0d0)
-    x = (0d0, 0d0)
     do kf = 1, mesh%nflux
        do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
           ktri = mesh%edge_tri(1, kedge)
           ! use midpoint of poloidal edge
           associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge))
-            a(kp) = (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
-                 (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
-            b(kp) = imun * (mesh%n + imun * conf%damp) * f%B0(2) / R
             call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
             call RT0_interp(Bn, ktri, R, Z, B_n, dBn_dR, dBn_dphi, dBn_dZ)
             grad_j0B0 = [sum(f%dj0_dR * f%B0 + f%dB0_dR * f%j0), 0d0, sum(f%dj0_dZ * f%B0 + f%dB0_dZ * f%j0)]
             grad_BnB0 = [sum(dBn_dR * f%B0 + f%dB0_dR * B_n), sum(dBn_dphi * f%B0), sum(dBn_dZ * f%B0 + f%dB0_dZ * B_n)]
             B0_grad_B0 = [sum(f%dB0_dR * f%B0), 0d0, sum(f%dB0_dZ * f%B0)]
-            x(kp) = (-2d0 / f%Bmod ** 2 * (clight * sum(zd_cross(grad_pn, f%B0) * B0_grad_B0) + &
+            inhom(kedge + 1) = (-2d0 / f%Bmod ** 2 * (clight * sum(zd_cross(grad_pn, f%B0) * B0_grad_B0) + &
                  sum(B_n * f%B0) * sum(f%j0 * B0_grad_B0) - sum(B_n * B0_grad_B0) * sum(f%j0 * f%B0)) + &
                  sum(grad_BnB0 * f%j0 - B_n * grad_j0B0) + 4d0 * pi * sum(grad_pn * f%j0)) / f%Bmod ** 2
           end associate
        end do
-       d = -a + b * 0.5d0
-       du = a + b * 0.5d0
-       associate (ndim => mesh%kp_max(kf), nz => 2 * mesh%kp_max(kf), k_min => mesh%kp_low(kf))
-         if (first_call) then
-            debug_x(k_min+1:k_min+ndim) = x(1:ndim)
-            debug_d(k_min+1:k_min+ndim) = d(1:ndim)
-            debug_du(k_min+1:k_min+ndim) = du(1:ndim)
-         end if
-         ! assemble sparse matrix (COO format)
-         ! first column, diagonal
-         irow(1) = 1
-         icol(1) = 1
-         aval(1) = d(1)
-         ! first column, off-diagonal
-         irow(2) = ndim
-         icol(2) = 1
-         aval(2) = du(ndim)
-         do k = 2, ndim
-            ! off-diagonal
-            irow(2*k-1) = k-1
-            icol(2*k-1) = k
-            aval(2*k-1) = du(k-1)
-            ! diagonal
-            irow(2*k) = k
-            icol(2*k) = k
-            aval(2*k) = d(k)
-         end do
-         inhom = x  ! remember inhomogeneity before x is overwritten with the solution
-         call sparse_solve(ndim, ndim, nz, irow(:nz), icol(:nz), aval(:nz), x(:ndim))
-         call sparse_matmul(ndim, ndim, irow(:nz), icol(:nz), aval(:nz), x(:ndim), resid)
-         resid(:) = resid - inhom(:ndim)
-         where (abs(inhom(:ndim)) >= small)
-            rel_err(:ndim) = abs(resid(:ndim)) / abs(inhom(:ndim))
-         elsewhere
-            rel_err(:ndim) = 0d0
-         end where
-         max_rel_err = max(max_rel_err, maxval(rel_err(:ndim)))
-         avg_rel_err = avg_rel_err + sum(rel_err(:ndim))
-       end associate
-       if (kf == 1) then ! first point on axis - average over enclosing flux surface
-          jnpar_B0%DOF(1) = sum(x(:mesh%kp_max(1))) / dble(mesh%kp_max(1))
-       end if
-       do kp = 1, mesh%kp_max(kf)
-          jnpar_B0%DOF(mesh%kp_low(kf) + kp) = x(kp)
-       end do
     end do
+    call solve_MDE(inhom, jnpar_B0%DOF)
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
           ktri = mesh%edge_tri(1, kedge)
@@ -1129,17 +1096,10 @@ contains
        end do
     end do
 
-    avg_rel_err = avg_rel_err / dble(mesh%npoint - 1)
-    write (logger%msg, '("compute_currn_MDE: diagonalization max_rel_err = ", ' // &
-         'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
-    if (logger%debug) call logger%write_msg
-    if (allocated(resid)) deallocate(resid)
-
     if (first_call) then
        first_call = .false.
-       call debug_currn(pn, Bn, jn, debug_x, debug_d, debug_du)
+       call debug_currn(pn, Bn, jn, inhom, [(0d0, 0d0)], [(0d0, 0d0)])
        call debug_MDE(pn, Bn, jn, jnpar_B0)
-       deallocate(debug_x, debug_d, debug_du)
     end if
     call add_sheet_current
   end subroutine compute_currn_MDE
@@ -1147,7 +1107,7 @@ contains
   subroutine debug_currn(presn, magfn, currn, x, d, du, terms, coeff_f)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: datafile
-    use mephit_util, only: clight
+    use mephit_util, only: clight, zd_cross
     use mephit_mesh, only: mesh, cache
     use mephit_pert, only: RT0_interp, L1_interp
     type(L1_t), intent(in) :: presn
@@ -1167,10 +1127,7 @@ contains
             call L1_interp(presn, ktri, R, Z, zdum, grad_pn(:, ktri))
             call RT0_interp(magfn, ktri, R, Z, Bn)
             call RT0_interp(currn, ktri, R, Z, jn)
-            lorentz(:, ktri) = 1d0 / clight * &
-                 [jn(2) * c%B0(3) - jn(3) * c%B0(2) + c%j0(2) * Bn(3) - c%j0(3) * Bn(2), &
-                 jn(3) * c%B0(1) - jn(1) * c%B0(3) + c%j0(3) * Bn(1) - c%j0(1) * Bn(3), &
-                 jn(1) * c%B0(2) - jn(2) * c%B0(1) + c%j0(1) * Bn(2) - c%j0(2) * Bn(1)]
+            lorentz(:, ktri) = (zd_cross(jn, c%B0) - zd_cross(Bn, c%j0)) / clight
           end associate
        end do
     end do

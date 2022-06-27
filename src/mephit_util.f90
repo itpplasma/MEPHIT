@@ -40,7 +40,7 @@ module mephit_util
     real(dp) :: rdim, zdim, rcentr, rleft, zmid, rmaxis, zmaxis, simag, sibry, bcentr, &
          current
     real(dp), dimension(:), allocatable :: fpol, pres, ffprim, pprime, qpsi, &
-         rbbbs, zbbbs, rlim, zlim, psi_eqd, R_eqd, Z_eqd
+         rbbbs, zbbbs, rlim, zlim, psi_eqd, R_eqd, Z_eqd, fprime
     real(dp), dimension(:, :), allocatable :: psirz
   contains
     procedure :: read => g_eqdsk_read
@@ -408,6 +408,9 @@ contains
     this%R_eqd(:) = this%rleft + linspace(0d0, this%rdim, this%nw, 0, 0)
     allocate(this%Z_eqd(this%nh))
     this%Z_eqd(:) = this%zmid + 0.5d0 * linspace(-this%zdim, this%zdim, this%nh, 0, 0)
+    ! cache repeatedly used values
+    allocate(this%fprime(this%nw))
+    this%fprime(:) = this%ffprim / this%fpol
   end subroutine g_eqdsk_read
 
   subroutine g_eqdsk_check_consistency(this)
@@ -583,6 +586,7 @@ contains
        this%cocos%sgn_dpsi = -this%cocos%sgn_dpsi
        this%pprime(:) = -this%pprime
        this%ffprim(:) = -this%ffprim
+       this%fprime(:) = -this%fprime
        this%cocos%sgn_Bpol = -this%cocos%sgn_Bpol
     end if
     if (this%cocos%sgn_pol == +1) then
@@ -603,6 +607,7 @@ contains
        this%psi_eqd(:) = this%psi_eqd / (2d0 * pi)
        this%pprime(:) = this%pprime * (2d0 * pi)
        this%ffprim(:) = this%ffprim * (2d0 * pi)
+       this%fprime(:) = this%fprime * (2d0 * pi)
        this%cocos%exp_Bpol = 0
     end if
     this%cocos%index = 3
@@ -693,7 +698,8 @@ contains
     allocate(this%fpol(this%nw), this%pres(this%nw), this%ffprim(this%nw), this%pprime(this%nw), &
          this%qpsi(this%nw), this%rbbbs(this%nbbbs), this%zbbbs(this%nbbbs), &
          this%rlim(this%limitr), this%zlim(this%limitr), this%psi_eqd(this%nw), &
-         this%R_eqd(this%nw), this%Z_eqd(this%nh), this%psirz(this%nw, this%nh))
+         this%R_eqd(this%nw), this%Z_eqd(this%nh), this%fprime(this%nw), &
+         this%psirz(this%nw, this%nh))
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/rdim', this%rdim)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/zdim', this%zdim)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/rcentr', this%rcentr)
@@ -717,6 +723,7 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi_eqd', this%psi_eqd)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_eqd', this%R_eqd)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_eqd', this%Z_eqd)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/fprime', this%fprime)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/psirz', this%psirz)
     call h5_close(h5id_root)
   end subroutine g_eqdsk_import_hdf5
@@ -765,7 +772,7 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/pres', this%pres, &
          lbound(this%pres), ubound(this%pres), unit = 'dyn cm^-2')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/ffprim', this%ffprim, &
-         lbound(this%ffprim), ubound(this%ffprim), unit = 'cm^-1')
+         lbound(this%ffprim), ubound(this%ffprim), unit = 'G')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/pprime', this%pprime, &
          lbound(this%pprime), ubound(this%pprime), unit = 'dyn cm^-2 Mx^-1')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/qpsi', this%qpsi, &
@@ -784,6 +791,8 @@ contains
          lbound(this%R_eqd), ubound(this%R_eqd), unit = 'cm', comment = 'equidistant R grid values')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_eqd', this%Z_eqd, &
          lbound(this%Z_eqd), ubound(this%Z_eqd), unit = 'cm', comment = 'equidistant Z grid values')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/fprime', this%fprime, &
+         lbound(this%fprime), ubound(this%fprime), unit = 'cm^-1')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/psirz', this%psirz, &
          lbound(this%psirz), ubound(this%psirz), unit = 'Mx')
     call h5_close(h5id_root)
@@ -806,6 +815,7 @@ contains
     if (allocated(this%psi_eqd)) deallocate(this%psi_eqd)
     if (allocated(this%R_eqd)) deallocate(this%R_eqd)
     if (allocated(this%Z_eqd)) deallocate(this%Z_eqd)
+    if (allocated(this%fprime)) deallocate(this%fprime)
     if (allocated(this%psirz)) deallocate(this%psirz)
   end subroutine g_eqdsk_deinit
 

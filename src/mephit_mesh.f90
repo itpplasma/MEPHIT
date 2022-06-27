@@ -2890,44 +2890,42 @@ contains
     call h5_close(h5id_root)
   end subroutine check_safety_factor
 
-  subroutine cache_equilibrium_field
+  subroutine equilibrium_field(R, Z, B0, dB0_dR, dB0_dZ, psi, Bmod, dBmod_dR, dBmod_dZ)
     use field_eq_mod, only: psif, psib
-    integer :: ktri, kedge, k
+    real(dp), intent(in) :: R, Z
+    real(dp), intent(out), dimension(3) :: B0, dB0_dR, dB0_dZ
+    real(dp), intent(out) :: psi, Bmod, dBmod_dR, dBmod_dZ
     real(dp) :: dum
+
+    call field(R, 0d0, Z, B0(1), B0(2), B0(3), &
+         dB0_dR(1), dum, dB0_dZ(1), dB0_dR(2), dum, dB0_dZ(2), dB0_dR(3), dum, dB0_dZ(3))
+    psi = psif - psib  ! see intperp_psi_pol in mephit_util
+    Bmod = sqrt(sum(B0 ** 2))
+    dBmod_dR = (sum(B0 * dB0_dR)) / Bmod
+    dBmod_dZ = (sum(B0 * dB0_dZ)) / Bmod
+  end subroutine equilibrium_field
+
+  subroutine cache_equilibrium_field
+    integer :: ktri, kedge, k
 
     ! edge midpoints
     do kedge = 1, mesh%nedge
        associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge))
-         call field(R, 0d0, Z, f%B0(1), f%B0(2), f%B0(3), &
-              f%dB0_dR(1), dum, f%dB0_dZ(1), f%dB0_dR(2), dum, f%dB0_dZ(2), f%dB0_dR(3), dum, f%dB0_dZ(3))
-         f%psi = psif - psib  ! see intperp_psi_pol in mephit_util
-         f%Bmod = sqrt(sum(f%B0 ** 2))
-         f%dBmod_dR = (sum(f%B0 * f%dB0_dR)) / f%Bmod
-         f%dBmod_dZ = (sum(f%B0 * f%dB0_dZ)) / f%Bmod
+         call equilibrium_field(R, Z, f%B0, f%dB0_dR, f%dB0_dZ, f%psi, f%Bmod, f%dBmod_dR, f%dBmod_dZ)
          cache%B0_flux(kedge) = R * (f%B0(1) * mesh%edge_Z(kedge) - f%B0(3) * mesh%edge_R(kedge))
        end associate
     end do
     ! weighted triangle centroids
     do ktri = 1, mesh%ntri
        associate (f => cache%cntr_fields(ktri), R => mesh%cntr_R(ktri), Z => mesh%cntr_Z(ktri))
-         call field(R, 0d0, Z, f%B0(1), f%B0(2), f%B0(3), &
-              f%dB0_dR(1), dum, f%dB0_dZ(1), f%dB0_dR(2), dum, f%dB0_dZ(2), f%dB0_dR(3), dum, f%dB0_dZ(3))
-         f%psi = psif - psib  ! see intperp_psi_pol in mephit_util
-         f%Bmod = sqrt(sum(f%B0 ** 2))
-         f%dBmod_dR = (sum(f%B0 * f%dB0_dR)) / f%Bmod
-         f%dBmod_dZ = (sum(f%B0 * f%dB0_dZ)) / f%Bmod
+         call equilibrium_field(R, Z, f%B0, f%dB0_dR, f%dB0_dZ, f%psi, f%Bmod, f%dBmod_dR, f%dBmod_dZ)
        end associate
     end do
     ! Gauss-Legendre evaluation points on triangle edges
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
           associate (f => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge), Z => mesh%GL_Z(k, kedge))
-            call field(R, 0d0, Z, f%B0(1), f%B0(2), f%B0(3), &
-                 f%dB0_dR(1), dum, f%dB0_dZ(1), f%dB0_dR(2), dum, f%dB0_dZ(2), f%dB0_dR(3), dum, f%dB0_dZ(3))
-            f%psi = psif - psib  ! see intperp_psi_pol in mephit_util
-            f%Bmod = sqrt(sum(f%B0 ** 2))
-            f%dBmod_dR = (sum(f%B0 * f%dB0_dR)) / f%Bmod
-            f%dBmod_dZ = (sum(f%B0 * f%dB0_dZ)) / f%Bmod
+            call equilibrium_field(R, Z, f%B0, f%dB0_dR, f%dB0_dZ, f%psi, f%Bmod, f%dBmod_dR, f%dBmod_dZ)
           end associate
        end do
     end do
@@ -2935,12 +2933,7 @@ contains
     do ktri = 1, mesh%ntri
        do k = 1, mesh%GL2_order
           associate (f => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri), Z => mesh%GL2_Z(k, ktri))
-            call field(R, 0d0, Z, f%B0(1), f%B0(2), f%B0(3), &
-                 f%dB0_dR(1), dum, f%dB0_dZ(1), f%dB0_dR(2), dum, f%dB0_dZ(2), f%dB0_dR(3), dum, f%dB0_dZ(3))
-            f%psi = psif - psib  ! see intperp_psi_pol in mephit_util
-            f%Bmod = sqrt(sum(f%B0 ** 2))
-            f%dBmod_dR = (sum(f%B0 * f%dB0_dR)) / f%Bmod
-            f%dBmod_dZ = (sum(f%B0 * f%dB0_dZ)) / f%Bmod
+            call equilibrium_field(R, Z, f%B0, f%dB0_dR, f%dB0_dZ, f%psi, f%Bmod, f%dBmod_dR, f%dBmod_dZ)
           end associate
        end do
     end do
@@ -3053,135 +3046,97 @@ contains
   end subroutine compute_curr0_ps
 
   subroutine compute_curr0_rot
-    use mephit_util, only: clight, pi
     integer :: ktri, kedge, k
-    real(dp) :: dum, B0_phi, dB0R_dZ, dB0Z_dR, dB0phi_dR, dB0phi_dZ
 
     ! edge midpoints
     do kedge = 1, mesh%nedge
-       associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge))
-         call field(R, 0d0, Z, dum, B0_phi, dum, dum, dum, dB0R_dZ, dB0phi_dR, dum, dB0phi_dZ, dB0Z_dR, dum, dum)
-         f%j0(1) = -0.25d0 / pi * clight * dB0phi_dZ
-         f%j0(3) = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
-         f%j0(2) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+       associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge))
+         f%j0(:) = curr0_rot(f, R)
        end associate
     end do
     ! weighted triangle centroids
     do ktri = 1, mesh%ntri
-       associate (f => cache%cntr_fields(ktri), R => mesh%cntr_R(ktri), Z => mesh%cntr_Z(ktri))
-         call field(R, 0d0, Z, dum, B0_phi, dum, dum, dum, dB0R_dZ, dB0phi_dR, dum, dB0phi_dZ, dB0Z_dR, dum, dum)
-         f%j0(1) = -0.25d0 / pi * clight * dB0phi_dZ
-         f%j0(3) = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
-         f%j0(2) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+       associate (f => cache%cntr_fields(ktri), R => mesh%cntr_R(ktri))
+         f%j0(:) = curr0_rot(f, R)
        end associate
     end do
     ! Gauss-Legendre evaluation points on triangle edges
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
-          associate (f => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge), Z => mesh%GL_Z(k, kedge))
-            call field(R, 0d0, Z, dum, B0_phi, dum, dum, dum, dB0R_dZ, dB0phi_dR, dum, dB0phi_dZ, dB0Z_dR, dum, dum)
-            f%j0(1) = -0.25d0 / pi * clight * dB0phi_dZ
-            f%j0(3) = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
-            f%j0(2) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+          associate (f => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge))
+            f%j0(:) = curr0_rot(f, R)
           end associate
        end do
     end do
     ! Gauss-Legendre evaluation points on triangle areas
     do ktri = 1, mesh%ntri
        do k = 1, mesh%GL2_order
-          associate (f => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri), Z => mesh%GL2_Z(k, ktri))
-            call field(R, 0d0, Z, dum, B0_phi, dum, dum, dum, dB0R_dZ, dB0phi_dR, dum, dB0phi_dZ, dB0Z_dR, dum, dum)
-            f%j0(1) = -0.25d0 / pi * clight * dB0phi_dZ
-            f%j0(3) = 0.25d0 / pi * clight * (dB0phi_dR + B0_phi / R)
-            f%j0(2) = 0.25d0 / pi * clight * (dB0R_dZ - dB0Z_dR)
+          associate (f => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri))
+            f%j0(:) = curr0_rot(f, R)
           end associate
        end do
     end do
+
+  contains
+    function curr0_rot(f, R)
+      use mephit_util, only: clight, pi
+      type(field_cache_t), intent(in) :: f
+      real(dp), intent(in) :: R
+      real(dp), dimension(3) :: curr0_rot
+      curr0_rot = 0.25d0 / pi * clight * [-f%dB0_dZ(2), f%dB0_dZ(1) - f%dB0_dR(3), f%dB0_dR(2) + f%B0(2) / R]
+    end function curr0_rot
   end subroutine compute_curr0_rot
 
-  subroutine compute_curr0_geqdsk
+  subroutine curr0_geqdsk(R, psi, B0, dB0_dR, dB0_dZ, j0, dj0_dR, dj0_dZ)
     use mephit_util, only: clight, pi
-    integer :: ktri, kedge, k
-    real(dp) :: dp0_dpsi, d2p0_dpsi2, F, dF_dpsi, FdF_dpsi, d2F_dpsi2, fprime(equil%nw)
+    real(dp), intent(in) :: R, psi
+    real(dp), intent(in), dimension(3) :: B0, dB0_dR, dB0_dZ
+    real(dp), intent(out), dimension(3) :: j0, dj0_dR, dj0_dZ
+    real(dp) :: dp0_dpsi, d2p0_dpsi2, F, dF_dpsi, FdF_dpsi, d2F_dpsi2
 
-    fprime = equil%ffprim / equil%fpol
+    dp0_dpsi = psi_interpolator%eval(equil%pprime, psi)
+    d2p0_dpsi2 = psi_interpolator%eval(equil%pprime, psi, .true.)
+    F = psi_interpolator%eval(equil%fpol, psi)
+    FdF_dpsi = psi_interpolator%eval(equil%ffprim, psi)
+    dF_dpsi = psi_interpolator%eval(equil%fprime, psi)
+    d2F_dpsi2 = psi_interpolator%eval(equil%fprime, psi, .true.)
+    j0(1) = 0.25d0 / pi * clight * dF_dpsi * B0(1)
+    j0(3) = 0.25d0 / pi * clight * dF_dpsi * B0(3)
+    j0(2) = clight * (dp0_dpsi * R + 0.25d0 / (pi * R) * FdF_dpsi)
+    dj0_dR(1) = 0.25d0 / pi * clight * (dF_dpsi * dB0_dR(1) &
+         + R * B0(3) * B0(1) * d2F_dpsi2)
+    dj0_dZ(1) = 0.25d0 / pi * clight * (dF_dpsi * dB0_dZ(1) &
+         - R * B0(1) * B0(1) * d2F_dpsi2)
+    dj0_dR(3) = 0.25d0 / pi * clight * (dF_dpsi * dB0_dR(3) &
+         + R * B0(3) * B0(3) * d2F_dpsi2)
+    dj0_dZ(3) = 0.25d0 / pi * clight * (dF_dpsi * dB0_dZ(3) &
+         - R * B0(1) * B0(3) * d2F_dpsi2)
+    dj0_dR(2) = clight * (dp0_dpsi + d2p0_dpsi2 * R * R * B0(3) + &
+         0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2 - FdF_dpsi / R))
+    dj0_dZ(2) = clight * (-d2p0_dpsi2 * R * R * B0(1) + &
+         0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2))
+  end subroutine curr0_geqdsk
+
+  subroutine compute_curr0_geqdsk
+    integer :: ktri, kedge, k
+
     ! edge midpoints
     do kedge = 1, mesh%nedge
        associate (c => cache%mid_fields(kedge), R => mesh%mid_R(kedge))
-         dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
-         d2p0_dpsi2 = psi_interpolator%eval(equil%pprime, c%psi, .true.)
-         F = psi_interpolator%eval(equil%fpol, c%psi)
-         FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
-         dF_dpsi = psi_interpolator%eval(fprime, c%psi)
-         d2F_dpsi2 = psi_interpolator%eval(fprime, c%psi, .true.)
-         c%j0(1) = 0.25d0 / pi * clight * dF_dpsi * c%B0(1)
-         c%j0(3) = 0.25d0 / pi * clight * dF_dpsi * c%B0(3)
-         c%j0(2) = clight * (dp0_dpsi * R + 0.25d0 / (pi * R) * FdF_dpsi)
-         c%dj0_dR(1) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dR(1) &
-              + R * c%B0(3) * c%B0(1) * d2F_dpsi2)
-         c%dj0_dZ(1) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dZ(1) &
-              - R * c%B0(1) * c%B0(1) * d2F_dpsi2)
-         c%dj0_dR(3) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dR(3) &
-              + R * c%B0(3) * c%B0(3) * d2F_dpsi2)
-         c%dj0_dZ(3) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dZ(3) &
-              - R * c%B0(1) * c%B0(3) * d2F_dpsi2)
-         c%dj0_dR(2) = clight * (dp0_dpsi + d2p0_dpsi2 * R * R * c%B0(3) + &
-              0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2 - FdF_dpsi / R))
-         c%dj0_dZ(2) = clight * (-d2p0_dpsi2 * R * R * c%B0(1) + &
-              0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2))
+         call curr0_geqdsk(R, c%psi, c%B0, c%dB0_dR, c%dB0_dZ, c%j0, c%dj0_dR, c%dj0_dZ)
        end associate
     end do
     ! weighted triangle centroids
     do ktri = 1, mesh%ntri
        associate (c => cache%cntr_fields(ktri), R => mesh%cntr_R(ktri))
-         dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
-         d2p0_dpsi2 = psi_interpolator%eval(equil%pprime, c%psi, .true.)
-         F = psi_interpolator%eval(equil%fpol, c%psi)
-         FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
-         dF_dpsi = psi_interpolator%eval(fprime, c%psi)
-         d2F_dpsi2 = psi_interpolator%eval(fprime, c%psi, .true.)
-         c%j0(1) = 0.25d0 / pi * clight * dF_dpsi * c%B0(1)
-         c%j0(3) = 0.25d0 / pi * clight * dF_dpsi * c%B0(3)
-         c%j0(2) = clight * (dp0_dpsi * R + 0.25d0 / (pi * R) * FdF_dpsi)
-         c%dj0_dR(1) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dR(1) &
-              + R * c%B0(3) * c%B0(1) * d2F_dpsi2)
-         c%dj0_dZ(1) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dZ(1) &
-              - R * c%B0(1) * c%B0(1) * d2F_dpsi2)
-         c%dj0_dR(3) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dR(3) &
-              + R * c%B0(3) * c%B0(3) * d2F_dpsi2)
-         c%dj0_dZ(3) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dZ(3) &
-              - R * c%B0(1) * c%B0(3) * d2F_dpsi2)
-         c%dj0_dR(2) = clight * (dp0_dpsi + d2p0_dpsi2 * R * R * c%B0(3) + &
-              0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2 - FdF_dpsi / R))
-         c%dj0_dZ(2) = clight * (-d2p0_dpsi2 * R * R * c%B0(1) + &
-              0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2))
+         call curr0_geqdsk(R, c%psi, c%B0, c%dB0_dR, c%dB0_dZ, c%j0, c%dj0_dR, c%dj0_dZ)
        end associate
     end do
     ! Gauss-Legendre evaluation points on triangle edges
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
           associate (c => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge))
-            dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
-            d2p0_dpsi2 = psi_interpolator%eval(equil%pprime, c%psi, .true.)
-            F = psi_interpolator%eval(equil%fpol, c%psi)
-            FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
-            dF_dpsi = psi_interpolator%eval(fprime, c%psi)
-            d2F_dpsi2 = psi_interpolator%eval(fprime, c%psi, .true.)
-            c%j0(1) = 0.25d0 / pi * clight * dF_dpsi * c%B0(1)
-            c%j0(3) = 0.25d0 / pi * clight * dF_dpsi * c%B0(3)
-            c%j0(2) = clight * (dp0_dpsi * R + 0.25d0 / (pi * R) * FdF_dpsi)
-            c%dj0_dR(1) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dR(1) &
-                 + R * c%B0(3) * c%B0(1) * d2F_dpsi2)
-            c%dj0_dZ(1) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dZ(1) &
-                 - R * c%B0(1) * c%B0(1) * d2F_dpsi2)
-            c%dj0_dR(3) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dR(3) &
-                 + R * c%B0(3) * c%B0(3) * d2F_dpsi2)
-            c%dj0_dZ(3) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dZ(3) &
-                 - R * c%B0(1) * c%B0(3) * d2F_dpsi2)
-            c%dj0_dR(2) = clight * (dp0_dpsi + d2p0_dpsi2 * R * R * c%B0(3) + &
-                 0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2 - FdF_dpsi / R))
-            c%dj0_dZ(2) = clight * (-d2p0_dpsi2 * R * R * c%B0(1) + &
-                 0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2))
+            call curr0_geqdsk(R, c%psi, c%B0, c%dB0_dR, c%dB0_dZ, c%j0, c%dj0_dR, c%dj0_dZ)
           end associate
        end do
     end do
@@ -3189,27 +3144,7 @@ contains
     do ktri = 1, mesh%ntri
        do k = 1, mesh%GL2_order
           associate (c => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri))
-            dp0_dpsi = psi_interpolator%eval(equil%pprime, c%psi)
-            d2p0_dpsi2 = psi_interpolator%eval(equil%pprime, c%psi, .true.)
-            F = psi_interpolator%eval(equil%fpol, c%psi)
-            FdF_dpsi = psi_interpolator%eval(equil%ffprim, c%psi)
-            dF_dpsi = psi_interpolator%eval(fprime, c%psi)
-            d2F_dpsi2 = psi_interpolator%eval(fprime, c%psi, .true.)
-            c%j0(1) = 0.25d0 / pi * clight * dF_dpsi * c%B0(1)
-            c%j0(3) = 0.25d0 / pi * clight * dF_dpsi * c%B0(3)
-            c%j0(2) = clight * (dp0_dpsi * R + 0.25d0 / (pi * R) * FdF_dpsi)
-            c%dj0_dR(1) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dR(1) &
-                 + R * c%B0(3) * c%B0(1) * d2F_dpsi2)
-            c%dj0_dZ(1) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dZ(1) &
-                 - R * c%B0(1) * c%B0(1) * d2F_dpsi2)
-            c%dj0_dR(3) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dR(3) &
-                 + R * c%B0(3) * c%B0(3) * d2F_dpsi2)
-            c%dj0_dZ(3) = 0.25d0 / pi * clight * (dF_dpsi * c%dB0_dZ(3) &
-                 - R * c%B0(1) * c%B0(3) * d2F_dpsi2)
-            c%dj0_dR(2) = clight * (dp0_dpsi + d2p0_dpsi2 * R * R * c%B0(3) + &
-                 0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2 - FdF_dpsi / R))
-            c%dj0_dZ(2) = clight * (-d2p0_dpsi2 * R * R * c%B0(1) + &
-                 0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2))
+            call curr0_geqdsk(R, c%psi, c%B0, c%dB0_dR, c%dB0_dZ, c%j0, c%dj0_dR, c%dj0_dZ)
           end associate
        end do
     end do
