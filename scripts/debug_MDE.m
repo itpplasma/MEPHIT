@@ -35,7 +35,7 @@ hold on;
 plot(angle(rhs), '--r');
 hold off;
 legend('LHS', 'RHS');
-ylabel('arg MDE p_{n} / dyn cm^{-3}');
+ylabel('arg MDE p_{n} / rad');
 
 figure;
 subplot(1, 2, 1);
@@ -53,7 +53,7 @@ plot(arg(grad_pn(2, :)), ':b');
 plot(arg(grad_pn(3, :)), '--r');
 hold off;
 legend('R', 'phi', 'Z');
-ylabel('arg grad p_{n} / dyn cm^{-3}');
+ylabel('arg grad p_{n} / rad');
 
 lhs = B0 .* dot(h, grad_jnpar);
 rhs = inhom;
@@ -76,7 +76,7 @@ plot(angle(rhs), '--r');
 plot(angle(rhs_RT0), '-.g');
 hold off;
 legend('LHS', 'RHS', 'RHS (RT0)');
-ylabel('arg MDE j_{n}^{||} / statA cm^{-3}');
+ylabel('arg MDE j_{n}^{||} / rad');
 
 figure;
 subplot(1, 2, 1);
@@ -94,5 +94,4 @@ plot(angle(grad_jnpar(2, :)), ':b');
 plot(angle(grad_jnpar(3, :)), '--r');
 hold off;
 legend('R', 'phi', 'Z');
-ylabel('arg grad j_{n}^{||} / statA cm^{-3}');
-
+ylabel('arg grad j_{n}^{||} / rad');
