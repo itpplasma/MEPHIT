@@ -1029,6 +1029,7 @@ contains
        end do
     end do
     call solve_MDE(inhom, jnpar_B0%DOF)
+    call add_shielding_curret
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
           ktri = mesh%edge_tri(1, kedge)
@@ -1037,7 +1038,7 @@ contains
             call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
             call RT0_interp(Bn, ktri, R, Z, B_n)
             call L1_interp(jnpar_B0, ktri, R, Z, B0_jnpar)
-            B0_jnpar = (0d0, 0d0)  ! B0_jnpar * f%B0 ** 2  ! hack to omit parallel component
+            B0_jnpar = B0_jnpar * f%Bmod ** 2
             jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * R * &
                  (B0_jnpar * sum(f%B0 * n_f) - clight * sum(zd_cross(grad_pn, f%B0) * n_f) + &
                  sum(f%j0 * f%B0) * sum(B_n * n_f) - sum(B_n * f%B0) * sum(f%j0 * n_f)) / f%Bmod ** 2
@@ -1051,7 +1052,7 @@ contains
             call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
             call RT0_interp(Bn, ktri, R, Z, B_n)
             call L1_interp(jnpar_B0, ktri, R, Z, B0_jnpar)
-            B0_jnpar = (0d0, 0d0)  ! B0_jnpar * f%B0 ** 2  ! hack to omit parallel component
+            B0_jnpar = B0_jnpar * f%Bmod ** 2
             jn%comp_phi(ktri) = jn%comp_phi(ktri) + mesh%GL2_weights(k) * &
                  (B0_jnpar * sum(f%B0 * n_f) - clight * sum(zd_cross(grad_pn, f%B0) * n_f) + &
                  sum(f%j0 * f%B0) * sum(B_n * n_f) - sum(B_n * f%B0) * sum(f%j0 * n_f)) / f%Bmod ** 2
@@ -1064,8 +1065,37 @@ contains
        call debug_currn(pn, Bn, jn, inhom)
        call debug_MDE(pn, Bn, jn, jnpar_B0)
     end if
-    call add_sheet_current
   end subroutine compute_currn_MDE
+
+  subroutine add_shielding_current
+    use mephit_conf, only: conf_arr
+    use mephit_util, only: imun
+    use mephit_mesh, only: equil, mesh
+    integer :: m, m_res, kf, kpoi_min, kpoi_max
+    complex(dp) :: pn_outer, pn_inner
+
+    do m = mesh%m_res_min, mesh%m_res_max
+       m_res = -equil%cocos%sgn_q * m
+       if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then
+          kf = mesh%res_ind(m)
+          kpoi_min = mesh%kp_low(kf) + 1
+          kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
+          pn_outer = sum(exp(-imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max)) * &
+               pn%DOF(kpoi_min:kpoi_max)) / dble(mesh%kp_max(kf))
+          kf = mesh%res_ind(m) - 1
+          kpoi_min = mesh%kp_low(kf) + 1
+          kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
+          pn_inner = sum(exp(-imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max)) * &
+               pn%DOF(kpoi_min:kpoi_max)) / dble(mesh%kp_max(kf))
+          kf = mesh%res_ind(m)
+          kpoi_min = mesh%kp_low(kf) + 1
+          kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
+          jnpar_B0%DOF(kpoi_min:kpoi_max) = jnpar_B0%DOF(kpoi_min:kpoi_max) + &
+               mesh%shielding_coeff(m) * conf_arr%sheet_current_factor(m) * &
+               (pn_outer - pn_inner) * exp(imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max))
+       end if
+    end do
+  end subroutine add_shielding_current
 
   subroutine debug_currn(presn, magfn, currn, inhom)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
