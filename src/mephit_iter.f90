@@ -381,6 +381,8 @@ contains
        if (kiter <= 1) then
           call L1_write(pn, datafile, 'iter/pn' // postfix, &
                'pressure (after iteration)', 'dyn cm^-2')
+          call L1_write(pn, datafile, 'iter/jnpar_B0' // postfix, &
+               'parallel current density (after iteration)', 's^-1')  ! SI: H^-1
           call RT0_write(jn, datafile, 'iter/jn' // postfix, &
                'current density (after iteration)', 'statA cm^-2', 1)
           call RT0_write(Bn, datafile, 'iter/Bn' // postfix, &
@@ -428,6 +430,8 @@ contains
     deallocate(L2int_Bn_diff)
     call L1_write(pn, datafile, 'iter/pn', &
          'pressure (full perturbation)', 'dyn cm^-2')
+    call L1_write(pn, datafile, 'iter/jnpar_B0', &
+         'parallel current density (after iteration)', 's^-1')  ! SI: H^-1
     call RT0_write(Bn, datafile, 'iter/Bn', &
          'magnetic field (full perturbation)', 'G', 2)
     call RT0_write(Bnplas, datafile, 'iter/Bnplas', &
