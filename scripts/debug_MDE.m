@@ -11,12 +11,12 @@ h = [data.cache.mid_fields.B0_R(k_min:k_max) ./ B0; ...
      data.cache.mid_fields.B0_phi(k_min:k_max) ./ B0; ...
      data.cache.mid_fields.B0_Z(k_min:k_max) ./ B0];
 dp0_dpsi = data.cache.fs.dp_dpsi(kf);
-Bn_psi = data.debug_MDE.Bn_psi_contravar(k_min:k_max);
-grad_pn = data.debug_MDE.grad_pn(:, k_min:k_max);
-div_jnperp = data.debug_MDE.div_jnperp(k_min:k_max);
-div_jnperp_RT0 = data.debug_MDE.div_jnperp_RT0(k_min:k_max);
-grad_jnpar = data.debug_MDE.grad_jnpar(:, k_min:k_max);
-inhom = data.debug_currn.x(k_min+1:k_max+1);
+Bn_psi = data.debug_MDE_000.Bn_psi_contravar(k_min:k_max);
+grad_pn = data.debug_MDE_000.grad_pn(:, k_min:k_max);
+div_jnperp = data.debug_MDE_000.div_jnperp(k_min:k_max);
+div_jnperp_RT0 = data.debug_MDE_000.div_jnperp_RT0(k_min:k_max);
+grad_jnpar = data.debug_MDE_000.grad_jnpar(:, k_min:k_max);
+inhom = data.debug_currn_000.x(k_min+1:k_max+1);
 
 lhs = dot(h, grad_pn);
 rhs = -Bn_psi ./ B0 * dp0_dpsi;

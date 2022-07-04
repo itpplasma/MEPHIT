@@ -283,7 +283,7 @@ contains
     end if
     if (preconditioned) then
        ! calculate eigenvectors
-       call arnoldi_break(ndim, conf%nkrylov, conf%ritz_threshold, conf%ritz_rel_err, &
+       call arnoldi_break(ndim, conf%nkrylov, 3, conf%ritz_threshold, conf%ritz_rel_err, &
             next_iteration_arnoldi, info, nritz, eigvals, eigvecs)
        if (info /= 0) then
           write (logger%msg, '("Error ", i0, " in routine arnoldi_break")') info
@@ -414,6 +414,8 @@ contains
     if (preconditioned) then
        deallocate(Lr, eigvals, eigvecs)
     end if
+    call debug_MDE("debug_MDE", pn, Bn, jn, jnpar_B0)
+    call debug_currn("debug_currn", pn, Bn, jn)
     Bnplas%DOF(:) = Bn%DOF - vac%Bn%DOF
     Bnplas%comp_phi(:) = Bn%comp_phi - vac%Bn%comp_phi
     call h5_open_rw(datafile, h5id_root)
@@ -635,19 +637,20 @@ contains
     call solve_MDE(inhom, pn%DOF)
   end subroutine compute_presn
 
-  subroutine debug_MDE(presn, magfn, currn_perp, currn_par)
+  subroutine debug_MDE(group, presn, magfn, currn_perp, currn_par)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use field_eq_mod, only: psif, psib
     use mephit_conf, only: conf, datafile
     use mephit_util, only: imun, pi, clight, zd_cross
     use mephit_mesh, only: equil, mesh, cache, psi_interpolator, point_location
     use mephit_pert, only: L1_t, L1_interp, RT0_t, RT0_interp
+    character(len = *), intent(in) :: group
     type(L1_t), intent(in) :: presn
     type(RT0_t), intent(in) :: magfn
     type(RT0_t), intent(in) :: currn_perp
     type(L1_t), intent(in) :: currn_par
-    character(len = *), parameter :: grp = 'debug_MDE'
     integer(HID_T) :: h5id_root
+    character(len = len_trim(group)) :: grp
     integer :: ndim, kf, kp, kedge, ktri, k
     real(dp) :: dum, psi, B_0(3), j_0(3), stencil_R(5), stencil_Z(5), &
          dp0_dpsi, dF_dpsi, FdF_dpsi, fprime(equil%nw)
@@ -655,6 +658,7 @@ contains
     complex(dp), allocatable :: grad_pn(:, :), Bn_psi_contravar(:), grad_jnpar(:, :), &
          div_jnperp(:), div_jnperp_RT0(:)
 
+    grp = trim(adjustl(group))
     fprime = equil%ffprim / equil%fpol
     ndim = mesh%npoint - 1
     allocate(grad_pn(3, ndim), Bn_psi_contravar(ndim), grad_jnpar(3, ndim), &
@@ -838,7 +842,7 @@ contains
     if (first_call) then
        first_call = .false.
        call RT0_compute_tor_comp(jn)
-       call debug_currn(pn, Bn, jn)
+       call debug_currn("debug_currn_000", pn, Bn, jn)
     end if
     call add_sheet_current
     call RT0_compute_tor_comp(jn)
@@ -989,7 +993,7 @@ contains
     if (first_call) then
        first_call = .false.
        call RT0_compute_tor_comp(jn)
-       call debug_currn(pn, Bn, jn)
+       call debug_currn("debug_currn_000", pn, Bn, jn)
     end if
     call add_sheet_current
     call RT0_compute_tor_comp(jn)
@@ -1029,7 +1033,7 @@ contains
        end do
     end do
     call solve_MDE(inhom, jnpar_B0%DOF)
-    call add_shielding_curret
+    call add_shielding_current
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
           ktri = mesh%edge_tri(1, kedge)
@@ -1062,8 +1066,8 @@ contains
 
     if (first_call) then
        first_call = .false.
-       call debug_currn(pn, Bn, jn, inhom)
-       call debug_MDE(pn, Bn, jn, jnpar_B0)
+       call debug_currn("debug_currn_000", pn, Bn, jn, inhom)
+       call debug_MDE("debug_MDE_000", pn, Bn, jn, jnpar_B0)
     end if
   end subroutine compute_currn_MDE
 
@@ -1097,21 +1101,23 @@ contains
     end do
   end subroutine add_shielding_current
 
-  subroutine debug_currn(presn, magfn, currn, inhom)
+  subroutine debug_currn(group, presn, magfn, currn, inhom)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: datafile
     use mephit_util, only: clight, zd_cross
     use mephit_mesh, only: mesh, cache
     use mephit_pert, only: RT0_interp, L1_interp
+    character(len = *), intent(in) :: group
     type(L1_t), intent(in) :: presn
     type(RT0_t), intent(in) :: magfn, currn
     complex(dp), intent(in), optional :: inhom(:)
-    character(len = *), parameter :: grp = 'debug_currn'
+    character(len = len_trim(group)) :: grp
     integer(HID_T) :: h5id_root
     integer :: kf, kt, ktri
     complex(dp) :: zdum, Bn(3), jn(3)
     complex(dp), dimension(3, mesh%ntri) :: grad_pn, lorentz
 
+    grp = trim(adjustl(group))
     do kf = 1, mesh%nflux
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt

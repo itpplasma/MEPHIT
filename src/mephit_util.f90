@@ -1045,6 +1045,7 @@ contains
   !>
   !> @ndim dimension of the linear operator
   !> @nkrylov maximum dimension of the Krylov subspace
+  !> @nmin minimum dimension of the Krylov subspace
   !> @threshold find eigenvalues with absolute value abive this threshold
   !> @tol consider eigenvalues converged when this relative error is reached
   !> @next_iteration subroutine yielding matrix-vector product for given input vector
@@ -1058,10 +1059,10 @@ contains
   !> converged eigenvalues and \p eigvals and \p eigvecs are not allocated. If the
   !> LAPACK subroutines fail, \p eigvecs and possibly \p eigvals are not allocated
   !> and the `info` parameter is propagated via \p ierr.
-  subroutine arnoldi_break(ndim, nkrylov, threshold, tol, next_iteration, &
+  subroutine arnoldi_break(ndim, nkrylov, nmin, threshold, tol, next_iteration, &
        ierr, nritz, eigvals, eigvecs)
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
-    integer, intent(in) :: ndim, nkrylov
+    integer, intent(in) :: ndim, nkrylov, nmin
     real(dp), intent(in) :: threshold, tol
     interface
        subroutine next_iteration(old_val, new_val)
@@ -1088,7 +1089,22 @@ contains
     end if
     if (nkrylov < 1) then
        ierr = -2
-       print '("arnoldi_break: nkrylov = ", i0, " < 1")', ndim
+       print '("arnoldi_break: nkrylov = ", i0, " < 1")', nkrylov
+       return
+    end if
+    if (nkrylov > ndim) then
+       ierr = -2
+       print '("arnoldi_break: nkrylov = ", i0, " > ndim = ", i0)', nkrylov, ndim
+       return
+    end if
+    if (nmin < 1) then
+       ierr = -3
+       print '("arnoldi_break: nmin = ", i0, " < 1")', nmin
+       return
+    end if
+    if (nmin > nkrylov) then
+       ierr = -3
+       print '("arnoldi_break: nmin = ", i0, " > nkrylov = ", i0)', nmin, nkrylov
        return
     end if
     allocate(fold(ndim), fnew(ndim), fzero(ndim), qvecs(ndim, nkrylov), hmat(nkrylov, nkrylov), &
@@ -1128,7 +1144,7 @@ contains
        selection(:k) = abs(ritzvals(:k)) >= threshold
        nritz = count(selection)
        converged(:k) = abs(progression(:k, k) - progression(:k, k - 1)) / &
-            abs(progression(:k, k - 1)) < tol
+            abs(progression(:k, k - 1)) < tol .and. k >= nmin
        if (all(pack(converged, selection))) then
           n = k
           exit
