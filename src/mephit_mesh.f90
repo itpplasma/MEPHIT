@@ -825,6 +825,7 @@ contains
     call create_mesh_points
     call compare_gpec_coordinates
     call connect_mesh_points
+    call mesh_write_MFEM
     call write_FreeFem_mesh
     call cache_init(cache, mesh%nflux, 512)
     call compute_sample_polmodes(cache%sample_polmodes_half, cache%npol, .true.)
@@ -2112,6 +2113,33 @@ contains
          comment = 'Jacobian surface factor between flux surfaces')
     call h5_close(h5id_root)
   end subroutine mesh_write
+
+  subroutine mesh_write_MFEM
+    integer :: fid, ktri, kp, kpoi
+
+    open(newunit = fid, file = 'core_plasma.mesh', status = 'replace', &
+         form = 'formatted', action = 'write')
+    write (fid, '("MFEM mesh v1.0", /)')
+    write (fid, '("dimension", /, "2", /)')
+    write (fid, '("elements", /, i0)') mesh%ntri
+    do ktri = 1, mesh%ntri
+       ! <element attribute> <geometry type> <vertex indices ...>
+       ! attribute: 1 for plasma core, geomtry type: 2 for triangle
+       write (fid, '("1 2", 3(1x, i0))') mesh%tri_node(:, ktri) - 1
+    end do
+    write (fid, '(/, "boundary", /, i0)') mesh%kp_max(mesh%nflux)
+    do kp = 1, mesh%kp_max(mesh%nflux)
+       ! <boundary element attribute> <geometry type> <vertex indices ...>
+       ! attribute: 1 for plasma core, geomtry type: 1 for segment
+       write (fid, '("1 1", 2(1x, i0))') mesh%kp_low(mesh%nflux) + kp - 1, &
+            mesh%kp_low(mesh%nflux) + mod(kp, mesh%kp_max(mesh%nflux))
+    end do
+    write (fid, '(/, "vertices", /, i0, /, "2")') mesh%npoint
+    do kpoi = 1, mesh%npoint
+       write (fid, '(es24.16e3, 1x, es24.16e3)') mesh%node_R(kpoi), mesh%node_Z(kpoi)
+    end do
+    close(fid)
+  end subroutine mesh_write_MFEM
 
   subroutine write_FreeFem_mesh
     integer :: fid, kpoi, ktri, kp, kedge
