@@ -8,22 +8,22 @@ fi
 # if first argument is relative path, prefix it with second argument and return absolute path
 # if second argument is empty, use current path
 absolutize() {
-    case $1 in
+    case "$1" in
         /*)
-            echo $1
+            echo "$1"
             ;;
         *)
             if [ -z "$2" ]; then
-                echo $(realpath -m $1)
+                realpath -m "$1"
             else
-                echo $(realpath -m $2/$1)
+                realpath -m "$2/$1"
             fi
             ;;
     esac
 }
 
 replace_first_in_line() {
-    sed -Ee "$2 s/^ *'?([^' ]*)'?/$3/" -i $1
+    sed -Ee "$2 s/^ *'?([^' ]*)'?/$3/" -i "$1"
 }
 
 
@@ -66,16 +66,22 @@ mephit_init() {
     if [ -z "$config" ]; then
         echo "$scriptname: no config file given" >&2
         anyerr+=1
-    elif [ ! -r $(absolutize "$config") ]; then
-        echo "$scriptname: cannot read config file '$config'" >&2
-        anyerr+=1
+    else
+        config=$(absolutize "$config")
+        if [ ! -r "$config" ]; then
+            echo "$scriptname: cannot read config file '$config'" >&2
+            anyerr+=1
+        fi
     fi
     if [ -z "$geqdsk" ]; then
         echo "$scriptname: no GEQDSK file given" >&2
         anyerr+=1
-    elif [ ! -r $(absolutize "$geqdsk") ]; then
-        echo "$scriptname: cannot read GEQDSK file '$geqdsk'" >&2
-        anyerr+=1
+    else
+        geqdsk=$(absolutize "$geqdsk")
+        if [ ! -r "$geqdsk" ]; then
+            echo "$scriptname: cannot read GEQDSK file '$geqdsk'" >&2
+            anyerr+=1
+        fi
     fi
     if [ -z "$type" ]; then
         echo "$scriptname: no type given" >&2
@@ -92,7 +98,7 @@ mephit_init() {
         esac
     fi
     if [ $anyerr -gt 0 ]; then
-        exit 1
+        return
     fi
 
     for workdir; do
@@ -108,11 +114,11 @@ mephit_init() {
            "$datadir/field_divB0.inp" \
            "$datadir/preload_for_SYNCH.inp" \
            "$convexwall" \
-           $(absolutize "$geqdsk")
+           "$geqdsk"
         if [ "$type" != "kilca" ]; then
             ln -s "$datadir/AUG_B_coils.h5" "$workdir/AUG_B_coils.h5"
         fi
-        cp $(absolutize "$config") "$workdir/mephit.in"
+        cp "$config" "$workdir/mephit.in"
         replace_first_in_line "$workdir/field_divB0.inp" 7 "'${geqdsk##*/}'"     # gfile
         replace_first_in_line "$workdir/field_divB0.inp" 9 "'${convexwall##*/}'" # convex
     done
@@ -146,7 +152,7 @@ mephit_convert() {
     lasterr=$?
     if [ $lasterr -ne 0 ]; then
         echo "$scriptname: error $lasterr during coil geometry / vacuum field conversion"
-        anyerr=$lasterr
+        anyerr+=1
     fi
 }
 
@@ -186,7 +192,7 @@ mephit_run() {
                 ;;
         esac
     done
-    if [ $analysis -eq 0 -a $iterations -eq 0 -a $meshing -eq 0 ]; then
+    if [ $analysis -eq 0 ] && [ $iterations -eq 0 ] && [ $meshing -eq 0 ]; then
         # if no options are set, default to go through all phases
         analysis=1
         iterations=1
@@ -194,13 +200,14 @@ mephit_run() {
     fi
     runmode=$(( analysis << 2 | iterations << 1 | meshing << 0 ))
 
-    workdirs="$@"
-    if [ -z $workdirs ]; then
-        workdirs="$(pwd)"
+    # default to current directory if none is given on the command line
+    workdirs=( "$(pwd)" )
+    if [ $# -gt 0 ]; then
+        workdirs=( "$@" )
     fi
-    for workdir in $workdirs; do
+    for workdir in "${workdirs[@]}"; do
         if [ ! -d "$workdir" ]; then
-            echo "$scriptname: directory '$workdir' does not exist, skipping..."
+            echo "$scriptname: skipping nonexistent directory '$workdir'."
             anyerr+=1
             continue
         fi
@@ -224,7 +231,7 @@ mephit_run() {
         if [ "$lasterr" -ne 0 ]; then
             echo "$scriptname: mephit_run.x exited with code $lasterr during run in $workdir" | tee -a "$log" >&2
             popd
-            anyerr=$lasterr
+            anyerr+=1
             continue
         fi
         popd
@@ -235,7 +242,17 @@ mephit_test() {
     config=mephit.in
     log=mephit.log
 
-    for workdir; do
+    # default to current directory if none is given on the command line
+    workdirs=( "$(pwd)" )
+    if [ $# -gt 0 ]; then
+        workdirs=( "$@" )
+    fi
+    for workdir in "${workdirs[@]}"; do
+        if [ ! -d "$workdir" ]; then
+            echo "$scriptname: skipping nonexistent directory '$workdir'."
+            anyerr+=1
+            continue
+        fi
         pushd "$workdir"
         export GFORTRAN_ERROR_BACKTRACE=1
         # uncomment to use memcheck
@@ -247,7 +264,7 @@ mephit_test() {
         if [ "$lasterr" -ne 0 ]; then
             echo "$scriptname: mephit_test.x exited with code $lasterr during run in $workdir" | tee -a "$log" >&2
             popd
-            anyerr=$lasterr
+            anyerr+=1
             continue
         fi
         popd
@@ -259,15 +276,35 @@ mephit_plot() {
     data=mephit.h5
     log=mephit.log
 
-    for workdir; do
+    # default to current directory if none is given on the command line
+    workdirs=( "$(pwd)" )
+    if [ $# -gt 0 ]; then
+        workdirs=( "$@" )
+    fi
+    for workdir in "${workdirs[@]}"; do
+        if [ ! -d "$workdir" ]; then
+            echo "$scriptname: skipping nonexistent directory '$workdir'."
+            anyerr+=1
+            continue
+        fi
         pushd "$workdir"
-        python3 "$scriptdir/magdifplot.py" $(absolutize .) "$data"
+        python3 "$scriptdir/magdifplot.py" "$(pwd)" "$data"
         popd
     done
 }
 
 mephit_clean() {
-    for workdir; do
+    # default to current directory if none is given on the command line
+    workdirs=( "$(pwd)" )
+    if [ $# -gt 0 ]; then
+        workdirs=( "$@" )
+    fi
+    for workdir in "${workdirs[@]}"; do
+        if [ ! -d "$workdir" ]; then
+            echo "$scriptname: skipping nonexistent directory '$workdir'."
+            anyerr+=1
+            continue
+        fi
         pushd "$workdir"
         # files from mephit_run
         rm -f fort.* mephit.h5 mephit.log inputformaxwell_ext.msh inputformaxwell.msh box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat
@@ -282,7 +319,8 @@ mephit_help() {
 }
 
 # context
-bindir=$(realpath $(dirname $0))
+bindir=$(dirname "$0")
+bindir=$(realpath "$bindir")
 scriptdir=$(realpath -m "$bindir/../../scripts")
 datadir=$(realpath -m "$bindir/../../data")
 if [ -d "@tmpdir@" ]; then
@@ -308,7 +346,7 @@ case "$1" in
     *)
         echo "$scriptname: unrecognized mode '$1'"
         mephit_help "$@"
-        exit 1
+        anyerr+=1
         ;;
 esac
 exit $anyerr
