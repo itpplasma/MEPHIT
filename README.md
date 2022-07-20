@@ -62,9 +62,9 @@ Simulations consist of three phases:
 2. iterations
 3. analysis (poloidal modes, parallel currents)
 
-Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default.
+Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default. If no working directory is given, the current directory is used; non-existing directories are skipped.
 
-    build/bin/mephit run [-m | --meshing] [-i | --iterations] [-a | --analysis] <working_directory> ...
+    build/bin/mephit run [-m | --meshing] [-i | --iterations] [-a | --analysis] [<working_directory> ...]
 
 
 ## Tests

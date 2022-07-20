@@ -194,7 +194,16 @@ mephit_run() {
     fi
     runmode=$(( analysis << 2 | iterations << 1 | meshing << 0 ))
 
-    for workdir; do
+    workdirs="$@"
+    if [ -z $workdirs ]; then
+        workdirs="$(pwd)"
+    fi
+    for workdir in $workdirs; do
+        if [ ! -d "$workdir" ]; then
+            echo "$scriptname: directory '$workdir' does not exist, skipping..."
+            anyerr+=1
+            continue
+        fi
         pushd "$workdir"
         rm -f "$log"
         if [ -f "field_divB0_unprocessed.inp" ]; then
