@@ -123,7 +123,7 @@ set_source_files_properties(${MEPHIT_FORTRAN_SRC_FILES}
   src/mephit_test.f90
   src/vacfield.f90
   src/standardise_equilibrium.f90
-  PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS}")
+  PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS} ${LEGACY_FLAGS}")
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS}")
 
