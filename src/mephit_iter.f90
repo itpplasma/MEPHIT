@@ -905,10 +905,7 @@ contains
     do k = lbound(mesh%res_modes, 1), ubound(mesh%res_modes, 1)
        call compute_sample_Ipar(sample_Ipar, mesh%res_modes(k))
        write (dataset, '("postprocess/Imn_par_", i0)') mesh%res_modes(k)
-       call write_Ipar_symfluxcoord(mesh%res_modes(k), sample_Ipar, datafile, dataset)
-       if (conf%kilca_scale_factor /= 0) then
-          call write_Ipar(mesh%res_modes(k), sample_Ipar, datafile, 'postprocess/Imn_par_KiLCA')
-       end if
+       call write_Ipar(mesh%res_modes(k), sample_Ipar, datafile, dataset)
     end do
   end subroutine mephit_postprocess
 
@@ -952,6 +949,53 @@ contains
          lbound(sheet_flux), ubound(sheet_flux), unit = 'statA')
     call h5_close(h5id_root)
   end subroutine check_furth
+
+
+  !> calculate parallel current (density) on a finer grid
+  subroutine write_Ipar(m, sample_Ipar, file, dataset)
+    use mephit_util, only: imun
+    use mephit_mesh, only: coord_cache_ext_t
+    use mephit_pert, only: L1_interp
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    integer, intent(in) :: m
+    type(coord_cache_ext_t), dimension(:, :), intent(in) :: sample_Ipar
+    character(len = *), intent(in) :: file, dataset
+    integer(HID_T) :: h5id_root
+    integer :: nrad, npol, krad, kpol
+    complex(dp) :: jn_par
+    real(dp), dimension(size(sample_Ipar, 2)) :: rad, psi
+    complex(dp), dimension(size(sample_Ipar, 2)) :: jmn_par_neg, jmn_par_pos
+
+    npol = size(sample_Ipar, 1)
+    nrad = size(sample_Ipar, 2)
+    psi(:) = sample_Ipar(1, :)%psi
+    rad(:) = sample_Ipar(1, :)%rad
+    jmn_par_neg = (0d0, 0d0)
+    jmn_par_pos = (0d0, 0d0)
+    do krad = 1, nrad
+       do kpol = 1, npol
+          associate (s => sample_Ipar(kpol, krad))
+            call L1_interp(jnpar_B0, s%ktri, s%R, s%Z, jn_par)
+            jn_par = jn_par * sqrt(s%B0_2)
+            jmn_par_neg(krad) = jmn_par_neg(krad) + jn_par * exp(imun * abs(m) * s%theta)
+            jmn_par_pos(krad) = jmn_par_pos(krad) + jn_par * exp(-imun * abs(m) * s%theta)
+          end associate
+       end do
+       jmn_par_neg(krad) = jmn_par_neg(krad) / dble(npol)
+       jmn_par_pos(krad) = jmn_par_pos(krad) / dble(npol)
+    end do
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', psi, &
+         lbound(psi), ubound(psi))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad', rad, &
+         lbound(rad), ubound(rad))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_pos', jmn_par_pos, &
+         lbound(jmn_par_pos), ubound(jmn_par_pos))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_neg', jmn_par_neg, &
+         lbound(jmn_par_neg), ubound(jmn_par_neg))
+    call h5_close(h5id_root)
+  end subroutine write_Ipar
 
 
   !> calculate parallel current (density) on a finer grid
@@ -1107,11 +1151,12 @@ contains
          lbound(Delta_mn_pos), ubound(Delta_mn_pos))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_mn_neg', Delta_mn_neg, &
          lbound(Delta_mn_neg), ubound(Delta_mn_neg))
+    call h5_close(h5id_root)
   end subroutine write_Ipar_symfluxcoord
 
 
   !> calculate parallel current (density) on a finer grid
-  subroutine write_Ipar(m, sample_Ipar, file, dataset)
+  subroutine write_Ipar_KiLCA(m, sample_Ipar, file, dataset)
     use mephit_util, only: imun, pi, clight, bent_cyl2straight_cyl
     use mephit_mesh, only: mesh, coord_cache_ext_t
     use mephit_pert, only: RT0_interp
@@ -1210,5 +1255,7 @@ contains
          lbound(bndry_pos), ubound(bndry_pos))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_neg', bndry_neg, &
          lbound(bndry_neg), ubound(bndry_neg))
-  end subroutine write_Ipar
+    call h5_close(h5id_root)
+  end subroutine write_Ipar_KiLCA
+
 end module mephit_iter
