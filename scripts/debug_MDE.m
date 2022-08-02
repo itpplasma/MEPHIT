@@ -16,7 +16,7 @@ grad_pn = data.debug_MDE_000.grad_pn(:, k_min:k_max);
 div_jnperp = data.debug_MDE_000.div_jnperp(k_min:k_max);
 div_jnperp_RT0 = data.debug_MDE_000.div_jnperp_RT0(k_min:k_max);
 grad_jnpar = data.debug_MDE_000.grad_jnpar(:, k_min:k_max);
-inhom = data.debug_currn_000.x(k_min+1:k_max+1);
+inhom = data.debug_currn_000.inhom(k_min+1:k_max+1);
 
 lhs = dot(h, grad_pn);
 rhs = -Bn_psi ./ B0 * dp0_dpsi;

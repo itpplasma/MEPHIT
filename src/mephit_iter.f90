@@ -404,8 +404,6 @@ contains
     if (preconditioned) then
        deallocate(Lr, eigvals, eigvecs)
     end if
-    call debug_MDE("debug_MDE", pn, Bn, jn, jnpar_B0)
-    call debug_currn("debug_currn", pn, Bn, jn)
     Bnplas%DOF(:) = Bn%DOF - vac%Bn%DOF
     Bnplas%comp_phi(:) = Bn%comp_phi - vac%Bn%comp_phi
     call h5_open_rw(datafile, h5id_root)
@@ -786,6 +784,10 @@ contains
        first_call = .false.
        call debug_currn("debug_currn_000", pn, Bn, jn, inhom)
        call debug_MDE("debug_MDE_000", pn, Bn, jn, jnpar_B0)
+    else
+       ! hack: overwrite to save only last iteration step
+       call debug_currn("debug_currn", pn, Bn, jn, inhom)
+       call debug_MDE("debug_MDE", pn, Bn, jn, jnpar_B0)
     end if
   end subroutine compute_currn
 

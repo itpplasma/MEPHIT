@@ -9,11 +9,11 @@ k_off = old.mesh.npoint - 1;
 area = old.mesh.area(k_min:k_max);
 orient = double(old.mesh.orient(k_min:k_max)) * 2 - 1;
 e_f = old.mesh.tri_edge(1, k_min:k_max);
-
-I_f_old = old.debug_currn_000.I(e_f) .* orient;
-I_old = old.debug_currn_000.I((k_off+k_min):(k_off+k_max));
-grad_pn_old = old.debug_currn_000.grad_pn(:, k_min:k_max);
-lorentz_old = old.debug_currn_000.lorentz(:, k_min:k_max);
+% old HDF5 file had no prefix
+I_f_old = old.debug_currn.I(e_f) .* orient;
+I_old = old.debug_currn.I((k_off+k_min):(k_off+k_max));
+grad_pn_old = old.debug_currn.grad_pn(:, k_min:k_max);
+lorentz_old = old.debug_currn.lorentz(:, k_min:k_max);
 I_f_mde = mde.debug_currn_000.I(e_f) .* orient;
 I_mde = mde.debug_currn_000.I((k_off+k_min):(k_off+k_max));
 grad_pn_mde = mde.debug_currn_000.grad_pn(:, k_min:k_max);
