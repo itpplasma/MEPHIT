@@ -257,8 +257,8 @@ contains
     character(len = 4) :: postfix
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
     integer, parameter :: m_max = 24
-    type(polmodes_t) :: pmn
-    type(vec_polmodes_t) :: jmn
+    type(polmodes_t) :: pmn, jmnpar_Bmod
+    type(vec_polmodes_t) :: jmn, Bmn
 
     ! system dimension: number of non-redundant edges in core plasma
     ndim = mesh%nedge
@@ -338,7 +338,9 @@ contains
     allocate(L2int_Bn_diff(0:maxiter))
     L2int_Bn_diff = ieee_value(0d0, ieee_quiet_nan)
     call polmodes_init(pmn, m_max, mesh%nflux)
+    call polmodes_init(jmnpar_Bmod, m_max, mesh%nflux)
     call vec_polmodes_init(jmn, m_max, mesh%nflux)
+    call vec_polmodes_init(Bmn, m_max, mesh%nflux)
     call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
     call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
     Bn%DOF(:) = vac%Bn%DOF
@@ -377,12 +379,6 @@ contains
                'magnetic field (after iteration)', 'G', 1)
           call RT0_write(Bn_diff, datafile, 'iter/Bn_diff' // postfix, &
                'magnetic field (difference between iterations)', 'G', 1)
-          call L1_poloidal_modes(pn, pmn)
-          call polmodes_write(pmn, datafile, 'postprocess/pmn' // postfix, &
-               'pressure (after iteration)', 'dyn cm^-2')
-          call RT0_poloidal_modes(jn, jmn)
-          call vec_polmodes_write(jmn, datafile, 'postprocess/jmn' // postfix, &
-               'current density (after iteration)', 'statA cm^-2')
        else
           if (L2int_Bn_diff(kiter) > conf%ritz_threshold ** kiter * L2int_Bnvac .or. &
                L2int_Bn_diff(kiter) < conf%iter_rel_err * L2int_Bnvac) then
@@ -390,6 +386,18 @@ contains
              exit
           end if
        end if
+       call L1_poloidal_modes(pn, pmn)
+       call polmodes_write(pmn, datafile, 'iter/pmn' // postfix, &
+            'pressure (after iteration)', 'dyn cm^-2')
+       call L1_poloidal_modes(jnpar_B0, jmnpar_Bmod)
+       call polmodes_write(jmnpar_Bmod, datafile, 'iter/jmnpar_Bmod' // postfix, &
+            'parallel current density (after iteration)', 's^-1')  ! SI: H^-1
+       call RT0_poloidal_modes(jn, jmn)
+       call vec_polmodes_write(jmn, datafile, 'iter/jmn' // postfix, &
+            'current density (after iteration)', 'statA cm^-2')
+       call RT0_poloidal_modes(Bn, Bmn)
+       call vec_polmodes_write(Bmn, datafile, 'iter/Bmn' // postfix, &
+            'magnetic field (after iteration)', 'G')
     end do
     rel_err = L2int_Bn_diff(niter) / L2int_Bnvac
     write (logger%msg, '("Relative error after ", i0, " iterations: ", es24.16e3)') &
@@ -416,8 +424,8 @@ contains
     deallocate(L2int_Bn_diff)
     call L1_write(pn, datafile, 'iter/pn', &
          'pressure (full perturbation)', 'dyn cm^-2')
-    call L1_write(jnpar_B0, datafile, 'iter/jnpar_B0', &
-         'parallel current density (after iteration)', 's^-1')  ! SI: H^-1
+    call L1_write(jnpar_B0, datafile, 'iter/jnpar_Bmod', &
+         'parallel current density (full perturbation)', 's^-1')  ! SI: H^-1
     call RT0_write(Bn, datafile, 'iter/Bn', &
          'magnetic field (full perturbation)', 'G', 2)
     call RT0_write(Bnplas, datafile, 'iter/Bnplas', &
@@ -427,7 +435,9 @@ contains
     call RT0_deinit(Bn_prev)
     call RT0_deinit(Bn_diff)
     call polmodes_deinit(pmn)
+    call polmodes_deinit(jmnpar_Bmod)
     call vec_polmodes_deinit(jmn)
+    call vec_polmodes_deinit(Bmn)
 
   contains
 
