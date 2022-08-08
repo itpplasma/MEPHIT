@@ -60,6 +60,7 @@ class Mephit:
         self.post['triangulation'] = Triangulation(self.data['/mesh/node_R'][()], self.data['/mesh/node_Z'][()],
                                                    self.data['/mesh/tri_node'][()] - 1)
         self.post['psi_norm'] = self.normalize_psi(self.data['/cache/fs/psi'][()])
+        self.post['psi_half_norm'] = self.normalize_psi(self.data['/cache/fs_half/psi'][()])
         self.post['sgn_m_res'] = int(sign(-self.data['/cache/fs/q'][-1]))
         m_res = arange(self.data['/mesh/m_res_min'][()], self.data['/mesh/m_res_max'][()] + 1) * self.post['sgn_m_res']
         self.post['psi_norm_res'] = dict(zip(m_res, self.normalize_psi(self.data['/mesh/psi_res'][()])))
@@ -76,7 +77,7 @@ class Mephit:
         from numpy import array
         polmodes = {'m_max': 0, 'label': label, 'rho': dict(), 'var': dict()}
         polmodes['m_max'] = (self.data[var_name].shape[1] - 1) // 2
-        rho = self.post['psi_norm'] if L1 else self.normalize_psi(self.data['/cache/fs_half/psi'][()])
+        rho = self.post['psi_norm'] if L1 else self.post['psi_half_norm']
         for m in range(-polmodes['m_max'], polmodes['m_max'] + 1):
             polmodes['rho'][m] = rho
             polmodes['var'][m] = array(self.data[var_name][:, m + polmodes['m_max']], dtype='D') * conversion
@@ -236,19 +237,21 @@ class Plot1D(PlotObject):
     @classmethod
     def conv_plot(cls, work_dir, sup_eigval, L2int_Bnvac, L2int_Bn_diff, rel_err):
         from numpy import arange
-        from functools import partial
-        kiter = arange(0, L2int_Bn_diff.shape[0])
+        kiter = arange(1, L2int_Bn_diff.shape[0] + 1)
         config = {
-            'xlabel': 'iteration step $k$', 'ylabel': r'$\lVert \V{B}_{n} \rVert_{2}$ / \si{\maxwell}',
-            'legend': {'loc': 'upper right'}, 'title': 'Convergence Estimation',
+            'xlabel': 'iteration step $k$',
+            'ylabel': r'$\lVert \V{B}_{n} \rVert_{2}$ / \si{\maxwell}',
+            'title': r'Convergence Estimation: $\V{B}_{n}^{(0)} = \V{B}_{n}^{\vac}, ' +
+                     fr"\lvert \lambda_{{\text{{sup}}}} \rvert = {sup_eigval:3}$",
             'plotdata': [
                 {'x': kiter, 'y': L2int_Bnvac * sup_eigval ** kiter,
-                 'args': {'label': r'$\lvert \lambda_{\text{max}} \rvert^{k} \lVert \V{B}_{n}^{(0)} \rVert_{2}$'}},
-                {'x': kiter, 'y': L2int_Bn_diff, 'args': {'label': r'$\lVert \upDelta \V{B}_{n}^{(k)} \rVert_{2}$',
-                                                          'ls': '', 'marker': 'x'}}
+                 'args': {'label': r'$\lvert \lambda_{\text{sup}} \rvert^{k} \lVert \V{B}_{n}^{(0)} \rVert_{2}$'}},
+                {'x': kiter, 'y': L2int_Bn_diff,
+                 'args': {'label': r'$\lVert \V{B}_{n}^{(k)} - \V{B}_{n}^{(k-1)} \rVert_{2}$', 'ls': '', 'marker': 'x'}}
             ],
             'postprocess': [XTicks(kiter), LogY(),
-                            HLine(rel_err * L2int_Bnvac, label='breaking condition', lw=0.5, ls='--')]
+                            HLine(rel_err * L2int_Bnvac, label='breaking condition', lw=0.5, ls='--')],
+            'legend': {'loc': 'upper right'},
         }
         return cls(work_dir, 'plot_conv.pdf', config)
 
@@ -271,6 +274,9 @@ class PolmodePlots(PlotObject):
         for data in self.config['poldata']:
             if m in data['var'].keys():
                 axs[0].plot(data['rho'][m], self.config['comp'](data['var'][m]), label=data['label'])
+        if 'postprocess' in self.config.keys():
+            for f in self.config['postprocess']:
+                f(fig, axs[0])
         axs[0].legend(loc='upper left', fontsize='x-small')
         axs[0].set_title(f"$m = {m}$")
         axs[0].set_xlabel(self.config['xlabel'])
@@ -304,6 +310,9 @@ class PolmodePlots(PlotObject):
                 for data in self.config['poldata']:
                     if m in data['var'].keys():
                         axs[k].plot(data['rho'][m], self.config['comp'](data['var'][m]), label=data['label'])
+                if 'postprocess' in self.config.keys():
+                    for f in self.config['postprocess']:
+                        f(fig, axs[k])
                 axs[k].legend(loc='upper left', fontsize='x-small')
                 axs[k].set_title(('resonant ' if m in self.config['resonances'] else 'non-resonant ') + fr"$m = {m}$")
                 axs[k].set_xlabel(self.config['xlabel'])

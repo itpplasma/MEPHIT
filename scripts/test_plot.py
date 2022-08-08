@@ -1,5 +1,5 @@
 from mephit_plot import Gpec, Id, LogY, Mephit, ParallelPlotter, Plot1D, PlotObject, PolmodePlots, run_dir, \
-    set_matplotlib_defaults, XTicks
+    set_matplotlib_defaults, XTicks, YTicks
 from numpy import abs, angle, arange, arctan2, empty, full, nan, pi, sign, sum
 from functools import partial
 
@@ -17,7 +17,7 @@ class IterationPlots(PlotObject):
         pdf = PdfPages(path.join(self.work_dir, self.filename))
         ylims = [None, None, None]
         for kiter in range(0, self.config['niter']):
-            print(f"Plotting {self.filename}, k = {kiter} ...")
+            print(f"Plotting {self.filename}, k = {kiter + 1} ...")
             fig = Figure(figsize=three_squares)
             axs = fig.subplots(vert_plot, horz_plot)
             for k in range(horz_plot):
@@ -31,7 +31,7 @@ class IterationPlots(PlotObject):
                 axs[k].axvline(self.config['res_pos'], color='b', alpha=0.5, lw=0.5)
                 axs[k].set_xlabel(self.config['xlabel'])
                 axs[k].set_ylabel(self.config['ylabel'][k])
-            fig.suptitle(self.config['title'] + f", $k = {kiter}$")
+            fig.suptitle(self.config['title'] + f", $k = {kiter + 1}$")
             canvas = FigureCanvas(fig)
             fig.savefig(pdf, format='pdf', dpi=300)
         pdf.close()
@@ -187,47 +187,58 @@ if __name__ == "__main__":
     gpec_Bmn_vac = reference.get_polmodes('vacuum perturbation (GPEC)', sgn_dpsi, 'Jbgradpsi_x')
     config = {
         'xlabel': r'$\hat{\psi}$',
-        'ylabel': r'$\abs [B_{n}^{\perp} \sqrt{g} \lVert \nabla \psi \rVert]_{m} A^{-1}$ / \si{\tesla}',
+        'ylabel': r'$\abs\, [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\tesla}',
         'rho': testcase.post['psi_norm'], 'q': testcase.data['/cache/fs/q'][()],
         'resonances': testcase.post['psi_norm_res'], 'sgn_m_res': testcase.post['sgn_m_res'], 'omit_res': False,
         'poldata': [mephit_Bmn_vac, gpec_Bmn_vac, mephit_Bmn, gpec_Bmn], 'comp': abs,
         'res_neighbourhood': testcase.post['psi_norm_res_neighbourhood']
     }
     plotter.plot_objects.put(PolmodePlots(work_dir, 'GPEC_Bmn_psi_abs.pdf', config))
+    phase_ticks = YTicks(arange(-180, 180 + 1, 45))
+    config['postprocess'] = [phase_ticks]
     config['comp'] = partial(angle, deg=True)
-    config['ylabel'] = r'$\arg [B_{n}^{\perp} \sqrt{g} \lVert \nabla \psi \rVert]_{m} A^{-1}$ / \si{\degree}'
+    config['ylabel'] = r'$\arg\, [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\degree}'
     plotter.plot_objects.put(PolmodePlots(work_dir, 'GPEC_Bmn_psi_arg.pdf', config))
 
     # iteration comparisons
     n = testcase.data['/config/n'][()]
-    m = 3 * testcase.post['sgn_m_res']
+    m_res_min = testcase.data['/mesh/m_res_min'][()]
+    m_res_max = testcase.data['/mesh/m_res_max'][()]
     niter = testcase.data['/iter/niter'][()]
     nflux = testcase.data['/mesh/nflux'][()]
-    abs_pmn_iter = full((niter, nflux + 1), nan)
-    abs_jmnpar_Bmod_iter = full((niter, nflux + 1), nan)
-    abs_Bmn_rad_iter = full((niter, nflux), nan)
+    abs_pmn_iter = full((m_res_max - m_res_min + 1, niter, nflux + 1), nan)
+    abs_jmnpar_Bmod_iter = full((m_res_max - m_res_min + 1, niter, nflux + 1), nan)
+    abs_Bmn_rad_iter = full((m_res_max - m_res_min + 1, niter, nflux), nan)
     for kiter in range(0, niter):
         pmn = testcase.get_polmodes(None, f"/iter/pmn_{kiter:03}/coeff", 0.1, L1=True)
         jmnpar_Bmod = testcase.get_polmodes(None, f"/iter/jmnpar_Bmod_{kiter:03}/coeff", 1.0 / 29.9792458, L1=True)
         Bmn_rad = testcase.get_polmodes(None, f"/iter/Bmn_{kiter:03}/coeff_rad", conversion)
-        abs_pmn_iter[kiter, :] = abs(pmn['var'][m])
-        abs_jmnpar_Bmod_iter[kiter, :] = abs(jmnpar_Bmod['var'][m])
-        abs_Bmn_rad_iter[kiter, :] = abs(Bmn_rad['var'][m])
+        for m in range(m_res_min, m_res_max + 1):
+            m_res = m * testcase.post['sgn_m_res']
+            abs_pmn_iter[m - m_res_min, kiter, :] = abs(pmn['var'][m_res])
+            abs_jmnpar_Bmod_iter[m - m_res_min, kiter, :] = abs(jmnpar_Bmod['var'][m_res])
+            abs_Bmn_rad_iter[m - m_res_min, kiter, :] = abs(Bmn_rad['var'][m_res])
     config = {
-        'title': f"Poloidal Modes in Preconditioned Iterations $k$ for $n = {n}$, $m = {m}$",
         'xlabel': r'$\hat{\psi}$',
         'ylabel': [
             r'$\abs\, p_{mn}$ / \si{\pascal}',
             r'$\abs\, \bigl[ J_{n}^{\parallel} B_{0}^{-1} \bigr]_{m}$ / \si{\per\henry}',
-            r'$\abs\, [B_{n}^{\perp} \sqrt{g} \lVert \nabla \psi \rVert]_{m} A^{-1}$ / \si{\tesla}'
+            r'$\abs\, [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\tesla}'
         ],
-        'rho': [pmn['rho'][m], jmnpar_Bmod['rho'][m], Bmn_rad['rho'][m]],
+        'rho': [testcase.post['psi_norm'], testcase.post['psi_norm'], testcase.post['psi_half_norm']],
         'yscale': ['log', 'log', 'linear'],
-        'res_pos': testcase.post['psi_norm_res'][abs(m)],
         'niter': niter,
-        'plotdata': [abs_pmn_iter, abs_jmnpar_Bmod_iter, abs_Bmn_rad_iter]
     }
-    plotter.plot_objects.put(IterationPlots(work_dir, 'plot_iter.pdf', config))
+    for m in range(m_res_min, m_res_max + 1):
+        m_res = m * testcase.post['sgn_m_res']
+        config['title'] = f"Poloidal Modes in Preconditioned Iterations $k$ for $n = {n}$, $m = {m_res}$"
+        config['res_pos'] = testcase.post['psi_norm_res'][m]
+        config['plotdata'] = [
+            abs_pmn_iter[m - m_res_min, :, :],
+            abs_jmnpar_Bmod_iter[m - m_res_min, :, :],
+            abs_Bmn_rad_iter[m - m_res_min, :, :]
+        ]
+        plotter.plot_objects.put(IterationPlots(work_dir, f"plot_iter_{m}.pdf", config))
 
     # convergence estimation
     niter = testcase.data['/iter/niter'][()]
