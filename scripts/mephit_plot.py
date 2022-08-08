@@ -19,10 +19,15 @@ def set_matplotlib_defaults():
     rcParams['ytick.right'] = True
     rcParams['lines.linewidth'] = 0.75
     rcParams['axes.formatter.limits'] = (-3, 4)
-    rcParams['axes.prop_cycle'] = (cycler('color', ['k', 'tab:orange', 'tab:purple', 'tab:red', 'tab:cyan',
-                                                    'tab:brown', 'tab:gray', 'tab:green', 'tab:pink', 'tab:blue']) +
-                                   cycler('ls', ['-', '--', '-.', ':', (0, (5, 1.2, 1, 1.2, 1, 1.2)),
-                                                 '-', '--', '-.', ':', (0, (5, 1.2, 1, 1.2, 1, 1.2))]))
+    dash_dot_dot = (0, (5, 1.2, 1, 1.2, 1, 1.2))
+    dash_dash_dot = (0, (5, 1.2, 5, 1.2, 1, 1.2))
+    # https://www.w3schools.com/colors/colors_nbs.asp
+    # black, vivid orange, strong purple, vivid yellow, vivid light blue, vivid red,
+    # grayish yellow, medium gray, vivid green, strong purplish pink, strong blue, strong yellowish pink
+    rcParams['axes.prop_cycle'] = (cycler('color', ['#222222', '#f38400', '#875692', '#f3c300', '#a1caf1', '#be0032',
+                                                    '#c2b280', '#848482', '#008856', '#e68fac', '#0067a5', '#f99379']) +
+                                   cycler('ls', ['-', ':', '-.', '--', dash_dot_dot, dash_dash_dot,
+                                                 '-', ':', '-.', '--', dash_dot_dot, dash_dash_dot]))
     latex_preamble = path.join(scripts_dir, 'magdifplot.tex')
     rcParams['text.latex.preamble'] = fr"\input{{{latex_preamble}}}"
 
@@ -169,12 +174,25 @@ class ParallelPlotter:
         return
 
 
+class Id:
+    def __call__(self, fig, ax):
+        pass
+
+
 class XTicks:
     def __init__(self, ticks):
         self.ticks = ticks
 
     def __call__(self, fig, ax):
         ax.set_xticks(self.ticks)
+
+
+class YTicks:
+    def __init__(self, ticks):
+        self.ticks = ticks
+
+    def __call__(self, fig, ax):
+        ax.set_yticks(self.ticks)
 
 
 class LogY:

@@ -1,6 +1,6 @@
-from mephit_plot import Gpec, Mephit, ParallelPlotter, Plot1D, PlotObject, PolmodePlots, run_dir, \
-    set_matplotlib_defaults
-from numpy import abs, angle, full, nan, sign
+from mephit_plot import Gpec, Id, LogY, Mephit, ParallelPlotter, Plot1D, PlotObject, PolmodePlots, run_dir, \
+    set_matplotlib_defaults, XTicks
+from numpy import abs, angle, arange, arctan2, empty, full, nan, pi, sign, sum
 from functools import partial
 
 
@@ -37,6 +37,41 @@ class IterationPlots(PlotObject):
         pdf.close()
 
 
+class ComplexPlot(PlotObject):
+    def do_plot(self):
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+        from os import path
+        from numpy import abs, angle
+        super().do_plot()
+        horz_plot = 2
+        vert_plot = 1
+        two_squares = (6.6, 3.3)
+        fig = Figure(figsize=two_squares)
+        axs = fig.subplots(vert_plot, horz_plot, sharex='all')
+        labels = []
+        for plotdata in self.config['plotdata']:
+            axs[0].plot(plotdata['x'], abs(plotdata['y']), **plotdata['args'])
+            axs[1].plot(plotdata['x'], angle(plotdata['y'], deg=True), **plotdata['args'])
+            axs[1].set_yticks(arange(-180, 180+1, 45))
+            labels.append(plotdata['label'])
+        for k in range(horz_plot):
+            axs[k].axhline(0.0, color='k', alpha=0.5, lw=0.5)
+            if 'postprocess' in self.config.keys():
+                for f in self.config['postprocess']:
+                    f[k](fig, axs[k])
+            if 'xlabel' in self.config.keys():
+                axs[k].set_xlabel(self.config['xlabel'])
+            if 'ylabel' in self.config.keys():
+                axs[k].set_ylabel(self.config['ylabel'][k])
+        if 'legend' in self.config.keys():
+            fig.legend(labels=labels, **self.config['legend'])
+        if 'title' in self.config.keys():
+            fig.suptitle(self.config['title'])
+        canvas = FigureCanvas(fig)
+        fig.savefig(path.join(self.work_dir, self.filename))
+
+
 if __name__ == "__main__":
     set_matplotlib_defaults()
     plotter = ParallelPlotter()
@@ -47,6 +82,100 @@ if __name__ == "__main__":
     testcase.read_datafile()
     testcase.postprocess()
     sgn_dpsi = sign(testcase.data['/cache/fs/psi'][-1] - testcase.data['/cache/fs/psi'][0])
+
+    # MEPHIT validation
+    kfs = [testcase.data['/mesh/res_ind'][0], testcase.data['/mesh/res_ind'][0] // 2]
+    res_nonres = ['res', 'nonres']
+    iters = ['initial', 'final']
+    q = []
+    q_half = []
+    theta = []
+    theta_half = []
+    grad_pn = []
+    grad_pn_half = []
+    lorentz = []
+    lhs = []
+    rhs = []
+    for kf in kfs:
+        q.append(f"{testcase.data['/cache/fs/q'][kf]:.3f}")
+        q_half.append(f"{testcase.data['/cache/fs_half/q'][kf - 1]:.3f}")
+        # poloidal edge index = point index - 1
+        ke_min = testcase.data['/mesh/kp_low'][kf - 1]
+        ke_max = testcase.data['/mesh/kp_low'][kf - 1] + testcase.data['/mesh/kp_max'][kf - 1] - 1
+        kt_min = testcase.data['/mesh/kt_low'][kf - 1] + 1
+        kt_max = testcase.data['/mesh/kt_low'][kf - 1] + testcase.data['/mesh/kt_max'][kf - 1]
+        # rad to deg
+        theta.append(testcase.data['/mesh/node_theta_geom'][ke_min:ke_max] * 180.0 / pi)  # point index
+        theta_half.append(arctan2(testcase.data['/mesh/cntr_Z'][kt_min - 1:kt_max - 1] -
+                                  testcase.data['/mesh/Z_O'][()],
+                                  testcase.data['/mesh/cntr_R'][kt_min - 1:kt_max - 1] -
+                                  testcase.data['/mesh/R_O'][()]) * 180 / pi)
+        theta_half[-1][theta_half[-1] < 0.0] += 360.0
+        # dyn cm^-3 Mx^-1 to Pa Wb^-1
+        dp0_dpsi = testcase.data['/cache/fs/dp_dpsi'][kf - 1] * 1.0e+7
+        # G to T
+        Bmod = testcase.data['/cache/mid_fields/B0'][ke_min - 1:ke_max - 1] * 1.0e-4
+        h = empty((3, ke_max - ke_min))
+        h[0, :] = testcase.data['/cache/mid_fields/B0_R'][ke_min - 1:ke_max - 1] / Bmod * 1.0e-4
+        h[1, :] = testcase.data['/cache/mid_fields/B0_phi'][ke_min - 1:ke_max - 1] / Bmod * 1.0e-4
+        h[2, :] = testcase.data['/cache/mid_fields/B0_Z'][ke_min - 1:ke_max - 1] / Bmod * 1.0e-4
+        # dyn cm^-3 to N m^-3
+        grad_pn.append([testcase.data['/debug_MDE_000/grad_pn'][ke_min - 1:ke_max - 1, :].T * 10,
+                        testcase.data['/debug_MDE/grad_pn'][ke_min - 1:ke_max - 1, :].T * 10])
+        grad_pn_half.append([testcase.data['/debug_currn_000/grad_pn'][kt_min - 1:kt_max - 1, :].T * 10,
+                             testcase.data['/debug_currn/grad_pn'][kt_min - 1:kt_max - 1, :].T * 10])
+        lorentz.append([testcase.data['/debug_currn_000/lorentz'][kt_min - 1:kt_max - 1, :].T * 10,
+                        testcase.data['/debug_currn/lorentz'][kt_min - 1:kt_max - 1, :].T * 10])
+        # G^2 cm to T^2 m
+        Bn_psi = [testcase.data['/debug_MDE_000/Bn_psi_contravar'][ke_min - 1:ke_max - 1] * 1.0e-10,
+                  testcase.data['/debug_MDE/Bn_psi_contravar'][ke_min - 1:ke_max - 1] * 1.0e-10]
+        # LHS vs. RHS
+        lhs.append([])
+        rhs.append([])
+        for k_iter in range(len(iters)):
+            lhs[-1].append(sum(h * grad_pn[-1][k_iter], axis=0))
+            rhs[-1].append(-Bn_psi[k_iter] / Bmod * dp0_dpsi)
+    theta_ticks = XTicks(arange(0, 360 + 1, 45))
+    config = {
+        'xlabel': r'$\theta$ / \si{\degree}',
+        'legend': {'fontsize': 'x-small', 'loc': 'lower right'},
+    }
+    for k_iter in range(len(iters)):
+        config['postprocess'] = [[theta_ticks, theta_ticks]]
+        # MDE p_n
+        config['ylabel'] = [r'abs MDE $p_{n}$ / \si{\newton\per\cubic\meter}', r'arg MDE $p_{n}$ / \si{\degree}']
+        config['title'] = f"MDE for pressure perturbation, {iters[k_iter]} iteration"
+        config['plotdata'] = []
+        for k in range(len(kfs)):
+            # noinspection PyTypeChecker
+            config['plotdata'].append({'x': theta[k], 'y': lhs[k][k_iter], 'args': {'lw': 0.5},
+                                       'label': '$q = ' + q[k] + r', B_{0}^{-1} \V{B}_{0} \cdot \grad p_{n}$'})
+            config['plotdata'].append({'x': theta[k], 'y': lhs[k][k_iter], 'args': {'lw': 0.5},
+                                       'label': '$q = ' + q[k] + r', -B_{0}^{-1} B_{n}^{\psi} \partial_{\psi} p_{0}$'})
+        plotter.plot_objects.put(ComplexPlot(work_dir, f"plot_MDE_pn_{iters[k_iter]}.pdf", config))
+        # grad p_n
+        config['postprocess'].append([LogY(), Id()])
+        config['ylabel'] = [r'$\abs \grad p_{n}$ / \si{\newton\per\cubic\meter}', r'$\arg \grad p_{n}$ / \si{\degree}']
+        config['title'] = f"Solution for pressure perturbation, {iters[k_iter]} perturbation"
+        config['plotdata'] = []
+        comps = [r'\partial_{R} p_{n}', r'\tfrac{\im n}{R} p_{n}', r'\partial_{Z} p_{n}']
+        for k in range(len(kfs)):
+            for k_comp in range(len(comps)):
+                config['plotdata'].append({'x': theta[k], 'y': grad_pn[k][k_iter][k_comp, :], 'args': {'lw': 0.5},
+                                           'label': f"$q = {q[k]}, {comps[k_comp]}$"})
+        plotter.plot_objects.put(ComplexPlot(work_dir, f"plot_grad_pn_{iters[k_iter]}.pdf", config))
+        # iMHD
+        config['ylabel'] = [r'$\abs f$ / \si{\newton\per\cubic\meter}', r'$\arg f$ / \si{\degree}']
+        comps = [r'$R$ comp.', r'$\phi$ comp.', r'$Z$ comp.']
+        for k in range(len(kfs)):
+            config['title'] = f"Linearized iMHD force balance ($q = {q_half[k]}$), {iters[k_iter]} iteration"
+            config['plotdata'] = []
+            for k_comp in range(len(comps)):
+                config['plotdata'].append({'x': theta_half[k], 'y': lorentz[k][k_iter][k_comp, :], 'args': {'lw': 0.5},
+                                           'label': f"Lorentz force, {comps[k_comp]}"})
+                config['plotdata'].append({'x': theta_half[k], 'y': grad_pn_half[k][k_iter][k_comp, :],
+                                           'label': f"pressure gradient, {comps[k_comp]}", 'args': {'lw': 0.5}})
+            plotter.plot_objects.put(ComplexPlot(work_dir, f"plot_MHD_{res_nonres[k]}_{iters[k_iter]}.pdf", config))
 
     # GPEC comparison
     conversion = 1.0e-04 / testcase.data['/mesh/gpec_jacfac'][:, 16]
@@ -70,24 +199,6 @@ if __name__ == "__main__":
     plotter.plot_objects.put(PolmodePlots(work_dir, 'GPEC_Bmn_psi_arg.pdf', config))
 
     # iteration comparisons
-    mephit_jmn_000 = testcase.get_polmodes('initial perturbation', '/postprocess/jmn_000/coeff_pol')
-    mephit_jmn = testcase.get_polmodes('full perturbation', '/postprocess/jmn/coeff_pol')
-    config['comp'] = abs
-    config['ylabel'] = r'$\abs J_{mn\vartheta}$ / \si{\statampere\per\centi\meter\cubed}'
-    config['poldata'] = [mephit_jmn_000, mephit_jmn]
-    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_jmn_theta_abs.pdf', config))
-    config['comp'] = partial(angle, deg=True)
-    config['ylabel'] = r'$\arg J_{mn\vartheta}$ / \si{\degree}'
-    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_jmn_theta_arg.pdf', config))
-    mephit_pmn_000 = testcase.get_polmodes('initial perturbation', '/postprocess/pmn_000/coeff', L1=True)
-    mephit_pmn = testcase.get_polmodes('full perturbation', '/postprocess/pmn/coeff', L1=True)
-    config['comp'] = abs
-    config['ylabel'] = r'$\abs p_{mn}$ / \si{\dyne\per\centi\meter\squared}'
-    config['poldata'] = [mephit_pmn_000, mephit_pmn]
-    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_pmn_abs.pdf', config))
-    config['comp'] = partial(angle, deg=True)
-    config['ylabel'] = r'$\arg p_{mn}$ / \si{\degree}'
-    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_pmn_arg.pdf', config))
     n = testcase.data['/config/n'][()]
     m = 3 * testcase.post['sgn_m_res']
     niter = testcase.data['/iter/niter'][()]
