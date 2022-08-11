@@ -222,7 +222,7 @@ contains
     call RT0_read(Bn, datafile, 'iter/Bn')
     call RT0_read(Bnplas, datafile, 'iter/Bnplas')
     call RT0_read(jn, datafile, 'iter/jn')
-    call L1_read(jnpar_B0, datafile, 'iter/jnpar_B0')
+    call L1_read(jnpar_B0, datafile, 'iter/jnpar_Bmod')
   end subroutine iter_read
 
   subroutine iter_step
@@ -371,7 +371,7 @@ contains
        if (kiter <= 1) then
           call L1_write(pn, datafile, 'iter/pn' // postfix, &
                'pressure (after iteration)', 'dyn cm^-2')
-          call L1_write(jnpar_B0, datafile, 'iter/jnpar_B0' // postfix, &
+          call L1_write(jnpar_B0, datafile, 'iter/jnpar_Bmod' // postfix, &
                'parallel current density (after iteration)', 's^-1')  ! SI: H^-1
           call RT0_write(jn, datafile, 'iter/jn' // postfix, &
                'current density (after iteration)', 'statA cm^-2', 1)
@@ -875,18 +875,17 @@ contains
   end subroutine debug_currn
 
   subroutine mephit_postprocess
-    use magdata_in_symfluxcoor_mod, only: ntheta
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
     use mephit_conf, only: conf, datafile
-    use mephit_mesh, only: mesh, coord_cache_ext_t, compute_sample_Ipar
+    use mephit_mesh, only: mesh, cache
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, &
          polmodes_t, polmodes_init, polmodes_deinit, polmodes_write, &
          L1_poloidal_modes, RT0_poloidal_modes, vac
     integer, parameter :: m_max = 24
-    integer :: k
-    character(len = 24) :: dataset
+    integer(HID_T) :: h5id_root
     type(polmodes_t) :: polmodes
     type(vec_polmodes_t) :: vec_polmodes
-    type(coord_cache_ext_t) :: sample_Ipar(ntheta, conf%nrad_Ipar)
+    complex(dp), allocatable :: Ires(:)
 
     ! poloidal modes
     call polmodes_init(polmodes, m_max, mesh%nflux)
@@ -911,20 +910,21 @@ contains
     call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/jmn', &
          'poloidal modes of current density perturbation', 'statA cm^-2')
     call vec_polmodes_deinit(vec_polmodes)
-    ! parallel currents
-    do k = lbound(mesh%res_modes, 1), ubound(mesh%res_modes, 1)
-       call compute_sample_Ipar(sample_Ipar, mesh%res_modes(k))
-       write (dataset, '("postprocess/Imn_par_", i0)') mesh%res_modes(k)
-       call write_Ipar(mesh%res_modes(k), sample_Ipar, datafile, dataset)
-    end do
+    ! resonant currents
+    allocate(Ires(mesh%m_res_min:mesh%m_res_max))
+    call compute_Ires(cache%sample_Ires, cache%GL_weights, jnpar_B0, Ires)
+    call h5_open_rw(datafile, h5id_root)
+    call h5_add(h5id_root, 'postprocess/Ires', Ires, lbound(Ires), ubound(Ires), &
+         comment = 'resonant currents', unit = 'statA')
+    call h5_close(h5id_root)
   end subroutine mephit_postprocess
 
   subroutine check_furth(currn, Bmn_plas)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, datafile
     use mephit_util, only: imun, clight
     use mephit_mesh, only: equil, fs_half, mesh, cache
     use mephit_pert, only: RT0_t, vec_polmodes_t
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(RT0_t), intent(in) :: currn
     type(vec_polmodes_t), intent(in) :: Bmn_plas
     character(len = *), parameter :: dataset = 'debug_furth'
@@ -960,312 +960,65 @@ contains
     call h5_close(h5id_root)
   end subroutine check_furth
 
-
-  !> calculate parallel current (density) on a finer grid
-  subroutine write_Ipar(m, sample_Ipar, file, dataset)
+  !> compute resonant currents
+  subroutine compute_Ires(sample_Ires, GL_weights, jnpar_Bmod, Ires)
+    use mephit_conf, only: logger
     use mephit_util, only: imun
-    use mephit_mesh, only: coord_cache_ext_t
-    use mephit_pert, only: L1_interp
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    integer, intent(in) :: m
-    type(coord_cache_ext_t), dimension(:, :), intent(in) :: sample_Ipar
-    character(len = *), intent(in) :: file, dataset
-    integer(HID_T) :: h5id_root
-    integer :: nrad, npol, krad, kpol
-    complex(dp) :: jn_par
-    real(dp), dimension(size(sample_Ipar, 2)) :: rad, psi
-    complex(dp), dimension(size(sample_Ipar, 2)) :: jmn_par_neg, jmn_par_pos
+    use mephit_mesh, only: coord_cache_t, mesh, equil
+    use mephit_pert, only: L1_t, L1_interp
+    type(coord_cache_t), intent(in) :: sample_Ires(:, :, mesh%m_res_min:)
+    real(dp), intent(in) :: GL_weights(:, mesh%m_res_min:)
+    type(L1_t), intent(in) :: jnpar_Bmod
+    complex(dp), intent(out) :: Ires(mesh%m_res_min:)
+    integer :: nrad, npol, krad, kpol, m
+    complex(dp) :: jn_par, jmn_par
 
-    npol = size(sample_Ipar, 1)
-    nrad = size(sample_Ipar, 2)
-    psi(:) = sample_Ipar(1, :)%psi
-    rad(:) = sample_Ipar(1, :)%rad
-    jmn_par_neg = (0d0, 0d0)
-    jmn_par_pos = (0d0, 0d0)
-    do krad = 1, nrad
-       do kpol = 1, npol
-          associate (s => sample_Ipar(kpol, krad))
-            call L1_interp(jnpar_B0, s%ktri, s%R, s%Z, jn_par)
-            jn_par = jn_par * sqrt(s%B0_2)
-            jmn_par_neg(krad) = jmn_par_neg(krad) + jn_par * exp(imun * abs(m) * s%theta)
-            jmn_par_pos(krad) = jmn_par_pos(krad) + jn_par * exp(-imun * abs(m) * s%theta)
-          end associate
+    if (size(GL_weights, 1) /= size(sample_Ires, 2)) then
+       call logger%msg_arg_size('compute_Ires', &
+            'size(GL_weights, 1)', 'size(sample_Ires, 2)', &
+            size(GL_weights, 1), size(sample_Ires, 2))
+       if (logger%err) call logger%write_msg
+       error stop
+    end if
+    if (ubound(GL_weights, 2) /= mesh%m_res_max) then
+       call logger%msg_arg_size('compute_Ires', &
+            'ubound(GL_weights, 2)', 'mesh%m_res_max', &
+            ubound(GL_weights, 2), mesh%m_res_max)
+       if (logger%err) call logger%write_msg
+       error stop
+    end if
+    if (ubound(Ires, 1) /= mesh%m_res_max) then
+       call logger%msg_arg_size('compute_Ires', &
+            'ubound(Ires, 1)', 'mesh%m_res_max', &
+            ubound(Ires, 1), mesh%m_res_max)
+       if (logger%err) call logger%write_msg
+       error stop
+    end if
+    if (ubound(sample_Ires, 3) /= mesh%m_res_max) then
+       call logger%msg_arg_size('compute_Ires', &
+            'ubound(sample_Ires, 3)', 'mesh%m_res_max', &
+            ubound(sample_Ires, 3), mesh%m_res_max)
+       if (logger%err) call logger%write_msg
+       error stop
+    end if
+    npol = size(sample_Ires, 1)
+    nrad = size(sample_Ires, 2)
+    do m = mesh%m_res_min, mesh%m_res_max
+       Ires(m) = (0d0, 0d0)
+       do krad = 1, nrad
+          jmn_par = (0d0, 0d0)
+          do kpol = 1, npol
+             associate (s => sample_Ires(kpol, krad, m))
+               call L1_interp(jnpar_Bmod, s%ktri, s%R, s%Z, jn_par)
+               jn_par = jn_par * sqrt(s%B0_R ** 2 + s%B0_phi ** 2 + s%B0_Z ** 2)
+               ! jmn_par includes the area differential
+               jmn_par = jmn_par + s%sqrt_g / s%R * jn_par * &
+                    exp(imun * equil%cocos%sgn_q * m * s%theta)
+             end associate
+          end do
+          Ires(m) = Ires(m) + jmn_par / dble(npol) * GL_weights(krad, m)
        end do
-       jmn_par_neg(krad) = jmn_par_neg(krad) / dble(npol)
-       jmn_par_pos(krad) = jmn_par_pos(krad) / dble(npol)
     end do
-    call h5_open_rw(file, h5id_root)
-    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', psi, &
-         lbound(psi), ubound(psi))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad', rad, &
-         lbound(rad), ubound(rad))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_pos', jmn_par_pos, &
-         lbound(jmn_par_pos), ubound(jmn_par_pos))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_neg', jmn_par_neg, &
-         lbound(jmn_par_neg), ubound(jmn_par_neg))
-    call h5_close(h5id_root)
-  end subroutine write_Ipar
-
-
-  !> calculate parallel current (density) on a finer grid
-  subroutine write_Ipar_symfluxcoord(m, sample_Ipar, file, dataset)
-    use mephit_conf, only: conf
-    use mephit_util, only: imun, pi, clight
-    use mephit_mesh, only: coord_cache_ext_t
-    use mephit_pert, only: RT0_interp
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    integer, intent(in) :: m
-    type(coord_cache_ext_t), dimension(:, :), intent(in) :: sample_Ipar
-    character(len = *), intent(in) :: file, dataset
-    integer(HID_T) :: h5id_root
-    integer :: nrad, npol, krad, kpol
-    real(dp) :: B0_psi, dB0R_dpsi, dB0phi_dpsi, dB0Z_dpsi, &
-         B0_dB0_dpsi, dhphi2_dpsi, B0_theta, dB0R_dtheta, dB0phi_dtheta, dB0Z_dtheta, &
-         B0_dB0_dtheta, dhphi2_dtheta, common_term, dB0theta_dpsi, dB0psi_dtheta, &
-         dhphihtheta_dpsi, dhphihpsi_dtheta
-    complex(dp) :: vec(3), dvec_dR(3), dvec_dZ(3), &
-         jn_R, jn_Z, jn_phi, jn_par, Bn_R, Bn_Z, Bn_phi, &
-         dBnR_dR, dBnR_dZ, dBnZ_dR, dBnZ_dZ, &
-         Bn_psi, dBnpsi_dpsi, Bn_theta, Delta_mn, part_int, bndry
-    real(dp), dimension(size(sample_Ipar, 2)) :: rad, psi, I_char
-    complex(dp), dimension(size(sample_Ipar, 2)) :: jmn_par_neg, jmn_par_pos, &
-         part_int_neg, part_int_pos, bndry_neg, bndry_pos, Delta_mn_neg, Delta_mn_pos
-
-    npol = size(sample_Ipar, 1)
-    nrad = size(sample_Ipar, 2)
-    psi(:) = sample_Ipar(1, :)%psi
-    rad(:) = sample_Ipar(1, :)%rad
-    jmn_par_neg = (0d0, 0d0)
-    jmn_par_pos = (0d0, 0d0)
-    part_int_neg = (0d0, 0d0)
-    part_int_pos = (0d0, 0d0)
-    bndry_neg = (0d0, 0d0)
-    bndry_pos = (0d0, 0d0)
-    I_char = 0d0
-    Delta_mn_neg = (0d0, 0d0)
-    Delta_mn_pos = (0d0, 0d0)
-    do krad = 1, nrad
-       do kpol = 1, npol
-          associate (s => sample_Ipar(kpol, krad))
-            call RT0_interp(jn, s%ktri, s%R, s%Z, vec)
-            jn_R = vec(1)
-            jn_phi = vec(2)
-            jn_Z = vec(3)
-            ! include h^phi in current density
-            jn_par = (jn_R * s%B0_R + jn_Z * s%B0_Z + jn_phi * s%B0_phi) * &
-                 s%B0_phi / s%B0_2 * s%sqrt_g / s%R
-            jmn_par_neg(krad) = jmn_par_neg(krad) + jn_par * exp(imun * abs(m) * s%theta)
-            jmn_par_pos(krad) = jmn_par_pos(krad) + jn_par * exp(-imun * abs(m) * s%theta)
-            ! comparison with indirect calculation (Boozer and Nuehrenberg 2006)
-            call RT0_interp(Bn, s%ktri, s%R, s%Z, vec, dvec_dR = dvec_dR, dvec_dZ = dvec_dZ)
-            Bn_R = vec(1)
-            Bn_phi = vec(2)
-            Bn_Z = vec(3)
-            dBnR_dR = dvec_dR(1)
-            dBnZ_dR = dvec_dR(3)
-            dBnR_dZ = dvec_dZ(1)
-            dBnZ_dZ = dvec_dZ(3)
-            dB0phi_dpsi = (s%dB0phi_dR * s%dR_dpsi + s%dB0phi_dZ * s%dZ_dpsi) / s%R - &
-                 s%B0_phi * s%dR_dpsi / s%R ** 2
-            Bn_psi = s%R * (Bn_R * s%B0_Z - Bn_Z * s%B0_R)
-            dBnpsi_dpsi = s%dR_dpsi * (Bn_R * s%B0_Z - Bn_Z * s%B0_R) + s%R * ( &
-                 Bn_R * (s%dB0Z_dR * s%dR_dpsi + s%dB0Z_dZ * s%dZ_dpsi) - &
-                 Bn_Z * (s%dB0R_dR * s%dR_dpsi + s%dB0R_dZ * s%dZ_dpsi) + &
-                 (dBnR_dR * s%dR_dpsi + dBnR_dZ * s%dZ_dpsi) * s%B0_Z - &
-                 (dBnZ_dR * s%dR_dpsi + dBnZ_dZ * s%dZ_dpsi) * s%B0_R)
-            Delta_mn = s%dq_dpsi / s%q * ((Bn_psi + dBnpsi_dpsi) / s%B0_phi * s%R - &
-                 Bn_psi * dB0phi_dpsi / s%B0_phi ** 2 * s%R ** 2)
-            Delta_mn_neg(krad) = Delta_mn_neg(krad) + Delta_mn * exp(imun * abs(m) * s%theta)
-            Delta_mn_pos(krad) = Delta_mn_pos(krad) + Delta_mn * exp(-imun * abs(m) * s%theta)
-            I_char(krad) = I_char(krad) + s%B0_2 / &
-                 ((s%B0_R ** 2 + s%B0_Z ** 2) * s%q * s%q * s%R * s%B0_phi)
-            ! comparison with indirect calculation (Ampere's law and integration by parts)
-            B0_psi = s%B0_R * s%dR_dpsi + s%B0_Z * s%dZ_dpsi  ! covariant component
-            dB0R_dpsi = s%dB0R_dR * s%dR_dpsi + s%dB0R_dZ * s%dZ_dpsi
-            dB0phi_dpsi = s%dB0phi_dR * s%dR_dpsi + s%dB0phi_dZ * s%dZ_dpsi
-            dB0Z_dpsi = s%dB0Z_dR * s%dR_dpsi + s%dB0Z_dZ * s%dZ_dpsi
-            B0_dB0_dpsi = s%B0_R * dB0R_dpsi + s%B0_phi * dB0phi_dpsi + s%B0_Z * dB0Z_dpsi
-            dhphi2_dpsi = 2d0 * s%B0_phi * (dB0phi_dpsi / s%B0_2 - &
-                 s%B0_phi * B0_dB0_dpsi / s%B0_2 ** 2)
-            B0_theta = s%B0_R * s%dR_dtheta + s%B0_Z * s%dZ_dtheta  ! covariant component
-            dB0R_dtheta = s%dB0R_dR * s%dR_dtheta + s%dB0R_dZ * s%dZ_dtheta
-            dB0phi_dtheta = s%dB0phi_dR * s%dR_dtheta + s%dB0phi_dZ * s%dZ_dtheta
-            dB0Z_dtheta = s%dB0Z_dR * s%dR_dtheta + s%dB0Z_dZ * s%dZ_dtheta
-            B0_dB0_dtheta = s%B0_R * dB0R_dtheta + s%B0_phi * dB0phi_dtheta + s%B0_Z * dB0Z_dtheta
-            dhphi2_dtheta = 2d0 * s%B0_phi * (dB0phi_dtheta / s%B0_2 - &
-                 s%B0_phi * B0_dB0_dtheta / s%B0_2 ** 2)
-            common_term = s%B0_R * s%d2R_dpsi_dtheta + s%B0_Z * s%d2Z_dpsi_dtheta + &
-                 s%dB0R_dR * s%dR_dpsi * s%dR_dtheta + s%dB0Z_dZ * s%dZ_dpsi * s%dZ_dtheta
-            dB0theta_dpsi = common_term + &
-                 s%dB0R_dZ * s%dZ_dpsi * s%dR_dtheta + s%dB0Z_dR * s%dR_dpsi * s%dZ_dtheta
-            dB0psi_dtheta = common_term + &
-                 s%dB0R_dZ * s%dZ_dtheta * s%dR_dpsi + s%dB0Z_dR * s%dR_dtheta * s%dZ_dpsi
-            dhphihtheta_dpsi = ((dB0phi_dpsi / s%R - s%B0_phi * s%dR_dpsi / s%R ** 2) * B0_theta + &
-                 s%B0_phi / s%R * dB0theta_dpsi) / s%B0_2 - 2d0 * s%B0_phi / s%R * B0_theta * &
-                 B0_dB0_dpsi / s%B0_2 ** 2
-            dhphihpsi_dtheta = ((dB0phi_dtheta / s%R - s%B0_phi * s%dR_dtheta / s%R ** 2) * B0_psi + &
-                 s%B0_phi / s%R * dB0psi_dtheta) / s%B0_2 - 2d0 * s%B0_phi / s%R * B0_psi * &
-                 B0_dB0_dtheta / s%B0_2 ** 2
-            Bn_psi = Bn_R * s%dR_dpsi + Bn_Z * s%dZ_dpsi
-            Bn_theta = Bn_R * s%dR_dtheta + Bn_Z * s%dZ_dtheta
-            part_int = dhphi2_dpsi * Bn_theta - dhphi2_dtheta * Bn_psi + Bn_phi / s%R * &
-                 (dhphihtheta_dpsi - dhphihpsi_dtheta) + imun * conf%n * s%B0_phi / s%R * &
-                 (B0_psi * Bn_theta - B0_theta * Bn_psi) / s%B0_2
-            part_int_neg(krad) = part_int_neg(krad) + (part_int - imun * abs(m) * &
-                 s%B0_phi * (s%B0_phi * Bn_psi - B0_psi * Bn_phi)) * &
-                 exp(imun * abs(m) * s%theta)
-            part_int_pos(krad) = part_int_pos(krad) + (part_int + imun * abs(m) * &
-                 s%B0_phi * (s%B0_phi * Bn_psi - B0_psi * Bn_phi)) * &
-                 exp(-imun * abs(m) * s%theta)
-            bndry = s%B0_phi * (Bn_phi * B0_theta - Bn_theta * s%B0_phi) / s%B0_2
-            bndry_neg(krad) = bndry_neg(krad) + bndry * exp(imun * abs(m) * s%theta)
-            bndry_pos(krad) = bndry_pos(krad) + bndry * exp(-imun * abs(m) * s%theta)
-          end associate
-       end do
-       jmn_par_neg(krad) = jmn_par_neg(krad) / dble(npol)
-       jmn_par_pos(krad) = jmn_par_pos(krad) / dble(npol)
-       part_int_neg(krad) = part_int_neg(krad) / dble(npol) * 0.25d0 * clight / pi
-       part_int_pos(krad) = part_int_pos(krad) / dble(npol) * 0.25d0 * clight / pi
-       bndry_neg(krad) = bndry_neg(krad) / dble(npol) * 0.25d0 * clight / pi
-       bndry_pos(krad) = bndry_pos(krad) / dble(npol) * 0.25d0 * clight / pi
-       Delta_mn_neg(krad) = Delta_mn_neg(krad) / dble(npol)
-       Delta_mn_pos(krad) = Delta_mn_pos(krad) / dble(npol)
-       I_char(krad) = dble(npol) * 0.5d0 * clight / I_char(krad)
-    end do
-    call h5_open_rw(file, h5id_root)
-    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', psi, &
-         lbound(psi), ubound(psi))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad', rad, &
-         lbound(rad), ubound(rad))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_pos', jmn_par_pos, &
-         lbound(jmn_par_pos), ubound(jmn_par_pos))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_neg', jmn_par_neg, &
-         lbound(jmn_par_neg), ubound(jmn_par_neg))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_pos', part_int_pos, &
-         lbound(part_int_pos), ubound(part_int_pos))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_neg', part_int_neg, &
-         lbound(part_int_neg), ubound(part_int_neg))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_pos', part_int_pos, &
-         lbound(part_int_pos), ubound(part_int_pos))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_neg', part_int_neg, &
-         lbound(part_int_neg), ubound(part_int_neg))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_pos', bndry_pos, &
-         lbound(bndry_pos), ubound(bndry_pos))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_neg', bndry_neg, &
-         lbound(bndry_neg), ubound(bndry_neg))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/I_char', I_char, &
-         lbound(I_char), ubound(I_char))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_mn_pos', Delta_mn_pos, &
-         lbound(Delta_mn_pos), ubound(Delta_mn_pos))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_mn_neg', Delta_mn_neg, &
-         lbound(Delta_mn_neg), ubound(Delta_mn_neg))
-    call h5_close(h5id_root)
-  end subroutine write_Ipar_symfluxcoord
-
-
-  !> calculate parallel current (density) on a finer grid
-  subroutine write_Ipar_KiLCA(m, sample_Ipar, file, dataset)
-    use mephit_util, only: imun, pi, clight, bent_cyl2straight_cyl
-    use mephit_mesh, only: mesh, coord_cache_ext_t
-    use mephit_pert, only: RT0_interp
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    integer, intent(in) :: m
-    type(coord_cache_ext_t), dimension(:, :), intent(in) :: sample_Ipar
-    character(len = *), intent(in) :: file, dataset
-    integer(HID_T) :: h5id_root
-    integer :: nrad, npol, krad, kpol
-    real(dp) :: dB0R_drad, dB0phi_drad, dB0Z_drad, B0_dB0_drad, &
-         B0_theta, dB0theta_drad, dhz2_drad, dradhthetahz_drad
-    complex(dp) :: vec(3), jn_R, jn_Z, jn_phi, jn_par, Bn_R, Bn_Z, Bn_phi, &
-         Bn_rad, Bn_pol, Bn_tor, part_int, bndry
-    real(dp), dimension(size(sample_Ipar, 2)) :: rad, psi
-    complex(dp), dimension(size(sample_Ipar, 2)) :: jmn_par_neg, jmn_par_pos, &
-         part_int_neg, part_int_pos, bndry_neg, bndry_pos
-
-    npol = size(sample_Ipar, 1)
-    nrad = size(sample_Ipar, 2)
-    psi(:) = sample_Ipar(1, :)%psi
-    rad(:) = sample_Ipar(1, :)%rad
-    jmn_par_neg = (0d0, 0d0)
-    jmn_par_pos = (0d0, 0d0)
-    part_int_neg = (0d0, 0d0)
-    part_int_pos = (0d0, 0d0)
-    bndry_neg = (0d0, 0d0)
-    bndry_pos = (0d0, 0d0)
-    do krad = 1, nrad
-       do kpol = 1, npol
-          associate (s => sample_Ipar(kpol, krad))
-            call RT0_interp(jn, s%ktri, s%R, s%Z, vec)
-            jn_R = vec(1)
-            jn_phi = vec(2)
-            jn_Z = vec(3)
-            ! include h^z in current density
-            jn_par = (jn_R * s%B0_R + jn_Z * s%B0_Z + jn_phi * s%B0_phi) * s%B0_phi / s%B0_2
-            jmn_par_neg(krad) = jmn_par_neg(krad) + jn_par * exp(imun * abs(m) * s%theta)
-            jmn_par_pos(krad) = jmn_par_pos(krad) + jn_par * exp(-imun * abs(m) * s%theta)
-            ! comparison with indirect calculation (Ampere's law and integration by parts)
-            dB0R_drad = s%dB0R_dR * cos(s%theta) + s%dB0R_dZ * sin(s%theta)
-            dB0phi_drad = s%dB0phi_dR * cos(s%theta) + s%dB0phi_dZ * sin(s%theta)
-            dB0Z_drad = s%dB0Z_dR * cos(s%theta) + s%dB0Z_dZ * sin(s%theta)
-            B0_dB0_drad = s%B0_R * dB0R_drad + s%B0_phi * dB0phi_drad + s%B0_Z * dB0Z_drad
-            B0_theta = s%B0_Z * cos(s%theta) - s%B0_R * sin(s%theta)
-            dB0theta_drad = s%dB0Z_dR * cos(s%theta) ** 2 - s%dB0R_dZ * sin(s%theta) ** 2 + &
-                 (s%dB0Z_dZ - s%dB0R_dR) * sin(s%theta) * cos(s%theta)
-            dhz2_drad = 2d0 * s%B0_phi * (s%B0_2 * dB0phi_drad - s%B0_phi * B0_dB0_drad) / &
-                 s%B0_2 ** 2
-            dradhthetahz_drad = B0_theta * s%B0_phi / s%B0_2 + rad(krad) * &
-                 ((B0_theta * dB0phi_drad + dB0theta_drad * s%B0_phi) / s%B0_2 - &
-                 2d0 * B0_theta * s%B0_phi * B0_dB0_drad / s%B0_2 ** 2)
-            call RT0_interp(Bn, s%ktri, s%R, s%Z, vec)
-            Bn_R = vec(1)
-            Bn_phi = vec(2)
-            Bn_Z = vec(3)
-            call bent_cyl2straight_cyl(Bn_R, Bn_phi, Bn_Z, s%theta, &
-                 Bn_rad, Bn_pol, Bn_tor)
-            part_int = -rad(krad) * Bn_pol * dhz2_drad + Bn_tor * dradhthetahz_drad
-            part_int_neg(krad) = part_int_neg(krad) + (part_int + imun * s%B0_phi * &
-                 (dble(mesh%n) / mesh%R_O * rad(krad) * B0_theta + &
-                 abs(m) * s%B0_phi) * Bn_rad / s%B0_2) * exp(imun * abs(m) * s%theta)
-            part_int_pos(krad) = part_int_pos(krad) + (part_int + imun * s%B0_phi * &
-                 (dble(mesh%n) / mesh%R_O * rad(krad) * B0_theta - &
-                 abs(m) * s%B0_phi) * Bn_rad / s%B0_2) * exp(-imun * abs(m) * s%theta)
-            bndry = s%B0_phi * rad(krad) * (s%B0_phi * Bn_pol - B0_theta * Bn_tor) / s%B0_2
-            bndry_neg(krad) = bndry_neg(krad) + bndry * exp(imun * abs(m) * s%theta)
-            bndry_pos(krad) = bndry_pos(krad) + bndry * exp(-imun * abs(m) * s%theta)
-          end associate
-       end do
-       jmn_par_neg(krad) = jmn_par_neg(krad) / dble(npol)
-       jmn_par_pos(krad) = jmn_par_pos(krad) / dble(npol)
-       part_int_neg(krad) = part_int_neg(krad) / dble(npol) * 0.25d0 * clight / pi
-       part_int_pos(krad) = part_int_pos(krad) / dble(npol) * 0.25d0 * clight / pi
-       bndry_neg(krad) = bndry_neg(krad) / dble(npol) * 0.25d0 * clight / pi
-       bndry_pos(krad) = bndry_pos(krad) / dble(npol) * 0.25d0 * clight / pi
-    end do
-    call h5_open_rw(file, h5id_root)
-    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', psi, &
-         lbound(psi), ubound(psi))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad', rad, &
-         lbound(rad), ubound(rad))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_pos', jmn_par_pos, &
-         lbound(jmn_par_pos), ubound(jmn_par_pos))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/jmn_par_neg', jmn_par_neg, &
-         lbound(jmn_par_neg), ubound(jmn_par_neg))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_pos', part_int_pos, &
-         lbound(part_int_pos), ubound(part_int_pos))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_neg', part_int_neg, &
-         lbound(part_int_neg), ubound(part_int_neg))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_pos', part_int_pos, &
-         lbound(part_int_pos), ubound(part_int_pos))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/part_int_neg', part_int_neg, &
-         lbound(part_int_neg), ubound(part_int_neg))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_pos', bndry_pos, &
-         lbound(bndry_pos), ubound(bndry_pos))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/bndry_neg', bndry_neg, &
-         lbound(bndry_neg), ubound(bndry_neg))
-    call h5_close(h5id_root)
-  end subroutine write_Ipar_KiLCA
+  end subroutine compute_Ires
 
 end module mephit_iter
