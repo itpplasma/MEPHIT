@@ -241,7 +241,7 @@ contains
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_util, only: arnoldi_break
-    use mephit_mesh, only: mesh
+    use mephit_mesh, only: mesh, cache
     use mephit_pert, only: L1_write, &
          RT0_init, RT0_deinit, RT0_write, RT0_compute_tor_comp, RT0_L2int, &
          vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, &
@@ -262,6 +262,7 @@ contains
     integer, parameter :: m_max = 24
     type(polmodes_t) :: pmn, jmnpar_Bmod
     type(vec_polmodes_t) :: jmn, Bmn
+    complex(dp) :: Ires(mesh%m_res_min:mesh%m_res_max)
 
     ! system dimension: number of non-redundant edges in core plasma
     ndim = mesh%nedge
@@ -395,6 +396,11 @@ contains
        call L1_poloidal_modes(jnpar_B0, jmnpar_Bmod)
        call polmodes_write(jmnpar_Bmod, datafile, 'iter/jmnpar_Bmod' // postfix, &
             'parallel current density (after iteration)', 's^-1')  ! SI: H^-1
+       call compute_Ires(cache%sample_Ires, cache%GL_weights, jnpar_B0, Ires)
+       call h5_open_rw(datafile, h5id_root)
+       call h5_add(h5id_root, 'iter/Ires' // postfix, Ires, lbound(Ires), ubound(Ires), &
+            comment = 'resonant currents (after iteration)', unit = 'statA')
+       call h5_close(h5id_root)
        call RT0_poloidal_modes(jn, jmn)
        call vec_polmodes_write(jmn, datafile, 'iter/jmn' // postfix, &
             'current density (after iteration)', 'statA cm^-2')
@@ -729,7 +735,7 @@ contains
   end subroutine debug_MDE
 
   subroutine compute_currn
-    use mephit_mesh, only: mesh, cache
+    use mephit_mesh, only: mesh, cache, field_cache_t
     use mephit_pert, only: L1_interp, RT0_interp
     use mephit_util, only: pi, clight, zd_cross
     ! hack: first call in mephit_iter() is always without plasma response
@@ -762,46 +768,67 @@ contains
        end do
     end do
     call solve_MDE(inhom, jnpar_B0%DOF)
+    if (first_call) then
+       do kedge = 1, mesh%nedge
+          do k = 1, mesh%GL_order
+             ktri = mesh%edge_tri(1, kedge)
+             n_f = [mesh%edge_Z(kedge), 0d0, -mesh%edge_R(kedge)]
+             call project_combined(jn%DOF(kedge), ktri, cache%edge_fields(k, kedge), &
+                  mesh%GL_weights(k) * mesh%GL_R(k, kedge), mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), n_f)
+          end do
+       end do
+       n_f = [0d0, 1d0, 0d0]
+       do ktri = 1, mesh%ntri
+          do k = 1, mesh%GL2_order
+             call project_combined(jn%comp_phi(ktri), ktri, cache%area_fields(k, ktri), &
+                  mesh%GL2_weights(k), mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), n_f)
+          end do
+       end do
+       call debug_currn("debug_currn_initial", pn, Bn, jn, inhom)
+       call debug_MDE("debug_MDE_initial", pn, Bn, jn, jnpar_B0)
+       jn%DOF(:) = (0d0, 0d0)
+       jn%comp_phi(:) = (0d0, 0d0)
+    end if
     call add_shielding_current
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
           ktri = mesh%edge_tri(1, kedge)
           n_f = [mesh%edge_Z(kedge), 0d0, -mesh%edge_R(kedge)]
-          associate (f => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge), Z => mesh%GL_Z(k, kedge))
-            call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
-            call RT0_interp(Bn, ktri, R, Z, B_n)
-            call L1_interp(jnpar_B0, ktri, R, Z, B0_jnpar)
-            B0_jnpar = B0_jnpar * f%Bmod ** 2
-            jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * R * &
-                 (B0_jnpar * sum(f%B0 * n_f) - clight * sum(zd_cross(grad_pn, f%B0) * n_f) + &
-                 sum(f%j0 * f%B0) * sum(B_n * n_f) - sum(B_n * f%B0) * sum(f%j0 * n_f)) / f%Bmod ** 2
-          end associate
+          call project_combined(jn%DOF(kedge), ktri, cache%edge_fields(k, kedge), &
+               mesh%GL_weights(k) * mesh%GL_R(k, kedge), mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), n_f)
        end do
     end do
     n_f = [0d0, 1d0, 0d0]
     do ktri = 1, mesh%ntri
        do k = 1, mesh%GL2_order
-          associate (f => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri), Z => mesh%GL2_Z(k, ktri))
-            call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
-            call RT0_interp(Bn, ktri, R, Z, B_n)
-            call L1_interp(jnpar_B0, ktri, R, Z, B0_jnpar)
-            B0_jnpar = B0_jnpar * f%Bmod ** 2
-            jn%comp_phi(ktri) = jn%comp_phi(ktri) + mesh%GL2_weights(k) * &
-                 (B0_jnpar * sum(f%B0 * n_f) - clight * sum(zd_cross(grad_pn, f%B0) * n_f) + &
-                 sum(f%j0 * f%B0) * sum(B_n * n_f) - sum(B_n * f%B0) * sum(f%j0 * n_f)) / f%Bmod ** 2
-          end associate
+          call project_combined(jn%comp_phi(ktri), ktri, cache%area_fields(k, ktri), &
+               mesh%GL2_weights(k), mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), n_f)
        end do
     end do
 
     if (first_call) then
        first_call = .false.
-       call debug_currn("debug_currn_000", pn, Bn, jn, inhom)
-       call debug_MDE("debug_MDE_000", pn, Bn, jn, jnpar_B0)
     else
        ! hack: overwrite to save only last iteration step
-       call debug_currn("debug_currn", pn, Bn, jn, inhom)
-       call debug_MDE("debug_MDE", pn, Bn, jn, jnpar_B0)
+       call debug_currn("debug_currn_final", pn, Bn, jn, inhom)
+       call debug_MDE("debug_MDE_final", pn, Bn, jn, jnpar_B0)
     end if
+
+  contains
+    subroutine project_combined(comp, ktri, f, weight, R, Z, n_f)
+      complex(dp), intent(inout) :: comp
+      integer, intent(in) :: ktri
+      type(field_cache_t), intent(in) :: f
+      real(dp), intent(in) :: weight, R, Z, n_f(3)
+
+      call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
+      call RT0_interp(Bn, ktri, R, Z, B_n)
+      call L1_interp(jnpar_B0, ktri, R, Z, B0_jnpar)
+      B0_jnpar = B0_jnpar * f%Bmod ** 2
+      comp = comp + weight * &
+           (B0_jnpar * sum(f%B0 * n_f) - clight * sum(zd_cross(grad_pn, f%B0) * n_f) + &
+           sum(f%j0 * f%B0) * sum(B_n * n_f) - sum(B_n * f%B0) * sum(f%j0 * n_f)) / f%Bmod ** 2
+    end subroutine project_combined
   end subroutine compute_currn
 
   subroutine add_shielding_current
@@ -895,6 +922,9 @@ contains
     call L1_poloidal_modes(pn, polmodes)
     call polmodes_write(polmodes, datafile, 'postprocess/pmn', &
          'poloidal modes of pressure perturbation', 'dyn cm^-2')
+    call L1_poloidal_modes(jnpar_B0, polmodes)
+    call polmodes_write(polmodes, datafile, 'iter/jmnpar_Bmod', &
+         'parallel current density', 's^-1')  ! SI: H^-1
     call polmodes_deinit(polmodes)
     call vec_polmodes_init(vec_polmodes, m_max, mesh%nflux)
     call RT0_poloidal_modes(Bn, vec_polmodes)

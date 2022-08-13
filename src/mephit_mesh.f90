@@ -11,7 +11,8 @@ module mephit_mesh
   public :: flux_func_cache, flux_func_cache_init, flux_func_cache_deinit
   public :: mesh_t, mesh_write, mesh_read, mesh_deinit, &
        generate_mesh, write_cache, read_cache, point_location
-  public :: coord_cache_t, cache_t, cache_init, cache_deinit, cache_write, cache_read
+  public :: coord_cache_t, field_cache_t, cache_t, cache_write, cache_read, &
+       cache_init, cache_deinit
 
   ! testing and debugging procedures
   public :: check_mesh, write_illustration_data, flux_func_cache_check, &
