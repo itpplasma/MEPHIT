@@ -1,12 +1,14 @@
 module mephit_util
 
   use iso_fortran_env, only: dp => real64
+  use iso_c_binding, only: c_ptr, c_null_ptr, c_double_complex
 
   implicit none
 
   private
 
   ! types and associated procedures
+  public :: fft_t
   public :: sign_convention, g_eqdsk
   public :: interp1d
   public :: neumaier_accumulator_real, neumaier_accumulator_complex
@@ -26,7 +28,20 @@ module mephit_util
   real(dp), parameter :: ev2erg = 1.6021766d-12      !< convert eV to erg
   complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
 
-  type:: sign_convention
+  ! types and interfaces
+
+  type :: fft_t
+     integer :: N = 0
+     complex(c_double_complex), dimension(:), pointer :: samples => null()
+     complex(c_double_complex), dimension(:), pointer, private :: modes => null()
+     type(c_ptr), private :: plan_p = c_null_ptr, samples_p = c_null_ptr, modes_p = c_null_ptr
+   contains
+     procedure :: init => fft_init
+     procedure :: apply => fft_apply
+     procedure :: deinit => fft_deinit
+  end type fft_t
+
+  type :: sign_convention
     integer :: exp_Bpol, sgn_cyl, sgn_dpsi, sgn_Btor, sgn_Itor, &
          sgn_F, sgn_q, sgn_Bpol, sgn_pol, index
   end type sign_convention
@@ -283,6 +298,77 @@ contains
     call fgsl_integration_glfixed_table_free(table)
   end subroutine gauss_legendre_unit_interval
 
+  subroutine fft_init(fft, N)
+    use iso_c_binding, only: c_size_t, c_f_pointer
+    use fftw3, only: fftw_alloc_complex, fftw_plan_dft_1d, &
+         FFTW_FORWARD, FFTW_PATIENT, FFTW_DESTROY_INPUT
+    class(fft_t), intent(inout) :: fft
+    integer, intent(in) :: N
+
+    call fft_deinit(fft)
+    fft%N = N
+    fft%samples_p = fftw_alloc_complex(int(N, c_size_t))
+    call c_f_pointer(fft%samples_p, fft%samples, [N])
+    fft%modes_p = fftw_alloc_complex(int(N, c_size_t))
+    call c_f_pointer(fft%modes_p, fft%modes, [N])
+    fft%plan_p = fftw_plan_dft_1d(N, fft%samples, fft%modes, &
+         FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_DESTROY_INPUT))
+  end subroutine fft_init
+
+  subroutine fft_apply(fft, m_min, m_max, modes)
+    use iso_c_binding, only: c_associated
+    use fftw3, only: fftw_execute_dft
+    use mephit_conf, only: logger
+    class(fft_t), intent(inout) :: fft
+    integer, intent(in) :: m_min, m_max
+    complex(dp), dimension(m_min:), intent(inout) :: modes
+
+    if (ubound(modes, 1) /= m_max) then
+       call logger%msg_arg_size('fft_apply', &
+            'ubound(modes, 1)', 'm_max', &
+            ubound(modes, 1), m_max)
+       if (logger%err) call logger%write_msg
+       error stop
+    end if
+    if (.not. (c_associated(fft%plan_p) .and. &
+         c_associated(fft%modes_p) .and. &
+         c_associated(fft%samples_p))) then
+       logger%msg = 'Attempt to dereference null pointer in fft_apply'
+       if (logger%err) call logger%write_msg
+       error stop
+    end if
+    call fftw_execute_dft(fft%plan_p, fft%samples, fft%modes)
+    if (m_min >= 0 .and. m_max >= 0) then
+       modes(:) = fft%modes(m_min+1:m_max+1) / dble(fft%N)
+    else if (m_min < 0 .and. m_max < 0) then
+       modes(:) = fft%modes(fft%N+m_min+1:fft%N+m_max+1) / dble(fft%N)
+    else
+       modes(m_min:-1) = fft%modes(fft%N+m_min+1:fft%N) / dble(fft%N)
+       modes(0:m_max) = fft%modes(:m_max+1) / dble(fft%N)
+    end if
+  end subroutine fft_apply
+
+  subroutine fft_deinit(fft)
+    use iso_c_binding, only: c_associated, c_null_ptr
+    use fftw3, only: fftw_destroy_plan, fftw_free
+    class(fft_t), intent(inout) :: fft
+
+    fft%N = 0
+    fft%samples => null()
+    fft%modes => null()
+    if (c_associated(fft%plan_p)) then
+       call fftw_destroy_plan(fft%plan_p)
+       fft%plan_p = c_null_ptr
+    end if
+    if (c_associated(fft%modes_p)) then
+       call fftw_free(fft%modes_p)
+       fft%modes_p = c_null_ptr
+    end if
+    if (c_associated(fft%samples_p)) then
+       call fftw_free(fft%samples_p)
+       fft%samples_p = c_null_ptr
+    end if
+  end subroutine fft_deinit
 
   !> Transform components of a vector \f$ \vec{v} \f$ from straight cylinder coordinates
   !> \f$ (r, \theta, z) \f$ to bent cylinder coordinates \f$ (R, \varphi, Z) \f$.

@@ -1,7 +1,7 @@
 module mephit_mesh
 
   use iso_fortran_env, only: dp => real64
-  use mephit_util, only: g_eqdsk, interp1d
+  use mephit_util, only: g_eqdsk, interp1d, fft_t
 
   implicit none
 
@@ -19,7 +19,7 @@ module mephit_mesh
 
   ! module variables
   public :: equil, psi_interpolator, psi_fine_interpolator, fs, fs_half, mesh, &
-       cache
+       cache, fft
 
   type(g_eqdsk) :: equil
   type(interp1d) :: psi_interpolator
@@ -243,6 +243,7 @@ module mephit_mesh
   end type cache_t
 
   type(cache_t) :: cache
+  type(fft_t) :: fft
 
 contains
 
@@ -826,6 +827,7 @@ contains
     call compute_sample_polmodes(cache%sample_polmodes_half, cache%npol, .true.)
     call compute_sample_polmodes(cache%sample_polmodes, cache%npol, .false.)
     call compute_sample_Ires(cache%sample_Ires, cache%GL_weights, cache%GL_order)
+    call fft%init(cache%npol)
     call compute_gpec_jacfac
     call cache_equilibrium_field
     call init_flux_variables
@@ -1618,23 +1620,19 @@ contains
   end subroutine compute_shielding_auxiliaries
 
   subroutine compute_gpec_jacfac
-    use mephit_util, only: imun
     integer, parameter :: m_max = 16
-    integer :: kf, kpol, m
-    complex(dp) :: fourier_basis(-m_max:m_max)
+    integer :: kf, kpol
 
     allocate(mesh%gpec_jacfac(-m_max:m_max, mesh%nflux))
     mesh%gpec_jacfac(:, :) = (0d0, 0d0)
     do kf = 1, mesh%nflux
        do kpol = 1, cache%npol
           associate (s => cache%sample_polmodes_half(kpol, kf))
-            fourier_basis = [(exp(-imun * m * s%theta), m = -m_max, m_max)]
-            mesh%gpec_jacfac(:, kf) = mesh%gpec_jacfac(:, kf) + s%sqrt_g * &
-                 s%R * hypot(s%B0_Z, -s%B0_R) * fourier_basis
+            fft%samples(kpol) = s%sqrt_g * s%R * hypot(s%B0_Z, -s%B0_R)
           end associate
        end do
+       call fft%apply(-m_max, m_max, mesh%gpec_jacfac(:, kf))
     end do
-    mesh%gpec_jacfac(:, :) = mesh%gpec_jacfac / cache%npol
   end subroutine compute_gpec_jacfac
 
   !> Compute coarse grid for poloidal mode sampling points

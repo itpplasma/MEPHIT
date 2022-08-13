@@ -85,7 +85,8 @@ contains
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use mephit_util, only: C_F_string, get_field_filenames, init_field
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
-    use mephit_mesh, only: equil, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, psi_interpolator
+    use mephit_mesh, only: equil, mesh, cache, fft, psi_interpolator, &
+         generate_mesh, mesh_write, mesh_read, write_cache, read_cache
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
     use hdf5_tools, only: h5_init, h5overwrite
     integer(c_int), intent(in), value :: runmode
@@ -139,6 +140,7 @@ contains
        ! read in preprocessed data
        call mesh_read(mesh, datafile, 'mesh')
        call read_cache
+       call fft%init(cache%npol)
        call load_magdata_in_symfluxcoord
        call vac_init(vac, mesh%nedge, mesh%ntri, mesh%m_res_min, mesh%m_res_max)
        call vac_read(vac, datafile, 'vac')
@@ -166,6 +168,7 @@ contains
        end if
        call iter_deinit
     end if
+    call fft%deinit
     call mephit_deinit
   end subroutine mephit_run
 

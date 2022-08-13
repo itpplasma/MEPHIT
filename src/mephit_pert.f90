@@ -658,36 +658,32 @@ contains
   end subroutine vec_polmodes_write
 
   subroutine L1_poloidal_modes(elem, polmodes)
-    use mephit_util, only: imun
-    use mephit_mesh, only: mesh, cache
+    use mephit_mesh, only: mesh, cache, fft
     type(L1_t), intent(in) :: elem
     type(polmodes_t), intent(inout) :: polmodes
-    integer :: kf, kpol, m
-    complex(dp) :: comp, fourier_basis(-polmodes%m_max:polmodes%m_max)
+    integer :: kf, kpol
 
     polmodes%coeff(:, :) = (0d0, 0d0)
     polmodes%coeff(0, 0) = elem%DOF(1)
     do kf = 1, mesh%nflux
        do kpol = 1, cache%npol
           associate (s => cache%sample_polmodes(kpol, kf))
-            fourier_basis = [(exp(-imun * m * s%theta), m = -polmodes%m_max, polmodes%m_max)]
-            call L1_interp(elem, s%ktri, s%R, s%Z, comp)
-            polmodes%coeff(:, kf) = polmodes%coeff(:, kf) + comp * fourier_basis
+            call L1_interp(elem, s%ktri, s%R, s%Z, fft%samples(kpol))
           end associate
        end do
+       call fft%apply(-polmodes%m_max, polmodes%m_max, polmodes%coeff(:, kf))
     end do
-    polmodes%coeff(:, :) = polmodes%coeff / cache%npol
   end subroutine L1_poloidal_modes
 
   subroutine RT0_poloidal_modes(elem, vec_polmodes)
     use mephit_conf, only: conf
-    use mephit_util, only: imun, bent_cyl2straight_cyl
-    use mephit_mesh, only: equil, mesh, cache
+    use mephit_util, only: bent_cyl2straight_cyl
+    use mephit_mesh, only: equil, mesh, cache, fft
     type(RT0_t), intent(in) :: elem
     type(vec_polmodes_t), intent(inout) :: vec_polmodes
-    integer :: kf, kpol, m
-    complex(dp) :: fourier_basis(-vec_polmodes%m_max:vec_polmodes%m_max)
-    complex(dp) :: cyl_vec(3), comp_rad, comp_n, comp_pol, comp_tor
+    integer :: kf, kpol
+    complex(dp) :: cyl_vec(3)
+    complex(dp), dimension(cache%npol) :: comp_rad, comp_n, comp_pol, comp_tor
 
     vec_polmodes%coeff_rad(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_n(:, :) = (0d0, 0d0)
@@ -696,29 +692,29 @@ contains
     do kf = 1, mesh%nflux
        do kpol = 1, cache%npol
           associate (s => cache%sample_polmodes_half(kpol, kf))
-            fourier_basis = [(exp(-imun * m * s%theta), m = -vec_polmodes%m_max, vec_polmodes%m_max)]
             call RT0_interp(elem, s%ktri, s%R, s%Z, cyl_vec)
             if (conf%kilca_scale_factor /= 0) then
                call bent_cyl2straight_cyl(cyl_vec(1), cyl_vec(2), cyl_vec(3), &
-                    s%theta, comp_rad, comp_pol, comp_tor)
-               comp_n = comp_rad
+                    s%theta, comp_rad(kpol), comp_pol(kpol), comp_tor(kpol))
+               comp_n(kpol) = comp_rad(kpol)
             else
-               comp_rad = s%sqrt_g * (cyl_vec(1) * s%B0_Z - cyl_vec(3) * s%B0_R) * s%R
-               comp_n = (cyl_vec(1) * s%B0_Z - cyl_vec(3) * s%B0_R) / hypot(s%B0_R, s%B0_Z)
-               comp_pol = cyl_vec(1) * s%dR_dtheta + cyl_vec(3) * s%dZ_dtheta
-               comp_tor = cyl_vec(2)
+               comp_rad(kpol) = s%sqrt_g * (cyl_vec(1) * s%B0_Z - cyl_vec(3) * s%B0_R) * s%R
+               comp_n(kpol) = (cyl_vec(1) * s%B0_Z - cyl_vec(3) * s%B0_R) / hypot(s%B0_R, s%B0_Z)
+               comp_pol(kpol) = cyl_vec(1) * s%dR_dtheta + cyl_vec(3) * s%dZ_dtheta
+               comp_tor(kpol) = cyl_vec(2)
             end if
-            vec_polmodes%coeff_rad(:, kf) = vec_polmodes%coeff_rad(:, kf) + comp_rad * fourier_basis
-            vec_polmodes%coeff_n(:, kf) = vec_polmodes%coeff_n(:, kf) + comp_n * fourier_basis
-            vec_polmodes%coeff_pol(:, kf) = vec_polmodes%coeff_pol(:, kf) + comp_pol * fourier_basis
-            vec_polmodes%coeff_tor(:, kf) = vec_polmodes%coeff_tor(:, kf) + comp_tor * fourier_basis
           end associate
        end do
+       fft%samples(:) = comp_rad
+       call fft%apply(-vec_polmodes%m_max, vec_polmodes%m_max, vec_polmodes%coeff_rad(:, kf))
+       fft%samples(:) = comp_n
+       call fft%apply(-vec_polmodes%m_max, vec_polmodes%m_max, vec_polmodes%coeff_n(:, kf))
+       vec_polmodes%coeff_n(:, kf) = vec_polmodes%coeff_n(:, kf) * equil%cocos%sgn_dpsi
+       fft%samples(:) = comp_pol
+       call fft%apply(-vec_polmodes%m_max, vec_polmodes%m_max, vec_polmodes%coeff_pol(:, kf))
+       fft%samples(:) = comp_tor
+       call fft%apply(-vec_polmodes%m_max, vec_polmodes%m_max, vec_polmodes%coeff_tor(:, kf))
     end do
-    vec_polmodes%coeff_rad(:, :) = vec_polmodes%coeff_rad / cache%npol
-    vec_polmodes%coeff_n(:, :) = equil%cocos%sgn_dpsi * vec_polmodes%coeff_n / cache%npol
-    vec_polmodes%coeff_pol(:, :) = vec_polmodes%coeff_pol / cache%npol
-    vec_polmodes%coeff_tor(:, :) = vec_polmodes%coeff_tor / cache%npol
   end subroutine RT0_poloidal_modes
 
   subroutine vac_init(this, nedge, ntri, m_min, m_max)
@@ -1651,33 +1647,31 @@ contains
   subroutine debug_Bmnvac
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, datafile
-    use mephit_util, only: imun
-    use mephit_mesh, only: equil, mesh, cache
+    use mephit_mesh, only: equil, mesh, cache, fft
     character(len = *), parameter :: dataset = 'vac/Bn'
     integer, parameter :: m_max = 24
-    integer :: kf, kpol, m
+    integer :: kf, kpol
     integer(HID_T) :: h5id_root
-    complex(dp) :: Bn_R, Bn_Z, Bn_phi, Bn_contradenspsi, Bn_n
-    complex(dp) :: fourier_basis(-m_max:m_max), Bmn_contradenspsi(-m_max:m_max, mesh%nflux), &
-         Bmn_n(-m_max:m_max, mesh%nflux)
+    complex(dp) :: Bn_R, Bn_Z, Bn_phi
+    complex(dp), dimension(cache%npol) :: Bn_contradenspsi, Bn_n
+    complex(dp), dimension(-m_max:m_max, mesh%nflux) :: Bmn_contradenspsi, Bmn_n
 
     Bmn_contradenspsi(:, :) = (0d0, 0d0)
     Bmn_n(:, :) = (0d0, 0d0)
     do kf = 1, mesh%nflux
        do kpol = 1, cache%npol
           associate (s => cache%sample_polmodes_half(kpol, kf))
-            fourier_basis = [(exp(-imun * m * s%theta), m = -m_max, m_max)]
             call spline_bn(conf%n, s%R, s%Z, Bn_R, Bn_phi, Bn_Z)
-            Bn_contradenspsi = s%sqrt_g * (Bn_R * s%B0_Z - &
-                 Bn_Z * s%B0_R) * s%R
-            Bn_n = (Bn_R * s%B0_Z - Bn_Z * s%B0_R) / hypot(s%B0_R, s%B0_Z)
-            Bmn_contradenspsi(:, kf) = Bmn_contradenspsi(:, kf) + Bn_contradenspsi * fourier_basis
-            Bmn_n(:, kf) = Bmn_n(:, kf) + Bn_n * fourier_basis
+            Bn_contradenspsi(kpol) = s%sqrt_g * (Bn_R * s%B0_Z - Bn_Z * s%B0_R) * s%R
+            Bn_n(kpol) = (Bn_R * s%B0_Z - Bn_Z * s%B0_R) / hypot(s%B0_R, s%B0_Z)
           end associate
        end do
+       fft%samples(:) = Bn_contradenspsi
+       call fft%apply(-m_max, m_max, Bmn_contradenspsi(:, kf))
+       fft%samples(:) = Bn_n
+       call fft%apply(-m_max, m_max, Bmn_n(:, kf))
+       Bmn_n(:, kf) = Bmn_n(:, kf) * equil%cocos%sgn_dpsi
     end do
-    Bmn_contradenspsi(:, :) = Bmn_contradenspsi / cache%npol
-    Bmn_n(:, :) = equil%cocos%sgn_dpsi * Bmn_n / cache%npol
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, dataset // '/')
     call h5_add(h5id_root, dataset // '/comp_psi_contravar_dens', Bmn_contradenspsi, &
