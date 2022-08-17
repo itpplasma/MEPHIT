@@ -1,22 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Jul  7 11:34:35 2020
 
-@author: patrick
-"""
-
-from magdifplot import run_dir, magdif, statA_per_cm2_to_A_per_m2
+from mephit_plot import run_dir, set_matplotlib_defaults, Mephit
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 from os import path
 from glob import iglob
 
+set_matplotlib_defaults()
+statA_per_cm2_to_A_per_m2 = 1.0e+5 / 2.9979246e+10
 dyn_per_cm3_to_N_per_m3 = 10.0
 latex_coord = {'R': 'R', 'Z': 'Z', 'phi': r'\varphi'}
-for work_dir in iglob(run_dir + '/g*'):
+for work_dir in iglob(run_dir + '/GSE/g3*'):
     try:
-        testcase = magdif(work_dir)
+        testcase = Mephit(work_dir)
         testcase.read_datafile()
         psi = testcase.data['/debug_equil/psi'][()]
         kf = psi.size // 2

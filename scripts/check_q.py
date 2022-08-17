@@ -1,23 +1,19 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""
-Created on Tue Jun 30 13:48:52 2020
-
-@author: patrick
-"""
 
 from numpy import clip
-from magdifplot import run_dir, magdif
+from mephit_plot import run_dir, set_matplotlib_defaults, Mephit
 from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
 from matplotlib.figure import Figure
 from matplotlib.ticker import MultipleLocator
 from os import path
 from glob import iglob
 
+set_matplotlib_defaults()
 q_max = 10.0
-for work_dir in iglob(run_dir + '/g*'):
+for work_dir in iglob(run_dir + '/GSE/g3*'):
     try:
-        testcase = magdif(work_dir)
+        testcase = Mephit(work_dir)
         testcase.read_datafile()
         fig = Figure()
         ax = fig.subplots()
