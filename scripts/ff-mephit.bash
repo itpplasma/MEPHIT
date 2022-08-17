@@ -1,11 +1,11 @@
 #!/bin/bash
-scriptname=$0
+scriptname=${0##*/}
 scriptdir=$(dirname "$0")
 scriptdir=$(realpath "$scriptdir")
 shared_namedpipe=$1
 
 # check whether FreeFem++ runs with MPI and
-# use subshell and change error code to suppress error message
+# use subshell to suppress error message and change error code
 (FreeFem++-mpi -check_plugin MUMPS || false) > /dev/null 2>&1
 err_MPI=$?
 
@@ -25,7 +25,7 @@ ff_cmd=FreeFem++
 if [ $err_MPI -eq 0 ]; then
     ff_cmd=$ff_cmd-mpi
 fi
-ff_args=( "-fglut" "fglut_dump" )
+ff_args=( "-ne" "-fglut" "fglut_dump" )
 if [ $graphical -ne 0 ]; then
     ff_args=( "-wg" "-wait" "${ff_args[@]}" )
 else

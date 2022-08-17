@@ -1,9 +1,10 @@
 # How to run
 
-Prerequisites for running NEO-EQ are as follows.
+Prerequisites for running MEPHIT are as follows.
 
 - current GNU/Linux environment (Bash, coreutils, getopt, ...)
 - current Fortran compiler (tested with `gfortran` >= 9.2.0 and `ifort` 18.0.1)
+- [Doxygen](https://doxygen.nl/) and [TeX Live](https://www.tug.org/texlive/) for documentation
 - [CMake](https://cmake.org/)
 - [LAPACK](https://www.netlib.org/lapack/)
 - [SuiteSparse](https://github.com/DrTimothyAldenDavis/SuiteSparse)
@@ -13,46 +14,55 @@ Prerequisites for running NEO-EQ are as follows.
 - [FreeFem++](https://github.com/FreeFem/FreeFem-sources)
 - [HDF5](https://www.hdfgroup.org/downloads/hdf5)
 - [NetCDF](https://github.com/Unidata/netcdf-fortran)
-- Python 3 including the following packages:
-  - [NumPy](https://github.com/numpy/numpy)
-  - [SciPy](https://github.com/scipy/scipy)
-  - [matplotlib](https://github.com/matplotlib/matplotlib)
-  - [colorcet](https://github.com/holoviz/colorcet)
-  - [h5py](https://github.com/h5py/h5py)
-  - [h5pickle](https://github.com/DaanVanVugt/h5pickle)
-  - [netcdf4-python](https://github.com/Unidata/netcdf4-python)
+- Python 3 including packages listed in [`requirements.txt`](requirements.txt)
 
 ## Initial build
 
 Set the environment variables `LIBNEO_DIR` and `FGSL_PATH` if libneo and FGSL are not in their default location (adjacent to MEPHIT and in the system default, respectively). At ITPcp, you can put the following into your `~/.bashrc`:
 
-    export LIBNEO_DIR=/temp/AG-plasma/codes/libneo/build-master
-    export FGSL_PATH=/temp/AG-plasma/codes/contrib/fgsl-1.5.0/LIB
+```bash
+export LIBNEO_DIR=/temp/AG-plasma/codes/libneo/build-master
+export FGSL_PATH=/temp/AG-plasma/codes/contrib/fgsl-1.5.0/LIB
+```
 
 To build MEPHIT, run
 
-    mkdir build
-    cd build
-    cmake ..
-    make
+```bash
+mkdir build
+cd build
+cmake ..
+make
+```
 
 ## Coil geometry conversions
 
-    build/bin/mephit convert <input_type> <output_type> <source_directory> [<target_directory>]
+```bash
+build/bin/mephit convert <input_type> <output_type> <source_directory> [<target_directory>]
+```
 
 Converts coil geometry of `<input_type>` to `<output_type>`, reading appropriately named files from `<source_directory>` and writing to `<target_directory>`. If `<target_directory>` does not exist, it is created, and if it is omitted, it is set to the same value as `<source_directory>`. Possible values for `<input_type>` are `AUG`, `GPEC`, and `Nemov`. Possible values for `<output_type>` are `Fourier`, `GPEC`, and `Nemov`.
 
 In order to use the default configuration `vac_src = 2` (pre-computed Fourier modes), run
 
-    build/bin/mephit convert AUG Fourier data
+```bash
+build/bin/mephit convert AUG Fourier data
+```
 
 once to generate `data/AUG_B_coils.h5` which should take about 20 minutes and uses about 2 GB of disk space.
 
 ## Setting up working directories
 
-    build/bin/mephit init -c <config> -g <gfile> -t { asdex | kilca } <working_directory> ...
+```bash
+build/bin/mephit init { -c | --config } <config> { -g | --g-eqdsk } <gfile> { -t | --type } { asdex | kilca } <working_directory> ...
+```
 
-This copies the `<config>`, `<gfile>`, and other necessary files to each given `<working_directory>`. The `<config>` file can be taken from a list of templates `mephit_<gfile>.in` in the `data` directory.
+This copies the `<config>`, `<gfile>`, and other necessary files to each given `<working_directory>`. The `<config>` file and some sample gfiles can be taken from a list of templates `mephit_<gfile>.in` in the `data` directory, e.g. [`data/mephit_g33353.2335.in`](data/mephit_g33353.2335.in). Currently, only geometry files for ASDEX Upgrade and KiLCA (large aspect ratio) are available.
+
+The config file `mephit.in` needs do be adapated for each simulation:
+
+- In the `arrays` namelist, array indices must be within the range of `m_res_min` and `m_res_max`.
+- For ASDEX Upgrade, the coil currents must be set in `config%Ic`.
+- For KiLCA, the requested poloidal mode must be set in `config%kilca_pol_mode`. For `config%kilca_scale_factor`, a value of `1000` yields reasonable results. Last but not least, the HDF5 output of the KiLCA vacuum run has to provied via `config%kilca_vac_output`.
 
 ## Simulations
 
@@ -64,22 +74,42 @@ Simulations consist of three phases:
 
 Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default. If no working directory is given, the current directory is used; non-existing directories are skipped.
 
-    build/bin/mephit run [-m | --meshing] [-i | --iterations] [-a | --analysis] [<working_directory> ...]
+```bash
+build/bin/mephit run [-m | --meshing] [-i | --iterations] [-a | --analysis] [<working_directory> ...]
+```
 
 ## Tests
 
 To run some default testing/debugging routines after the meshing phase, use
 
-    build/bin/mephit test [<working_directory> ...]
+```bash
+build/bin/mephit test [<working_directory> ...]
+```
 
 ## Plots
 
 Default plots are generated by running
 
-    build/bin/mephit plot [<working_directory> ...]
+```bash
+build/bin/mephit plot [<working_directory> ...]
+```
 
 ## Cleanup
 
-    build/bin/mephit clean [<working_directory> ...]
+```bash
+build/bin/mephit clean [<working_directory> ...]
+```
 
 This removes all files generated by the `run` and `plot` commands in each `<working_directory>`.
+
+# Documentation
+
+To generate documentation, run the following commands.
+
+```bash
+cd DOC
+latexmk magdif.tex
+doxygen doxygen.conf
+```
+
+While both the LaTeX documentation of the method and the Doxygen documentation of the source code are horribly out of date, the `EXTRACT_ALL = YES` option of Doxygen is useful for generating call graphs.

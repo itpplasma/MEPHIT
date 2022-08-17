@@ -1,0 +1,7 @@
+colorcet>=3.0.0
+h5pickle
+h5py
+matplotlib
+netCDF4
+numpy
+scipy
