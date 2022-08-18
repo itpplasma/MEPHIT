@@ -1,6 +1,6 @@
 from mephit_plot import Gpec, HLine, Id, LogY, Mephit, ParallelPlotter, Plot1D, PlotObject, PolmodePlots, run_dir, \
     set_matplotlib_defaults, XTicks, YTicks
-from numpy import abs, angle, arange, arctan2, argmax, empty, full, nan, pi, sign, sum
+from numpy import abs, angle, arange, arctan2, argmax, full, nan, pi, sign, sum
 from functools import partial
 
 
@@ -86,7 +86,7 @@ if __name__ == "__main__":
 
     work_dir = run_dir + '/33353_2325'
     testcase = Mephit(work_dir)
-    testcase.read_datafile()
+    testcase.open_datafile()
     testcase.postprocess()
     sgn_dpsi = sign(testcase.data['/cache/fs/psi'][-1] - testcase.data['/cache/fs/psi'][0])
 
@@ -122,7 +122,7 @@ if __name__ == "__main__":
         dp0_dpsi = testcase.data['/cache/fs/dp_dpsi'][kf - 1] * 1.0e+7
         # G to T
         Bmod = testcase.data['/cache/mid_fields/B0'][ke_min - 1:ke_max - 1] * 1.0e-4
-        h = empty((3, ke_max - ke_min))
+        h = full((3, ke_max - ke_min), nan)
         h[0, :] = testcase.data['/cache/mid_fields/B0_R'][ke_min - 1:ke_max - 1] / Bmod * 1.0e-4
         h[1, :] = testcase.data['/cache/mid_fields/B0_phi'][ke_min - 1:ke_max - 1] / Bmod * 1.0e-4
         h[2, :] = testcase.data['/cache/mid_fields/B0_Z'][ke_min - 1:ke_max - 1] / Bmod * 1.0e-4
@@ -183,7 +183,7 @@ if __name__ == "__main__":
     mephit_Bmn = testcase.get_polmodes('full perturbation (MEPHIT)', '/postprocess/Bmn/coeff_rad', conversion)
     mephit_Bmn_vac = testcase.get_polmodes('vacuum perturbation (MEPHIT)', '/postprocess/Bmn_vac/coeff_rad', conversion)
     reference = Gpec(work_dir, 2)
-    reference.read_datafile()
+    reference.open_datafiles()
     gpec_Bmn = reference.get_polmodes('full perturbation (GPEC)', sgn_dpsi, 'Jbgradpsi')
     gpec_Bmn_vac = reference.get_polmodes('vacuum perturbation (GPEC)', sgn_dpsi, 'Jbgradpsi_x')
     config = {
@@ -271,3 +271,5 @@ if __name__ == "__main__":
     plotter.plot_objects.put(Plot1D.conv_plot(work_dir, sup_eigval, L2int_Bnvac, L2int_Bn_diff, rel_err))
 
     plotter.finish()
+    testcase.close_datafile()
+    reference.close_datafiles()

@@ -39,15 +39,16 @@ class Mephit:
         self.data = None
         self.post = dict()
 
-    def __del__(self):
+    def close_datafile(self):
         from h5pickle import File
         if isinstance(self.data, File):
             self.data.close()
 
-    def read_datafile(self):
+    def open_datafile(self):
         from h5py import get_config as h5py_hack
         from h5pickle import File
         from os import path
+        self.close_datafile()
         h5py_hack().complex_names = ('real', 'imag')  # complex values are stored as compound types in libneo/hdf5tools
         self.data = File(path.join(self.work_dir, 'mephit.h5'), 'r')
 
@@ -92,15 +93,16 @@ class Gpec:
         self.data = dict()
         self.post = dict()
 
-    def __del__(self):
+    def close_datafiles(self):
         from netCDF4 import Dataset
         for file in self.data.keys():
             if isinstance(self.data[file], Dataset):
                 self.data[file].close()
 
-    def read_datafile(self):
+    def open_datafiles(self):
         from os import path
         from netCDF4 import Dataset
+        self.close_datafiles()
         for file in ['profile', 'cylindrical', 'control']:
             self.data[file] = Dataset(path.join(self.work_dir, f"gpec_{file}_output_n{self.n}.nc"), 'r')
         self.data['dcon'] = Dataset(path.join(self.work_dir, f"dcon_output_n{self.n}.nc"), 'r')
@@ -168,7 +170,10 @@ class ParallelPlotter:
         while True:
             plot_object = plot_objects_queue.get()
             if isinstance(plot_object, PlotObject):
-                plot_object.do_plot()
+                try:
+                    plot_object.do_plot()
+                except BaseException as err:
+                    print(f"Unexpected {err=}, {type(err)=}")
             else:
                 results_queue.put(plot_object)
                 break

@@ -2327,7 +2327,7 @@ contains
   subroutine compare_gpec_coordinates
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use netcdf, only: nf90_open, nf90_nowrite, nf90_noerr, nf90_inq_dimid, nf90_inq_varid, &
-         nf90_inquire_dimension, nf90_get_var, nf90_close, nf90_global, nf90_get_att
+         nf90_inquire_dimension, nf90_get_var, nf90_close, nf90_global, nf90_get_att, nf90_strerror
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext, psipol_max
     use mephit_conf, only: conf, logger, datafile
     use mephit_util, only: pi
@@ -2372,17 +2372,20 @@ contains
     call check_error("nf90_inq_dimid", nf90_inq_dimid(ncid_file, "theta_dcon", ncid))
     call check_error("nf90_inquire_dimension", &
          nf90_inquire_dimension(ncid_file, ncid, len = npol))
-    allocate(psi(nrad), theta(npol), R(nrad, npol), Z(nrad, npol), xi_n(nrad, npol, 0:1))
+    allocate(psi(nrad), theta(npol), R(npol, nrad), Z(npol, nrad), xi_n(0:1, npol, nrad))
     call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "psi_n", ncid))
     call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, psi))
     call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "theta_dcon", ncid))
     call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, theta))
     call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "R", ncid))
-    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, R))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, R, &
+         count = flip1d(shape(R)), map = flip1d(stride1d(shape(R)))))
     call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "z", ncid))
-    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, Z))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, Z, &
+         count = flip1d(shape(Z)), map = flip1d(stride1d(shape(Z)))))
     call check_error("nf90_inq_varid", nf90_inq_varid(ncid_file, "xi_n_fun", ncid))
-    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, xi_n))
+    call check_error("nf90_get_var", nf90_get_var(ncid_file, ncid, xi_n, &
+         count = flip1d(shape(xi_n)), map = flip1d(stride1d(shape(xi_n)))))
     call check_error("nf90_close", nf90_close(ncid_file))
     psi(:) = psipol_max * psi
     theta(:) = 2d0 * pi * theta
@@ -2395,29 +2398,29 @@ contains
     call h5_add(h5id_root, dataset // '/theta', theta, lbound(theta), ubound(theta), &
          unit = 'rad', comment = 'flux poloidal angle')
     call h5_add(h5id_root, dataset // '/R_GPEC', R, lbound(R), ubound(R), &
-         unit = 'cm', comment = 'R(psi, theta) from GPEC')
+         unit = 'cm', comment = 'R(theta, psi) from GPEC')
     call h5_add(h5id_root, dataset // '/Z_GPEC', Z, lbound(Z), ubound(Z), &
-         unit = 'cm', comment = 'Z(psi, theta) from GPEC')
-    do kpol = 1, npol
-       do krad = 1, nrad
+         unit = 'cm', comment = 'Z(theta, psi) from GPEC')
+    do krad = 1, nrad
+       do kpol = 1, npol
           call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol), &
-               dum, dum, dum, dum, dum, R(krad, kpol), dum, dum, Z(krad, kpol), dum, dum)
+               dum, dum, dum, dum, dum, R(kpol, krad), dum, dum, Z(kpol, krad), dum, dum)
        end do
     end do
     allocate(xi_n_R(npol), xi_n_Z(npol))
     krad = nrad
     do kpol = 1, npol
-       call field(R(krad, kpol), 0d0, Z(krad, kpol), B0_R, dum, B0_Z, &
+       call field(R(kpol, krad), 0d0, Z(kpol, krad), B0_R, dum, B0_Z, &
             dum, dum, dum, dum, dum, dum, dum, dum, dum)
-       unit_normal = [R(krad, kpol) * B0_Z, -R(krad, kpol) * B0_R] * equil%cocos%sgn_dpsi
+       unit_normal = [R(kpol, krad) * B0_Z, -R(kpol, krad) * B0_R] * equil%cocos%sgn_dpsi
        unit_normal = unit_normal / norm2(unit_normal)
-       xi_n_R(kpol) = unit_normal(0) * 1d2 * cmplx(xi_n(krad, kpol, 0), xi_n(krad, kpol, 1), dp)
-       xi_n_Z(kpol) = unit_normal(1) * 1d2 * cmplx(xi_n(krad, kpol, 0), xi_n(krad, kpol, 1), dp)
+       xi_n_R(kpol) = unit_normal(0) * 1d2 * cmplx(xi_n(0, kpol, krad), xi_n(1, kpol, krad), dp)
+       xi_n_Z(kpol) = unit_normal(1) * 1d2 * cmplx(xi_n(0, kpol, krad), xi_n(1, kpol, krad), dp)
     end do
     call h5_add(h5id_root, dataset // '/R', R, lbound(R), ubound(R), &
-         unit = 'cm', comment = 'R(psi, theta)')
+         unit = 'cm', comment = 'R(theta, psi)')
     call h5_add(h5id_root, dataset // '/Z', Z, lbound(Z), ubound(Z), &
-         unit = 'cm', comment = 'Z(psi, theta)')
+         unit = 'cm', comment = 'Z(theta, psi)')
     call h5_add(h5id_root, dataset // '/xi_n_R', xi_n_R, lbound(xi_n_R), ubound(xi_n_R), &
          unit = 'cm', comment = 'Radial component of normal displacement xi_n(theta) at last flux surface')
     call h5_add(h5id_root, dataset // '/xi_n_Z', xi_n_Z, lbound(xi_n_Z), ubound(xi_n_Z), &
@@ -2426,19 +2429,19 @@ contains
     deallocate(psi, theta, R, Z, xi_n, xi_n_R, xi_n_Z)
 
     nrad = (nrad - 1 + stepsize) / stepsize
-    allocate(psi(nrad), theta(npol), R(nrad, npol), Z(nrad, npol), sqrt_g(nrad, npol))
+    allocate(psi(nrad), theta(npol), R(npol, nrad), Z(npol, nrad), sqrt_g(npol, nrad))
     filename = 'gpec_diagnostics_jacfac_1_fun.out'
     inquire(file = filename, exist = file_exists)
     if (.not. file_exists) return
     logger%msg = 'File ' // trim(filename) // ' found, performing GPEC jacfac comparison.'
     if (logger%info) call logger%write_msg
-    allocate(jacfac(nrad, npol), contradenspsi(nrad, npol))
+    allocate(jacfac(npol, nrad), contradenspsi(npol, nrad))
     open(newunit = fid, file = filename, status = 'old', form = 'formatted', action = 'read')
     read (fid, *)
     read (fid, *)
     do krad = 1, nrad
        do kpol = 1, npol
-          read (fid, '(1x, 4(1x, es16.8))') psi(krad), theta(kpol), jacfac(krad, kpol)
+          read (fid, '(1x, 4(1x, es16.8))') psi(krad), theta(kpol), jacfac(kpol, krad)
        end do
     end do
     close(fid)
@@ -2450,39 +2453,39 @@ contains
     if (.not. file_exists) return
     logger%msg = 'File ' // trim(filename) // ' found, performing GPEC grad psi comparison.'
     if (logger%info) call logger%write_msg
-    allocate(delpsi(nrad, npol), grad_psi(nrad, npol))
+    allocate(delpsi(npol, nrad), grad_psi(npol, nrad))
     open(newunit = fid, file = filename, status = 'old', form = 'formatted', action = 'read')
     read (fid, *)
     read (fid, *)
     do krad = 1, nrad
        do kpol = 1, npol
-          read (fid, '(1x, 3(1x, es16.8))') psi(krad), theta(kpol), delpsi(krad, kpol)
+          read (fid, '(1x, 3(1x, es16.8))') psi(krad), theta(kpol), delpsi(kpol, krad)
        end do
     end do
     close(fid)
     psi(:) = psipol_max * psi
     theta(:) = 2d0 * pi * theta
     delpsi(:, :) = 1d-2 * psipol_max * delpsi
-    do kpol = 1, npol
-       do krad = 1, nrad
+    do krad = 1, nrad
+       do kpol = 1, npol
           call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol), &
-               q, dum, sqrt_g(krad, kpol), dum, dum, R(krad, kpol), dum, dum, Z(krad, kpol), dum, dum)
-          call field(R(krad, kpol), 0d0, Z(krad, kpol), B0_R, dum, B0_Z, &
+               q, dum, sqrt_g(kpol, krad), dum, dum, R(kpol, krad), dum, dum, Z(kpol, krad), dum, dum)
+          call field(R(kpol, krad), 0d0, Z(kpol, krad), B0_R, dum, B0_Z, &
                dum, dum, dum, dum, dum, dum, dum, dum, dum)
-          grad_psi(krad, kpol) = R(krad, kpol) * hypot(B0_Z, -B0_R)
-          contradenspsi(krad, kpol) = grad_psi(krad, kpol) * sqrt_g(krad, kpol) * abs(q)
+          grad_psi(kpol, krad) = R(kpol, krad) * hypot(B0_Z, -B0_R)
+          contradenspsi(kpol, krad) = grad_psi(kpol, krad) * sqrt_g(kpol, krad) * abs(q)
        end do
     end do
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, dataset // '/')
     call h5_add(h5id_root, dataset // '/jacfac', jacfac, lbound(jacfac), ubound(jacfac), &
-         unit = '?', comment = 'GPEC jacfac at (psi, theta)')
+         unit = '?', comment = 'GPEC jacfac at (theta, psi)')
     call h5_add(h5id_root, dataset // '/contradenspsi', contradenspsi, lbound(contradenspsi), ubound(contradenspsi), &
-         unit = 'cm^2', comment = 'MEPHIT jacfac at (psi, theta)')
+         unit = 'cm^2', comment = 'MEPHIT jacfac at (theta, psi)')
     call h5_add(h5id_root, dataset // '/delpsi', delpsi, lbound(delpsi), ubound(delpsi), &
-         unit = 'G cm', comment = 'GPEC grad psi at (psi, theta)')
+         unit = 'G cm', comment = 'GPEC grad psi at (theta, psi)')
     call h5_add(h5id_root, dataset // '/grad_psi', grad_psi, lbound(grad_psi), ubound(grad_psi), &
-         unit = 'G cm', comment = 'MEPHIT grad psi at (psi, theta)')
+         unit = 'G cm', comment = 'MEPHIT grad psi at (theta, psi)')
     call h5_close(h5id_root)
     deallocate(psi, theta, R, Z, delpsi, grad_psi, jacfac, sqrt_g)
 
@@ -2501,7 +2504,7 @@ contains
     call check_error("nf90_close", nf90_close(ncid_file))
     nrad = nrad + 1
     npol = npol + 1
-    allocate(psi(nrad), theta(npol), jac(nrad, npol), sqrt_g(nrad, npol), R(nrad, npol), Z(nrad, npol))
+    allocate(psi(nrad), theta(npol), jac(npol, nrad), sqrt_g(npol, nrad), R(npol, nrad), Z(npol, nrad))
     open(newunit = fid, file = '2d.out', status = 'old', form = 'formatted', action = 'read')
     read (fid, *)
     read (fid, *)
@@ -2513,11 +2516,11 @@ contains
        read (fid, *)
        do kpol = 1, npol
           read (fid, '(i6, 1p, 8e24.16)') idum, theta(kpol), dum, dum, dum, dum, &
-               R(krad, kpol), Z(krad, kpol), jac(krad, kpol)
+               R(kpol, krad), Z(kpol, krad), jac(kpol, krad)
           theta(kpol) = theta(kpol) * 2d0 * pi
           call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol), &
-               q, dum, sqrt_g(krad, kpol), dum, dum, dum, dum, dum, dum, dum, dum)
-          sqrt_g(krad, kpol) = sqrt_g(krad, kpol) * abs(q)
+               q, dum, sqrt_g(kpol, krad), dum, dum, dum, dum, dum, dum, dum, dum)
+          sqrt_g(kpol, krad) = sqrt_g(kpol, krad) * abs(q)
        end do
        read (fid, *)
        read (fid, *)
@@ -2533,26 +2536,40 @@ contains
     call h5_add(h5id_root, dataset // '/jac/theta', theta, lbound(theta), ubound(theta), &
          unit = 'rad', comment = 'flux poloidal angle')
     call h5_add(h5id_root, dataset // '/jac/R', R, lbound(R), ubound(R), &
-         unit = 'cm', comment = 'R(psi, theta)')
+         unit = 'cm', comment = 'R(theta, psi)')
     call h5_add(h5id_root, dataset // '/jac/Z', Z, lbound(Z), ubound(Z), &
-         unit = 'cm', comment = 'Z(psi, theta)')
+         unit = 'cm', comment = 'Z(theta, psi)')
     call h5_add(h5id_root, dataset // '/jac/sqrt_g', sqrt_g, lbound(sqrt_g), ubound(sqrt_g), &
-         unit = 'cm G^-1', comment = 'MEPHIT Jacobian at (psi, theta)')
+         unit = 'cm G^-1', comment = 'MEPHIT Jacobian at (theta, psi)')
     call h5_add(h5id_root, dataset // '/jac/jac', jac, lbound(jac), ubound(jac), &
-         unit = 'cm G^-1', comment = 'GPEC Jacobian at (psi, theta)')
+         unit = 'cm G^-1', comment = 'GPEC Jacobian at (theta, psi)')
     call h5_close(h5id_root)
     deallocate(psi, theta, jac, sqrt_g, R, Z)
 
   contains
+
     subroutine check_error(funcname, status)
       character(len = *), intent(in) :: funcname
       integer, intent(in) :: status
       if (status /= nf90_noerr) then
-         write (logger%msg, '(a, " returned error ", i0)') funcname, status
+         write (logger%msg, '(a, " returned error ", i0, ": ", a)') funcname, status, nf90_strerror(status)
          if (logger%err) call logger%write_msg
          error stop
       end if
     end subroutine check_error
+
+    pure function flip1d(arr)
+      integer, dimension(:), intent(in) :: arr
+      integer, dimension(size(arr, 1)) :: flip1d
+      flip1d = arr(ubound(arr, 1):lbound(arr, 1):-1)
+    end function flip1d
+
+    pure function stride1d(arr)
+      integer, dimension(:), intent(in) :: arr
+      integer, dimension(size(arr, 1)) :: stride1d
+      integer :: k
+      stride1d = [1, (product(arr(:k)), k = 1, size(arr, 1) - 1)]
+    end function stride1d
   end subroutine compare_gpec_coordinates
 
   subroutine write_illustration_data(npsi, ntheta, nrad, npol)
