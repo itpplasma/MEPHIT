@@ -2447,7 +2447,6 @@ contains
     close(fid)
     psi(:) = psipol_max * psi
     theta(:) = 2d0 * pi * theta
-    jacfac(:, :) = psipol_max / (2d4 * pi * chi1) * jacfac
     filename = 'gpec_diagnostics_delpsi_fun.out'
     inquire(file = filename, exist = file_exists)
     if (.not. file_exists) return
@@ -2475,13 +2474,16 @@ contains
           grad_psi(kpol, krad) = R(kpol, krad) * hypot(B0_Z, -B0_R)
           contradenspsi(kpol, krad) = grad_psi(kpol, krad) * sqrt_g(kpol, krad) * abs(q)
        end do
+       ! normalize by flux surface average - dimensionless factor
+       ! conversion factors for delpsi and jac cancel in GPEC jacfac
+       contradenspsi(:, krad) = contradenspsi(:, krad) / sum(contradenspsi(:, krad)) * dble(npol)
     end do
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, dataset // '/')
     call h5_add(h5id_root, dataset // '/jacfac', jacfac, lbound(jacfac), ubound(jacfac), &
-         unit = '?', comment = 'GPEC jacfac at (theta, psi)')
+         unit = '1', comment = 'GPEC jacfac at (theta, psi)')
     call h5_add(h5id_root, dataset // '/contradenspsi', contradenspsi, lbound(contradenspsi), ubound(contradenspsi), &
-         unit = 'cm^2', comment = 'MEPHIT jacfac at (theta, psi)')
+         unit = '1', comment = 'MEPHIT jacfac at (theta, psi)')
     call h5_add(h5id_root, dataset // '/delpsi', delpsi, lbound(delpsi), ubound(delpsi), &
          unit = 'G cm', comment = 'GPEC grad psi at (theta, psi)')
     call h5_add(h5id_root, dataset // '/grad_psi', grad_psi, lbound(grad_psi), ubound(grad_psi), &
@@ -2509,13 +2511,13 @@ contains
     read (fid, *)
     read (fid, *)
     do krad = 1, nrad
-       read (fid, '(6x, i3, 6x, e24.16)') idum, psi(krad)
+       read (fid, '(6x, i3, 6x, e11.3)') idum, psi(krad)
        psi(krad) = psi(krad) * psipol_max
        read (fid, *)
        read (fid, *)
        read (fid, *)
        do kpol = 1, npol
-          read (fid, '(i6, 1p, 8e24.16)') idum, theta(kpol), dum, dum, dum, dum, &
+          read (fid, '(i6, 1p, 8e11.3)') idum, theta(kpol), dum, dum, dum, dum, &
                R(kpol, krad), Z(kpol, krad), jac(kpol, krad)
           theta(kpol) = theta(kpol) * 2d0 * pi
           call magdata_in_symfluxcoord_ext(2, dum, psi(krad), theta(kpol), &
