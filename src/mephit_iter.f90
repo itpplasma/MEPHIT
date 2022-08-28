@@ -85,7 +85,7 @@ contains
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use mephit_util, only: C_F_string, get_field_filenames, init_field
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
-    use mephit_mesh, only: equil, mesh, cache, fft, psi_interpolator, &
+    use mephit_mesh, only: equil, mesh, psi_interpolator, &
          generate_mesh, mesh_write, mesh_read, write_cache, read_cache
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
     use hdf5_tools, only: h5_init, h5overwrite
@@ -140,7 +140,6 @@ contains
        ! read in preprocessed data
        call mesh_read(mesh, datafile, 'mesh')
        call read_cache
-       call fft%init(cache%npol)
        call load_magdata_in_symfluxcoord
        call vac_init(vac, mesh%nedge, mesh%ntri, mesh%m_res_min, mesh%m_res_max)
        call vac_read(vac, datafile, 'vac')
@@ -168,7 +167,6 @@ contains
        end if
        call iter_deinit
     end if
-    call fft%deinit
     call mephit_deinit
   end subroutine mephit_run
 
@@ -250,7 +248,7 @@ contains
     use mephit_conf, only: conf, logger, runmode_precon, runmode_single, datafile, cmplx_fmt
 
     logical :: preconditioned
-    integer :: kiter, niter, maxiter, ndim, nritz, i, j, info
+    integer :: kiter, niter, maxiter, ndim, nritz, i, j, info, m
     integer(HID_T) :: h5id_root
     real(dp), allocatable :: L2int_Bn_diff(:)
     real(dp) :: L2int_Bnvac, rel_err
@@ -396,7 +394,10 @@ contains
        call L1_poloidal_modes(jnpar_B0, jmnpar_Bmod)
        call polmodes_write(jmnpar_Bmod, datafile, 'iter/jmnpar_Bmod' // postfix, &
             'parallel current density (after iteration)', 's^-1')  ! SI: H^-1
-       call compute_Ires(cache%sample_Ires, cache%GL_weights, jnpar_B0, Ires)
+       do m = mesh%m_res_min, mesh%m_res_max
+          call compute_Ires(cache%shielding(m)%sample_Ires, cache%shielding(m)%GL_weights, &
+               jnpar_B0, m, Ires(m))
+       end do
        call h5_open_rw(datafile, h5id_root)
        call h5_add(h5id_root, 'iter/Ires' // postfix, Ires, lbound(Ires), ubound(Ires), &
             comment = 'resonant currents (after iteration)', unit = 'statA')
@@ -915,6 +916,7 @@ contains
     integer(HID_T) :: h5id_root
     type(polmodes_t) :: polmodes
     type(vec_polmodes_t) :: vec_polmodes
+    integer :: m
     complex(dp), allocatable :: Ires(:)
 
     ! poloidal modes
@@ -945,7 +947,10 @@ contains
     call vec_polmodes_deinit(vec_polmodes)
     ! resonant currents
     allocate(Ires(mesh%m_res_min:mesh%m_res_max))
-    call compute_Ires(cache%sample_Ires, cache%GL_weights, jnpar_B0, Ires)
+    do m = mesh%m_res_min, mesh%m_res_max
+       call compute_Ires(cache%shielding(m)%sample_Ires, cache%shielding(m)%GL_weights, &
+            jnpar_B0, m, Ires(m))
+    end do
     call h5_open_rw(datafile, h5id_root)
     call h5_add(h5id_root, 'postprocess/Ires', Ires, lbound(Ires), ubound(Ires), &
          comment = 'resonant currents', unit = 'statA')
@@ -962,7 +967,7 @@ contains
     type(vec_polmodes_t), intent(in) :: Bmn_plas
     character(len = *), parameter :: dataset = 'debug_furth'
     integer(HID_T) :: h5id_root
-    integer :: kf, kpol, kilca_m_res
+    integer :: kf, log2, npol, kpol, k, kilca_m_res
     complex(dp) :: sheet_flux(mesh%nflux)
     real(dp) :: k_z, k_theta(mesh%nflux)
 
@@ -971,12 +976,16 @@ contains
     k_theta(:) = kilca_m_res / fs_half%rad
     sheet_flux(:) = (0d0, 0d0)
     do kf = 1, mesh%nflux
-       do kpol = 1, cache%npol
-          associate (s => cache%sample_polmodes_half(kpol, kf))
+       log2 = cache%log2_kt_max(kf)
+       npol = shiftl(1, log2)
+       do kpol = 1, npol
+          k = cache%kt_low(kf) + kpol
+          associate (s => cache%sample_polmodes_half(k))
             sheet_flux(kf) = sheet_flux(kf) + mesh%area(s%ktri) * currn%comp_phi(s%ktri) * &
                  exp(-imun * kilca_m_res * s%theta)
           end associate
        end do
+       sheet_flux(kf) = sheet_flux(kf) / dble(shiftl(1, log2))
     end do
     sheet_flux(:) = -2d0 * imun / clight / k_theta * sheet_flux
     call h5_open_rw(datafile, h5id_root)
@@ -994,63 +1003,41 @@ contains
   end subroutine check_furth
 
   !> compute resonant currents
-  subroutine compute_Ires(sample_Ires, GL_weights, jnpar_Bmod, Ires)
+  subroutine compute_Ires(sample_Ires, GL_weights, jnpar_Bmod, m, Ires)
     use mephit_conf, only: logger
     use mephit_util, only: imun
-    use mephit_mesh, only: coord_cache_t, mesh, equil
+    use mephit_mesh, only: coord_cache_t, equil
     use mephit_pert, only: L1_t, L1_interp
-    type(coord_cache_t), intent(in) :: sample_Ires(:, :, mesh%m_res_min:)
-    real(dp), intent(in) :: GL_weights(:, mesh%m_res_min:)
+    type(coord_cache_t), intent(in) :: sample_Ires(:, :)
+    real(dp), intent(in) :: GL_weights(:)
     type(L1_t), intent(in) :: jnpar_Bmod
-    complex(dp), intent(out) :: Ires(mesh%m_res_min:)
-    integer :: nrad, npol, krad, kpol, m
+    integer, intent(in) :: m
+    complex(dp), intent(out) :: Ires
+    integer :: nrad, npol, krad, kpol
     complex(dp) :: jn_par, jmn_par
 
-    if (size(GL_weights, 1) /= size(sample_Ires, 2)) then
+    if (size(GL_weights) /= size(sample_Ires, 2)) then
        call logger%msg_arg_size('compute_Ires', &
-            'size(GL_weights, 1)', 'size(sample_Ires, 2)', &
-            size(GL_weights, 1), size(sample_Ires, 2))
-       if (logger%err) call logger%write_msg
-       error stop
-    end if
-    if (ubound(GL_weights, 2) /= mesh%m_res_max) then
-       call logger%msg_arg_size('compute_Ires', &
-            'ubound(GL_weights, 2)', 'mesh%m_res_max', &
-            ubound(GL_weights, 2), mesh%m_res_max)
-       if (logger%err) call logger%write_msg
-       error stop
-    end if
-    if (ubound(Ires, 1) /= mesh%m_res_max) then
-       call logger%msg_arg_size('compute_Ires', &
-            'ubound(Ires, 1)', 'mesh%m_res_max', &
-            ubound(Ires, 1), mesh%m_res_max)
-       if (logger%err) call logger%write_msg
-       error stop
-    end if
-    if (ubound(sample_Ires, 3) /= mesh%m_res_max) then
-       call logger%msg_arg_size('compute_Ires', &
-            'ubound(sample_Ires, 3)', 'mesh%m_res_max', &
-            ubound(sample_Ires, 3), mesh%m_res_max)
+            'size(GL_weights)', 'size(sample_Ires, 2)', &
+            size(GL_weights), size(sample_Ires, 2))
        if (logger%err) call logger%write_msg
        error stop
     end if
     npol = size(sample_Ires, 1)
     nrad = size(sample_Ires, 2)
-    do m = mesh%m_res_min, mesh%m_res_max
-       Ires(m) = (0d0, 0d0)
-       do krad = 1, nrad
-          jmn_par = (0d0, 0d0)
-          do kpol = 1, npol
-             associate (s => sample_Ires(kpol, krad, m))
-               call L1_interp(jnpar_Bmod, s%ktri, s%R, s%Z, jn_par)
-               jn_par = jn_par * sqrt(s%B0_R ** 2 + s%B0_phi ** 2 + s%B0_Z ** 2)
-               ! jmn_par includes the area differential
-               jmn_par = jmn_par + s%sqrt_g / s%R * jn_par * &
-                    exp(imun * equil%cocos%sgn_q * m * s%theta)
-             end associate
-          end do
-          Ires(m) = Ires(m) + jmn_par / dble(npol) * GL_weights(krad, m)
+    Ires = (0d0, 0d0)
+    do krad = 1, nrad
+       jmn_par = (0d0, 0d0)
+       do kpol = 1, npol
+          associate (s => sample_Ires(kpol, krad))
+            call L1_interp(jnpar_Bmod, s%ktri, s%R, s%Z, jn_par)
+            jn_par = jn_par * sqrt(s%B0_R ** 2 + s%B0_phi ** 2 + s%B0_Z ** 2)
+            ! jmn_par includes the area differential
+            jmn_par = jmn_par + s%sqrt_g / s%R * jn_par * &
+                 exp(imun * equil%cocos%sgn_q * m * s%theta)
+          end associate
        end do
+       Ires = Ires + jmn_par / dble(npol) * GL_weights(krad)
     end do
   end subroutine compute_Ires
 

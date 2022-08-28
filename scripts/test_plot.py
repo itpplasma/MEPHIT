@@ -181,7 +181,7 @@ if __name__ == "__main__":
             plotter.plot_objects.put(ComplexPlot(work_dir, f"plot_MHD_{res_nonres[k]}_{it}.pdf", config))
 
     # GPEC comparison
-    conversion = 1.0e-04 / testcase.data['/mesh/gpec_jacfac'][:, 16]
+    conversion = 1.0e-04 / testcase.data['/mesh/gpec_jacfac'][()]
     mephit_Bmn = testcase.get_polmodes('full perturbation (MEPHIT)', '/postprocess/Bmn/coeff_rad', conversion)
     mephit_Bmn_vac = testcase.get_polmodes('vacuum perturbation (MEPHIT)', '/postprocess/Bmn_vac/coeff_rad', conversion)
     reference = Gpec(work_dir, 2)

@@ -658,40 +658,47 @@ contains
   end subroutine vec_polmodes_write
 
   subroutine L1_poloidal_modes(elem, polmodes)
-    use mephit_mesh, only: mesh, cache, fft
+    use mephit_mesh, only: mesh, cache
     type(L1_t), intent(in) :: elem
     type(polmodes_t), intent(inout) :: polmodes
-    integer :: kf, kpol
+    integer :: kf, log2, kpol, k
 
     polmodes%coeff(:, :) = (0d0, 0d0)
     polmodes%coeff(0, 0) = elem%DOF(1)
     do kf = 1, mesh%nflux
-       do kpol = 1, cache%npol
-          associate (s => cache%sample_polmodes(kpol, kf))
-            call L1_interp(elem, s%ktri, s%R, s%Z, fft%samples(kpol))
+       log2 = cache%log2_kp_max(kf)
+       do kpol = 1, shiftl(1, log2)
+          k = cache%kp_low(kf) + kpol
+          associate (s => cache%sample_polmodes(k))
+            call L1_interp(elem, s%ktri, s%R, s%Z, cache%fft(log2)%samples(kpol))
           end associate
        end do
-       call fft%apply(-polmodes%m_max, polmodes%m_max, polmodes%coeff(:, kf))
+       call cache%fft(log2)%apply(-polmodes%m_max, polmodes%m_max, polmodes%coeff(:, kf))
     end do
   end subroutine L1_poloidal_modes
 
   subroutine RT0_poloidal_modes(elem, vec_polmodes)
     use mephit_conf, only: conf
     use mephit_util, only: bent_cyl2straight_cyl
-    use mephit_mesh, only: equil, mesh, cache, fft
+    use mephit_mesh, only: equil, mesh, cache
     type(RT0_t), intent(in) :: elem
     type(vec_polmodes_t), intent(inout) :: vec_polmodes
-    integer :: kf, kpol
+    integer :: npol, log2, kf, kpol, k
     complex(dp) :: cyl_vec(3)
-    complex(dp), dimension(cache%npol) :: comp_rad, comp_n, comp_pol, comp_tor
+    complex(dp), dimension(:), allocatable :: comp_rad, comp_n, comp_pol, comp_tor
 
+    npol = shiftl(1, cache%max_log2)
+    allocate(comp_rad(npol), comp_n(npol), comp_pol(npol), comp_tor(npol))
     vec_polmodes%coeff_rad(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_n(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_pol(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_tor(:, :) = (0d0, 0d0)
     do kf = 1, mesh%nflux
-       do kpol = 1, cache%npol
-          associate (s => cache%sample_polmodes_half(kpol, kf))
+       log2 = cache%log2_kt_max(kf)
+       npol = shiftl(1, log2)
+       do kpol = 1, npol
+          k = cache%kt_low(kf) + kpol
+          associate (s => cache%sample_polmodes_half(k))
             call RT0_interp(elem, s%ktri, s%R, s%Z, cyl_vec)
             if (conf%kilca_scale_factor /= 0) then
                call bent_cyl2straight_cyl(cyl_vec(1), cyl_vec(2), cyl_vec(3), &
@@ -705,16 +712,21 @@ contains
             end if
           end associate
        end do
-       fft%samples(:) = comp_rad
-       call fft%apply(-vec_polmodes%m_max, vec_polmodes%m_max, vec_polmodes%coeff_rad(:, kf))
-       fft%samples(:) = comp_n
-       call fft%apply(-vec_polmodes%m_max, vec_polmodes%m_max, vec_polmodes%coeff_n(:, kf))
+       cache%fft(log2)%samples(:) = comp_rad(:npol)
+       call cache%fft(log2)%apply(-vec_polmodes%m_max, vec_polmodes%m_max, &
+            vec_polmodes%coeff_rad(:, kf))
+       cache%fft(log2)%samples(:) = comp_n(:npol)
+       call cache%fft(log2)%apply(-vec_polmodes%m_max, vec_polmodes%m_max, &
+            vec_polmodes%coeff_n(:, kf))
        vec_polmodes%coeff_n(:, kf) = vec_polmodes%coeff_n(:, kf) * equil%cocos%sgn_dpsi
-       fft%samples(:) = comp_pol
-       call fft%apply(-vec_polmodes%m_max, vec_polmodes%m_max, vec_polmodes%coeff_pol(:, kf))
-       fft%samples(:) = comp_tor
-       call fft%apply(-vec_polmodes%m_max, vec_polmodes%m_max, vec_polmodes%coeff_tor(:, kf))
+       cache%fft(log2)%samples(:) = comp_pol(:npol)
+       call cache%fft(log2)%apply(-vec_polmodes%m_max, vec_polmodes%m_max, &
+            vec_polmodes%coeff_pol(:, kf))
+       cache%fft(log2)%samples(:) = comp_tor(:npol)
+       call cache%fft(log2)%apply(-vec_polmodes%m_max, vec_polmodes%m_max, &
+            vec_polmodes%coeff_tor(:, kf))
     end do
+    deallocate(comp_rad, comp_n, comp_pol, comp_tor)
   end subroutine RT0_poloidal_modes
 
   subroutine vac_init(this, nedge, ntri, m_min, m_max)
@@ -1647,29 +1659,34 @@ contains
   subroutine debug_Bmnvac
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, datafile
-    use mephit_mesh, only: equil, mesh, cache, fft
+    use mephit_mesh, only: equil, mesh, cache
     character(len = *), parameter :: dataset = 'vac/Bn'
     integer, parameter :: m_max = 24
-    integer :: kf, kpol
+    integer :: npol, kf, log2, kpol, k
     integer(HID_T) :: h5id_root
     complex(dp) :: Bn_R, Bn_Z, Bn_phi
-    complex(dp), dimension(cache%npol) :: Bn_contradenspsi, Bn_n
+    complex(dp), dimension(:), allocatable :: Bn_contradenspsi, Bn_n
     complex(dp), dimension(-m_max:m_max, mesh%nflux) :: Bmn_contradenspsi, Bmn_n
 
+    npol = shiftl(1, cache%max_log2)
+    allocate(Bn_contradenspsi(npol), Bn_n(npol))
     Bmn_contradenspsi(:, :) = (0d0, 0d0)
     Bmn_n(:, :) = (0d0, 0d0)
     do kf = 1, mesh%nflux
-       do kpol = 1, cache%npol
-          associate (s => cache%sample_polmodes_half(kpol, kf))
+       log2 = cache%log2_kt_max(kf)
+       npol = shiftl(1, log2)
+       do kpol = 1, npol
+          k = cache%kt_low(kf) + kpol
+          associate (s => cache%sample_polmodes_half(k))
             call spline_bn(conf%n, s%R, s%Z, Bn_R, Bn_phi, Bn_Z)
             Bn_contradenspsi(kpol) = s%sqrt_g * (Bn_R * s%B0_Z - Bn_Z * s%B0_R) * s%R
             Bn_n(kpol) = (Bn_R * s%B0_Z - Bn_Z * s%B0_R) / hypot(s%B0_R, s%B0_Z)
           end associate
        end do
-       fft%samples(:) = Bn_contradenspsi
-       call fft%apply(-m_max, m_max, Bmn_contradenspsi(:, kf))
-       fft%samples(:) = Bn_n
-       call fft%apply(-m_max, m_max, Bmn_n(:, kf))
+       cache%fft(log2)%samples(:) = Bn_contradenspsi(:npol)
+       call cache%fft(log2)%apply(-m_max, m_max, Bmn_contradenspsi(:, kf))
+       cache%fft(log2)%samples(:) = Bn_n(:npol)
+       call cache%fft(log2)%apply(-m_max, m_max, Bmn_n(:, kf))
        Bmn_n(:, kf) = Bmn_n(:, kf) * equil%cocos%sgn_dpsi
     end do
     call h5_open_rw(datafile, h5id_root)
@@ -1925,25 +1942,27 @@ contains
     type(RT0_t), intent(in) :: Bn
     character(len = *), parameter :: dataset = 'debug_RT0'
     integer(HID_T) :: h5id_root
-    integer :: kf, kpol, pol_modes(2)
+    integer :: kf, log2, kpol, k, pol_modes(2)
     complex(dp) :: B_interp(3)
-    complex(dp), dimension(cache%npol, mesh%nflux) :: B_R, B_Z, B_phi, &
-         B_R_interp, B_Z_interp, B_phi_interp
+    complex(dp), dimension(size(cache%sample_polmodes_half)) :: &
+         B_R, B_Z, B_phi, B_R_interp, B_Z_interp, B_phi_interp
 
     pol_modes = [conf%kilca_pol_mode, -conf%kilca_pol_mode]
     do kf = 1, mesh%nflux
-       do kpol = 1, cache%npol
-          associate (s => cache%sample_polmodes_half(kpol, kf))
+       log2 = cache%log2_kt_max(kf)
+       do kpol = 1, shiftl(1, log2)
+          k = cache%kt_low(kf) + kpol
+          associate (s => cache%sample_polmodes_half(k))
             if (conf%kilca_pol_mode /= 0) then
                call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, &
-                    fs_half%rad(kf), s%theta, B_R(kpol, kf), B_phi(kpol, kf), B_Z(kpol, kf))
+                    fs_half%rad(kf), s%theta, B_R(k), B_phi(k), B_Z(k))
             else
-               call spline_bn(conf%n, s%R, s%Z, B_R(kpol, kf), B_phi(kpol, kf), B_Z(kpol, kf))
+               call spline_bn(conf%n, s%R, s%Z, B_R(k), B_phi(k), B_Z(k))
             end if
             call RT0_interp(Bn, s%ktri, s%R, s%Z, B_interp)
-            B_R_interp(kpol, kf) = B_interp(1)
-            B_phi_interp(kpol, kf) = B_interp(2)
-            B_Z_interp(kpol, kf) = B_interp(3)
+            B_R_interp(k) = B_interp(1)
+            B_phi_interp(k) = B_interp(2)
+            B_Z_interp(k) = B_interp(3)
           end associate
        end do
     end do

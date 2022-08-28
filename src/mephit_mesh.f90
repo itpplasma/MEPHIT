@@ -11,8 +11,8 @@ module mephit_mesh
   public :: flux_func_cache, flux_func_cache_init, flux_func_cache_deinit
   public :: mesh_t, mesh_write, mesh_read, mesh_deinit, &
        generate_mesh, write_cache, read_cache, point_location
-  public :: coord_cache_t, field_cache_t, cache_t, cache_write, cache_read, &
-       cache_init, cache_deinit
+  public :: coord_cache_t, field_cache_t, shielding_t, cache_t, &
+       cache_write, cache_read, cache_init, cache_deinit
 
   ! testing and debugging procedures
   public :: check_mesh, write_illustration_data, flux_func_cache_check, &
@@ -20,7 +20,7 @@ module mephit_mesh
 
   ! module variables
   public :: equil, psi_interpolator, psi_fine_interpolator, fs, fs_half, mesh, &
-       cache, fft
+       cache
 
   type(g_eqdsk) :: equil
   type(interp1d) :: psi_interpolator
@@ -218,7 +218,7 @@ module mephit_mesh
      real(dp), allocatable :: shielding_coeff(:)
 
      !> Surface integral Jacobian used for normalization of poloidal modes in GPEC
-     complex(dp), allocatable :: gpec_jacfac(:, :)
+     real(dp), allocatable :: gpec_jacfac(:)
 
   end type mesh_t
 
@@ -234,17 +234,22 @@ module mephit_mesh
           dB0_dR(3), dB0_dZ(3), dj0_dR(3), dj0_dZ(3)
   end type field_cache_t
 
+  type :: shielding_t
+     real(dp), allocatable :: GL_weights(:)
+     type(coord_cache_t), allocatable :: sample_Ires(:, :)
+  end type shielding_t
+
   type :: cache_t
-     integer :: nrad, npol, GL_order
-     real(dp), allocatable :: GL_weights(:, :)
-     type(coord_cache_t), allocatable :: sample_polmodes_half(:, :), sample_polmodes(:, :)
-     type(coord_cache_t), allocatable :: sample_Ires(:, :, :)
+     integer :: GL_order, min_log2, max_log2
+     integer, allocatable :: log2_kp_max(:), log2_kt_max(:), kp_low(:), kt_low(:)
+     type(fft_t), allocatable :: fft(:)
+     type(shielding_t), allocatable :: shielding(:)
+     type(coord_cache_t), allocatable :: sample_polmodes_half(:), sample_polmodes(:)
      type(field_cache_t), allocatable :: edge_fields(:, :), area_fields(:, :)
      type(field_cache_t), allocatable :: mid_fields(:), cntr_fields(:)
   end type cache_t
 
   type(cache_t) :: cache
-  type(fft_t) :: fft
 
 contains
 
@@ -418,45 +423,45 @@ contains
             lbound(cache), ubound(cache), unit = 'cm rad^-1', &
             comment = 'Jacobian element (Z, theta) at ' // trim(adjustl(comment)))
        call h5_close(h5id_root)
-    rank (3)
+    rank (1)
        call h5_open_rw(file, h5id_root)
        call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
-       call h5_add(h5id_root, trim(adjustl(dataset)) // '/ktri', cache(:, :, :)%ktri, &
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/ktri', cache(:)%ktri, &
             lbound(cache), ubound(cache), &
             comment = 'triangle index of ' // trim(adjustl(comment)))
-       call h5_add(h5id_root, trim(adjustl(dataset)) // '/R', cache(:, :, :)%R, &
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/R', cache(:)%R, &
             lbound(cache), ubound(cache), unit = 'cm', &
             comment = 'R coordinate of ' // trim(adjustl(comment)))
-       call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z', cache(:, :, :)%Z, &
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z', cache(:)%Z, &
             lbound(cache), ubound(cache), unit = 'cm', &
             comment = 'Z coordinate of ' // trim(adjustl(comment)))
-       call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:, :, :)%psi, &
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:)%psi, &
             lbound(cache), ubound(cache), unit = 'Mx', &
             comment = 'poloidal flux at ' // trim(adjustl(comment)))
-       call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:, :, :)%theta, &
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:)%theta, &
             lbound(cache), ubound(cache), unit = 'rad', &
             comment = 'flux poloidal angle at ' // trim(adjustl(comment)))
-       call h5_add(h5id_root, trim(adjustl(dataset)) // '/sqrt_g', cache(:, :, :)%sqrt_g, &
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/sqrt_g', cache(:)%sqrt_g, &
             lbound(cache), ubound(cache), unit = 'cm G^-1', &
             comment = 'Jacobian at ' // trim(adjustl(comment)))
-       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:, :, :)%B0_R, &
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:)%B0_R, &
             lbound(cache), ubound(cache), unit = 'G', &
             comment = 'R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:, :, :)%B0_phi, &
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:)%B0_phi, &
             lbound(cache), ubound(cache), unit = 'G', &
             comment = 'physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:, :, :)%B0_Z, &
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:)%B0_Z, &
             lbound(cache), ubound(cache), unit = 'G', &
             comment = 'Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dR_dtheta', cache(:, :, :)%dR_dtheta, &
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dR_dtheta', cache(:)%dR_dtheta, &
             lbound(cache), ubound(cache), unit = 'cm rad^-1', &
             comment = 'Jacobian element (R, theta) at ' // trim(adjustl(comment)))
-       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dZ_dtheta', cache(:, :, :)%dZ_dtheta, &
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/dZ_dtheta', cache(:)%dZ_dtheta, &
             lbound(cache), ubound(cache), unit = 'cm rad^-1', &
             comment = 'Jacobian element (Z, theta) at ' // trim(adjustl(comment)))
        call h5_close(h5id_root)
     rank default
-       error stop 'coord_cache_write: rank-2 or rank-3 array expected for argument ''cache'''
+       error stop 'coord_cache_write: rank-1 or rank-2 array expected for argument ''cache'''
     end select
   end subroutine coord_cache_write
 
@@ -482,22 +487,22 @@ contains
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/dR_dtheta', cache(:, :)%dR_dtheta)
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/dZ_dtheta', cache(:, :)%dZ_dtheta)
        call h5_close(h5id_root)
-    rank (3)
+    rank (1)
        call h5_open(file, h5id_root)
-       call h5_get(h5id_root, trim(adjustl(dataset)) // '/ktri', cache(:, :, :)%ktri)
-       call h5_get(h5id_root, trim(adjustl(dataset)) // '/R', cache(:, :, :)%R)
-       call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z', cache(:, :, :)%Z)
-       call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:, :, :)%psi)
-       call h5_get(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:, :, :)%theta)
-       call h5_get(h5id_root, trim(adjustl(dataset)) // '/sqrt_g', cache(:, :, :)%sqrt_g)
-       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:, :, :)%B0_R)
-       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:, :, :)%B0_phi)
-       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:, :, :)%B0_Z)
-       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dR_dtheta', cache(:, :, :)%dR_dtheta)
-       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dZ_dtheta', cache(:, :, :)%dZ_dtheta)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/ktri', cache(:)%ktri)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/R', cache(:)%R)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z', cache(:)%Z)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:)%psi)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:)%theta)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/sqrt_g', cache(:)%sqrt_g)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:)%B0_R)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:)%B0_phi)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:)%B0_Z)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dR_dtheta', cache(:)%dR_dtheta)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/dZ_dtheta', cache(:)%dZ_dtheta)
        call h5_close(h5id_root)
     rank default
-       error stop 'coord_cache_read: rank-2 or rank-3 array expected for argument ''cache'''
+       error stop 'coord_cache_read: rank-1 or rank-2 array expected for argument ''cache'''
     end select
   end subroutine coord_cache_read
 
@@ -713,106 +718,198 @@ contains
     call h5_close(h5id_root)
   end subroutine field_cache_read
 
-  subroutine cache_init(cache, nrad, npol, GL_order)
+  subroutine shielding_init(shielding, npol, GL_order)
+    type(shielding_t), intent(inout) :: shielding
+    integer, intent(in) :: npol, GL_order
+
+    call shielding_deinit(shielding)
+    allocate(shielding%GL_weights(3 * GL_order))
+    allocate(shielding%sample_Ires(npol, 3 * GL_order))
+  end subroutine shielding_init
+
+  subroutine shielding_deinit(shielding)
+    type(shielding_t), intent(inout) :: shielding
+
+    if (allocated(shielding%GL_weights)) deallocate(shielding%GL_weights)
+    if (allocated(shielding%sample_Ires)) deallocate(shielding%sample_Ires)
+  end subroutine shielding_deinit
+
+  subroutine shielding_write(shielding, file, group)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
+    type(shielding_t), intent(in) :: shielding
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+
+    grp = trim(group)
+    call coord_cache_write(shielding%sample_Ires, file, grp // &
+         '/sample_Ires', 'resonant current sampling points')
+    call h5_open_rw(file, h5id_root)
+    call h5_add(h5id_root, grp // '/GL_weights', shielding%GL_weights, &
+         lbound(shielding%GL_weights), ubound(shielding%GL_weights), &
+         unit = 'Mx', comment = 'G-L quadrature weights including psi interval')
+    call h5_close(h5id_root)
+  end subroutine shielding_write
+
+  subroutine shielding_read(shielding, file, group)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    type(shielding_t), intent(inout) :: shielding
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+
+    grp = trim(group)
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, grp // '/GL_weights', shielding%GL_weights)
+    call h5_close(h5id_root)
+    call coord_cache_read(shielding%sample_Ires, file, grp // '/sample_Ires')
+  end subroutine shielding_read
+
+  subroutine cache_init(cache, GL_order)
     type(cache_t), intent(inout) :: cache
-    integer, intent(in) :: nrad, npol, GL_order
+    integer, intent(in) :: GL_order
+    integer :: kf, log2, m, npol
 
     call cache_deinit(cache)
-    cache%nrad = nrad
-    cache%npol = npol
     cache%GL_order = GL_order
-    allocate(cache%GL_weights(3 * GL_order, mesh%m_res_min:mesh%m_res_max))
-    allocate(cache%sample_polmodes(npol, nrad), cache%sample_polmodes_half(npol, nrad))
-    allocate(cache%sample_Ires(npol, 3 * GL_order, mesh%m_res_min:mesh%m_res_max))
+    allocate(cache%log2_kp_max(mesh%nflux))
+    allocate(cache%log2_kt_max(mesh%nflux))
+    allocate(cache%kp_low(mesh%nflux))
+    allocate(cache%kt_low(mesh%nflux))
+    cache%log2_kp_max(:) = max(6, bit_size(mesh%kp_max) - leadz(mesh%kp_max))
+    cache%log2_kt_max(:) = max(6, bit_size(mesh%kt_max) - leadz(mesh%kt_max))
+    cache%kp_low(1) = 0
+    do kf = 2, mesh%nflux
+       cache%kp_low(kf) = cache%kp_low(kf - 1) + shiftl(1, cache%log2_kp_max(kf - 1))
+    end do
+    cache%kt_low(1) = 0
+    do kf = 2, mesh%nflux
+       cache%kt_low(kf) = cache%kt_low(kf - 1) + shiftl(1, cache%log2_kt_max(kf - 1))
+    end do
+    cache%min_log2 = min(minval(cache%log2_kp_max), minval(cache%log2_kt_max))
+    cache%max_log2 = max(maxval(cache%log2_kp_max), maxval(cache%log2_kt_max))
+    allocate(cache%fft(cache%min_log2:cache%max_log2))
+    do log2 = cache%min_log2, cache%max_log2
+       call cache%fft(log2)%init(shiftl(1, log2))
+    end do
+    allocate(cache%sample_polmodes(sum(shiftl(1, cache%log2_kp_max))))
+    allocate(cache%sample_polmodes_half(sum(shiftl(1, cache%log2_kt_max))))
+    allocate(cache%shielding(mesh%m_res_min:mesh%m_res_max))
+    do m = mesh%m_res_min, mesh%m_res_max
+       npol = shiftl(1, cache%log2_kp_max(mesh%res_ind(m)))
+       call shielding_init(cache%shielding(m), npol, GL_order)
+    end do
     allocate(cache%edge_fields(mesh%GL_order, mesh%nedge), cache%area_fields(mesh%GL2_order, mesh%ntri))
     allocate(cache%mid_fields(mesh%nedge), cache%cntr_fields(mesh%ntri))
   end subroutine cache_init
 
   subroutine cache_deinit(cache)
     type(cache_t), intent(inout) :: cache
+    integer :: kl, m
 
-    cache%nrad = 0
-    cache%npol = 0
     cache%GL_order = 0
-    if (allocated(cache%GL_weights)) deallocate(cache%GL_weights)
+    cache%min_log2 = 0
+    cache%max_log2 = 0
+    if (allocated(cache%log2_kp_max)) deallocate(cache%log2_kp_max)
+    if (allocated(cache%log2_kt_max)) deallocate(cache%log2_kt_max)
+    if (allocated(cache%kp_low)) deallocate(cache%kp_low)
+    if (allocated(cache%kt_low)) deallocate(cache%kt_low)
     if (allocated(cache%sample_polmodes)) deallocate(cache%sample_polmodes)
     if (allocated(cache%sample_polmodes_half)) deallocate(cache%sample_polmodes_half)
-    if (allocated(cache%sample_Ires)) deallocate(cache%sample_Ires)
+    if (allocated(cache%fft)) then
+       do kl = lbound(cache%fft, 1), ubound(cache%fft, 1)
+          call cache%fft(kl)%deinit
+       end do
+       deallocate(cache%fft)
+    end if
+    if (allocated(cache%shielding)) then
+       do m = lbound(cache%shielding, 1), ubound(cache%shielding, 1)
+          call shielding_deinit(cache%shielding(m))
+       end do
+       deallocate(cache%shielding)
+    end if
     if (allocated(cache%edge_fields)) deallocate(cache%edge_fields)
     if (allocated(cache%area_fields)) deallocate(cache%area_fields)
     if (allocated(cache%mid_fields)) deallocate(cache%mid_fields)
     if (allocated(cache%cntr_fields)) deallocate(cache%cntr_fields)
   end subroutine cache_deinit
 
-  subroutine cache_write(cache, file, dataset)
+  subroutine cache_write(cache, file, group)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
     type(cache_t), intent(in) :: cache
     character(len = *), intent(in) :: file
-    character(len = *), intent(in) :: dataset
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    character(len = *), parameter :: fmt = '("_", i3)'
+    character(len = 4) :: suffix
     integer(HID_T) :: h5id_root
+    integer :: m
 
-    call coord_cache_write(cache%sample_polmodes_half, file, &
-         trim(adjustl(dataset)) // '/sample_polmodes_half', &
-         'poloidal mode sampling points between flux surfaces')
-    call coord_cache_write(cache%sample_polmodes, file, &
-         trim(adjustl(dataset)) // '/sample_polmodes', &
-         'poloidal mode sampling points on flux surfaces')
-    call coord_cache_write(cache%sample_Ires, file, &
-         trim(adjustl(dataset)) // '/sample_Ires', &
-         'poloidal mode sampling points for resonant currents')
-    call field_cache_write(cache%edge_fields, file, &
-         trim(adjustl(dataset)) // '/edge_fields', &
-         'GL quadrature points on triangle edges')
-    call field_cache_write(cache%area_fields, file, &
-         trim(adjustl(dataset)) // '/area_fields', &
-         'GL quadrature points on triangle areas')
-    call field_cache_write(cache%mid_fields, file, &
-         trim(adjustl(dataset)) // '/mid_fields', &
-         'triangle edge midpoints')
-    call field_cache_write(cache%cntr_fields, file, &
-         trim(adjustl(dataset)) // '/cntr_fields', &
-         'weighted triangle centroids')
+    grp = trim(group)
+    call coord_cache_write(cache%sample_polmodes_half, file, grp // &
+         '/sample_polmodes_half', 'poloidal mode sampling points between flux surfaces')
+    call coord_cache_write(cache%sample_polmodes, file, grp // &
+         '/sample_polmodes', 'poloidal mode sampling points on flux surfaces')
+    call field_cache_write(cache%edge_fields, file, grp // &
+         '/edge_fields', 'GL quadrature points on triangle edges')
+    call field_cache_write(cache%area_fields, file, grp // &
+         '/area_fields', 'GL quadrature points on triangle areas')
+    call field_cache_write(cache%mid_fields, file, grp // &
+         '/mid_fields', 'triangle edge midpoints')
+    call field_cache_write(cache%cntr_fields, file, grp // &
+         '/cntr_fields', 'weighted triangle centroids')
     call h5_open_rw(file, h5id_root)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nrad', cache%nrad, &
-         comment = 'number of radial divisions for poloidal mode sampling points')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/npol', cache%npol, &
-         comment = 'number of poloidal divisions for poloidal mode sampling points')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_order', cache%GL_order, &
+    call h5_add(h5id_root, grp // '/GL_order', cache%GL_order, &
          comment = 'order of G-L quadrature for resonant current sampling points')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/GL_weights', cache%GL_weights, &
-         lbound(cache%GL_weights), ubound(cache%GL_weights), unit = 'Mx', &
-         comment = 'G-L quadrature weights including psi interval')
+    call h5_add(h5id_root, grp // '/log2_kp_max', cache%log2_kp_max, &
+         lbound(cache%log2_kp_max), ubound(cache%log2_kp_max), &
+         comment = 'binary logarithm of poloidal sampling points on flux surfaces')
+    call h5_add(h5id_root, grp // '/log2_kt_max', cache%log2_kt_max, &
+         lbound(cache%log2_kt_max), ubound(cache%log2_kt_max), &
+         comment = 'binary logarithm of poloidal sampling points between flux surfaces')
     call h5_close(h5id_root)
+    do m = mesh%m_res_min, mesh%m_res_max
+       write (suffix, fmt) m
+       call shielding_write(cache%shielding(m), file, grp // &
+            '/shielding' // suffix)
+    end do
   end subroutine cache_write
 
-  subroutine cache_read(cache, file, dataset)
+  subroutine cache_read(cache, file, group)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
     type(cache_t), intent(inout) :: cache
     character(len = *), intent(in) :: file
-    character(len = *), intent(in) :: dataset
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    character(len = *), parameter :: fmt = '("_", i3)'
+    character(len = 4) :: suffix
     integer(HID_T) :: h5id_root
-    integer :: nrad, npol, GL_order
+    integer :: m, GL_order
 
+    grp = trim(group)
     call h5_open(file, h5id_root)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/nrad', nrad)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/npol', npol)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_order', GL_order)
+    call h5_get(h5id_root, grp // '/GL_order', GL_order)
     call h5_close(h5id_root)
-    call cache_init(cache, nrad, npol, GL_order)
+    call cache_init(cache, GL_order)
     call coord_cache_read(cache%sample_polmodes_half, file, &
-         trim(adjustl(dataset)) // '/sample_polmodes_half')
+         grp // '/sample_polmodes_half')
     call coord_cache_read(cache%sample_polmodes, file, &
-         trim(adjustl(dataset)) // '/sample_polmodes')
-    call coord_cache_read(cache%sample_Ires, file, &
-         trim(adjustl(dataset)) // '/sample_Ires')
-    call field_cache_read(cache%edge_fields, file, trim(adjustl(dataset)) // '/edge_fields')
-    call field_cache_read(cache%area_fields, file, trim(adjustl(dataset)) // '/area_fields')
-    call field_cache_read(cache%mid_fields, file, trim(adjustl(dataset)) // '/mid_fields')
-    call field_cache_read(cache%cntr_fields, file, trim(adjustl(dataset)) // '/cntr_fields')
+         grp // '/sample_polmodes')
+    do m = mesh%m_res_min, mesh%m_res_max
+       write (suffix, fmt) m
+       call shielding_read(cache%shielding(m), file, grp // '/shielding' // suffix)
+    end do
+    call field_cache_read(cache%edge_fields, file, grp // '/edge_fields')
+    call field_cache_read(cache%area_fields, file, grp // '/area_fields')
+    call field_cache_read(cache%mid_fields, file, grp // '/mid_fields')
+    call field_cache_read(cache%cntr_fields, file, grp // '/cntr_fields')
   end subroutine cache_read
 
   subroutine generate_mesh
     use mephit_conf, only: conf
+    integer :: m
 
     if (conf%kilca_scale_factor /= 0) then
        mesh%n = conf%n * conf%kilca_scale_factor
@@ -824,11 +921,13 @@ contains
     call connect_mesh_points
     call mesh_write_MFEM
     call write_FreeFem_mesh
-    call cache_init(cache, mesh%nflux, 512, 4)
-    call compute_sample_polmodes(cache%sample_polmodes_half, cache%npol, .true.)
-    call compute_sample_polmodes(cache%sample_polmodes, cache%npol, .false.)
-    call compute_sample_Ires(cache%sample_Ires, cache%GL_weights, cache%GL_order)
-    call fft%init(cache%npol)
+    call cache_init(cache, 4)
+    call compute_sample_polmodes(cache%sample_polmodes_half, .true.)
+    call compute_sample_polmodes(cache%sample_polmodes, .false.)
+    do m = mesh%m_res_min, mesh%m_res_max
+       call compute_sample_Ires(cache%shielding(m)%sample_Ires, &
+            cache%shielding(m)%GL_weights, cache%GL_order, m)
+    end do
     call compute_gpec_jacfac
     call cache_equilibrium_field
     call init_flux_variables
@@ -1621,47 +1720,64 @@ contains
   end subroutine compute_shielding_auxiliaries
 
   subroutine compute_gpec_jacfac
-    integer, parameter :: m_max = 16
-    integer :: kf, kpol
+    integer :: kf, kpol, k, npol
 
-    allocate(mesh%gpec_jacfac(-m_max:m_max, mesh%nflux))
-    mesh%gpec_jacfac(:, :) = (0d0, 0d0)
+    allocate(mesh%gpec_jacfac(mesh%nflux))
+    mesh%gpec_jacfac(:) = 0d0
     do kf = 1, mesh%nflux
-       do kpol = 1, cache%npol
-          associate (s => cache%sample_polmodes_half(kpol, kf))
-            fft%samples(kpol) = s%sqrt_g * s%R * hypot(s%B0_Z, -s%B0_R)
+       npol = shiftl(1, cache%log2_kt_max(kf))
+       do kpol = 1, npol
+          k = cache%kt_low(kf) + kpol
+          associate (s => cache%sample_polmodes_half(k))
+            mesh%gpec_jacfac(kf) = mesh%gpec_jacfac(kf) + &
+                 s%sqrt_g * s%R * hypot(s%B0_Z, -s%B0_R)
           end associate
        end do
-       call fft%apply(-m_max, m_max, mesh%gpec_jacfac(:, kf))
+       mesh%gpec_jacfac(kf) = mesh%gpec_jacfac(kf) / dble(npol)
     end do
   end subroutine compute_gpec_jacfac
 
   !> Compute coarse grid for poloidal mode sampling points
-  subroutine compute_sample_polmodes(sample, npol, half_grid)
+  subroutine compute_sample_polmodes(sample, half_grid)
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
-    use mephit_conf, only: conf
+    use mephit_conf, only: conf, logger
     use mephit_util, only: pi
-    type(coord_cache_t), dimension(:, :), allocatable, intent(inout) :: sample
-    integer, intent(in) :: npol
+    type(coord_cache_t), dimension(:), intent(out) :: sample
     logical, intent(in) :: half_grid
-    integer :: kf, kpol
+    integer :: kf, kpol, k
+    integer, dimension(mesh%nflux) :: npol, k_low
     real(dp) :: dum, q
     real(dp), allocatable, dimension(:) :: psi, rad
 
-    if (allocated(sample)) deallocate(sample)
-    allocate(sample(npol, mesh%nflux))
     if (half_grid) then
+       npol = shiftl(1, cache%log2_kt_max)
+       if (size(sample) /= sum(npol)) then
+          call logger%msg_arg_size('compute_sample_polmodes', &
+               'size(sample)', 'sum(npol)', size(sample), sum(npol))
+          if (logger%err) call logger%write_msg
+          error stop
+       end if
        allocate(psi, source = fs_half%psi)
        allocate(rad, source = fs_half%rad)
+       k_low = cache%kt_low
     else
+       npol = shiftl(1, cache%log2_kp_max)
+       if (size(sample) /= sum(npol)) then
+          call logger%msg_arg_size('compute_sample_polmodes', &
+               'size(sample)', 'sum(npol)', size(sample), sum(npol))
+          if (logger%err) call logger%write_msg
+          error stop
+       end if
        allocate(psi, source = fs%psi)
        allocate(rad, source = fs%rad)
+       k_low = cache%kp_low
     end if
     do kf = 1, mesh%nflux
-       do kpol = 1, npol
-          associate (s => sample(kpol, kf))
+       do kpol = 1, npol(kf)
+          k = k_low(kf) + kpol
+          associate (s => sample(k))
             s%psi = psi(kf)
-            s%theta = 2d0 * pi * dble(kpol - 1) / dble(npol)
+            s%theta = 2d0 * pi * dble(kpol - 1) / dble(npol(kf))
             if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
                s%R = mesh%R_O + rad(kf) * cos(s%theta)
                s%Z = mesh%Z_O + rad(kf) * sin(s%theta)
@@ -1691,14 +1807,15 @@ contains
   end subroutine compute_sample_polmodes
 
   !> Compute fine grid for parallel current sampling points.
-  subroutine compute_sample_Ires(sample_Ires, GL_weights, GL_order)
+  subroutine compute_sample_Ires(sample_Ires, GL_weights, GL_order, m)
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
     use mephit_conf, only: logger
     use mephit_util, only: pi, interp_psi_pol, gauss_legendre_unit_interval
-    type(coord_cache_t), dimension(:, :, mesh%m_res_min:), intent(out) :: sample_Ires
-    real(dp), dimension(:, mesh%m_res_min:), intent(out) :: GL_weights
+    type(coord_cache_t), dimension(:, :), intent(out) :: sample_Ires
+    real(dp), dimension(:), intent(out) :: GL_weights
     integer, intent(in) :: GL_order
-    integer :: nrad, krad, npol, kpol, m, k, kf, kGL
+    integer, intent(in) :: m
+    integer :: nrad, krad, npol, kpol, k, kf, kGL
     real(dp) :: theta(size(sample_Ires, 1)), psi(size(sample_Ires, 2)), &
          weights(GL_order), points(GL_order), q, dum
 
@@ -1709,24 +1826,10 @@ contains
        if (logger%err) call logger%write_msg
        error stop
     end if
-    if (size(GL_weights, 1) /= 3 * GL_order) then
+    if (size(GL_weights) /= 3 * GL_order) then
        call logger%msg_arg_size('compute_sample_Ires', &
-            'size(GL_weights, 1)', '3 * GL_order', &
-            size(GL_weights, 1), 3 * GL_order)
-       if (logger%err) call logger%write_msg
-       error stop
-    end if
-    if (ubound(sample_Ires, 3) /= mesh%m_res_max) then
-       call logger%msg_arg_size('compute_sample_Ires', &
-            'ubound(sample_Ires, 3)', 'mesh%m_res_max', &
-            ubound(sample_Ires, 3), mesh%m_res_max)
-       if (logger%err) call logger%write_msg
-       error stop
-    end if
-    if (ubound(GL_weights, 2) /= mesh%m_res_max) then
-       call logger%msg_arg_size('compute_sample_Ires', &
-            'ubound(GL_weights, 2)', 'mesh%m_res_max', &
-            ubound(GL_weights, 2), mesh%m_res_max)
+            'size(GL_weights)', '3 * GL_order', &
+            size(GL_weights), 3 * GL_order)
        if (logger%err) call logger%write_msg
        error stop
     end if
@@ -1734,38 +1837,36 @@ contains
     nrad = 3 * GL_order
     theta = 2d0 * pi * [(dble(kpol - 1), kpol = 1, npol)] / dble(npol)
     call gauss_legendre_unit_interval(GL_order, points, weights)
-    do m = mesh%m_res_min, mesh%m_res_max
-       do k = 1, 3
-          kf = mesh%res_ind(m) + k - 2
-          do kGL = 1, GL_order
-             krad = (k - 1) * GL_order + kGL
-             if (kf > mesh%nflux) then
-                psi(krad) = fs%psi(mesh%nflux) * points(kGL) + &
-                     fs%psi(mesh%nflux - 1) * points(GL_order - kGL + 1)
-                GL_weights(krad, m) = 0d0
-             else
-                psi(krad) = fs%psi(kf) * points(kGL) + &
-                     fs%psi(kf - 1) * points(GL_order - kGL + 1)
-                GL_weights(krad, m) = weights(kGL) * abs(fs%psi(kf) - fs%psi(kf - 1))
-             end if
-          end do
+    do k = 1, 3
+       kf = mesh%res_ind(m) + k - 2
+       do kGL = 1, GL_order
+          krad = (k - 1) * GL_order + kGL
+          if (kf > mesh%nflux) then
+             psi(krad) = fs%psi(mesh%nflux) * points(kGL) + &
+                  fs%psi(mesh%nflux - 1) * points(GL_order - kGL + 1)
+             GL_weights(krad) = 0d0
+          else
+             psi(krad) = fs%psi(kf) * points(kGL) + &
+                  fs%psi(kf - 1) * points(GL_order - kGL + 1)
+             GL_weights(krad) = weights(kGL) * abs(fs%psi(kf) - fs%psi(kf - 1))
+          end if
        end do
-       do krad = 1, nrad
-          do kpol = 1, npol
-             associate (s => sample_Ires(kpol, krad, m))
-               s%psi = psi(krad)
-               s%theta = theta(kpol)
-               ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
-               call magdata_in_symfluxcoord_ext(2, dum, psi(krad) - fs%psi(0), theta(kpol), &
-                    q, dum, s%sqrt_g, dum, dum, s%R, dum, s%dR_dtheta, s%Z, dum, s%dZ_dtheta)
-               s%ktri = point_location(s%R, s%Z)
-               call field(s%R, 0d0, s%Z, s%B0_R, s%B0_phi, s%B0_Z, &
-                    dum, dum, dum, dum, dum, dum, dum, dum, dum)
-               ! sqrt_g misses a factor of q and the signs of dpsi_drad and B0_phi
-               ! taken together, these three always yield a positive sign in COCOS 3
-               s%sqrt_g = s%sqrt_g * abs(q)
-             end associate
-          end do
+    end do
+    do krad = 1, nrad
+       do kpol = 1, npol
+          associate (s => sample_Ires(kpol, krad))
+            s%psi = psi(krad)
+            s%theta = theta(kpol)
+            ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
+            call magdata_in_symfluxcoord_ext(2, dum, psi(krad) - fs%psi(0), theta(kpol), &
+                 q, dum, s%sqrt_g, dum, dum, s%R, dum, s%dR_dtheta, s%Z, dum, s%dZ_dtheta)
+            s%ktri = point_location(s%R, s%Z)
+            call field(s%R, 0d0, s%Z, s%B0_R, s%B0_phi, s%B0_Z, &
+                 dum, dum, dum, dum, dum, dum, dum, dum, dum)
+            ! sqrt_g misses a factor of q and the signs of dpsi_drad and B0_phi
+            ! taken together, these three always yield a positive sign in COCOS 3
+            s%sqrt_g = s%sqrt_g * abs(q)
+          end associate
        end do
     end do
   end subroutine compute_sample_Ires
@@ -2234,7 +2335,7 @@ contains
     allocate(mesh%GL2_R(mesh%GL2_order, mesh%nedge))
     allocate(mesh%GL2_Z(mesh%GL2_order, mesh%nedge))
     allocate(mesh%shielding_coeff(mesh%m_res_min:mesh%m_res_max))
-    allocate(mesh%gpec_jacfac(-16:16, mesh%nflux))
+    allocate(mesh%gpec_jacfac(mesh%nflux))
     allocate(mesh%area(mesh%ntri))
     allocate(mesh%cntr_R(mesh%ntri))
     allocate(mesh%cntr_Z(mesh%ntri))
