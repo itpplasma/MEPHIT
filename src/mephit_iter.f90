@@ -833,33 +833,62 @@ contains
   end subroutine compute_currn
 
   subroutine add_shielding_current
-    use mephit_conf, only: conf_arr
+    use mephit_conf, only: conf_arr, conf
     use mephit_util, only: imun
-    use mephit_mesh, only: equil, mesh
-    integer :: m, m_res, kf, kpoi_min, kpoi_max
+    use mephit_mesh, only: equil, mesh, cache
+    integer :: m, m_res, kf, kpoi_min, kpoi_max, kp, kpoi
     complex(dp) :: pn_outer, pn_inner
 
-    do m = mesh%m_res_min, mesh%m_res_max
-       m_res = -equil%cocos%sgn_q * m
-       if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then
-          kf = mesh%res_ind(m)
-          kpoi_min = mesh%kp_low(kf) + 1
-          kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
-          pn_outer = sum(exp(-imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max)) * &
-               pn%DOF(kpoi_min:kpoi_max)) / dble(mesh%kp_max(kf))
-          kf = mesh%res_ind(m) - 1
-          kpoi_min = mesh%kp_low(kf) + 1
-          kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
-          pn_inner = sum(exp(-imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max)) * &
-               pn%DOF(kpoi_min:kpoi_max)) / dble(mesh%kp_max(kf))
-          kf = mesh%res_ind(m)
-          kpoi_min = mesh%kp_low(kf) + 1
-          kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
-          jnpar_B0%DOF(kpoi_min:kpoi_max) = jnpar_B0%DOF(kpoi_min:kpoi_max) + &
-               mesh%shielding_coeff(m) * conf_arr%sheet_current_factor(m) * &
-               (pn_outer - pn_inner) * exp(imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max))
-       end if
-    end do
+    if (conf%shielding_fourier) then
+       do m = mesh%m_res_min, mesh%m_res_max
+          m_res = -equil%cocos%sgn_q * m
+          if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then
+             kf = mesh%res_ind(m)
+             kpoi_min = mesh%kp_low(kf) + 1
+             kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
+             pn_outer = sum(exp(-imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max)) * &
+                  pn%DOF(kpoi_min:kpoi_max)) / dble(mesh%kp_max(kf))
+             kf = mesh%res_ind(m) - 1
+             kpoi_min = mesh%kp_low(kf) + 1
+             kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
+             pn_inner = sum(exp(-imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max)) * &
+                  pn%DOF(kpoi_min:kpoi_max)) / dble(mesh%kp_max(kf))
+             jnpar_B0%DOF(kpoi_min:kpoi_max) = jnpar_B0%DOF(kpoi_min:kpoi_max) + &
+                  cache%shielding(m)%coeff * conf_arr%sheet_current_factor(m) * &
+                  (pn_outer - pn_inner) * exp(imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max))
+             kf = mesh%res_ind(m)
+             kpoi_min = mesh%kp_low(kf) + 1
+             kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
+             jnpar_B0%DOF(kpoi_min:kpoi_max) = jnpar_B0%DOF(kpoi_min:kpoi_max) + &
+                  cache%shielding(m)%coeff * conf_arr%sheet_current_factor(m) * &
+                  (pn_outer - pn_inner) * exp(imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max))
+          end if
+       end do
+    else
+       do m = mesh%m_res_min, mesh%m_res_max
+          if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then
+             associate (s => cache%shielding(m))
+               kf = mesh%res_ind(m) - 1
+               do kp = 1, mesh%kp_max(kf)
+                  kpoi = mesh%kp_low(kf) + kp
+                  pn_inner = pn%DOF(kpoi)
+                  pn_outer = sum(s%weights(:, kp) * pn%DOF(s%kpois(:, kp)))
+                  jnpar_B0%DOF(kpoi) = jnpar_B0%DOF(kpoi) + (pn_outer - pn_inner) * &
+                       s%coeff * conf_arr%sheet_current_factor(m)
+               end do
+               kf = mesh%res_ind(m)
+               do kp = 1, mesh%kp_max(kf)
+                  kpoi = mesh%kp_low(kf) + kp
+                  pn_inner = sum(s%weights(:, s%inner_kp_max + kp) * &
+                       pn%DOF(s%kpois(:, s%inner_kp_max + kp)))
+                  pn_outer = pn%DOF(kpoi)
+                  jnpar_B0%DOF(kpoi) = jnpar_B0%DOF(kpoi) + (pn_outer - pn_inner) * &
+                       s%coeff * conf_arr%sheet_current_factor(m)
+               end do
+             end associate
+          end if
+       end do
+    end if
   end subroutine add_shielding_current
 
   subroutine debug_currn(group, presn, magfn, currn, inhom)

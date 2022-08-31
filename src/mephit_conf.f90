@@ -116,9 +116,9 @@ module mephit_conf
      !> to 0.45 cm.
      real(dp) :: max_Delta_rad = 0.2d0
 
-     !> Number of radial divisions in radially refined regions for parallel current
-     !> computations. Defaults to 2048.
-     integer :: nrad_Ipar = 2048
+     !> Use Fourier expansion of resonant mode in shielding current computation.
+     !> Defaults to true.
+     logical :: shielding_fourier = .true.
 
      !> Minimum temperature. Does not apply when #pres_prof equals #pres_prof_geqdsk.
      !> Defaults to 20 eV.
@@ -223,6 +223,7 @@ contains
     type(config_t), intent(in) :: config
     character(len = *), intent(in) :: file, dataset
     integer(HID_T) :: h5id_root
+    integer :: shielding_fourier
 
     call h5_open_rw(file, h5id_root)
     call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
@@ -250,8 +251,13 @@ contains
          comment = 'index of toroidal harmonics of perturbation')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/max_Delta_rad', config%max_Delta_rad, &
          comment = 'maximum distance between flux surfaces along theta = 0', unit = 'cm')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nrad_Ipar', config%nrad_Ipar, &
-         comment = 'radial divisions in radially refined regions for parallel current computations')
+    if (conf%shielding_fourier) then
+       shielding_fourier = 1
+    else
+       shielding_fourier = 0
+    end if
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_fourier', shielding_fourier, &
+         comment = 'use only resonant Fourier mode in shielding current perturbation')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/temp_min', config%temp_min, &
          comment = 'minimum temperature', unit = 'eV')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dens_min', config%dens_min, &
