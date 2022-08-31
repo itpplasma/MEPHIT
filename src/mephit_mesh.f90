@@ -1017,7 +1017,7 @@ contains
     mesh%m_res_min = max(ceiling(minval(abs(q_sample)) * dble(mesh%n)), conf%n + 1)
     mesh%m_res_max = floor(maxval(abs(q_sample)) * dble(mesh%n))
     if (allocated(mesh%res_modes)) deallocate(mesh%res_modes)
-    if (conf%kilca_scale_factor /= 0) then
+    if (conf%kilca_scale_factor /= 0 .and. conf%kilca_pol_mode /= 0) then
        allocate(mesh%res_modes(1))
        mesh%res_modes(:) = [conf%kilca_pol_mode]
     else
@@ -1858,7 +1858,7 @@ contains
           associate (s => sample(k))
             s%psi = psi(kf)
             s%theta = 2d0 * pi * dble(kpol - 1) / dble(npol(kf))
-            if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
+            if (conf%kilca_scale_factor /= 0 .and. conf%debug_kilca_geom_theta) then
                s%R = mesh%R_O + rad(kf) * cos(s%theta)
                s%Z = mesh%Z_O + rad(kf) * sin(s%theta)
                s%dR_dtheta = -rad(kf) * sin(s%theta)
@@ -1872,7 +1872,7 @@ contains
             s%ktri = point_location(s%R, s%Z)
             call field(s%R, 0d0, s%Z, s%B0_R, s%B0_phi, s%B0_Z, &
                  dum, dum, dum, dum, dum, dum, dum, dum, dum)
-            if (conf%kilca_pol_mode /= 0 .and. conf%debug_kilca_geom_theta) then
+            if (conf%kilca_scale_factor /= 0 .and. conf%debug_kilca_geom_theta) then
                s%sqrt_g = equil%cocos%sgn_dpsi * rad(kf) / &
                     (-s%B0_R * sin(s%theta) + s%B0_Z * cos(s%theta))
             else
@@ -2380,7 +2380,7 @@ contains
     allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%psi_res(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%rad_norm_res(mesh%m_res_min:mesh%m_res_max))
-    if (conf%kilca_scale_factor /= 0) then
+    if (conf%kilca_scale_factor /= 0 .and. conf%kilca_pol_mode /= 0) then
        allocate(mesh%res_modes(1))
     else
        allocate(mesh%res_modes(mesh%m_res_max - mesh%m_res_min + 1))

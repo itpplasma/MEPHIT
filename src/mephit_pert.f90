@@ -95,11 +95,14 @@ module mephit_pert
      !> Vacuum perturbation field in units of Gauss.
      type(RT0_t) :: Bn
 
-     !> Lower and upper bound of of vac_t::kilca_vac_coeff.
+     !> Lower and upper bound of of vac_t::kilca_vac_coeff and vac_t::kilca_pol_modes.
      integer :: m_min, m_max
 
-     !> single poloidal mode number used with KiLCA.
+     !> Single poloidal mode number used with KiLCA. If zero, use whole available range.
      integer :: kilca_pol_mode
+
+     !> poloidal modes excited in KiLCA
+     integer, allocatable :: kilca_pol_modes(:)
 
      !> Integration constant for resonant vacuum perturbation in KiLCA comparison.
      complex(dp), allocatable :: kilca_vac_coeff(:)
@@ -627,7 +630,7 @@ contains
     call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_max', vec_polmodes%m_max, &
          'maximal absolute poloidal mode number')
-    if (conf%kilca_pol_mode /= 0) then
+    if (conf%kilca_scale_factor /= 0) then
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_rad', &
             vec_polmodes%coeff_rad, lbound(vec_polmodes%coeff_rad), ubound(vec_polmodes%coeff_rad), &
             comment = 'r component of ' // trim(adjustl(comment)), &
@@ -733,12 +736,20 @@ contains
     use mephit_conf, only: conf
     class(vac_t), intent(inout) :: this
     integer, intent(in) :: nedge, ntri, m_min, m_max
+    integer :: m
 
     call vac_deinit(this)
     call RT0_init(this%Bn, nedge, ntri)
     if (conf%kilca_scale_factor /= 0) then
        this%m_min = m_min
        this%m_max = m_max
+       if (conf%kilca_pol_mode /= 0) then
+          allocate(vac%kilca_pol_modes(2))
+          vac%kilca_pol_modes(:) = [conf%kilca_pol_mode, -conf%kilca_pol_mode]
+       else
+          allocate(vac%kilca_pol_modes(2 * (m_max - m_min + 1)))
+          vac%kilca_pol_modes(:) = [([m, -m], m = m_min, m_max)]
+       end if
        allocate(this%kilca_vac_coeff(m_min:m_max))
        this%kilca_vac_coeff = (0d0, 0d0)
     end if
@@ -751,6 +762,7 @@ contains
     this%m_min = 0
     this%m_max = 0
     this%kilca_pol_mode = 0
+    if (allocated(this%kilca_pol_modes)) deallocate(this%kilca_pol_modes)
     if (allocated(this%kilca_vac_coeff)) deallocate(this%kilca_vac_coeff)
   end subroutine vac_deinit
 
@@ -768,6 +780,7 @@ contains
        call h5_get(h5id_root, trim(adjustl(grp_name)) // '/m_min', this%m_max)
        call h5_get(h5id_root, trim(adjustl(grp_name)) // '/m_max', this%m_max)
        call h5_get(h5id_root, trim(adjustl(grp_name)) // '/kilca_pol_mode', this%kilca_pol_mode)
+       call h5_get(h5id_root, trim(adjustl(grp_name)) // '/kilca_pol_modes', this%kilca_pol_modes)
        call h5_get(h5id_root, trim(adjustl(grp_name)) // '/kilca_vac_coeff', this%kilca_vac_coeff)
        call h5_close(h5id_root)
     end if
@@ -792,6 +805,9 @@ contains
             'maximal poloidal mode number')
        call h5_add(h5id_root, trim(adjustl(grp_name)) // '/kilca_pol_mode', this%kilca_pol_mode, &
             'poloidal mode number of resonance to be considered in pre- and post-processing')
+       call h5_add(h5id_root, trim(adjustl(grp_name)) // '/kilca_pol_modes', &
+            this%kilca_pol_modes, lbound(this%kilca_pol_modes), ubound(this%kilca_pol_modes), &
+            'full range of poloidal mode numbers')
        call h5_add(h5id_root, trim(adjustl(grp_name)) // '/kilca_vac_coeff', &
             this%kilca_vac_coeff, lbound(this%kilca_vac_coeff), ubound(this%kilca_vac_coeff), &
             'coefficient of modified Bessel function of first kind', 'G')
@@ -1750,20 +1766,18 @@ contains
 
   ! calculate resonant vacuum perturbation
   subroutine compute_kilca_vacuum(Bn)
-    use mephit_conf, only: conf
     use mephit_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
-    integer :: kedge, k, pol_modes(2)
+    integer :: kedge, k
     real(dp) :: rho, theta
     complex(dp) :: B_R, B_phi, B_Z
 
-    pol_modes = [conf%kilca_pol_mode, -conf%kilca_pol_mode]
     Bn%DOF = (0d0, 0d0)
     do kedge = 1, mesh%nedge
        do k = 1, mesh%GL_order
           rho = hypot(mesh%GL_R(k, kedge) - mesh%R_O, mesh%GL_Z(k, kedge) - mesh%Z_O)
           theta = atan2(mesh%GL_Z(k, kedge) - mesh%Z_O, mesh%GL_R(k, kedge) - mesh%R_O)
-          call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, rho, theta, B_R, B_phi, B_Z)
+          call kilca_vacuum(mesh%n, vac%kilca_pol_modes, mesh%R_O, rho, theta, B_R, B_phi, B_Z)
           Bn%DOF(kedge) = Bn%DOF(kedge) + mesh%GL_weights(k) * &
                (B_R * mesh%edge_Z(kedge) - B_Z * mesh%edge_R(kedge)) * mesh%GL_R(k, kedge)
        end do
@@ -1904,19 +1918,21 @@ contains
 
   subroutine debug_Bmnvac_kilca
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use mephit_conf, only: conf, datafile
+    use mephit_conf, only: datafile
     use mephit_mesh, only: fs_half, mesh
     character(len = *), parameter :: dataset = 'Bmnvac'
     integer(HID_T) :: h5id_root
-    complex(dp), dimension(mesh%nflux) :: B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
-    integer :: kf, abs_pol_mode
+    complex(dp), dimension(mesh%nflux, vac%m_min:vac%m_max) :: &
+         B_rad_neg, B_pol_neg, B_tor_neg, B_rad_pos, B_pol_pos, B_tor_pos
+    integer :: kf, m
 
-    abs_pol_mode = abs(conf%kilca_pol_mode)
-    do kf = 1, mesh%nflux
-       call kilca_vacuum_fourier(mesh%n, -abs_pol_mode, mesh%R_O, fs_half%rad(kf), &
-            vac%kilca_vac_coeff(abs_pol_mode), B_rad_neg(kf), B_pol_neg(kf), B_tor_neg(kf))
-       call kilca_vacuum_fourier(mesh%n, abs_pol_mode, mesh%R_O, fs_half%rad(kf), &
-            vac%kilca_vac_coeff(abs_pol_mode), B_rad_pos(kf), B_pol_pos(kf), B_tor_pos(kf))
+    do m = vac%m_min, vac%m_max
+       do kf = 1, mesh%nflux
+          call kilca_vacuum_fourier(mesh%n, -m, mesh%R_O, fs_half%rad(kf), &
+               vac%kilca_vac_coeff(m), B_rad_neg(kf, m), B_pol_neg(kf, m), B_tor_neg(kf, m))
+          call kilca_vacuum_fourier(mesh%n, m, mesh%R_O, fs_half%rad(kf), &
+               vac%kilca_vac_coeff(m), B_rad_pos(kf, m), B_pol_pos(kf, m), B_tor_pos(kf, m))
+       end do
     end do
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, dataset // '/')
@@ -1927,11 +1943,11 @@ contains
     call h5_add(h5id_root, dataset // '/comp_tor_neg', B_tor_neg, lbound(B_tor_neg), ubound(B_tor_neg), &
          comment = 'toroidal component of negative poloidal mode of KiLCA vacuum at half-grid steps', unit = 'G')
     call h5_add(h5id_root, dataset // '/comp_rad_pos', B_rad_pos, lbound(B_rad_pos), ubound(B_rad_pos), &
-         comment = 'radial component of posative poloidal mode of KiLCA vacuum at half-grid steps', unit = 'G')
+         comment = 'radial component of positive poloidal mode of KiLCA vacuum at half-grid steps', unit = 'G')
     call h5_add(h5id_root, dataset // '/comp_pol_pos', B_pol_pos, lbound(B_pol_pos), ubound(B_pol_pos), &
-         comment = 'poloidal component of posative poloidal mode of KiLCA vacuum at half-grid steps', unit = 'G')
+         comment = 'poloidal component of positive poloidal mode of KiLCA vacuum at half-grid steps', unit = 'G')
     call h5_add(h5id_root, dataset // '/comp_tor_pos', B_tor_pos, lbound(B_tor_pos), ubound(B_tor_pos), &
-         comment = 'toroidal component of posative poloidal mode of KiLCA vacuum at half-gridd steps', unit = 'G')
+         comment = 'toroidal component of positive poloidal mode of KiLCA vacuum at half-grid steps', unit = 'G')
     call h5_close(h5id_root)
   end subroutine debug_Bmnvac_kilca
 
@@ -1942,19 +1958,18 @@ contains
     type(RT0_t), intent(in) :: Bn
     character(len = *), parameter :: dataset = 'debug_RT0'
     integer(HID_T) :: h5id_root
-    integer :: kf, log2, kpol, k, pol_modes(2)
+    integer :: kf, log2, kpol, k
     complex(dp) :: B_interp(3)
     complex(dp), dimension(size(cache%sample_polmodes_half)) :: &
          B_R, B_Z, B_phi, B_R_interp, B_Z_interp, B_phi_interp
 
-    pol_modes = [conf%kilca_pol_mode, -conf%kilca_pol_mode]
     do kf = 1, mesh%nflux
        log2 = cache%log2_kt_max(kf)
        do kpol = 1, shiftl(1, log2)
           k = cache%kt_low(kf) + kpol
           associate (s => cache%sample_polmodes_half(k))
-            if (conf%kilca_pol_mode /= 0) then
-               call kilca_vacuum(mesh%n, pol_modes, mesh%R_O, &
+            if (conf%kilca_scale_factor /= 0) then
+               call kilca_vacuum(mesh%n, vac%kilca_pol_modes, mesh%R_O, &
                     fs_half%rad(kf), s%theta, B_R(k), B_phi(k), B_Z(k))
             else
                call spline_bn(conf%n, s%R, s%Z, B_R(k), B_phi(k), B_Z(k))
