@@ -167,13 +167,15 @@ class ParallelPlotter:
 
     @classmethod
     def plot_worker(cls, plot_objects_queue, results_queue):
+        import traceback
         while True:
             plot_object = plot_objects_queue.get()
             if isinstance(plot_object, PlotObject):
                 try:
                     plot_object.do_plot()
-                except BaseException as err:
-                    print(f"Unexpected {err=}, {type(err)=}")
+                except BaseException:
+                    print(f"Error plotting '{plot_object.filename}'")
+                    print(traceback.format_exc())
             else:
                 results_queue.put(plot_object)
                 break
@@ -276,9 +278,15 @@ class PolmodePlots(PlotObject):
         m = 0
         fig = Figure(figsize=two_squares)
         axs = fig.subplots(vert_plot, horz_plot)
+        axs[0].axhline(0.0, color='k', alpha=0.5, lw=0.5)
         for data in self.config['poldata']:
             if m in data['var'].keys():
-                axs[0].plot(data['rho'][m], self.config['comp'](data['var'][m]), label=data['label'])
+                if 'zoom_x' in self.config.keys():
+                    zoom_x = (self.config['zoom_x'][0] <= data['rho'][m]) & (data['rho'][m] <= self.config['zoom_x'][1])
+                    axs[0].plot(data['rho'][m][zoom_x], self.config['comp'](data['var'][m][zoom_x]),
+                                label=data['label'])
+                else:
+                    axs[0].plot(data['rho'][m], self.config['comp'](data['var'][m]), label=data['label'])
         if 'postprocess' in self.config.keys():
             for f in self.config['postprocess']:
                 f(fig, axs[0])
@@ -306,15 +314,22 @@ class PolmodePlots(PlotObject):
             for k in range(horz_plot):
                 m = (2 * k - 1) * m_abs * self.config['sgn_m_res']
                 axs[k].axhline(0.0, color='k', alpha=0.5, lw=0.5)
-                if m in self.config['resonances'] and not self.config['omit_res']:
-                    axs[k].axvline(self.config['resonances'][m],
-                                   color='b', alpha=0.5, lw=0.5, label='resonance position')
-                if m in self.config['resonances'] and 'res_neighbourhood' in self.config.keys():
-                    for pos in self.config['res_neighbourhood'][m]:
-                        axs[k].axvline(pos, color='k', alpha=0.5, lw=0.25)
+                if not self.config['omit_res']:
+                    if m in self.config['resonances']:
+                        axs[k].axvline(self.config['resonances'][m],
+                                       color='b', alpha=0.5, lw=0.5, label='resonance position')
+                    if m in self.config['resonances'] and 'res_neighbourhood' in self.config.keys():
+                        for pos in self.config['res_neighbourhood'][m]:
+                            axs[k].axvline(pos, color='k', alpha=0.5, lw=0.25)
                 for data in self.config['poldata']:
                     if m in data['var'].keys():
-                        axs[k].plot(data['rho'][m], self.config['comp'](data['var'][m]), label=data['label'])
+                        if 'zoom_x' in self.config.keys():
+                            zoom_x = (self.config['zoom_x'][0] <= data['rho'][m]) & \
+                                     (data['rho'][m] <= self.config['zoom_x'][1])
+                            axs[k].plot(data['rho'][m][zoom_x], self.config['comp'](data['var'][m][zoom_x]),
+                                        label=data['label'])
+                        else:
+                            axs[k].plot(data['rho'][m], self.config['comp'](data['var'][m]), label=data['label'])
                 if 'postprocess' in self.config.keys():
                     for f in self.config['postprocess']:
                         f(fig, axs[k])

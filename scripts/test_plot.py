@@ -1,6 +1,6 @@
 from mephit_plot import Gpec, HLine, Id, LogY, Mephit, ParallelPlotter, Plot1D, PlotObject, PolmodePlots, run_dir, \
     set_matplotlib_defaults, XTicks, YTicks
-from numpy import abs, angle, arange, arctan2, argmax, array, full, nan, pi, sign, sum
+from numpy import abs, angle, arange, arctan2, argmax, array, full, gradient, ix_, nan, nonzero, pi, sign, sum
 from numpy.fft import fft, rfft
 from scipy.interpolate import UnivariateSpline
 from functools import partial
@@ -12,29 +12,42 @@ class IterationPlots(PlotObject):
         from matplotlib.figure import Figure
         from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
         from matplotlib.backends.backend_pdf import PdfPages
-        from numpy import amin, amax
+        from numpy import amax, amin, fmax, fmin, nan
         super().do_plot()
         horz_plot = 3
         vert_plot = 1
         three_squares = (9.9, 3.3)
         pdf = PdfPages(path.join(self.work_dir, self.filename))
+        ylims = [[nan, nan], [nan, nan], [nan, nan]]
         if self.config['global_ylims']:
-            ylims = [(amin(ydata), amax(ydata)) for ydata in self.config['plotdata']]
-        else:
-            ylims = [None, None, None]
+            for k in range(len(self.config['plotdata'])):
+                ylims[k % horz_plot] = [fmin(ylims[k % horz_plot][0], amin(self.config['plotdata'][k])),
+                                        fmax(ylims[k % horz_plot][1], amax(self.config['plotdata'][k]))]
         for kiter in range(0, self.config['niter']):
             print(f"Plotting {self.filename}, k = {kiter + 1} ...")
             fig = Figure(figsize=three_squares)
             axs = fig.subplots(vert_plot, horz_plot)
             for k in range(horz_plot):
                 axs[k].set_yscale(self.config['yscale'][k])
-                axs[k].plot(self.config['rho'][k], self.config['plotdata'][k][kiter, :], **self.config['plotargs'])
+            for k in range(len(self.config['plotdata'])):
+                if 'zoom_x' in self.config.keys():
+                    zoom_x = (self.config['zoom_x'][0] <= self.config['rho'][k % horz_plot]) & \
+                             (self.config['rho'][k % horz_plot] <= self.config['zoom_x'][1])
+                    axs[k % horz_plot].plot(self.config['rho'][k % horz_plot][zoom_x],
+                                            self.config['plotdata'][k][kiter, :][zoom_x], **self.config['plotargs'])
+                else:
+                    axs[k % horz_plot].plot(self.config['rho'][k % horz_plot], self.config['plotdata'][k][kiter, :],
+                                            **self.config['plotargs'])
+            for k in range(horz_plot):
                 if not self.config['global_ylims'] and kiter == 0:
                     ylims[k] = axs[k].get_ylim()
                 else:
                     axs[k].set_ylim(ylims[k])
                 if 'res_pos' in self.config.keys():
                     axs[k].axvline(self.config['res_pos'], color='b', alpha=0.5, lw=0.5)
+                if 'res_neighbourhood' in self.config.keys():
+                    for pos in self.config['res_neighbourhood']:
+                        axs[k].axvline(pos, color='k', alpha=0.5, lw=0.25)
                 if 'postprocess' in self.config.keys():
                     for f in self.config['postprocess']:
                         f[k](fig, axs[k])
@@ -202,6 +215,53 @@ if __name__ == "__main__":
     config['comp'] = partial(angle, deg=True)
     config['ylabel'] = r'$\arg\, [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\degree}'
     plotter.plot_objects.put(PolmodePlots(work_dir, 'GPEC_Bmn_psi_arg.pdf', config))
+    ## zoomed plots
+    zoom_x = [0.001, 0.1]
+    zoom_m_max = 5
+    mephit_dpsi_Bmn = {'m_max': zoom_m_max, 'label': mephit_Bmn['label'], 'rho': dict(), 'var': dict()}
+    mephit_dpsi_Bmn_vac = {'m_max': zoom_m_max, 'label': mephit_Bmn_vac['label'], 'rho': dict(), 'var': dict()}
+    gpec_dpsi_Bmn = {'m_max': zoom_m_max, 'label': gpec_Bmn['label'], 'rho': dict(), 'var': dict()}
+    gpec_dpsi_Bmn_vac = {'m_max': zoom_m_max, 'label': gpec_Bmn_vac['label'], 'rho': dict(), 'var': dict()}
+    for m in mephit_Bmn['rho']:
+        if abs(m) <= zoom_m_max:
+            mephit_dpsi_Bmn['rho'][m] = mephit_Bmn['rho'][m]
+            mephit_dpsi_Bmn['var'][m] = full(mephit_Bmn['var'][m].shape, nan, dtype='D')
+            mephit_dpsi_Bmn['var'][m].real = gradient(mephit_Bmn['var'][m].real, mephit_Bmn['rho'][m])
+            mephit_dpsi_Bmn['var'][m].imag = gradient(mephit_Bmn['var'][m].imag, mephit_Bmn['rho'][m])
+    for m in mephit_Bmn_vac['rho']:
+        if abs(m) <= zoom_m_max:
+            mephit_dpsi_Bmn_vac['rho'][m] = mephit_Bmn_vac['rho'][m]
+            mephit_dpsi_Bmn_vac['var'][m] = full(mephit_Bmn_vac['var'][m].shape, nan, dtype='D')
+            mephit_dpsi_Bmn_vac['var'][m].real = gradient(mephit_Bmn_vac['var'][m].real, mephit_Bmn_vac['rho'][m])
+            mephit_dpsi_Bmn_vac['var'][m].imag = gradient(mephit_Bmn_vac['var'][m].imag, mephit_Bmn_vac['rho'][m])
+    for m in gpec_Bmn['rho']:
+        if abs(m) <= zoom_m_max:
+            gpec_dpsi_Bmn['rho'][m] = gpec_Bmn['rho'][m]
+            gpec_dpsi_Bmn['var'][m] = full(gpec_Bmn['var'][m].shape, nan, dtype='D')
+            gpec_dpsi_Bmn['var'][m].real = gradient(gpec_Bmn['var'][m].real, gpec_Bmn['rho'][m])
+            gpec_dpsi_Bmn['var'][m].imag = gradient(gpec_Bmn['var'][m].imag, gpec_Bmn['rho'][m])
+    for m in gpec_Bmn_vac['rho']:
+        if abs(m) <= zoom_m_max:
+            mask = nonzero((zoom_x[0] <= gpec_Bmn_vac['rho'][m]) & (gpec_Bmn_vac['rho'][m] <= zoom_x[1]))
+            gpec_dpsi_Bmn_vac['rho'][m] = gpec_Bmn_vac['rho'][m]
+            gpec_dpsi_Bmn_vac['var'][m] = full(gpec_Bmn_vac['var'][m].shape, nan, dtype='D')
+            gpec_dpsi_Bmn_vac['var'][m].real = gradient(gpec_Bmn_vac['var'][m].real, gpec_Bmn_vac['rho'][m])
+            gpec_dpsi_Bmn_vac['var'][m].imag = gradient(gpec_Bmn_vac['var'][m].imag, gpec_Bmn_vac['rho'][m])
+    mephit_Bmn['m_max'] = zoom_m_max
+    mephit_Bmn_vac['m_max'] = zoom_m_max
+    gpec_Bmn['m_max'] = zoom_m_max
+    gpec_Bmn_vac['m_max'] = zoom_m_max
+    config = {
+        'xlabel': r'$\psi$',
+        'ylabel': r'$\abs\, [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\tesla}',
+        'rho': testcase.post['psi_norm'], 'q': testcase.data['/cache/fs/q'][()],
+        'resonances': testcase.post['psi_norm_res'], 'sgn_m_res': testcase.post['sgn_m_res'], 'omit_res': True,
+        'poldata': [mephit_Bmn_vac, gpec_Bmn_vac, mephit_Bmn, gpec_Bmn], 'comp': abs, 'zoom_x': zoom_x
+    }
+    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_Jbgradpsi.pdf', config))
+    config['ylabel'] = r'$\abs\, \partial_{\psi} [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\tesla}'
+    config['poldata'] = [mephit_dpsi_Bmn_vac, gpec_dpsi_Bmn_vac, mephit_dpsi_Bmn, gpec_dpsi_Bmn]
+    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_dpsi_Jbgradpsi.pdf', config))
     ## normalization debugging
     cm_to_m = 1.0e-02
     G_to_T = 1.0e-04
@@ -339,9 +399,9 @@ if __name__ == "__main__":
     m_res_max = testcase.data['/mesh/m_res_max'][()]
     niter = testcase.data['/iter/niter'][()]
     nflux = testcase.data['/mesh/nflux'][()]
-    abs_pmn_iter = full((m_res_max - m_res_min + 1, niter, nflux + 1), nan)
-    abs_jmnpar_Bmod_iter = full((m_res_max - m_res_min + 1, niter, nflux + 1), nan)
-    abs_Bmn_rad_iter = full((m_res_max - m_res_min + 1, niter, nflux), nan)
+    abs_pmn_iter = full((2 * m_res_max + 1, niter, nflux + 1), nan)
+    abs_jmnpar_Bmod_iter = full((2 * m_res_max + 1, niter, nflux + 1), nan)
+    abs_Bmn_rad_iter = full((2 * m_res_max + 1, niter, nflux), nan)
     kf_res = testcase.data['/mesh/res_ind'][()]
     shielding = full((niter, m_res_max - m_res_min + 1), nan)
     penetration = full((niter, m_res_max - m_res_min + 1), nan)
@@ -351,16 +411,17 @@ if __name__ == "__main__":
         jmnpar_Bmod = testcase.get_polmodes(None, f"/iter/jmnpar_Bmod_{kiter:03}/coeff", 1.0 / 29.9792458, L1=True)
         Bmn_rad = testcase.get_polmodes(None, f"/iter/Bmn_{kiter:03}/coeff_rad", conversion)
         Ires[kiter, :] = abs(testcase.data[f"/iter/Ires_{kiter:03}"][()]) * 0.1 / 2.99792458e+08
+        for m in range(-m_res_max, m_res_max + 1):
+            abs_pmn_iter[m + m_res_max, kiter, :] = abs(pmn['var'][m])
+            abs_jmnpar_Bmod_iter[m + m_res_max, kiter, :] = abs(jmnpar_Bmod['var'][m])
+            abs_Bmn_rad_iter[m + m_res_max, kiter, :] = abs(Bmn_rad['var'][m])
         for m in range(m_res_min, m_res_max + 1):
             m_res = m * testcase.post['sgn_m_res']
-            abs_pmn_iter[m - m_res_min, kiter, :] = abs(pmn['var'][m_res])
-            abs_jmnpar_Bmod_iter[m - m_res_min, kiter, :] = abs(jmnpar_Bmod['var'][m_res])
-            abs_Bmn_rad_iter[m - m_res_min, kiter, :] = abs(Bmn_rad['var'][m_res])
-            kf_max = argmax(abs_Bmn_rad_iter[m - m_res_min, kiter, :kf_res[m - m_res_min] - 1]) + 1
-            penetration[kiter, m - m_res_min] = abs_Bmn_rad_iter[m - m_res_min, kiter, kf_max - 1] / \
-                abs(mephit_Bmn_vac['var'][m][kf_max - 1])
-            shielding[kiter, m - m_res_min] = abs_Bmn_rad_iter[m - m_res_min, kiter, kf_res[m - m_res_min] - 1] / \
-                abs(mephit_Bmn_vac['var'][m][kf_res[m - m_res_min] - 1])
+            kf_max = argmax(abs_Bmn_rad_iter[m_res + m_res_max, kiter, :kf_res[m - m_res_min] - 1]) + 1
+            penetration[kiter, m - m_res_min] = abs_Bmn_rad_iter[m_res + m_res_max, kiter, kf_max - 1] / \
+                abs(mephit_Bmn_vac['var'][m_res][kf_max - 1])
+            shielding[kiter, m - m_res_min] = abs_Bmn_rad_iter[m_res + m_res_max, kiter, kf_res[m - m_res_min] - 1] / \
+                abs(mephit_Bmn_vac['var'][m_res][kf_res[m - m_res_min] - 1])
     config = {
         'xlabel': r'$\hat{\psi}$',
         'ylabel': [
@@ -374,12 +435,17 @@ if __name__ == "__main__":
     }
     for m in range(m_res_min, m_res_max + 1):
         m_res = m * testcase.post['sgn_m_res']
-        config['title'] = f"Poloidal Modes in Preconditioned Iterations $k$ for $n = {n}$, $m = {m_res}$"
+        config['title'] = f"Poloidal Modes in Preconditioned Iterations $k$ for $n = {n}$, $m = \pm {m}$"
         config['res_pos'] = testcase.post['psi_norm_res'][m]
+        config['res_neighbourhood'] = testcase.post['psi_norm_res_neighbourhood'][m]
+        config['zoom_x'] = config['res_neighbourhood'][ix_([0, -1])]
         config['plotdata'] = [
-            abs_pmn_iter[m - m_res_min, :, :],
-            abs_jmnpar_Bmod_iter[m - m_res_min, :, :],
-            abs_Bmn_rad_iter[m - m_res_min, :, :]
+            abs_pmn_iter[m_res + m_res_max, :, :],
+            abs_jmnpar_Bmod_iter[m_res + m_res_max, :, :],
+            abs_Bmn_rad_iter[m_res + m_res_max, :, :],
+            abs_pmn_iter[-m_res + m_res_max, :, :],
+            abs_jmnpar_Bmod_iter[-m_res + m_res_max, :, :],
+            abs_Bmn_rad_iter[-m_res + m_res_max, :, :]
         ]
         plotter.plot_objects.put(IterationPlots(work_dir, f"plot_iter_{m}.pdf", config))
     m_res_range = arange(m_res_min, m_res_max + 1)
