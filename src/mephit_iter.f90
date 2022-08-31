@@ -152,7 +152,6 @@ contains
     if (iterations .or. analysis) then
        call iter_init
        if (iterations) then
-          call MFEM_test
           call mephit_iterate
           call FEM_deinit
        else
@@ -228,7 +227,7 @@ contains
 
   subroutine iter_step
     ! compute pressure based on previous perturbation field
-    call compute_presn
+    call MFEM_test
     ! compute currents based on previous perturbation field
     call compute_currn
     ! use field code to generate new field from currents
@@ -475,16 +474,11 @@ contains
 
   subroutine unit_B0(R, Z, vector) bind(C, name = 'unit_B0')
     use iso_c_binding, only: c_double
-    use mephit_conf, only: logger
     real(c_double), intent(in), value :: R
     real(c_double), intent(in), value :: Z
     real(c_double), intent(out) :: vector(3)
     real(dp) :: dum
 
-    if (logger%debug) then
-       logger%msg = 'called unit_B0'
-       call logger%write_msg
-    end if
     call field(R, 0d0, Z, vector(1), vector(3), vector(2), &
          dum, dum, dum, dum, dum, dum, dum, dum, dum)
     dum = sqrt(sum(vector * vector))
@@ -495,7 +489,6 @@ contains
     use iso_c_binding, only: c_double, c_double_complex
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use field_eq_mod, only: psif, psib
-    use mephit_conf, only: logger
     use mephit_mesh, only: equil, psi_interpolator, mesh, point_location
     use mephit_pert, only: RT0_interp, vac
     real(c_double), intent(in), value :: R
@@ -505,13 +498,9 @@ contains
     integer :: ktri
     complex(dp) :: B_n(3)
 
-    if (logger%debug) then
-       logger%msg = 'called presn_inhom'
-       call logger%write_msg
-    end if
     call field(R, 0d0, Z, B_0(1), B_0(2), B_0(3), &
          dum, dum, dum, dum, dum, dum, dum, dum, dum)
-    psi = psif - psib  ! see intperp_psi_pol in mephit_util
+    psi = psif - psib  ! see interp_psi_pol in mephit_util
     dp0_dpsi = psi_interpolator%eval(equil%pprime, psi)
     ktri = point_location(R, Z)
     if (ktri <= 0 .or. ktri > mesh%ntri) then

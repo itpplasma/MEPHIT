@@ -43,6 +43,12 @@ endif ()
 set(HDF5_tools_include_dir ${LIBNEO_DIR})
 set(HDF5_tools_lib_dir ${LIBNEO_DIR}/src/hdf5_tools)
 
+if ("$ENV{MFEM_HOME}" STREQUAL "")
+  set(MFEM_HOME "${CMAKE_SOURCE_DIR}/../mfem")
+else ()
+  set(MFEM_HOME "$ENV{MFEM_HOME}")
+endif ()
+
 if ("$ENV{FGSL_PATH}" STREQUAL "")
   if ("${CMAKE_SYSTEM}" MATCHES "Darwin")
     set(FGSL_PATH /usr/local)
@@ -60,6 +66,7 @@ cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 set (NETCDF_F90 "YES")
 find_package (NetCDF REQUIRED)
+find_package(MFEM REQUIRED)
 
 # GSL
 find_library(gsl_lib gsl ${GSL_LIB})
@@ -113,13 +120,14 @@ set(MEPHIT_C_SRC_FILES
 
 set(MEPHIT_CPP_SRC_FILES
   src/mephit_fem.cpp
+  src/magnetic_differential_equation.cpp
+  src/miscellaneous.cpp
 )
 
 ### Set compiler flags
 set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
 set_source_files_properties(${MEPHIT_FORTRAN_SRC_FILES}
-  src/mephit_mesher.f90
   src/mephit_test.f90
   src/vacfield.f90
   src/standardise_equilibrium.f90
@@ -136,7 +144,12 @@ add_library(mephit SHARED
   ${MEPHIT_C_SRC_FILES}
   ${MEPHIT_CPP_SRC_FILES}
 )
-target_include_directories(mephit PUBLIC ${HDF5_tools_include_dir} ${FGSL_INC} ${NETCDF_INCLUDES})
+target_include_directories(mephit PUBLIC
+  ${HDF5_tools_include_dir}
+  ${FGSL_INC}
+  ${NETCDF_INCLUDES}
+  ${MFEM_INCLUDE_DIRS}
+)
 set(MEPHIT_LIBS
   # ${SUPERLU_LIBRARIES}
   ${SUITESPARSE_LIBRARIES}
@@ -148,6 +161,7 @@ set(MEPHIT_LIBS
   ${NETCDF_LIBRARIES}
   ${gsl_lib}
   ${fgsl_lib}
+  ${MFEM_LIBRARIES}
   blas
   lapack
   fftw3
