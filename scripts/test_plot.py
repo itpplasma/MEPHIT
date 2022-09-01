@@ -342,7 +342,7 @@ if __name__ == "__main__":
             r'$\abs\, [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\tesla}'
         ],
         'rho': [testcase.post['psi_norm'], testcase.post['psi_norm'], testcase.post['psi_half_norm']],
-        'yscale': ['log', 'log', 'linear'], 'global_ylims': False, 'plotargs': {'lw': 0.5}, 'niter': niter,
+        'yscale': ['log', 'log', 'linear'], 'global_ylims': True, 'plotargs': {'lw': 0.5}, 'niter': niter,
         'postprocess': [[Id(), Id(), HLine(0.0, color='k', alpha=0.5, lw=0.5)]]
     }
     m_res_range = arange(m_res_min, m_res_max + 1)
@@ -356,9 +356,9 @@ if __name__ == "__main__":
             abs_pmn_iter[m_res + m_res_max, :, :],
             abs_jmnpar_Bmod_iter[m_res + m_res_max, :, :],
             abs_Bmn_rad_iter[m_res + m_res_max, :, :],
-            abs_pmn_iter[-m_res + m_res_max, :, :],
+            full(abs_pmn_iter.shape[1:], nan),  # abs_pmn_iter[-m_res + m_res_max, :, :],
             abs_jmnpar_Bmod_iter[-m_res + m_res_max, :, :],
-            abs_Bmn_rad_iter[-m_res + m_res_max, :, :]
+            # abs_Bmn_rad_iter[-m_res + m_res_max, :, :]
         ]
         plotter.plot_objects.put(IterationPlots(work_dir, f"plot_iter_{m}.pdf", config))
     config = {

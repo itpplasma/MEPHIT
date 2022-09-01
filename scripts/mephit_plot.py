@@ -389,21 +389,16 @@ class IterationPlots(PlotObject):
         from matplotlib.figure import Figure
         from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
         from matplotlib.backends.backend_pdf import PdfPages
-        from numpy import amax, amin, fmax, fmin, nan
+        from numpy import fmax, fmin
         super().do_plot()
         horz_plot = 3
         vert_plot = 1
         three_squares = (9.9, 3.3)
         pdf = PdfPages(path.join(self.work_dir, self.filename))
-        ylims = [[nan, nan], [nan, nan], [nan, nan]]
-        if self.config['global_ylims']:
-            for k in range(len(self.config['plotdata'])):
-                ylims[k % horz_plot] = [fmin(ylims[k % horz_plot][0], amin(self.config['plotdata'][k])),
-                                        fmax(ylims[k % horz_plot][1], amax(self.config['plotdata'][k]))]
+        figs = [Figure(figsize=three_squares) for kiter in range(0, self.config['niter'])]
         for kiter in range(0, self.config['niter']):
             print(f"Plotting {self.filename}, k = {kiter + 1} ...")
-            fig = Figure(figsize=three_squares)
-            axs = fig.subplots(vert_plot, horz_plot)
+            axs = figs[kiter].subplots(vert_plot, horz_plot)
             for k in range(horz_plot):
                 axs[k].set_yscale(self.config['yscale'][k])
             for k in range(len(self.config['plotdata'])):
@@ -416,10 +411,6 @@ class IterationPlots(PlotObject):
                     axs[k % horz_plot].plot(self.config['rho'][k % horz_plot], self.config['plotdata'][k][kiter, :],
                                             **self.config['plotargs'])
             for k in range(horz_plot):
-                if not self.config['global_ylims'] and kiter == 0:
-                    ylims[k] = axs[k].get_ylim()
-                else:
-                    axs[k].set_ylim(ylims[k])
                 if 'res_pos' in self.config.keys():
                     axs[k].axvline(self.config['res_pos'], color='b', alpha=0.5, lw=0.5)
                 if 'res_neighbourhood' in self.config.keys():
@@ -427,12 +418,21 @@ class IterationPlots(PlotObject):
                         axs[k].axvline(pos, color='k', alpha=0.5, lw=0.25)
                 if 'postprocess' in self.config.keys():
                     for f in self.config['postprocess']:
-                        f[k](fig, axs[k])
+                        f[k](figs[kiter], axs[k])
                 axs[k].set_xlabel(self.config['xlabel'])
                 axs[k].set_ylabel(self.config['ylabel'][k])
-            fig.suptitle(self.config['title'] + f", $k = {kiter + 1}$")
-            canvas = FigureCanvas(fig)
-            fig.savefig(pdf, format='pdf', dpi=300)
+            figs[kiter].suptitle(self.config['title'] + f", $k = {kiter + 1}$")
+        ylims = [figs[0].axes[k].get_ylim() for k in range(horz_plot)]
+        if self.config['global_ylims']:
+            for kiter in range(self.config['niter']):
+                for k in range(horz_plot):
+                    ylim = figs[kiter].axes[k].get_ylim()
+                    ylims[k] = [fmin(ylims[k][0], ylim[0]), fmax(ylims[k][1], ylim[1])]
+        for kiter in range(0, self.config['niter']):
+            for k in range(horz_plot):
+                figs[kiter].axes[k].set_ylim(ylims[k])
+            canvas = FigureCanvas(figs[kiter])
+            figs[kiter].savefig(pdf, format='pdf', dpi=300)
         pdf.close()
 
 

@@ -180,7 +180,7 @@ if __name__ == "__main__":
             abs_Bmn_rad_iter[m_res + m_res_max, :, :],
             abs_pmn_iter[-m_res + m_res_max, :, :],
             abs_jmnpar_Bmod_iter[-m_res + m_res_max, :, :],
-            abs_Bmn_rad_iter[-m_res + m_res_max, :, :]
+            # abs_Bmn_rad_iter[-m_res + m_res_max, :, :]
         ]
         plotter.plot_objects.put(IterationPlots(work_dir, f"plot_iter_{m}.pdf", config))
     config = {
