@@ -1,97 +1,9 @@
-from mephit_plot import Gpec, HLine, Id, LogY, Mephit, ParallelPlotter, Plot1D, PlotObject, PolmodePlots, run_dir, \
-    set_matplotlib_defaults, XTicks, YTicks
+from mephit_plot import ComplexPlot, Gpec, HLine, Id, IterationPlots, LogY, Mephit, ParallelPlotter, Plot1D, \
+    PolmodePlots, run_dir, set_matplotlib_defaults, XTicks, YTicks
 from numpy import abs, angle, arange, arctan2, argmax, array, full, gradient, ix_, nan, nonzero, pi, sign, sum
 from numpy.fft import fft, rfft
 from scipy.interpolate import UnivariateSpline
 from functools import partial
-
-
-class IterationPlots(PlotObject):
-    def do_plot(self):
-        from os import path
-        from matplotlib.figure import Figure
-        from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-        from matplotlib.backends.backend_pdf import PdfPages
-        from numpy import amax, amin, fmax, fmin, nan
-        super().do_plot()
-        horz_plot = 3
-        vert_plot = 1
-        three_squares = (9.9, 3.3)
-        pdf = PdfPages(path.join(self.work_dir, self.filename))
-        ylims = [[nan, nan], [nan, nan], [nan, nan]]
-        if self.config['global_ylims']:
-            for k in range(len(self.config['plotdata'])):
-                ylims[k % horz_plot] = [fmin(ylims[k % horz_plot][0], amin(self.config['plotdata'][k])),
-                                        fmax(ylims[k % horz_plot][1], amax(self.config['plotdata'][k]))]
-        for kiter in range(0, self.config['niter']):
-            print(f"Plotting {self.filename}, k = {kiter + 1} ...")
-            fig = Figure(figsize=three_squares)
-            axs = fig.subplots(vert_plot, horz_plot)
-            for k in range(horz_plot):
-                axs[k].set_yscale(self.config['yscale'][k])
-            for k in range(len(self.config['plotdata'])):
-                if 'zoom_x' in self.config.keys():
-                    zoom_x = (self.config['zoom_x'][0] <= self.config['rho'][k % horz_plot]) & \
-                             (self.config['rho'][k % horz_plot] <= self.config['zoom_x'][1])
-                    axs[k % horz_plot].plot(self.config['rho'][k % horz_plot][zoom_x],
-                                            self.config['plotdata'][k][kiter, :][zoom_x], **self.config['plotargs'])
-                else:
-                    axs[k % horz_plot].plot(self.config['rho'][k % horz_plot], self.config['plotdata'][k][kiter, :],
-                                            **self.config['plotargs'])
-            for k in range(horz_plot):
-                if not self.config['global_ylims'] and kiter == 0:
-                    ylims[k] = axs[k].get_ylim()
-                else:
-                    axs[k].set_ylim(ylims[k])
-                if 'res_pos' in self.config.keys():
-                    axs[k].axvline(self.config['res_pos'], color='b', alpha=0.5, lw=0.5)
-                if 'res_neighbourhood' in self.config.keys():
-                    for pos in self.config['res_neighbourhood']:
-                        axs[k].axvline(pos, color='k', alpha=0.5, lw=0.25)
-                if 'postprocess' in self.config.keys():
-                    for f in self.config['postprocess']:
-                        f[k](fig, axs[k])
-                axs[k].set_xlabel(self.config['xlabel'])
-                axs[k].set_ylabel(self.config['ylabel'][k])
-            fig.suptitle(self.config['title'] + f", $k = {kiter + 1}$")
-            canvas = FigureCanvas(fig)
-            fig.savefig(pdf, format='pdf', dpi=300)
-        pdf.close()
-
-
-class ComplexPlot(PlotObject):
-    def do_plot(self):
-        from matplotlib.figure import Figure
-        from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-        from os import path
-        from numpy import abs, angle
-        super().do_plot()
-        horz_plot = 2
-        vert_plot = 1
-        two_squares = (6.6, 3.3)
-        fig = Figure(figsize=two_squares)
-        axs = fig.subplots(vert_plot, horz_plot, sharex='all')
-        labels = []
-        for plotdata in self.config['plotdata']:
-            axs[0].plot(plotdata['x'], abs(plotdata['y']), **plotdata['args'])
-            axs[1].plot(plotdata['x'], angle(plotdata['y'], deg=True), **plotdata['args'])
-            axs[1].set_yticks(arange(-180, 180+1, 45))
-            axs[1].axhline(0.0, color='k', alpha=0.5, lw=0.5)
-            labels.append(plotdata['label'])
-        for k in range(horz_plot):
-            if 'postprocess' in self.config.keys():
-                for f in self.config['postprocess']:
-                    f[k](fig, axs[k])
-            if 'xlabel' in self.config.keys():
-                axs[k].set_xlabel(self.config['xlabel'])
-            if 'ylabel' in self.config.keys():
-                axs[k].set_ylabel(self.config['ylabel'][k])
-        if 'legend' in self.config.keys():
-            fig.legend(labels=labels, **self.config['legend'])
-        if 'title' in self.config.keys():
-            fig.suptitle(self.config['title'])
-        canvas = FigureCanvas(fig)
-        fig.savefig(path.join(self.work_dir, self.filename))
 
 
 if __name__ == "__main__":
@@ -433,11 +345,12 @@ if __name__ == "__main__":
         'yscale': ['log', 'log', 'linear'], 'global_ylims': False, 'plotargs': {'lw': 0.5}, 'niter': niter,
         'postprocess': [[Id(), Id(), HLine(0.0, color='k', alpha=0.5, lw=0.5)]]
     }
-    for m in range(m_res_min, m_res_max + 1):
+    m_res_range = arange(m_res_min, m_res_max + 1)
+    for m in m_res_range:
         m_res = m * testcase.post['sgn_m_res']
         config['title'] = f"Poloidal Modes in Preconditioned Iterations $k$ for $n = {n}$, $m = \pm {m}$"
-        config['res_pos'] = testcase.post['psi_norm_res'][m]
-        config['res_neighbourhood'] = testcase.post['psi_norm_res_neighbourhood'][m]
+        config['res_pos'] = testcase.post['psi_norm_res'][m_res]
+        config['res_neighbourhood'] = testcase.post['psi_norm_res_neighbourhood'][m_res]
         config['zoom_x'] = config['res_neighbourhood'][ix_([0, -1])]
         config['plotdata'] = [
             abs_pmn_iter[m_res + m_res_max, :, :],
@@ -448,7 +361,6 @@ if __name__ == "__main__":
             abs_Bmn_rad_iter[-m_res + m_res_max, :, :]
         ]
         plotter.plot_objects.put(IterationPlots(work_dir, f"plot_iter_{m}.pdf", config))
-    m_res_range = arange(m_res_min, m_res_max + 1)
     config = {
         'title': f"Shielding \& max. penetration vs. resonant current for $n = {n}$",
         'xlabel': r'poloidal mode $m$',
