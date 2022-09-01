@@ -65,15 +65,16 @@ class Mephit:
         self.post['rad'] = self.data['/cache/fs/rad'][()]
         self.post['rad_half'] = self.data['/cache/fs_half/rad'][()]
         self.post['sgn_m_res'] = int(sign(-self.data['/cache/fs/q'][-1]))
-        m_res = arange(self.data['/mesh/m_res_min'][()], self.data['/mesh/m_res_max'][()] + 1) * self.post['sgn_m_res']
-        self.post['psi_norm_res'] = dict(zip(m_res, self.normalize_psi(self.data['/mesh/psi_res'][()])))
-        self.post['rad_res'] = dict(zip(m_res, self.data['/mesh/rad_norm_res'][()] * self.post['rad'][-1]))
+        self.post['m_res'] = self.post['sgn_m_res'] * arange(self.data['/mesh/m_res_min'][()],
+                                                             self.data['/mesh/m_res_max'][()] + 1)
+        self.post['psi_norm_res'] = dict(zip(self.post['m_res'], self.normalize_psi(self.data['/mesh/psi_res'][()])))
+        self.post['rad_res'] = dict(zip(self.post['m_res'], self.data['/mesh/rad_norm_res'][()] * self.post['rad'][-1]))
         m_res_min = self.data['/mesh/m_res_min'][()]
         res_ind = self.data['/mesh/res_ind'][()] - 1
         nflux = self.data['/mesh/nflux'][()]
         self.post['psi_norm_res_neighbourhood'] = {}
         self.post['rad_res_neighbourhood'] = {}
-        for m in m_res:
+        for m in self.post['m_res']:
             kf_min = res_ind[abs(m) - m_res_min] - 2
             kf_max = min(res_ind[abs(m) - m_res_min] + 3, nflux - 1)
             self.post['psi_norm_res_neighbourhood'][m] = self.post['psi_norm'][kf_min:kf_max+1]
@@ -88,6 +89,13 @@ class Mephit:
             polmodes['rho'][m] = rho
             polmodes['var'][m] = array(self.data[var_name][:, m + polmodes['m_max']], dtype='D') * conversion
         return polmodes
+
+    def get_Ires(self):
+        from numpy import abs
+        from scipy.constants import c as clight
+        scaling = self.data['/config/kilca_scale_factor'][()]
+        scaling = scaling if scaling != 0 else 1
+        return dict(zip(self.post['m_res'], abs(self.data['/postprocess/Ires'][()]) * scaling * 0.1 / clight))
 
 
 class Kilca:
@@ -123,6 +131,17 @@ class Kilca:
             if grp[var_name].shape[0] == 2:
                 polmodes['var'][m].imag = grp[var_name][1, :] * conversion
         return polmodes
+
+    def get_Ires(self):
+        from numpy import sign
+        sgn_q = int(sign(self.data['/output/background/profiles/q_i'][0, -1]))
+        Ires = {}
+        for name, grp in self.data['/output'].items():
+            if 'postprocessor' not in name:
+                continue
+            m = int(grp['mode'][0, 0]) * sgn_q
+            Ires[m] = grp['Ipar'][0, 0] * 10.0
+        return Ires
 
 
 class Gpec:
@@ -164,6 +183,16 @@ class Gpec:
             # and expands Fourier series in negative toroidal angle
             polmodes['var'][m].imag = self.data['profile'].variables[var_name][1, k, :] * 0.5 * sgn_dpsi * helicity
         return polmodes
+
+    def get_Ires(self):
+        from numpy import hypot
+        helicity = int(self.data['profile'].getncattr('helicity'))
+        Ires = {}
+        for k, abs_m in enumerate(self.data['control'].variables['m_rational'][:]):
+            m = abs_m * helicity
+            Ires[m] = hypot(self.data['profile'].variables['I_res'][0, k],
+                            self.data['profile'].variables['I_res'][1, k])
+        return Ires
 
 
 class PlotObject:
@@ -346,7 +375,7 @@ class PolmodePlots(PlotObject):
         canvas = FigureCanvas(fig)
         fig.savefig(pdf, format='pdf', dpi=300)
         # plot non-symmetric modes
-        m_max = min(map(lambda d: d['m_max'], self.config['poldata']))
+        m_max = max(map(lambda d: d['m_max'], self.config['poldata']))
         for m_abs in range(1, m_max + 1):
             print(f"Plotting {self.filename}, m = ±{m_abs} ...")
             fig = Figure(figsize=two_squares)

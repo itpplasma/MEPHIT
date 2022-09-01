@@ -2,6 +2,7 @@ from mephit_plot import ComplexPlot, Gpec, HLine, Id, IterationPlots, LogY, Meph
     PolmodePlots, run_dir, set_matplotlib_defaults, XTicks, YTicks
 from numpy import abs, angle, arange, arctan2, argmax, array, full, gradient, ix_, nan, nonzero, pi, sign, sum
 from numpy.fft import fft, rfft
+from scipy.constants import c as clight
 from scipy.interpolate import UnivariateSpline
 from functools import partial
 
@@ -109,10 +110,21 @@ if __name__ == "__main__":
     conversion = 1.0e-04 / testcase.data['/mesh/gpec_jacfac'][()]
     mephit_Bmn = testcase.get_polmodes('full perturbation (MEPHIT)', '/postprocess/Bmn/coeff_rad', conversion)
     mephit_Bmn_vac = testcase.get_polmodes('vacuum perturbation (MEPHIT)', '/postprocess/Bmn_vac/coeff_rad', conversion)
+    mephit_Ires = testcase.get_Ires()
     reference = Gpec(work_dir, 2)
     reference.open_datafiles()
     gpec_Bmn = reference.get_polmodes('full perturbation (GPEC)', sgn_dpsi, 'Jbgradpsi')
     gpec_Bmn_vac = reference.get_polmodes('vacuum perturbation (GPEC)', sgn_dpsi, 'Jbgradpsi_x')
+    gpec_Ires = reference.get_Ires()
+    config = {
+        'xlabel': '$m$', 'ylabel': r'$\abs\, I_{m, n}^{\parallel}$ / \si{\ampere}', 'legend': {'fontsize': 'small'},
+        'plotdata': [
+            {'x': mephit_Ires.keys(), 'y': mephit_Ires.values(), 'args': {'label': 'MEPHIT', 'marker': 'o', 'ls': ''}},
+            {'x': gpec_Ires.keys(), 'y': gpec_Ires.values(), 'args': {'label': 'GPEC', 'marker': 'x', 'ls': ''}}
+        ],
+        'postprocess': [XTicks(mephit_Ires.keys())]
+    }
+    plotter.plot_objects.put(Plot1D(work_dir, 'plot_Ires.pdf', config))
     config = {
         'xlabel': r'$\hat{\psi}$',
         'ylabel': r'$\abs\, [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\tesla}',
@@ -320,9 +332,9 @@ if __name__ == "__main__":
     Ires = full((niter, m_res_max - m_res_min + 1), nan)
     for kiter in range(0, niter):
         pmn = testcase.get_polmodes(None, f"/iter/pmn_{kiter:03}/coeff", 0.1, L1=True)
-        jmnpar_Bmod = testcase.get_polmodes(None, f"/iter/jmnpar_Bmod_{kiter:03}/coeff", 1.0 / 29.9792458, L1=True)
+        jmnpar_Bmod = testcase.get_polmodes(None, f"/iter/jmnpar_Bmod_{kiter:03}/coeff", 4.0 * pi / clight, L1=True)
         Bmn_rad = testcase.get_polmodes(None, f"/iter/Bmn_{kiter:03}/coeff_rad", conversion)
-        Ires[kiter, :] = abs(testcase.data[f"/iter/Ires_{kiter:03}"][()]) * 0.1 / 2.99792458e+08
+        Ires[kiter, :] = abs(testcase.data[f"/iter/Ires_{kiter:03}"][()]) * 0.1 / clight
         for m in range(-m_res_max, m_res_max + 1):
             abs_pmn_iter[m + m_res_max, kiter, :] = abs(pmn['var'][m])
             abs_jmnpar_Bmod_iter[m + m_res_max, kiter, :] = abs(jmnpar_Bmod['var'][m])
@@ -338,7 +350,7 @@ if __name__ == "__main__":
         'xlabel': r'$\hat{\psi}$',
         'ylabel': [
             r'$\abs\, p_{mn}$ / \si{\pascal}',
-            r'$\abs\, \bigl[ J_{n}^{\parallel} B_{0}^{-1} \bigr]_{m}$ / \si{\per\henry}',
+            r'$\abs\, \bigl[ \mu_{0} J_{n}^{\parallel} B_{0}^{-1} \bigr]_{m}$ / \si{\per\meter}',
             r'$\abs\, [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\tesla}'
         ],
         'rho': [testcase.post['psi_norm'], testcase.post['psi_norm'], testcase.post['psi_half_norm']],
