@@ -10,7 +10,7 @@ if __name__ == "__main__":
     plotter = ParallelPlotter()
     plotter.start()
 
-    work_dir = run_dir + '/geomint_TCFP'
+    work_dir = run_dir + '/TCFP'
     testcase = Mephit(work_dir)
     testcase.open_datafile()
     testcase.postprocess()

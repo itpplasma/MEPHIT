@@ -356,6 +356,8 @@ class PolmodePlots(PlotObject):
                                 label=data['label'])
                 else:
                     axs[0].plot(data['rho'][m], self.config['comp'](data['var'][m]), label=data['label'])
+            else:
+                next(axs[0]._get_lines.prop_cycler)
         if 'postprocess' in self.config.keys():
             for f in self.config['postprocess']:
                 f(fig, axs[0])
@@ -399,6 +401,8 @@ class PolmodePlots(PlotObject):
                                         label=data['label'])
                         else:
                             axs[k].plot(data['rho'][m], self.config['comp'](data['var'][m]), label=data['label'])
+                    else:
+                        next(axs[k]._get_lines.prop_cycler)
                 if 'postprocess' in self.config.keys():
                     for f in self.config['postprocess']:
                         f(fig, axs[k])
