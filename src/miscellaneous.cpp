@@ -37,13 +37,9 @@ mfem::Vector utility::mfem_helper::get_random_vector(const int n) {
 
 double utility::mfem_helper::get_operator_application_difference(mfem::Operator *A, mfem::Operator *B) {
     if(A->Height() != B->Height()){
-        int const height_a = A->Height();
-        int const height_b = B->Height();
         throw std::runtime_error("get_operator_application_difference: Operators must have same height!");
     }
     if(A->Width() != B->Width()){
-        int const width_a = A->Width();
-        int const width_b = B->Width();
         throw std::runtime_error("get_operator_application_difference: Operators must have same width!");
     }
     const int n = A->Width();
@@ -81,7 +77,6 @@ mfem::SparseMatrix utility::mfem_helper::block_to_sparse_matrix(const mfem::Bloc
     mfem::SparseMatrix S(B.Height(), B.Width());
     mfem::Vector row_data;
     mfem::Array<int> row_ind;
-    int nnz_elem = B.NumNonZeroElems();
     int i, j;
     for (i = 0; i < B.RowOffsets().Last(); i++)
     {

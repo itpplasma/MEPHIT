@@ -43,10 +43,10 @@ endif ()
 set(HDF5_tools_include_dir ${LIBNEO_DIR})
 set(HDF5_tools_lib_dir ${LIBNEO_DIR}/src/hdf5_tools)
 
-if ("$ENV{MFEM_HOME}" STREQUAL "")
-  set(MFEM_HOME "${CMAKE_SOURCE_DIR}/../mfem")
+if ("$ENV{MFEM_DIR}" STREQUAL "")
+  set(MFEM_DIR "${CMAKE_SOURCE_DIR}/../mfem/build")
 else ()
-  set(MFEM_HOME "$ENV{MFEM_HOME}")
+  set(MFEM_DIR "$ENV{MFEM_DIR}")
 endif ()
 
 if ("$ENV{FGSL_PATH}" STREQUAL "")
