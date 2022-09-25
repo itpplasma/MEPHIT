@@ -1105,7 +1105,7 @@ contains
   subroutine Biot_Savart_sum_coils(ncoil, nseg, nwind, XYZ, Ic, &
        Rmin, Rmax, Zmin, Zmax, nR, nphi, nZ, Bvac)
     use mephit_conf, only: logger
-    use mephit_util, only: pi, linspace
+    use mephit_util, only: pi, linspace, dd_cross
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
     real(dp), intent(in), dimension(:) :: Ic
@@ -1160,11 +1160,7 @@ contains
                 BRfZ(:) = 0d0
                 do ks = 1, nseg
                    crXYZ(:) = rXYZ(:) - cXYZ(:, ks, kc)
-                   BXYZ(:) = &
-                        [dXYZ(2, ks, kc) * crXYZ(3) - dXYZ(3, ks, kc) * crXYZ(2), &
-                        dXYZ(3, ks, kc) * crXYZ(1) - dXYZ(1, ks, kc) * crXYZ(3), &
-                        dXYZ(1, ks, kc) * crXYZ(2) - dXYZ(2, ks, kc) * crXYZ(1)] &
-                        / sqrt(sum(crXYZ ** 2)) ** 3
+                   BXYZ(:) = dd_cross(dXYZ(:, ks, kc), crXYZ) / sqrt(sum(crXYZ ** 2)) ** 3
                    BRfZ(:) = BRfZ + &
                         [BXYZ(2) * sinphi(kphi) + BXYZ(1) * cosphi(kphi), &
                         BXYZ(2) * cosphi(kphi) - BXYZ(1) * sinphi(kphi), &
@@ -1183,7 +1179,7 @@ contains
     use FFTW3, only: fftw_alloc_real, fftw_alloc_complex, fftw_plan_dft_r2c_1d, FFTW_PATIENT, &
          FFTW_DESTROY_INPUT, fftw_execute_dft_r2c, fftw_destroy_plan, fftw_free
     use mephit_conf, only: logger
-    use mephit_util, only: pi, linspace
+    use mephit_util, only: pi, linspace, dd_cross
     integer, intent(in) :: ncoil, nseg, nwind
     real(dp), intent(in), dimension(:, :, :) :: XYZ
     integer, intent(in) :: nmax
@@ -1260,11 +1256,7 @@ contains
                 ! Biot-Savart integral over coil segments
                 do ks = 1, nseg
                    crXYZ(:) = rXYZ(:) - cXYZ(:, ks, kc)
-                   BXYZ(:) = &
-                        [dXYZ(2, ks, kc) * crXYZ(3) - dXYZ(3, ks, kc) * crXYZ(2), &
-                        dXYZ(3, ks, kc) * crXYZ(1) - dXYZ(1, ks, kc) * crXYZ(3), &
-                        dXYZ(1, ks, kc) * crXYZ(2) - dXYZ(2, ks, kc) * crXYZ(1)] &
-                        / sqrt(sum(crXYZ ** 2)) ** 3
+                   BXYZ(:) = dd_cross(dXYZ(:, ks, kc), crXYZ) / sqrt(sum(crXYZ ** 2)) ** 3
                    BR(kphi) = BR(kphi) + BXYZ(2) * sinphi(kphi) + BXYZ(1) * cosphi(kphi)
                    Bphi(kphi) = Bphi(kphi) + BXYZ(2) * cosphi(kphi) - BXYZ(1) * sinphi(kphi)
                    BZ(kphi) = BZ(kphi) + BXYZ(3)
