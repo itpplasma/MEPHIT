@@ -23,6 +23,7 @@ end module field_c_mod
 module field_eq_mod
   logical :: use_fpol = .true.                                      !<=18.12.18
   logical :: skip_read = .false.
+  integer :: iaxieq = 0
   integer :: icall_eq=0
   integer :: nrad,nzet,icp,nwindow_r,nwindow_z
   real(kind=8), parameter                      :: pi=3.14159265358979d0
@@ -56,15 +57,37 @@ end module inthecore_mod
 !
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 ! -----------------------------------------------------------------
+subroutine read_field_input
+  use input_files, only: iunit, gfile, pfile, convexfile, fluxdatapath
+  use field_c_mod, only: ntor, icftype
+  use field_eq_mod, only: nwindow_r, nwindow_z
+  use field_mod, only: ipert, iequil, ampl
+  use inthecore_mod, only: cutoff
+
+  open(iunit, file='field_divB0.inp')
+  read(iunit,*) ipert        ! 0=eq only, 1=vac, 2=vac+plas no derivatives,
+                             ! 3=plas+vac with derivatives
+  read(iunit,*) iequil       ! 0=perturbation alone, 1=with equilibrium
+  read(iunit,*) ampl         ! amplitude of perturbation, a.u.
+  read(iunit,*) ntor         ! number of toroidal harmonics
+  read(iunit,*) cutoff       ! inner cutoff in psi/psi_a units
+  read(iunit,*) icftype      ! type of coil file
+  read(iunit,*) gfile        ! equilibrium file
+  read(iunit,*) pfile        ! coil        file
+  read(iunit,*) convexfile   ! convex file for stretchcoords
+  read(iunit,*) fluxdatapath ! directory with data in flux coord.
+  read(iunit,*) nwindow_r    ! widow size for filtering of psi array over R
+  read(iunit,*) nwindow_z    ! widow size for filtering of psi array over Z
+  close(iunit)
+end subroutine read_field_input
+
 subroutine field(r,p,z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ   &
                 ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ)
 !
   use period_mod
-  use input_files
-  use field_c_mod,   only : ntor,icftype,icall_c
+  use field_c_mod, only: icall_c
   use field_mod
-  use inthecore_mod, only : incore,cutoff
-  use field_eq_mod, only : nwindow_r,nwindow_z
+  use inthecore_mod, only: incore
 !
   implicit none
 !
@@ -75,21 +98,7 @@ subroutine field(r,p,z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ   &
 !
   if(icall .eq. 0) then
      icall = 1
-     open(iunit, file='field_divB0.inp')
-     read(iunit,*) ipert        ! 0=eq only, 1=vac, 2=vac+plas no derivatives,
-                                ! 3=plas+vac with derivatives
-     read(iunit,*) iequil       ! 0=perturbation alone, 1=with equilibrium
-     read(iunit,*) ampl         ! amplitude of perturbation, a.u.
-     read(iunit,*) ntor         ! number of toroidal harmonics
-     read(iunit,*) cutoff       ! inner cutoff in psi/psi_a units
-     read(iunit,*) icftype      ! type of coil file
-     read(iunit,*) gfile        ! equilibrium file
-     read(iunit,*) pfile        ! coil        file
-     read(iunit,*) convexfile   ! convex file for stretchcoords
-     read(iunit,*) fluxdatapath ! directory with data in flux coord.
-     read(iunit,*) nwindow_r    ! widow size for filtering of psi array over R
-     read(iunit,*) nwindow_z    ! widow size for filtering of psi array over Z
-     close(iunit)
+     call read_field_input
      print *, 'Perturbation field',ipert,'Ampl',ampl
      if(icall_c.eq.-1) ipert=1
   endif
@@ -196,29 +205,34 @@ subroutine field_eq(r,ppp,z,Brad,Bphi,Bzet,dBrdR,dBrdp,dBrdZ  &
 !-------first call: read data from disk-------------------------------
   if(icall_eq .lt. 1) then
 !
-!     call read_dimeq0(nrad,nzet)
     if (.not. skip_read) then
-        call read_dimeq1(nrad,nzet)
-        allocate(rad(nrad),zet(nzet))
-        allocate(psi0(nrad,nzet),psi(nrad,nzet))
-        allocate(splfpol(0:5,nrad))                                                  !<=18.12.18
+        if (iaxieq .eq. 1) then
+           call read_dimeq_west(nrad, nzet)
+        else
+!          call read_dimeq0(nrad, nzet)
+           call read_dimeq1(nrad, nzet)
+        end if
+        allocate(rad(nrad), zet(nzet))
+        allocate(psi0(nrad, nzet), psi(nrad, nzet))
     end if
-
-!     call read_eqfile0(nrad, nzet, psib, btf, rtf, rad, zet, psi)
-    if(use_fpol) then                                                                !<=18.12.18
+    if (use_fpol) then                                                               !<=18.12.18
       if (.not. skip_read) then
+         allocate(splfpol(0:5, nrad))                                                !<=18.12.18
+!        call read_eqfile0(nrad, nzet, psib, btf, rtf, rad, zet, psi)
          call read_eqfile2(nrad, nzet, psi_axis, psi_sep, btf, rtf, &                !<=18.12.18
-              splfpol(0,:), rad, zet, psi)                                           !<=18.12.18
+              splfpol(0, :), rad, zet, psi)                                          !<=18.12.18
       end if
       psib=-psi_axis                                                                 !<=18.12.18
       psi_sep=(psi_sep-psi_axis)*1.d8                                                !<=18.12.18
       splfpol(0,:)=splfpol(0,:)*1.d6                                                 !<=18.12.18
       call spline_fpol                                                               !<=18.12.18
-    else                                                                             !<=18.12.18
-       if (.not. skip_read) then
-          call read_eqfile1(nrad, nzet, psib, btf, rtf, rad, zet, psi)
-       end if
-    endif                                                                            !<=18.12.18
+    else if (.not. skip_read) then                                                   !<=18.12.18
+      if (iaxieq .eq. 1) then
+         call read_eqfile_west(nrad, nzet, psib, btf, rtf, rad, zet, psi)
+      else
+         call read_eqfile1(nrad, nzet, psib, btf, rtf, rad, zet, psi)
+      end if
+    end if                                                                           !<=18.12.18
 !
 ! Filtering:
 !open(191,file='psi_orig.dat')
@@ -604,6 +618,53 @@ subroutine set_eqcoords(nwEQD,nhEQD,xdim,zdim,r1,zmid,rad,zet)
   return
 2010  format(5(e16.9))
 end subroutine set_eqcoords
+
+! ===========================================================================
+
+! Input of axisymmetric equilibrium for WEST tokamak
+
+  subroutine read_dimeq_west(nrad, nzet)
+
+  use input_files, only: iunit, gfile
+
+  implicit none
+
+  integer :: nrad, nzet
+
+  open(unit = iunit,file = trim(gfile), status = 'old', action = 'read')
+  read(iunit, *) nrad, nzet
+  close(iunit)
+
+  end subroutine read_dimeq_west
+
+!----------------------------------------------------------------------
+
+  subroutine read_eqfile_west(nrad, nzet, psib, btf, rtf, rad, zet, psi)
+
+  use input_files, only: iunit, gfile
+
+  implicit none
+
+  integer :: nrad, nzet, ir
+  double precision :: psib, btf, rtf
+  double precision :: rad(nrad), zet(nzet)
+  double precision :: psi(nrad, nzet)
+
+  psib = 0.0d0
+
+  open(unit = iunit, file = trim(gfile), status = 'old', action = 'read')
+  read (iunit, *) nrad, nzet
+  read (iunit, *) btf
+  read (iunit, *) rad
+  read (iunit, *) zet
+  do ir = 1, nrad
+    read (iunit, *) psi(ir, :)
+  end do
+  close(iunit)
+  rtf = 0.5d0 * (rad(1) + rad(nrad))
+  btf = btf / rtf
+
+  end subroutine read_eqfile_west
 
 ! ===========================================================================
 !
@@ -1169,7 +1230,7 @@ subroutine read_field4(nr,np,nz,rmin,rmax,pmin,pmax,zmin,zmax,Br,Bp,Bz)
   double precision :: rmin,rmax,pmin,pmax,zmin,zmax
   double precision, dimension(nr,np,nz)       :: Br,Bp,Bz
 !
-  open(iunit,file=pfile) 
+  open(iunit,file=pfile)
   read(iunit,*) nr,np,nz
   read(iunit,*) rmin,rmax
   read(iunit,*) pmin,pmax

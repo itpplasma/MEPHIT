@@ -1366,8 +1366,7 @@ contains
   subroutine read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bnvac_R, Bnvac_Z)
     use input_files, only: pfile
     use mephit_conf, only: conf
-    use mephit_util, only: imun, pi, linspace, get_field_filenames
-    character(len = 1024) :: gfile, convexfile
+    use mephit_util, only: imun, pi, linspace
     integer, intent(out) :: nR, nZ
     real(dp), intent(out) :: Rmin, Rmax, Zmin, Zmax
     complex(dp), intent(out), dimension(:, :), allocatable :: Bnvac_R, Bnvac_Z
@@ -1375,7 +1374,7 @@ contains
     real(dp) :: B_R, B_phi, B_Z
     complex(dp), allocatable :: fourier_basis(:)
 
-    call get_field_filenames(gfile, pfile, convexfile)
+    call read_field_input
     open(newunit = fid, file = pfile, status = 'old', action = 'read', form = 'formatted')
     read (fid, *) nR, nphi, nZ, idum
     read (fid, *) Rmin, Rmax

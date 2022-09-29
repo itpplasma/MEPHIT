@@ -82,6 +82,7 @@ contains
 
   subroutine mephit_run(runmode, config) bind(C, name = 'mephit_run')
     use iso_c_binding, only: c_int, c_ptr
+    use input_files, only: gfile
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use mephit_util, only: C_F_string, get_field_filenames, init_field
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
@@ -92,7 +93,7 @@ contains
     integer(c_int), intent(in), value :: runmode
     type(c_ptr), intent(in), value :: config
     integer(c_int) :: runmode_flags
-    character(len = 1024) :: config_filename, gfile, pfile, convexfile
+    character(len = 1024) :: config_filename
     logical :: meshing, analysis, iterations
 
     meshing = iand(runmode, ishft(1, 0)) /= 0
@@ -113,8 +114,8 @@ contains
     call config_export_hdf5(conf, datafile, 'config')
     if (meshing) then
        ! initialize equilibrium field
-       call get_field_filenames(gfile, pfile, convexfile)
-       call equil%read(trim(gfile), trim(convexfile))
+       call read_field_input
+       call equil%read(trim(gfile))
        call equil%classify
        call equil%standardise
        if (conf%kilca_scale_factor /= 0) then
@@ -134,6 +135,7 @@ contains
        call FEM_extend_mesh
     else
        ! initialize equilibrium field
+       call read_field_input
        call equil%import_hdf5(datafile, 'equil')
        call init_field(equil)
        call psi_interpolator%init(4, equil%psi_eqd)
