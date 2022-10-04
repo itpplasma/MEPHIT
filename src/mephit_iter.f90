@@ -226,8 +226,16 @@ contains
   end subroutine iter_read
 
   subroutine iter_step
+    use mephit_conf, only: datafile
+    use mephit_pert, only: L1_write
+    logical, save :: first = .true.
     ! compute pressure based on previous perturbation field
-    call MFEM_test
+    if (first) then
+       call MFEM_test
+       call L1_write(pn, datafile, 'iter/mfem_pn_000', 'MFEM', 'barye')
+       first = .false.
+    end if
+    call compute_presn
     ! compute currents based on previous perturbation field
     call compute_currn
     ! use field code to generate new field from currents
