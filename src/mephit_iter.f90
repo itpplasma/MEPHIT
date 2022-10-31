@@ -84,7 +84,7 @@ contains
     use iso_c_binding, only: c_int, c_ptr
     use input_files, only: gfile
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
-    use mephit_util, only: C_F_string, get_field_filenames, init_field
+    use mephit_util, only: C_F_string, init_field
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
     use mephit_mesh, only: equil, mesh, psi_interpolator, &
          generate_mesh, mesh_write, mesh_read, write_cache, read_cache
