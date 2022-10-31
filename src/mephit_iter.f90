@@ -651,10 +651,9 @@ contains
 
   subroutine debug_MDE(group, presn, magfn, currn_perp, currn_par)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use field_eq_mod, only: psif, psib
-    use mephit_conf, only: conf, datafile
-    use mephit_util, only: imun, pi, clight, zd_cross
-    use mephit_mesh, only: equil, mesh, cache, psi_interpolator, point_location
+    use mephit_conf, only: datafile
+    use mephit_util, only: pi, clight, zd_cross
+    use mephit_mesh, only: mesh, cache, equilibrium_field, curr0_geqdsk
     use mephit_pert, only: L1_t, L1_interp, RT0_t, RT0_interp
     character(len = *), intent(in) :: group
     type(L1_t), intent(in) :: presn
@@ -663,78 +662,67 @@ contains
     type(L1_t), intent(in) :: currn_par
     integer(HID_T) :: h5id_root
     character(len = len_trim(group)) :: grp
-    integer :: ndim, kf, kp, kedge, ktri, k
-    real(dp) :: dum, psi, B_0(3), j_0(3), stencil_R(5), stencil_Z(5), &
-         dp0_dpsi, dF_dpsi, FdF_dpsi, fprime(equil%nw)
-    complex(dp) :: zdum, B_n(3), jnperp(3, 5), grad_p_n(3)
-    complex(dp), allocatable :: grad_pn(:, :), Bn_psi_contravar(:), grad_jnpar(:, :), &
-         div_jnperp(:), div_jnperp_RT0(:)
+    integer :: ndim, kf, kpol, k
+    real(dp) :: dum, psi, B0(3), dB0_dR(3), dB0_dZ(3), Bmod, j0(3), dj0_dR(3), dj0_dZ(3), &
+         grad_j0B0(3), B0_grad_B0(3)
+    complex(dp) :: Bn(3), dBn_dR(3), dBn_dphi(3), dBn_dZ(3), grad_BnB0(3), jnperp(3, 0:3)
+    complex(dp), allocatable :: lorentz(:, :), pn(:), grad_pn(:, :), Bn_psi_contravar(:), &
+         jnpar_Bmod(:), grad_jnpar_Bmod(:, :), div_jnperp(:), div_jnperp_RT0(:)
 
     grp = trim(adjustl(group))
-    fprime = equil%ffprim / equil%fpol
-    ndim = mesh%npoint - 1
-    allocate(grad_pn(3, ndim), Bn_psi_contravar(ndim), grad_jnpar(3, ndim), &
-         div_jnperp(ndim), div_jnperp_RT0(ndim))
-    div_jnperp(:) = (0d0, 0d0)
+    ndim = sum(shiftl(1, cache%log2_kt_max))
+    allocate(lorentz(3, ndim), pn(ndim), grad_pn(3, ndim), Bn_psi_contravar(ndim), &
+         jnpar_Bmod(ndim), grad_jnpar_Bmod(3, ndim), div_jnperp(ndim), div_jnperp_RT0(ndim))
     do kf = 1, mesh%nflux
-       do kp = 1, mesh%kp_max(kf)
-          kedge = mesh%kp_low(kf) + kp - 1
-          ktri = mesh%edge_tri(1, kedge)
-          associate (R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge), c => cache%mid_fields(kedge))
-            call L1_interp(presn, ktri, R, Z, zdum, grad_pn(:, kedge))
-            call RT0_interp(magfn, ktri, R, Z, B_n)
-            call L1_interp(currn_par, ktri, R, Z, zdum, grad_jnpar(:, kedge))
-            call RT0_interp(currn_perp, ktri, R, Z, jnperp(:, 4), &
+       do kpol = 1, shiftl(1, cache%log2_kt_max(kf))
+          k = cache%kt_low(kf) + kpol
+          associate (s => cache%sample_polmodes_half(k))
+            call equilibrium_field(s%R, s%Z, B0, dB0_dR, dB0_dZ, psi, Bmod, dum, dum)
+            call curr0_geqdsk(s%R, psi, B0, dB0_dR, dB0_dZ, j0, dj0_dR, dj0_dZ)
+            call L1_interp(presn, s%ktri, s%R, s%Z, pn(k), grad_pn(:, k))
+            call RT0_interp(magfn, s%ktri, s%R, s%Z, Bn, dBn_dR, dBn_dphi, dBn_dZ)
+            call L1_interp(currn_par, s%ktri, s%R, s%Z, jnpar_Bmod(k), grad_jnpar_Bmod(:, k))
+            call RT0_interp(currn_perp, s%ktri, s%R, s%Z, jnperp(:, 0), &
                  jnperp(:, 1), jnperp(:, 2), jnperp(:, 3))
-            Bn_psi_contravar(kedge) = R * (B_n(1) * c%B0(3) - B_n(3) * c%B0(1))
-            div_jnperp_RT0(kedge) = jnperp(1, 1) + jnperp(2, 2) + jnperp(3, 3) + &
-                 jnperp(1, 4) / R
+            Bn_psi_contravar(k) = s%R * (Bn(1) * B0(3) - Bn(3) * B0(1))
+            lorentz(:, k) = (zd_cross(jnperp(:, 0), B0) - zd_cross(Bn, j0)) / clight
+            div_jnperp_RT0(k) = jnperp(1, 1) + jnperp(2, 2) + jnperp(3, 3) + jnperp(1, 0) / s%R
+            grad_j0B0 = [sum(dj0_dR * B0 + dB0_dR * j0), 0d0, sum(dj0_dZ * B0 + dB0_dZ * j0)]
+            grad_BnB0 = [sum(dBn_dR * B0 + dB0_dR * Bn), sum(dBn_dphi * B0), sum(dBn_dZ * B0 + dB0_dZ * Bn)]
+            B0_grad_B0 = [sum(dB0_dR * B0), 0d0, sum(dB0_dZ * B0)]
+            div_jnperp(k) = (-2d0 / Bmod ** 2 * (clight * sum(zd_cross(grad_pn(:, k), B0) * B0_grad_B0) + &
+                 sum(Bn * B0) * sum(j0 * B0_grad_B0) - sum(Bn * B0_grad_B0) * sum(j0 * B0)) + &
+                 sum(grad_BnB0 * j0 - Bn * grad_j0B0) + 4d0 * pi * sum(grad_pn(:, k) * j0)) / Bmod ** 2
           end associate
-          if (kf < mesh%nflux) then
-             stencil_R = mesh%mid_R(kedge) + [0, 1, -1, 0, 0] * 0.2d0 * conf%max_Delta_rad
-             stencil_Z = mesh%mid_Z(kedge) + [0, 0, 0, 1, -1] * 0.2d0 * conf%max_Delta_rad
-             do k = 1, 5
-                call field(stencil_R(k), 0d0, stencil_Z(k), B_0(1), B_0(2), B_0(3), &
-                     dum, dum, dum, dum, dum, dum, dum, dum, dum)
-                psi = psif - psib  ! see intperp_psi_pol in mephit_util
-                dp0_dpsi = psi_interpolator%eval(equil%pprime, psi)
-                FdF_dpsi = psi_interpolator%eval(equil%ffprim, psi)
-                dF_dpsi = psi_interpolator%eval(fprime, psi)
-                j_0(1) = 0.25d0 / pi * clight * dF_dpsi * B_0(1)
-                j_0(2) = clight * (dp0_dpsi * stencil_R(k) + 0.25d0 / (pi * stencil_R(k)) * FdF_dpsi)
-                j_0(3) = 0.25d0 / pi * clight * dF_dpsi * B_0(3)
-                ktri = point_location(stencil_R(k), stencil_Z(k), psi)
-                call L1_interp(presn, ktri, stencil_R(k), stencil_Z(k), zdum, grad_p_n)
-                call RT0_interp(magfn, ktri, stencil_R(k), stencil_Z(k), B_n)
-                jnperp(:, k) = (sum(B_0 * J_0) * B_n - sum(B_0 * B_n) * J_0 + clight * &
-                     zd_cross(grad_p_n, B_0)) / sum(B_0 ** 2)
-             end do
-             div_jnperp(kedge) = imun * mesh%n / stencil_R(1) * jnperp(2, 1) + &
-                  (jnperp(1, 2) - jnperp(1, 3) + jnperp(3, 4) - jnperp(3, 5)) / &
-                  (0.4d0 * conf%max_Delta_rad) + jnperp(1, 1) / stencil_R(1)
-          end if
        end do
     end do
 
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/pn', pn, lbound(pn), ubound(pn), &
+         comment = 'perturbation pressure', unit = 'dyn cm^-2')
     call h5_add(h5id_root, grp // '/grad_pn', grad_pn, lbound(grad_pn), ubound(grad_pn), &
-         comment = 'perturbation pressure gradient', unit = 'dyn cm^-2')
+         comment = 'perturbation pressure gradient', unit = 'dyn cm^-3')
     call h5_add(h5id_root, grp // '/Bn_psi_contravar', Bn_psi_contravar, &
-         lbound(Bn_psi_contravar), ubound(Bn_psi_contravar), &
-         comment = 'perturbation pressure gradient', unit = 'G^2 cm')
-    call h5_add(h5id_root, grp // '/grad_jnpar', grad_jnpar, &
-         lbound(grad_jnpar), ubound(grad_jnpar), unit = 'cm^-1 s^-1', &
+         lbound(Bn_psi_contravar), ubound(Bn_psi_contravar), unit = 'G^2 cm', &
+         comment = 'perturbation magnetic field (contravariant psi component)')
+    call h5_add(h5id_root, grp // '/jnpar_Bmod', jnpar_Bmod, &
+         lbound(jnpar_Bmod), ubound(jnpar_Bmod), unit = 's^-1', &
+         comment = 'parallel perturbation current density')
+    call h5_add(h5id_root, grp // '/grad_jnpar_Bmod', grad_jnpar_Bmod, &
+         lbound(grad_jnpar_Bmod), ubound(grad_jnpar_Bmod), unit = 'cm^-1 s^-1', &
          comment = 'parallel perturbation current density gradient')
     call h5_add(h5id_root, grp // '/div_jnperp', div_jnperp, &
          lbound(div_jnperp), ubound(div_jnperp), unit = 'statA cm^-3', &
-         comment = 'perpendicular perturbation current density divergence (five-point stencil)')
+         comment = 'perpendicular perturbation current density divergence')
     call h5_add(h5id_root, grp // '/div_jnperp_RT0', div_jnperp_RT0, &
          lbound(div_jnperp_RT0), ubound(div_jnperp_RT0), unit = 'statA cm^-3', &
          comment = 'perpendicular perturbation current density divergence (RT0 interpolation)')
+    call h5_add(h5id_root, grp // '/lorentz', lorentz, lbound(lorentz), ubound(lorentz), &
+         comment = 'perturbation Lorentz force density', unit = 'dyn cm^-3')
     call h5_close(h5id_root)
 
-    deallocate(grad_pn, Bn_psi_contravar, grad_jnpar, div_jnperp, div_jnperp_RT0)
+    deallocate(lorentz, pn, grad_pn, Bn_psi_contravar, jnpar_Bmod, grad_jnpar_Bmod, div_jnperp, div_jnperp_RT0)
   end subroutine debug_MDE
 
   subroutine compute_currn
@@ -787,7 +775,6 @@ contains
                   mesh%GL2_weights(k), mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), n_f)
           end do
        end do
-       call debug_currn("debug_currn_initial", pn, Bn, jn, inhom)
        call debug_MDE("debug_MDE_initial", pn, Bn, jn, jnpar_B0)
        jn%DOF(:) = (0d0, 0d0)
        jn%comp_phi(:) = (0d0, 0d0)
@@ -813,7 +800,6 @@ contains
        first_call = .false.
     else
        ! hack: overwrite to save only last iteration step
-       call debug_currn("debug_currn_final", pn, Bn, jn, inhom)
        call debug_MDE("debug_MDE_final", pn, Bn, jn, jnpar_B0)
     end if
 
@@ -892,49 +878,6 @@ contains
        end do
     end if
   end subroutine add_shielding_current
-
-  subroutine debug_currn(group, presn, magfn, currn, inhom)
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use mephit_conf, only: datafile
-    use mephit_util, only: clight, zd_cross
-    use mephit_mesh, only: mesh, cache
-    use mephit_pert, only: RT0_interp, L1_interp
-    character(len = *), intent(in) :: group
-    type(L1_t), intent(in) :: presn
-    type(RT0_t), intent(in) :: magfn, currn
-    complex(dp), intent(in), optional :: inhom(:)
-    character(len = len_trim(group)) :: grp
-    integer(HID_T) :: h5id_root
-    integer :: kf, kt, ktri
-    complex(dp) :: zdum, Bn(3), jn(3)
-    complex(dp), dimension(3, mesh%ntri) :: grad_pn, lorentz
-
-    grp = trim(adjustl(group))
-    do kf = 1, mesh%nflux
-       do kt = 1, mesh%kt_max(kf)
-          ktri = mesh%kt_low(kf) + kt
-          associate (R => mesh%cntr_R(ktri), Z => mesh%cntr_Z(ktri), c => cache%cntr_fields(ktri))
-            call L1_interp(presn, ktri, R, Z, zdum, grad_pn(:, ktri))
-            call RT0_interp(magfn, ktri, R, Z, Bn)
-            call RT0_interp(currn, ktri, R, Z, jn)
-            lorentz(:, ktri) = (zd_cross(jn, c%B0) - zd_cross(Bn, c%j0)) / clight
-          end associate
-       end do
-    end do
-    call h5_open_rw(datafile, h5id_root)
-    call h5_create_parent_groups(h5id_root, grp // '/')
-    call h5_add(h5id_root, grp // '/grad_pn', grad_pn, lbound(grad_pn), ubound(grad_pn), &
-         comment = 'perturbation pressure gradient', unit = 'dyn cm^-2')
-    call h5_add(h5id_root, grp // '/lorentz', lorentz, lbound(lorentz), ubound(lorentz), &
-         comment = 'perturbation Lorentz force density', unit = 'dyn cm^-2')
-    call h5_add(h5id_root, grp // '/I', currn%DOF, lbound(currn%DOF), ubound(currn%DOF), &
-         comment = 'perturbation current density degrees of freedom', unit = 'statA')
-    if (present(inhom)) then
-       call h5_add(h5id_root, grp // '/inhom', inhom, lbound(inhom), ubound(inhom), &
-            comment = 'inhomogeneities of linear systems of equations', unit = 'statA cm^-3')
-    end if
-    call h5_close(h5id_root)
-  end subroutine debug_currn
 
   subroutine mephit_postprocess
     use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close

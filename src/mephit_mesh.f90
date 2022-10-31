@@ -16,7 +16,7 @@ module mephit_mesh
 
   ! testing and debugging procedures
   public :: check_mesh, write_illustration_data, flux_func_cache_check, &
-       check_safety_factor, check_curr0
+       check_safety_factor, check_curr0, equilibrium_field, curr0_geqdsk
 
   ! module variables
   public :: equil, psi_interpolator, psi_fine_interpolator, fs, fs_half, mesh, &
