@@ -670,13 +670,13 @@ contains
          jnpar_Bmod(:), grad_jnpar_Bmod(:, :), div_jnperp(:), div_jnperp_RT0(:)
 
     grp = trim(adjustl(group))
-    ndim = sum(shiftl(1, cache%log2_kt_max))
+    ndim = sum(shiftl(1, cache%log2_kp_max))
     allocate(lorentz(3, ndim), pn(ndim), grad_pn(3, ndim), Bn_psi_contravar(ndim), &
          jnpar_Bmod(ndim), grad_jnpar_Bmod(3, ndim), div_jnperp(ndim), div_jnperp_RT0(ndim))
     do kf = 1, mesh%nflux
-       do kpol = 1, shiftl(1, cache%log2_kt_max(kf))
-          k = cache%kt_low(kf) + kpol
-          associate (s => cache%sample_polmodes_half(k))
+       do kpol = 1, shiftl(1, cache%log2_kp_max(kf))
+          k = cache%kp_low(kf) + kpol
+          associate (s => cache%sample_polmodes(k))
             call equilibrium_field(s%R, s%Z, B0, dB0_dR, dB0_dZ, psi, Bmod, dum, dum)
             call curr0_geqdsk(s%R, psi, B0, dB0_dR, dB0_dZ, j0, dj0_dR, dj0_dZ)
             call L1_interp(presn, s%ktri, s%R, s%Z, pn(k), grad_pn(:, k))
