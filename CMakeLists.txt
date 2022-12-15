@@ -8,7 +8,6 @@ project(MEPHIT LANGUAGES Fortran C CXX)
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
-set(CMAKE_INSTALL_PREFIX ${CMAKE_SOURCE_DIR})
 
 ### Set compiler flags
 if ("$ENV{FC}" MATCHES "ifort")
@@ -165,4 +164,14 @@ target_link_libraries(standardise_equilibrium.x mephit)
 target_link_libraries(vacfield.x mephit)
 
 ### Add helper script to binaries
-configure_file(scripts/mephit.bash ${EXECUTABLE_OUTPUT_PATH}/mephit @ONLY)
+configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)
+configure_file(scripts/ff-mephit.bash ${PROJECT_BINARY_DIR}/scripts/ff-mephit.bash COPYONLY)
+configure_file(scripts/maxwell_daemon.edp ${PROJECT_BINARY_DIR}/scripts/maxwell_daemon.edp COPYONLY)
+configure_file(scripts/extmesh.edp ${PROJECT_BINARY_DIR}/scripts/extmesh.edp COPYONLY)
+configure_file(scripts/magdifplot.tex ${PROJECT_BINARY_DIR}/scripts/magdifplot.tex COPYONLY)
+configure_file(scripts/mephit_plot.py ${PROJECT_BINARY_DIR}/scripts/mephit_plot.py COPYONLY)
+configure_file(scripts/test_plot.py ${PROJECT_BINARY_DIR}/scripts/test_plot.py COPYONLY)
+configure_file(data/convexwall_asdex.dat ${PROJECT_BINARY_DIR}/data/convexwall_asdex.dat COPYONLY)
+configure_file(data/convexwall_kilca.dat ${PROJECT_BINARY_DIR}/data/convexwall_kilca.dat COPYONLY)
+configure_file(data/field_divB0.inp ${PROJECT_BINARY_DIR}/data/field_divB0.inp COPYONLY)
+configure_file(data/preload_for_SYNCH.inp ${PROJECT_BINARY_DIR}/data/preload_for_SYNCH.inp COPYONLY)
