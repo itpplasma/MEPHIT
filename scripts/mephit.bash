@@ -319,10 +319,10 @@ mephit_help() {
 }
 
 # context
-bindir=$(dirname "$0")
-bindir=$(realpath "$bindir")
-scriptdir=$(realpath -m "$bindir/../../scripts")
-datadir=$(realpath -m "$bindir/../../data")
+scriptdir=$(dirname "$0")
+scriptdir=$(realpath "$scriptdir")
+bindir=$(realpath -m "$scriptdir/../bin")
+datadir=$(realpath -m "$scriptdir/../data")
 if [ -d "@tmpdir@" ]; then
     tmpdir=@tmpdir@
 else

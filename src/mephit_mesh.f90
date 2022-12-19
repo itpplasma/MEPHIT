@@ -16,7 +16,7 @@ module mephit_mesh
 
   ! testing and debugging procedures
   public :: check_mesh, write_illustration_data, flux_func_cache_check, &
-       check_safety_factor, check_curr0
+       check_safety_factor, check_curr0, equilibrium_field, curr0_geqdsk
 
   ! module variables
   public :: equil, psi_interpolator, psi_fine_interpolator, fs, fs_half, mesh, &
@@ -902,6 +902,12 @@ contains
     call h5_add(h5id_root, grp // '/log2_kt_max', cache%log2_kt_max, &
          lbound(cache%log2_kt_max), ubound(cache%log2_kt_max), &
          comment = 'binary logarithm of poloidal sampling points between flux surfaces')
+    call h5_add(h5id_root, grp // '/kp_low', cache%kp_low, &
+         lbound(cache%kp_low), ubound(cache%kp_low), &
+         comment = 'cumulative sum of poloidal sampling points on flux surfaces')
+    call h5_add(h5id_root, grp // '/kt_low', cache%kt_low, &
+         lbound(cache%kt_low), ubound(cache%kt_low), &
+         comment = 'cumulative sum of poloidal sampling points between flux surfaces')
     call h5_close(h5id_root)
     do m = mesh%m_res_min, mesh%m_res_max
        write (suffix, fmt) m

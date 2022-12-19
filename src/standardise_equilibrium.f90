@@ -19,7 +19,7 @@ program standardise_equilibrium
   end if
 
   call logger%init('-', 4, .false.) ! log_level = debug
-  call equil%read(trim(unprocessed_geqdsk), '')
+  call equil%read(trim(unprocessed_geqdsk))
   call equil%classify
   call equil%standardise
   call equil%write(trim(standardised_geqdsk))

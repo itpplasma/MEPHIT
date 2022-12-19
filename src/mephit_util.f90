@@ -14,8 +14,8 @@ module mephit_util
   public :: neumaier_accumulator_real, neumaier_accumulator_complex
 
   ! utility procedures
-  public :: get_field_filenames, init_field, deinit_field, interp_psi_pol, &
-       pos_angle, linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, zd_cross, &
+  public :: init_field, deinit_field, interp_psi_pol, &
+       pos_angle, linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, zd_cross, dd_cross, &
        binsearch, interleave, heapsort_real, heapsort_complex, complex_abs_asc, complex_abs_desc, &
        arnoldi_break, hessenberg_eigvals, hessenberg_eigvecs, &
        gauss_legendre_unit_interval, C_F_string
@@ -49,7 +49,6 @@ module mephit_util
   type :: g_eqdsk
     type(sign_convention) :: cocos
     character(len = 1024) :: fname
-    character(len = 1024) :: convexfile
     character(len = 48) :: header
     integer :: nw, nh, nbbbs, limitr
     real(dp) :: rdim, zdim, rcentr, rleft, zmid, rmaxis, zmaxis, simag, sibry, bcentr, &
@@ -115,34 +114,14 @@ module mephit_util
 
 contains
 
-  ! better future solution: put this in a separate subroutine in field_divB0.f90
-  subroutine get_field_filenames(gfile, pfile, convexfile)
-    character(len = *), intent(out) :: gfile, pfile, convexfile
-    integer :: fid
-    open(newunit = fid, file = 'field_divB0.inp', status = 'old', form = 'formatted', action = 'read')
-    read (fid, *)
-    read (fid, *)
-    read (fid, *)
-    read (fid, *)
-    read (fid, *)
-    read (fid, *)
-    read (fid, *) gfile        ! equilibrium file
-    read (fid, *) pfile        ! coil file
-    read (fid, *) convexfile   ! convex file for stretchcoords
-    close(fid)
-  end subroutine get_field_filenames
-
   !> Set module variables for initialization of subroutine field
   subroutine init_field(equil)
-    use input_files, only: convexfile
     use field_mod, only: icall, ipert, iequil
     use field_eq_mod, only: skip_read, icall_eq, nwindow_r, nwindow_z, &
          nrad, nzet, psi_axis, psi_sep, btf, rtf, splfpol, rad, zet, psi, psi0
     type(g_eqdsk), intent(in) :: equil
     real(dp) :: dum
 
-    ! use supplied filename
-    convexfile = equil%convexfile
     ! compute equiibrium field
     ipert = 0
     iequil = 1
@@ -414,7 +393,7 @@ contains
     comp_tor = comp_phi ! / (1d0 + r / R_0 * cos(theta))  ! exact version
   end subroutine bent_cyl2straight_cyl
 
-  function zd_cross(z, d)
+  pure function zd_cross(z, d)
     complex(dp), intent(in) :: z(3)
     real(dp), intent(in) :: d(3)
     complex(dp) :: zd_cross(3)
@@ -422,15 +401,21 @@ contains
     zd_cross = z([2, 3, 1]) * d([3, 1, 2]) - z([3, 1, 2]) * d([2, 3, 1])
   end function zd_cross
 
-  subroutine g_eqdsk_read(this, fname, convexfile)
+  pure function dd_cross(d1, d2)
+    real(dp), intent(in) :: d1(3), d2(3)
+    real(dp) :: dd_cross(3)
+
+    dd_cross = d1([2, 3, 1]) * d2([3, 1, 2]) - d1([3, 1, 2]) * d2([2, 3, 1])
+  end function dd_cross
+
+  subroutine g_eqdsk_read(this, fname)
     class(g_eqdsk), intent(inout) :: this
-    character(len = *), intent(in) :: fname, convexfile
+    character(len = *), intent(in) :: fname
     integer :: fid, kw, kh, idum
     real(dp) :: xdum
 
     call g_eqdsk_deinit(this)
     this%fname = fname
-    this%convexfile = convexfile
     open(newunit = fid, file = this%fname, status = 'old', form = 'formatted', action = 'read')
     read (fid, geqdsk_2000) this%header, idum, this%nw, this%nh
     allocate(this%fpol(this%nw))
@@ -775,7 +760,6 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/sgn_pol', this%cocos%sgn_pol)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/cocos/index', this%cocos%index)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/fname', this%fname)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/convexfile', this%convexfile)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/header', this%header)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/nw', this%nw)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/nh', this%nh)
@@ -835,8 +819,6 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/cocos/index', this%cocos%index)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/fname', this%fname, &
          comment = 'original GEQDSK filename')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/convexfile', this%convexfile, &
-         comment = 'associated convexfile for subroutine stretch_coords')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/header', this%header)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/nw', this%nw)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/nh', this%nh)
@@ -888,7 +870,6 @@ contains
     class(g_eqdsk) :: this
 
     this%fname = ''
-    this%convexfile = ''
     if (allocated(this%fpol)) deallocate(this%fpol)
     if (allocated(this%pres)) deallocate(this%pres)
     if (allocated(this%ffprim)) deallocate(this%ffprim)

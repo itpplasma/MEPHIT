@@ -62,27 +62,86 @@ class Mephit:
                                                    self.data['/mesh/tri_node'][()] - 1)
         self.post['psi_norm'] = self.normalize_psi(self.data['/cache/fs/psi'][()])
         self.post['psi_half_norm'] = self.normalize_psi(self.data['/cache/fs_half/psi'][()])
+        self.post['rad'] = self.data['/cache/fs/rad'][()]
+        self.post['rad_half'] = self.data['/cache/fs_half/rad'][()]
         self.post['sgn_m_res'] = int(sign(-self.data['/cache/fs/q'][-1]))
-        m_res = arange(self.data['/mesh/m_res_min'][()], self.data['/mesh/m_res_max'][()] + 1) * self.post['sgn_m_res']
-        self.post['psi_norm_res'] = dict(zip(m_res, self.normalize_psi(self.data['/mesh/psi_res'][()])))
+        self.post['m_res'] = self.post['sgn_m_res'] * arange(self.data['/mesh/m_res_min'][()],
+                                                             self.data['/mesh/m_res_max'][()] + 1)
+        self.post['psi_norm_res'] = dict(zip(self.post['m_res'], self.normalize_psi(self.data['/mesh/psi_res'][()])))
+        self.post['rad_res'] = dict(zip(self.post['m_res'], self.data['/mesh/rad_norm_res'][()] * self.post['rad'][-1]))
         m_res_min = self.data['/mesh/m_res_min'][()]
         res_ind = self.data['/mesh/res_ind'][()] - 1
         nflux = self.data['/mesh/nflux'][()]
         self.post['psi_norm_res_neighbourhood'] = {}
-        for m in m_res:
-            kf_min = res_ind[m - m_res_min] - 2
-            kf_max = min(res_ind[m - m_res_min] + 3, nflux - 1)
+        self.post['rad_res_neighbourhood'] = {}
+        for m in self.post['m_res']:
+            kf_min = res_ind[abs(m) - m_res_min] - 2
+            kf_max = min(res_ind[abs(m) - m_res_min] + 3, nflux - 1)
             self.post['psi_norm_res_neighbourhood'][m] = self.post['psi_norm'][kf_min:kf_max+1]
+            self.post['rad_res_neighbourhood'][m] = self.post['rad'][kf_min:kf_max+1]
 
-    def get_polmodes(self, label, var_name='/postprocess/Bmn/coeff_rad', conversion=1.0, L1=False):
+    def get_polmodes(self, label, var_name='/postprocess/Bmn/coeff_rad', conversion=1.0e-4, L1=False, rad=False):
         from numpy import array
         polmodes = {'m_max': 0, 'label': label, 'rho': dict(), 'var': dict()}
         polmodes['m_max'] = (self.data[var_name].shape[1] - 1) // 2
-        rho = self.post['psi_norm'] if L1 else self.post['psi_half_norm']
+        rho = self.post['rad' if rad else 'psi_norm'] if L1 else self.post['rad_half' if rad else 'psi_half_norm']
         for m in range(-polmodes['m_max'], polmodes['m_max'] + 1):
             polmodes['rho'][m] = rho
             polmodes['var'][m] = array(self.data[var_name][:, m + polmodes['m_max']], dtype='D') * conversion
         return polmodes
+
+    def get_Ires(self):
+        from numpy import abs
+        from scipy.constants import c as clight
+        scaling = self.data['/config/kilca_scale_factor'][()]
+        scaling = scaling if scaling != 0 else 1
+        return dict(zip(self.post['m_res'], abs(self.data['/postprocess/Ires'][()]) * scaling * 0.1 / clight))
+
+
+class Kilca:
+    def __init__(self, work_dir):
+        from os import getcwd
+        self.work_dir = work_dir or getcwd()
+        self.data = None
+        self.post = dict()
+
+    def close_datafile(self):
+        from h5pickle import File
+        if isinstance(self.data, File):
+            self.data.close()
+
+    def open_datafile(self, datafile):
+        from h5pickle import File
+        from os import path
+        self.close_datafile()
+        self.data = File(path.join(self.work_dir, datafile), 'r')
+
+    def get_polmodes(self, label, var_name='Br', conversion=1.0e-04):
+        from numpy import array, sign, zeros
+        polmodes = {'m_max': 0, 'label': label, 'rho': dict(), 'var': dict()}
+        sgn_q = int(sign(self.data['/output/background/profiles/q_i'][0, -1]))
+        for name, grp in self.data['/output'].items():
+            if 'postprocessor' not in name:
+                continue
+            m = int(grp['mode'][0, 0]) * sgn_q
+            polmodes['m_max'] = max(polmodes['m_max'], abs(m))
+            polmodes['rho'][m] = array(grp['r'][0, :], dtype='d')
+            polmodes['var'][m] = zeros(polmodes['rho'][m].shape, dtype='D')
+            polmodes['var'][m].real = grp[var_name][0, :] * conversion
+            if grp[var_name].shape[0] == 2:
+                polmodes['var'][m].imag = grp[var_name][1, :] * conversion
+        return polmodes
+
+    def get_Ires(self):
+        from numpy import sign
+        sgn_q = int(sign(self.data['/output/background/profiles/q_i'][0, -1]))
+        Ires = {}
+        for name, grp in self.data['/output'].items():
+            if 'postprocessor' not in name:
+                continue
+            m = int(grp['mode'][0, 0]) * sgn_q
+            Ires[m] = grp['Ipar'][0, 0] * 10.0
+        return Ires
 
 
 class Gpec:
@@ -124,6 +183,16 @@ class Gpec:
             # and expands Fourier series in negative toroidal angle
             polmodes['var'][m].imag = self.data['profile'].variables[var_name][1, k, :] * 0.5 * sgn_dpsi * helicity
         return polmodes
+
+    def get_Ires(self):
+        from numpy import hypot
+        helicity = int(self.data['profile'].getncattr('helicity'))
+        Ires = {}
+        for k, abs_m in enumerate(self.data['control'].variables['m_rational'][:]):
+            m = abs_m * helicity
+            Ires[m] = hypot(self.data['profile'].variables['I_res'][0, k],
+                            self.data['profile'].variables['I_res'][1, k])
+        return Ires
 
 
 class PlotObject:
@@ -287,6 +356,8 @@ class PolmodePlots(PlotObject):
                                 label=data['label'])
                 else:
                     axs[0].plot(data['rho'][m], self.config['comp'](data['var'][m]), label=data['label'])
+            else:
+                next(axs[0]._get_lines.prop_cycler)
         if 'postprocess' in self.config.keys():
             for f in self.config['postprocess']:
                 f(fig, axs[0])
@@ -306,9 +377,9 @@ class PolmodePlots(PlotObject):
         canvas = FigureCanvas(fig)
         fig.savefig(pdf, format='pdf', dpi=300)
         # plot non-symmetric modes
-        m_max = min(map(lambda d: d['m_max'], self.config['poldata']))
+        m_max = max(map(lambda d: d['m_max'], self.config['poldata']))
         for m_abs in range(1, m_max + 1):
-            print(f"Plotting {self.filename}, m = {m_abs} ...")
+            print(f"Plotting {self.filename}, m = ±{m_abs} ...")
             fig = Figure(figsize=two_squares)
             axs = fig.subplots(vert_plot, horz_plot, sharex='all', sharey='all')
             for k in range(horz_plot):
@@ -330,6 +401,8 @@ class PolmodePlots(PlotObject):
                                         label=data['label'])
                         else:
                             axs[k].plot(data['rho'][m], self.config['comp'](data['var'][m]), label=data['label'])
+                    else:
+                        next(axs[k]._get_lines.prop_cycler)
                 if 'postprocess' in self.config.keys():
                     for f in self.config['postprocess']:
                         f(fig, axs[k])
@@ -341,3 +414,91 @@ class PolmodePlots(PlotObject):
             canvas = FigureCanvas(fig)
             fig.savefig(pdf, format='pdf', dpi=300)
         pdf.close()
+
+
+class IterationPlots(PlotObject):
+    def do_plot(self):
+        from os import path
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+        from matplotlib.backends.backend_pdf import PdfPages
+        from numpy import fmax, fmin
+        super().do_plot()
+        horz_plot = 3
+        vert_plot = 1
+        three_squares = (9.9, 3.3)
+        pdf = PdfPages(path.join(self.work_dir, self.filename))
+        figs = [Figure(figsize=three_squares) for kiter in range(0, self.config['niter'])]
+        for kiter in range(0, self.config['niter']):
+            print(f"Plotting {self.filename}, k = {kiter + 1} ...")
+            axs = figs[kiter].subplots(vert_plot, horz_plot)
+            for k in range(horz_plot):
+                axs[k].set_yscale(self.config['yscale'][k])
+            for k in range(len(self.config['plotdata'])):
+                if 'zoom_x' in self.config.keys():
+                    zoom_x = (self.config['zoom_x'][0] <= self.config['rho'][k % horz_plot]) & \
+                             (self.config['rho'][k % horz_plot] <= self.config['zoom_x'][1])
+                    axs[k % horz_plot].plot(self.config['rho'][k % horz_plot][zoom_x],
+                                            self.config['plotdata'][k][kiter, :][zoom_x], **self.config['plotargs'])
+                else:
+                    axs[k % horz_plot].plot(self.config['rho'][k % horz_plot], self.config['plotdata'][k][kiter, :],
+                                            **self.config['plotargs'])
+            for k in range(horz_plot):
+                if 'res_pos' in self.config.keys():
+                    axs[k].axvline(self.config['res_pos'], color='b', alpha=0.5, lw=0.5)
+                if 'res_neighbourhood' in self.config.keys():
+                    for pos in self.config['res_neighbourhood']:
+                        axs[k].axvline(pos, color='k', alpha=0.5, lw=0.25)
+                if 'postprocess' in self.config.keys():
+                    for f in self.config['postprocess']:
+                        f[k](figs[kiter], axs[k])
+                axs[k].set_xlabel(self.config['xlabel'])
+                axs[k].set_ylabel(self.config['ylabel'][k])
+            figs[kiter].suptitle(self.config['title'] + f", $k = {kiter + 1}$")
+        ylims = [figs[0].axes[k].get_ylim() for k in range(horz_plot)]
+        if self.config['global_ylims']:
+            for kiter in range(self.config['niter']):
+                for k in range(horz_plot):
+                    ylim = figs[kiter].axes[k].get_ylim()
+                    ylims[k] = [fmin(ylims[k][0], ylim[0]), fmax(ylims[k][1], ylim[1])]
+        for kiter in range(0, self.config['niter']):
+            for k in range(horz_plot):
+                figs[kiter].axes[k].set_ylim(ylims[k])
+            canvas = FigureCanvas(figs[kiter])
+            figs[kiter].savefig(pdf, format='pdf', dpi=300)
+        pdf.close()
+
+
+class ComplexPlot(PlotObject):
+    def do_plot(self):
+        from matplotlib.figure import Figure
+        from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+        from os import path
+        from numpy import abs, angle, arange
+        super().do_plot()
+        horz_plot = 2
+        vert_plot = 1
+        two_squares = (6.6, 3.3)
+        fig = Figure(figsize=two_squares)
+        axs = fig.subplots(vert_plot, horz_plot, sharex='all')
+        labels = []
+        for plotdata in self.config['plotdata']:
+            axs[0].plot(plotdata['x'], abs(plotdata['y']), **plotdata['args'])
+            axs[1].plot(plotdata['x'], angle(plotdata['y'], deg=True), **plotdata['args'])
+            axs[1].set_yticks(arange(-180, 180+1, 45))
+            axs[1].axhline(0.0, color='k', alpha=0.5, lw=0.5)
+            labels.append(plotdata['label'])
+        for k in range(horz_plot):
+            if 'postprocess' in self.config.keys():
+                for f in self.config['postprocess']:
+                    f[k](fig, axs[k])
+            if 'xlabel' in self.config.keys():
+                axs[k].set_xlabel(self.config['xlabel'])
+            if 'ylabel' in self.config.keys():
+                axs[k].set_ylabel(self.config['ylabel'][k])
+        if 'legend' in self.config.keys():
+            fig.legend(labels=labels, **self.config['legend'])
+        if 'title' in self.config.keys():
+            fig.suptitle(self.config['title'])
+        canvas = FigureCanvas(fig)
+        fig.savefig(path.join(self.work_dir, self.filename))

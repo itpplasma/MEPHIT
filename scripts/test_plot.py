@@ -1,97 +1,11 @@
-from mephit_plot import Gpec, HLine, Id, LogY, Mephit, ParallelPlotter, Plot1D, PlotObject, PolmodePlots, run_dir, \
-    set_matplotlib_defaults, XTicks, YTicks
-from numpy import abs, angle, arange, arctan2, argmax, array, full, gradient, ix_, nan, nonzero, pi, sign, sum
+from mephit_plot import ComplexPlot, Gpec, HLine, Id, IterationPlots, LogY, Mephit, ParallelPlotter, Plot1D, \
+    PolmodePlots, run_dir, set_matplotlib_defaults, XTicks, YTicks
+from numpy import abs, angle, arange, arctan2, argmax, array, full, gradient, ix_, nan, ndarray, nonzero, pi, r_, sign, sum, where
 from numpy.fft import fft, rfft
+from numpy.linalg import norm
+from scipy.constants import c as clight
 from scipy.interpolate import UnivariateSpline
 from functools import partial
-
-
-class IterationPlots(PlotObject):
-    def do_plot(self):
-        from os import path
-        from matplotlib.figure import Figure
-        from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-        from matplotlib.backends.backend_pdf import PdfPages
-        from numpy import amax, amin, fmax, fmin, nan
-        super().do_plot()
-        horz_plot = 3
-        vert_plot = 1
-        three_squares = (9.9, 3.3)
-        pdf = PdfPages(path.join(self.work_dir, self.filename))
-        ylims = [[nan, nan], [nan, nan], [nan, nan]]
-        if self.config['global_ylims']:
-            for k in range(len(self.config['plotdata'])):
-                ylims[k % horz_plot] = [fmin(ylims[k % horz_plot][0], amin(self.config['plotdata'][k])),
-                                        fmax(ylims[k % horz_plot][1], amax(self.config['plotdata'][k]))]
-        for kiter in range(0, self.config['niter']):
-            print(f"Plotting {self.filename}, k = {kiter + 1} ...")
-            fig = Figure(figsize=three_squares)
-            axs = fig.subplots(vert_plot, horz_plot)
-            for k in range(horz_plot):
-                axs[k].set_yscale(self.config['yscale'][k])
-            for k in range(len(self.config['plotdata'])):
-                if 'zoom_x' in self.config.keys():
-                    zoom_x = (self.config['zoom_x'][0] <= self.config['rho'][k % horz_plot]) & \
-                             (self.config['rho'][k % horz_plot] <= self.config['zoom_x'][1])
-                    axs[k % horz_plot].plot(self.config['rho'][k % horz_plot][zoom_x],
-                                            self.config['plotdata'][k][kiter, :][zoom_x], **self.config['plotargs'])
-                else:
-                    axs[k % horz_plot].plot(self.config['rho'][k % horz_plot], self.config['plotdata'][k][kiter, :],
-                                            **self.config['plotargs'])
-            for k in range(horz_plot):
-                if not self.config['global_ylims'] and kiter == 0:
-                    ylims[k] = axs[k].get_ylim()
-                else:
-                    axs[k].set_ylim(ylims[k])
-                if 'res_pos' in self.config.keys():
-                    axs[k].axvline(self.config['res_pos'], color='b', alpha=0.5, lw=0.5)
-                if 'res_neighbourhood' in self.config.keys():
-                    for pos in self.config['res_neighbourhood']:
-                        axs[k].axvline(pos, color='k', alpha=0.5, lw=0.25)
-                if 'postprocess' in self.config.keys():
-                    for f in self.config['postprocess']:
-                        f[k](fig, axs[k])
-                axs[k].set_xlabel(self.config['xlabel'])
-                axs[k].set_ylabel(self.config['ylabel'][k])
-            fig.suptitle(self.config['title'] + f", $k = {kiter + 1}$")
-            canvas = FigureCanvas(fig)
-            fig.savefig(pdf, format='pdf', dpi=300)
-        pdf.close()
-
-
-class ComplexPlot(PlotObject):
-    def do_plot(self):
-        from matplotlib.figure import Figure
-        from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
-        from os import path
-        from numpy import abs, angle
-        super().do_plot()
-        horz_plot = 2
-        vert_plot = 1
-        two_squares = (6.6, 3.3)
-        fig = Figure(figsize=two_squares)
-        axs = fig.subplots(vert_plot, horz_plot, sharex='all')
-        labels = []
-        for plotdata in self.config['plotdata']:
-            axs[0].plot(plotdata['x'], abs(plotdata['y']), **plotdata['args'])
-            axs[1].plot(plotdata['x'], angle(plotdata['y'], deg=True), **plotdata['args'])
-            axs[1].set_yticks(arange(-180, 180+1, 45))
-            axs[1].axhline(0.0, color='k', alpha=0.5, lw=0.5)
-            labels.append(plotdata['label'])
-        for k in range(horz_plot):
-            if 'postprocess' in self.config.keys():
-                for f in self.config['postprocess']:
-                    f[k](fig, axs[k])
-            if 'xlabel' in self.config.keys():
-                axs[k].set_xlabel(self.config['xlabel'])
-            if 'ylabel' in self.config.keys():
-                axs[k].set_ylabel(self.config['ylabel'][k])
-        if 'legend' in self.config.keys():
-            fig.legend(labels=labels, **self.config['legend'])
-        if 'title' in self.config.keys():
-            fig.suptitle(self.config['title'])
-        canvas = FigureCanvas(fig)
-        fig.savefig(path.join(self.work_dir, self.filename))
 
 
 if __name__ == "__main__":
@@ -104,103 +18,191 @@ if __name__ == "__main__":
     testcase.open_datafile()
     testcase.postprocess()
     sgn_dpsi = sign(testcase.data['/cache/fs/psi'][-1] - testcase.data['/cache/fs/psi'][0])
+    nflux = testcase.data['/mesh/nflux'][()]
+    m_max = 24
+    m_res_min = testcase.data['/mesh/m_res_min'][()]
 
     # MEPHIT validation
-    kfs = [testcase.data['/mesh/res_ind'][0], testcase.data['/mesh/res_ind'][0] // 2]
-    res_nonres = ['res', 'nonres']
     iters = ['initial', 'final']
-    q = []
-    q_half = []
-    theta = []
-    theta_half = []
-    grad_pn = dict(zip(iters, [[], []]))
-    grad_pn_half = dict(zip(iters, [[], []]))
-    lorentz = dict(zip(iters, [[], []]))
-    lhs = dict(zip(iters, [[], []]))
-    rhs = dict(zip(iters, [[], []]))
-    for kf in kfs:
-        q.append(f"{testcase.data['/cache/fs/q'][kf]:.3f}")
-        q_half.append(f"{testcase.data['/cache/fs_half/q'][kf - 1]:.3f}")
-        # poloidal edge index = point index - 1
-        ke_min = testcase.data['/mesh/kp_low'][kf - 1]
-        ke_max = testcase.data['/mesh/kp_low'][kf - 1] + testcase.data['/mesh/kp_max'][kf - 1] - 1
-        kt_min = testcase.data['/mesh/kt_low'][kf - 1] + 1
-        kt_max = testcase.data['/mesh/kt_low'][kf - 1] + testcase.data['/mesh/kt_max'][kf - 1]
-        # rad to deg
-        theta.append(testcase.data['/mesh/node_theta_geom'][ke_min:ke_max] * 180.0 / pi)  # point index
-        theta_half.append(arctan2(testcase.data['/mesh/cntr_Z'][kt_min - 1:kt_max - 1] -
-                                  testcase.data['/mesh/Z_O'][()],
-                                  testcase.data['/mesh/cntr_R'][kt_min - 1:kt_max - 1] -
-                                  testcase.data['/mesh/R_O'][()]) * 180 / pi)
-        theta_half[-1][theta_half[-1] < 0.0] += 360.0
-        # dyn cm^-3 Mx^-1 to Pa Wb^-1
-        dp0_dpsi = testcase.data['/cache/fs/dp_dpsi'][kf - 1] * 1.0e+7
-        # G to T
-        Bmod = testcase.data['/cache/mid_fields/B0'][ke_min - 1:ke_max - 1] * 1.0e-4
-        h = full((3, ke_max - ke_min), nan)
-        h[0, :] = testcase.data['/cache/mid_fields/B0_R'][ke_min - 1:ke_max - 1] / Bmod * 1.0e-4
-        h[1, :] = testcase.data['/cache/mid_fields/B0_phi'][ke_min - 1:ke_max - 1] / Bmod * 1.0e-4
-        h[2, :] = testcase.data['/cache/mid_fields/B0_Z'][ke_min - 1:ke_max - 1] / Bmod * 1.0e-4
-        Bn_psi = {}
+    samples = dict((key, []) for key in ['kf', 'res', 'q', 'theta'])
+    for k in range(3):
+        samples['kf'].append((testcase.data['/mesh/res_ind'][k] +
+                              (testcase.data['/mesh/res_ind'][k - 1] if k > 0 else 0)) // 2 - 1)
+        samples['kf'].append(testcase.data['/mesh/res_ind'][k] - 1)
+        samples['res'] += ['nonres', 'res']
+    valid = {}
+    for qty in ['pn', 'pn_lhs', 'pn_rhs', 'jnpar_Bmod', 'jnpar_Bmod_lhs', 'jnpar_Bmod_rhs']:
+        samples[qty] = dict((it, []) for it in iters)
+        valid[qty] = dict((it, full((2 * m_max + 1, nflux), nan, dtype='D')) for it in iters)
+    for qty in ['grad_pn', 'grad_jnpar_Bmod', 'lorentz']:
+        samples[qty] = dict((it, []) for it in iters)
+        valid[qty] = dict((it, full((2 * m_max + 1, nflux, 3), nan, dtype='D')) for it in iters)
+    labels = {
+        'pn': r'\delta p',
+        'pn_lhs': r'\V{h} \cdot \nabla \delta p',
+        'pn_rhs': r"-p_{0}'(\psi) \delta B^{\psi} B_{0}^{-1}",
+        'jnpar_Bmod': r'\mu_{0} \delta J^{\parallel} B_{0}^{-1}',
+        'jnpar_Bmod_lhs': r'\V{h} \cdot \nabla (\mu_{0} \delta J^{\parallel} B_{0}^{-1})',
+        'jnpar_Bmod_rhs': r'-\mu_{0} B_{0}^{-1} \nabla \cdot \delta \V{J}^{\perp}',
+        'lorentz': r'\delta (\V{J} \times \V{B})'
+    }
+    conversions = {
+        'pn': 0.1, 'grad_pn': 10.0, 'Bn_psi_contravar': 1.0e-10, 'lorentz': 10.0,
+        'jnpar_Bmod': 4.0 * pi / clight, 'grad_jnpar_Bmod': 400.0 * pi / clight, 'div_jnperp': 0.04 * pi / clight
+    }
+    units = {
+        'pn': r'\pascal', 'pn_lhs': r'\newton\per\cubic\meter',
+        'jnpar_Bmod': r'\per\meter', 'jnpar_Bmod_lhs': r'\per\square\meter',
+        'lorentz': r'\newton\per\cubic\meter'
+    }
+    for kf in arange(nflux):
+        k_low = testcase.data['/cache/kp_low'][kf] - 1
+        k_max = 1 << testcase.data['/cache/log2_kp_max'][kf]
+        trunc = r_[0:m_max+1, k_max-m_max:k_max]
+        s = testcase.data['/cache/sample_polmodes']
+        B0 = full((3, k_max), nan)
+        B0[0, :] = s['B0_R'][k_low+1:k_low+k_max+1] * 1.0e-4
+        B0[1, :] = s['B0_phi'][k_low+1:k_low+k_max+1] * 1.0e-4
+        B0[2, :] = s['B0_Z'][k_low+1:k_low+k_max+1]  * 1.0e-4
+        Bmod = norm(B0, axis=0)
+        dp0_dpsi = testcase.data['/cache/fs/dp_dpsi'][kf+1] * 1.0e+7
+        if kf in samples['kf']:
+            samples['q'].append(f"{testcase.data['/cache/fs/q'][kf+1]:.3f}")
+            samples['theta'].append(s['theta'][k_low+1:k_low+k_max+1] * 180.0 / pi)
         for it in iters:
-            # dyn cm^-3 to N m^-3
-            grad_pn[it].append(testcase.data[f"/debug_MDE_{it}/grad_pn"][ke_min - 1:ke_max - 1, :].T * 10)
-            grad_pn_half[it].append(testcase.data[f"/debug_currn_{it}/grad_pn"][kt_min - 1:kt_max - 1, :].T * 10)
-            lorentz[it].append(testcase.data[f"/debug_currn_{it}/lorentz"][kt_min - 1:kt_max - 1, :].T * 10)
-            # G^2 cm to T^2 m
-            Bn_psi[it] = testcase.data[f"/debug_MDE_{it}/Bn_psi_contravar"][ke_min - 1:ke_max - 1] * 1.0e-10
-            # LHS vs. RHS
-            lhs[it].append(sum(h * grad_pn[it][-1], axis=0))
-            rhs[it].append(-Bn_psi[it] / Bmod * dp0_dpsi)
+            slices = {}
+            for qty, factor in conversions.items():
+                slices[qty] = testcase.data['/debug_MDE_' + it + '/' + qty][k_low+1:k_low+k_max+1, ...].T * factor
+            for qty in ['pn', 'jnpar_Bmod']:
+                valid[qty][it][:, kf] = fft(slices[qty])[trunc] / k_max
+                valid['grad_' + qty][it][:, kf, :] = fft(slices['grad_' + qty])[:, trunc].T / k_max
+                valid[qty + '_lhs'][it][:, kf] = fft(sum(B0 * slices['grad_' + qty], axis=0) / Bmod)[trunc] / k_max
+            valid['lorentz'][it][:, kf, :] = fft(slices['lorentz'])[:, trunc].T / k_max
+            valid['pn_rhs'][it][:, kf] = -dp0_dpsi * fft(slices['Bn_psi_contravar'] / Bmod)[trunc] / k_max
+            valid['jnpar_Bmod_rhs'][it][:, kf] = -fft(slices['div_jnperp'] / Bmod)[trunc] / k_max
+            if kf in samples['kf']:
+                for qty in ['pn', 'grad_pn', 'jnpar_Bmod', 'grad_jnpar_Bmod', 'lorentz']:
+                    samples[qty][it].append(slices[qty])
+                samples['pn_lhs'][it].append(sum(B0 * slices['grad_pn'], axis=0) / Bmod)
+                samples['pn_rhs'][it].append(-dp0_dpsi * slices['Bn_psi_contravar'] / Bmod)
+                samples['jnpar_Bmod_lhs'][it].append(sum(B0 * slices['grad_jnpar_Bmod'], axis=0) / Bmod)
+                samples['jnpar_Bmod_rhs'][it].append(-slices['div_jnperp'] / Bmod)
+    for qty in ['pn', 'pn_lhs', 'pn_rhs', 'jnpar_Bmod', 'jnpar_Bmod_lhs', 'jnpar_Bmod_rhs']:
+        label = '$' + labels[qty] + '$'
+        for it in iters:
+            valid[qty][it] = {'m_max': m_max, 'rho': {m: testcase.post['psi_norm'][1:] for m in range(-m_max, m_max + 1)},
+                              'label': label, 'var': {m: valid[qty][it][m, :] for m in range(-m_max, m_max + 1)}}
+    for vqty in ['grad_pn', 'grad_jnpar_Bmod', 'lorentz']:
+        for ix, coord in enumerate(['R', 'phi', 'Z']):
+            if 'grad_' in vqty:
+                qty = vqty.replace('grad_', '', 1)
+                label = r'$\partial_{' + coord.replace('phi', r'\varphi') + '} (' + labels[qty] + ')$'
+                qty = 'd' + qty + '_d' + coord
+            else:
+                qty = vqty + "_" + coord
+                label = '$' + labels[vqty] + r' \cdot \hat{\V{e}}_{' + coord.replace('phi', r'\varphi') + '}$'
+            valid[qty] = {}
+            for it in iters:
+                valid[qty][it] = {'m_max': m_max, 'rho': {m: testcase.post['psi_norm'][1:] for m in range(-m_max, m_max + 1)},
+                                  'label': label, 'var': {m: valid[vqty][it][m, :, ix] for m in range(-m_max, m_max + 1)}}
+        del valid[vqty]
+    arg = partial(angle, deg=True)
+    phase_ticks = YTicks(arange(-180, 180 + 1, 45))
     theta_ticks = XTicks(arange(0, 360 + 1, 45))
     config = {
-        'xlabel': r'$\theta$ / \si{\degree}',
-        'legend': {'fontsize': 'x-small', 'loc': 'lower right'},
+        'xlabel': r'$\hat{\psi}$', 'rho': testcase.post['psi_norm'][1:],
+        'q': testcase.data['/cache/fs/q'][1:], 'sgn_m_res': testcase.post['sgn_m_res'],
+        'omit_res': False, 'resonances': testcase.post['psi_norm_res'],
+        'res_neighbourhood': testcase.post['psi_norm_res_neighbourhood']
+    }
+    for it in iters:
+        for qty in ['pn', 'jnpar_Bmod']:
+            config['poldata'] = [valid[qty + '_lhs'][it], valid[qty + '_rhs'][it]]
+            config['ylabel'] = 'abs MDE $' + labels[qty] + r'$ / \si{' + units[qty + '_lhs'] + '}'
+            config['comp'] = abs
+            config['postprocess'] = [LogY()]
+            plotter.plot_objects.put(PolmodePlots(work_dir, f"plot_{it}_polmodes_MDE_{qty}_abs.pdf", config))
+            config['postprocess'] = [phase_ticks]
+            config['comp'] = arg
+            config['ylabel'] = 'arg MDE $' + labels[qty] + r'$ / \si{\degree}'
+            plotter.plot_objects.put(PolmodePlots(work_dir, f"plot_{it}_polmodes_MDE_{qty}_arg.pdf", config))
+        config['poldata'] = []
+        for coord in ['R', 'phi', 'Z']:
+                config['poldata'] += [valid['dpn_d' + coord][it], valid['lorentz_' + coord][it]]
+        config['ylabel'] = r'abs $f$ / \si{' + units['lorentz'] + '}'
+        config['comp'] = abs
+        config['postprocess'] = [LogY()]
+        plotter.plot_objects.put(PolmodePlots(work_dir, f"plot_{it}_polmodes_MHD_abs.pdf", config))
+        config['postprocess'] = [phase_ticks]
+        config['comp'] = arg
+        config['ylabel'] = r'arg $f$ / \si{\degree}'
+        plotter.plot_objects.put(PolmodePlots(work_dir, f"plot_{it}_polmodes_MHD_arg.pdf", config))
+
+    config = {
+        'xlabel': r'$\vartheta$ / \si{\degree}',
+        'legend': {'fontsize': 'x-small', 'loc': 'lower right'}
     }
     for it in iters:
         config['postprocess'] = [[theta_ticks, theta_ticks], [HLine(0.0, color='k', alpha=0.5, lw=0.5), Id()]]
         # MDE p_n
         config['ylabel'] = [r'abs MDE $p_{n}$ / \si{\newton\per\cubic\meter}', r'arg MDE $p_{n}$ / \si{\degree}']
         config['title'] = f"MDE for pressure perturbation, {it} iteration"
-        config['plotdata'] = []
-        for k in range(len(kfs)):
-            config['plotdata'].append({'x': theta[k], 'y': lhs[it][k], 'args': {'lw': 0.5},
-                                       'label': '$q = ' + q[k] + r', B_{0}^{-1} \V{B}_{0} \cdot \grad p_{n}$'})
-            config['plotdata'].append({'x': theta[k], 'y': lhs[it][k], 'args': {'lw': 0.5},
-                                       'label': '$q = ' + q[k] + r', -B_{0}^{-1} B_{n}^{\psi} \partial_{\psi} p_{0}$'})
-        plotter.plot_objects.put(ComplexPlot(work_dir, f"plot_MDE_pn_{it}.pdf", config))
+        for k in range(3):
+            config['plotdata'] = [{'x': samples['theta'][2*k], 'y': samples['pn_lhs'][it][2*k], 'args': {'lw': 0.5},
+                                   'label': '$q = ' + samples['q'][2*k] + r', B_{0}^{-1} \V{B}_{0} \cdot \grad p_{n}$'},
+                                  {'x': samples['theta'][2*k], 'y': samples['pn_rhs'][it][2*k], 'args': {'lw': 0.5},
+                                   'label': '$q = ' + samples['q'][2*k] + r', -B_{0}^{-1} B_{n}^{\psi} \partial_{\psi} p_{0}$'},
+                                  {'x': samples['theta'][2*k+1], 'y': samples['pn_lhs'][it][2*k+1], 'args': {'lw': 0.5},
+                                   'label': '$q = ' + samples['q'][2*k+1] + r', B_{0}^{-1} \V{B}_{0} \cdot \grad p_{n}$'},
+                                  {'x': samples['theta'][2*k+1], 'y': samples['pn_rhs'][it][2*k+1], 'args': {'lw': 0.5},
+                                   'label': '$q = ' + samples['q'][2*k+1] + r', -B_{0}^{-1} B_{n}^{\psi} \partial_{\psi} p_{0}$'}]
+            plotter.plot_objects.put(ComplexPlot(work_dir, f"plot_{it}_MDE_pn_{m_res_min + k}.pdf", config))
         # grad p_n
         config['postprocess'] = [[theta_ticks, theta_ticks], [LogY(), Id()]]
         config['ylabel'] = [r'$\abs \grad p_{n}$ / \si{\newton\per\cubic\meter}', r'$\arg \grad p_{n}$ / \si{\degree}']
         config['title'] = f"Solution for pressure perturbation, {it} perturbation"
-        config['plotdata'] = []
         comps = [r'\partial_{R} p_{n}', r'\tfrac{\im n}{R} p_{n}', r'\partial_{Z} p_{n}']
-        for k in range(len(kfs)):
+        for k in range(3):
+            config['plotdata'] = []
             for k_comp in range(len(comps)):
-                config['plotdata'].append({'x': theta[k], 'y': grad_pn[it][k][k_comp, :], 'args': {'lw': 0.5},
-                                           'label': f"$q = {q[k]}, {comps[k_comp]}$"})
-        plotter.plot_objects.put(ComplexPlot(work_dir, f"plot_grad_pn_{it}.pdf", config))
+                config['plotdata'].append({'x': samples['theta'][2*k], 'y': samples['grad_pn'][it][2*k][k_comp, :],
+                                           'label': f"$q = {samples['q'][2*k]}, {comps[k_comp]}$", 'args': {'lw': 0.5}})
+            for k_comp in range(len(comps)):
+                config['plotdata'].append({'x': samples['theta'][2*k+1], 'y': samples['grad_pn'][it][2*k+1][k_comp, :],
+                                           'label': f"$q = {samples['q'][2*k+1]}, {comps[k_comp]}$", 'args': {'lw': 0.5}})
+            plotter.plot_objects.put(ComplexPlot(work_dir, f"plot_{it}_grad_pn_{m_res_min + k}.pdf", config))
         # iMHD
         config['ylabel'] = [r'$\abs f$ / \si{\newton\per\cubic\meter}', r'$\arg f$ / \si{\degree}']
         comps = [r'$R$ comp.', r'$\phi$ comp.', r'$Z$ comp.']
-        for k in range(len(kfs)):
-            config['title'] = f"Linearized iMHD force balance ($q = {q_half[k]}$), {it} iteration"
+        for k in range(2):
+            config['title'] = f"Linearized iMHD force balance ($q = {samples['q'][k]}$), {it} iteration"
             config['plotdata'] = []
             for k_comp in range(len(comps)):
-                config['plotdata'].append({'x': theta_half[k], 'y': lorentz[it][k][k_comp, :], 'args': {'lw': 0.5},
-                                           'label': f"Lorentz force, {comps[k_comp]}"})
-                config['plotdata'].append({'x': theta_half[k], 'y': grad_pn_half[it][k][k_comp, :],
+                config['plotdata'].append({'x': samples['theta'][k], 'y': samples['lorentz'][it][k][k_comp, :],
+                                           'label': f"Lorentz force, {comps[k_comp]}", 'args': {'lw': 0.5}})
+                config['plotdata'].append({'x': samples['theta'][k], 'y': samples['grad_pn'][it][k][k_comp, :],
                                            'label': f"pressure gradient, {comps[k_comp]}", 'args': {'lw': 0.5}})
-            plotter.plot_objects.put(ComplexPlot(work_dir, f"plot_MHD_{res_nonres[k]}_{it}.pdf", config))
+            plotter.plot_objects.put(ComplexPlot(work_dir, f"plot_{it}_MHD_{samples['res'][k]}.pdf", config))
 
     # GPEC comparison
     conversion = 1.0e-04 / testcase.data['/mesh/gpec_jacfac'][()]
     mephit_Bmn = testcase.get_polmodes('full perturbation (MEPHIT)', '/postprocess/Bmn/coeff_rad', conversion)
     mephit_Bmn_vac = testcase.get_polmodes('vacuum perturbation (MEPHIT)', '/postprocess/Bmn_vac/coeff_rad', conversion)
+    mephit_Ires = testcase.get_Ires()
     reference = Gpec(work_dir, 2)
     reference.open_datafiles()
     gpec_Bmn = reference.get_polmodes('full perturbation (GPEC)', sgn_dpsi, 'Jbgradpsi')
     gpec_Bmn_vac = reference.get_polmodes('vacuum perturbation (GPEC)', sgn_dpsi, 'Jbgradpsi_x')
+    gpec_Ires = reference.get_Ires()
+    config = {
+        'xlabel': '$m$', 'ylabel': r'$\abs\, I_{m, n}^{\parallel}$ / \si{\ampere}', 'legend': {'fontsize': 'small'},
+        'plotdata': [
+            {'x': mephit_Ires.keys(), 'y': mephit_Ires.values(), 'args': {'label': 'MEPHIT', 'marker': 'o', 'ls': ''}},
+            {'x': gpec_Ires.keys(), 'y': gpec_Ires.values(), 'args': {'label': 'GPEC', 'marker': 'x', 'ls': ''}}
+        ],
+        'postprocess': [XTicks(mephit_Ires.keys())]
+    }
+    plotter.plot_objects.put(Plot1D(work_dir, 'plot_Ires.pdf', config))
     config = {
         'xlabel': r'$\hat{\psi}$',
         'ylabel': r'$\abs\, [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\tesla}',
@@ -408,9 +410,9 @@ if __name__ == "__main__":
     Ires = full((niter, m_res_max - m_res_min + 1), nan)
     for kiter in range(0, niter):
         pmn = testcase.get_polmodes(None, f"/iter/pmn_{kiter:03}/coeff", 0.1, L1=True)
-        jmnpar_Bmod = testcase.get_polmodes(None, f"/iter/jmnpar_Bmod_{kiter:03}/coeff", 1.0 / 29.9792458, L1=True)
+        jmnpar_Bmod = testcase.get_polmodes(None, f"/iter/jmnpar_Bmod_{kiter:03}/coeff", 4.0 * pi / clight, L1=True)
         Bmn_rad = testcase.get_polmodes(None, f"/iter/Bmn_{kiter:03}/coeff_rad", conversion)
-        Ires[kiter, :] = abs(testcase.data[f"/iter/Ires_{kiter:03}"][()]) * 0.1 / 2.99792458e+08
+        Ires[kiter, :] = abs(testcase.data[f"/iter/Ires_{kiter:03}"][()]) * 0.1 / clight
         for m in range(-m_res_max, m_res_max + 1):
             abs_pmn_iter[m + m_res_max, kiter, :] = abs(pmn['var'][m])
             abs_jmnpar_Bmod_iter[m + m_res_max, kiter, :] = abs(jmnpar_Bmod['var'][m])
@@ -426,29 +428,29 @@ if __name__ == "__main__":
         'xlabel': r'$\hat{\psi}$',
         'ylabel': [
             r'$\abs\, p_{mn}$ / \si{\pascal}',
-            r'$\abs\, \bigl[ J_{n}^{\parallel} B_{0}^{-1} \bigr]_{m}$ / \si{\per\henry}',
+            r'$\abs\, \bigl[ \mu_{0} J_{n}^{\parallel} B_{0}^{-1} \bigr]_{m}$ / \si{\per\meter}',
             r'$\abs\, [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\tesla}'
         ],
         'rho': [testcase.post['psi_norm'], testcase.post['psi_norm'], testcase.post['psi_half_norm']],
-        'yscale': ['log', 'log', 'linear'], 'global_ylims': False, 'plotargs': {'lw': 0.5}, 'niter': niter,
+        'yscale': ['log', 'log', 'linear'], 'global_ylims': True, 'plotargs': {'lw': 0.5}, 'niter': niter,
         'postprocess': [[Id(), Id(), HLine(0.0, color='k', alpha=0.5, lw=0.5)]]
     }
-    for m in range(m_res_min, m_res_max + 1):
+    m_res_range = arange(m_res_min, m_res_max + 1)
+    for m in m_res_range:
         m_res = m * testcase.post['sgn_m_res']
         config['title'] = f"Poloidal Modes in Preconditioned Iterations $k$ for $n = {n}$, $m = \pm {m}$"
-        config['res_pos'] = testcase.post['psi_norm_res'][m]
-        config['res_neighbourhood'] = testcase.post['psi_norm_res_neighbourhood'][m]
+        config['res_pos'] = testcase.post['psi_norm_res'][m_res]
+        config['res_neighbourhood'] = testcase.post['psi_norm_res_neighbourhood'][m_res]
         config['zoom_x'] = config['res_neighbourhood'][ix_([0, -1])]
         config['plotdata'] = [
             abs_pmn_iter[m_res + m_res_max, :, :],
             abs_jmnpar_Bmod_iter[m_res + m_res_max, :, :],
             abs_Bmn_rad_iter[m_res + m_res_max, :, :],
-            abs_pmn_iter[-m_res + m_res_max, :, :],
+            full(abs_pmn_iter.shape[1:], nan),  # abs_pmn_iter[-m_res + m_res_max, :, :],
             abs_jmnpar_Bmod_iter[-m_res + m_res_max, :, :],
-            abs_Bmn_rad_iter[-m_res + m_res_max, :, :]
+            # abs_Bmn_rad_iter[-m_res + m_res_max, :, :]
         ]
         plotter.plot_objects.put(IterationPlots(work_dir, f"plot_iter_{m}.pdf", config))
-    m_res_range = arange(m_res_min, m_res_max + 1)
     config = {
         'title': f"Shielding \& max. penetration vs. resonant current for $n = {n}$",
         'xlabel': r'poloidal mode $m$',
