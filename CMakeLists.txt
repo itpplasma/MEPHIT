@@ -8,6 +8,7 @@ project(MEPHIT LANGUAGES Fortran C CXX)
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
+set(CMAKE_Fortran_MODULE_DIRECTORY ${LIBRARY_OUTPUT_PATH})
 
 ### Set compiler flags
 if ("$ENV{FC}" MATCHES "ifort")
