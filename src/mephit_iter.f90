@@ -227,23 +227,6 @@ contains
     call L1_read(jnpar_B0, datafile, 'iter/jnpar_Bmod')
   end subroutine iter_read
 
-  subroutine iter_step
-    use mephit_conf, only: datafile
-    use mephit_pert, only: L1_write
-    logical, save :: first = .true.
-    ! compute pressure based on previous perturbation field
-    if (first) then
-       call MFEM_test
-       call L1_write(pn, datafile, 'iter/mfem_pn_000', 'MFEM', 'barye')
-       first = .false.
-    end if
-    call compute_presn
-    ! compute currents based on previous perturbation field
-    call compute_currn
-    ! use field code to generate new field from currents
-    call compute_Bn
-  end subroutine iter_step
-
   subroutine mephit_iterate
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
@@ -369,7 +352,24 @@ contains
        Bn_prev%DOF(:) = Bn%DOF
        Bn_prev%comp_phi(:) = Bn%comp_phi
        ! compute B_(n+1) = K * B_n + B_vac ... different from next_iteration_arnoldi
-       call iter_step
+       if (kiter <= 1) then
+          call MFEM_test
+          call L1_poloidal_modes(pn, pmn)
+          call L1_write(pn, datafile, 'iter/MFEM_pn' // postfix, &
+               'pressure (after MFEM iteration)', 'dyn cm^-2')
+          call polmodes_write(pmn, datafile, 'iter/MFEM_pmn' // postfix, &
+               'pressure modes (after MFEM iteration)', 'dyn cm^-2')
+          call compute_presn
+          call L1_poloidal_modes(pn, pmn)
+          call L1_write(pn, datafile, 'iter/pn' // postfix, &
+               'pressure (after iteration)', 'dyn cm^-2')
+          call polmodes_write(pmn, datafile, 'iter/pmn' // postfix, &
+               'pressure modes (after iteration)', 'dyn cm^-2')
+       else
+          call compute_presn
+       end if
+       call compute_currn
+       call compute_Bn
        Bn%DOF(:) = Bn%DOF + vac%Bn%DOF
        if (preconditioned) then
           Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
@@ -380,8 +380,6 @@ contains
        Bn_diff%comp_phi(:) = Bn%comp_phi - Bn_prev%comp_phi
        L2int_Bn_diff(kiter) = RT0_L2int(Bn_diff)
        if (kiter <= 1) then
-          call L1_write(pn, datafile, 'iter/pn' // postfix, &
-               'pressure (after iteration)', 'dyn cm^-2')
           call L1_write(jnpar_B0, datafile, 'iter/jnpar_Bmod' // postfix, &
                'parallel current density (after iteration)', 's^-1')  ! SI: H^-1
           call RT0_write(jn, datafile, 'iter/jn' // postfix, &
@@ -464,9 +462,30 @@ contains
     subroutine next_iteration_arnoldi(old_val, new_val)
       complex(dp), intent(in) :: old_val(:)
       complex(dp), intent(out) :: new_val(:)
+      logical, save :: first = .true.
       Bn%DOF(:) = old_val + vac%Bn%DOF
       call RT0_compute_tor_comp(Bn)
-      call iter_step
+      if (first) then
+         call polmodes_init(pmn, m_max, mesh%nflux)
+         call MFEM_test
+         call L1_poloidal_modes(pn, pmn)
+         call L1_write(pn, datafile, 'debug_MDE_initial/MFEM_pn', &
+              'pressure (initial iteration from MFEM)', 'dyn cm^-2')
+         call polmodes_write(pmn, datafile, 'debug_MDE_initial/MFEM_pmn', &
+              'pressure modes (initial iteration from MFEM)', 'dyn cm^-2')
+         call compute_presn
+         call L1_poloidal_modes(pn, pmn)
+         call L1_write(pn, datafile, 'debug_MDE_initial/pn', &
+              'pressure (initial iteration)', 'dyn cm^-2')
+         call polmodes_write(pmn, datafile, 'debug_MDE_initial/pmn', &
+              'pressure modes (initial interation)', 'dyn cm^-2')
+         call polmodes_deinit(pmn)
+         first = .false.
+      else
+         call compute_presn
+      end if
+      call compute_currn
+      call compute_Bn
       new_val(:) = Bn%DOF
     end subroutine next_iteration_arnoldi
   end subroutine mephit_iterate
