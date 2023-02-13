@@ -571,7 +571,7 @@ contains
          + (this%psirz(kw + 1, kh) - 2d0 * psi + this%psirz(kw - 1, kh)) / Delta_R ** 2 &
          - (this%psirz(kw + 1, kh) - this%psirz(kw - 1, kh)) / (2d0 * Delta_R * this%R_eqd(kw))
     gs_factor = gs_lhs / gs_rhs
-    write (logger%msg, '("Grad-Shafranov equation LHS / RHS: ", f19.16)') gs_factor
+    write (logger%msg, '("Grad-Shafranov equation LHS / RHS: ", es24.16e3)') gs_factor
     if (logger%info) call logger%write_msg
   end function g_eqdsk_grad_shafranov_normalization
 

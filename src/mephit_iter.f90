@@ -478,7 +478,7 @@ contains
          call L1_write(pn, datafile, 'debug_MDE_initial/pn', &
               'pressure (initial iteration)', 'dyn cm^-2')
          call polmodes_write(pmn, datafile, 'debug_MDE_initial/pmn', &
-              'pressure modes (initial interation)', 'dyn cm^-2')
+              'pressure modes (initial iteration)', 'dyn cm^-2')
          call polmodes_deinit(pmn)
          first = .false.
       else
