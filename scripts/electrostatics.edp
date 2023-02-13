@@ -1,0 +1,41 @@
+load "MUMPS"
+
+mesh Th = readmesh("inputformaxwell_ext.msh");
+int bp = Th.be(0)[0];
+real xmin = Th(bp).x;
+real xmax = Th(bp).x;
+real ymin = Th(bp).y;
+real ymax = Th(bp).y;
+for (int be = 1; be < Th.nbe; be++) {
+  bp = Th.be(be)[0];
+  xmin = min(xmin, Th(bp).x);
+  xmax = max(xmax, Th(bp).x);
+  ymin = min(ymin, Th(bp).y);
+  ymax = max(ymax, Th(bp).y);
+}
+real xmid = 0.5 * (xmax + xmin);
+real xrad = 0.5 * (xmax - xmin);
+real ymid = 0.5 * (ymax + ymin);
+real yrad = 0.5 * (ymax - ymin);
+
+fespace Vh0(Th, P0);
+fespace Vh1(Th, P1);
+Vh0 <real> source;
+Vh1 <real> scalpot, weakpot;
+int nmode = 2;
+problem Poisson(scalpot, weakpot, solver = sparsesolver) =
+  int2d(Th)(x * (dx(weakpot) * dx(scalpot) + dy(weakpot) * dy(scalpot)))
+  + int2d(Th)(nmode^2 / x * weakpot * scalpot)
+  - int2d(Th)(4 * pi * x * weakpot * source)  // include Jacobian here for test
+  + on(2, scalpot = 0);
+
+real eccfac = (xrad / yrad)^2;
+real rmax2 = xrad^2;
+real amplitude = 10.0;
+// do not include Jacobian here for test
+source = -0.25 / pi * amplitude / rmax2 * (4.0 + 2.0 * (eccfac - xmid / x) +
+  (nmode / x)^2 * (rmax2 - (x - xmid)^2 - eccfac * (y - ymid)^2));
+scalpot = -amplitude * (1.0 - ((x - xmid)^2 + eccfac * (y - ymid)^2) / rmax2);
+plot(scalpot, wait = true);
+Poisson;
+plot(scalpot, wait = true);
