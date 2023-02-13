@@ -78,7 +78,7 @@ problem Ampere([ax, ay], [wx, wy], solver = sparsesolver) = // defines the PDE
   int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(ay) - dy(ax)))
   + int2d(Th)(nmode^2 / x * (wx * ax + wy * ay))
   - int2d(Th)(4.0 * pi / c * (wx * Jr + wy * Jz))
-  + on(1, ax = 0, ay = 0);
+  + on(2, ax = 0, ay = 0);
 state = 0;
 while (state != -3) {
   LoadFlag(state, datapipe);

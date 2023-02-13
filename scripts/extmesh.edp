@@ -16,6 +16,7 @@ border inner(t = 1.0, 0.0) {
   bp1 = Thinner.be(be % nbe)[1];
   x = Thinner(bp0).x * (1.0 - s) + Thinner(bp1).x * s;
   y = Thinner(bp0).y * (1.0 - s) + Thinner(bp1).y * s;
+  label = 1;
 }
 // construct outer border (clockwise)
 real xmin, xmax, xmid, xrad, ymin, ymax, ymid, yrad;
@@ -38,7 +39,7 @@ yrad = 0.5 * (ymax - ymin);
 border outer(t = 0.0, 2.0 * pi) {
   x = xmid + outerboxscale * xrad * cos(t);
   y = ymid + outerboxscale * yrad * sin(t);
-  label = 1;
+  label = 2;
 }
 
 mesh Thouter = buildmesh(inner(nbe) + outer(lrint(nbe * outerborderrefinement)),
