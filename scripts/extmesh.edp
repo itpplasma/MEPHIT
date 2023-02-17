@@ -1,56 +1,15 @@
-string plasmamesh = "inputformaxwell.msh";
-string extendedmesh = "inputformaxwell_ext.msh";
-real outerborderrefinement = 0.125;
-real outerboxscale = 2.0;  // should be larger than sqrt(2.0);
+string innermeshfile = "core_plasma.msh";
+string outermeshfile = "outer.msh";
+string meshfile = "maxwell.msh";
 
-mesh Thinner = readmesh(plasmamesh);
-int nbe = Thinner.nbe;
-int be, bp0, bp1;
-real s;
-// reconstruct LCFS (counterclockwise)
-border inner(t = 1.0, 0.0) {
-  be = lrint(floor(t * nbe));
-  // round relative positions on edge to start/end/midpoint
-  s = 0.5 * lrint(t * (2 * nbe) - 2 * be);
-  bp0 = Thinner.be(be % nbe)[0];
-  bp1 = Thinner.be(be % nbe)[1];
-  x = Thinner(bp0).x * (1.0 - s) + Thinner(bp1).x * s;
-  y = Thinner(bp0).y * (1.0 - s) + Thinner(bp1).y * s;
-  label = 1;
-}
-// construct outer border (clockwise)
-real xmin, xmax, xmid, xrad, ymin, ymax, ymid, yrad;
-bp0 = Thinner.be(be)[0];
-xmin = Thinner(bp0).x;
-xmax = Thinner(bp0).x;
-ymin = Thinner(bp0).y;
-ymax = Thinner(bp0).y;
-for (be = 1; be < nbe; be++) {
-  bp0 = Thinner.be(be)[0];
-  xmin = min(xmin, Thinner(bp0).x);
-  xmax = max(xmax, Thinner(bp0).x);
-  ymin = min(ymin, Thinner(bp0).y);
-  ymax = max(ymax, Thinner(bp0).y);
-}
-xmid = 0.5 * (xmax + xmin);
-xrad = 0.5 * (xmax - xmin);
-ymid = 0.5 * (ymax + ymin);
-yrad = 0.5 * (ymax - ymin);
-border outer(t = 0.0, 2.0 * pi) {
-  x = xmid + outerboxscale * xrad * cos(t);
-  y = ymid + outerboxscale * yrad * sin(t);
-  label = 2;
-}
-
-mesh Thouter = buildmesh(inner(nbe) + outer(lrint(nbe * outerborderrefinement)),
-                         fixedborder = true);  // keep border points aligned
+mesh Thinner = readmesh(innermeshfile);
+mesh Thouter = readmesh(outermeshfile);
 int[int] regionmap = [0, 1];
 Thouter = change(Thouter, region = regionmap);
-
 mesh Th = Thinner + Thouter;
-savemesh(Th, extendedmesh);
-if (Thinner.nv + Thouter.nv - Th.nv != nbe) {
-  cerr << "Error: expected " << nbe << " border points to be merged, but got "
+savemesh(Th, meshfile);
+if (Thinner.nv + Thouter.nv - Th.nv != Thinner.nbe) {
+  cerr << "Error: expected " << Thinner.nbe << " border points to be merged, but got "
        << Thinner.nv + Thouter.nv - Th.nv << ".\n";
   exit(1);
 }

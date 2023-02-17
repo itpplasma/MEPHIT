@@ -11,8 +11,7 @@ load "MUMPS"
 real c = 29979245800.0; // speed of light
 
 include "getARGV.idp"
-string meshfile = getARGV("-M", "inputformaxwell_ext.msh");
-string edgefile = getARGV("-E", "edgemap.dat");
+string edgefile = "edgemap.dat";
 string datapipe = getARGV("-P", "maxwell.dat");
 bool doplot = false;
 
@@ -27,11 +26,12 @@ if (runmode % 2) {
   LoadFlag(state, datapipe);
   flag(state, datapipe);
   include "extmesh.edp"
+} else {
+  mesh Th = readmesh("maxwell.msh");
 }
 if (!((runmode / 2) % 2)) {
   exit(0);
 }
-mesh Th = readmesh(meshfile);
 // count triangles in internal region 0
 int ntri = 0;
 for (int k = 0; k < Th.nt; k++) {

@@ -1,5 +1,7 @@
 load "medit"
-mesh Th = readmesh("inputformaxwell.msh");
+mesh Thinner = readmesh("core_plasma.msh");
+medit("mesh", Thinner);
+mesh Thouter = readmesh("outer.msh");
+medit("mesh", Thouter);
+mesh Th = readmesh("maxwell.msh");
 medit("mesh", Th);
-mesh Thext = readmesh("inputformaxwell_ext.msh");
-medit("mesh", Thext);

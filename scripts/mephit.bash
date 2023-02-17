@@ -307,7 +307,7 @@ mephit_clean() {
         fi
         pushd "$workdir"
         # files from mephit_run
-        rm -f fort.* mephit.h5 mephit.log inputformaxwell_ext.msh inputformaxwell.msh box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat
+        rm -f fort.* mephit.h5 mephit.log core_plasma.msh outer.msh maxwell.msh box_size_axis.dat btor_rbig.dat flux_functions.dat twodim_functions.dat
         # files from mephit_plot
         rm -f plot*.pdf convergence.pdf Bmn*.pdf currmn*.pdf
         popd

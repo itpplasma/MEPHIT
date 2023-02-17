@@ -241,14 +241,14 @@ void FEM_triangulate_external(const int npt_inner,
   }
   for (k = 0; k < out.numberoftriangles; ++k) {
     fprintf(fid, "%i %i %i 1\n",
-            out.trianglelist[3 * k],
-            out.trianglelist[3 * k + 1],
-            out.trianglelist[3 * k + 2]);
+            out.trianglelist[3 * k] + 1,
+            out.trianglelist[3 * k + 1] + 1,
+            out.trianglelist[3 * k + 2] + 1);
   }
   for (k = 0; k < out.numberofsegments; ++k) {
     fprintf(fid, "%i %i 2\n",
-            out.segmentlist[2 * k],
-            out.segmentlist[2 * k + 1]);
+            out.segmentlist[2 * k] + 1,
+            out.segmentlist[2 * k + 1] + 1);
   }
   fclose(fid);
 

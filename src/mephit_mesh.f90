@@ -2338,7 +2338,7 @@ contains
     real(dp), parameter :: outer_border_refinement = 0.125d0, outer_box_scale = 2d0
     real(dp), allocatable :: bdry_R(:), bdry_Z(:), theta(:)
 
-    open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace', form = 'formatted', action = 'write')
+    open(newunit = fid, file = 'core_plasma.msh', status = 'replace', form = 'formatted', action = 'write')
     write (fid, '(3(1x, i0))') mesh%npoint, mesh%ntri, mesh%kp_max(mesh%nflux) - 1
     do kpoi = 1, mesh%npoint
        write (fid, '(2(1x, es23.15e3), 1x, i0)') &

@@ -1,22 +1,12 @@
 load "MUMPS"
 
-mesh Th = readmesh("inputformaxwell_ext.msh");
-int bp = Th.be(0)[0];
-real xmin = Th(bp).x;
-real xmax = Th(bp).x;
-real ymin = Th(bp).y;
-real ymax = Th(bp).y;
-for (int be = 1; be < Th.nbe; be++) {
-  bp = Th.be(be)[0];
-  xmin = min(xmin, Th(bp).x);
-  xmax = max(xmax, Th(bp).x);
-  ymin = min(ymin, Th(bp).y);
-  ymax = max(ymax, Th(bp).y);
-}
-real xmid = 0.5 * (xmax + xmin);
-real xrad = 0.5 * (xmax - xmin);
-real ymid = 0.5 * (ymax + ymin);
-real yrad = 0.5 * (ymax - ymin);
+include "extmesh.edp"
+real[int] bb(4);
+boundingbox(Th, bb);
+real xmid = 0.5 * (bb[1] + bb[0]);
+real xrad = 0.5 * (bb[1] - bb[0]);
+real ymid = 0.5 * (bb[3] + bb[2]);
+real yrad = 0.5 * (bb[3] - bb[2]);
 
 fespace Vh0(Th, P0);
 fespace Vh1(Th, P1);
