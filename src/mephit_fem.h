@@ -27,6 +27,13 @@ void FEM_compute_Bn(const int nedge, const complex_double *Jn, complex_double *B
 void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2int);
 void FEM_deinit(void);
 
+void FEM_triangulate_external(const int npt_inner,
+                              const int npt_outer,
+                              const double *bdry_R,
+                              const double *bdry_Z,
+                              const double R_mid,
+                              const double Z_mid);
+
 typedef void real_vector_field(const double R,
                                const double Z,
                                double *vector);

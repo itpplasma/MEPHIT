@@ -219,6 +219,16 @@ module mephit_mesh
 
   end type mesh_t
 
+  interface
+     subroutine FEM_triangulate_external(npt_inner, npt_outer, node_R, node_Z, R_O, Z_O) &
+          bind(C, name = 'FEM_triangulate_external')
+       use iso_c_binding, only: c_int, c_double
+       integer(c_int), intent(in), value :: npt_inner, npt_outer
+       real(c_double), intent(in), dimension(1:npt_inner + npt_outer) :: node_R, node_Z
+       real(c_double), intent(in), value :: R_O, Z_O
+     end subroutine FEM_triangulate_external
+  end interface
+
   type(mesh_t) :: mesh
 
   type :: coord_cache_t
@@ -2322,7 +2332,11 @@ contains
   end subroutine mesh_write_MFEM
 
   subroutine write_FreeFem_mesh
-    integer :: fid, kpoi, ktri, kp, kedge
+    use mephit_util, only: pi, linspace
+    integer :: fid, kpoi, ktri, kp, kedge, npt_inner, npt_outer
+    real(dp) :: R_min, R_max, R_mid, R_rad, Z_min, Z_max, Z_mid, Z_rad
+    real(dp), parameter :: outer_border_refinement = 0.125d0, outer_box_scale = 2d0
+    real(dp), allocatable :: bdry_R(:), bdry_Z(:), theta(:)
 
     open(newunit = fid, file = 'inputformaxwell.msh', status = 'replace', form = 'formatted', action = 'write')
     write (fid, '(3(1x, i0))') mesh%npoint, mesh%ntri, mesh%kp_max(mesh%nflux) - 1
@@ -2350,6 +2364,28 @@ contains
        write (fid, '(2(1x, i0))') mesh%edge_tri(2, kedge), 3
     end do
     close(fid)
+
+    ! extend mesh
+    R_min = minval(mesh%node_R)
+    R_max = maxval(mesh%node_R)
+    R_mid = 0.5d0 * (R_max + R_min)
+    R_rad = 0.5d0 * (R_max - R_min) * outer_box_scale
+    Z_min = minval(mesh%node_Z)
+    Z_max = maxval(mesh%node_Z)
+    Z_mid = 0.5d0 * (Z_max + Z_min)
+    Z_rad = 0.5d0 * (Z_max - Z_min) * outer_box_scale
+    npt_inner = mesh%kp_max(mesh%nflux)
+    npt_outer = nint(outer_border_refinement * npt_inner)
+    allocate(bdry_R(npt_inner + npt_outer), bdry_Z(npt_inner + npt_outer))
+    kpoi = mesh%kp_low(mesh%nflux) + 1
+    bdry_R(:npt_inner) = mesh%node_R(kpoi:)
+    bdry_Z(:npt_inner) = mesh%node_Z(kpoi:)
+    allocate(theta(npt_outer))
+    theta(:) = linspace(0d0, 2d0 * pi, npt_outer, 0, 1)
+    bdry_R(npt_inner+1:) = R_mid + R_rad * cos(theta)
+    bdry_Z(npt_inner+1:) = Z_mid + Z_rad * sin(theta)
+    call FEM_triangulate_external(npt_inner, npt_outer, bdry_R, bdry_Z, R_mid, Z_mid)
+    deallocate(bdry_R, bdry_Z, theta)
   end subroutine write_FreeFem_mesh
 
   subroutine mesh_read(mesh, file, dataset)

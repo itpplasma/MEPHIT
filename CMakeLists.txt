@@ -165,6 +165,7 @@ set(MEPHIT_LIBS
   blas
   lapack
   fftw3
+  triangle
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
 
