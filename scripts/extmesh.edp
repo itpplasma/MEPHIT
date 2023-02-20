@@ -6,11 +6,13 @@ mesh Thinner = readmesh(innermeshfile);
 mesh Thouter = readmesh(outermeshfile);
 int[int] regionmap = [0, 1];
 Thouter = change(Thouter, region = regionmap);
-mesh Th = Thinner + Thouter;
-savemesh(Th, meshfile);
-if (Thinner.nv + Thouter.nv - Th.nv != Thinner.nbe) {
-  cerr << "Error: expected " << Thinner.nbe << " border points to be merged, but got "
-       << Thinner.nv + Thouter.nv - Th.nv << ".\n";
+mesh Thextended = Thinner + Thouter;
+savemesh(Thextended, meshfile);
+if (Thinner.nv + Thouter.nv - Thextended.nv != Thinner.nbe) {
+  cerr << "Error: expected "
+       << Thinner.nbe
+       << " border points to be merged, but got "
+       << Thinner.nv + Thouter.nv - Thextended.nv
+       << ".\n";
   exit(1);
 }
-// plot(Th);

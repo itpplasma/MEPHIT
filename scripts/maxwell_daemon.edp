@@ -26,12 +26,11 @@ if (runmode % 2) {
   LoadFlag(state, datapipe);
   flag(state, datapipe);
   include "extmesh.edp"
-} else {
-  mesh Th = readmesh("maxwell.msh");
 }
 if (!((runmode / 2) % 2)) {
   exit(0);
 }
+mesh Th = readmesh("maxwell.msh");
 // count triangles in internal region 0
 int ntri = 0;
 for (int k = 0; k < Th.nt; k++) {
