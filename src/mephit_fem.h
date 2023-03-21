@@ -33,6 +33,8 @@ void FEM_triangulate_external(const int npt_inner,
                               const double *bdry_Z,
                               const double R_mid,
                               const double Z_mid);
+void Rtree_init(int ntri, double *tri_bb);
+void Rtree_query(double R, double Z, int *result_size, int **results);
 
 typedef void real_vector_field(const double R,
                                const double Z,

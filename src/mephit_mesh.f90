@@ -180,6 +180,7 @@ module mephit_mesh
      integer, allocatable :: tri_node(:, :)
      integer, allocatable :: tri_node_F(:)
      real(dp), allocatable :: tri_theta_extent(:, :)
+     real(dp), allocatable :: tri_RZ_extent(:, :, :)
 
      !> true if edge f of given triangle lies on the outer flux surface, false otherwise
      logical, allocatable :: orient(:)
@@ -227,6 +228,19 @@ module mephit_mesh
        real(c_double), intent(in), dimension(1:npt_inner + npt_outer) :: node_R, node_Z
        real(c_double), intent(in), value :: R_O, Z_O
      end subroutine FEM_triangulate_external
+
+     subroutine Rtree_init(ntri, tri_bb) bind(C, name = 'Rtree_init')
+       use iso_c_binding, only: c_int, c_double
+       integer(c_int), intent(in), value :: ntri
+       real(c_double), intent(in), dimension(2, 2, ntri) :: tri_bb
+     end subroutine rtree_init
+
+     subroutine Rtree_query(R, Z, result_size, results) bind(C, name = "Rtree_query")
+       use iso_c_binding, only: c_double, c_int, c_ptr
+       real(c_double), intent(in), value :: R, Z
+       integer(c_int), intent(out) :: result_size
+       type(c_ptr), intent(out) :: results
+     end subroutine rtree_query
   end interface
 
   type(mesh_t) :: mesh
@@ -1574,6 +1588,14 @@ contains
     end where
     ! nodes for radial edges
     mesh%edge_node(:, mesh%npoint:) = mesh%tri_node([3, 1], :)
+    ! cache bounding boxes
+    allocate(mesh%tri_RZ_extent(2, 2, mesh%ntri))
+    do ktri = 1, mesh%ntri
+       nodes(:3) = mesh%tri_node(:, ktri)
+       mesh%tri_RZ_extent(:, 1, ktri) = [minval(mesh%node_R(nodes(:3))), minval(mesh%node_Z(nodes(:3)))]
+       mesh%tri_RZ_extent(:, 2, ktri) = [maxval(mesh%node_R(nodes(:3))), maxval(mesh%node_Z(nodes(:3)))]
+    end do
+    call rtree_init(mesh%ntri, mesh%tri_RZ_extent)
     ! cache areas and 'centroids'
     allocate(mesh%cntr_R(mesh%ntri))
     allocate(mesh%cntr_Z(mesh%ntri))
@@ -1967,7 +1989,29 @@ contains
     end do
   end subroutine compute_sample_Ires
 
-  function point_location(R, Z, hint_psi) result(location)
+  function point_location(R, Z) result(location)
+    use iso_c_binding, only: c_int, c_ptr, c_f_pointer
+    real(dp), intent(in) :: R, Z
+    integer :: location
+    type(c_ptr) :: results_p
+    integer(c_int) :: result_size
+    integer(c_int), dimension(:), pointer :: results
+    integer :: k
+    real(dp) :: thickness
+
+    location = -1
+    thickness = fs%rad(mesh%nflux) * sqrt(epsilon(1d0)) * 8d0
+    call Rtree_query(R, Z, result_size, results_p)
+    call c_f_pointer(results_p, results, [result_size])
+    do k = 1, result_size
+       if (point_in_triangle(results(k), R, Z, thickness)) then
+          location = results(k)
+          return
+       end if
+    end do
+  end function point_location
+
+  function point_location_geom(R, Z, hint_psi) result(location)
     use mephit_util, only: interp_psi_pol, binsearch, pos_angle
     real(dp), intent(in) :: R, Z
     real(dp), intent(in), optional :: hint_psi
@@ -2046,7 +2090,7 @@ contains
           end if
        end do
     end if
-  end function point_location
+  end function point_location_geom
 
   function point_location_check(R, Z, hint_psi) result(location)
     use mephit_util, only: interp_psi_pol, binsearch, pos_angle
@@ -2243,6 +2287,9 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/tri_theta_extent', mesh%tri_theta_extent, &
          lbound(mesh%tri_theta_extent), ubound(mesh%tri_theta_extent), &
          comment = 'range of geometrical poloidal angle covered by triangle')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/tri_RZ_extent', mesh%tri_RZ_extent, &
+         lbound(mesh%tri_RZ_extent), ubound(mesh%tri_RZ_extent), &
+         comment = 'bounding box (R_min, Z_min, R_max, Z_max) of triangle')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/orient', orient, &
          lbound(orient), ubound(orient), &
          comment = 'triangle orientation: true (1) if edge f lies on outer flux surface')
@@ -2438,6 +2485,7 @@ contains
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
     allocate(mesh%tri_theta_extent(2, mesh%ntri))
+    allocate(mesh%tri_RZ_extent(2, 2, mesh%ntri))
     allocate(mesh%orient(mesh%ntri))
     allocate(orient(mesh%ntri))
     allocate(mesh%edge_node(2, mesh%nedge))
@@ -2474,6 +2522,7 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_node', mesh%tri_node)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_node_F', mesh%tri_node_F)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_theta_extent', mesh%tri_theta_extent)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_RZ_extent', mesh%tri_RZ_extent)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/orient', orient)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_node', mesh%edge_node)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/edge_tri', mesh%edge_tri)
@@ -2499,6 +2548,7 @@ contains
        mesh%orient = .false.
     end where
     deallocate(orient)
+    call rtree_init(mesh%ntri, mesh%tri_RZ_extent)
   end subroutine mesh_read
 
   subroutine mesh_deinit(this)
@@ -2521,6 +2571,7 @@ contains
     if (allocated(this%tri_node)) deallocate(this%tri_node)
     if (allocated(this%tri_node_F)) deallocate(this%tri_node_F)
     if (allocated(this%tri_theta_extent)) deallocate(this%tri_theta_extent)
+    if (allocated(this%tri_RZ_extent)) deallocate(this%tri_RZ_extent)
     if (allocated(this%orient)) deallocate(this%orient)
     if (allocated(this%edge_node)) deallocate(this%edge_node)
     if (allocated(this%edge_tri)) deallocate(this%edge_tri)

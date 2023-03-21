@@ -1,8 +1,43 @@
 #include "mephit_fem.h"
 #include "mfem.hpp"
 #include "magnetic_differential_equation.h"
+#include <boost/geometry.hpp>
+#include <boost/geometry/geometries/point_xy.hpp>
+#include <boost/geometry/index/rtree.hpp>
 #include <cstdio>
+#include <vector>
 #include <map>
+
+namespace bg = boost::geometry;
+namespace bgi = boost::geometry::index;
+
+typedef bg::model::d2::point_xy<double> RZ_point;
+typedef bg::model::box<RZ_point> RZ_box;
+typedef std::pair<RZ_box, int> RZ_index;
+
+static bgi::rtree< RZ_index, bgi::rstar<16> > RZ_tree;
+static std::vector<int> query_results;
+
+extern "C" void Rtree_init(int ntri, double *tri_bb)
+{
+  RZ_tree.clear();
+  for (int k = 0; k < ntri; ++k) {
+    // construct bounding box object
+    RZ_box bb = RZ_box(RZ_point(tri_bb[4 * k], tri_bb[4 * k + 1]),
+                       RZ_point(tri_bb[4 * k + 2], tri_bb[4 * k + 3]));
+    RZ_tree.insert(std::make_pair(bb, k + 1));
+  }
+}
+
+extern "C" void Rtree_query(double R, double Z, int *result_size, int **results)
+{
+  query_results.clear();
+  for (auto it = RZ_tree.qbegin(bgi::contains(RZ_point(R, Z))); it != RZ_tree.qend(); ++it) {
+    query_results.push_back(it->second);
+  }
+  *result_size = static_cast<int>(query_results.size());
+  *results = query_results.data();
+}
 
 typedef std::map<std::pair<double, double>, size_t> points_2D;
 

@@ -12,6 +12,7 @@ Prerequisites for running MEPHIT are as follows.
 - [GSL](https://www.gnu.org/software/gsl/) and [FGSL](https://github.com/reinh-bader/fgsl)
 - [FFTW3](http://fftw.org/)
 - [Triangle](https://www.cs.cmu.edu/~quake/triangle.html)
+- [Boost](https://www.boost.org/)
 - [FreeFem++](https://github.com/FreeFem/FreeFem-sources)
 - [HDF5](https://www.hdfgroup.org/downloads/hdf5)
 - [NetCDF](https://github.com/Unidata/netcdf-fortran)

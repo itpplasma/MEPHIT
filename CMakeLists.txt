@@ -67,6 +67,7 @@ find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 set (NETCDF_F90 "YES")
 find_package (NetCDF REQUIRED)
 find_package(MFEM REQUIRED)
+find_package(Boost 1.74 REQUIRED)
 
 # GSL
 find_library(gsl_lib gsl ${GSL_LIB})
