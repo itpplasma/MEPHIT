@@ -23,6 +23,9 @@ module mephit_iter
   !> Parallel current density perturbation in units of statampere cm^-2 G^-1.
   type(L1_t) :: jnpar_B0
 
+  !> Vector potential components for GORILLA
+  type(L1_t) :: AnR, AnZ
+
   abstract interface
      subroutine real_vector_field(R, Z, vector) bind(C)
        use iso_c_binding, only: c_double
@@ -40,19 +43,22 @@ module mephit_iter
   end interface
 
   interface
-     subroutine FEM_init(tormode, nedge, runmode) bind(C, name = 'FEM_init')
+     subroutine FEM_init(tormode, nedge, npoint, runmode) bind(C, name = 'FEM_init')
        use iso_c_binding, only: c_int
-       integer(c_int), intent(in), value :: tormode, nedge, runmode
+       integer(c_int), intent(in), value :: tormode, nedge, npoint, runmode
      end subroutine FEM_init
 
      subroutine FEM_extend_mesh() bind(C, name = 'FEM_extend_mesh')
      end subroutine FEM_extend_mesh
 
-     subroutine FEM_compute_Bn(nedge, Jn, Bn) bind(C, name = 'FEM_compute_Bn')
+     subroutine FEM_compute_Bn(nedge, npoint, Jn, Bn, AnR, AnZ) bind(C, name = 'FEM_compute_Bn')
        use iso_c_binding, only: c_int, c_double_complex
        integer(c_int), intent(in), value :: nedge
+       integer(c_int), intent(in), value :: npoint
        complex(c_double_complex), intent(in) :: Jn(1:nedge)
        complex(c_double_complex), intent(out) :: Bn(1:nedge)
+       complex(c_double_complex), intent(out) :: AnR(1:npoint)
+       complex(c_double_complex), intent(out) :: AnZ(1:npoint)
      end subroutine FEM_compute_Bn
 
      subroutine FEM_compute_L2int(nedge, elem, L2int) bind(C, name = 'FEM_compute_L2int')
@@ -131,7 +137,7 @@ contains
        call generate_vacfield(vac)
        call vac_write(vac, datafile, 'vac')
        ! pass effective toroidal mode number and runmode to FreeFem++
-       call FEM_init(mesh%n, mesh%nedge, runmode_flags)
+       call FEM_init(mesh%n, mesh%nedge, mesh%npoint, runmode_flags)
        call FEM_extend_mesh
     else
        ! initialize equilibrium field
@@ -149,7 +155,7 @@ contains
        call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
        call conf_arr%export_hdf5(datafile, 'config')
        ! pass effective toroidal mode number and runmode to FreeFem++
-       call FEM_init(mesh%n, mesh%nedge, runmode)
+       call FEM_init(mesh%n, mesh%nedge, mesh%npoint, runmode)
     end if
     if (iterations .or. analysis) then
        call iter_init
@@ -204,6 +210,8 @@ contains
     call RT0_init(Bnplas, mesh%nedge, mesh%ntri)
     call RT0_init(jn, mesh%nedge, mesh%ntri)
     call L1_init(jnpar_B0, mesh%npoint)
+    call L1_init(AnR, mesh%npoint)
+    call L1_init(AnZ, mesh%npoint)
   end subroutine iter_init
 
   subroutine iter_deinit
@@ -214,6 +222,8 @@ contains
     call RT0_deinit(Bnplas)
     call RT0_deinit(jn)
     call L1_deinit(jnpar_B0)
+    call L1_deinit(AnR)
+    call L1_deinit(AnZ)
   end subroutine iter_deinit
 
   subroutine iter_read
@@ -225,6 +235,8 @@ contains
     call RT0_read(Bnplas, datafile, 'iter/Bnplas')
     call RT0_read(jn, datafile, 'iter/jn')
     call L1_read(jnpar_B0, datafile, 'iter/jnpar_Bmod')
+    call L1_read(AnR, datafile, 'iter/AnR')
+    call L1_read(AnZ, datafile, 'iter/AnZ')
   end subroutine iter_read
 
   subroutine mephit_iterate
@@ -443,6 +455,10 @@ contains
          'pressure (full perturbation)', 'dyn cm^-2')
     call L1_write(jnpar_B0, datafile, 'iter/jnpar_Bmod', &
          'parallel current density (full perturbation)', 's^-1')  ! SI: H^-1
+    call L1_write(AnR, datafile, 'iter/AnR', &
+         'R component of vector potential for GORILLA (full perturbation)', 'G cm')
+    call L1_write(AnZ, datafile, 'iter/AnZ', &
+         'Z component of vector potential for GORILLA (full perturbation)', 'G cm')
     call RT0_write(Bn, datafile, 'iter/Bn', &
          'magnetic field (full perturbation)', 'G', 2)
     call RT0_write(Bnplas, datafile, 'iter/Bnplas', &
@@ -497,7 +513,7 @@ contains
     use mephit_mesh, only: mesh
     use mephit_pert, only: RT0_compute_tor_comp
 
-    call FEM_compute_Bn(mesh%nedge, jn%DOF, Bn%DOF)
+    call FEM_compute_Bn(mesh%nedge, mesh%npoint, jn%DOF, Bn%DOF, AnR%DOF, AnZ%DOF)
     call RT0_compute_tor_comp(Bn)
   end subroutine compute_Bn
 

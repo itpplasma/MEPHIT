@@ -128,16 +128,19 @@ void receive_double1_from_FreeFem(const char *namedpipe, const int size, double 
   }
 }
 
-void FEM_init(const int tormode, const int nedge, const int runmode)
+void FEM_init(const int tormode, const int nedge, const int npoint, const int runmode)
 {
   long int long_tormode = tormode ? tormode : 2;
   long int long_nedge = nedge;
+  long int long_npoint = npoint;
   long int long_runmode = runmode ? runmode : (1 << 0 | 1 << 1 | 1 << 2);
- 
+
   send_long0_to_FreeFem(shared_namedpipe, &long_tormode);
   receive_long0_from_FreeFem(shared_namedpipe, &long_tormode);
   send_long0_to_FreeFem(shared_namedpipe, &long_nedge);
   receive_long0_from_FreeFem(shared_namedpipe, &long_nedge);
+  send_long0_to_FreeFem(shared_namedpipe, &long_npoint);
+  receive_long0_from_FreeFem(shared_namedpipe, &long_npoint);
   send_long0_to_FreeFem(shared_namedpipe, &long_runmode);
   receive_long0_from_FreeFem(shared_namedpipe, &long_runmode);
 }
@@ -150,7 +153,12 @@ void FEM_extend_mesh(void)
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
 }
 
-void FEM_compute_Bn(const int nedge, const complex_double *Jn, complex_double *Bn)
+void FEM_compute_Bn(const int nedge,
+                    const int npoint,
+                    const complex_double *Jn,
+                    complex_double *Bn,
+                    complex_double *AnR,
+                    complex_double *AnZ)
 {
   long int flag = -1L;
   int size = 2 * nedge;
@@ -159,6 +167,9 @@ void FEM_compute_Bn(const int nedge, const complex_double *Jn, complex_double *B
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
   send_double1_to_FreeFem(shared_namedpipe, size, (double *) Jn);
   receive_double1_from_FreeFem(shared_namedpipe, size, (double *) Bn);
+  size = 2 * npoint;
+  receive_double1_from_FreeFem(shared_namedpipe, size, (double *) AnR);
+  receive_double1_from_FreeFem(shared_namedpipe, size, (double *) AnZ);
 }
 
 void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2int)

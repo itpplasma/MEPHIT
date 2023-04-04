@@ -15,11 +15,13 @@ string edgefile = "edgemap.dat";
 string datapipe = getARGV("-P", "maxwell.dat");
 bool doplot = false;
 
-int runmode = 0, nmode = 2, nedge = 0, state = 0;
+int runmode = 0, nmode = 2, nedge = 0, npoint = 0, state = 0;
 LoadFlag(nmode, datapipe);
 flag(nmode, datapipe);
 LoadFlag(nedge, datapipe);
 flag(nedge, datapipe);
+LoadFlag(npoint, datapipe);
+flag(npoint, datapipe);
 LoadFlag(runmode, datapipe);
 flag(runmode, datapipe);
 if (runmode % 2) {
@@ -46,6 +48,7 @@ fespace Hdiv(Th, RT0);
 Hrot <complex> [ax, ay], [wx, wy];
 Hdiv <complex> [Jr, Jz], [Br, Bz];
 Vh0 <complex> Bphi, Jphi;
+Vh1 <complex> P1AR, P1AZ;
 
 int[int] edgemap(nedge), signmap(nedge);
 {
@@ -59,18 +62,25 @@ int[int] edgemap(nedge), signmap(nedge);
     signmap[kedge] = (ke > 0) ? 1 : -1;
   }
 }
-real[int] fluxdata(2 * nedge); // (Re, Im) of RT0 DoFs
-macro deserializeDoFs(pol)
+real[int] edgedata(2 * nedge);    // (Re, Im) of RT0 DoFs
+real[int] pointdata(2 * npoint);  // (Re, Im) of P1 DoFs
+macro deserializeRT0(pol)
 for (int k = 0; k < nedge; k++) {
-  pol[][edgemap[k]] = signmap[k] * (fluxdata[2 * k] + 1.0i * fluxdata[2 * k + 1]);
+  pol[][edgemap[k]] = signmap[k] * (edgedata[2 * k] + 1.0i * edgedata[2 * k + 1]);
 }
-// end macro deserializeDoFs
-macro serializeDoFs(pol)
+// end macro deserializeRT0
+macro serializeRT0(pol)
 for (int k = 0; k < nedge; k++) {
-  fluxdata[2 * k] = signmap[k] * real(pol[][edgemap[k]]);
-  fluxdata[2 * k + 1] = signmap[k] * imag(pol[][edgemap[k]]);
+  edgedata[2 * k] = signmap[k] * real(pol[][edgemap[k]]);
+  edgedata[2 * k + 1] = signmap[k] * imag(pol[][edgemap[k]]);
 }
-// end macro serializeDoFs
+// end macro serializeRT0
+macro serializeP1(pol)
+for (int k = 0; k < npoint; k++) {
+  pointdata[2 * k] = real(pol[][k]);
+  pointdata[2 * k + 1] = imag(pol[][k]);
+}
+// end macro serializeP1
 
 real[int] integral(1);  // for SaveVec
 problem Ampere([ax, ay], [wx, wy], solver = sparsesolver) = // defines the PDE
@@ -84,9 +94,9 @@ while (state != -3) {
   flag(state, datapipe);
   if (state == -1) {
     // Ampere solver
-    LoadVec(fluxdata, datapipe);
+    LoadVec(edgedata, datapipe);
     [Jr, Jz] = [0.0 + 0.0i, 0.0 + 0.0i];
-    deserializeDoFs(Jr);
+    deserializeRT0(Jr);
     // note that the metric determinant x = R is already contained in the input data
     // for J, but not in A
     Ampere;
@@ -94,24 +104,25 @@ while (state != -3) {
     [Br, Bz] = [1.0i * nmode * ay, -1.0i * nmode * ax];
     // contravariant density component identical to physical component
     Bphi = -(dx(ay) - dy(ax));
-    serializeDoFs(Br);
-    SaveVec(fluxdata, datapipe);
+    serializeRT0(Br);
+    SaveVec(edgedata, datapipe);
+    P1AR = ax;
+    serializeP1(P1AR);
+    SaveVec(pointdata, datapipe);
+    P1AZ = ay;
+    serializeP1(P1AZ);
+    SaveVec(pointdata, datapipe);
     if (doplot) {
-      Hdiv [JrRe, JzRe], [JrIm, JzIm], [BrRe, BzRe], [BrIm, BzIm];
-      [JrRe, JzRe] = [real(Jr), real(Jz)];
-      [JrIm, JzIm] = [imag(Jr), imag(Jz)];
-      [BrRe, BzRe] = [real(Br), real(Bz)];
-      [BrIm, BzIm] = [imag(Br), imag(Bz)];
-      plot(Th, wait = true);
-      plot(JrRe, wait = true, value = true);
-      plot(BrRe, wait = true, value = true);
-      plot(Bphi, wait = true, fill = true, value = true);
+      plot(ax, wait = true, value = true, fill = true);
+      plot(P1AR, wait = true, value = true, fill = true);
+      plot(ay, wait = true, value = true, fill = true);
+      plot(P1AZ, wait = true, value = true, fill = true);
     }
   } else if (state == -2) {
     // convergenve estimation
-    LoadVec(fluxdata, datapipe);
+    LoadVec(edgedata, datapipe);
     [Br, Bz] = [0.0 + 0.0i, 0.0 + 0.0i];
-    deserializeDoFs(Br);
+    deserializeRT0(Br);
     integral[0] = sqrt(int2d(Th, 0, qforder=4)(real(Br * conj(Br) + Bz * conj(Bz))));
     SaveVec(integral, datapipe);
   }
