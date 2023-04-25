@@ -1,6 +1,6 @@
 # How to run
 
-Prerequisites for running MEPHIT are as follows.
+Prerequisites from external sources for running MEPHIT are as follows.
 
 - current GNU/Linux environment (Bash, coreutils, getopt, ...)
 - current Fortran compiler (tested with `gfortran` >= 9.2.0 and `ifort` 18.0.1)
@@ -24,6 +24,7 @@ In the following sections, it is assumed that the environment variable `MEPHIT_D
 
 ```bash
 export LIBNEO_DIR=/temp/AG-plasma/codes/libneo/build-master
+export KILCA_DIR=/temp/AG-plasma/codes/KiLCA-2.4.2/lib
 export FGSL_PATH=/temp/AG-plasma/codes/contrib/fgsl-1.5.0/LIB
 ```
 

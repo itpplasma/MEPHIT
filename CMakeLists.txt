@@ -35,6 +35,13 @@ else ()
   endif ()
 endif ()
 
+if ("$ENV{KILCA_DIR}" STREQUAL "")
+  set(KILCA_DIR "${CMAKE_SOURCE_DIR}/../KiLCA/build")
+else ()
+  set(KILCA_DIR "$ENV{KILCA_DIR}")
+endif ()
+cmake_print_variables(KILCA_DIR)
+
 if ("$ENV{LIBNEO_DIR}" STREQUAL "")
   set(LIBNEO_DIR "${CMAKE_SOURCE_DIR}/../libneo/build")
 else ()
@@ -77,6 +84,9 @@ set(FGSL_LIB ${FGSL_PATH}/lib/ CACHE STRING "FGSL lib")
 set(FGSL_INC ${FGSL_PATH}/include/fgsl/ CACHE STRING "FGSL include")
 find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
 
+# KiLCA
+find_library(kilca_lib libkilca.a ${KILCA_DIR} NO_DEFAULT_PATH)
+
 # hdf5_tools
 find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
 
@@ -105,6 +115,10 @@ set(COMMON_FORTRAN_SRC_FILES
   src/external/d1mach.f
   src/fftw3.f90
   src/sparse_mod.f90
+  src/getIfunc.f90
+  src/progonka.f90
+  src/response_current.f90
+  src/W2_arr.f90
 )
 set(MEPHIT_FORTRAN_SRC_FILES
   src/mephit_iter.f90
@@ -163,6 +177,7 @@ set(MEPHIT_LIBS
   ${gsl_lib}
   ${fgsl_lib}
   ${MFEM_LIBRARIES}
+  ${kilca_lib}
   blas
   lapack
   fftw3
