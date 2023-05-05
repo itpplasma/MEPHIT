@@ -92,6 +92,7 @@ contains
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use mephit_util, only: C_F_string, init_field
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
+    use mephit_equil, only: read_profiles, write_profiles_hdf5, read_profiles_hdf5
     use mephit_mesh, only: equil, mesh, psi_interpolator, &
          generate_mesh, mesh_write, mesh_read, write_cache, read_cache
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
@@ -129,6 +130,9 @@ contains
        end if
        call equil%export_hdf5(datafile, 'equil')
        call init_field(equil)
+       ! read kinetic profiles
+       call read_profiles
+       call write_profiles_hdf5(datafile, 'equil/profiles')
        ! generate mesh and vacuum field
        call generate_mesh
        call mesh_write(mesh, datafile, 'mesh')
@@ -145,6 +149,8 @@ contains
        call equil%import_hdf5(datafile, 'equil')
        call init_field(equil)
        call psi_interpolator%init(4, equil%psi_eqd)
+       ! read kinetic profiles
+       call read_profiles_hdf5(datafile, 'equil/profiles')
        ! read in preprocessed data
        call mesh_read(mesh, datafile, 'mesh')
        call read_cache

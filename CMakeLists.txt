@@ -40,7 +40,6 @@ if ("$ENV{KILCA_DIR}" STREQUAL "")
 else ()
   set(KILCA_DIR "$ENV{KILCA_DIR}")
 endif ()
-cmake_print_variables(KILCA_DIR)
 
 if ("$ENV{LIBNEO_DIR}" STREQUAL "")
   set(LIBNEO_DIR "${CMAKE_SOURCE_DIR}/../libneo/build")
@@ -121,11 +120,12 @@ set(COMMON_FORTRAN_SRC_FILES
   src/W2_arr.f90
 )
 set(MEPHIT_FORTRAN_SRC_FILES
-  src/mephit_iter.f90
   src/mephit_conf.f90
   src/mephit_util.f90
+  src/mephit_equil.f90
   src/mephit_mesh.f90
   src/mephit_pert.f90
+  src/mephit_iter.f90
 )
 
 set(MEPHIT_C_SRC_FILES
