@@ -10,6 +10,7 @@ module mephit_util
   ! types and associated procedures
   public :: fft_t
   public :: sign_convention, g_eqdsk
+  public :: func1d_t, func1d_init, func1d_deinit, func1d_write, func1d_read, func1d_read_formatted
   public :: neumaier_accumulator_real, neumaier_accumulator_complex
 
   ! utility procedures
@@ -77,6 +78,12 @@ module mephit_util
        invert_fmt = '("Inverting sign of ", a, "...")', &
        unscaled_fmt = '("Flux in ", a, " is not normalized by 2 pi.")', &
        rescale_fmt = '("Rescaling ", a, "...")'
+
+  !> 1D function sample
+  type :: func1d_t
+     real(dp), dimension(:), allocatable :: x
+     real(dp), dimension(:), allocatable :: y
+  end type func1d_t
 
   type :: neumaier_accumulator_real
      private
@@ -869,6 +876,85 @@ contains
     if (allocated(this%psirz)) deallocate(this%psirz)
   end subroutine g_eqdsk_deinit
 
+  subroutine func1d_init(func1d, lb, ub)
+    type(func1d_t), intent(inout) :: func1d
+    integer, intent(in) :: lb
+    integer, intent(in) :: ub
+
+    call func1d_deinit(func1d)
+    allocate(func1d%x(lb:ub))
+    allocate(func1d%y(lb:ub))
+  end subroutine func1d_init
+
+  subroutine func1d_deinit(func1d)
+    type(func1d_t), intent(inout) :: func1d
+
+    if (allocated(func1d%x)) deallocate(func1d%x)
+    if (allocated(func1d%y)) deallocate(func1d%y)
+  end subroutine func1d_deinit
+
+  subroutine func1d_write(func1d, file, group, x_comment, x_unit, y_comment, y_unit)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    type(func1d_t), intent(in) :: func1d
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = *), intent(in) :: x_comment
+    character(len = *), intent(in) :: x_unit
+    character(len = *), intent(in) :: y_comment
+    character(len = *), intent(in) :: y_unit
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+
+    grp = trim(group)
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/x', &
+         func1d%x, lbound(func1d%x), ubound(func1d%x), &
+         comment = trim(adjustl(x_comment)), unit = trim(adjustl(x_unit)))
+    call h5_add(h5id_root, grp // '/y', &
+         func1d%y, lbound(func1d%y), ubound(func1d%y), &
+         comment = trim(adjustl(y_comment)), unit = trim(adjustl(y_unit)))
+    call h5_close(h5id_root)
+  end subroutine func1d_write
+
+  subroutine func1d_read(func1d, file, group)
+    use hdf5_tools, only: HID_T, h5_open, h5_get_bounds, h5_get, h5_close
+    type(func1d_t), intent(inout) :: func1d
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+    integer :: lb, ub
+
+    grp = trim(group)
+    call h5_open(file, h5id_root)
+    call h5_get_bounds(h5id_root, grp // '/x', lb, ub)
+    call func1d_init(func1d, lb, ub)
+    call h5_get(h5id_root, grp // '/x', func1d%x)
+    call h5_get(h5id_root, grp // '/y', func1d%y)
+    call h5_close(h5id_root)
+  end subroutine func1d_read
+
+  subroutine func1d_read_formatted(func1d, fname)
+    type(func1d_t), intent(inout) :: func1d
+    character(len = *), intent(in) :: fname
+    integer :: fid, status, n, k
+
+    open(newunit = fid, file = trim(adjustl(fname)), &
+         status = 'old', form = 'formatted', action = 'read')
+    n = 0
+    do
+       read(fid, *, iostat = status)
+       if (status /= 0) exit
+       n = n + 1
+    end do
+    rewind fid
+    call func1d_init(func1d, 1, n)
+    do k = 1, n
+       read (fid, *) func1d%x(k), func1d%y(k)
+    end do
+    close(fid)
+  end subroutine func1d_read_formatted
 
   !> 1D piecewise Lagrange polynomial interpolator
   function interp1d(sample_x, sample_y, resampled_x, n_lag, deriv) result(resampled_y)
