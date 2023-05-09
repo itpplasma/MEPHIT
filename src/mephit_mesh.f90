@@ -19,12 +19,10 @@ module mephit_mesh
        check_safety_factor, check_curr0, equilibrium_field, curr0_geqdsk
 
   ! module variables
-  public :: equil, psi_interpolator, psi_fine_interpolator, fs, fs_half, mesh, &
-       cache
+  public :: equil, psi_fine, fs, fs_half, mesh, cache
 
   type(g_eqdsk) :: equil
-  type(interp1d) :: psi_interpolator
-  type(interp1d) :: psi_fine_interpolator
+  real(dp), dimension(:), allocatable :: psi_fine  ! intermediate step, to be removed
 
   !> Structure containing flux functions evaluated at a specific flux surface, indicated
   !> by a common array index. For details see flux_func_cache_init().
@@ -1033,7 +1031,6 @@ contains
     end interface
     real(dp) :: psi_min, psi_max
     integer :: m
-    type(interp1d) :: psi_sample_interpolator
 
     if (size(psi_sample) /= size(q_sample)) then
        call logger%msg_arg_size('refine_resonant_surfaces', 'size(psi_sample)', &
@@ -1043,7 +1040,6 @@ contains
     end if
     psi_min = minval(psi_sample)
     psi_max = maxval(psi_sample)
-    call psi_sample_interpolator%init(4, psi_sample)
     mesh%m_res_min = max(ceiling(minval(abs(q_sample)) * dble(mesh%n)), conf%n + 1)
     mesh%m_res_max = floor(maxval(abs(q_sample)) * dble(mesh%n))
     if (allocated(mesh%res_modes)) deallocate(mesh%res_modes)
@@ -1070,9 +1066,11 @@ contains
 
   contains
     function q_interp_resonant(psi)
+      use mephit_util, only: interp1d
       real(dp), intent(in) :: psi
       real(dp) :: q_interp_resonant
-      q_interp_resonant = psi_sample_interpolator%eval(abs(q_sample), psi) - dble(m) / dble(mesh%n)
+
+      q_interp_resonant = interp1d(psi_sample, abs(q_sample), psi, 3) - dble(m) / dble(mesh%n)
     end function q_interp_resonant
   end subroutine compute_resonance_positions
 
@@ -1276,7 +1274,7 @@ contains
 
   subroutine create_mesh_points
     use mephit_conf, only: conf, conf_arr, logger
-    use mephit_util, only: interp_psi_pol, pi, pos_angle
+    use mephit_util, only: interp_psi_pol, resample1d, pi, pos_angle
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
          rsmall, circumf, raxis, zaxis, load_magdata_in_symfluxcoord
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, theta0_at_xpoint
@@ -1310,13 +1308,14 @@ contains
     ! field_line_integration_for_SYNCH subtracts psi_axis from psisurf and
     ! load_magdata_in_symfluxcoord_ext divides by psipol_max
     psi_axis = interp_psi_pol(raxis, zaxis)
-    call psi_fine_interpolator%init(4, psisurf(1:) * psipol_max + psi_axis)
+    allocate(psi_fine(nlabel))  ! intermediate step, to be removed
+    psi_fine(:) = psisurf(1:) * psipol_max + psi_axis
     ! interpolate between psi and rho
     rad_max = rbeg(nlabel)
     allocate(rho_norm_eqd(nlabel))
     rho_norm_eqd(:) = rbeg / rad_max
 
-    call compute_resonance_positions(psisurf(1:) * psipol_max + psi_axis, qsaf, psi2rho_norm)
+    call compute_resonance_positions(psi_fine, qsaf, psi2rho_norm)
     call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
     call refine_resonant_surfaces(conf%max_Delta_rad / rad_max, rho_norm_ref)
     call fs%init(mesh%nflux, .false.)
@@ -1330,14 +1329,12 @@ contains
     call flux_func_cache_check
     call cache_resonance_positions
 
-    fs%area(:) = [(pi * psi_fine_interpolator%eval(rsmall, fs%psi(kf)) ** 2, &
-         kf = 0, mesh%nflux)]
-    fs%perimeter(:) = [(psi_fine_interpolator%eval(circumf, fs%psi(kf)), &
-         kf = 0, mesh%nflux)]
-    fs_half%area(:) = [(pi * psi_fine_interpolator%eval(rsmall, fs_half%psi(kf)) ** 2, &
-         kf = 1, mesh%nflux)]
-    fs_half%perimeter(:) = [(psi_fine_interpolator%eval(circumf, fs_half%psi(kf)), &
-         kf = 1, mesh%nflux)]
+    call resample1d(psi_fine, rsmall, fs%psi, fs%area, 3)
+    fs%area(:) = pi * fs%area ** 2
+    call resample1d(psi_fine, circumf, fs%psi, fs%perimeter, 3)
+    call resample1d(psi_fine, rsmall, fs_half%psi, fs_half%area, 3)
+    fs_half%area(:) = pi * fs_half%area ** 2
+    call resample1d(psi_fine, circumf, fs_half%psi, fs_half%perimeter, 3)
     allocate(opt_pol_edge_len(mesh%nflux + 1))
     ! cache averaged radius at half-grid steps
     opt_pol_edge_len(:mesh%nflux) = sqrt(fs_half%area / pi)
@@ -1404,14 +1401,18 @@ contains
 
   contains
     function psi2rho_norm(psi) result(rho_norm)
+      use mephit_util, only: interp1d
       real(dp), intent(in) :: psi
       real(dp) :: rho_norm
-      rho_norm = psi_fine_interpolator%eval(rho_norm_eqd, psi)
+
+      rho_norm = interp1d(psi_fine, rho_norm_eqd, psi, 3)
     end function psi2rho_norm
+
     function psi_ref(psi_eqd)
       real(dp), dimension(:), intent(in) :: psi_eqd
       real(dp), dimension(size(psi_eqd)) :: psi_ref
       integer :: kf
+
       if (mesh%nflux /= size(psi_eqd)) then
          call logger%msg_arg_size('psi_ref', 'nflux', 'size(psi_eqd)', &
               mesh%nflux, size(psi_eqd))
@@ -1776,7 +1777,7 @@ contains
   end subroutine check_mesh
 
   subroutine compute_shielding_auxiliaries(s, m)
-    use mephit_util, only: pi, clight, interp1d, binsearch
+    use mephit_util, only: pi, clight, resample1d, interp1d, binsearch
     type(shielding_t), intent(inout) :: s
     integer, intent(in) :: m
     integer :: kf, inner_kp_low, outer_kp_low
@@ -1793,7 +1794,7 @@ contains
     call project_theta(mesh%node_theta_flux, mesh%node_theta_geom, &
          s%inner_kp_max, inner_kp_low, s%outer_kp_max, outer_kp_low, &
          s%kpois(:, s%inner_kp_max + 1:), s%weights(:, s%inner_kp_max + 1:))
-    dq_dpsi = psi_interpolator%eval(equil%qpsi, fs_half%psi(kf), .true.)
+    dq_dpsi = interp1d(equil%psi_eqd, equil%qpsi, fs_half%psi(kf), 3, .true.)
     s%coeff = clight * mesh%n / (4d0 * pi * mesh%R_O) * &
          abs(dq_dpsi / (fs_half%q(kf) * fs_half%dp_dpsi(kf))) / &
          (mesh%n * abs(fs%q(kf) - fs%q(kf - 1)))
@@ -1807,7 +1808,6 @@ contains
       real(dp), dimension(:, :), intent(out) :: weights
       real(dp), dimension(-1:dest_kp_max+2) :: theta_flux_ext, theta_geom_ext
       real(dp), dimension(src_kp_max) :: src_theta, dest_theta
-      type(interp1d) :: theta_flux2theta_geom
       integer :: kp, inf_kp
 
       theta_flux_ext(1:dest_kp_max) = theta_flux(dest_kpoi_low + 1:&
@@ -1823,9 +1823,7 @@ contains
       theta_geom_ext(dest_kp_max + 1:dest_kp_max + 2) = theta_geom(dest_kpoi_low + 1:&
            dest_kpoi_low + 2) + 2d0 * pi
       src_theta = theta_flux(src_kpoi_low + 1:src_kpoi_low + src_kp_max)
-      call theta_flux2theta_geom%init(4, theta_flux_ext)
-      dest_theta = [(theta_flux2theta_geom%eval(theta_geom_ext, src_theta(kp)), kp = 1, src_kp_max)]
-      call theta_flux2theta_geom%deinit
+      call resample1d(theta_flux_ext, theta_geom_ext, src_theta, dest_theta, 3)
       kpois(:, 1) = [dest_kpoi_low + 1, dest_kpoi_low + 2]
       weights(:, 1) = [1d0, 0d0]
       do kp = 2, src_kp_max
@@ -2895,10 +2893,7 @@ contains
   subroutine init_flux_variables
     use mephit_conf, only: conf, logger, pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
          q_prof_flux, q_prof_rot, q_prof_geqdsk
-    integer :: kf
-
-    ! initialize fluxvar with equidistant psi values
-    call psi_interpolator%init(4, equil%psi_eqd)
+    use mephit_util, only: resample1d
 
     select case (conf%pres_prof)
     case (pres_prof_eps)
@@ -2929,10 +2924,10 @@ contains
        error stop
     end select
 
-    fs%F(:) = [(psi_interpolator%eval(equil%fpol, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs%FdF_dpsi(:) = [(psi_interpolator%eval(equil%ffprim, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs_half%F(:) = [(psi_interpolator%eval(equil%fpol, fs_half%psi(kf)), kf = 1, mesh%nflux)]
-    fs_half%FdF_dpsi(:) = [(psi_interpolator%eval(equil%ffprim, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    call resample1d(equil%psi_eqd, equil%fpol, fs%psi, fs%F, 3)
+    call resample1d(equil%psi_eqd, equil%ffprim, fs%psi, fs%FdF_dpsi, 3)
+    call resample1d(equil%psi_eqd, equil%fpol, fs_half%psi, fs_half%F, 3)
+    call resample1d(equil%psi_eqd, equil%ffprim, fs_half%psi, fs_half%FdF_dpsi, 3)
   end subroutine init_flux_variables
 
   subroutine compute_pres_prof_eps
@@ -3007,18 +3002,17 @@ contains
   end subroutine compute_pres_prof_par
 
   subroutine compute_pres_prof_geqdsk
-    integer :: kf
+    use mephit_util, only: resample1d
 
-    fs%p(:) = [(psi_interpolator%eval(equil%pres, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs%dp_dpsi(:) = [(psi_interpolator%eval(equil%pprime, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs_half%p(:) = [(psi_interpolator%eval(equil%pres, fs_half%psi(kf)), kf = 1, mesh%nflux)]
-    fs_half%dp_dpsi(:) = [(psi_interpolator%eval(equil%pprime, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    call resample1d(equil%psi_eqd, equil%pres, fs%psi, fs%p, 3)
+    call resample1d(equil%psi_eqd, equil%pprime, fs%psi, fs%dp_dpsi, 3)
+    call resample1d(equil%psi_eqd, equil%pres, fs_half%psi, fs_half%p, 3)
+    call resample1d(equil%psi_eqd, equil%pprime, fs_half%psi, fs_half%dp_dpsi, 3)
   end subroutine compute_pres_prof_geqdsk
 
   subroutine compute_safety_factor_flux
-    use mephit_util, only: pi, interp1d
+    use mephit_util, only: pi, resample1d
     integer :: kf, kt, ktri
-    type(interp1d) :: psi_half_interpolator
 
     fs_half%q = 0d0
     do kf = 1, mesh%nflux
@@ -3028,26 +3022,24 @@ contains
        end do
        fs_half%q(kf) = fs_half%q(kf) * 0.5d0 / pi / (fs%psi(kf) - fs%psi(kf-1))
     end do
-    call psi_half_interpolator%init(4, fs_half%psi)
     ! Lagrange polynomial extrapolation for values at separatrix and magnetic axis
-    fs%q(:) = [(psi_half_interpolator%eval(fs_half%q, fs%psi(kf)), kf = 0, mesh%nflux)]
-    call psi_half_interpolator%deinit
+    call resample1d(fs_half%psi, fs_half%q, fs%psi, fs%q, 3)
   end subroutine compute_safety_factor_flux
 
   subroutine compute_safety_factor_rot
     use magdata_in_symfluxcoor_mod, only: qsaf
-    integer :: kf
+    use mephit_util, only: resample1d
 
     ! Lagrange polynomial extrapolation for value at magnetic axis
-    fs%q(:) = [(psi_fine_interpolator%eval(qsaf, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs_half%q(:) = [(psi_fine_interpolator%eval(qsaf, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    call resample1d(psi_fine, qsaf, fs%psi, fs%q, 3)
+    call resample1d(psi_fine, qsaf, fs_half%psi, fs_half%q, 3)
   end subroutine compute_safety_factor_rot
 
   subroutine compute_safety_factor_geqdsk
-    integer :: kf
+    use mephit_util, only: resample1d
 
-    fs%q(:) = [(psi_interpolator%eval(equil%qpsi, fs%psi(kf)), kf = 0, mesh%nflux)]
-    fs_half%q(:) = [(psi_interpolator%eval(equil%qpsi, fs_half%psi(kf)), kf = 1, mesh%nflux)]
+    call resample1d(equil%psi_eqd, equil%qpsi, fs%psi, fs%q, 3)
+    call resample1d(equil%psi_eqd, equil%qpsi, fs_half%psi, fs_half%q, 3)
   end subroutine compute_safety_factor_geqdsk
 
   subroutine check_resonance_positions
@@ -3310,12 +3302,12 @@ contains
     real(dp), intent(out), dimension(3) :: j0, dj0_dR, dj0_dZ
     real(dp) :: dp0_dpsi, d2p0_dpsi2, F, dF_dpsi, FdF_dpsi, d2F_dpsi2
 
-    dp0_dpsi = psi_interpolator%eval(equil%pprime, psi)
-    d2p0_dpsi2 = psi_interpolator%eval(equil%pprime, psi, .true.)
-    F = psi_interpolator%eval(equil%fpol, psi)
-    FdF_dpsi = psi_interpolator%eval(equil%ffprim, psi)
-    dF_dpsi = psi_interpolator%eval(equil%fprime, psi)
-    d2F_dpsi2 = psi_interpolator%eval(equil%fprime, psi, .true.)
+    dp0_dpsi = interp1d(equil%psi_eqd, equil%pprime, psi, 3)
+    d2p0_dpsi2 = interp1d(equil%psi_eqd, equil%pprime, psi, 3, .true.)
+    F = interp1d(equil%psi_eqd, equil%fpol, psi, 3)
+    FdF_dpsi = interp1d(equil%psi_eqd, equil%ffprim, psi, 3)
+    dF_dpsi = interp1d(equil%psi_eqd, equil%fprime, psi, 3)
+    d2F_dpsi2 = interp1d(equil%psi_eqd, equil%fprime, psi, 3, .true.)
     j0(1) = 0.25d0 / pi * clight * dF_dpsi * B0(1)
     j0(3) = 0.25d0 / pi * clight * dF_dpsi * B0(3)
     j0(2) = clight * (dp0_dpsi * R + 0.25d0 / (pi * R) * FdF_dpsi)

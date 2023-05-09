@@ -93,7 +93,7 @@ contains
     use mephit_util, only: C_F_string, init_field
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
     use mephit_equil, only: read_profiles, write_profiles_hdf5, read_profiles_hdf5
-    use mephit_mesh, only: equil, mesh, psi_interpolator, &
+    use mephit_mesh, only: equil, mesh, &
          generate_mesh, mesh_write, mesh_read, write_cache, read_cache
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
     use hdf5_tools, only: h5_init, h5overwrite
@@ -148,7 +148,6 @@ contains
        call read_field_input
        call equil%import_hdf5(datafile, 'equil')
        call init_field(equil)
-       call psi_interpolator%init(4, equil%psi_eqd)
        ! read kinetic profiles
        call read_profiles_hdf5(datafile, 'equil/profiles')
        ! read in preprocessed data
@@ -188,12 +187,11 @@ contains
     use hdf5_tools, only: h5_deinit
     use mephit_conf, only: conf_arr, logger
     use mephit_util, only: deinit_field
-    use mephit_mesh, only: equil, fs, fs_half, psi_interpolator, psi_fine_interpolator, &
+    use mephit_mesh, only: equil, fs, fs_half, psi_fine, &
          mesh, cache, mesh_deinit, cache_deinit
     use mephit_pert, only: vac, vac_deinit
 
-    call psi_interpolator%deinit
-    call psi_fine_interpolator%deinit
+    if (allocated(psi_fine)) deallocate(psi_fine)  ! intermediate step, to be removed
     call cache_deinit(cache)
     call fs%deinit
     call fs_half%deinit
@@ -540,7 +538,8 @@ contains
     use iso_c_binding, only: c_double, c_double_complex
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use field_eq_mod, only: psif, psib
-    use mephit_mesh, only: equil, psi_interpolator, mesh, point_location
+    use mephit_util, only: interp1d
+    use mephit_mesh, only: equil, mesh, point_location
     use mephit_pert, only: RT0_interp, vac
     real(c_double), intent(in), value :: R
     real(c_double), intent(in), value :: Z
@@ -552,7 +551,7 @@ contains
     call field(R, 0d0, Z, B_0(1), B_0(2), B_0(3), &
          dum, dum, dum, dum, dum, dum, dum, dum, dum)
     psi = psif - psib  ! see interp_psi_pol in mephit_util
-    dp0_dpsi = psi_interpolator%eval(equil%pprime, psi)
+    dp0_dpsi = interp1d(equil%psi_eqd, equil%pprime, psi, 3)
     ktri = point_location(R, Z)
     if (ktri <= 0 .or. ktri > mesh%ntri) then
        scalar = cmplx(ieee_value(0d0, ieee_quiet_nan), ieee_value(0d0, ieee_quiet_nan), dp)

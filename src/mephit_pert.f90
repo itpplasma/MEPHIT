@@ -1991,7 +1991,7 @@ contains
 
   subroutine debug_fouriermodes
     use mephit_conf, only: conf, datafile, logger
-    use mephit_util, only: interp1d, linspace, imun
+    use mephit_util, only: resample1d, linspace, imun
     use mephit_mesh, only: equil
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     logical :: file_exists
@@ -2003,7 +2003,6 @@ contains
     character(len = *), parameter :: ptrn_nsqpsi = 'nrad = ', ptrn_psimax = 'psimax', &
          ptrn_phimax = 'phimax', dataset = 'debug_fouriermodes'
     character(len = 1024) :: line
-    type(interp1d) :: rq_interpolator
 
     inquire(file = 'amn.dat', exist = file_exists)
     if (.not. file_exists) return
@@ -2033,10 +2032,9 @@ contains
     end do
     close(fid)
     sgn_dpsi = sign(1d0, psimax)
-    call rq_interpolator%init(4, rsmall * abs(qsaf))
     allocate(rq_eqd(nlabel), psi_n(nlabel), Bmn_contradenspsi(-mpol:mpol, nlabel))
     rq_eqd(:) = linspace(abs(flabel_min), abs(flabel_max), nlabel, 0, 0)
-    psi_n(:) = [(rq_interpolator%eval(psisurf / psimax, rq_eqd(k)), k = 1, nlabel)]
+    call resample1d(rsmall * abs(qsaf), psisurf / psimax, rq_eqd, psi_n, 3)
     ! if qsaf does not have the expected sign, theta points in the wrong direction,
     ! and we have to reverse the index m and the overall sign
     if (equil%cocos%sgn_q * qsaf(nsqpsi) < 0d0) then
