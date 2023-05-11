@@ -1,6 +1,6 @@
 module mephit_iter
   use iso_fortran_env, only: dp => real64
-  use mephit_pert, only: L1_t, RT0_t
+  use mephit_pert, only: L1_t, RT0_t, vec_polmodes_t
 
   implicit none
 
@@ -25,6 +25,15 @@ module mephit_iter
 
   !> Vector potential components for GORILLA
   type(L1_t) :: AnR, AnZ
+
+  !> Poloidal modes of perturbation field in units of Gauss.
+  type(vec_polmodes_t) :: Bmn
+
+  !> Poloidal modes of electric potential perturbation in units of statV.
+  complex(dp), allocatable :: Phi_mn(:, :)
+
+  !> Poloidal modes of aligned electric potential perturbation in units of statV.
+  complex(dp), allocatable :: Phi_aligned_mn(:, :)
 
   abstract interface
      subroutine real_vector_field(R, Z, vector) bind(C)
@@ -188,6 +197,7 @@ contains
     use mephit_mesh, only: equil, fs, fs_half, psi_fine, &
          mesh, cache, mesh_deinit, cache_deinit
     use mephit_pert, only: vac, vac_deinit
+    use mephit_equil, only: deinit_profiles
 
     if (allocated(psi_fine)) deallocate(psi_fine)  ! intermediate step, to be removed
     call cache_deinit(cache)
@@ -197,6 +207,7 @@ contains
     call unload_magdata_in_symfluxcoord
     call vac_deinit(vac)
     call deinit_field
+    call deinit_profiles
     call equil%deinit
     call conf_arr%deinit
     call logger%deinit
@@ -204,8 +215,10 @@ contains
   end subroutine mephit_deinit
 
   subroutine iter_init
+    use mephit_conf, only: conf, currn_model_kilca
     use mephit_mesh, only: mesh
-    use mephit_pert, only: RT0_init, L1_init
+    use mephit_pert, only: RT0_init, L1_init, vec_polmodes_init
+    integer, parameter :: m_max = 24
 
     call L1_init(pn, mesh%npoint)
     call RT0_init(Bn, mesh%nedge, mesh%ntri)
@@ -214,10 +227,15 @@ contains
     call L1_init(jnpar_B0, mesh%npoint)
     call L1_init(AnR, mesh%npoint)
     call L1_init(AnZ, mesh%npoint)
+    call vec_polmodes_init(Bmn, m_max, mesh%nflux)
+    if (conf%currn_model == currn_model_kilca) then
+       allocate(Phi_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max))
+       allocate(Phi_aligned_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max))
+    end if
   end subroutine iter_init
 
   subroutine iter_deinit
-    use mephit_pert, only: L1_deinit, RT0_deinit
+    use mephit_pert, only: L1_deinit, RT0_deinit, vec_polmodes_deinit
 
     call L1_deinit(pn)
     call RT0_deinit(Bn)
@@ -226,11 +244,16 @@ contains
     call L1_deinit(jnpar_B0)
     call L1_deinit(AnR)
     call L1_deinit(AnZ)
+    call vec_polmodes_deinit(Bmn)
+    if (allocated(Phi_mn)) deallocate(Phi_mn)
+    if (allocated(Phi_aligned_mn)) deallocate(Phi_aligned_mn)
   end subroutine iter_deinit
 
   subroutine iter_read
-    use mephit_conf, only: datafile
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    use mephit_conf, only: datafile, conf, currn_model_kilca
     use mephit_pert, only: L1_read, RT0_read
+    integer(HID_T) :: h5id_root
 
     call L1_read(pn, datafile, 'iter/pn')
     call RT0_read(Bn, datafile, 'iter/Bn')
@@ -239,11 +262,18 @@ contains
     call L1_read(jnpar_B0, datafile, 'iter/jnpar_Bmod')
     call L1_read(AnR, datafile, 'iter/AnR')
     call L1_read(AnZ, datafile, 'iter/AnZ')
+    if (conf%currn_model == currn_model_kilca) then
+       call h5_open(datafile, h5id_root)
+       call h5_get(h5id_root, 'iter/Phi_mn', Phi_mn)
+       call h5_get(h5id_root, 'iter/Phi_aligned_mn', Phi_aligned_mn)
+       call h5_close(h5id_root)
+    end if
   end subroutine iter_read
 
   subroutine mephit_iterate
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use mephit_conf, only: conf, logger, datafile, cmplx_fmt, runmode_precon, runmode_single, currn_model_kilca
     use mephit_util, only: arnoldi_break
     use mephit_mesh, only: mesh, cache
     use mephit_pert, only: L1_write, &
@@ -251,7 +281,6 @@ contains
          vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, &
          polmodes_t, polmodes_init, polmodes_deinit, polmodes_write, &
          L1_poloidal_modes, RT0_poloidal_modes, vac
-    use mephit_conf, only: conf, logger, runmode_precon, runmode_single, datafile, cmplx_fmt
 
     logical :: preconditioned
     integer :: kiter, niter, maxiter, ndim, nritz, i, j, info, m
@@ -265,7 +294,7 @@ contains
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
     integer, parameter :: m_max = 24
     type(polmodes_t) :: pmn, jmnpar_Bmod
-    type(vec_polmodes_t) :: jmn, Bmn
+    type(vec_polmodes_t) :: jmn
     complex(dp) :: Ires(mesh%m_res_min:mesh%m_res_max)
 
     ! system dimension: number of non-redundant edges in core plasma
@@ -348,7 +377,6 @@ contains
     call polmodes_init(pmn, m_max, mesh%nflux)
     call polmodes_init(jmnpar_Bmod, m_max, mesh%nflux)
     call vec_polmodes_init(jmn, m_max, mesh%nflux)
-    call vec_polmodes_init(Bmn, m_max, mesh%nflux)
     call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
     call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
     Bn%DOF(:) = vac%Bn%DOF
@@ -451,6 +479,14 @@ contains
     call h5_add(h5id_root, 'iter/L2int_Bn_diff', L2int_Bn_diff, &
          lbound(L2int_Bn_diff), ubound(L2int_Bn_diff), &
          comment = 'L2 integral of magnetic field (difference between iterations)', unit = 'Mx')
+    if (conf%currn_model == currn_model_kilca) then
+       call h5_add(h5id_root, 'iter/Phi_mn', Phi_mn, &
+            lbound(Phi_mn), ubound(Phi_mn), &
+            comment = 'electric potential perturbation', unit = 'statV')
+       call h5_add(h5id_root, 'iter/Phi_aligned_mn', Phi_aligned_mn, &
+            lbound(Phi_aligned_mn), ubound(Phi_aligned_mn), &
+            comment = 'electric potential perturbation', unit = 'statV')
+    end if
     call h5_close(h5id_root)
     deallocate(L2int_Bn_diff)
     call L1_write(pn, datafile, 'iter/pn', &
@@ -472,7 +508,6 @@ contains
     call polmodes_deinit(pmn)
     call polmodes_deinit(jmnpar_Bmod)
     call vec_polmodes_deinit(jmn)
-    call vec_polmodes_deinit(Bmn)
 
   contains
 
@@ -856,13 +891,37 @@ contains
   end subroutine compute_currn
 
   subroutine add_shielding_current
-    use mephit_conf, only: conf_arr, conf
-    use mephit_util, only: imun
-    use mephit_mesh, only: equil, mesh, cache
+    use mephit_conf, only: conf_arr, conf, currn_model_kilca
+    use mephit_util, only: imun, ev2erg, resample1d
+    use mephit_mesh, only: equil, mesh, cache, fs, fs_half
+    use mephit_equil, only: m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
+    use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
+         RT0_poloidal_modes
     integer :: m, m_res, kf, kpoi_min, kpoi_max, kp, kpoi
     complex(dp) :: pn_outer, pn_inner
+    complex(dp), dimension(0:mesh%nflux) :: Bmnpsi_over_B0phi, jmnpar_over_Bmod
 
-    if (conf%shielding_fourier) then
+    if (conf%currn_model == currn_model_kilca) then
+       call RT0_poloidal_modes(Bn, Bmn)
+       do m = mesh%m_res_min, mesh%m_res_max
+          m_res = -equil%cocos%sgn_q * m
+          call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Re / fs_half%q, &
+               fs%psi, Bmnpsi_over_B0phi%Re, 3)
+          call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Im / fs_half%q, &
+               fs%psi, Bmnpsi_over_B0phi%Im, 3)
+          call response_current(1, m_res, mesh%n, mesh%nflux, m_i, Z_i, &
+               mesh%R_O, fs%psi, fs%q, fs%F, Phi0%y, mesh%avg_R2gradpsi2, &
+               dens_e%y, temp_e%y * ev2erg, temp_i%y * ev2erg, nu_e%y, nu_i%y, &
+               Bmnpsi_over_B0phi, jmnpar_over_Bmod, Phi_mn(:, m))
+          Phi_aligned_mn(:, m) = imun * Bmnpsi_over_B0phi * fs%q * dPhi0_dpsi%y / (m_res + mesh%n * fs%q)
+          do kf = 1, mesh%nflux
+             kpoi_min = mesh%kp_low(kf) + 1
+             kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
+             jnpar_B0%DOF(kpoi_min:kpoi_max) = jnpar_B0%DOF(kpoi_min:kpoi_max) + &
+                  jmnpar_over_Bmod(kf) * exp(imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max))
+          end do
+       end do
+    elseif (conf%shielding_fourier) then
        do m = mesh%m_res_min, mesh%m_res_max
           m_res = -equil%cocos%sgn_q * m
           if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then

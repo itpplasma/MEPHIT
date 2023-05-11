@@ -216,6 +216,9 @@ module mephit_mesh
      !> Surface integral Jacobian used for normalization of poloidal modes in GPEC
      real(dp), allocatable :: gpec_jacfac(:)
 
+     !> Flux surface average \f$ \langle R^{2} \lVert \nabla \psi \rVert^{2} \rangle \f$.
+     real(dp), allocatable :: avg_R2gradpsi2(:)
+
   end type mesh_t
 
   interface
@@ -992,6 +995,7 @@ contains
             cache%shielding(m)%GL_weights, cache%GL_order, m)
        call compute_shielding_auxiliaries(cache%shielding(m), m)
     end do
+    call compute_kilca_auxiliaries
     call compute_gpec_jacfac
     call check_resonance_positions
     call compute_curr0
@@ -1987,6 +1991,24 @@ contains
     end do
   end subroutine compute_sample_Ires
 
+  subroutine compute_kilca_auxiliaries
+    integer :: kf, kpol, k, npol
+
+    allocate(mesh%avg_R2gradpsi2(mesh%nflux))
+    mesh%avg_R2gradpsi2(:) = 0d0
+    do kf = 1, mesh%nflux
+       npol = shiftl(1, cache%log2_kp_max(kf))
+       do kpol = 1, npol
+          k = cache%kp_low(kf) + kpol
+          associate (s => cache%sample_polmodes(k))
+            mesh%avg_R2gradpsi2(kf) = mesh%avg_R2gradpsi2(kf) + &
+                 s%R ** 4 * (s%B0_Z ** 2 + s%B0_R ** 2)
+          end associate
+       end do
+       mesh%avg_R2gradpsi2(kf) = mesh%avg_R2gradpsi2(kf) / dble(npol)
+    end do
+  end subroutine compute_kilca_auxiliaries
+
   function point_location(R, Z) result(location)
     use iso_c_binding, only: c_int, c_ptr, c_f_pointer
     real(dp), intent(in) :: R, Z
@@ -2346,6 +2368,9 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/gpec_jacfac', mesh%gpec_jacfac, &
          lbound(mesh%gpec_jacfac), ubound(mesh%gpec_jacfac), unit = 'cm^2', &
          comment = 'Jacobian surface factor between flux surfaces')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/avg_R2gradpsi2', mesh%avg_R2gradpsi2, &
+         lbound(mesh%avg_R2gradpsi2), ubound(mesh%avg_R2gradpsi2), unit = 'Mx^2', &
+         comment = 'Flux surface average (on flux surfaces) for KiLCA coupling')
     call h5_close(h5id_root)
   end subroutine mesh_write
 
@@ -2500,6 +2525,7 @@ contains
     allocate(mesh%GL2_R(mesh%GL2_order, mesh%nedge))
     allocate(mesh%GL2_Z(mesh%GL2_order, mesh%nedge))
     allocate(mesh%gpec_jacfac(mesh%nflux))
+    allocate(mesh%avg_R2gradpsi2(0:mesh%nflux))
     allocate(mesh%area(mesh%ntri))
     allocate(mesh%cntr_R(mesh%ntri))
     allocate(mesh%cntr_Z(mesh%ntri))
@@ -2539,6 +2565,7 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL2_R', mesh%GL2_R)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL2_Z', mesh%GL2_Z)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/gpec_jacfac', mesh%gpec_jacfac)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/avg_R2gradpsi2', mesh%avg_R2gradpsi2)
     call h5_close(h5id_root)
     where (orient == 1)
        mesh%orient = .true.
@@ -2588,6 +2615,7 @@ contains
     if (allocated(this%GL2_R)) deallocate(this%GL2_R)
     if (allocated(this%GL2_Z)) deallocate(this%GL2_Z)
     if (allocated(this%gpec_jacfac)) deallocate(this%gpec_jacfac)
+    if (allocated(this%avg_R2gradpsi2)) deallocate(this%avg_R2gradpsi2)
   end subroutine mesh_deinit
 
   subroutine compare_gpec_coordinates
