@@ -46,37 +46,60 @@ module mephit_equil
 contains
 
   subroutine process_profiles
+    use magdata_in_symfluxcoor_mod, only: psi_norm_fine => psisurf, rsmall_fine => rsmall
     use mephit_util, only: pi, func1d_init, func1d_deinit, func1d_read_formatted, resample1d
     use mephit_mesh, only: mesh, fs
     type(func1d_t) :: raw, raw_int
-    real(dp) :: rsmall(0:mesh%nflux)
+    real(dp), dimension(0:mesh%nflux) :: rsmall, rho_pol
     integer :: krad
 
     rsmall = sqrt(fs%area / pi)
+    rho_pol = sqrt((fs%psi - fs%psi(0)) / (fs%psi(mesh%nflux) - fs%psi(0)))
     ! read electron density profile
     call func1d_init(dens_e, 0, mesh%nflux)
     call func1d_read_formatted(raw, 'n.dat')
-    call resample1d(raw%x, raw%y, rsmall, dens_e%y, 3)
+    if (abs(raw%x(ubound(raw%x, 1)) - 1d0) <= 0.05d0) then
+       call resample1d(raw%x, raw%y * 1d-6, rho_pol, dens_e%y, 3)  ! SI units
+    else
+       call resample1d(raw%x, raw%y, rsmall, dens_e%y, 3)
+    end if
     dens_e%x(:) = fs%psi
     ! read electron temperature profile
     call func1d_init(temp_e, 0, mesh%nflux)
     call func1d_read_formatted(raw, 'Te.dat')
-    call resample1d(raw%x, raw%y, rsmall, temp_e%y, 3)
+    if (abs(raw%x(ubound(raw%x, 1)) - 1d0) <= 0.05d0) then
+       call resample1d(raw%x, raw%y, rho_pol, temp_e%y, 3)
+    else
+       call resample1d(raw%x, raw%y, rsmall, temp_e%y, 3)
+    end if
     temp_e%x(:) = fs%psi
     ! read ion temperature profile
     call func1d_init(temp_i, 0, mesh%nflux)
     call func1d_read_formatted(raw, 'Ti.dat')
-    call resample1d(raw%x, raw%y, rsmall, temp_i%y, 3)
+    if (abs(raw%x(ubound(raw%x, 1)) - 1d0) <= 0.05d0) then
+       call resample1d(raw%x, raw%y, rho_pol, temp_i%y, 3)
+    else
+       call resample1d(raw%x, raw%y, rsmall, temp_i%y, 3)
+    end if
     temp_i%x(:) = fs%psi
     ! read radial electric field profile
     call func1d_init(E_r, 0, mesh%nflux)
     call func1d_read_formatted(raw, 'Er.dat')
-    call resample1d(raw%x, raw%y, rsmall, E_r%y, 3)
+    if (abs(raw%x(ubound(raw%x, 1)) - 1d0) <= 0.05d0) then
+       call resample1d(raw%x, raw%y, rho_pol, E_r%y, 3)
+    else
+       call resample1d(raw%x, raw%y, rsmall, E_r%y, 3)
+    end if
     E_r%x(:) = fs%psi
     ! integrate electric field to yield the electric potential
     call func1d_init(Phi0, 0, mesh%nflux)
     call func1d_init(raw_int, lbound(raw%x, 1), ubound(raw%x, 1))
-    raw_int%x(:) = raw%x
+    if (abs(raw%x(ubound(raw%x, 1)) - 1d0) <= 0.05d0) then
+       call resample1d(psi_norm_fine(1:), rsmall_fine, raw%x ** 2, raw_int%x, 3)
+       raw%x(:) = raw_int%x
+    else
+       raw_int%x(:) = raw%x
+    end if
     raw_int%y(:) = 0d0
     do krad = lbound(raw%x, 1) + 1, ubound(raw%x, 1)
        raw_int%y(krad) = raw_int%y(krad - 1) + (raw%x(krad) - raw%x(krad - 1)) &
@@ -119,7 +142,7 @@ contains
          'poloidal flux', 'Mx', 'radial electric field', 'statV cm^-1')
     call func1d_write(Phi0, file, grp // '/Phi0', &
          'poloidal flux', 'Mx', 'electric potential', 'statV')
-    call func1d_write(Phi0, file, grp // '/dPhi0_dpsi', &
+    call func1d_write(dPhi0_dpsi, file, grp // '/dPhi0_dpsi', &
          'poloidal flux', 'Mx', 'psi derivative of electric potential', 'statV Mx^-1')
     call func1d_write(nu_e, file, grp // '/nu_e', &
          'poloidal flux', 'Mx', 'electron collision frequency', 's^-1')
@@ -139,7 +162,7 @@ contains
     call func1d_read(temp_i, file, grp // '/temp_i')
     call func1d_read(E_r, file, grp // '/E_r')
     call func1d_read(Phi0, file, grp // '/Phi0')
-    call func1d_read(Phi0, file, grp // '/dPhi0_dpsi')
+    call func1d_read(dPhi0_dpsi, file, grp // '/dPhi0_dpsi')
     call func1d_read(nu_e, file, grp // '/nu_e')
     call func1d_read(nu_i, file, grp // '/nu_i')
   end subroutine read_profiles
