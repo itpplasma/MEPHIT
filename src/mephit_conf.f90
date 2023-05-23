@@ -176,8 +176,8 @@ module mephit_conf
 
      integer :: m_min, m_max
 
-     !> Number of unrefined flux surfaces to be replaced by refined ones.
-     integer, dimension(:), allocatable :: deletions
+     !> Width of refined flux surfaces around resonances in cm.
+     real(dp), dimension(:), allocatable :: Delta_rad_res
 
      !> Width ratio of neighbouring refined flux surfaces.
      real(dp), dimension(:), allocatable :: refinement
@@ -294,21 +294,20 @@ contains
     character(len = *), intent(in) :: filename
     integer, intent(in) :: m_min, m_max
     integer :: fid
-    integer, dimension(m_min:m_max) :: deletions
-    real(dp), dimension(m_min:m_max) :: refinement, sheet_current_factor
-    namelist /arrays/ deletions, refinement, sheet_current_factor
+    real(dp), dimension(m_min:m_max) :: Delta_rad_res, refinement, sheet_current_factor
+    namelist /arrays/ Delta_rad_res, refinement, sheet_current_factor
 
     config%m_min = m_min
     config%m_max = m_max
-    deletions = 0
+    Delta_rad_res = 0d0
     refinement = 0d0
     sheet_current_factor = 0d0
     open(newunit = fid, file = filename)
     read(fid, nml = arrays)
     close(fid)
-    if (allocated(config%deletions)) deallocate(config%deletions)
-    allocate(config%deletions(m_min:m_max))
-    config%deletions(:) = deletions
+    if (allocated(config%Delta_rad_res)) deallocate(config%Delta_rad_res)
+    allocate(config%Delta_rad_res(m_min:m_max))
+    config%Delta_rad_res(:) = Delta_rad_res
     if (allocated(config%refinement)) deallocate(config%refinement)
     allocate(config%refinement(m_min:m_max))
     config%refinement(:) = refinement
@@ -329,9 +328,9 @@ contains
          comment = 'minimum poloidal mode number')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_max', config%m_max, &
          comment = 'maximum poloidal mode number')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/deletions', config%deletions, &
-         lbound(config%deletions), ubound(config%deletions), &
-         comment = 'number of unrefined flux surfaces to be replaced by refined ones')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res', config%Delta_rad_res, &
+         lbound(config%Delta_rad_res), ubound(config%Delta_rad_res), &
+         comment = 'width of refined flux surfaces around resonances', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/refinement', config%refinement, &
          lbound(config%refinement), ubound(config%refinement), &
          comment = 'width ratio of neighbouring refined flux surfaces')
@@ -351,10 +350,10 @@ contains
     call config_delayed_deinit(config)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_min', config%m_min)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_max', config%m_max)
-    allocate(config%deletions(config%m_min:config%m_max))
+    allocate(config%Delta_rad_res(config%m_min:config%m_max))
     allocate(config%refinement(config%m_min:config%m_max))
     allocate(config%sheet_current_factor(config%m_min:config%m_max))
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/deletions', config%deletions)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res', config%Delta_rad_res)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', config%refinement)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor)
     call h5_close(h5id_root)
@@ -365,7 +364,7 @@ contains
 
     config%m_min = 0
     config%m_max = 0
-    if (allocated(config%deletions)) deallocate(config%deletions)
+    if (allocated(config%Delta_rad_res)) deallocate(config%Delta_rad_res)
     if (allocated(config%refinement)) deallocate(config%refinement)
     if (allocated(config%sheet_current_factor)) deallocate(config%sheet_current_factor)
   end subroutine config_delayed_deinit

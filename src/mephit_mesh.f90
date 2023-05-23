@@ -115,10 +115,10 @@ module mephit_mesh
      !> Maximal poloidal mode number in resonance
      integer :: m_res_max
 
-     !> Number of unrefined flux surfaces to be replaced by refined ones.
-     integer, allocatable :: deletions(:)
+     !> Width of refined flux surfaces around resonances in cm.
+     real(dp), allocatable :: Delta_rad_res(:)
 
-     !> Width ratio of neighbouring refined flux surfaces.
+     !> Maximum width ratio of neighbouring refined flux surfaces.
      real(dp), allocatable :: refinement(:)
 
      !> Indices of flux surfaces where resonance corresponding to a poloidal mode (given as
@@ -1078,167 +1078,198 @@ contains
     end function q_interp_resonant
   end subroutine compute_resonance_positions
 
-  subroutine refine_eqd_partition(coarse_sep, nref, deletions, refinement, resonances, diverging_q, partition, ref_ind)
+  subroutine refine_unit_partition(nref, coarse_sep, fine_sep, refinement, resonances, diverging_q, &
+       nflux, partition, kf_ref)
     use mephit_conf, only: logger
     use mephit_util, only: linspace
-    real(dp), intent(in) :: coarse_sep
     integer, intent(in) :: nref
-    integer, dimension(:), intent(in) :: deletions
-    real(dp), dimension(:), intent(in) :: refinement, resonances
+    real(dp), intent(in) :: coarse_sep
+    real(dp), intent(in) :: fine_sep(:)
+    real(dp), intent(in) :: refinement(:)
+    real(dp), intent(in) :: resonances(:)
     logical, intent(in) :: diverging_q
-    real(dp), dimension(:), allocatable, intent(out) :: partition
-    integer, dimension(:), intent(out) :: ref_ind
-    integer :: kref, k, inter(nref + 1)
-    integer, dimension(nref) :: additions, add_lo, add_hi, fine_lo, fine_hi
-    real(dp), dimension(nref) :: fine_sep
-    real(dp), dimension(:, :), allocatable :: geom_ser, fine_pos_lo, fine_pos_hi
+    integer, intent(out) :: nflux
+    real(dp), allocatable, intent(out) :: partition(:)
+    integer, intent(out) :: kf_ref(:)
+    integer :: kref, k, max_adds, add_lo(nref), add_hi(nref), inter(nref + 1), kf_lo, kf_hi
+    real(dp) :: sep_lo, sep_hi, sep_inter, dist_inter
+    real(dp), allocatable :: geom_partial_sums(:), pos_lo(:, :), pos_hi(:, :)
 
     if (allocated(partition)) deallocate(partition)
     if (nref < 1) then
-       mesh%nflux = ceiling(1d0 / coarse_sep)
-       allocate(partition(0:mesh%nflux))
-       partition(:) = linspace(0d0, 1d0, mesh%nflux + 1, 0, 0)
+       nflux = ceiling(1d0 / coarse_sep)
+       allocate(partition(0:nflux))
+       partition(:) = linspace(0d0, 1d0, nflux + 1, 0, 0)
        return
     end if
-    if (nref /= size(deletions)) then
-       call logger%msg_arg_size('refine_eqd_partition', 'nref', 'size(deletions)', nref, &
-            size(deletions))
+    if (nref /= size(fine_sep)) then
+       call logger%msg_arg_size('refine_unit_partition', 'nref', 'size(fine_sep)', nref, &
+            size(fine_sep))
        if (logger%err) call logger%write_msg
        error stop
     end if
     if (nref /= size(refinement)) then
-       call logger%msg_arg_size('refine_eqd_partition', 'nref', 'size(refinement)', nref, &
+       call logger%msg_arg_size('refine_unit_partition', 'nref', 'size(refinement)', nref, &
             size(refinement))
        if (logger%err) call logger%write_msg
        error stop
     end if
     if (nref /= size(resonances)) then
-       call logger%msg_arg_size('refine_eqd_partition', 'nref', 'size(resonances)', nref, &
+       call logger%msg_arg_size('refine_unit_partition', 'nref', 'size(resonances)', nref, &
             size(resonances))
        if (logger%err) call logger%write_msg
        error stop
     end if
-    if (nref /= size(ref_ind)) then
-       call logger%msg_arg_size('refine_eqd_partition', 'nref', 'size(ref_ind)', nref, &
-            size(ref_ind))
+    if (nref /= size(kf_ref)) then
+       call logger%msg_arg_size('refine_unit_partition', 'nref', 'size(kf_ref)', nref, &
+            size(kf_ref))
        if (logger%err) call logger%write_msg
        error stop
     end if
-    ! construct geometric series
-    if (any(refinement >= dble(deletions + 3) / dble(deletions + 1))) then
-       logger%msg = 'Requested refinement factor is too high'
+    if (any(refinement <= 1d0)) then
+       logger%msg = 'refine_unit_partition: refinement factors need to be larger than one'
        if (logger%err) call logger%write_msg
        error stop
     end if
-    additions = ceiling((log(refinement + 1d0) - &
-         log(3d0 + dble(2 * deletions) * (1d0 - refinement) - refinement)) / log(refinement)) - 1
-    fine_sep = coarse_sep * refinement ** (-additions - 1)
-    allocate(geom_ser(maxval(additions) + 1, nref))
-    geom_ser(:, :) = reshape([(((refinement(kref) ** k - refinement(kref)) / (refinement(kref) - 1d0), &
-         k = 1, maxval(additions) + 1), kref = 1, nref)], [maxval(additions) + 1, nref])
-    ! determine positions and numbers of additional points in refined regions
-    allocate(fine_pos_lo(maxval(additions) + 1, nref), fine_pos_hi(maxval(additions) + 1, nref))
-    fine_pos_lo(:, :) = reshape([((resonances(kref) - fine_sep(kref) * (0.5d0 + geom_ser(k, kref)), &
-         k = 1, maxval(additions) + 1), kref = 1, nref)], [maxval(additions) + 1, nref])
-    fine_pos_hi(:, :) = reshape([((resonances(kref) + fine_sep(kref) * (0.5d0 + geom_ser(k, kref)), &
-         k = 1, maxval(additions) + 1), kref = 1, nref)], [maxval(additions) + 1, nref])
-    ! reduce number of additional points if refined regions overlap
-    add_lo = additions
-    add_hi = additions
-    do while (fine_pos_lo(add_lo(1) + 1, 1) < 0d0)
-       add_lo(1) = add_lo(1) - 1
-    end do
-    do kref = 2, nref
-       do while (fine_pos_lo(add_lo(kref) + 1, kref) < fine_pos_hi(add_hi(kref-1) + 1, kref - 1))
-          if (add_lo(kref) <= add_hi(kref-1)) then
-             add_hi(kref-1) = add_hi(kref-1) - 1
-          else
-             add_lo(kref) = add_lo(kref) - 1
-          end if
-       end do
-    end do
+    if (any(fine_sep >= coarse_sep)) then
+       logger%msg = 'refine_unit_partition: all elements of fine_sep need to be less than coarse_sep'
+       if (logger%err) call logger%write_msg
+       error stop
+    end if
+    ! construct refined regions via geometric series
+    add_lo = floor(log(coarse_sep / fine_sep) / log(refinement))
+    add_hi = add_lo
+    max_adds = maxval(add_lo)
     if (diverging_q) then
        ! continue with fine separation outside last refined region
        add_hi(nref) = 0
-    else
-       do while (1d0 < fine_pos_hi(add_hi(nref) + 1, nref))
-          add_hi(nref) = add_hi(nref) - 1
-       end do
     end if
-    ! compute number of intervals between refined regions
-    inter(1) = ceiling(fine_pos_lo(add_lo(1) + 1, 1) / (fine_sep(1) * refinement(1) ** (add_lo(1) + 1)))
-    do kref = 2, nref
-       inter(kref) = ceiling((fine_pos_lo(add_lo(kref) + 1, kref) - fine_pos_hi(add_hi(kref-1) + 1, kref-1)) / &
-            max(fine_sep(kref) * refinement(kref) ** (add_lo(kref) + 1), &
-            fine_sep(kref-1) * refinement(kref-1) ** (add_hi(kref-1) + 1)))
-    end do
-    if (diverging_q) then
-       ! continue with fine separation outside last refined region
-       inter(nref + 1) = ceiling((1d0 - fine_pos_hi(add_hi(nref) + 1, nref)) / fine_sep(nref))
-    else
-       inter(nref + 1) = ceiling((1d0 - fine_pos_hi(add_hi(nref) + 1, nref)) / &
-            (fine_sep(nref) * refinement(nref) ** (add_hi(nref) + 1)))
-    end if
-    ! compute upper and lower array indices of refined regions
-    fine_lo(1) = inter(1)
-    fine_hi(1) = fine_lo(1) + add_lo(1) + add_hi(1) + 1
-    do kref = 2, nref
-       fine_lo(kref) = fine_hi(kref-1) + inter(kref)
-       fine_hi(kref) = fine_lo(kref) + add_lo(kref) + add_hi(kref) + 1
-    end do
-    ref_ind = fine_hi - add_hi
-    ! compute refined regions around resonant flux surfaces
-    mesh%nflux = sum(add_lo) + sum(add_hi) + sum(inter) + nref
-    allocate(partition(0:mesh%nflux))
-    partition(:) = 0d0
+    allocate(geom_partial_sums(0:max_adds), pos_lo(0:max_adds, 1:nref), pos_hi(0:max_adds, 1:nref))
     do kref = 1, nref
-       partition(fine_lo(kref) + add_lo(kref):fine_lo(kref):-1) = resonances(kref) - &
-            fine_sep(kref) * (0.5d0 + geom_ser(:add_lo(kref) + 1, kref))
-       partition(fine_hi(kref) - add_hi(kref):fine_hi(kref)) = resonances(kref) + &
-            fine_sep(kref) * (0.5d0 + geom_ser(:add_hi(kref) + 1, kref))
+       geom_partial_sums(:) = (refinement(kref) ** [(k, k = 1, max_adds + 1)] - &
+            refinement(kref) ** 1) / (refinement(kref) - 1d0)
+       pos_lo(:, kref) = resonances(kref) - fine_sep(kref) * (0.5d0 + geom_partial_sums)
+       pos_hi(:, kref) = resonances(kref) + fine_sep(kref) * (0.5d0 + geom_partial_sums)
     end do
-    ! compute equidistant positions between refined regions
-    partition(:fine_lo(1)) = linspace(0d0, partition(fine_lo(1)), inter(1) + 1, 0, 0)
+    ! reduce number of points in geometric series if refined regions overlap
+    ! and if transition between refined and unrefined regions is not concave
+    inter = 0
     do kref = 2, nref
-       partition(fine_hi(kref-1):fine_lo(kref)) = &
-            linspace(partition(fine_hi(kref-1)), partition(fine_lo(kref)), inter(kref) + 1, 0, 0)
+inner: do
+          sep_lo = fine_sep(kref) * refinement(kref) ** add_lo(kref)
+          sep_hi = fine_sep(kref - 1) * refinement(kref - 1) ** add_hi(kref - 1)
+          dist_inter = pos_lo(add_lo(kref), kref) - pos_hi(add_hi(kref - 1), kref - 1)
+          if (dist_inter > 0d0) then  ! refined regions do not overlap
+             inter(kref) = ceiling(dist_inter / min(coarse_sep, &
+                  sep_lo * refinement(kref), sep_hi * refinement(kref - 1)))
+             sep_inter = dist_inter / dble(inter(kref))
+             if (sep_lo <= sep_inter .and. sep_hi <= sep_inter) then
+                exit inner
+             end if
+          end if
+          if (add_lo(kref) > 0 .and. add_hi(kref - 1) > 0) then
+             if (sep_lo <= sep_hi) then
+                add_hi(kref - 1) = add_hi(kref - 1) - 1
+             else
+                add_lo(kref) = add_lo(kref) - 1
+             end if
+          elseif (add_hi(kref - 1) > 0) then
+             add_hi(kref - 1) = add_hi(kref - 1) - 1
+          elseif (add_lo(kref) > 0) then
+             add_lo(kref) = add_lo(kref) - 1
+          else
+             write (logger%msg, '("refine_unit_partition: refinement failed at interval ", i0)') kref
+             if (logger%err) call logger%write_msg
+             error stop
+          end if
+       end do inner
     end do
-    partition(fine_hi(nref):) = linspace(partition(fine_hi(nref)), 1d0, inter(nref+1) + 1, 0, 0)
-  end subroutine refine_eqd_partition
+    do
+       sep_lo = fine_sep(1) * refinement(1) ** add_lo(1)
+       dist_inter = pos_lo(add_lo(1), 1)
+       if (dist_inter > 0d0) then  ! refined region does not extend beyond axis
+          inter(1) = ceiling(dist_inter / min(coarse_sep, sep_lo * refinement(1)))
+          sep_inter = dist_inter / dble(inter(1))
+          if (sep_lo <= sep_inter) then
+             exit
+          end if
+       end if
+       if (add_lo(1) > 0) then
+          add_lo(1) = add_lo(1) - 1
+       else
+          logger%msg = 'refine_unit_partition: refinement failed at interval 1'
+          if (logger%err) call logger%write_msg
+          error stop
+       end if
+    end do
+    do
+       sep_hi = fine_sep(nref) * refinement(nref) ** add_hi(nref)
+       dist_inter = 1d0 - pos_hi(add_hi(nref), nref)
+       if (dist_inter > 0d0) then  ! refined regions does not extend beyond separatrix
+          inter(nref + 1) = ceiling(dist_inter / min(coarse_sep, sep_hi * refinement(nref)))
+          sep_inter = dist_inter / dble(inter(nref + 1))
+          if (sep_hi <= sep_inter) then
+             exit
+          end if
+       end if
+       if (add_hi(nref) > 0) then
+          add_hi(nref) = add_hi(nref) - 1
+       else
+          write (logger%msg, '("refine_unit_partition: refinement failed at interval ", i0)') nref + 1
+          if (logger%err) call logger%write_msg
+          error stop
+       end if
+    end do
+    ! fill unrefined regions with equidistant intervals
+    nflux = sum(add_lo) + sum(add_hi) + sum(inter) + nref
+    allocate(partition(0:nflux))
+    partition(:) = 0d0
+    kf_hi = 0
+    do kref = 1, nref
+       kf_lo = kf_hi + inter(kref)
+       partition(kf_hi + 1:kf_lo) = linspace(partition(kf_hi), pos_lo(add_lo(kref), kref), inter(kref), 1, 0)
+       kf_ref(kref) = kf_lo + add_lo(kref) + 1
+       partition(kf_lo + 1:kf_ref(kref) - 1) = pos_lo(add_lo(kref) - 1:0:-1, kref)  ! kf_lo + 1 -> add_lo - 1
+       kf_hi = kf_ref(kref) + add_hi(kref)
+       partition(kf_ref(kref):kf_hi) = pos_hi(0:add_hi(kref), kref)
+    end do
+    partition(kf_hi + 1:nflux) = linspace(partition(kf_hi), 1d0, inter(nref + 1), 1, 0)
+    deallocate(geom_partial_sums, pos_lo, pos_hi)
+  end subroutine refine_unit_partition
 
-  subroutine refine_resonant_surfaces(coarse_sep, rho_norm_ref)
-    use mephit_conf, only: conf, conf_arr, logger
+  subroutine refine_resonant_surfaces(coarse_sep, fine_sep, refinement, rho_norm_ref)
+    use mephit_conf, only: conf, logger
     real(dp), intent(in) :: coarse_sep
+    real(dp), dimension(mesh%m_res_min:), intent(in) :: fine_sep
+    real(dp), dimension(mesh%m_res_min:), intent(in) :: refinement
     real(dp), dimension(:), allocatable, intent(out) :: rho_norm_ref
     logical :: diverging_q
     integer :: m, m_dense, kref
     integer, dimension(:), allocatable :: ref_ind
     logical, dimension(:), allocatable :: mask
 
-    if (allocated(mesh%refinement)) deallocate(mesh%refinement)
-    if (allocated(mesh%deletions)) deallocate(mesh%deletions)
-    allocate(mesh%refinement(mesh%m_res_min:mesh%m_res_max))
-    allocate(mesh%deletions(mesh%m_res_min:mesh%m_res_max))
-    mesh%refinement(:) = conf_arr%refinement
-    mesh%deletions(:) = conf_arr%deletions
     allocate(mask(mesh%m_res_min:mesh%m_res_max))
-    mask(:) = 1d0 < mesh%refinement .and. mesh%refinement < 3d0
+    mask(:) = 1d0 < refinement .and. 0d0 < fine_sep .and. fine_sep < coarse_sep
     if (conf%kilca_scale_factor /= 0) then
        diverging_q = .false.
     else
        diverging_q = .true.
-       ! heuristic: if distance between resonances is less than coarse grid separation,
+       ! heuristic: if distance between resonances is too low,
        ! take inner resonance as last to be refined; outside, only the fine separation is used
        m_dense = mesh%m_res_min + 1
        do while (m_dense <= mesh%m_res_max)
-          if (mesh%rad_norm_res(m_dense) - mesh%rad_norm_res(m_dense - 1) < coarse_sep) exit
+          if (mesh%rad_norm_res(m_dense) - mesh%rad_norm_res(m_dense - 1) < &
+               sum(fine_sep(m_dense - 1:m_dense) * (0.5d0 + refinement(m_dense - 1:m_dense)))) then
+             exit
+          end if
           m_dense = m_dense + 1
        end do
        mask(m_dense:mesh%m_res_max) = .false.
     end if
     allocate(ref_ind(count(mask)))
-    call refine_eqd_partition(coarse_sep, count(mask), pack(mesh%deletions, mask), &
-         pack(mesh%refinement, mask), pack(mesh%rad_norm_res, mask), diverging_q, rho_norm_ref, ref_ind)
+    call refine_unit_partition(count(mask), coarse_sep, pack(fine_sep, mask), &
+         pack(refinement, mask), pack(mesh%rad_norm_res, mask), diverging_q, &
+         mesh%nflux, rho_norm_ref, ref_ind)
     logger%msg = 'refinement positions:'
     if (logger%debug) call logger%write_msg
     kref = 0
@@ -1321,7 +1352,14 @@ contains
 
     call compute_resonance_positions(psi_fine, qsaf, psi2rho_norm)
     call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
-    call refine_resonant_surfaces(conf%max_Delta_rad / rad_max, rho_norm_ref)
+    if (allocated(mesh%refinement)) deallocate(mesh%refinement)
+    if (allocated(mesh%Delta_rad_res)) deallocate(mesh%Delta_rad_res)
+    allocate(mesh%refinement(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%Delta_rad_res(mesh%m_res_min:mesh%m_res_max))
+    mesh%refinement(:) = conf_arr%refinement
+    mesh%Delta_rad_res(:) = conf_arr%Delta_rad_res
+    call refine_resonant_surfaces(conf%max_Delta_rad / rad_max, conf_arr%Delta_rad_res / rad_max, &
+         conf_arr%refinement, rho_norm_ref)
     call fs%init(mesh%nflux, .false.)
     call fs_half%init(mesh%nflux, .true.)
     fs%rad(:) = rho_norm_ref
@@ -2256,9 +2294,9 @@ contains
          comment = 'minimal absolute poloidal mode number')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_res_max', mesh%m_res_max, &
          comment = 'maximal absolute poloidal mode number')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/deletions', mesh%deletions, &
-         lbound(mesh%deletions), ubound(mesh%deletions), &
-         comment = 'number of unrefined flux surfaces to be replaced by refined ones')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res', mesh%Delta_rad_res, &
+         lbound(mesh%Delta_rad_res), ubound(mesh%Delta_rad_res), &
+         comment = 'width of refined flux surfaces around resonances', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/refinement', mesh%refinement, &
          lbound(mesh%refinement), ubound(mesh%refinement), &
          comment = 'width ratio of neighbouring refined flux surfaces')
@@ -2487,7 +2525,7 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL_order', mesh%GL_order)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/GL2_order', mesh%GL2_order)
     ! TODO: allocate deferred-shape arrays in hdf5_tools and skip allocation here
-    allocate(mesh%deletions(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%Delta_rad_res(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%refinement(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%psi_res(mesh%m_res_min:mesh%m_res_max))
@@ -2529,7 +2567,7 @@ contains
     allocate(mesh%area(mesh%ntri))
     allocate(mesh%cntr_R(mesh%ntri))
     allocate(mesh%cntr_Z(mesh%ntri))
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/deletions', mesh%deletions)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res', mesh%Delta_rad_res)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', mesh%refinement)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/res_ind', mesh%res_ind)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi_res', mesh%psi_res)
@@ -2579,7 +2617,7 @@ contains
   subroutine mesh_deinit(this)
     class(mesh_t), intent(inout) :: this
 
-    if (allocated(this%deletions)) deallocate(this%deletions)
+    if (allocated(this%Delta_rad_res)) deallocate(this%Delta_rad_res)
     if (allocated(this%refinement)) deallocate(this%refinement)
     if (allocated(this%res_ind)) deallocate(this%res_ind)
     if (allocated(this%psi_res)) deallocate(this%psi_res)
