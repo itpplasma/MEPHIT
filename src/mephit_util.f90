@@ -969,7 +969,7 @@ contains
     integer :: kder, k, k_lo, k_hi
 
     if (size(sample_x) /= size(sample_y)) then
-       call logger%msg_arg_size('resample1d', 'size(sample_x)', &
+       call logger%msg_arg_size('interp1d', 'size(sample_x)', &
             'size(sample_y)', size(sample_x), size(sample_y))
        if (logger%err) call logger%write_msg
        error stop

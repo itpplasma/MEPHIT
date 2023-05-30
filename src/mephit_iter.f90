@@ -528,9 +528,9 @@ contains
               'pressure modes (initial iteration from MFEM)', 'dyn cm^-2')
          call compute_presn
          call L1_poloidal_modes(pn, pmn)
-         call L1_write(pn, datafile, 'debug_MDE_initial/pn', &
+         call L1_write(pn, datafile, 'debug_MDE_initial/MEPHIT_pn', &
               'pressure (initial iteration)', 'dyn cm^-2')
-         call polmodes_write(pmn, datafile, 'debug_MDE_initial/pmn', &
+         call polmodes_write(pmn, datafile, 'debug_MDE_initial/MEPHIT_pmn', &
               'pressure modes (initial iteration)', 'dyn cm^-2')
          call polmodes_deinit(pmn)
          first = .false.

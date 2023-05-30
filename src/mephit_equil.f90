@@ -113,12 +113,14 @@ contains
     call func1d_init(dPhi0_dpsi, 0, mesh%nflux)
     dPhi0_dpsi%x(:) = fs%psi
     call resample1d(Phi0%x, Phi0%y, dPhi0_dpsi%x, dPhi0_dpsi%y, 3, .true.)
-    ! electron collision frequency
+    ! transverse diffusion rate of fast electrons in ion background
+    ! (NRL Plasma Formulary 2016, p. 32)
     call func1d_init(nu_e, 0, mesh%nflux)
     nu_e%x(:) = fs%psi
     nu_e%y(:) = 7.7d-6 * (1d0 + Z_i) * dens_e%y / temp_e%y ** 1.5d0 &
          * (24.d0 - log(sqrt(dens_e%y) / temp_e%y))
-    ! ion collision frequency
+    ! transverse diffusion rate of fast ions in ion background
+    ! (NRL Plasma Formulary 2016, p. 32)
     call func1d_init(nu_i, 0, mesh%nflux)
     nu_i%x(:) = fs%psi
     nu_i%y(:) = 1.8d-7 * Z_i ** 3 / sqrt(m_i) * dens_e%y / temp_i%y ** 1.5d0 &
