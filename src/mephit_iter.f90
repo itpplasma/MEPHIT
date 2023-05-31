@@ -277,7 +277,7 @@ contains
     use mephit_util, only: arnoldi_break
     use mephit_mesh, only: mesh, cache
     use mephit_pert, only: L1_write, &
-         RT0_init, RT0_deinit, RT0_write, RT0_compute_tor_comp, RT0_L2int, &
+         RT0_init, RT0_deinit, RT0_write, RT0_tor_comp_from_zero_div, RT0_L2int, &
          vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, &
          polmodes_t, polmodes_init, polmodes_deinit, polmodes_write, &
          L1_poloidal_modes, RT0_poloidal_modes, vac
@@ -333,7 +333,7 @@ contains
           do i = 1, min(nritz, conf%max_eig_out)
              write (postfix, postfix_fmt) i
              Bn%DOF(:) = eigvecs(:, i)
-             call RT0_compute_tor_comp(Bn)
+             call RT0_tor_comp_from_zero_div(Bn)
              call RT0_write(Bn, datafile, 'iter/eigvec' // postfix, &
                   'iteration eigenvector', 'G', 1)
           end do
@@ -384,7 +384,7 @@ contains
     if (preconditioned) then
        Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
             matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF)))
-       call RT0_compute_tor_comp(Bn)
+       call RT0_tor_comp_from_zero_div(Bn)
     end if
     niter = maxiter
     do kiter = 0, maxiter
@@ -417,7 +417,7 @@ contains
           Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
                matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF - Bn_prev%DOF)))
        end if
-       call RT0_compute_tor_comp(Bn)
+       call RT0_tor_comp_from_zero_div(Bn)
        Bn_diff%DOF(:) = Bn%DOF - Bn_prev%DOF
        Bn_diff%comp_phi(:) = Bn%comp_phi - Bn_prev%comp_phi
        L2int_Bn_diff(kiter) = RT0_L2int(Bn_diff)
@@ -517,7 +517,7 @@ contains
       complex(dp), intent(out) :: new_val(:)
       logical, save :: first = .true.
       Bn%DOF(:) = old_val + vac%Bn%DOF
-      call RT0_compute_tor_comp(Bn)
+      call RT0_tor_comp_from_zero_div(Bn)
       if (first) then
          call polmodes_init(pmn, m_max, mesh%nflux)
          call MFEM_test
@@ -548,10 +548,10 @@ contains
   !> This subroutine calls a C function that pipes the data to/from FreeFem.
   subroutine compute_Bn
     use mephit_mesh, only: mesh
-    use mephit_pert, only: RT0_compute_tor_comp
+    use mephit_pert, only: RT0_tor_comp_from_zero_div
 
     call FEM_compute_Bn(mesh%nedge, mesh%npoint, jn%DOF, Bn%DOF, AnR%DOF, AnZ%DOF)
-    call RT0_compute_tor_comp(Bn)
+    call RT0_tor_comp_from_zero_div(Bn)
   end subroutine compute_Bn
 
   subroutine unit_B0(R, Z, vector) bind(C, name = 'unit_B0')
@@ -797,13 +797,13 @@ contains
 
   subroutine compute_currn
     use mephit_mesh, only: mesh, cache, field_cache_t
-    use mephit_pert, only: L1_interp, RT0_interp
+    use mephit_pert, only: L1_interp, RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
     use mephit_util, only: pi, clight, zd_cross
     ! hack: first call in mephit_iter() is always without plasma response
     ! and without additional shielding currents
     logical, save :: first_call = .true.
-    integer :: kf, kp, ktri, kedge, k
-    real(dp), dimension(3) :: n_f, grad_j0B0, B0_grad_B0
+    integer :: kf, kp, ktri, kedge
+    real(dp), dimension(3) :: grad_j0B0, B0_grad_B0
     complex(dp) :: zdum, B0_jnpar
     complex(dp), dimension(3) :: grad_pn, B_n, dBn_dR, dBn_dZ, dBn_dphi, grad_BnB0
     complex(dp), dimension(mesh%npoint) :: inhom
@@ -830,42 +830,15 @@ contains
     end do
     call solve_MDE(inhom, jnpar_B0%DOF)
     if (first_call) then
-       do kedge = 1, mesh%nedge
-          do k = 1, mesh%GL_order
-             ktri = mesh%edge_tri(1, kedge)
-             n_f = [mesh%edge_Z(kedge), 0d0, -mesh%edge_R(kedge)]
-             call project_combined(jn%DOF(kedge), ktri, cache%edge_fields(k, kedge), &
-                  mesh%GL_weights(k) * mesh%GL_R(k, kedge), mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), n_f)
-          end do
-       end do
-       n_f = [0d0, 1d0, 0d0]
-       do ktri = 1, mesh%ntri
-          do k = 1, mesh%GL2_order
-             call project_combined(jn%comp_phi(ktri), ktri, cache%area_fields(k, ktri), &
-                  mesh%GL2_weights(k), mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), n_f)
-          end do
-       end do
+       call RT0_project_pol_comp(jn, project_combined)
+       call RT0_project_tor_comp(jn, project_combined)
        call debug_MDE("debug_MDE_initial", pn, Bn, jn, jnpar_B0)
        jn%DOF(:) = (0d0, 0d0)
        jn%comp_phi(:) = (0d0, 0d0)
     end if
     call add_shielding_current
-    do kedge = 1, mesh%nedge
-       do k = 1, mesh%GL_order
-          ktri = mesh%edge_tri(1, kedge)
-          n_f = [mesh%edge_Z(kedge), 0d0, -mesh%edge_R(kedge)]
-          call project_combined(jn%DOF(kedge), ktri, cache%edge_fields(k, kedge), &
-               mesh%GL_weights(k) * mesh%GL_R(k, kedge), mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), n_f)
-       end do
-    end do
-    n_f = [0d0, 1d0, 0d0]
-    do ktri = 1, mesh%ntri
-       do k = 1, mesh%GL2_order
-          call project_combined(jn%comp_phi(ktri), ktri, cache%area_fields(k, ktri), &
-               mesh%GL2_weights(k), mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), n_f)
-       end do
-    end do
-
+    call RT0_project_pol_comp(jn, project_combined)
+    call RT0_project_tor_comp(jn, project_combined)
     if (first_call) then
        first_call = .false.
     else
@@ -874,20 +847,20 @@ contains
     end if
 
   contains
-    subroutine project_combined(comp, ktri, f, weight, R, Z, n_f)
-      complex(dp), intent(inout) :: comp
+    function project_combined(ktri, weight, R, Z, n_f, f)
+      complex(dp) :: project_combined
       integer, intent(in) :: ktri
+      real(dp), intent(in) :: weight, R, Z, n_f(:)
       type(field_cache_t), intent(in) :: f
-      real(dp), intent(in) :: weight, R, Z, n_f(3)
 
       call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
       call RT0_interp(Bn, ktri, R, Z, B_n)
       call L1_interp(jnpar_B0, ktri, R, Z, B0_jnpar)
       B0_jnpar = B0_jnpar * f%Bmod ** 2
-      comp = comp + weight * &
+      project_combined = weight * &
            (B0_jnpar * sum(f%B0 * n_f) - clight * sum(zd_cross(grad_pn, f%B0) * n_f) + &
            sum(f%j0 * f%B0) * sum(B_n * n_f) - sum(B_n * f%B0) * sum(f%j0 * n_f)) / f%Bmod ** 2
-    end subroutine project_combined
+    end function project_combined
   end subroutine compute_currn
 
   subroutine add_shielding_current
