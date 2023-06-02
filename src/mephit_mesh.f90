@@ -10,7 +10,7 @@ module mephit_mesh
   ! types and associated procedures
   public :: flux_func_cache, flux_func_cache_init, flux_func_cache_deinit
   public :: mesh_t, mesh_write, mesh_read, mesh_deinit, &
-       generate_mesh, write_cache, read_cache, point_location
+       generate_mesh, write_cache, read_cache, point_location, mesh_interp_theta_flux
   public :: coord_cache_t, field_cache_t, shielding_t, cache_t, &
        cache_write, cache_read, cache_init, cache_deinit
 
@@ -177,6 +177,7 @@ module mephit_mesh
 
      integer, allocatable :: tri_node(:, :)
      integer, allocatable :: tri_node_F(:)
+     logical, allocatable :: tri_theta2pi(:)
      real(dp), allocatable :: tri_theta_extent(:, :)
      real(dp), allocatable :: tri_RZ_extent(:, :, :)
 
@@ -1515,9 +1516,11 @@ inner: do
     use mephit_util, only: pi, gauss_legendre_unit_interval
     integer :: kf, kp, kp_lo, kp_hi, kt, ktri, ktri_adj, kedge, nodes(4), k
     real(dp) :: mat(3, 3), points(mesh%GL_order), points2(3, mesh%GL2_order)
+    logical :: theta2pi
 
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
+    allocate(mesh%tri_theta2pi(mesh%ntri))
     allocate(mesh%tri_theta_extent(2, mesh%ntri))
     allocate(mesh%orient(mesh%ntri))
     allocate(mesh%edge_node(2, mesh%nedge))
@@ -1525,6 +1528,7 @@ inner: do
     allocate(mesh%tri_edge(3, mesh%ntri))
     mesh%tri_node = 0
     mesh%tri_node_F = 0
+    mesh%tri_theta2pi = .false.
     mesh%tri_theta_extent = 0d0
     mesh%edge_node = 0
     mesh%edge_tri = 0
@@ -1556,10 +1560,12 @@ inner: do
        mesh%tri_edge(2, ktri) = kedge
        mesh%tri_edge(3, ktri_adj) = kedge
     end do
+    mesh%tri_theta2pi(mesh%kt_low(1) + mesh%kp_max(1)) = .true.
     ! define triangles on outer flux surfaces
     do kf = 2, mesh%nflux
        kp_lo = 1
        kp_hi = 1
+       theta2pi = .false.
        do kt = 1, mesh%kt_max(kf)
           ktri = mesh%kt_low(kf) + kt
           ! edge i is fixed by nodes(1) and nodes(2)
@@ -1599,6 +1605,7 @@ inner: do
              mesh%edge_tri(1, kedge) = ktri
              mesh%tri_edge(1, ktri) = kedge
              kp_hi = mod(kp_hi, mesh%kp_max(kf)) + 1
+             theta2pi = theta2pi .or. kp_hi == 1
           else
              ! node indices for triangle with poloidal edge on inner flux surface
              mesh%tri_node(:, ktri) = nodes([2, 4, 1])
@@ -1608,7 +1615,9 @@ inner: do
              mesh%edge_tri(2, kedge) = ktri
              mesh%tri_edge(1, ktri) = kedge
              kp_lo = mod(kp_lo, mesh%kp_max(kf - 1)) + 1
+             theta2pi = theta2pi .or. kp_lo == 1
           end if
+          mesh%tri_theta2pi(ktri) = theta2pi
           ! triangle indices for radial edge
           ktri_adj = mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf)) + 1
           kedge = mesh%npoint + mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf))
@@ -1616,12 +1625,12 @@ inner: do
           mesh%tri_edge(2, ktri) = kedge
           mesh%tri_edge(3, ktri_adj) = kedge
           ! cache poloidal extent of triangles for point_location_check
-          if (all(mesh%node_theta_geom(mesh%tri_node(:, ktri)) > epsilon(1d0)) .or. kt < (mesh%kt_max(kf) - kt)) then
-             mesh%tri_theta_extent(1, ktri) = minval(mesh%node_theta_geom(mesh%tri_node(:, ktri)))
-             mesh%tri_theta_extent(2, ktri) = maxval(mesh%node_theta_geom(mesh%tri_node(:, ktri)))
-          else
+          if (theta2pi) then
              mesh%tri_theta_extent(1, ktri) = minval(upper_branch(mesh%node_theta_geom(mesh%tri_node(:, ktri))))
              mesh%tri_theta_extent(2, ktri) = maxval(upper_branch(mesh%node_theta_geom(mesh%tri_node(:, ktri))))
+          else
+             mesh%tri_theta_extent(1, ktri) = minval(mesh%node_theta_geom(mesh%tri_node(:, ktri)))
+             mesh%tri_theta_extent(2, ktri) = maxval(mesh%node_theta_geom(mesh%tri_node(:, ktri)))
           end if
        end do
     end do
@@ -2249,18 +2258,53 @@ inner: do
     probably = any(dist_2 < thickness ** 2)
   end function point_in_triangle
 
+  function mesh_interp_theta_flux(R, Z) result(theta)
+    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+    use mephit_util, only: pi
+    real(dp), intent(in) :: R, Z
+    real(dp) :: theta
+    integer :: ktri, nodes(3)
+    real(dp) :: DOF(3), Delta_R(3), Delta_Z(3)
+
+    ktri = point_location(R, Z)
+    if (ktri <= 0 .or. ktri > mesh%ntri) then
+       theta = ieee_value(1d0, ieee_quiet_nan)
+       return
+    end if
+    nodes = mesh%tri_node(:, ktri)
+    DOF = mesh%node_theta_flux(nodes)
+    if (mesh%tri_theta2pi(ktri)) then
+       where (abs(DOF) <= 0d0)  ! suppress compiler warning about exact comparison
+          DOF = 2d0 * pi
+       end where
+    end if
+    if (nodes(3) == mesh%kp_low(1)) then
+       ! avoid singular point at axis
+       DOF(3) = 0.5d0 * (DOF(1) + DOF(2))
+    end if
+    Delta_R = R - mesh%node_R(nodes)
+    Delta_Z = Z - mesh%node_Z(nodes)
+    theta = sum(DOF * (Delta_R([2, 3, 1]) * Delta_Z([3, 1, 2]) - &
+         Delta_R([3, 1, 2]) * Delta_Z([2, 3, 1]))) * 0.5d0 / mesh%area(ktri)
+  end function mesh_interp_theta_flux
+
   subroutine mesh_write(mesh, file, dataset)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(mesh_t), intent(in) :: mesh
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
     integer(HID_T) :: h5id_root
-    integer :: orient(mesh%ntri)
+    integer :: orient(mesh%ntri), tri_theta2pi(mesh%ntri)
 
     where (mesh%orient)
        orient = 1
     elsewhere
        orient = 0
+    end where
+    where (mesh%tri_theta2pi)
+       tri_theta2pi = 1
+    elsewhere
+       tri_theta2pi = 0
     end where
     call h5_open_rw(file, h5id_root)
     call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
@@ -2342,6 +2386,9 @@ inner: do
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/tri_node_F', mesh%tri_node_F, &
          lbound(mesh%tri_node_F), ubound(mesh%tri_node_F), &
          comment = 'local node index of node F')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/tri_theta2pi', tri_theta2pi, &
+         lbound(tri_theta2pi), ubound(tri_theta2pi), &
+         comment = 'true (1) if theta = 2 pi instead of theta = 0')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/tri_theta_extent', mesh%tri_theta_extent, &
          lbound(mesh%tri_theta_extent), ubound(mesh%tri_theta_extent), &
          comment = 'range of geometrical poloidal angle covered by triangle')
@@ -2503,7 +2550,7 @@ inner: do
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
     integer(HID_T) :: h5id_root
-    integer, allocatable :: orient(:)
+    integer, allocatable :: orient(:), tri_theta2pi(:)
 
     call mesh_deinit(mesh)
     call h5_open(file, h5id_root)
@@ -2545,6 +2592,7 @@ inner: do
     allocate(mesh%node_theta_geom(mesh%npoint))
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
+    allocate(mesh%tri_theta2pi(mesh%ntri))
     allocate(mesh%tri_theta_extent(2, mesh%ntri))
     allocate(mesh%tri_RZ_extent(2, 2, mesh%ntri))
     allocate(mesh%orient(mesh%ntri))
@@ -2583,6 +2631,7 @@ inner: do
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/node_theta_geom', mesh%node_theta_geom)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_node', mesh%tri_node)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_node_F', mesh%tri_node_F)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_theta2pi', tri_theta2pi)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_theta_extent', mesh%tri_theta_extent)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/tri_RZ_extent', mesh%tri_RZ_extent)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/orient', orient)
@@ -2611,6 +2660,12 @@ inner: do
        mesh%orient = .false.
     end where
     deallocate(orient)
+    where (tri_theta2pi == 1)
+       mesh%tri_theta2pi = .true.
+    elsewhere
+       mesh%tri_theta2pi = .false.
+    end where
+    deallocate(tri_theta2pi)
     call rtree_init(mesh%ntri, mesh%tri_RZ_extent)
   end subroutine mesh_read
 
@@ -2633,6 +2688,7 @@ inner: do
     if (allocated(this%node_theta_geom)) deallocate(this%node_theta_geom)
     if (allocated(this%tri_node)) deallocate(this%tri_node)
     if (allocated(this%tri_node_F)) deallocate(this%tri_node_F)
+    if (allocated(this%tri_theta2pi)) deallocate(this%tri_theta2pi)
     if (allocated(this%tri_theta_extent)) deallocate(this%tri_theta_extent)
     if (allocated(this%tri_RZ_extent)) deallocate(this%tri_RZ_extent)
     if (allocated(this%orient)) deallocate(this%orient)
