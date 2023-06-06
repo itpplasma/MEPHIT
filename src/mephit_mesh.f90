@@ -1045,7 +1045,7 @@ contains
     end if
     psi_min = minval(psi_sample)
     psi_max = maxval(psi_sample)
-    mesh%m_res_min = max(ceiling(minval(abs(q_sample)) * dble(mesh%n)), conf%n + 1)
+    mesh%m_res_min = max(ceiling(minval(abs(q_sample)) * dble(mesh%n)), 1)
     mesh%m_res_max = floor(maxval(abs(q_sample)) * dble(mesh%n))
     if (allocated(mesh%res_modes)) deallocate(mesh%res_modes)
     if (conf%kilca_scale_factor /= 0 .and. conf%kilca_pol_mode /= 0) then

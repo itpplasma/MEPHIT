@@ -888,10 +888,11 @@ contains
             fs%psi, Bmnpsi_over_B0phi%Re, 3)
        call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Im / fs_half%q, &
             fs%psi, Bmnpsi_over_B0phi%Im, 3)
-       call response_current(1, m_res, mesh%n, mesh%nflux, m_i, Z_i, &
-            mesh%R_O, fs%psi, fs%q, fs%F, Phi0%y, mesh%avg_R2gradpsi2, &
+       ! negate m_res and q because theta is assumed clockwise in this interface
+       call response_current(1, -m_res, mesh%n, mesh%nflux, m_i, Z_i, &
+            mesh%R_O, fs%psi, -fs%q, fs%F, Phi0%y, mesh%avg_R2gradpsi2, &
             dens_e%y, temp_e%y * ev2erg, temp_i%y * ev2erg, nu_e%y, nu_i%y, &
-            Bmnpsi_over_B0phi, jmnpar_over_Bmod, Phi_mn(:, m_res))
+            Bmnpsi_over_B0phi, jmnpar_over_Bmod, Phi_mn(:, m))
        Phi_aligned_mn(:, m) = imun * Bmnpsi_over_B0phi * fs%q * dPhi0_dpsi%y / (m_res + mesh%n * fs%q)
        do kf = 1, mesh%nflux
           kpoi_min = mesh%kp_low(kf) + 1
