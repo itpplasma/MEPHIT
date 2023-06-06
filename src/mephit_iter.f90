@@ -218,7 +218,6 @@ contains
     use mephit_conf, only: conf, currn_model_kilca
     use mephit_mesh, only: mesh
     use mephit_pert, only: RT0_init, L1_init, vec_polmodes_init
-    integer, parameter :: m_max = 24
 
     call L1_init(pn, mesh%npoint)
     call RT0_init(Bn, mesh%nedge, mesh%ntri)
@@ -227,7 +226,7 @@ contains
     call L1_init(jnpar_B0, mesh%npoint)
     call L1_init(AnR, mesh%npoint)
     call L1_init(AnZ, mesh%npoint)
-    call vec_polmodes_init(Bmn, m_max, mesh%nflux)
+    call vec_polmodes_init(Bmn, conf%m_max, mesh%nflux)
     if (conf%currn_model == currn_model_kilca) then
        allocate(Phi_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max))
        allocate(Phi_aligned_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max))
@@ -292,7 +291,6 @@ contains
     integer, allocatable :: ipiv(:)
     character(len = 4) :: postfix
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
-    integer, parameter :: m_max = 24
     type(polmodes_t) :: pmn, jmnpar_Bmod
     type(vec_polmodes_t) :: jmn
     complex(dp) :: Ires(mesh%m_res_min:mesh%m_res_max)
@@ -374,9 +372,9 @@ contains
     call h5_close(h5id_root)
     allocate(L2int_Bn_diff(0:maxiter))
     L2int_Bn_diff = ieee_value(0d0, ieee_quiet_nan)
-    call polmodes_init(pmn, m_max, mesh%nflux)
-    call polmodes_init(jmnpar_Bmod, m_max, mesh%nflux)
-    call vec_polmodes_init(jmn, m_max, mesh%nflux)
+    call polmodes_init(pmn, conf%m_max, mesh%nflux)
+    call polmodes_init(jmnpar_Bmod, conf%m_max, mesh%nflux)
+    call vec_polmodes_init(jmn, conf%m_max, mesh%nflux)
     call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
     call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
     Bn%DOF(:) = vac%Bn%DOF
@@ -519,7 +517,7 @@ contains
       Bn%DOF(:) = old_val + vac%Bn%DOF
       call RT0_tor_comp_from_zero_div(Bn)
       if (first) then
-         call polmodes_init(pmn, m_max, mesh%nflux)
+         call polmodes_init(pmn, conf%m_max, mesh%nflux)
          call MFEM_test
          call L1_poloidal_modes(pn, pmn)
          call L1_write(pn, datafile, 'debug_MDE_initial/MFEM_pn', &
@@ -796,7 +794,7 @@ contains
   end subroutine debug_MDE
 
   subroutine compute_currn
-    use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger
+    use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger, datafile
     use mephit_mesh, only: mesh, cache, field_cache_t
     use mephit_pert, only: L1_interp, RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
     use mephit_util, only: pi, clight, zd_cross
@@ -987,7 +985,6 @@ contains
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, &
          polmodes_t, polmodes_init, polmodes_deinit, polmodes_write, &
          L1_poloidal_modes, RT0_poloidal_modes, vac
-    integer, parameter :: m_max = 24
     integer(HID_T) :: h5id_root
     type(polmodes_t) :: polmodes
     type(vec_polmodes_t) :: vec_polmodes
@@ -995,7 +992,7 @@ contains
     complex(dp), allocatable :: Ires(:)
 
     ! poloidal modes
-    call polmodes_init(polmodes, m_max, mesh%nflux)
+    call polmodes_init(polmodes, conf%m_max, mesh%nflux)
     call L1_poloidal_modes(pn, polmodes)
     call polmodes_write(polmodes, datafile, 'postprocess/pmn', &
          'poloidal modes of pressure perturbation', 'dyn cm^-2')
@@ -1003,7 +1000,7 @@ contains
     call polmodes_write(polmodes, datafile, 'iter/jmnpar_Bmod', &
          'parallel current density', 's^-1')  ! SI: H^-1
     call polmodes_deinit(polmodes)
-    call vec_polmodes_init(vec_polmodes, m_max, mesh%nflux)
+    call vec_polmodes_init(vec_polmodes, conf%m_max, mesh%nflux)
     call RT0_poloidal_modes(Bn, vec_polmodes)
     call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn', &
          'poloidal modes of magnetic field (full perturbation)', 'G')

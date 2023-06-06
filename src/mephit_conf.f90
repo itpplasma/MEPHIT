@@ -120,6 +120,9 @@ module mephit_conf
      !> Index of toroidal harmonics of perturbation. Defaults to 2.
      integer :: n = 2
 
+     !> Maximum poloidal mode number for Fourier transform of results. Defaults to 24.
+     integer :: m_max = 24
+
      !> Maximum distance between flux surfaces along \f$ \theta = 0 \f$. Defaults
      !> to 0.45 cm.
      real(dp) :: max_Delta_rad = 0.2d0
