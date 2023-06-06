@@ -2258,15 +2258,20 @@ inner: do
     probably = any(dist_2 < thickness ** 2)
   end function point_in_triangle
 
-  function mesh_interp_theta_flux(R, Z) result(theta)
+  function mesh_interp_theta_flux(R, Z, hint_ktri) result(theta)
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use mephit_util, only: pi
     real(dp), intent(in) :: R, Z
+    integer, intent(in), optional :: hint_ktri
     real(dp) :: theta
     integer :: ktri, nodes(3)
     real(dp) :: DOF(3), Delta_R(3), Delta_Z(3)
 
-    ktri = point_location(R, Z)
+    if (present(hint_ktri)) then
+       ktri = hint_ktri
+    else
+       ktri = point_location(R, Z)
+    end if
     if (ktri <= 0 .or. ktri > mesh%ntri) then
        theta = ieee_value(1d0, ieee_quiet_nan)
        return
@@ -2592,6 +2597,7 @@ inner: do
     allocate(mesh%node_theta_geom(mesh%npoint))
     allocate(mesh%tri_node(3, mesh%ntri))
     allocate(mesh%tri_node_F(mesh%ntri))
+    allocate(tri_theta2pi(mesh%ntri))
     allocate(mesh%tri_theta2pi(mesh%ntri))
     allocate(mesh%tri_theta_extent(2, mesh%ntri))
     allocate(mesh%tri_RZ_extent(2, 2, mesh%ntri))

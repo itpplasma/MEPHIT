@@ -796,6 +796,7 @@ contains
   end subroutine debug_MDE
 
   subroutine compute_currn
+    use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger
     use mephit_mesh, only: mesh, cache, field_cache_t
     use mephit_pert, only: L1_interp, RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
     use mephit_util, only: pi, clight, zd_cross
@@ -836,15 +837,23 @@ contains
        jn%DOF(:) = (0d0, 0d0)
        jn%comp_phi(:) = (0d0, 0d0)
     end if
-    call add_shielding_current
-    call RT0_project_pol_comp(jn, project_combined)
-    call RT0_project_tor_comp(jn, project_combined)
-    if (first_call) then
-       first_call = .false.
-    else
-       ! hack: overwrite to save only last iteration step
-       call debug_MDE("debug_MDE_final", pn, Bn, jn, jnpar_B0)
-    end if
+    select case (conf%currn_model)
+    case (currn_model_mhd)
+       call add_shielding_current
+       call RT0_project_pol_comp(jn, project_combined)
+       call RT0_project_tor_comp(jn, project_combined)
+    case (currn_model_kilca)
+       call RT0_project_pol_comp(jn, project_combined)
+       call RT0_project_tor_comp(jn, project_combined)
+       call add_kilca_current
+    case default
+       write (logger%msg, '("unknown response current model selection", i0)') conf%currn_model
+       if (logger%err) call logger%write_msg
+       error stop
+    end select
+    if (first_call) first_call = .false.
+    ! hack: overwrite to save only last iteration step
+    call debug_MDE("debug_MDE_final", pn, Bn, jn, jnpar_B0)
 
   contains
     function project_combined(ktri, weight, R, Z, n_f, f)
@@ -863,38 +872,62 @@ contains
     end function project_combined
   end subroutine compute_currn
 
-  subroutine add_shielding_current
-    use mephit_conf, only: conf_arr, conf, currn_model_kilca
-    use mephit_util, only: imun, ev2erg, resample1d
-    use mephit_mesh, only: equil, mesh, cache, fs, fs_half
+  subroutine add_kilca_current
+    use mephit_util, only: imun, ev2erg, resample1d, interp1d
+    use mephit_mesh, only: equil, mesh, fs, fs_half, mesh_interp_theta_flux, field_cache_t
     use mephit_equil, only: m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
-         RT0_poloidal_modes
-    integer :: m, m_res, kf, kpoi_min, kpoi_max, kp, kpoi
-    complex(dp) :: pn_outer, pn_inner
+         RT0_poloidal_modes, RT0_project_pol_comp, RT0_project_tor_comp
+    integer :: m, m_res, kf, kpoi_min, kpoi_max
     complex(dp), dimension(0:mesh%nflux) :: Bmnpsi_over_B0phi, jmnpar_over_Bmod
 
-    if (conf%currn_model == currn_model_kilca) then
-       call RT0_poloidal_modes(Bn, Bmn)
-       do m = mesh%m_res_min, mesh%m_res_max
-          m_res = -equil%cocos%sgn_q * m
-          call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Re / fs_half%q, &
-               fs%psi, Bmnpsi_over_B0phi%Re, 3)
-          call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Im / fs_half%q, &
-               fs%psi, Bmnpsi_over_B0phi%Im, 3)
-          call response_current(1, m_res, mesh%n, mesh%nflux, m_i, Z_i, &
-               mesh%R_O, fs%psi, fs%q, fs%F, Phi0%y, mesh%avg_R2gradpsi2, &
-               dens_e%y, temp_e%y * ev2erg, temp_i%y * ev2erg, nu_e%y, nu_i%y, &
-               Bmnpsi_over_B0phi, jmnpar_over_Bmod, Phi_mn(:, m))
-          Phi_aligned_mn(:, m) = imun * Bmnpsi_over_B0phi * fs%q * dPhi0_dpsi%y / (m_res + mesh%n * fs%q)
-          do kf = 1, mesh%nflux
-             kpoi_min = mesh%kp_low(kf) + 1
-             kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
-             jnpar_B0%DOF(kpoi_min:kpoi_max) = jnpar_B0%DOF(kpoi_min:kpoi_max) + &
-                  jmnpar_over_Bmod(kf) * exp(imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max))
-          end do
+    call RT0_poloidal_modes(Bn, Bmn)
+    do m = mesh%m_res_min, mesh%m_res_max
+       m_res = -equil%cocos%sgn_q * m
+       call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Re / fs_half%q, &
+            fs%psi, Bmnpsi_over_B0phi%Re, 3)
+       call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Im / fs_half%q, &
+            fs%psi, Bmnpsi_over_B0phi%Im, 3)
+       call response_current(1, m_res, mesh%n, mesh%nflux, m_i, Z_i, &
+            mesh%R_O, fs%psi, fs%q, fs%F, Phi0%y, mesh%avg_R2gradpsi2, &
+            dens_e%y, temp_e%y * ev2erg, temp_i%y * ev2erg, nu_e%y, nu_i%y, &
+            Bmnpsi_over_B0phi, jmnpar_over_Bmod, Phi_mn(:, m_res))
+       Phi_aligned_mn(:, m) = imun * Bmnpsi_over_B0phi * fs%q * dPhi0_dpsi%y / (m_res + mesh%n * fs%q)
+       do kf = 1, mesh%nflux
+          kpoi_min = mesh%kp_low(kf) + 1
+          kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
+          jnpar_B0%DOF(kpoi_min:kpoi_max) = jnpar_B0%DOF(kpoi_min:kpoi_max) + &
+               jmnpar_over_Bmod(kf) * exp(imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max))
        end do
-    elseif (conf%shielding_fourier) then
+       call RT0_project_pol_comp(jn, project_kilca)
+       call RT0_project_tor_comp(jn, project_kilca)
+    end do
+
+  contains
+    function project_kilca(ktri, weight, R, Z, n_f, f)
+      complex(dp) :: project_kilca
+      integer, intent(in) :: ktri
+      real(dp), intent(in) :: weight, R, Z, n_f(:)
+      type(field_cache_t), intent(in) :: f
+      complex(dp) :: jmnpar_over_Bmod_interp
+
+      jmnpar_over_Bmod_interp%Re = interp1d(fs%psi, jmnpar_over_Bmod%Re, f%psi, 3)
+      jmnpar_over_Bmod_interp%Im = interp1d(fs%psi, jmnpar_over_Bmod%Im, f%psi, 3)
+      project_kilca = weight * jmnpar_over_Bmod_interp * &
+           ((m_res + mesh%n * interp1d(fs%psi, fs%q, f%psi, 3)) / m_res * &
+           (f%B0(1) ** 2 + f%B0(3) ** 2) / f%B0(2) * sum([0d0, 1d0, 0d0] * n_f) + &
+           sum(f%B0 * n_f)) * exp(imun * m_res * mesh_interp_theta_flux(R, Z, ktri))
+    end function project_kilca
+  end subroutine add_kilca_current
+
+  subroutine add_shielding_current
+    use mephit_conf, only: conf, conf_arr
+    use mephit_util, only: imun
+    use mephit_mesh, only: equil, mesh, cache
+    integer :: m, m_res, kf, kpoi_min, kpoi_max, kp, kpoi
+    complex(dp) :: pn_outer, pn_inner
+
+    if (conf%shielding_fourier) then
        do m = mesh%m_res_min, mesh%m_res_max
           m_res = -equil%cocos%sgn_q * m
           if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then
