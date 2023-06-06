@@ -892,9 +892,10 @@ contains
     use mephit_equil, only: m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
          RT0_poloidal_modes, RT0_project_pol_comp, RT0_project_tor_comp
-    integer :: m, m_res, kf, kpoi_min, kpoi_max
+    integer :: m, m_res, kf, kf_min, kpoi_min, kpoi_max
     complex(dp), dimension(0:mesh%nflux) :: Bmnpsi_over_B0phi, jmnpar_over_Bmod
 
+    kf_min = max(1, mesh%res_ind(mesh%m_res_min) / 4)
     call RT0_poloidal_modes(Bn, Bmn)
     do m = mesh%m_res_min, mesh%m_res_max
        m_res = -equil%cocos%sgn_q * m
@@ -908,6 +909,7 @@ contains
             dens_e%y, temp_e%y * ev2erg, temp_i%y * ev2erg, nu_e%y, nu_i%y, &
             Bmnpsi_over_B0phi, jmnpar_over_Bmod, Phi_mn(:, m))
        Phi_aligned_mn(:, m) = imun * Bmnpsi_over_B0phi * fs%q * dPhi0_dpsi%y / (m_res + mesh%n * fs%q)
+       jmnpar_over_Bmod(:kf_min) = (0d0, 0d0)  ! suppress spurious current near axis
        do kf = 1, mesh%nflux
           kpoi_min = mesh%kp_low(kf) + 1
           kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
