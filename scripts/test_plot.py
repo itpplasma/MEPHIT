@@ -13,7 +13,7 @@ if __name__ == "__main__":
     plotter = ParallelPlotter()
     plotter.start()
 
-    work_dir = run_dir + '/33353_2325'
+    work_dir = run_dir + '/33353_2900'
     testcase = Mephit(work_dir)
     testcase.open_datafile()
     testcase.postprocess()
@@ -183,6 +183,22 @@ if __name__ == "__main__":
                 config['plotdata'].append({'x': samples['theta'][k], 'y': samples['grad_pn'][it][k][k_comp, :],
                                            'label': f"pressure gradient, {comps[k_comp]}", 'args': {'lw': 0.5}})
             plotter.plot_objects.put(ComplexPlot(work_dir, f"plot_{it}_MHD_{samples['res'][k]}.pdf", config))
+    jmnpar_Bmod_excl = testcase.get_polmodes('excluding KiLCA current', '/debug_KiLCA/jmnpar_Bmod_excl/coeff', conversions['jnpar_Bmod'], L1=True)
+    jmnpar_Bmod_incl = testcase.get_polmodes('including KiLCA current', '/debug_KiLCA/jmnpar_Bmod_incl/coeff', conversions['jnpar_Bmod'], L1=True)
+    config = {
+        'xlabel': r'$\hat{\psi}$',
+        'ylabel': r'$\abs\, ' + labels['jnpar_Bmod'] + r'$ / \si{' + units['jnpar_Bmod'] + '}',
+        'rho': testcase.post['psi_norm'], 'q': testcase.data['/cache/fs/q'][()],
+        'resonances': testcase.post['psi_norm_res'], 'sgn_m_res': testcase.post['sgn_m_res'], 'omit_res': False,
+        'poldata': [jmnpar_Bmod_excl, jmnpar_Bmod_incl], 'comp': abs,
+        'res_neighbourhood': testcase.post['psi_norm_res_neighbourhood']
+    }
+    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_debug_polmodes_jnpar_Bmod_abs.pdf', config))
+    phase_ticks = YTicks(arange(-180, 180 + 1, 45))
+    config['postprocess'] = [phase_ticks]
+    config['comp'] = partial(angle, deg=True)
+    config['ylabel'] = r'$\arg\, ' + labels['jnpar_Bmod'] + r'$ / \si{\degree}'
+    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_debug_polmodes_jnpar_Bmod_arg.pdf', config))
 
     # GPEC comparison
     conversion = 1.0e-04 / testcase.data['/mesh/gpec_jacfac'][()]

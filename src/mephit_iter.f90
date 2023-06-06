@@ -796,7 +796,8 @@ contains
   subroutine compute_currn
     use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger, datafile
     use mephit_mesh, only: mesh, cache, field_cache_t
-    use mephit_pert, only: L1_interp, RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
+    use mephit_pert, only: L1_interp, RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp, &
+         polmodes_t, polmodes_init, polmodes_write, polmodes_deinit, L1_poloidal_modes
     use mephit_util, only: pi, clight, zd_cross
     ! hack: first call in mephit_iter() is always without plasma response
     ! and without additional shielding currents
@@ -806,6 +807,7 @@ contains
     complex(dp) :: zdum, B0_jnpar
     complex(dp), dimension(3) :: grad_pn, B_n, dBn_dR, dBn_dZ, dBn_dphi, grad_BnB0
     complex(dp), dimension(mesh%npoint) :: inhom
+    type(polmodes_t) :: polmodes
 
     jn%DOF(:) = (0d0, 0d0)
     jn%comp_phi(:) = (0d0, 0d0)
@@ -843,7 +845,21 @@ contains
     case (currn_model_kilca)
        call RT0_project_pol_comp(jn, project_combined)
        call RT0_project_tor_comp(jn, project_combined)
+       if (first_call) then
+          call polmodes_init(polmodes, conf%m_max, mesh%nflux)
+          call L1_poloidal_modes(jnpar_B0, polmodes)
+          call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_excl', &
+               'parallel current density excluding KiLCA current', 's^-1')  ! SI: H^-1
+          call polmodes_deinit(polmodes)
+       end if
        call add_kilca_current
+       if (first_call) then
+          call polmodes_init(polmodes, conf%m_max, mesh%nflux)
+          call L1_poloidal_modes(jnpar_B0, polmodes)
+          call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_incl', &
+               'parallel current density including KiLCA current', 's^-1')  ! SI: H^-1
+          call polmodes_deinit(polmodes)
+       end if
     case default
        write (logger%msg, '("unknown response current model selection", i0)') conf%currn_model
        if (logger%err) call logger%write_msg
