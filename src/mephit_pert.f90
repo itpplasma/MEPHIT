@@ -331,9 +331,9 @@ contains
     real(dp) :: n_f(3)
 
     do kedge = 1, mesh%nedge
+       ktri = mesh%edge_tri(1, kedge)
+       n_f = [mesh%edge_Z(kedge), 0d0, -mesh%edge_R(kedge)]
        do k = 1, mesh%GL_order
-          ktri = mesh%edge_tri(1, kedge)
-          n_f = [mesh%edge_Z(kedge), 0d0, -mesh%edge_R(kedge)]
           elem%DOF(kedge) = elem%DOF(kedge) + proj(ktri, mesh%GL_weights(k) * mesh%GL_R(k, kedge), &
                mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), n_f, cache%edge_fields(k, kedge))
        end do

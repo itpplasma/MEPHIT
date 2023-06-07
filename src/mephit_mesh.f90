@@ -253,7 +253,7 @@ module mephit_mesh
   end type coord_cache_t
 
   type :: field_cache_t
-     real(dp) :: psi, B0(3), j0(3), Bmod, dBmod_dR, dBmod_dZ, &
+     real(dp) :: psi, theta, B0(3), j0(3), Bmod, dBmod_dR, dBmod_dZ, &
           dB0_dR(3), dB0_dZ(3), dj0_dR(3), dj0_dZ(3)
   end type field_cache_t
 
@@ -552,6 +552,9 @@ contains
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:)%psi, &
             lbound(cache), ubound(cache), unit = 'Mx', &
             comment = 'poloidal flux at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:)%theta, &
+            lbound(cache), ubound(cache), unit = 'rad', &
+            comment = 'flux poloidal angle at ' // trim(adjustl(comment)))
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:)%B0(1), &
             lbound(cache), ubound(cache), unit = 'G', &
             comment = 'R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
@@ -619,6 +622,9 @@ contains
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:, :)%psi, &
             lbound(cache), ubound(cache), unit = 'Mx', &
             comment = 'poloidal flux at ' // trim(adjustl(comment)))
+       call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:, :)%theta, &
+            lbound(cache), ubound(cache), unit = 'rad', &
+            comment = 'flux poloidal angle at ' // trim(adjustl(comment)))
        call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:, :)%B0(1), &
             lbound(cache), ubound(cache), unit = 'G', &
             comment = 'R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
@@ -699,6 +705,7 @@ contains
     select rank (cache)
     rank (1)
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:)%psi)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:)%theta)
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:)%B0(1))
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:)%B0(3))
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:)%B0(2))
@@ -722,6 +729,7 @@ contains
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dZ', cache(:)%dj0_dZ(3))
     rank (2)
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:, :)%psi)
+       call h5_get(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:, :)%theta)
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:, :)%B0(1))
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:, :)%B0(3))
        call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:, :)%B0(2))
@@ -3249,12 +3257,14 @@ inner: do
     do kedge = 1, mesh%nedge
        associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge))
          call equilibrium_field(R, Z, f%B0, f%dB0_dR, f%dB0_dZ, f%psi, f%Bmod, f%dBmod_dR, f%dBmod_dZ)
+         f%theta = mesh_interp_theta_flux(R, Z, mesh%edge_tri(1, kedge))
        end associate
     end do
     ! weighted triangle centroids
     do ktri = 1, mesh%ntri
        associate (f => cache%cntr_fields(ktri), R => mesh%cntr_R(ktri), Z => mesh%cntr_Z(ktri))
          call equilibrium_field(R, Z, f%B0, f%dB0_dR, f%dB0_dZ, f%psi, f%Bmod, f%dBmod_dR, f%dBmod_dZ)
+         f%theta = mesh_interp_theta_flux(R, Z, ktri)
        end associate
     end do
     ! Gauss-Legendre evaluation points on triangle edges
@@ -3262,6 +3272,7 @@ inner: do
        do k = 1, mesh%GL_order
           associate (f => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge), Z => mesh%GL_Z(k, kedge))
             call equilibrium_field(R, Z, f%B0, f%dB0_dR, f%dB0_dZ, f%psi, f%Bmod, f%dBmod_dR, f%dBmod_dZ)
+            f%theta = mesh_interp_theta_flux(R, Z, mesh%edge_tri(1, kedge))
           end associate
        end do
     end do
@@ -3270,6 +3281,7 @@ inner: do
        do k = 1, mesh%GL2_order
           associate (f => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri), Z => mesh%GL2_Z(k, ktri))
             call equilibrium_field(R, Z, f%B0, f%dB0_dR, f%dB0_dZ, f%psi, f%Bmod, f%dBmod_dR, f%dBmod_dZ)
+            f%theta = mesh_interp_theta_flux(R, Z, ktri)
           end associate
        end do
     end do
