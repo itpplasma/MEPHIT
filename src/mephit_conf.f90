@@ -123,6 +123,9 @@ module mephit_conf
      !> Maximum poloidal mode number for Fourier transform of results. Defaults to 24.
      integer :: m_max = 24
 
+     !> Ignore resonance position where q = 1, which is usually spurious. Defaults to true.
+     logical :: ignore_q1_res = .true.
+
      !> Maximum distance between flux surfaces along \f$ \theta = 0 \f$. Defaults
      !> to 0.45 cm.
      real(dp) :: max_Delta_rad = 0.2d0

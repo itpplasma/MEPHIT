@@ -1720,12 +1720,11 @@ contains
     use mephit_conf, only: conf, datafile
     use mephit_mesh, only: equil, mesh, cache
     character(len = *), parameter :: dataset = 'vac/Bn'
-    integer, parameter :: m_max = 24
     integer :: npol, kf, log2, kpol, k
     integer(HID_T) :: h5id_root
     complex(dp) :: Bn_R, Bn_Z, Bn_phi
     complex(dp), dimension(:), allocatable :: Bn_contradenspsi, Bn_n
-    complex(dp), dimension(-m_max:m_max, mesh%nflux) :: Bmn_contradenspsi, Bmn_n
+    complex(dp), dimension(-conf%m_max:conf%m_max, mesh%nflux) :: Bmn_contradenspsi, Bmn_n
 
     npol = shiftl(1, cache%max_log2)
     allocate(Bn_contradenspsi(npol), Bn_n(npol))
@@ -1743,9 +1742,9 @@ contains
           end associate
        end do
        cache%fft(log2)%samples(:) = Bn_contradenspsi(:npol)
-       call cache%fft(log2)%apply(-m_max, m_max, Bmn_contradenspsi(:, kf))
+       call cache%fft(log2)%apply(-conf%m_max, conf%m_max, Bmn_contradenspsi(:, kf))
        cache%fft(log2)%samples(:) = Bn_n(:npol)
-       call cache%fft(log2)%apply(-m_max, m_max, Bmn_n(:, kf))
+       call cache%fft(log2)%apply(-conf%m_max, conf%m_max, Bmn_n(:, kf))
        Bmn_n(:, kf) = Bmn_n(:, kf) * equil%cocos%sgn_dpsi
     end do
     call h5_open_rw(datafile, h5id_root)
