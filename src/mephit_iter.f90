@@ -888,7 +888,7 @@ contains
 
   subroutine add_kilca_current
     use mephit_util, only: imun, ev2erg, resample1d, interp1d
-    use mephit_mesh, only: equil, mesh, fs, fs_half, mesh_interp_theta_flux, field_cache_t, cache
+    use mephit_mesh, only: equil, mesh, fs, fs_half, mesh_interp_theta_flux, field_cache_t
     use mephit_equil, only: m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
          RT0_poloidal_modes, RT0_project_pol_comp, RT0_project_tor_comp
@@ -932,7 +932,8 @@ contains
       jmnpar_over_Bmod_interp%Im = interp1d(fs%psi, jmnpar_over_Bmod%Im, f%psi, 3)
       project_kilca = weight * jmnpar_over_Bmod_interp * &
            ((m_res + mesh%n * interp1d(fs%psi, fs%q, f%psi, 3)) / m_res * &
-           (f%B0(1) ** 2 + f%B0(3) ** 2) / f%B0(2) * sum([0d0, 1d0, 0d0] * n_f) + &
+           (f%B0(1) ** 2 + f%B0(3) ** 2) / f%B0(2) * sum([0d0, 1d0, 0d0] * n_f) - &
+           R * f%B0(2) * sum([f%B0(1), 0d0, f%B0(3)] * n_f) + &
            sum(f%B0 * n_f)) * exp(imun * m_res * f%theta)
     end function project_kilca
   end subroutine add_kilca_current
