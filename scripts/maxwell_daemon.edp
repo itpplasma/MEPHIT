@@ -40,15 +40,13 @@ for (int k = 0; k < Th.nt; k++) {
     ntri++;
 }
 cout << "Number of triangles in internal region: " << ntri << endl;
-fespace Vh0(Th, P0);
 fespace Vh1(Th, P1);
-fespace Vh2(Th, P2);
 fespace Hrot(Th, RT0Ortho);
 fespace Hdiv(Th, RT0);
-Hrot <complex> [ax, ay], [wx, wy];
-Hdiv <complex> [Jr, Jz], [Br, Bz];
-Vh0 <complex> Bphi, Jphi;
-Vh1 <complex> P1AR, P1AZ;
+Hrot [ax, ay], [wx, wy], [qx, qy];
+// contravariant density components also include metric determinant R
+Hdiv [ReJR, ReJZ], [ImJR, ImJZ], [ReBR, ReBZ], [ImBR, ImBZ];
+Vh1 ReP1AR, ImP1AR, ReP1AZ, ImP1AZ;
 
 int[int] edgemap(nedge), signmap(nedge);
 {
@@ -64,30 +62,39 @@ int[int] edgemap(nedge), signmap(nedge);
 }
 real[int] edgedata(2 * nedge);    // (Re, Im) of RT0 DoFs
 real[int] pointdata(2 * npoint);  // (Re, Im) of P1 DoFs
-macro deserializeRT0(pol)
+macro deserializeRT0(polRe, polIm)
 for (int k = 0; k < nedge; k++) {
-  pol[][edgemap[k]] = signmap[k] * (edgedata[2 * k] + 1.0i * edgedata[2 * k + 1]);
+  polRe[][edgemap[k]] = signmap[k] * edgedata[2 * k];
+  polIm[][edgemap[k]] = signmap[k] * edgedata[2 * k + 1];
 }
 // end macro deserializeRT0
-macro serializeRT0(pol)
+macro serializeRT0(polRe, polIm)
 for (int k = 0; k < nedge; k++) {
-  edgedata[2 * k] = signmap[k] * real(pol[][edgemap[k]]);
-  edgedata[2 * k + 1] = signmap[k] * imag(pol[][edgemap[k]]);
+  edgedata[2 * k] = signmap[k] * polRe[][edgemap[k]];
+  edgedata[2 * k + 1] = signmap[k] * polIm[][edgemap[k]];
 }
 // end macro serializeRT0
-macro serializeP1(pol)
+macro serializeP1(polRe, polIm)
 for (int k = 0; k < npoint; k++) {
-  pointdata[2 * k] = real(pol[][k]);
-  pointdata[2 * k + 1] = imag(pol[][k]);
+  pointdata[2 * k] = polRe[][k];
+  pointdata[2 * k + 1] = polIm[][k];
 }
 // end macro serializeP1
 
 real[int] integral(1);  // for SaveVec
-problem Ampere([ax, ay], [wx, wy], solver = sparsesolver) = // defines the PDE
+// note that the metric determinant x = R is already contained in the input data
+// for J, but not in A
+varf Ampere([ax, ay], [wx, wy]) = // defines the PDE
   int2d(Th)(x * (dx(wy) - dy(wx)) * (dx(ay) - dy(ax)))
   + int2d(Th)(nmode^2 / x * (wx * ax + wy * ay))
-  - int2d(Th)(4.0 * pi / c * (wx * Jr + wy * Jz))
   + on(2, ax = 0, ay = 0);
+matrix L = Ampere(Hrot, Hrot, solver = sparsesolver);
+varf rhsRe([dumx, dumy], [wx, wy]) =
+  int2d(Th)(4.0 * pi / c * (wx * ReJR + wy * ReJZ))
+  + on(2, dumx = 0, dumy = 0);
+varf rhsIm([dumx, dumy], [wx, wy]) =
+  int2d(Th)(4.0 * pi / c * (wx * ImJR + wy * ImJZ))
+  + on(2, dumx = 0, dumy = 0);
 state = 0;
 while (state != -3) {
   LoadFlag(state, datapipe);
@@ -95,35 +102,47 @@ while (state != -3) {
   if (state == -1) {
     // Ampere solver
     LoadVec(edgedata, datapipe);
-    [Jr, Jz] = [0.0 + 0.0i, 0.0 + 0.0i];
-    deserializeRT0(Jr);
-    // note that the metric determinant x = R is already contained in the input data
-    // for J, but not in A
-    Ampere;
-    // contravariant density components include factor R
-    [Br, Bz] = [1.0i * nmode * ay, -1.0i * nmode * ax];
-    // contravariant density component identical to physical component
-    Bphi = -(dx(ay) - dy(ax));
-    serializeRT0(Br);
-    SaveVec(edgedata, datapipe);
-    P1AR = ax;
-    serializeP1(P1AR);
-    SaveVec(pointdata, datapipe);
-    P1AZ = ay;
-    serializeP1(P1AZ);
-    SaveVec(pointdata, datapipe);
+    [ReJR, ReJZ] = [0.0, 0.0];
+    [ImJR, ImJZ] = [0.0, 0.0];
+    deserializeRT0(ReJR, ImJR);
+    // real part
+    qx[] = rhsRe(0, Hrot);
+    ax[] = L^-1 * qx[];
+    [ImBR, ImBZ] = [nmode * ay, -nmode * ax];
+    ReP1AR = ax;
+    ReP1AZ = ay;
     if (doplot) {
       plot(ax, wait = true, value = true, fill = true);
-      plot(P1AR, wait = true, value = true, fill = true);
+      plot(ReP1AR, wait = true, value = true, fill = true);
       plot(ay, wait = true, value = true, fill = true);
-      plot(P1AZ, wait = true, value = true, fill = true);
+      plot(ReP1AZ, wait = true, value = true, fill = true);
     }
+    // imaginary part
+    qx[] = rhsIm(0, Hrot);
+    ax[] = L^-1 * qx[];
+    [ReBR, ReBZ] = [-nmode * ay, nmode * ax];
+    ImP1AR = ax;
+    ImP1AZ = ay;
+    if (doplot) {
+      plot(ax, wait = true, value = true, fill = true);
+      plot(ImP1AR, wait = true, value = true, fill = true);
+      plot(ay, wait = true, value = true, fill = true);
+      plot(ImP1AZ, wait = true, value = true, fill = true);
+    }
+    // output
+    serializeRT0(ReBR, ImBR);
+    SaveVec(edgedata, datapipe);
+    serializeP1(ReP1AR, ImP1AR);
+    SaveVec(pointdata, datapipe);
+    serializeP1(ReP1AZ, ImP1AZ);
+    SaveVec(pointdata, datapipe);
   } else if (state == -2) {
     // convergenve estimation
     LoadVec(edgedata, datapipe);
-    [Br, Bz] = [0.0 + 0.0i, 0.0 + 0.0i];
-    deserializeRT0(Br);
-    integral[0] = sqrt(int2d(Th, 0, qforder=4)(real(Br * conj(Br) + Bz * conj(Bz))));
+    [ReBR, ReBZ] = [0.0, 0.0];
+    [ImBR, ImBZ] = [0.0, 0.0];
+    deserializeRT0(ReBR, ImBR);
+    integral[0] = sqrt(int2d(Th, 0, qforder=4)(ReBR * ReBR + ImBR * ImBR + ReBZ * ReBZ + ImBZ * ImBZ));
     SaveVec(integral, datapipe);
   }
 }
