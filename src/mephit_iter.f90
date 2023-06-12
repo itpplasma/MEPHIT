@@ -308,7 +308,7 @@ contains
        ! calculate eigenvectors
        call arnoldi_break(ndim, conf%nkrylov, 3, conf%ritz_threshold, conf%ritz_rel_err, &
             next_iteration_arnoldi, info, nritz, eigvals, eigvecs)
-       if (info /= 0) then
+       if (info < 0) then
           write (logger%msg, '("Error ", i0, " in routine arnoldi_break")') info
           if (logger%err) call logger%write_msg
           error stop
@@ -326,6 +326,11 @@ contains
              write (logger%msg, '("lambda ", i0, ": ", ' // cmplx_fmt // ')') i, eigvals(i)
              call logger%write_msg
           end do
+       end if
+       if (info > 0) then
+          logger%msg = 'Warning: not all eigenvalues converged, consider changing ' // &
+               'your configuration (nkrylov, ritz_threshold, ritz_rel_err)'
+          if (logger%warn) call logger%write_msg
        end if
        if (nritz > 0) then
           do i = 1, min(nritz, conf%max_eig_out)
