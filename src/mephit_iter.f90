@@ -888,11 +888,13 @@ contains
 
   subroutine add_kilca_current
     use mephit_util, only: imun, ev2erg, resample1d, interp1d
-    use mephit_mesh, only: equil, mesh, fs, fs_half, mesh_interp_theta_flux, field_cache_t
+    use mephit_mesh, only: equil, mesh, fs, fs_half, mesh_interp_theta_flux, field_cache_t, cache
     use mephit_equil, only: m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
-         RT0_poloidal_modes, RT0_project_pol_comp, RT0_project_tor_comp
-    integer :: m, m_res, kf, kf_min, kpoi_min, kpoi_max
+         RT0_poloidal_modes
+    integer :: m, m_res, kf, kf_min, kpoi_min, kpoi_max, kedge, ktri, kt, kp, k
+    real(dp) :: edge_perp(2), lin_interp(2), q_interp
+    complex(dp) :: jmnpar_over_Bmod_interp
     complex(dp), dimension(0:mesh%nflux) :: Bmnpsi_over_B0phi, jmnpar_over_Bmod
 
     kf_min = max(1, mesh%res_ind(mesh%m_res_min) / 4)
@@ -916,26 +918,59 @@ contains
           jnpar_B0%DOF(kpoi_min:kpoi_max) = jnpar_B0%DOF(kpoi_min:kpoi_max) + &
                jmnpar_over_Bmod(kf) * exp(imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max))
        end do
-       call RT0_project_pol_comp(jn, project_kilca)
-       call RT0_project_tor_comp(jn, project_kilca)
+       ! project to poloidal edges
+       do kf = 1, mesh%nflux
+          do kp = 1, mesh%kp_max(kf)
+             kedge = mesh%kp_low(kf) + kp - 1
+             ktri = mesh%edge_tri(1, kedge)
+             edge_perp = [mesh%edge_Z(kedge), -mesh%edge_R(kedge)]
+             do k = 1, mesh%GL_order
+                associate (f => cache%edge_fields(k, kedge), weight => mesh%GL_weights(k) * mesh%GL_R(k, kedge))
+                  lin_interp = [fs%psi(kf) - f%psi, f%psi - fs%psi(kf - 1)] / (fs%psi(kf) - fs%psi(kf - 1))
+                  jmnpar_over_Bmod_interp = sum(jmnpar_over_Bmod(kf - 1:kf) * lin_interp)
+                  q_interp = sum(fs%q(kf - 1:kf) * lin_interp)
+                  jn%DOF(kedge) = jn%DOF(kedge) + weight * &
+                       jmnpar_over_Bmod_interp * exp(imun * m_res * f%theta) * &
+                       (-mesh%n * q_interp / m_res) * sum([f%B0(1), f%B0(3)] * edge_perp)
+                end associate
+             end do
+          end do
+       end do
+       ! project to radial edges
+       do kf = 1, mesh%nflux
+          do kt = 1, mesh%kt_max(kf)
+             kedge = mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf)) + 1
+             ktri = mesh%edge_tri(1, kedge)
+             edge_perp = [mesh%edge_Z(kedge), -mesh%edge_R(kedge)]
+             do k = 1, mesh%GL_order
+                associate (f => cache%edge_fields(k, kedge), weight => mesh%GL_weights(k) * mesh%GL_R(k, kedge))
+                  lin_interp = [fs%psi(kf) - f%psi, f%psi - fs%psi(kf - 1)] / (fs%psi(kf) - fs%psi(kf - 1))
+                  jmnpar_over_Bmod_interp = sum(jmnpar_over_Bmod(kf - 1:kf) * lin_interp)
+                  q_interp = sum(fs%q(kf - 1:kf) * lin_interp)
+                  jn%DOF(kedge) = jn%DOF(kedge) + weight * &
+                       jmnpar_over_Bmod_interp * exp(imun * m_res * f%theta) * &
+                       (-mesh%n * q_interp / m_res) * sum([f%B0(1), f%B0(3)] * edge_perp)
+                end associate
+             end do
+          end do
+       end do
+       ! project to toroidal component
+       do kf = 1, mesh%nflux
+          do kt = 1, mesh%kt_max(kf)
+             ktri = mesh%kt_low(kf) + kt
+             do k = 1, mesh%GL2_order
+                associate (f => cache%area_fields(k, ktri), weight => mesh%GL2_weights(k))
+                  lin_interp = [fs%psi(kf) - f%psi, f%psi - fs%psi(kf - 1)] / (fs%psi(kf) - fs%psi(kf - 1))
+                  jmnpar_over_Bmod_interp = sum(jmnpar_over_Bmod(kf - 1:kf) * lin_interp)
+                  q_interp = sum(fs%q(kf - 1:kf) * lin_interp)
+                  jn%comp_phi(ktri) = jn%comp_phi(ktri) + weight * &
+                       jmnpar_over_Bmod_interp * exp(imun * m_res * f%theta) * &
+                       (f%B0(2) + (1d0 + mesh%n * q_interp / m_res) * (f%B0(1) ** 2 + f%B0(3) ** 2) / f%B0(2))
+                end associate
+             end do
+          end do
+       end do
     end do
-
-  contains
-    function project_kilca(ktri, weight, R, Z, n_f, f)
-      complex(dp) :: project_kilca
-      integer, intent(in) :: ktri
-      real(dp), intent(in) :: weight, R, Z, n_f(:)
-      type(field_cache_t), intent(in) :: f
-      complex(dp) :: jmnpar_over_Bmod_interp
-
-      jmnpar_over_Bmod_interp%Re = interp1d(fs%psi, jmnpar_over_Bmod%Re, f%psi, 3)
-      jmnpar_over_Bmod_interp%Im = interp1d(fs%psi, jmnpar_over_Bmod%Im, f%psi, 3)
-      project_kilca = weight * jmnpar_over_Bmod_interp * &
-           ((m_res + mesh%n * interp1d(fs%psi, fs%q, f%psi, 3)) / m_res * &
-           (f%B0(1) ** 2 + f%B0(3) ** 2) / f%B0(2) * sum([0d0, 1d0, 0d0] * n_f) - &
-           R * f%B0(2) * sum([f%B0(1), 0d0, f%B0(3)] * n_f) + &
-           sum(f%B0 * n_f)) * exp(imun * m_res * f%theta)
-    end function project_kilca
   end subroutine add_kilca_current
 
   subroutine add_shielding_current
