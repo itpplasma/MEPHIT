@@ -14,6 +14,7 @@ include "getARGV.idp"
 string edgefile = "edgemap.dat";
 string datapipe = getARGV("-P", "maxwell.dat");
 bool doplot = false;
+int nRichardson = 3;  // number of Richardson iterations
 
 int runmode = 0, nmode = 2, nedge = 0, npoint = 0, state = 0;
 LoadFlag(nmode, datapipe);
@@ -43,7 +44,7 @@ cout << "Number of triangles in internal region: " << ntri << endl;
 fespace Vh1(Th, P1);
 fespace Hrot(Th, RT0Ortho);
 fespace Hdiv(Th, RT0);
-Hrot [ax, ay], [wx, wy], [qx, qy];
+Hrot [ax, ay], [wx, wy], [qx, qy], [resx, resy], [corrx, corry];
 // contravariant density components also include metric determinant R
 Hdiv [ReJR, ReJZ], [ImJR, ImJZ], [ReBR, ReBZ], [ImBR, ImBZ];
 Vh1 ReP1AR, ImP1AR, ReP1AZ, ImP1AZ;
@@ -96,10 +97,12 @@ varf rhsIm([dumx, dumy], [wx, wy]) =
   int2d(Th)(4.0 * pi / c * (wx * ImJR + wy * ImJZ))
   + on(2, dumx = 0, dumy = 0);
 state = 0;
+int loopcount = 0;
 while (state != -3) {
   LoadFlag(state, datapipe);
   flag(state, datapipe);
   if (state == -1) {
+    loopcount++;
     // Ampere solver
     LoadVec(edgedata, datapipe);
     [ReJR, ReJZ] = [0.0, 0.0];
@@ -108,6 +111,18 @@ while (state != -3) {
     // real part
     qx[] = rhsRe(0, Hrot);
     ax[] = L^-1 * qx[];
+    for (int k = 0; k < nRichardson; k++) {
+      resx[] = L * ax[];
+      resx[] -= qx[];
+      if (k + 1 == nRichardson && loopcount == 1) {
+        plot(qx, wait = true, value = true, fill = true);
+        plot(resx, wait = true, value = true, fill = true);
+        plot(qy, wait = true, value = true, fill = true);
+        plot(resy, wait = true, value = true, fill = true);
+      }
+      corrx[] = L^-1 * resx[];
+      ax[] -= corrx[];
+    }
     [ImBR, ImBZ] = [nmode * ay, -nmode * ax];
     ReP1AR = ax;
     ReP1AZ = ay;
@@ -120,6 +135,18 @@ while (state != -3) {
     // imaginary part
     qx[] = rhsIm(0, Hrot);
     ax[] = L^-1 * qx[];
+    for (int k = 0; k < nRichardson; k++) {
+      resx[] = L * ax[];
+      resx[] -= qx[];
+      if (k + 1 == nRichardson && loopcount == 1) {
+        plot(qx, wait = true, value = true, fill = true);
+        plot(resx, wait = true, value = true, fill = true);
+        plot(qy, wait = true, value = true, fill = true);
+        plot(resy, wait = true, value = true, fill = true);
+      }
+      corrx[] = L^-1 * resx[];
+      ax[] -= corrx[];
+    }
     [ReBR, ReBZ] = [-nmode * ay, nmode * ax];
     ImP1AR = ax;
     ImP1AZ = ay;
