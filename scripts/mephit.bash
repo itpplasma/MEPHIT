@@ -159,16 +159,18 @@ mephit_convert() {
 mephit_run() {
     config=mephit.in
     log=mephit.log
-    analysis=0
-    iterations=0
     meshing=0
-    TEMP=$(getopt -o 'aim' --long 'analysis,iterations,meshing' -n "$scriptname" -- "$@")
+    iterations=0
+    analysis=0
+    debug=0
+    memcheck=0
+    TEMP=$(getopt -o 'mia' --long 'meshing,analysis,iterations,debug,memcheck' -n "$scriptname" -- "$@")
     eval set -- "$TEMP"
     unset TEMP
     while true; do
         case "$1" in
-            '-a'|'--analysis')
-                analysis=1
+            '-m'|'--meshing')
+                meshing=1
                 shift
                 continue
                 ;;
@@ -177,8 +179,18 @@ mephit_run() {
                 shift
                 continue
                 ;;
-            '-m'|'--meshing')
-                meshing=1
+            '-a'|'--analysis')
+                analysis=1
+                shift
+                continue
+                ;;
+            '--debug')
+                debug=1
+                shift
+                continue
+                ;;
+            '--memcheck')
+                memcheck=1
                 shift
                 continue
                 ;;
@@ -219,15 +231,22 @@ mephit_run() {
             mv -b -f field_divB0_unprocessed.inp field_divB0.inp
         fi
         export GFORTRAN_ERROR_BACKTRACE=1
-        # uncomment to use memcheck
-        # valgrind -v --leak-check=full --show-leak-kinds=all --track-origins=yes \
-        "$bindir/mephit_run.x" \
-            $runmode \
-            "$config" \
-            "$tmpdir" \
-            "$scriptdir/ff-mephit.bash" \
-            2>&1 | tee -a "$log"
-        lasterr=$?
+        if [ $memcheck -eq 1 ]; then
+            valgrind -v \
+                --leak-check=full \
+                --show-leak-kinds=all \
+                --track-origins=yes \
+                --log-file="valgrind_%p_%n.log" \
+                "$bindir/mephit_run.x" $runmode "$config" "$tmpdir" "$scriptdir/ff-mephit.bash" 2>&1 | tee -a "$log"
+            lasterr=$?
+        elif [ $debug -eq 1 ]; then
+            gdb -x "$scriptdir/mephit.gdb" --args \
+                "$bindir/mephit_run.x" $runmode "$config" "$tmpdir" "$scriptdir/ff-mephit.bash"
+            lasterr=$?
+        else
+            "$bindir/mephit_run.x" $runmode "$config" "$tmpdir" "$scriptdir/ff-mephit.bash" 2>&1 | tee -a "$log"
+            lasterr=$?
+        fi
         if [ "$lasterr" -ne 0 ]; then
             echo "$scriptname: mephit_run.x exited with code $lasterr during run in $workdir" | tee -a "$log" >&2
             popd

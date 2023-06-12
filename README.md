@@ -75,10 +75,10 @@ Simulations consist of three phases:
 2. iterations
 3. analysis (poloidal modes, parallel currents)
 
-Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default. If no working directory is given, the current directory is used; non-existing directories are skipped.
+Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default. Use `--debug` to start a [GDB](https://www.gnu.org/software/gdb) session and `--memcheck` to run [Valgrind's Memcheck](https://valgrind.org/info/tools.html#memcheck). If no working directory is given, the current directory is used; non-existing directories are skipped.
 
 ```bash
-$MEPHIT_DIR/scripts/mephit.bash run [-m | --meshing] [-i | --iterations] [-a | --analysis] [<working_directory> ...]
+$MEPHIT_DIR/scripts/mephit.bash run [-m | --meshing] [-i | --iterations] [-a | --analysis] [--debug | --memcheck] [<working_directory> ...]
 ```
 
 ## Tests
