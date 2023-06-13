@@ -101,8 +101,7 @@ contains
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
     use mephit_util, only: C_F_string, init_field
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
-    use mephit_equil, only: process_profiles, write_profiles, read_profiles
-    use mephit_mesh, only: equil, mesh, &
+    use mephit_mesh, only: equil, mesh, process_profiles, write_profiles, read_profiles, &
          generate_mesh, mesh_write, mesh_read, write_cache, read_cache
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
     use hdf5_tools, only: h5_init, h5overwrite
@@ -195,9 +194,8 @@ contains
     use mephit_conf, only: conf_arr, logger
     use mephit_util, only: deinit_field
     use mephit_mesh, only: equil, fs, fs_half, psi_fine, &
-         mesh, cache, mesh_deinit, cache_deinit
+         mesh, cache, mesh_deinit, cache_deinit, deinit_profiles
     use mephit_pert, only: vac, vac_deinit
-    use mephit_equil, only: deinit_profiles
 
     if (allocated(psi_fine)) deallocate(psi_fine)  ! intermediate step, to be removed
     call cache_deinit(cache)
@@ -893,8 +891,8 @@ contains
 
   subroutine add_kilca_current
     use mephit_util, only: imun, ev2erg, resample1d, interp1d
-    use mephit_mesh, only: equil, mesh, fs, fs_half, mesh_interp_theta_flux, field_cache_t, cache
-    use mephit_equil, only: m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
+    use mephit_mesh, only: equil, mesh, cache, fs, fs_half, mesh_interp_theta_flux, field_cache_t, &
+         m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
          RT0_poloidal_modes
     integer :: m, m_res, kf, kf_min, kpoi_min, kpoi_max, kedge, ktri, kt, kp, k

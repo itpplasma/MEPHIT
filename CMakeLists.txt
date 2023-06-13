@@ -122,7 +122,6 @@ set(COMMON_FORTRAN_SRC_FILES
 set(MEPHIT_FORTRAN_SRC_FILES
   src/mephit_conf.f90
   src/mephit_util.f90
-  src/mephit_equil.f90
   src/mephit_mesh.f90
   src/mephit_pert.f90
   src/mephit_iter.f90
