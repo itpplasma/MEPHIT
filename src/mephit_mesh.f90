@@ -13,7 +13,8 @@ module mephit_mesh
        generate_mesh, write_cache, read_cache, point_location, mesh_interp_theta_flux
   public :: coord_cache_t, field_cache_t, shielding_t, cache_t, &
        cache_write, cache_read, cache_init, cache_deinit
-  public :: process_profiles, write_profiles, read_profiles, deinit_profiles
+  public :: read_profiles, compute_auxiliary_profiles, resample_profiles, &
+       write_profiles_hdf5, read_profiles_hdf5, deinit_profiles
 
   ! testing and debugging procedures
   public :: check_mesh, write_illustration_data, flux_func_cache_check, &
@@ -44,7 +45,7 @@ module mephit_mesh
   !> Electric potential profile \f$ \Phi_{0} \f$ in statV.
   type(func1d_t) :: Phi0
 
-  !> psi derivative of electric potential profile \f$ \Phi_{0} \f$ in statV.
+  !> psi derivative of electric potential profile \f$ \Phi_{0} \f$ in statV Mx^-1.
   type(func1d_t) :: dPhi0_dpsi
 
   !> Electron collision frequency profile \f$ \nu_{e} \f$ in s^-1.
@@ -1062,88 +1063,106 @@ contains
     call cache_read(cache, datafile, 'cache')
   end subroutine read_cache
 
-  subroutine process_profiles
-    use magdata_in_symfluxcoor_mod, only: psi_norm_fine => psisurf, rsmall_fine => rsmall
-    use mephit_util, only: pi, func1d_init, func1d_deinit, func1d_read_formatted, resample1d
-    type(func1d_t) :: raw, raw_int
-    real(dp), dimension(0:mesh%nflux) :: rsmall, rho_pol
-    integer :: krad
+  subroutine read_profiles
+    use mephit_util, only: func1d_read_formatted
 
-    rsmall = sqrt(fs%area / pi)
-    rho_pol = sqrt((fs%psi - fs%psi(0)) / (fs%psi(mesh%nflux) - fs%psi(0)))
-    ! read electron density profile
-    call func1d_init(dens_e, 0, mesh%nflux)
-    call func1d_read_formatted(raw, 'n.dat')
-    if (abs(raw%x(ubound(raw%x, 1)) - 1d0) <= 0.05d0) then
-       call resample1d(raw%x, raw%y * 1d-6, rho_pol, dens_e%y, 3)  ! SI units
-    else
-       call resample1d(raw%x, raw%y, rsmall, dens_e%y, 3)
+    call func1d_read_formatted(dens_e, 'n.dat')
+    if (abs(dens_e%x(ubound(dens_e%x, 1)) - 1d0) <= 0.05d0) then
+       dens_e%y(:) = dens_e%y * 1d-6  ! SI units
     end if
-    dens_e%x(:) = fs%psi
-    ! read electron temperature profile
-    call func1d_init(temp_e, 0, mesh%nflux)
-    call func1d_read_formatted(raw, 'Te.dat')
-    if (abs(raw%x(ubound(raw%x, 1)) - 1d0) <= 0.05d0) then
-       call resample1d(raw%x, raw%y, rho_pol, temp_e%y, 3)
-    else
-       call resample1d(raw%x, raw%y, rsmall, temp_e%y, 3)
+    call func1d_read_formatted(temp_e, 'Te.dat')
+    call func1d_read_formatted(temp_i, 'Ti.dat')
+    call func1d_read_formatted(E_r, 'Er.dat')
+  end subroutine read_profiles
+
+  subroutine compute_auxiliary_profiles
+    use magdata_in_symfluxcoor_mod, only: rsmall, psisurf, psipol_max
+    use mephit_conf, only: logger
+    use mephit_util, only: func1d_init, resample1d
+    integer :: nrad, krad
+    real(dp), allocatable :: rsmall_interp(:), psi_interp(:)
+
+    if (size(dens_e%x) /= size(temp_e%x)) then
+       call logger%msg_arg_size('calculate_auxiliary_profiles', &
+            'size(dens_e)', 'size(temp_e)', size(dens_e%x), size(temp_e%x))
+       if (logger%err) call logger%write_msg
+       error stop
     end if
-    temp_e%x(:) = fs%psi
-    ! read ion temperature profile
-    call func1d_init(temp_i, 0, mesh%nflux)
-    call func1d_read_formatted(raw, 'Ti.dat')
-    if (abs(raw%x(ubound(raw%x, 1)) - 1d0) <= 0.05d0) then
-       call resample1d(raw%x, raw%y, rho_pol, temp_i%y, 3)
-    else
-       call resample1d(raw%x, raw%y, rsmall, temp_i%y, 3)
+    if (size(dens_e%x) /= size(temp_i%x)) then
+       call logger%msg_arg_size('calculate_auxiliary_profiles', &
+            'size(dens_e)', 'size(temp_i)', size(dens_e%x), size(temp_i%x))
+       if (logger%err) call logger%write_msg
+       error stop
     end if
-    temp_i%x(:) = fs%psi
-    ! read radial electric field profile
-    call func1d_init(E_r, 0, mesh%nflux)
-    call func1d_read_formatted(raw, 'Er.dat')
-    if (abs(raw%x(ubound(raw%x, 1)) - 1d0) <= 0.05d0) then
-       call resample1d(raw%x, raw%y, rho_pol, E_r%y, 3)
-    else
-       call resample1d(raw%x, raw%y, rsmall, E_r%y, 3)
-    end if
-    E_r%x(:) = fs%psi
-    ! integrate electric field to yield the electric potential
-    call func1d_init(Phi0, 0, mesh%nflux)
-    call func1d_init(raw_int, lbound(raw%x, 1), ubound(raw%x, 1))
-    if (abs(raw%x(ubound(raw%x, 1)) - 1d0) <= 0.05d0) then
-       call resample1d(psi_norm_fine(1:), rsmall_fine, raw%x ** 2, raw_int%x, 3)
-       raw%x(:) = raw_int%x
-    else
-       raw_int%x(:) = raw%x
-    end if
-    raw_int%y(:) = 0d0
-    do krad = lbound(raw%x, 1) + 1, ubound(raw%x, 1)
-       raw_int%y(krad) = raw_int%y(krad - 1) + (raw%x(krad) - raw%x(krad - 1)) &
-            * 0.5d0 * (raw%y(krad) + raw%y(krad - 1))
-    end do
-    call resample1d(raw_int%x, raw_int%y, rsmall, Phi0%y, 3)
-    Phi0%x(:) = fs%psi
-    call func1d_deinit(raw_int)
-    call func1d_deinit(raw)
-    ! psi derivative of Phi0
-    call func1d_init(dPhi0_dpsi, 0, mesh%nflux)
-    dPhi0_dpsi%x(:) = fs%psi
-    call resample1d(Phi0%x, Phi0%y, dPhi0_dpsi%x, dPhi0_dpsi%y, 3, .true.)
+    nrad = size(dens_e%x)
     ! transverse diffusion rate of fast electrons in ion background
     ! (NRL Plasma Formulary 2016, p. 32)
-    call func1d_init(nu_e, 0, mesh%nflux)
-    nu_e%x(:) = fs%psi
+    call func1d_init(nu_e, 1, nrad)
+    nu_e%x(:) = dens_e%x
     nu_e%y(:) = 7.7d-6 * (1d0 + Z_i) * dens_e%y / temp_e%y ** 1.5d0 &
          * (24.d0 - log(sqrt(dens_e%y) / temp_e%y))
     ! transverse diffusion rate of fast ions in ion background
     ! (NRL Plasma Formulary 2016, p. 32)
-    call func1d_init(nu_i, 0, mesh%nflux)
-    nu_i%x(:) = fs%psi
+    call func1d_init(nu_i, 1, nrad)
+    nu_i%x(:) = dens_e%x
     nu_i%y(:) = 1.8d-7 * Z_i ** 3 / sqrt(m_i) * dens_e%y / temp_i%y ** 1.5d0 &
          * (23.d0 - log(Z_i ** 2.5d0 * sqrt(2.d0 * dens_e%y) / temp_i%y ** 1.5d0))
-  end subroutine process_profiles
+    ! integrate electric field over rsmall to yield the electric potential
+    nrad = size(E_r%x)
+    allocate(rsmall_interp(nrad), psi_interp(nrad))
+    if (abs(E_r%x(nrad) - 1d0) <= 0.05d0) then
+       psi_interp(:) = E_r%x ** 2
+       call resample1d(psisurf(1:), rsmall, psi_interp, rsmall_interp, 3)
+    else
+       rsmall_interp(:) = E_r%x
+       call resample1d(rsmall, psisurf(1:), rsmall_interp, psi_interp, 3)
+    end if
+    psi_interp(:) = psi_interp * psipol_max  ! for correct scaling of derivative
+    call func1d_init(Phi0, 1, nrad)
+    Phi0%y(:) = 0d0
+    do krad = 2, nrad
+       Phi0%y(krad) = Phi0%y(krad - 1) + (rsmall_interp(krad) - rsmall_interp(krad - 1)) &
+            * 0.5d0 * (E_r%y(krad) + E_r%y(krad - 1))
+    end do
+    Phi0%x(:) = E_r%x
+    ! psi derivative of Phi0
+    call func1d_init(dPhi0_dpsi, 1, nrad)
+    call resample1d(psi_interp, Phi0%y, psi_interp, dPhi0_dpsi%y, 3, .true.)
+    dPhi0_dpsi%x(:) = E_r%x
+    deallocate(rsmall_interp, psi_interp)
+  end subroutine compute_auxiliary_profiles
 
-  subroutine write_profiles(file, group)
+  subroutine resample_profiles
+    use mephit_util, only: pi, func1d_init, resample1d
+    real(dp), dimension(0:mesh%nflux) :: rsmall, rho_pol, resampled
+
+    rsmall = sqrt(fs%area / pi)
+    rho_pol = sqrt((fs%psi - fs%psi(0)) / (fs%psi(mesh%nflux) - fs%psi(0)))
+    call resample_profile(dens_e)
+    call resample_profile(temp_e)
+    call resample_profile(temp_i)
+    call resample_profile(E_r)
+    call resample_profile(Phi0)
+    call resample_profile(dPhi0_dpsi)
+    call resample_profile(nu_e)
+    call resample_profile(nu_i)
+
+  contains
+    subroutine resample_profile(profile)
+      type(func1d_t), intent(inout) :: profile
+
+      if (abs(profile%x(ubound(profile%x, 1)) - 1d0) <= 0.05d0) then
+         call resample1d(profile%x, profile%y, rho_pol, resampled, 3)
+      else
+         call resample1d(profile%x, profile%y, rsmall, resampled, 3)
+      end if
+      call func1d_init(profile, 0, mesh%nflux)
+      profile%y(:) = resampled
+      profile%x(:) = fs%psi
+    end subroutine resample_profile
+  end subroutine resample_profiles
+
+  subroutine write_profiles_hdf5(file, group)
     use mephit_util, only: func1d_write
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: group
@@ -1166,9 +1185,9 @@ contains
          'poloidal flux', 'Mx', 'electron collision frequency', 's^-1')
     call func1d_write(nu_i, file, grp // '/nu_i', &
          'poloidal flux', 'Mx', 'ion collision frequency', 's^-1')
-  end subroutine write_profiles
+  end subroutine write_profiles_hdf5
 
-  subroutine read_profiles(file, group)
+  subroutine read_profiles_hdf5(file, group)
     use mephit_util, only: func1d_read
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: group
@@ -1183,7 +1202,7 @@ contains
     call func1d_read(dPhi0_dpsi, file, grp // '/dPhi0_dpsi')
     call func1d_read(nu_e, file, grp // '/nu_e')
     call func1d_read(nu_i, file, grp // '/nu_i')
-  end subroutine read_profiles
+  end subroutine read_profiles_hdf5
 
   subroutine deinit_profiles
     use mephit_util, only: func1d_deinit
