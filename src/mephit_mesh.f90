@@ -1280,6 +1280,47 @@ contains
     end function q_interp_resonant
   end subroutine compute_resonance_positions
 
+  subroutine compute_resonant_layer_widths
+    use magdata_in_symfluxcoor_mod, only: qsaf, rsmall, psisurf
+    use mephit_conf, only: logger
+    use mephit_util, only: clight, resample1d
+    integer :: m
+    real(dp), dimension(mesh%m_res_min:mesh%m_res_max) :: rsmall_res, rho_pol_res, &
+         q, V_ExB, k_perp, v_Te, nu_e_interp, delta_mn
+
+    call resample1d(psi_fine, rsmall, mesh%psi_res, rsmall_res, 3)
+    call resample1d(psi_fine, sqrt(psisurf(1:)), mesh%psi_res, rho_pol_res, 3)
+    call resample1d(psi_fine, abs(qsaf), mesh%psi_res, q, 3)
+    call resample1d(psi_fine, rsmall, mesh%psi_res, k_perp, 3)
+    k_perp = [(dble(m), m = mesh%m_res_min, mesh%m_res_max)] / k_perp  ! k_perp => rsmall
+    if (abs(E_r%x(ubound(E_r%x, 1)) - 1d0) <= 0.05d0) then
+       call resample1d(E_r%x, E_r%y, rho_pol_res, V_ExB, 3)
+    else
+       call resample1d(E_r%x, E_r%y, rsmall_res, V_ExB, 3)
+    end if
+    V_ExB = clight * abs(V_ExB / equil%bcentr)  ! V_ExB => E_r
+    if (abs(temp_e%x(ubound(temp_e%x, 1)) - 1d0) <= 0.05d0) then
+       call resample1d(temp_e%x, temp_e%y, rho_pol_res, v_Te, 3)
+    else
+       call resample1d(temp_e%x, temp_e%y, rsmall_res, v_Te, 3)
+    end if
+    v_Te = 4.19e7 * sqrt(abs(v_Te))  ! v_Te => temp_e
+    if (abs(nu_e%x(ubound(nu_e%x, 1)) - 1d0) <= 0.05d0) then
+       call resample1d(nu_e%x, nu_e%y, rho_pol_res, nu_e_interp, 3)
+    else
+       call resample1d(nu_e%x, nu_e%y, rsmall_res, nu_e_interp, 3)
+    end if
+    logger%msg = 'resonant layer widths:'
+    if (logger%debug) call logger%write_msg
+    do m = mesh%m_res_min, mesh%m_res_max
+       delta_mn(m) = q(m) * mesh%R_O * V_ExB(m) / v_Te(m) * &
+            max(1d0, sqrt(nu_e_interp(m) / (k_perp(m) * V_ExB(m))))
+       write (logger%msg, '("m = ", i2, ", rsmall_mn = ", es24.16e3, ", delta_mn = ", es24.16e3)') &
+            m, rsmall_res(m), delta_mn(m)
+       if (logger%debug) call logger%write_msg
+    end do
+  end subroutine compute_resonant_layer_widths
+
   subroutine refine_unit_partition(nref, coarse_sep, fine_sep, refinement, resonances, diverging_q, &
        nflux, partition, kf_ref)
     use mephit_conf, only: logger
@@ -1553,6 +1594,9 @@ inner: do
     rho_norm_eqd(:) = rbeg / rad_max
 
     call compute_resonance_positions(psi_fine, qsaf, psi2rho_norm)
+    call read_profiles
+    call compute_auxiliary_profiles
+    call compute_resonant_layer_widths
     call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
     if (allocated(mesh%refinement)) deallocate(mesh%refinement)
     if (allocated(mesh%Delta_rad_res)) deallocate(mesh%Delta_rad_res)

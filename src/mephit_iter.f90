@@ -102,7 +102,7 @@ contains
     use mephit_util, only: C_F_string, init_field
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
     use mephit_mesh, only: equil, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
-         read_profiles, compute_auxiliary_profiles, resample_profiles, write_profiles_hdf5, read_profiles_hdf5
+         resample_profiles, write_profiles_hdf5, read_profiles_hdf5
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
     use hdf5_tools, only: h5_init, h5overwrite
     integer(c_int), intent(in), value :: runmode
@@ -138,8 +138,6 @@ contains
        end if
        call equil%export_hdf5(datafile, 'equil')
        call init_field(equil)
-       call read_profiles
-       call compute_auxiliary_profiles
        ! generate mesh and vacuum field
        call generate_mesh
        call mesh_write(mesh, datafile, 'mesh')
