@@ -1316,7 +1316,7 @@ contains
        qvecs(:, k) = qvecs(:, k) / hmat(k, k-1)
        ! calculate Ritz values
        call hessenberg_eigvals(hmat(:k, :k), ritzvals(:k), ierr)
-       if (ierr /= 0) return
+       if (ierr < 0) return
        progression(:k, k) = ritzvals(:k)
        selection(:k) = abs(ritzvals(:k)) >= threshold
        nritz = count(selection)
@@ -1331,7 +1331,6 @@ contains
        ierr = count(converged)
        print '("arnoldi_break: only ", i0, " eigenvalues of ", i0, " converged")', &
             ierr, nritz
-       return
     end if
     ! sort eigenvalues in descending order and optionall compute eigenvectors in this order
     call heapsort_complex(ritzvals(:n), complex_abs_desc)
@@ -1340,7 +1339,7 @@ contains
     if (present(eigvecs)) then
        allocate(ritzvecs(n, nritz), eigvecs(ndim, nritz))
        call hessenberg_eigvecs(hmat(:n, :n), ritzvals(:n), selection(:n), ritzvecs, ierr)
-       if (ierr /= 0) return
+       if (ierr < 0) return
        eigvecs = matmul(qvecs(:, :n), ritzvecs)
        deallocate(ritzvecs)
     end if
@@ -1367,12 +1366,14 @@ contains
     if (size(hmat, 1) /= ndim) then
        print '("hessenberg_eigvals: hmat has shape (", i0, ", ", i0, "), ' // &
             'but expected (", i0, ", ", i0, ")")', shape(hmat), ndim, ndim
-       error stop
+       ierr = -1
+       return
     end if
     if (size(eigvals, 1) /= ndim) then
        print '("hessenberg_eigvals: eigvals has shape (", i0, "), ' // &
             'but expected (", i0, ")")', shape(hmat), ndim
-       error stop
+       ierr = -2
+       return
     end if
     allocate(hmat_work(ndim, ndim), zdum(1, ndim))
     hmat_work(:, :) = hmat
@@ -1380,14 +1381,12 @@ contains
     lwork = -1
     call zhseqr('E', 'N', ndim, 1, ndim, hmat_work, ndim, eigvals, &
          zdum, 1, work, lwork, ierr)
-    if (ierr /= 0) then
-       if (ierr < 0) then
-          print '("ZHSEQR: illegal value in argument #", i0)', -ierr
-       else
-          print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
-               ierr, ndim
-       end if
+    if (ierr < 0) then
+       print '("ZHSEQR: illegal value in argument #", i0)', -ierr
        return
+    elseif (ierr > 0) then
+       print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
+            ierr, ndim
     end if
     lwork = int(work(1))
     deallocate(work)
@@ -1395,13 +1394,11 @@ contains
     call zhseqr('E', 'N', ndim, 1, ndim, hmat_work, ndim, eigvals, &
          zdum, 1, work, lwork, ierr)
     deallocate(work, hmat_work, zdum)
-    if (ierr /= 0) then
-       if (ierr < 0) then
-          print '("ZHSEQR: illegal value in argument #", i0)', -ierr
-       else
-          print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
-               ierr, ndim
-       end if
+    if (ierr < 0) then
+       print '("ZHSEQR: illegal value in argument #", i0)', -ierr
+    elseif (ierr > 0) then
+       print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
+            ierr, ndim
     end if
   end subroutine hessenberg_eigvals
 
@@ -1432,22 +1429,26 @@ contains
     if (size(hmat, 1) /= ndim) then
        print '("hessenberg_eigvecs: hmat has shape (", i0, ", ", i0, "), ' // &
             'but expected (", i0, ", ", i0, ")")', shape(hmat), ndim, ndim
-       error stop
+       ierr = -1
+       return
     end if
     if (size(eigvals, 1) /= ndim) then
        print '("hessenberg_eigvecs: eigvals has shape (", i0, "), ' // &
             'but expected (", i0, ")")', shape(eigvals), ndim
-       error stop
+       ierr = -2
+       return
     end if
     if (size(mask, 1) /= ndim) then
        print '("hessenberg_eigvecs: mask has shape (", i0, "), ' // &
             'but expected (", i0, ")")', shape(mask), ndim
-       error stop
+       ierr = -3
+       return
     end if
     if (size(eigvecs, 1) /= ndim .or. size(eigvecs, 2) /= count(mask)) then
        print '("hessenberg_eigvecs: eigvecs has shape (", i0, ", ", i0, "), ' // &
             'but expected (", i0, ", ", i0, ")")', shape(eigvecs), ndim, count(mask)
-       error stop
+       ierr = -4
+       return
     end if
     allocate(eigvals_work(ndim), work(ndim, ndim), rwork(ndim), &
          zdum(1, count(mask)), idum(count(mask)), ifailr(count(mask)))
@@ -1455,13 +1456,11 @@ contains
     call zhsein('R', 'Q', 'N', mask, ndim, hmat, ndim, eigvals_work, &
          zdum, 1, eigvecs, ndim, count(mask), neff, work, rwork, &
          idum, ifailr, ierr)
-    if (ierr /= 0) then
-       if (ierr < 0) then
-          print '("ZHSEIN: illegal value in argument #", i0)', -ierr
-       else
-          print '("ZHSEIN: only ", i0, " of ", i0, " eigenvectors converged")', &
-               ierr, ndim
-       end if
+    if (ierr < 0) then
+       print '("ZHSEIN: illegal value in argument #", i0)', -ierr
+    elseif (ierr > 0) then
+       print '("ZHSEIN: only ", i0, " of ", i0, " eigenvectors converged")', &
+            ierr, ndim
     end if
     deallocate(eigvals_work, work, rwork, zdum, idum, ifailr)
   end subroutine hessenberg_eigvecs
