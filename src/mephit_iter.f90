@@ -611,7 +611,7 @@ contains
 
   subroutine solve_MDE(inhom, solution)
     use sparse_mod, only: sparse_solve, sparse_matmul
-    use mephit_conf, only: conf, logger
+    use mephit_conf, only: logger
     use mephit_util, only: imun
     use mephit_mesh, only: mesh, cache
     complex(dp), dimension(:), intent(in) :: inhom
@@ -648,7 +648,7 @@ contains
           associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge))
             a(kp) = (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
                  (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
-            b(kp) = imun * (mesh%n + imun * conf%damp) * f%B0(2) / R
+            b(kp) = imun * (mesh%n + imun * mesh%damping(kf)) * f%B0(2) / R
             x(kp) = inhom(kedge + 1)
           end associate
        end do

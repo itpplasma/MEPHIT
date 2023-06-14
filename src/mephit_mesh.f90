@@ -87,8 +87,8 @@ module mephit_mesh
      !> Safety factor \f$ q \f$ (dimensionless).
      real(dp), dimension(:), allocatable, public :: q
 
-     !> Area of poloidal cross-section, in cm^2
-     real(dp), dimension(:), allocatable, public :: area
+     !> Equivalent radius of poloidal cross-section area, in cm
+     real(dp), dimension(:), allocatable, public :: rsmall
 
      !> Perimeter of poloidal cross-section, in cm
      real(dp), dimension(:), allocatable, public :: perimeter
@@ -163,13 +163,29 @@ module mephit_mesh
      !> array index).
      real(dp), allocatable :: psi_res(:)
 
-     !> Normalized minor radius (along line connecting X point and O point) at resonance
+     !> Normalized small radius (along line connecting X point and O point) at resonance
      !> position corresponding to a poloidal mode (given as array index).
      real(dp), allocatable :: rad_norm_res(:)
+
+     !> Small radius (of equivalent-area circle) at resonance
+     !> position corresponding to a poloidal mode (given as array index).
+     real(dp), allocatable :: rsmall_res(:)
 
      !> Poloidal modes that are expected to be in resonance. This might be different from
      !> m_res_min:m_res_max for specially constructed vacuum perturbation fields.
      integer, allocatable :: res_modes(:)
+
+     !> Estimated resonant layer width in cm, computed from kinetic profiles.
+     real(dp), allocatable :: delta_mn(:)
+
+     !> Estimated resonant layer width in Mx (of psi), computed from kinetic profiles.
+     real(dp), allocatable :: delta_psi_mn(:)
+
+     !> Estimated resonant layer width in cm (of rad), computed from kinetic profiles.
+     real(dp), allocatable :: delta_rad_mn(:)
+
+     !> Damping factor for MDE solutions when "KiLCA" currents are used.
+     real(dp), allocatable :: damping(:)
 
      !> Number of knots on the flux surface given by the array index.
      !>
@@ -344,7 +360,7 @@ contains
        allocate(this%FdF_dpsi(nflux))
        allocate(this%dp_dpsi(nflux))
        allocate(this%q(nflux))
-       allocate(this%area(nflux))
+       allocate(this%rsmall(nflux))
        allocate(this%perimeter(nflux))
     else
        allocate(this%psi(0:nflux))
@@ -354,7 +370,7 @@ contains
        allocate(this%FdF_dpsi(0:nflux))
        allocate(this%dp_dpsi(0:nflux))
        allocate(this%q(0:nflux))
-       allocate(this%area(0:nflux))
+       allocate(this%rsmall(0:nflux))
        allocate(this%perimeter(0:nflux))
     end if
     this%psi = 0d0
@@ -364,7 +380,7 @@ contains
     this%FdF_dpsi = 0d0
     this%dp_dpsi = 0d0
     this%q = 0d0
-    this%area = 0d0
+    this%rsmall = 0d0
     this%perimeter = 0d0
   end subroutine flux_func_cache_init
 
@@ -378,7 +394,7 @@ contains
     if (allocated(this%FdF_dpsi)) deallocate(this%FdF_dpsi)
     if (allocated(this%dp_dpsi)) deallocate(this%dp_dpsi)
     if (allocated(this%q)) deallocate(this%q)
-    if (allocated(this%area)) deallocate(this%area)
+    if (allocated(this%rsmall)) deallocate(this%rsmall)
     if (allocated(this%perimeter)) deallocate(this%perimeter)
   end subroutine flux_func_cache_deinit
 
@@ -413,9 +429,9 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/q', &
          cache%q, lbound(cache%q), ubound(cache%q), unit = '1', &
          comment = 'safety factor ' // trim(adjustl(comment)))
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/area', &
-         cache%area, lbound(cache%area), ubound(cache%area), unit = 'cm^2', &
-         comment = 'poloidal cross-section area ' // trim(adjustl(comment)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rsmall', &
+         cache%rsmall, lbound(cache%rsmall), ubound(cache%rsmall), unit = 'cm', &
+         comment = 'equivalent radius of poloidal cross-section area ' // trim(adjustl(comment)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/perimeter', &
          cache%perimeter, lbound(cache%perimeter), ubound(cache%perimeter), unit = 'cm', &
          comment = 'poloidal cross-section perimeter ' // trim(adjustl(comment)))
@@ -437,7 +453,7 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/FdF_dpsi', cache%FdF_dpsi)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/dp_dpsi', cache%dp_dpsi)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/q', cache%q)
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/area', cache%area)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rsmall', cache%rsmall)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/perimeter', cache%perimeter)
     call h5_close(h5id_root)
   end subroutine flux_func_cache_read
@@ -1133,10 +1149,9 @@ contains
   end subroutine compute_auxiliary_profiles
 
   subroutine resample_profiles
-    use mephit_util, only: pi, func1d_init, resample1d
-    real(dp), dimension(0:mesh%nflux) :: rsmall, rho_pol, resampled
+    use mephit_util, only: func1d_init, resample1d
+    real(dp), dimension(0:mesh%nflux) :: rho_pol, resampled
 
-    rsmall = sqrt(fs%area / pi)
     rho_pol = sqrt((fs%psi - fs%psi(0)) / (fs%psi(mesh%nflux) - fs%psi(0)))
     call resample_profile(dens_e)
     call resample_profile(temp_e)
@@ -1154,7 +1169,7 @@ contains
       if (abs(profile%x(ubound(profile%x, 1)) - 1d0) <= 0.05d0) then
          call resample1d(profile%x, profile%y, rho_pol, resampled, 3)
       else
-         call resample1d(profile%x, profile%y, rsmall, resampled, 3)
+         call resample1d(profile%x, profile%y, fs%rsmall, resampled, 3)
       end if
       call func1d_init(profile, 0, mesh%nflux)
       profile%y(:) = resampled
@@ -1281,14 +1296,17 @@ contains
   end subroutine compute_resonance_positions
 
   subroutine compute_resonant_layer_widths
-    use magdata_in_symfluxcoor_mod, only: qsaf, rsmall, psisurf
+    use magdata_in_symfluxcoor_mod, only: qsaf, rsmall, psisurf, psipol_max, rbeg
     use mephit_conf, only: logger
     use mephit_util, only: clight, resample1d
     integer :: m
-    real(dp), dimension(mesh%m_res_min:mesh%m_res_max) :: rsmall_res, rho_pol_res, &
-         q, V_ExB, k_perp, v_Te, nu_e_interp, delta_mn
+    real(dp) :: delta(2)
+    real(dp), dimension(mesh%m_res_min:mesh%m_res_max) :: rho_pol_res, &
+         q, V_ExB, k_perp, v_Te, nu_e_interp
 
-    call resample1d(psi_fine, rsmall, mesh%psi_res, rsmall_res, 3)
+    if (allocated(mesh%rsmall_res)) deallocate(mesh%rsmall_res)
+    allocate(mesh%rsmall_res(mesh%m_res_min:mesh%m_res_max))
+    call resample1d(psi_fine, rsmall, mesh%psi_res, mesh%rsmall_res, 3)
     call resample1d(psi_fine, sqrt(psisurf(1:)), mesh%psi_res, rho_pol_res, 3)
     call resample1d(psi_fine, abs(qsaf), mesh%psi_res, q, 3)
     call resample1d(psi_fine, rsmall, mesh%psi_res, k_perp, 3)
@@ -1296,28 +1314,40 @@ contains
     if (abs(E_r%x(ubound(E_r%x, 1)) - 1d0) <= 0.05d0) then
        call resample1d(E_r%x, E_r%y, rho_pol_res, V_ExB, 3)
     else
-       call resample1d(E_r%x, E_r%y, rsmall_res, V_ExB, 3)
+       call resample1d(E_r%x, E_r%y, mesh%rsmall_res, V_ExB, 3)
     end if
     V_ExB = clight * abs(V_ExB / equil%bcentr)  ! V_ExB => E_r
     if (abs(temp_e%x(ubound(temp_e%x, 1)) - 1d0) <= 0.05d0) then
        call resample1d(temp_e%x, temp_e%y, rho_pol_res, v_Te, 3)
     else
-       call resample1d(temp_e%x, temp_e%y, rsmall_res, v_Te, 3)
+       call resample1d(temp_e%x, temp_e%y, mesh%rsmall_res, v_Te, 3)
     end if
     v_Te = 4.19e7 * sqrt(abs(v_Te))  ! v_Te => temp_e
     if (abs(nu_e%x(ubound(nu_e%x, 1)) - 1d0) <= 0.05d0) then
        call resample1d(nu_e%x, nu_e%y, rho_pol_res, nu_e_interp, 3)
     else
-       call resample1d(nu_e%x, nu_e%y, rsmall_res, nu_e_interp, 3)
+       call resample1d(nu_e%x, nu_e%y, mesh%rsmall_res, nu_e_interp, 3)
     end if
+    if (allocated(mesh%delta_mn)) deallocate(mesh%delta_mn)
+    allocate(mesh%delta_mn(mesh%m_res_min:mesh%m_res_max))
+    if (allocated(mesh%delta_psi_mn)) deallocate(mesh%delta_psi_mn)
+    allocate(mesh%delta_psi_mn(mesh%m_res_min:mesh%m_res_max))
+    if (allocated(mesh%delta_rad_mn)) deallocate(mesh%delta_rad_mn)
+    allocate(mesh%delta_rad_mn(mesh%m_res_min:mesh%m_res_max))
     logger%msg = 'resonant layer widths:'
     if (logger%debug) call logger%write_msg
     do m = mesh%m_res_min, mesh%m_res_max
-       delta_mn(m) = q(m) * mesh%R_O * V_ExB(m) / v_Te(m) * &
+       mesh%delta_mn(m) = q(m) * mesh%R_O * V_ExB(m) / v_Te(m) * &
             max(1d0, sqrt(nu_e_interp(m) / (k_perp(m) * V_ExB(m))))
        write (logger%msg, '("m = ", i2, ", rsmall_mn = ", es24.16e3, ", delta_mn = ", es24.16e3)') &
-            m, rsmall_res(m), delta_mn(m)
+            m, mesh%rsmall_res(m), mesh%delta_mn(m)
        if (logger%debug) call logger%write_msg
+       call resample1d(rsmall, psisurf(1:) * psipol_max, &
+            mesh%rsmall_res(m) + [-0.5d0, 0.5d0] * mesh%delta_mn, delta, 3)
+       mesh%delta_psi_mn(m) = delta(2) - delta(1)
+       call resample1d(rsmall, rbeg, &
+            mesh%rsmall_res(m) + [-0.5d0, 0.5d0] * mesh%delta_mn, delta, 3)
+       mesh%delta_rad_mn(m) = delta(2) - delta(1)
     end do
   end subroutine compute_resonant_layer_widths
 
@@ -1552,7 +1582,7 @@ inner: do
 
   subroutine create_mesh_points
     use mephit_conf, only: conf, conf_arr, logger
-    use mephit_util, only: interp_psi_pol, resample1d, pi, pos_angle
+    use mephit_util, only: interp_psi_pol, resample1d, pos_angle
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
          rsmall, circumf, raxis, zaxis, load_magdata_in_symfluxcoord
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, theta0_at_xpoint
@@ -1603,8 +1633,8 @@ inner: do
     allocate(mesh%refinement(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%Delta_rad_res(mesh%m_res_min:mesh%m_res_max))
     mesh%refinement(:) = conf_arr%refinement
-    mesh%Delta_rad_res(:) = conf_arr%Delta_rad_res
-    call refine_resonant_surfaces(conf%max_Delta_rad / rad_max, conf_arr%Delta_rad_res / rad_max, &
+    mesh%Delta_rad_res(:) = conf_arr%Delta_rad_res  !!!
+    call refine_resonant_surfaces(conf%max_Delta_rad / rad_max, mesh%delta_rad_mn / rad_max, &
          conf_arr%refinement, rho_norm_ref)
     call fs%init(mesh%nflux, .false.)
     call fs_half%init(mesh%nflux, .true.)
@@ -1617,15 +1647,13 @@ inner: do
     call flux_func_cache_check
     call cache_resonance_positions
 
-    call resample1d(psi_fine, rsmall, fs%psi, fs%area, 3)
-    fs%area(:) = pi * fs%area ** 2
+    call resample1d(psi_fine, rsmall, fs%psi, fs%rsmall, 3)
     call resample1d(psi_fine, circumf, fs%psi, fs%perimeter, 3)
-    call resample1d(psi_fine, rsmall, fs_half%psi, fs_half%area, 3)
-    fs_half%area(:) = pi * fs_half%area ** 2
+    call resample1d(psi_fine, rsmall, fs_half%psi, fs_half%rsmall, 3)
     call resample1d(psi_fine, circumf, fs_half%psi, fs_half%perimeter, 3)
     allocate(opt_pol_edge_len(mesh%nflux + 1))
     ! cache averaged radius at half-grid steps
-    opt_pol_edge_len(:mesh%nflux) = sqrt(fs_half%area / pi)
+    opt_pol_edge_len(:mesh%nflux) = fs_half%rsmall
     ! extrapolate linearly
     opt_pol_edge_len(mesh%nflux + 1) = 2d0 * opt_pol_edge_len(mesh%nflux) - opt_pol_edge_len(mesh%nflux - 1)
     ! compute successive difference
@@ -2284,7 +2312,9 @@ inner: do
   end subroutine compute_sample_Ires
 
   subroutine compute_kilca_auxiliaries
-    integer :: kf, kpol, k, npol
+    use mephit_util, only: resample1d
+    integer :: kf, kpol, k, npol, m
+    real(dp), dimension(0:mesh%nflux) :: q_prime
 
     allocate(mesh%avg_R2gradpsi2(mesh%nflux))
     mesh%avg_R2gradpsi2(:) = 0d0
@@ -2298,6 +2328,14 @@ inner: do
           end associate
        end do
        mesh%avg_R2gradpsi2(kf) = mesh%avg_R2gradpsi2(kf) / dble(npol)
+    end do
+    call resample1d(fs%psi, fs%q, fs%psi, q_prime, 3, .true.)
+    if (allocated(mesh%damping)) deallocate(mesh%damping)
+    allocate(mesh%damping(0:mesh%nflux))
+    mesh%damping(:) = 0d0
+    do m = mesh%m_res_min, mesh%m_res_max
+       mesh%damping(:) = mesh%damping + q_prime / fs%q * mesh%delta_psi_mn(m) * &
+            exp(-(fs%psi - mesh%psi_res(m)) ** 2 / mesh%delta_psi_mn(m) ** 2) * mesh%n
     end do
   end subroutine compute_kilca_auxiliaries
 
@@ -2605,7 +2643,22 @@ inner: do
          comment = 'poloidal modes that are expected to actually be in resonance')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad_norm_res', mesh%rad_norm_res, &
          lbound(mesh%rad_norm_res), ubound(mesh%rad_norm_res), unit = '1', &
-         comment = 'normalized minor radius (along X-O line) in resonance with given poloidal mode number')
+         comment = 'normalized small radius (along X-O line) in resonance with given poloidal mode number')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/rsmall_res', mesh%rsmall_res, &
+         lbound(mesh%rsmall_res), ubound(mesh%rsmall_res), unit = 'cm', &
+         comment = 'normalized small radius (of equivalent-area circle) in resonance with given poloidal mode number')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/delta_mn', mesh%delta_mn, &
+         lbound(mesh%delta_mn), ubound(mesh%delta_mn), &
+         comment = 'resonant layer width', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/delta_psi_mn', mesh%delta_psi_mn, &
+         lbound(mesh%delta_psi_mn), ubound(mesh%delta_psi_mn), &
+         comment = 'resonant layer width (in units of psi)', unit = 'Mx')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/delta_rad_mn', mesh%delta_rad_mn, &
+         lbound(mesh%delta_rad_mn), ubound(mesh%delta_rad_mn), &
+         comment = 'resonant layer width (in units of rad)', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/damping', mesh%damping, &
+         lbound(mesh%damping), ubound(mesh%damping), &
+         comment = 'damping factors', unit = '1')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/kp_max', mesh%kp_max, &
          lbound(mesh%kp_max), ubound(mesh%kp_max), &
          comment = 'number of nodes on flux surface')
@@ -2827,11 +2880,16 @@ inner: do
     allocate(mesh%res_ind(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%psi_res(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%rad_norm_res(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%rsmall_res(mesh%m_res_min:mesh%m_res_max))
     if (conf%kilca_scale_factor /= 0 .and. conf%kilca_pol_mode /= 0) then
        allocate(mesh%res_modes(1))
     else
        allocate(mesh%res_modes(mesh%m_res_max - mesh%m_res_min + 1))
     end if
+    allocate(mesh%delta_mn(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%delta_psi_mn(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%delta_rad_mn(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%damping(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%kp_max(mesh%nflux))
     allocate(mesh%kt_max(mesh%nflux))
     allocate(mesh%kp_low(mesh%nflux))
@@ -2871,7 +2929,12 @@ inner: do
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/res_ind', mesh%res_ind)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi_res', mesh%psi_res)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/rad_norm_res', mesh%rad_norm_res)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/rsmall_res', mesh%rsmall_res)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/res_modes', mesh%res_modes)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/delta_mn', mesh%delta_mn)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/delta_psi_mn', mesh%delta_psi_mn)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/delta_rad_mn', mesh%delta_rad_mn)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/damping', mesh%damping)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/kp_max', mesh%kp_max)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/kp_low', mesh%kp_low)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/kt_max', mesh%kt_max)
@@ -2928,7 +2991,12 @@ inner: do
     if (allocated(this%res_ind)) deallocate(this%res_ind)
     if (allocated(this%psi_res)) deallocate(this%psi_res)
     if (allocated(this%rad_norm_res)) deallocate(this%rad_norm_res)
+    if (allocated(this%rsmall_res)) deallocate(this%rsmall_res)
     if (allocated(this%res_modes)) deallocate(this%res_modes)
+    if (allocated(this%delta_mn)) deallocate(this%delta_mn)
+    if (allocated(this%delta_psi_mn)) deallocate(this%delta_psi_mn)
+    if (allocated(this%delta_rad_mn)) deallocate(this%delta_rad_mn)
+    if (allocated(this%damping)) deallocate(this%damping)
     if (allocated(this%kp_max)) deallocate(this%kp_max)
     if (allocated(this%kt_max)) deallocate(this%kt_max)
     if (allocated(this%kp_low)) deallocate(this%kp_low)
