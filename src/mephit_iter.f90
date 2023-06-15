@@ -8,6 +8,13 @@ module mephit_iter
 
   public :: mephit_run, mephit_deinit
 
+  !> Switch to enable debugging of initial iterations without plasma response
+  !> and without additional shielding currents / damping.
+  logical :: debug_initial = .true.
+
+  !> Switch to enable damping in solve_MDE().
+  logical :: damp = .false.
+
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   type(L1_t) :: pn
 
@@ -293,6 +300,14 @@ contains
     type(vec_polmodes_t) :: jmn
     complex(dp) :: Ires(mesh%m_res_min:mesh%m_res_max)
 
+    if (debug_initial) then
+       damp = .false.
+       Bn%DOF(:) = vac%Bn%DOF
+       Bn%comp_phi(:) = vac%Bn%comp_phi
+       call compute_presn
+       call compute_currn
+    end if
+    damp = .true.
     ! system dimension: number of non-redundant edges in core plasma
     ndim = mesh%nedge
     ! runmodes
@@ -417,6 +432,8 @@ contains
        if (preconditioned) then
           Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
                matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF - Bn_prev%DOF)))
+       elseif (kiter == 0) then
+          debug_initial = .false.
        end if
        call RT0_tor_comp_from_zero_div(Bn)
        Bn_diff%DOF(:) = Bn%DOF - Bn_prev%DOF
@@ -516,10 +533,10 @@ contains
     subroutine next_iteration_arnoldi(old_val, new_val)
       complex(dp), intent(in) :: old_val(:)
       complex(dp), intent(out) :: new_val(:)
-      logical, save :: first = .true.
+
       Bn%DOF(:) = old_val + vac%Bn%DOF
       call RT0_tor_comp_from_zero_div(Bn)
-      if (first) then
+      if (debug_initial) then
          call polmodes_init(pmn, conf%m_max, mesh%nflux)
          call MFEM_test
          call L1_poloidal_modes(pn, pmn)
@@ -534,7 +551,7 @@ contains
          call polmodes_write(pmn, datafile, 'debug_MDE_initial/MEPHIT_pmn', &
               'pressure modes (initial iteration)', 'dyn cm^-2')
          call polmodes_deinit(pmn)
-         first = .false.
+         debug_initial = .false.
       else
          call compute_presn
       end if
@@ -648,7 +665,11 @@ contains
           associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge))
             a(kp) = (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
                  (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
-            b(kp) = imun * (mesh%n + imun * mesh%damping(kf)) * f%B0(2) / R
+            if (damp) then
+               b(kp) = imun * (mesh%n + imun * mesh%damping(kf)) * f%B0(2) / R
+            else
+               b(kp) = imun * mesh%n * f%B0(2) / R
+            end if
             x(kp) = inhom(kedge + 1)
           end associate
        end do
@@ -802,9 +823,6 @@ contains
     use mephit_pert, only: L1_interp, RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp, &
          polmodes_t, polmodes_init, polmodes_write, polmodes_deinit, L1_poloidal_modes
     use mephit_util, only: pi, clight, zd_cross
-    ! hack: first call in mephit_iter() is always without plasma response
-    ! and without additional shielding currents
-    logical, save :: first_call = .true.
     integer :: kf, kp, ktri, kedge
     real(dp), dimension(3) :: grad_j0B0, B0_grad_B0
     complex(dp) :: zdum, B0_jnpar
@@ -833,7 +851,7 @@ contains
        end do
     end do
     call solve_MDE(inhom, jnpar_B0%DOF)
-    if (first_call) then
+    if (debug_initial) then
        call RT0_project_pol_comp(jn, project_combined)
        call RT0_project_tor_comp(jn, project_combined)
        call debug_MDE("debug_MDE_initial", pn, Bn, jn, jnpar_B0)
@@ -848,18 +866,23 @@ contains
     case (currn_model_kilca)
        call RT0_project_pol_comp(jn, project_combined)
        call RT0_project_tor_comp(jn, project_combined)
-       if (first_call) then
+       if (debug_initial) then
           call polmodes_init(polmodes, conf%m_max, mesh%nflux)
           call L1_poloidal_modes(jnpar_B0, polmodes)
-          call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_excl', &
-               'parallel current density excluding KiLCA current', 's^-1')  ! SI: H^-1
+          if (damp) then
+             call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_incl', &
+                  'parallel current density from iMHD including damping', 's^-1')  ! SI: H^-1
+          else
+             call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_excl', &
+                  'parallel current density from iMHD excluding damping', 's^-1')  ! SI: H^-1
+          end if
           call polmodes_deinit(polmodes)
        end if
        call add_kilca_current
-       if (first_call) then
+       if (debug_initial) then
           call polmodes_init(polmodes, conf%m_max, mesh%nflux)
           call L1_poloidal_modes(jnpar_B0, polmodes)
-          call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_incl', &
+          call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_total', &
                'parallel current density including KiLCA current', 's^-1')  ! SI: H^-1
           call polmodes_deinit(polmodes)
        end if
@@ -868,7 +891,6 @@ contains
        if (logger%err) call logger%write_msg
        error stop
     end select
-    if (first_call) first_call = .false.
     ! hack: overwrite to save only last iteration step
     call debug_MDE("debug_MDE_final", pn, Bn, jn, jnpar_B0)
 
@@ -890,16 +912,22 @@ contains
   end subroutine compute_currn
 
   subroutine add_kilca_current
+    use mephit_conf, only: conf, datafile
     use mephit_util, only: imun, ev2erg, resample1d, interp1d
     use mephit_mesh, only: equil, mesh, cache, fs, fs_half, mesh_interp_theta_flux, field_cache_t, &
          m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
-         RT0_poloidal_modes
+         RT0_poloidal_modes, polmodes_t, polmodes_init, polmodes_write, polmodes_deinit
     integer :: m, m_res, kf, kf_min, kpoi_min, kpoi_max, kedge, ktri, kt, kp, k
     real(dp) :: edge_perp(2), lin_interp(2), q_interp
     complex(dp) :: jmnpar_over_Bmod_interp
     complex(dp), dimension(0:mesh%nflux) :: Bmnpsi_over_B0phi, jmnpar_over_Bmod
+    type(polmodes_t) :: polmodes
 
+    if (debug_initial) then
+       call polmodes_init(polmodes, conf%m_max, mesh%nflux)
+       polmodes%coeff(:, :) = (0d0, 0d0)
+    end if
     kf_min = max(1, mesh%res_ind(mesh%m_res_min) / 4)
     call RT0_poloidal_modes(Bn, Bmn)
     do m = mesh%m_res_min, mesh%m_res_max
@@ -913,6 +941,9 @@ contains
             mesh%R_O, fs%psi, -fs%q, fs%F, Phi0%y, mesh%avg_R2gradpsi2, &
             dens_e%y, temp_e%y * ev2erg, temp_i%y * ev2erg, nu_e%y, nu_i%y, &
             Bmnpsi_over_B0phi, jmnpar_over_Bmod, Phi_mn(:, m))
+       if (debug_initial) then
+          polmodes%coeff(m_res, :) = jmnpar_over_Bmod
+       end if
        Phi_aligned_mn(:, m) = imun * Bmnpsi_over_B0phi * fs%q * dPhi0_dpsi%y / (m_res + mesh%n * fs%q)
        jmnpar_over_Bmod(:kf_min) = (0d0, 0d0)  ! suppress spurious current near axis
        do kf = 1, mesh%nflux
@@ -974,6 +1005,11 @@ contains
           end do
        end do
     end do
+    if (debug_initial) then
+       call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_KiLCA', &
+            'parallel current density from KiLCA', 's^-1')  ! SI: H^-1
+       call polmodes_deinit(polmodes)
+    end if
   end subroutine add_kilca_current
 
   subroutine add_shielding_current

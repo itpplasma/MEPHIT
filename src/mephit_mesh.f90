@@ -2889,7 +2889,7 @@ inner: do
     allocate(mesh%delta_mn(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%delta_psi_mn(mesh%m_res_min:mesh%m_res_max))
     allocate(mesh%delta_rad_mn(mesh%m_res_min:mesh%m_res_max))
-    allocate(mesh%damping(mesh%m_res_min:mesh%m_res_max))
+    allocate(mesh%damping(0:mesh%nflux))
     allocate(mesh%kp_max(mesh%nflux))
     allocate(mesh%kt_max(mesh%nflux))
     allocate(mesh%kp_low(mesh%nflux))
