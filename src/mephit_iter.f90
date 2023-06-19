@@ -300,14 +300,18 @@ contains
     type(vec_polmodes_t) :: jmn
     complex(dp) :: Ires(mesh%m_res_min:mesh%m_res_max)
 
-    if (debug_initial) then
+    if (conf%damp) then
+       if (debug_initial) then
+          damp = .false.
+          Bn%DOF(:) = vac%Bn%DOF
+          Bn%comp_phi(:) = vac%Bn%comp_phi
+          call compute_presn
+          call compute_currn
+       end if
+       damp = .true.
+    else
        damp = .false.
-       Bn%DOF(:) = vac%Bn%DOF
-       Bn%comp_phi(:) = vac%Bn%comp_phi
-       call compute_presn
-       call compute_currn
     end if
-    damp = .true.
     ! system dimension: number of non-redundant edges in core plasma
     ndim = mesh%nedge
     ! runmodes

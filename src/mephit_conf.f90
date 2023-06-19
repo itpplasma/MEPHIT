@@ -150,8 +150,8 @@ module mephit_conf
      !> Defaults to 5.0e+13 cm^-3.
      real(dp) :: dens_max = 5d13
 
-     !> Damping factor for resonances. Defaults to 0.
-     real(dp) :: damp = 0d0
+     !> Enable damping of the Pfirsch-Schlueter current. Defaults to true.
+     logical :: damp = .true.
 
      !> Single poloidal mode used in comparison with KiLCA code. Defaults to 0 (ASDEX
      !> geometry).
@@ -237,7 +237,7 @@ contains
     type(config_t), intent(in) :: config
     character(len = *), intent(in) :: file, dataset
     integer(HID_T) :: h5id_root
-    integer :: shielding_fourier
+    integer :: shielding_fourier, damp
 
     call h5_open_rw(file, h5id_root)
     call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
@@ -281,8 +281,13 @@ contains
          comment = 'maximum temperature', unit = 'eV')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dens_max', config%dens_max, &
          comment = 'maximum density', unit = 'cm^-3')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/damp', config%damp, &
-         comment = 'damping factor for resonances', unit = '1')
+    if (conf%damp) then
+       damp = 1
+    else
+       damp = 0
+    end if
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/damp', damp, &
+         comment = 'enable damping of Pfirsch-Schlueter current')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_pol_mode', config%kilca_pol_mode, &
          comment = 'single poloidal mode used in comparison with KiLCA code')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_scale_factor', config%kilca_scale_factor, &
