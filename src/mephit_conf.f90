@@ -21,7 +21,8 @@ module mephit_conf
        curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
        q_prof_flux, q_prof_rot, q_prof_geqdsk, &
        vac_src_nemov, vac_src_gpec, vac_src_fourier, &
-       currn_model_mhd, currn_model_kilca
+       currn_model_mhd, currn_model_kilca, &
+       refinement_scheme_geometric, refinement_scheme_gaussian
 
   character(len = *), parameter :: cmplx_fmt = 'es24.16e3, 1x, sp, es24.16e3, s, " i"'
   character(len = *), parameter :: nl_fmt = '"' // new_line('A') // '"'
@@ -51,6 +52,9 @@ module mephit_conf
 
   integer, parameter :: currn_model_mhd = 0    !< response current from iMHD model
   integer, parameter :: currn_model_kilca = 1  !< response current from KiLCA model
+
+  integer, parameter :: refinement_scheme_geometric = 0  !< radial refinement via geometric series
+  integer, parameter :: refinement_scheme_gaussian = 1   !< radial refinement via sum of Gaussians
 
   type :: config_t
 
@@ -87,6 +91,10 @@ module mephit_conf
      !> Method to compute response current. Possible values are #currn_model_mhd (default)
      !> and #currn_model_kilca.
      integer :: currn_model = currn_model_mhd
+
+     !> Method used for radial refinement. Possible values are #refinement_scheme_geometric
+     !> (default) and #refinement_scheme_gaussian.
+     integer :: refinement_scheme = refinement_scheme_geometric
 
      !> Generate non-resonant vacuum perturbation for testing. Defaults to false.
      logical :: nonres = .false.
@@ -250,6 +258,7 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/q_prof', config%q_prof)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/vac_src', config%vac_src)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/currn_model', config%currn_model)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/refinement_scheme', config%refinement_scheme)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/nonres', config%nonres)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/quad_avg', config%quad_avg)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Ic', config%Ic, &
