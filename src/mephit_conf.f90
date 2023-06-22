@@ -131,6 +131,9 @@ module mephit_conf
      !> Maximum poloidal mode number for Fourier transform of results. Defaults to 24.
      integer :: m_max = 24
 
+     !> Maximum number of points per flux surface. Defaults to 0 (no maximum imposed).
+     integer :: pol_max = 0
+
      !> Ignore resonance position where q = 1, which is usually spurious. Defaults to true.
      logical :: ignore_q1_res = .true.
 
@@ -276,6 +279,10 @@ contains
          comment = 'relative error for eigenvalues in Arnoldi method')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/n', config%n, &
          comment = 'index of toroidal harmonics of perturbation')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_max', config%m_max, &
+         comment = 'maximum poloidal mode number for Fourier transform of results')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/pol_max', config%pol_max, &
+         comment = 'maximum number of points per flux surface')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/max_Delta_rad', config%max_Delta_rad, &
          comment = 'maximum distance between flux surfaces along theta = 0', unit = 'cm')
     if (conf%shielding_fourier) then

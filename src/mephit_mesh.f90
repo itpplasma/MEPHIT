@@ -1745,6 +1745,9 @@ inner: do
     allocate(mesh%kt_low(mesh%nflux))
     ! round to even numbers
     mesh%kp_max(:) = 2 * nint(0.5d0 * fs%perimeter(1:) / opt_pol_edge_len(:mesh%nflux))
+    if (conf%pol_max > 0) then
+       mesh%kp_max(:) = min(mesh%kp_max, 2 * nint(0.5d0 * dble(conf%pol_max)))
+    end if
     mesh%kp_low(1) = 1
     do kf = 2, mesh%nflux
        mesh%kp_low(kf) = mesh%kp_low(kf-1) + mesh%kp_max(kf-1)
