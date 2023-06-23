@@ -22,6 +22,7 @@ else ()
   set(WARNING_FLAGS "-Wall -Wextra -pedantic -fmax-errors=1 -Wno-unused-label")
   set(LEGACY_FLAGS "-fcheck=no-array-temps")
   set(CMAKE_C_FLAGS "-O2 -g -march=native -Wconversion -Wfloat-equal -Wshadow -Wredundant-decls -Winline ${WARNING_FLAGS}")
+  set(BLA_VENDOR OpenBLAS)
 endif ()
 
 ### Define external paths
@@ -66,6 +67,7 @@ else ()
 endif ()
 
 ### Find dependencies in standard directories
+find_package(LAPACK)
 find_package(SuiteSparse REQUIRED)
 find_package(SuperLU)
 cmake_policy(SET CMP0074 NEW)
