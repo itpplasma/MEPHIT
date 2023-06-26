@@ -1730,21 +1730,18 @@ inner: do
     call resample1d(psi_fine, circumf, fs%psi, fs%perimeter, 3)
     call resample1d(psi_fine, rsmall, fs_half%psi, fs_half%rsmall, 3)
     call resample1d(psi_fine, circumf, fs_half%psi, fs_half%perimeter, 3)
-    allocate(opt_pol_edge_len(mesh%nflux + 1))
-    ! cache averaged radius at half-grid steps
-    opt_pol_edge_len(:mesh%nflux) = fs_half%rsmall
-    ! extrapolate linearly
-    opt_pol_edge_len(mesh%nflux + 1) = 2d0 * opt_pol_edge_len(mesh%nflux) - opt_pol_edge_len(mesh%nflux - 1)
-    ! compute successive difference
-    opt_pol_edge_len(:mesh%nflux) = opt_pol_edge_len(2:) - opt_pol_edge_len(:mesh%nflux)
+    allocate(opt_pol_edge_len(mesh%nflux))
+    opt_pol_edge_len(:mesh%nflux - 1) = fs_half%rsmall(2:) - fs_half%rsmall(:mesh%nflux - 1)
+    opt_pol_edge_len(mesh%nflux) = fs%rsmall(mesh%nflux) - fs%rsmall(mesh%nflux - 1)
     ! averaged radius corresponds to altitude - factor for edge length of equilateral triangle
-    opt_pol_edge_len(:mesh%nflux) = 2d0 / sqrt(3d0) * opt_pol_edge_len(:mesh%nflux)
+    ! use geometric mean to reduce effect of radial refinement
+    opt_pol_edge_len(:) = 2d0 / sqrt(3d0) * sqrt(opt_pol_edge_len * conf%max_Delta_rad)
     allocate(mesh%kp_max(mesh%nflux))
     allocate(mesh%kt_max(mesh%nflux))
     allocate(mesh%kp_low(mesh%nflux))
     allocate(mesh%kt_low(mesh%nflux))
     ! round to even numbers
-    mesh%kp_max(:) = 2 * nint(0.5d0 * fs%perimeter(1:) / opt_pol_edge_len(:mesh%nflux))
+    mesh%kp_max(:) = 2 * nint(0.5d0 * fs%perimeter(1:) / opt_pol_edge_len)
     if (conf%pol_max > 0) then
        mesh%kp_max(:) = min(mesh%kp_max, 2 * nint(0.5d0 * dble(conf%pol_max)))
     end if
