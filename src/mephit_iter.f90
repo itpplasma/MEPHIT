@@ -307,6 +307,8 @@ contains
           Bn%comp_phi(:) = vac%Bn%comp_phi
           call compute_presn
           call compute_currn
+          Bn%DOF(:) = vac%Bn%DOF
+          Bn%comp_phi(:) = vac%Bn%comp_phi
        end if
        damp = .true.
     else
@@ -558,11 +560,13 @@ contains
          call polmodes_write(pmn, datafile, 'debug_MDE_initial/MEPHIT_pmn', &
               'pressure modes (initial iteration)', 'dyn cm^-2')
          call polmodes_deinit(pmn)
-         debug_initial = .false.
       else
          call compute_presn
       end if
       call compute_currn
+      if (debug_initial) then
+         debug_initial = .false.
+      end if
       call compute_Bn
       new_val(:) = Bn%DOF
     end subroutine next_iteration_arnoldi
