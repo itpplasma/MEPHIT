@@ -387,6 +387,8 @@ contains
     end if
 
     L2int_Bnvac = RT0_L2int(vac%Bn)
+    write (logger%msg, '("L2int_Bnvac = ", es24.16e3)') L2int_Bnvac
+    if (logger%info) call logger%write_msg
     call h5_open_rw(datafile, h5id_root)
     call h5_create_parent_groups(h5id_root, 'iter/')
     call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int_Bnvac, &
@@ -443,6 +445,8 @@ contains
        Bn_diff%DOF(:) = Bn%DOF - Bn_prev%DOF
        Bn_diff%comp_phi(:) = Bn%comp_phi - Bn_prev%comp_phi
        L2int_Bn_diff(kiter) = RT0_L2int(Bn_diff)
+       write (logger%msg, '("L2int_Bn_diff = ", es24.16e3)') L2int_Bn_diff(kiter)
+       if (logger%info) call logger%write_msg
        if (kiter <= 1) then
           call L1_write(jnpar_B0, datafile, 'iter/jnpar_Bmod' // postfix, &
                'parallel current density (after iteration)', 's^-1')  ! SI: H^-1
@@ -453,8 +457,7 @@ contains
           call RT0_write(Bn_diff, datafile, 'iter/Bn_diff' // postfix, &
                'magnetic field (difference between iterations)', 'G', 1)
        else
-          if (L2int_Bn_diff(kiter) > conf%ritz_threshold ** kiter * L2int_Bnvac .or. &
-               L2int_Bn_diff(kiter) < conf%iter_rel_err * L2int_Bnvac) then
+          if (L2int_Bn_diff(kiter) < conf%iter_rel_err * L2int_Bnvac) then
              niter = kiter
              exit
           end if
