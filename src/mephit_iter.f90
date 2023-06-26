@@ -453,8 +453,8 @@ contains
           call RT0_write(Bn_diff, datafile, 'iter/Bn_diff' // postfix, &
                'magnetic field (difference between iterations)', 'G', 1)
        else
-          if (L2int_Bn_diff(kiter) > conf%ritz_threshold ** kiter * L2int_Bnvac .or. &
-               L2int_Bn_diff(kiter) < conf%iter_rel_err * L2int_Bnvac) then
+         !  if (L2int_Bn_diff(kiter) > conf%ritz_threshold ** kiter * L2int_Bnvac .or. &
+             if(L2int_Bn_diff(kiter) < conf%iter_rel_err * L2int_Bnvac) then
              niter = kiter
              exit
           end if
