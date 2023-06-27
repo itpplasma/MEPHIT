@@ -48,6 +48,7 @@ Hrot [ax, ay], [wx, wy], [qx, qy], [resx, resy], [corrx, corry];
 // contravariant density components also include metric determinant R
 Hdiv [ReJR, ReJZ], [ImJR, ImJZ], [ReBR, ReBZ], [ImBR, ImBZ];
 Vh1 ReP1AR, ImP1AR, ReP1AZ, ImP1AZ;
+Vh1 ReJnparB0, ImJnparB0, B0R, B0P, B0Z, B0mod;
 
 int[int] edgemap(nedge), signmap(nedge);
 {
@@ -108,6 +109,28 @@ while (state != -3) {
     [ReJR, ReJZ] = [0.0, 0.0];
     [ImJR, ImJZ] = [0.0, 0.0];
     deserializeRT0(ReJR, ImJR);
+
+    ReJnparB0 = 0.0;
+    ImJnparB0 = 0.0;
+    B0R = 0.0;
+    B0P = 0.0;
+    B0Z = 0.0;
+    B0mod = 0.0;
+    {
+      ifstream in("/tmp/jnpar_B0.dat");
+      for (int kpoi = 0; kpoi < 25643; kpoi++) {
+          in >> ReJnparB0[][kpoi] >> ImJnparB0[][kpoi];
+      }
+    }
+    {
+      ifstream in("/tmp/B0.dat");
+      for (int kpoi = 0; kpoi < 25643; kpoi++) {
+          in >> B0R[][kpoi] >> B0P[][kpoi] >> B0Z[][kpoi] >> B0mod[][kpoi];
+      }
+    }
+    [ReJR, ReJZ] = [ReJR + ReJnparB0*B0R, ReJZ + ReJnparB0*B0Z];
+    [ImJR, ImJZ] = [ImJR + ImJnparB0*B0R, ImJZ + ImJnparB0*B0Z];
+
     // real part
     qx[] = rhsRe(0, Hrot);
     ax[] = L^-1 * qx[];
