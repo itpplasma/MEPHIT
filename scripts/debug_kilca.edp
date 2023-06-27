@@ -1,0 +1,14 @@
+mesh Th = readmesh("maxwell.msh");
+fespace Vh1(Th, P1);
+Vh1 ReJnparB0, ImJnparB0;
+
+cout << Th.nv;
+ReJnparB0[] = 0.0;
+ImJnparB0[] = 0.0;
+
+{
+    ifstream in("/tmp/jnpar_B0.dat");
+    for (int kpoi = 0; kpoi < 23245; kpoi++) {
+        in >> ReJnparB0[][kpoi] >> ImJnparB0[][kpoi];
+    }
+}
