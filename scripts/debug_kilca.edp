@@ -12,3 +12,6 @@ ImJnparB0[] = 0.0;
         in >> ReJnparB0[][kpoi] >> ImJnparB0[][kpoi];
     }
 }
+
+plot(Th, wait=true);
+plot(ImJnparB0);
