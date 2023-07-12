@@ -26,8 +26,8 @@ def set_matplotlib_defaults():
     # grayish yellow, medium gray, vivid green, strong purplish pink, strong blue, strong yellowish pink
     rcParams['axes.prop_cycle'] = (cycler('color', ['#222222', '#f38400', '#875692', '#f3c300', '#a1caf1', '#be0032',
                                                     '#c2b280', '#848482', '#008856', '#e68fac', '#0067a5', '#f99379']) +
-                                   cycler('ls', ['-', ':', '-.', '--', dash_dot_dot, dash_dash_dot,
-                                                 '-', ':', '-.', '--', dash_dot_dot, dash_dash_dot]))
+                                   cycler('ls', ['-', '--', '-.', ':', dash_dot_dot, dash_dash_dot,
+                                                 '-', '--', '-.', ':', dash_dot_dot, dash_dash_dot]))
     latex_preamble = path.join(scripts_dir, 'magdifplot.tex')
     rcParams['text.latex.preamble'] = fr"\input{{{latex_preamble}}}"
 
