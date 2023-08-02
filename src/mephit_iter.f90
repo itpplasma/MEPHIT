@@ -84,6 +84,13 @@ module mephit_iter
        real(c_double), intent(out) :: L2int
      end subroutine FEM_compute_L2int
 
+     subroutine FEM_debug_projection(npoint, JnparB0, B0pol) bind(C, name = 'FEM_debug_projection')
+       use iso_c_binding, only: c_int, c_double_complex
+       integer(c_int), intent(in), value :: npoint
+       complex(c_double_complex), intent(in) :: JnparB0(1:npoint)
+       complex(c_double_complex), intent(in) :: B0pol(1:npoint)
+     end subroutine FEM_debug_projection
+
      subroutine FEM_deinit() bind(C, name = 'FEM_deinit')
      end subroutine FEM_deinit
 
@@ -130,6 +137,9 @@ contains
     end if
     call C_F_string(config, config_filename)
     call config_read(conf, config_filename)
+    if (conf%debug_projection) then
+       runmode_flags = ior(runmode_flags, ishft(1, 3))
+    end if
     call logger%init('-', conf%log_level, conf%quiet)
     call h5_init
     h5overwrite = .true.
@@ -930,8 +940,9 @@ contains
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
          RT0_poloidal_modes, polmodes_t, polmodes_init, polmodes_write, polmodes_deinit
     integer :: m, m_res, kf, kf_min, kpoi_min, kpoi_max, kedge, ktri, kt, kp, k
-    real(dp) :: edge_perp(2), lin_interp(2), q_interp
-    complex(dp) :: jmnpar_over_Bmod_interp
+    real(dp) :: edge_perp(2), lin_interp(2), q_interp, dum
+    complex(dp) :: jmnpar_over_Bmod_interp, B0pol(mesh%npoint)
+    logical, save :: first = .true.  ! quick and dirty
     complex(dp), dimension(0:mesh%nflux) :: Bmnpsi_over_B0phi, jmnpar_over_Bmod
     type(polmodes_t) :: polmodes
 
@@ -963,59 +974,71 @@ contains
           jnpar_B0%DOF(kpoi_min:kpoi_max) = jnpar_B0%DOF(kpoi_min:kpoi_max) + &
                jmnpar_over_Bmod(kf) * exp(imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max))
        end do
-       ! project to poloidal edges
-       do kf = 1, mesh%nflux
-          do kp = 1, mesh%kp_max(kf)
-             kedge = mesh%kp_low(kf) + kp - 1
-             ktri = mesh%edge_tri(1, kedge)
-             edge_perp = [mesh%edge_Z(kedge), -mesh%edge_R(kedge)]
-             do k = 1, mesh%GL_order
-                associate (f => cache%edge_fields(k, kedge), weight => mesh%GL_weights(k) * mesh%GL_R(k, kedge))
-                  lin_interp = [fs%psi(kf) - f%psi, f%psi - fs%psi(kf - 1)] / (fs%psi(kf) - fs%psi(kf - 1))
-                  jmnpar_over_Bmod_interp = sum(jmnpar_over_Bmod(kf - 1:kf) * lin_interp)
-                  q_interp = sum(fs%q(kf - 1:kf) * lin_interp)
-                  jn%DOF(kedge) = jn%DOF(kedge) + weight * &
-                       jmnpar_over_Bmod_interp * exp(imun * m_res * f%theta) * &
-                       (-mesh%n * q_interp / m_res) * sum([f%B0(1), f%B0(3)] * edge_perp)
-                end associate
+       if (.not. conf%debug_projection) then
+          ! project to poloidal edges
+          do kf = 1, mesh%nflux
+             do kp = 1, mesh%kp_max(kf)
+                kedge = mesh%kp_low(kf) + kp - 1
+                ktri = mesh%edge_tri(1, kedge)
+                edge_perp = [mesh%edge_Z(kedge), -mesh%edge_R(kedge)]
+                do k = 1, mesh%GL_order
+                   associate (f => cache%edge_fields(k, kedge), weight => mesh%GL_weights(k) * mesh%GL_R(k, kedge))
+                     lin_interp = [fs%psi(kf) - f%psi, f%psi - fs%psi(kf - 1)] / (fs%psi(kf) - fs%psi(kf - 1))
+                     jmnpar_over_Bmod_interp = sum(jmnpar_over_Bmod(kf - 1:kf) * lin_interp)
+                     q_interp = sum(fs%q(kf - 1:kf) * lin_interp)
+                     jn%DOF(kedge) = jn%DOF(kedge) + weight * &
+                          jmnpar_over_Bmod_interp * exp(imun * m_res * f%theta) * &
+                          (-mesh%n * q_interp / m_res) * sum([f%B0(1), f%B0(3)] * edge_perp)
+                   end associate
+                end do
              end do
           end do
-       end do
-       ! project to radial edges
-       do kf = 1, mesh%nflux
-          do kt = 1, mesh%kt_max(kf)
-             kedge = mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf)) + 1
-             ktri = mesh%edge_tri(1, kedge)
-             edge_perp = [mesh%edge_Z(kedge), -mesh%edge_R(kedge)]
-             do k = 1, mesh%GL_order
-                associate (f => cache%edge_fields(k, kedge), weight => mesh%GL_weights(k) * mesh%GL_R(k, kedge))
-                  lin_interp = [fs%psi(kf) - f%psi, f%psi - fs%psi(kf - 1)] / (fs%psi(kf) - fs%psi(kf - 1))
-                  jmnpar_over_Bmod_interp = sum(jmnpar_over_Bmod(kf - 1:kf) * lin_interp)
-                  q_interp = sum(fs%q(kf - 1:kf) * lin_interp)
-                  jn%DOF(kedge) = jn%DOF(kedge) + weight * &
-                       jmnpar_over_Bmod_interp * exp(imun * m_res * f%theta) * &
-                       (-mesh%n * q_interp / m_res) * sum([f%B0(1), f%B0(3)] * edge_perp)
-                end associate
+          ! project to radial edges
+          do kf = 1, mesh%nflux
+             do kt = 1, mesh%kt_max(kf)
+                kedge = mesh%kt_low(kf) + mod(kt, mesh%kt_max(kf)) + 1
+                ktri = mesh%edge_tri(1, kedge)
+                edge_perp = [mesh%edge_Z(kedge), -mesh%edge_R(kedge)]
+                do k = 1, mesh%GL_order
+                   associate (f => cache%edge_fields(k, kedge), weight => mesh%GL_weights(k) * mesh%GL_R(k, kedge))
+                     lin_interp = [fs%psi(kf) - f%psi, f%psi - fs%psi(kf - 1)] / (fs%psi(kf) - fs%psi(kf - 1))
+                     jmnpar_over_Bmod_interp = sum(jmnpar_over_Bmod(kf - 1:kf) * lin_interp)
+                     q_interp = sum(fs%q(kf - 1:kf) * lin_interp)
+                     jn%DOF(kedge) = jn%DOF(kedge) + weight * &
+                          jmnpar_over_Bmod_interp * exp(imun * m_res * f%theta) * &
+                          (-mesh%n * q_interp / m_res) * sum([f%B0(1), f%B0(3)] * edge_perp)
+                   end associate
+                end do
              end do
           end do
-       end do
-       ! project to toroidal component
-       do kf = 1, mesh%nflux
-          do kt = 1, mesh%kt_max(kf)
-             ktri = mesh%kt_low(kf) + kt
-             do k = 1, mesh%GL2_order
-                associate (f => cache%area_fields(k, ktri), weight => mesh%GL2_weights(k))
-                  lin_interp = [fs%psi(kf) - f%psi, f%psi - fs%psi(kf - 1)] / (fs%psi(kf) - fs%psi(kf - 1))
-                  jmnpar_over_Bmod_interp = sum(jmnpar_over_Bmod(kf - 1:kf) * lin_interp)
-                  q_interp = sum(fs%q(kf - 1:kf) * lin_interp)
-                  jn%comp_phi(ktri) = jn%comp_phi(ktri) + weight * &
-                       jmnpar_over_Bmod_interp * exp(imun * m_res * f%theta) * &
-                       (f%B0(2) + (1d0 + mesh%n * q_interp / m_res) * (f%B0(1) ** 2 + f%B0(3) ** 2) / f%B0(2))
-                end associate
+          ! project to toroidal component
+          do kf = 1, mesh%nflux
+             do kt = 1, mesh%kt_max(kf)
+                ktri = mesh%kt_low(kf) + kt
+                do k = 1, mesh%GL2_order
+                   associate (f => cache%area_fields(k, ktri), weight => mesh%GL2_weights(k))
+                     lin_interp = [fs%psi(kf) - f%psi, f%psi - fs%psi(kf - 1)] / (fs%psi(kf) - fs%psi(kf - 1))
+                     jmnpar_over_Bmod_interp = sum(jmnpar_over_Bmod(kf - 1:kf) * lin_interp)
+                     q_interp = sum(fs%q(kf - 1:kf) * lin_interp)
+                     jn%comp_phi(ktri) = jn%comp_phi(ktri) + weight * &
+                          jmnpar_over_Bmod_interp * exp(imun * m_res * f%theta) * &
+                          (f%B0(2) + (1d0 + mesh%n * q_interp / m_res) * (f%B0(1) ** 2 + f%B0(3) ** 2) / f%B0(2))
+                   end associate
+                end do
              end do
           end do
-       end do
+       end if
     end do
+    if (conf%debug_projection) then
+       if (first) then
+          do kp = 1, mesh%npoint
+             call field(mesh%node_R(kp), 0d0, mesh%node_Z(kp), B0pol(kp)%Re, dum, B0pol(kp)%Im, &
+                  dum, dum, dum, dum, dum, dum, dum, dum, dum)
+          end do
+          first = .false.
+       end if
+       call FEM_debug_projection(mesh%npoint, jnpar_B0%DOF, B0pol)
+    end if
     if (debug_initial) then
        call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_KiLCA', &
             'parallel current density from KiLCA', 's^-1')  ! SI: H^-1
