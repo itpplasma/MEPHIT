@@ -84,6 +84,13 @@ module mephit_iter
        real(c_double), intent(out) :: L2int
      end subroutine FEM_compute_L2int
 
+     subroutine FEM_debug_projection(npoint, JnparB0, B0pol) bind(C, name = 'FEM_debug_projection')
+       use iso_c_binding, only: c_int, c_double_complex
+       integer(c_int), intent(in), value :: npoint
+       complex(c_double_complex), intent(in) :: JnparB0(1:npoint)
+       complex(c_double_complex), intent(in) :: B0pol(1:npoint)
+     end subroutine FEM_debug_projection
+
      subroutine FEM_deinit() bind(C, name = 'FEM_deinit')
      end subroutine FEM_deinit
 
@@ -928,17 +935,16 @@ contains
   subroutine add_kilca_current
     use mephit_conf, only: conf, datafile
     use mephit_util, only: imun, ev2erg, resample1d, interp1d
-    use mephit_mesh, only: equil, mesh, cache, fs, fs_half, mesh_interp_theta_flux, field_cache_t, equilibrium_field, &
+    use mephit_mesh, only: equil, mesh, cache, fs, fs_half, mesh_interp_theta_flux, field_cache_t, &
          m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
          RT0_poloidal_modes, polmodes_t, polmodes_init, polmodes_write, polmodes_deinit
     integer :: m, m_res, kf, kf_min, kpoi_min, kpoi_max, kedge, ktri, kt, kp, k
-    real(dp) :: edge_perp(2), lin_interp(2), q_interp
-    complex(dp) :: jmnpar_over_Bmod_interp
+    real(dp) :: edge_perp(2), lin_interp(2), q_interp, dum
+    complex(dp) :: jmnpar_over_Bmod_interp, B0pol(mesh%npoint)
+    logical, save :: first = .true.  ! quick and dirty
     complex(dp), dimension(0:mesh%nflux) :: Bmnpsi_over_B0phi, jmnpar_over_Bmod
     type(polmodes_t) :: polmodes
-    real(dp), dimension(3) :: B0, dB0_dR, dB0_dZ
-    real(dp) :: psi, Bmod, dBmod_dR, dBmod_dZ
 
     if (debug_initial) then
        call polmodes_init(polmodes, conf%m_max, mesh%nflux)
@@ -1024,16 +1030,14 @@ contains
        end if
     end do
     if (conf%debug_projection) then
-       open(100, file='/tmp/jnpar_B0.dat', status='unknown')
-       open(101, file='/tmp/B0.dat', status='unknown')
-       do kp = 1, mesh%npoint
-          call equilibrium_field(mesh%node_R(kp), mesh%node_Z(kp), &
-               B0, dB0_dR, dB0_dZ, psi, Bmod, dBmod_dR, dBmod_dZ)
-          write(100, *) real(jnpar_B0%DOF(kp)), aimag(jnpar_B0%DOF(kp))
-          write(101, *) B0(1), B0(2), B0(3), Bmod
-       end do
-       close(101)
-       close(100)
+       if (first) then
+          do kp = 1, mesh%npoint
+             call field(mesh%node_R(kp), 0d0, mesh%node_Z(kp), B0pol(kp)%Re, dum, B0pol(kp)%Im, &
+                  dum, dum, dum, dum, dum, dum, dum, dum, dum)
+          end do
+          first = .false.
+       end if
+       call FEM_debug_projection(mesh%npoint, jnpar_B0%DOF, B0pol)
     end if
     if (debug_initial) then
        call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_KiLCA', &
