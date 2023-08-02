@@ -20,7 +20,7 @@ Prerequisites from external sources for running MEPHIT are as follows.
 
 ## Initial build
 
-In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the desired build directory. If libneo, MFEM, and FGSL are not in their default location (adjacent to MEPHIT and in the system default, respectively), the environment variables `LIBNEO_DIR`, `MFEM_DIR`, and `FGSL_PATH` need to be set as well. At ITPcp, you can put the following into your `~/.bashrc`:
+In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the desired build directory. If libneo & KiLCA, MFEM & FGSL are not in their default location (adjacent to MEPHIT and in the system default, respectively), the environment variables `LIBNEO_DIR`, `KILCA_DIR`, `MFEM_DIR`, and `FGSL_PATH` need to be set as well. At ITPcp, you can put the following into your `~/.bashrc`:
 
 ```bash
 export LIBNEO_DIR=/temp/AG-plasma/codes/libneo/build-master
@@ -61,6 +61,8 @@ $MEPHIT_DIR/scripts/mephit.bash init { -c | --config } <config> { -g | --g-eqdsk
 ```
 
 This copies the `<config>`, `<gfile>`, and other necessary files to each given `<working_directory>`. The `<config>` file and some sample gfiles can be taken from a list of templates `mephit_<gfile>.in` in the `data` directory, e.g. [`data/mephit_g33353.2335.in`](data/mephit_g33353.2335.in). Currently, only geometry files for ASDEX Upgrade and KiLCA (large aspect ratio) are available.
+
+Currently, profiles must be supplied by hand, e.g., by symbolic links, and file names are fixed: `n.dat`, `Te.dat`, `Ti.dat`, `Er.dat`.
 
 The config file `mephit.in` needs do be adapated for each simulation:
 
