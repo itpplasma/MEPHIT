@@ -9,7 +9,8 @@ module mephit_pert
   ! types and associated procedures
   public :: L1_t, L1_init, L1_deinit, L1_write, L1_read, L1_interp
   public :: RT0_t, RT0_init, RT0_deinit, RT0_write, RT0_read, RT0_interp, &
-       RT0_compute_tor_comp, RT0_L2int_num, RT0_L2int, RT0_triplot, RT0_rectplot
+       RT0_project_pol_comp, RT0_project_tor_comp, RT0_tor_comp_from_zero_div, &
+       RT0_L2int_num, RT0_L2int, RT0_triplot, RT0_rectplot
   public :: polmodes_t, polmodes_init, polmodes_deinit, &
        polmodes_write, polmodes_read, L1_poloidal_modes
   public :: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
@@ -23,6 +24,21 @@ module mephit_pert
 
   ! module variables
   public :: vac
+
+  ! interfaces
+  abstract interface
+     function vector_element_projection(ktri, weight, R, Z, n, f)
+       use mephit_mesh, only: field_cache_t
+       import :: dp
+       integer, intent(in) :: ktri
+       real(dp), intent(in) :: weight
+       real(dp), intent(in) :: R
+       real(dp), intent(in) :: Z
+       real(dp), intent(in) :: n(:)
+       type(field_cache_t), intent(in) :: f
+       complex(dp) :: vector_element_projection
+     end function vector_element_projection
+  end interface
 
   type :: L1_t
      !> Number of points on which the L1 are defined
@@ -307,7 +323,39 @@ contains
     end if
   end subroutine RT0_interp
 
-  pure subroutine RT0_compute_tor_comp(elem)
+  subroutine RT0_project_pol_comp(elem, proj)
+    use mephit_mesh, only: mesh, cache
+    type(RT0_t), intent(inout) :: elem
+    procedure(vector_element_projection) :: proj
+    integer :: kedge, k, ktri
+    real(dp) :: n_f(3)
+
+    do kedge = 1, mesh%nedge
+       ktri = mesh%edge_tri(1, kedge)
+       n_f = [mesh%edge_Z(kedge), 0d0, -mesh%edge_R(kedge)]
+       do k = 1, mesh%GL_order
+          elem%DOF(kedge) = elem%DOF(kedge) + proj(ktri, mesh%GL_weights(k) * mesh%GL_R(k, kedge), &
+               mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), n_f, cache%edge_fields(k, kedge))
+       end do
+    end do
+  end subroutine RT0_project_pol_comp
+
+  subroutine RT0_project_tor_comp(elem, proj)
+    use mephit_mesh, only: mesh, cache
+    type(RT0_t), intent(inout) :: elem
+    procedure(vector_element_projection) :: proj
+    integer :: ktri, k
+    real(dp), parameter :: n_f(3) = [0d0, 1d0, 0d0]
+
+    do ktri = 1, mesh%ntri
+       do k = 1, mesh%GL2_order
+          elem%comp_phi(ktri) = elem%comp_phi(ktri) + proj(ktri, mesh%GL2_weights(k), &
+               mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), n_f, cache%area_fields(k, ktri))
+       end do
+    end do
+  end subroutine RT0_project_tor_comp
+
+  pure subroutine RT0_tor_comp_from_zero_div(elem)
     use mephit_util, only: imun
     use mephit_mesh, only: mesh
     type(RT0_t), intent(inout) :: elem
@@ -321,7 +369,7 @@ contains
        elem%comp_phi(ktri) = imun / mesh%n / mesh%area(ktri) * (-elem%DOF(mesh%tri_edge(1, ktri)) &
             - elem%DOF(mesh%tri_edge(2, ktri)) + elem%DOF(mesh%tri_edge(3, ktri)))
     end forall
-  end subroutine RT0_compute_tor_comp
+  end subroutine RT0_tor_comp_from_zero_div
 
   function RT0_L2int_num(elem)
     use mephit_mesh, only: mesh
@@ -1529,11 +1577,9 @@ contains
 
   subroutine compute_Bnvac(Bn)
     use mephit_conf, only: conf, logger, vac_src_nemov, vac_src_gpec, vac_src_fourier
-    use mephit_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
-    integer :: nR, nZ, kedge, k
+    integer :: nR, nZ
     real(dp) :: Rmin, Rmax, Zmin, Zmax
-    complex(dp) :: B_R, B_phi, B_Z
     complex(dp), dimension(:, :), allocatable :: Bn_R, Bn_Z
 
     ! initialize vacuum field
@@ -1554,15 +1600,21 @@ contains
     deallocate(Bn_R, Bn_Z)
     ! project to finite elements
     Bn%DOF = (0d0, 0d0)
-    do kedge = 1, mesh%nedge
-       do k = 1, mesh%GL_order
-          call spline_bn(conf%n, mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), B_R, B_phi, B_Z)
-          Bn%DOF(kedge) = Bn%DOF(kedge) + mesh%GL_weights(k) * &
-               (B_R * mesh%edge_Z(kedge) - B_Z * mesh%edge_R(kedge)) * mesh%GL_R(k, kedge)
-       end do
-    end do
-    ! toroidal flux via zero divergence
-    call RT0_compute_tor_comp(Bn)
+    call RT0_project_pol_comp(Bn, project_splined)
+    call RT0_tor_comp_from_zero_div(Bn)
+
+  contains
+    function project_splined(ktri, weight, R, Z, n_f, f)
+      use mephit_mesh, only: field_cache_t
+      complex(dp) :: project_splined
+      integer, intent(in) :: ktri
+      real(dp), intent(in) :: weight, R, Z, n_f(:)
+      type(field_cache_t), intent(in) :: f
+      complex(dp) :: B(3)
+
+      call spline_bn(conf%n, R, Z, B(1), B(2), B(3))
+      project_splined = weight * sum(B * n_f)
+    end function project_splined
   end subroutine compute_Bnvac
 
   subroutine generate_vacfield(vac)
@@ -1668,12 +1720,11 @@ contains
     use mephit_conf, only: conf, datafile
     use mephit_mesh, only: equil, mesh, cache
     character(len = *), parameter :: dataset = 'vac/Bn'
-    integer, parameter :: m_max = 24
     integer :: npol, kf, log2, kpol, k
     integer(HID_T) :: h5id_root
     complex(dp) :: Bn_R, Bn_Z, Bn_phi
     complex(dp), dimension(:), allocatable :: Bn_contradenspsi, Bn_n
-    complex(dp), dimension(-m_max:m_max, mesh%nflux) :: Bmn_contradenspsi, Bmn_n
+    complex(dp), dimension(-conf%m_max:conf%m_max, mesh%nflux) :: Bmn_contradenspsi, Bmn_n
 
     npol = shiftl(1, cache%max_log2)
     allocate(Bn_contradenspsi(npol), Bn_n(npol))
@@ -1691,9 +1742,9 @@ contains
           end associate
        end do
        cache%fft(log2)%samples(:) = Bn_contradenspsi(:npol)
-       call cache%fft(log2)%apply(-m_max, m_max, Bmn_contradenspsi(:, kf))
+       call cache%fft(log2)%apply(-conf%m_max, conf%m_max, Bmn_contradenspsi(:, kf))
        cache%fft(log2)%samples(:) = Bn_n(:npol)
-       call cache%fft(log2)%apply(-m_max, m_max, Bmn_n(:, kf))
+       call cache%fft(log2)%apply(-conf%m_max, conf%m_max, Bmn_n(:, kf))
        Bmn_n(:, kf) = Bmn_n(:, kf) * equil%cocos%sgn_dpsi
     end do
     call h5_open_rw(datafile, h5id_root)
@@ -1726,7 +1777,7 @@ contains
           end associate
        end do
     end do
-    call RT0_compute_tor_comp(Bn)
+    call RT0_tor_comp_from_zero_div(Bn)
     if (conf%quad_avg) call avg_flux_on_quad(Bn)
   end subroutine compute_Bn_nonres
 
@@ -1774,7 +1825,7 @@ contains
        end do
     end do
     ! toroidal flux via zero divergence
-    call RT0_compute_tor_comp(Bn)
+    call RT0_tor_comp_from_zero_div(Bn)
   end subroutine compute_kilca_vacuum
 
   !> Calculate the vacuum perturbation field in cylindrical coordinates from the Fourier
@@ -1991,7 +2042,7 @@ contains
 
   subroutine debug_fouriermodes
     use mephit_conf, only: conf, datafile, logger
-    use mephit_util, only: interp1d, linspace, imun
+    use mephit_util, only: resample1d, linspace, imun
     use mephit_mesh, only: equil
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     logical :: file_exists
@@ -2003,7 +2054,6 @@ contains
     character(len = *), parameter :: ptrn_nsqpsi = 'nrad = ', ptrn_psimax = 'psimax', &
          ptrn_phimax = 'phimax', dataset = 'debug_fouriermodes'
     character(len = 1024) :: line
-    type(interp1d) :: rq_interpolator
 
     inquire(file = 'amn.dat', exist = file_exists)
     if (.not. file_exists) return
@@ -2033,10 +2083,9 @@ contains
     end do
     close(fid)
     sgn_dpsi = sign(1d0, psimax)
-    call rq_interpolator%init(4, rsmall * abs(qsaf))
     allocate(rq_eqd(nlabel), psi_n(nlabel), Bmn_contradenspsi(-mpol:mpol, nlabel))
     rq_eqd(:) = linspace(abs(flabel_min), abs(flabel_max), nlabel, 0, 0)
-    psi_n(:) = [(rq_interpolator%eval(psisurf / psimax, rq_eqd(k)), k = 1, nlabel)]
+    call resample1d(rsmall * abs(qsaf), psisurf / psimax, rq_eqd, psi_n, 3)
     ! if qsaf does not have the expected sign, theta points in the wrong direction,
     ! and we have to reverse the index m and the overall sign
     if (equil%cocos%sgn_q * qsaf(nsqpsi) < 0d0) then

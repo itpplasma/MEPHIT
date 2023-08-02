@@ -20,7 +20,9 @@ module mephit_conf
        pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
        curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
        q_prof_flux, q_prof_rot, q_prof_geqdsk, &
-       vac_src_nemov, vac_src_gpec, vac_src_fourier
+       vac_src_nemov, vac_src_gpec, vac_src_fourier, &
+       currn_model_mhd, currn_model_kilca, &
+       refinement_scheme_geometric, refinement_scheme_gaussian
 
   character(len = *), parameter :: cmplx_fmt = 'es24.16e3, 1x, sp, es24.16e3, s, " i"'
   character(len = *), parameter :: nl_fmt = '"' // new_line('A') // '"'
@@ -47,6 +49,12 @@ module mephit_conf
   integer, parameter :: vac_src_nemov = 0   !< vacuum field perturbation from Viktor Nemov's code
   integer, parameter :: vac_src_gpec = 1    !< vacuum field perturbation from GPEC
   integer, parameter :: vac_src_fourier = 2 !< vacuum field perturbation from precomputed Fourier modes
+
+  integer, parameter :: currn_model_mhd = 0    !< response current from iMHD model
+  integer, parameter :: currn_model_kilca = 1  !< response current from KiLCA model
+
+  integer, parameter :: refinement_scheme_geometric = 0  !< radial refinement via geometric series
+  integer, parameter :: refinement_scheme_gaussian = 1   !< radial refinement via sum of Gaussians
 
   type :: config_t
 
@@ -80,6 +88,14 @@ module mephit_conf
      !> and #vac_src_gpec.
      integer :: vac_src = vac_src_nemov
 
+     !> Method to compute response current. Possible values are #currn_model_mhd (default)
+     !> and #currn_model_kilca.
+     integer :: currn_model = currn_model_mhd
+
+     !> Method used for radial refinement. Possible values are #refinement_scheme_geometric
+     !> (default) and #refinement_scheme_gaussian.
+     integer :: refinement_scheme = refinement_scheme_geometric
+
      !> Generate non-resonant vacuum perturbation for testing. Defaults to false.
      logical :: nonres = .false.
 
@@ -112,6 +128,15 @@ module mephit_conf
      !> Index of toroidal harmonics of perturbation. Defaults to 2.
      integer :: n = 2
 
+     !> Maximum poloidal mode number for Fourier transform of results. Defaults to 24.
+     integer :: m_max = 24
+
+     !> Maximum number of points per flux surface. Defaults to 0 (no maximum imposed).
+     integer :: pol_max = 0
+
+     !> Ignore resonance position where q = 1, which is usually spurious. Defaults to true.
+     logical :: ignore_q1_res = .true.
+
      !> Maximum distance between flux surfaces along \f$ \theta = 0 \f$. Defaults
      !> to 0.45 cm.
      real(dp) :: max_Delta_rad = 0.2d0
@@ -136,8 +161,8 @@ module mephit_conf
      !> Defaults to 5.0e+13 cm^-3.
      real(dp) :: dens_max = 5d13
 
-     !> Damping factor for resonances. Defaults to 0.
-     real(dp) :: damp = 0d0
+     !> Enable damping of the Pfirsch-Schlueter current. Defaults to true.
+     logical :: damp = .true.
 
      !> Single poloidal mode used in comparison with KiLCA code. Defaults to 0 (ASDEX
      !> geometry).
@@ -161,6 +186,7 @@ module mephit_conf
 
      real(dp) :: debug_pol_offset = 0.5d0
      logical :: debug_kilca_geom_theta = .false.
+     logical :: debug_projection = .false.
 
   end type config_t
 
@@ -168,13 +194,16 @@ module mephit_conf
 
      integer :: m_min, m_max
 
-     !> Number of unrefined flux surfaces to be replaced by refined ones.
-     integer, dimension(:), allocatable :: deletions
+     !> Width of refined flux surfaces around resonances in cm.
+     real(dp), dimension(:), allocatable :: Delta_rad_res
 
-     !> Width ratio of neighbouring refined flux surfaces.
+     !> Number of additional fine flux surfaces. Defaults to 0.
+     integer, dimension(:), allocatable :: add_fine
+
+     !> Width ratio of neighbouring refined flux surfaces. Defaults to 0 (no refinement).
      real(dp), dimension(:), allocatable :: refinement
 
-     !> Free parameters setting the magnitudes of sheet currents.
+     !> Free parameters setting the magnitudes of sheet currents. Defaults to 0.
      real(dp), dimension(:), allocatable :: sheet_current_factor
 
    contains
@@ -223,7 +252,6 @@ contains
     type(config_t), intent(in) :: config
     character(len = *), intent(in) :: file, dataset
     integer(HID_T) :: h5id_root
-    integer :: shielding_fourier
 
     call h5_open_rw(file, h5id_root)
     call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
@@ -232,6 +260,8 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/curr_prof', config%curr_prof)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/q_prof', config%q_prof)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/vac_src', config%vac_src)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/currn_model', config%currn_model)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/refinement_scheme', config%refinement_scheme)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/nonres', config%nonres)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/quad_avg', config%quad_avg)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Ic', config%Ic, &
@@ -249,14 +279,13 @@ contains
          comment = 'relative error for eigenvalues in Arnoldi method')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/n', config%n, &
          comment = 'index of toroidal harmonics of perturbation')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_max', config%m_max, &
+         comment = 'maximum poloidal mode number for Fourier transform of results')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/pol_max', config%pol_max, &
+         comment = 'maximum number of points per flux surface')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/max_Delta_rad', config%max_Delta_rad, &
          comment = 'maximum distance between flux surfaces along theta = 0', unit = 'cm')
-    if (conf%shielding_fourier) then
-       shielding_fourier = 1
-    else
-       shielding_fourier = 0
-    end if
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_fourier', shielding_fourier, &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_fourier', config%shielding_fourier, &
          comment = 'use only resonant Fourier mode in shielding current perturbation')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/temp_min', config%temp_min, &
          comment = 'minimum temperature', unit = 'eV')
@@ -267,7 +296,7 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dens_max', config%dens_max, &
          comment = 'maximum density', unit = 'cm^-3')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/damp', config%damp, &
-         comment = 'damping factor for resonances', unit = '1')
+         comment = 'enable damping of Pfirsch-Schlueter current')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_pol_mode', config%kilca_pol_mode, &
          comment = 'single poloidal mode used in comparison with KiLCA code')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_scale_factor', config%kilca_scale_factor, &
@@ -276,6 +305,7 @@ contains
          comment = 'maximum number of exported eigenvectors')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/debug_pol_offset', config%debug_pol_offset)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/debug_kilca_geom_theta', config%debug_kilca_geom_theta)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/debug_projection', config%debug_projection)
     call h5_close(h5id_root)
   end subroutine config_export_hdf5
 
@@ -285,21 +315,25 @@ contains
     character(len = *), intent(in) :: filename
     integer, intent(in) :: m_min, m_max
     integer :: fid
-    integer, dimension(m_min:m_max) :: deletions
-    real(dp), dimension(m_min:m_max) :: refinement, sheet_current_factor
-    namelist /arrays/ deletions, refinement, sheet_current_factor
+    integer, dimension(m_min:m_max) :: add_fine
+    real(dp), dimension(m_min:m_max) :: Delta_rad_res, refinement, sheet_current_factor
+    namelist /arrays/ Delta_rad_res, add_fine, refinement, sheet_current_factor
 
     config%m_min = m_min
     config%m_max = m_max
-    deletions = 0
+    Delta_rad_res = 0d0
+    add_fine = 0
     refinement = 0d0
     sheet_current_factor = 0d0
     open(newunit = fid, file = filename)
     read(fid, nml = arrays)
     close(fid)
-    if (allocated(config%deletions)) deallocate(config%deletions)
-    allocate(config%deletions(m_min:m_max))
-    config%deletions(:) = deletions
+    if (allocated(config%Delta_rad_res)) deallocate(config%Delta_rad_res)
+    allocate(config%Delta_rad_res(m_min:m_max))
+    config%Delta_rad_res(:) = Delta_rad_res
+    if (allocated(config%add_fine)) deallocate(config%add_fine)
+    allocate(config%add_fine(m_min:m_max))
+    config%add_fine(:) = add_fine
     if (allocated(config%refinement)) deallocate(config%refinement)
     allocate(config%refinement(m_min:m_max))
     config%refinement(:) = refinement
@@ -320,9 +354,12 @@ contains
          comment = 'minimum poloidal mode number')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_max', config%m_max, &
          comment = 'maximum poloidal mode number')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/deletions', config%deletions, &
-         lbound(config%deletions), ubound(config%deletions), &
-         comment = 'number of unrefined flux surfaces to be replaced by refined ones')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res', config%Delta_rad_res, &
+         lbound(config%Delta_rad_res), ubound(config%Delta_rad_res), &
+         comment = 'width of refined flux surfaces around resonances', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/add_fine', config%add_fine, &
+         lbound(config%add_fine), ubound(config%add_fine), &
+         comment = 'number of additional fine flux surfaces')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/refinement', config%refinement, &
          lbound(config%refinement), ubound(config%refinement), &
          comment = 'width ratio of neighbouring refined flux surfaces')
@@ -342,10 +379,12 @@ contains
     call config_delayed_deinit(config)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_min', config%m_min)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_max', config%m_max)
-    allocate(config%deletions(config%m_min:config%m_max))
+    allocate(config%Delta_rad_res(config%m_min:config%m_max))
+    allocate(config%add_fine(config%m_min:config%m_max))
     allocate(config%refinement(config%m_min:config%m_max))
     allocate(config%sheet_current_factor(config%m_min:config%m_max))
-    call h5_get(h5id_root, trim(adjustl(dataset)) // '/deletions', config%deletions)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res', config%Delta_rad_res)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/add_fine', config%add_fine)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', config%refinement)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor)
     call h5_close(h5id_root)
@@ -356,7 +395,8 @@ contains
 
     config%m_min = 0
     config%m_max = 0
-    if (allocated(config%deletions)) deallocate(config%deletions)
+    if (allocated(config%Delta_rad_res)) deallocate(config%Delta_rad_res)
+    if (allocated(config%add_fine)) deallocate(config%add_fine)
     if (allocated(config%refinement)) deallocate(config%refinement)
     if (allocated(config%sheet_current_factor)) deallocate(config%sheet_current_factor)
   end subroutine config_delayed_deinit

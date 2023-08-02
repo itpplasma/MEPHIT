@@ -26,16 +26,17 @@ def set_matplotlib_defaults():
     # grayish yellow, medium gray, vivid green, strong purplish pink, strong blue, strong yellowish pink
     rcParams['axes.prop_cycle'] = (cycler('color', ['#222222', '#f38400', '#875692', '#f3c300', '#a1caf1', '#be0032',
                                                     '#c2b280', '#848482', '#008856', '#e68fac', '#0067a5', '#f99379']) +
-                                   cycler('ls', ['-', ':', '-.', '--', dash_dot_dot, dash_dash_dot,
-                                                 '-', ':', '-.', '--', dash_dot_dot, dash_dash_dot]))
+                                   cycler('ls', ['-', '--', '-.', ':', dash_dot_dot, dash_dash_dot,
+                                                 '-', '--', '-.', ':', dash_dot_dot, dash_dash_dot]))
     latex_preamble = path.join(scripts_dir, 'magdifplot.tex')
     rcParams['text.latex.preamble'] = fr"\input{{{latex_preamble}}}"
 
 
 class Mephit:
-    def __init__(self, work_dir):
+    def __init__(self, work_dir, h5file='mephit.h5'):
         from os import getcwd
         self.work_dir = work_dir or getcwd()
+        self.h5file = h5file
         self.data = None
         self.post = dict()
 
@@ -50,10 +51,13 @@ class Mephit:
         from os import path
         self.close_datafile()
         h5py_hack().complex_names = ('real', 'imag')  # complex values are stored as compound types in libneo/hdf5tools
-        self.data = File(path.join(self.work_dir, 'mephit.h5'), 'r')
+        self.data = File(path.join(self.work_dir, self.h5file), 'r')
 
     def normalize_psi(self, arr):
         return (arr - self.data['/cache/fs/psi'][0]) / (self.data['/cache/fs/psi'][-1] - self.data['/cache/fs/psi'][0])
+
+    def normalize_psi_diff(self, arr):
+        return arr / (self.data['/cache/fs/psi'][-1] - self.data['/cache/fs/psi'][0])
 
     def postprocess(self):
         from matplotlib.tri import Triangulation

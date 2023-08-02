@@ -118,7 +118,7 @@ int main(int argc, char *argv[])
   } else if (fem.pid == (pid_t) -1) {
     errno_msg(exit, __FILE__, __LINE__, errno, "Failed to create child process for FreeFem");
   }
-  mephit.pid = fork();
+ mephit_fork: mephit.pid = fork();
   if (mephit.pid == (pid_t) 0) {
     mephit_run(runmode, config);
     exit(0);

@@ -10,11 +10,11 @@ module mephit_util
   ! types and associated procedures
   public :: fft_t
   public :: sign_convention, g_eqdsk
-  public :: interp1d
+  public :: func1d_t, func1d_init, func1d_deinit, func1d_write, func1d_read, func1d_read_formatted
   public :: neumaier_accumulator_real, neumaier_accumulator_complex
 
   ! utility procedures
-  public :: init_field, deinit_field, interp_psi_pol, &
+  public :: init_field, deinit_field, interp_psi_pol, interp1d, resample1d, &
        pos_angle, linspace, straight_cyl2bent_cyl, bent_cyl2straight_cyl, zd_cross, dd_cross, &
        binsearch, interleave, heapsort_real, heapsort_complex, complex_abs_asc, complex_abs_desc, &
        arnoldi_break, hessenberg_eigvals, hessenberg_eigvecs, &
@@ -79,16 +79,11 @@ module mephit_util
        unscaled_fmt = '("Flux in ", a, " is not normalized by 2 pi.")', &
        rescale_fmt = '("Rescaling ", a, "...")'
 
-  !> 1D piecewise Lagrange polynomial interpolator
-  type :: interp1d
-     private
-     integer :: n_lag, n_var
-     real(dp), dimension(:), allocatable :: indep_var
-   contains
-     procedure :: init => interp1d_init
-     procedure :: eval => interp1d_eval
-     procedure :: deinit => interp1d_deinit
-  end type interp1d
+  !> 1D function sample
+  type :: func1d_t
+     real(dp), dimension(:), allocatable :: x
+     real(dp), dimension(:), allocatable :: y
+  end type func1d_t
 
   type :: neumaier_accumulator_real
      private
@@ -488,10 +483,8 @@ contains
     use mephit_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
     integer, parameter :: ignore = 3
-    type(interp1d) :: psi_interpolator
     real(dp) :: deriv_eqd(this%nw), factor
     logical :: mask(this%nw)
-    integer :: k
 
     if (this%cocos%sgn_Btor /= this%cocos%sgn_F) then
        write (logger%msg, incons_fmt) 'FPOL', 'BCENTR'
@@ -504,9 +497,7 @@ contains
           this%cocos%sgn_F = -this%cocos%sgn_F
        end if
     end if
-    call psi_interpolator%init(4, this%psi_eqd)
-    deriv_eqd(:) = [(psi_interpolator%eval(this%pres, this%psi_eqd(k), .true.), &
-         k = 1, this%nw)]
+    call resample1d(this%psi_eqd, this%pres, this%psi_eqd, deriv_eqd, 3, .true.)
     ! ignore a few possibly unreliable values on both ends of the interval
     mask = .true.
     mask(1:1+ignore) = .false.
@@ -526,8 +517,8 @@ contains
        if (logger%info) call logger%write_msg
        this%pprime = -this%pprime
     end if
-    deriv_eqd(:) = [(psi_interpolator%eval(this%fpol, this%psi_eqd(k), .true.), &
-         k = 1, this%nw)] * this%fpol
+    call resample1d(this%psi_eqd, this%fpol, this%psi_eqd, deriv_eqd, 3, .true.)
+    deriv_eqd(:) = deriv_eqd * this%fpol
     factor = sum(deriv_eqd / this%ffprim, mask = mask) / dble(count(mask))
     if (abs(factor) >= sqrt(2d0 * pi)) then
        write (logger%msg, unscaled_fmt) 'FFPRIM'
@@ -550,8 +541,7 @@ contains
     use mephit_conf, only: logger
     class(g_eqdsk), intent(inout) :: this
     real(dp) :: gs_factor
-    type(interp1d) :: psi_interpolator
-    real(dp) :: Delta_R, Delta_Z, psi, gs_rhs, gs_lhs
+    real(dp) :: Delta_R, Delta_Z, psi, gs_rhs, gs_lhs, dp_dpsi, FdF_dpsi
     integer :: kw, kh
 
     ! find evaluation point to the upper right of the magnetic axis
@@ -561,9 +551,9 @@ contains
     kh = kh + 2
     psi = this%psirz(kw, kh)
     ! evaluate flux functions on RHS of GS equation
-    call psi_interpolator%init(4, this%psi_eqd)
-    gs_rhs = -4d0 * pi * this%R_eqd(kw) ** 2 * psi_interpolator%eval(this%pprime, psi) &
-         - psi_interpolator%eval(this%ffprim, psi)
+    dp_dpsi = interp1d(this%psi_eqd, this%pprime, psi, 3)
+    FdF_dpsi = interp1d(this%psi_eqd, this%ffprim, psi, 3)
+    gs_rhs = -4d0 * pi * this%R_eqd(kw) ** 2 * dp_dpsi - FdF_dpsi
     ! approximate differential operator on LHS of GS equation
     Delta_R = this%rdim / dble(this%nw - 1)
     Delta_Z = this%zdim / dble(this%nh - 1)
@@ -886,65 +876,185 @@ contains
     if (allocated(this%psirz)) deallocate(this%psirz)
   end subroutine g_eqdsk_deinit
 
-  subroutine interp1d_init(this, n_lag, indep_var)
+  subroutine func1d_init(func1d, lb, ub)
+    type(func1d_t), intent(inout) :: func1d
+    integer, intent(in) :: lb
+    integer, intent(in) :: ub
+
+    call func1d_deinit(func1d)
+    allocate(func1d%x(lb:ub))
+    allocate(func1d%y(lb:ub))
+  end subroutine func1d_init
+
+  subroutine func1d_deinit(func1d)
+    type(func1d_t), intent(inout) :: func1d
+
+    if (allocated(func1d%x)) deallocate(func1d%x)
+    if (allocated(func1d%y)) deallocate(func1d%y)
+  end subroutine func1d_deinit
+
+  subroutine func1d_write(func1d, file, group, x_comment, x_unit, y_comment, y_unit)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    type(func1d_t), intent(in) :: func1d
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = *), intent(in) :: x_comment
+    character(len = *), intent(in) :: x_unit
+    character(len = *), intent(in) :: y_comment
+    character(len = *), intent(in) :: y_unit
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+
+    grp = trim(group)
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/x', &
+         func1d%x, lbound(func1d%x), ubound(func1d%x), &
+         comment = trim(adjustl(x_comment)), unit = trim(adjustl(x_unit)))
+    call h5_add(h5id_root, grp // '/y', &
+         func1d%y, lbound(func1d%y), ubound(func1d%y), &
+         comment = trim(adjustl(y_comment)), unit = trim(adjustl(y_unit)))
+    call h5_close(h5id_root)
+  end subroutine func1d_write
+
+  subroutine func1d_read(func1d, file, group)
+    use hdf5_tools, only: HID_T, h5_open, h5_get_bounds, h5_get, h5_close
+    type(func1d_t), intent(inout) :: func1d
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+    integer :: lb, ub
+
+    grp = trim(group)
+    call h5_open(file, h5id_root)
+    call h5_get_bounds(h5id_root, grp // '/x', lb, ub)
+    call func1d_init(func1d, lb, ub)
+    call h5_get(h5id_root, grp // '/x', func1d%x)
+    call h5_get(h5id_root, grp // '/y', func1d%y)
+    call h5_close(h5id_root)
+  end subroutine func1d_read
+
+  subroutine func1d_read_formatted(func1d, fname)
+    type(func1d_t), intent(inout) :: func1d
+    character(len = *), intent(in) :: fname
+    integer :: fid, status, n, k
+
+    open(newunit = fid, file = trim(adjustl(fname)), &
+         status = 'old', form = 'formatted', action = 'read')
+    n = 0
+    do
+       read(fid, *, iostat = status)
+       if (status /= 0) exit
+       n = n + 1
+    end do
+    rewind fid
+    call func1d_init(func1d, 1, n)
+    do k = 1, n
+       read (fid, *) func1d%x(k), func1d%y(k)
+    end do
+    close(fid)
+  end subroutine func1d_read_formatted
+
+  !> 1D piecewise Lagrange polynomial interpolator
+  function interp1d(sample_x, sample_y, resampled_x, n_lag, deriv) result(resampled_y)
     use mephit_conf, only: logger
-    class(interp1d), intent(inout) :: this
+    real(dp), intent(in) :: sample_x(:)
+    real(dp), intent(in) :: sample_y(:)
+    real(dp), intent(in) :: resampled_x
+    real(dp) :: resampled_y
     integer, intent(in) :: n_lag
-    real(dp), intent(in), dimension(:) :: indep_var
-
-    if (n_lag >= size(indep_var)) then
-       write (logger%msg, '("Lagrange polynomial order ", i0, ' // &
-            '" must be lower than number of sample points", i0)') n_lag, size(indep_var)
-       if (logger%err) call logger%write_msg
-       return
-    end if
-    call interp1d_deinit(this)
-    this%n_lag = n_lag
-    this%n_var = size(indep_var)
-    allocate(this%indep_var(this%n_var))
-    this%indep_var(:) = indep_var
-  end subroutine interp1d_init
-
-  function interp1d_eval(this, sample, position, deriv) result(interp)
-    use mephit_conf, only: logger
-    class(interp1d) :: this
-    real(dp), intent(in) :: sample(:)
-    real(dp), intent(in) :: position
     logical, intent(in), optional :: deriv
-    real(dp) :: interp
-    real(dp) :: lag_coeff(0:1, this%n_lag)
-    integer :: k, kder
+    real(dp) :: lag_coeff(0:1, n_lag + 1)
+    integer :: kder, k, k_lo, k_hi
 
+    if (size(sample_x) /= size(sample_y)) then
+       call logger%msg_arg_size('interp1d', 'size(sample_x)', &
+            'size(sample_y)', size(sample_x), size(sample_y))
+       if (logger%err) call logger%write_msg
+       error stop
+    end if
+    if (n_lag >= size(sample_x)) then
+       write (logger%msg, '("Lagrange polynomial order ", i0, ' // &
+            '" must be lower than number of sample points ", i0)') &
+            n_lag, size(sample_x)
+       if (logger%err) call logger%write_msg
+       error stop
+    end if
     kder = 0
     if (present(deriv)) then
        if (deriv) then
           kder = 1
        end if
     end if
-    if (this%n_var /= size(sample)) then
-       call logger%msg_arg_size('interp1d_eval', 'this%n_var', 'size(sample)', &
-            this%n_var, size(sample))
+    call binsearch(sample_x, lbound(sample_x, 1), resampled_x, k)
+    k_lo = k - (n_lag + 1) / 2
+    k_hi = k_lo + n_lag
+    ! ensure that polynomial sample points remain within the bounds of sample_x
+    if (k_lo < lbound(sample_x, 1)) then
+       k_lo = lbound(sample_x, 1)
+       k_hi = k_lo + n_lag
+    elseif (k_hi > ubound(sample_x, 1)) then
+       k_hi = ubound(sample_x, 1)
+       k_lo = k_hi - n_lag
+    end if
+    call plag_coeff(n_lag + 1, 1, resampled_x, sample_x(k_lo:k_hi), lag_coeff)
+    resampled_y = sum(sample_y(k_lo:k_hi) * lag_coeff(kder, :))
+  end function interp1d
+
+  !> 1D piecewise Lagrange polynomial resampler
+  subroutine resample1d(sample_x, sample_y, resampled_x, resampled_y, n_lag, deriv)
+    use mephit_conf, only: logger
+    real(dp), intent(in) :: sample_x(:)
+    real(dp), intent(in) :: sample_y(:)
+    real(dp), intent(in) :: resampled_x(:)
+    real(dp), intent(out) :: resampled_y(:)
+    integer, intent(in) :: n_lag
+    logical, intent(in), optional :: deriv
+    real(dp) :: lag_coeff(0:1, n_lag + 1)
+    integer :: kder, k, k_lo, k_hi, k_re
+
+    if (size(sample_x) /= size(sample_y)) then
+       call logger%msg_arg_size('resample1d', 'size(sample_x)', &
+            'size(sample_y)', size(sample_x), size(sample_y))
        if (logger%err) call logger%write_msg
        error stop
     end if
-    call binsearch(this%indep_var, lbound(this%indep_var, 1), position, k)
-    ! ensure that polynomial sample points do not go below lower bound of 1
-    if (k < 1 + this%n_lag / 2) then
-       k = 1 + this%n_lag / 2
-    ! ensure that polynomial sample points do not go above upper bound of this%n_var
-    elseif (k > this%n_var - this%n_lag / 2 + 1) then
-       k = this%n_var - this%n_lag / 2 + 1
+    if (size(resampled_x) /= size(resampled_y)) then
+       call logger%msg_arg_size('resample1d', 'size(resampled_x)', &
+            'size(resampled_y)', size(resampled_x), size(resampled_y))
+       if (logger%err) call logger%write_msg
+       error stop
     end if
-    call plag_coeff(this%n_lag, 1, position, &
-         this%indep_var(k - this%n_lag / 2:k + this%n_lag / 2 - 1), lag_coeff)
-    interp = sum(sample(k - this%n_lag / 2:k + this%n_lag / 2 - 1) * lag_coeff(kder, :))
-  end function interp1d_eval
-
-  subroutine interp1d_deinit(this)
-    class(interp1d), intent(inout) :: this
-
-    if (allocated(this%indep_var)) deallocate(this%indep_var)
-  end subroutine interp1d_deinit
+    if (n_lag >= size(sample_x)) then
+       write (logger%msg, '("Lagrange polynomial order ", i0, ' // &
+            '" must be lower than number of sample points ", i0)') &
+            n_lag, size(sample_x)
+       if (logger%err) call logger%write_msg
+       error stop
+    end if
+    kder = 0
+    if (present(deriv)) then
+       if (deriv) then
+          kder = 1
+       end if
+    end if
+    do k_re = lbound(resampled_x, 1), ubound(resampled_x, 1)
+       call binsearch(sample_x, lbound(sample_x, 1), resampled_x(k_re), k)
+       k_lo = k - (n_lag + 1) / 2
+       k_hi = k_lo + n_lag
+       ! ensure that polynomial sample points remain within the bounds of sample_x
+       if (k_lo < lbound(sample_x, 1)) then
+          k_lo = lbound(sample_x, 1)
+          k_hi = k_lo + n_lag
+       elseif (k_hi > ubound(sample_x, 1)) then
+          k_hi = ubound(sample_x, 1)
+          k_lo = k_hi - n_lag
+       end if
+       call plag_coeff(n_lag + 1, 1, resampled_x(k_re), sample_x(k_lo:k_hi), lag_coeff)
+       resampled_y(k_re) = sum(sample_y(k_lo:k_hi) * lag_coeff(kder, :))
+    end do
+  end subroutine resample1d
 
   subroutine neumaier_accumulator_real_init(this)
     class(neumaier_accumulator_real), intent(inout) :: this
@@ -1206,7 +1316,7 @@ contains
        qvecs(:, k) = qvecs(:, k) / hmat(k, k-1)
        ! calculate Ritz values
        call hessenberg_eigvals(hmat(:k, :k), ritzvals(:k), ierr)
-       if (ierr /= 0) return
+       if (ierr < 0) return
        progression(:k, k) = ritzvals(:k)
        selection(:k) = abs(ritzvals(:k)) >= threshold
        nritz = count(selection)
@@ -1221,7 +1331,6 @@ contains
        ierr = count(converged)
        print '("arnoldi_break: only ", i0, " eigenvalues of ", i0, " converged")', &
             ierr, nritz
-       return
     end if
     ! sort eigenvalues in descending order and optionall compute eigenvectors in this order
     call heapsort_complex(ritzvals(:n), complex_abs_desc)
@@ -1230,7 +1339,7 @@ contains
     if (present(eigvecs)) then
        allocate(ritzvecs(n, nritz), eigvecs(ndim, nritz))
        call hessenberg_eigvecs(hmat(:n, :n), ritzvals(:n), selection(:n), ritzvecs, ierr)
-       if (ierr /= 0) return
+       if (ierr < 0) return
        eigvecs = matmul(qvecs(:, :n), ritzvecs)
        deallocate(ritzvecs)
     end if
@@ -1257,12 +1366,14 @@ contains
     if (size(hmat, 1) /= ndim) then
        print '("hessenberg_eigvals: hmat has shape (", i0, ", ", i0, "), ' // &
             'but expected (", i0, ", ", i0, ")")', shape(hmat), ndim, ndim
-       error stop
+       ierr = -1
+       return
     end if
     if (size(eigvals, 1) /= ndim) then
        print '("hessenberg_eigvals: eigvals has shape (", i0, "), ' // &
             'but expected (", i0, ")")', shape(hmat), ndim
-       error stop
+       ierr = -2
+       return
     end if
     allocate(hmat_work(ndim, ndim), zdum(1, ndim))
     hmat_work(:, :) = hmat
@@ -1270,14 +1381,12 @@ contains
     lwork = -1
     call zhseqr('E', 'N', ndim, 1, ndim, hmat_work, ndim, eigvals, &
          zdum, 1, work, lwork, ierr)
-    if (ierr /= 0) then
-       if (ierr < 0) then
-          print '("ZHSEQR: illegal value in argument #", i0)', -ierr
-       else
-          print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
-               ierr, ndim
-       end if
+    if (ierr < 0) then
+       print '("ZHSEQR: illegal value in argument #", i0)', -ierr
        return
+    elseif (ierr > 0) then
+       print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
+            ierr, ndim
     end if
     lwork = int(work(1))
     deallocate(work)
@@ -1285,13 +1394,11 @@ contains
     call zhseqr('E', 'N', ndim, 1, ndim, hmat_work, ndim, eigvals, &
          zdum, 1, work, lwork, ierr)
     deallocate(work, hmat_work, zdum)
-    if (ierr /= 0) then
-       if (ierr < 0) then
-          print '("ZHSEQR: illegal value in argument #", i0)', -ierr
-       else
-          print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
-               ierr, ndim
-       end if
+    if (ierr < 0) then
+       print '("ZHSEQR: illegal value in argument #", i0)', -ierr
+    elseif (ierr > 0) then
+       print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
+            ierr, ndim
     end if
   end subroutine hessenberg_eigvals
 
@@ -1322,22 +1429,26 @@ contains
     if (size(hmat, 1) /= ndim) then
        print '("hessenberg_eigvecs: hmat has shape (", i0, ", ", i0, "), ' // &
             'but expected (", i0, ", ", i0, ")")', shape(hmat), ndim, ndim
-       error stop
+       ierr = -1
+       return
     end if
     if (size(eigvals, 1) /= ndim) then
        print '("hessenberg_eigvecs: eigvals has shape (", i0, "), ' // &
             'but expected (", i0, ")")', shape(eigvals), ndim
-       error stop
+       ierr = -2
+       return
     end if
     if (size(mask, 1) /= ndim) then
        print '("hessenberg_eigvecs: mask has shape (", i0, "), ' // &
             'but expected (", i0, ")")', shape(mask), ndim
-       error stop
+       ierr = -3
+       return
     end if
     if (size(eigvecs, 1) /= ndim .or. size(eigvecs, 2) /= count(mask)) then
        print '("hessenberg_eigvecs: eigvecs has shape (", i0, ", ", i0, "), ' // &
             'but expected (", i0, ", ", i0, ")")', shape(eigvecs), ndim, count(mask)
-       error stop
+       ierr = -4
+       return
     end if
     allocate(eigvals_work(ndim), work(ndim, ndim), rwork(ndim), &
          zdum(1, count(mask)), idum(count(mask)), ifailr(count(mask)))
@@ -1345,13 +1456,11 @@ contains
     call zhsein('R', 'Q', 'N', mask, ndim, hmat, ndim, eigvals_work, &
          zdum, 1, eigvecs, ndim, count(mask), neff, work, rwork, &
          idum, ifailr, ierr)
-    if (ierr /= 0) then
-       if (ierr < 0) then
-          print '("ZHSEIN: illegal value in argument #", i0)', -ierr
-       else
-          print '("ZHSEIN: only ", i0, " of ", i0, " eigenvectors converged")', &
-               ierr, ndim
-       end if
+    if (ierr < 0) then
+       print '("ZHSEIN: illegal value in argument #", i0)', -ierr
+    elseif (ierr > 0) then
+       print '("ZHSEIN: only ", i0, " of ", i0, " eigenvectors converged")', &
+            ierr, ndim
     end if
     deallocate(eigvals_work, work, rwork, zdum, idum, ifailr)
   end subroutine hessenberg_eigvecs

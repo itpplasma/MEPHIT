@@ -19,9 +19,10 @@ if ("$ENV{FC}" MATCHES "ifort")
 else ()
   # gfortran configuration
   set(CMAKE_Fortran_FLAGS "-O2 -march=native -cpp -g -fno-realloc-lhs -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow")
-  set(WARNING_FLAGS "-Wall -Wextra -pedantic -fmax-errors=1")
+  set(WARNING_FLAGS "-Wall -Wextra -pedantic -fmax-errors=1 -Wno-unused-label")
   set(LEGACY_FLAGS "-fcheck=no-array-temps")
   set(CMAKE_C_FLAGS "-O2 -g -march=native -Wconversion -Wfloat-equal -Wshadow -Wredundant-decls -Winline ${WARNING_FLAGS}")
+  set(BLA_VENDOR OpenBLAS)
 endif ()
 
 ### Define external paths
@@ -33,6 +34,12 @@ else ()
   else ()
     set(tmpdir $XDG_RUNTIME_DIR)
   endif ()
+endif ()
+
+if ("$ENV{KILCA_DIR}" STREQUAL "")
+  set(KILCA_DIR "${CMAKE_SOURCE_DIR}/../KiLCA/build")
+else ()
+  set(KILCA_DIR "$ENV{KILCA_DIR}")
 endif ()
 
 if ("$ENV{LIBNEO_DIR}" STREQUAL "")
@@ -60,6 +67,7 @@ else ()
 endif ()
 
 ### Find dependencies in standard directories
+find_package(LAPACK)
 find_package(SuiteSparse REQUIRED)
 find_package(SuperLU)
 cmake_policy(SET CMP0074 NEW)
@@ -76,6 +84,9 @@ find_library(gsl_lib gsl ${GSL_LIB})
 set(FGSL_LIB ${FGSL_PATH}/lib/ CACHE STRING "FGSL lib")
 set(FGSL_INC ${FGSL_PATH}/include/fgsl/ CACHE STRING "FGSL include")
 find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
+
+# KiLCA
+find_library(kilca_lib libkilca.a ${KILCA_DIR} NO_DEFAULT_PATH)
 
 # hdf5_tools
 find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
@@ -105,13 +116,17 @@ set(COMMON_FORTRAN_SRC_FILES
   src/external/d1mach.f
   src/fftw3.f90
   src/sparse_mod.f90
+  src/getIfunc.f90
+  src/progonka.f90
+  src/response_current.f90
+  src/W2_arr.f90
 )
 set(MEPHIT_FORTRAN_SRC_FILES
-  src/mephit_iter.f90
   src/mephit_conf.f90
   src/mephit_util.f90
   src/mephit_mesh.f90
   src/mephit_pert.f90
+  src/mephit_iter.f90
 )
 
 set(MEPHIT_C_SRC_FILES
@@ -163,6 +178,7 @@ set(MEPHIT_LIBS
   ${gsl_lib}
   ${fgsl_lib}
   ${MFEM_LIBRARIES}
+  ${kilca_lib}
   blas
   lapack
   fftw3
@@ -185,6 +201,7 @@ configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ON
 configure_file(scripts/ff-mephit.bash ${PROJECT_BINARY_DIR}/scripts/ff-mephit.bash COPYONLY)
 configure_file(scripts/maxwell_daemon.edp ${PROJECT_BINARY_DIR}/scripts/maxwell_daemon.edp COPYONLY)
 configure_file(scripts/extmesh.edp ${PROJECT_BINARY_DIR}/scripts/extmesh.edp COPYONLY)
+configure_file(scripts/mephit.gdb ${PROJECT_BINARY_DIR}/scripts/mephit.gdb COPYONLY)
 configure_file(scripts/magdifplot.tex ${PROJECT_BINARY_DIR}/scripts/magdifplot.tex COPYONLY)
 configure_file(scripts/mephit_plot.py ${PROJECT_BINARY_DIR}/scripts/mephit_plot.py COPYONLY)
 configure_file(scripts/test_plot.py ${PROJECT_BINARY_DIR}/scripts/test_plot.py COPYONLY)

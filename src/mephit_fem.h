@@ -30,6 +30,9 @@ void FEM_compute_Bn(const int nedge,
                     complex_double *AnR,
                     complex_double *AnZ);
 void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2int);
+void FEM_debug_projection(const int npoint,
+                          const complex_double *JnparB0,
+                          const complex_double *B0pol);
 void FEM_deinit(void);
 
 void FEM_triangulate_external(const int npt_inner,

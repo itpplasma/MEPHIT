@@ -1,6 +1,6 @@
 # How to run
 
-Prerequisites for running MEPHIT are as follows.
+Prerequisites from external sources for running MEPHIT are as follows.
 
 - current GNU/Linux environment (Bash, coreutils, getopt, ...)
 - current Fortran compiler (tested with `gfortran` >= 9.2.0 and `ifort` 18.0.1)
@@ -20,11 +20,13 @@ Prerequisites for running MEPHIT are as follows.
 
 ## Initial build
 
-In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the desired build directory. If libneo and FGSL are not in their default location (adjacent to MEPHIT and in the system default, respectively), the environment variables `LIBNEO_DIR` and `FGSL_PATH` need to be set as well. At ITPcp, you can put the following into your `~/.bashrc`:
+In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the desired build directory. If libneo & KiLCA, MFEM & FGSL are not in their default location (adjacent to MEPHIT and in the system default, respectively), the environment variables `LIBNEO_DIR`, `KILCA_DIR`, `MFEM_DIR`, and `FGSL_PATH` need to be set as well. At ITPcp, you can put the following into your `~/.bashrc`:
 
 ```bash
 export LIBNEO_DIR=/temp/AG-plasma/codes/libneo/build-master
+export KILCA_DIR=/temp/AG-plasma/codes/KiLCA-2.4.2/lib
 export FGSL_PATH=/temp/AG-plasma/codes/contrib/fgsl-1.5.0/LIB
+export MFEM_DIR=/temp/AG-plasma/codes/mfem/build
 ```
 
 To build MEPHIT, run
@@ -60,6 +62,8 @@ $MEPHIT_DIR/scripts/mephit.bash init { -c | --config } <config> { -g | --g-eqdsk
 
 This copies the `<config>`, `<gfile>`, and other necessary files to each given `<working_directory>`. The `<config>` file and some sample gfiles can be taken from a list of templates `mephit_<gfile>.in` in the `data` directory, e.g. [`data/mephit_g33353.2335.in`](data/mephit_g33353.2335.in). Currently, only geometry files for ASDEX Upgrade and KiLCA (large aspect ratio) are available.
 
+Currently, profiles must be supplied by hand, e.g., by symbolic links, and file names are fixed: `n.dat`, `Te.dat`, `Ti.dat`, `Er.dat`.
+
 The config file `mephit.in` needs do be adapated for each simulation:
 
 - In the `arrays` namelist, array indices must be within the range of `m_res_min` and `m_res_max`.
@@ -74,10 +78,10 @@ Simulations consist of three phases:
 2. iterations
 3. analysis (poloidal modes, parallel currents)
 
-Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default. If no working directory is given, the current directory is used; non-existing directories are skipped.
+Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default. Use `--debug` to start a [GDB](https://www.gnu.org/software/gdb) session and `--memcheck` to run [Valgrind's Memcheck](https://valgrind.org/info/tools.html#memcheck). If no working directory is given, the current directory is used; non-existing directories are skipped.
 
 ```bash
-$MEPHIT_DIR/scripts/mephit.bash run [-m | --meshing] [-i | --iterations] [-a | --analysis] [<working_directory> ...]
+$MEPHIT_DIR/scripts/mephit.bash run [-m | --meshing] [-i | --iterations] [-a | --analysis] [--debug | --memcheck] [<working_directory> ...]
 ```
 
 ## Tests
