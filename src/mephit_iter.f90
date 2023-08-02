@@ -112,8 +112,9 @@ contains
   subroutine mephit_run(runmode, config) bind(C, name = 'mephit_run')
     use iso_c_binding, only: c_int, c_ptr
     use input_files, only: gfile
+    use geqdsk_tools, only: geqdsk_read, geqdsk_classify, geqdsk_standardise
     use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
-    use mephit_util, only: C_F_string, init_field
+    use mephit_util, only: C_F_string, init_field, geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
     use mephit_mesh, only: equil, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
          resample_profiles, write_profiles_hdf5, read_profiles_hdf5
@@ -147,13 +148,13 @@ contains
     if (meshing) then
        ! initialize equilibrium field
        call read_field_input
-       call equil%read(trim(gfile))
-       call equil%classify
-       call equil%standardise
+       call geqdsk_read(equil, trim(gfile))
+       call geqdsk_classify(equil)
+       call geqdsk_standardise(equil)
        if (conf%kilca_scale_factor /= 0) then
-          call equil%scale(conf%kilca_scale_factor)
+          call geqdsk_scale(equil, conf%kilca_scale_factor)
        end if
-       call equil%export_hdf5(datafile, 'equil')
+       call geqdsk_export_hdf5(equil, datafile, 'equil')
        call init_field(equil)
        ! generate mesh and vacuum field
        call generate_mesh
@@ -170,7 +171,7 @@ contains
     else
        ! initialize equilibrium field
        call read_field_input
-       call equil%import_hdf5(datafile, 'equil')
+       call geqdsk_import_hdf5(equil, datafile, 'equil')
        call init_field(equil)
        ! read in preprocessed data
        call mesh_read(mesh, datafile, 'mesh')
@@ -208,6 +209,7 @@ contains
   subroutine mephit_deinit
     use magdata_in_symfluxcoor_mod, only: unload_magdata_in_symfluxcoord
     use hdf5_tools, only: h5_deinit
+    use geqdsk_tools, only: geqdsk_deinit
     use mephit_conf, only: conf_arr, logger
     use mephit_util, only: deinit_field
     use mephit_mesh, only: equil, fs, fs_half, psi_fine, &
@@ -223,7 +225,7 @@ contains
     call vac_deinit(vac)
     call deinit_field
     call deinit_profiles
-    call equil%deinit
+    call geqdsk_deinit(equil)
     call conf_arr%deinit
     call logger%deinit
     call h5_deinit

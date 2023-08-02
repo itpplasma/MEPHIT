@@ -1,7 +1,8 @@
 module mephit_mesh
 
   use iso_fortran_env, only: dp => real64
-  use mephit_util, only: g_eqdsk, interp1d, fft_t, func1d_t
+  use geqdsk_tools, only: geqdsk_t
+  use mephit_util, only: interp1d, fft_t, func1d_t
 
   implicit none
 
@@ -54,8 +55,8 @@ module mephit_mesh
   !> Ion collision frequency profile \f$ \nu_{e} \f$ in s^-1.
   type(func1d_t) :: nu_i
 
+  type(geqdsk_t) :: equil
 
-  type(g_eqdsk) :: equil
   real(dp), dimension(:), allocatable :: psi_fine  ! intermediate step, to be removed
 
   !> Structure containing flux functions evaluated at a specific flux surface, indicated

@@ -47,6 +47,7 @@ if ("$ENV{LIBNEO_DIR}" STREQUAL "")
 else ()
   set(LIBNEO_DIR "$ENV{LIBNEO_DIR}")
 endif ()
+set(magfie_dir ${LIBNEO_DIR}/src)
 set(HDF5_tools_include_dir ${LIBNEO_DIR})
 set(HDF5_tools_lib_dir ${LIBNEO_DIR}/src/hdf5_tools)
 
@@ -91,27 +92,21 @@ find_library(kilca_lib libkilca.a ${KILCA_DIR} NO_DEFAULT_PATH)
 # hdf5_tools
 find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
 
+# magfie
+find_library(magfie_lib magfie ${magfie_dir} NO_DEFAULT_PATH)
+
 ### External source files
 include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
 include_directories(${HDF5_INCLUDE_DIRS})
 
 ### Project source files
 set(COMMON_FORTRAN_SRC_FILES
-  src/bdivfree.f90
-  src/binsrc.f90
-  src/field_divB0.f90
   src/field_line_integration_for_SYNCH.f90
   src/from_nrtype.f90
-  src/leastsq.f90
-  src/lubksb.f
-  src/ludcmp.f
   src/magdata_in_symfluxcoord.f90
   src/odeint_allroutines.f
-  src/plag_coeff.f90
   src/points_2d.f90
   src/preload_for_SYNCH.f90
-  src/spl_three_to_five_mod.f90
-  src/spline5_RZ.f90
   src/external/netlib_mod.f90
   src/external/d1mach.f
   src/fftw3.f90
@@ -146,7 +141,6 @@ set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
 set_source_files_properties(${MEPHIT_FORTRAN_SRC_FILES}
   src/mephit_test.f90
   src/vacfield.f90
-  src/standardise_equilibrium.f90
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS} ${LEGACY_FLAGS}")
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS}")
@@ -162,6 +156,7 @@ add_library(mephit SHARED
 )
 target_include_directories(mephit PUBLIC
   ${HDF5_tools_include_dir}
+  ${magfie_dir}
   ${FGSL_INC}
   ${NETCDF_INCLUDES}
   ${MFEM_INCLUDE_DIRS}
@@ -169,6 +164,7 @@ target_include_directories(mephit PUBLIC
 set(MEPHIT_LIBS
   # ${SUPERLU_LIBRARIES}
   ${SUITESPARSE_LIBRARIES}
+  ${magfie_lib}
   ${HDF5_tools_lib}
   ${HDF5_Fortran_HL_LIBRARIES}
   ${HDF5_HL_LIBRARIES}
@@ -189,11 +185,9 @@ target_link_libraries(mephit ${MEPHIT_LIBS})
 ### Define executables
 add_executable(mephit_run.x src/mephit_run.c)
 add_executable(mephit_test.x src/mephit_test.f90)
-add_executable(standardise_equilibrium.x src/standardise_equilibrium.f90)
 add_executable(vacfield.x src/vacfield.f90)
 target_link_libraries(mephit_run.x mephit)
 target_link_libraries(mephit_test.x mephit)
-target_link_libraries(standardise_equilibrium.x mephit)
 target_link_libraries(vacfield.x mephit)
 
 ### Add helper script to binaries

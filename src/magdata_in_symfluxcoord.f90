@@ -21,8 +21,6 @@ contains
 !
 ! Reads and splines magnetic data over theta
 !
-  use spl_three_to_five_mod, only : spl_per
-!
   implicit none
 !
   integer :: i,nthetap1
