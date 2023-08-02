@@ -186,6 +186,7 @@ module mephit_conf
 
      real(dp) :: debug_pol_offset = 0.5d0
      logical :: debug_kilca_geom_theta = .false.
+     logical :: debug_projection = .false.
 
   end type config_t
 
@@ -251,7 +252,6 @@ contains
     type(config_t), intent(in) :: config
     character(len = *), intent(in) :: file, dataset
     integer(HID_T) :: h5id_root
-    integer :: shielding_fourier, damp
 
     call h5_open_rw(file, h5id_root)
     call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
@@ -285,12 +285,7 @@ contains
          comment = 'maximum number of points per flux surface')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/max_Delta_rad', config%max_Delta_rad, &
          comment = 'maximum distance between flux surfaces along theta = 0', unit = 'cm')
-    if (conf%shielding_fourier) then
-       shielding_fourier = 1
-    else
-       shielding_fourier = 0
-    end if
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_fourier', shielding_fourier, &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_fourier', config%shielding_fourier, &
          comment = 'use only resonant Fourier mode in shielding current perturbation')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/temp_min', config%temp_min, &
          comment = 'minimum temperature', unit = 'eV')
@@ -300,12 +295,7 @@ contains
          comment = 'maximum temperature', unit = 'eV')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/dens_max', config%dens_max, &
          comment = 'maximum density', unit = 'cm^-3')
-    if (conf%damp) then
-       damp = 1
-    else
-       damp = 0
-    end if
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/damp', damp, &
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/damp', config%damp, &
          comment = 'enable damping of Pfirsch-Schlueter current')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_pol_mode', config%kilca_pol_mode, &
          comment = 'single poloidal mode used in comparison with KiLCA code')
@@ -315,6 +305,7 @@ contains
          comment = 'maximum number of exported eigenvectors')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/debug_pol_offset', config%debug_pol_offset)
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/debug_kilca_geom_theta', config%debug_kilca_geom_theta)
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/debug_projection', config%debug_projection)
     call h5_close(h5id_root)
   end subroutine config_export_hdf5
 
