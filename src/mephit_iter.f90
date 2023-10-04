@@ -415,6 +415,24 @@ contains
     call vec_polmodes_init(jmn, conf%m_max, mesh%nflux)
     call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
     call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
+    if (preconditioned) then
+       Bn%DOF(:) = 0d0
+       do i = 1, nritz
+          if (abs(eigvals(i)) < 1d0) exit
+          Bn%DOF(:) = Bn%DOF + eigvecs(:, i)
+       end do
+       Bn%DOF(:) = RT0_L2int(Bn) / L2int_Bnvac * Bn%DOF
+       call RT0_tor_comp_from_zero_div(Bn)
+       Bn_prev%DOF(:) = Bn%DOF
+       call compute_presn
+       call compute_currn
+       call compute_Bn
+       Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
+            matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF - Bn_prev%DOF)))
+       call RT0_tor_comp_from_zero_div(Bn)
+       call RT0_write(Bn, datafile, 'iter/debug_kernel', &
+            'preconditioner applied to its kernel', 'G', 1)
+    end if
     Bn%DOF(:) = vac%Bn%DOF
     Bn%comp_phi(:) = vac%Bn%comp_phi
     if (preconditioned) then
