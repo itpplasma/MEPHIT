@@ -24,6 +24,7 @@
   use rhs_surf_mod, only : dr_dphi, dz_dphi
   use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
        theta0_at_xpoint, theta_axis, theta0
+  use magdata_in_symfluxcoor_mod, only: btor, rbig
 !
   implicit none
 !
@@ -32,11 +33,11 @@
   integer, parameter :: niter=50    !number of iterations for Newton method
   integer, parameter :: nstep_min=10   !minimum number of steps
 !
-  integer :: nstep,nsurfmax,nlabel,ntheta
+  integer, intent(in) :: nstep,nsurfmax,nlabel,ntheta
   integer :: i,j,nsurf,nmap,isurf,iter
 !
   double precision, parameter :: pi = 3.14159265358979d0
-  double precision :: rmn,rmx,zmn,zmx,raxis,zaxis
+  double precision, intent(out) :: rmn,rmx,zmn,zmx,raxis,zaxis
   double precision :: relerr,phiout
   double precision :: phi,rrr,ppp,zzz
   double precision :: aiota,hbr
@@ -47,8 +48,8 @@
   double precision, dimension(2) :: prev_ymet, ymet_axis
 
   double precision, dimension(neq)           :: ymet
-  double precision, dimension(nlabel)        :: rbeg,rsmall,qsaf,psisurf,phitor,circumf
-  double precision, dimension(nlabel,ntheta) :: R_st,Z_st,bmod_st,sqgnorm_st
+  double precision, dimension(nlabel), intent(out) :: rbeg,rsmall,qsaf,psisurf,phitor,circumf
+  double precision, dimension(nlabel,ntheta), intent(out) :: R_st,Z_st,bmod_st,sqgnorm_st
 !
   external :: rhs_axis, rhs_surf  !, rhs_surf_theta
   double precision, external :: cross_2d_sign
@@ -96,9 +97,8 @@
 !
   psi_axis=psif
   print *,'toroidal field = ',btf
-  open(1,file='btor_rbig.dat')
-  write (1,*) btf,rtf
-  close(1)
+  btor = btf
+  rbig = rtf
 !
 ! End of search for the magnetic axis
 !

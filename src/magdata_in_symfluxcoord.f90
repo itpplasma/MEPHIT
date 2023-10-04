@@ -6,7 +6,8 @@ module magdata_in_symfluxcoor_mod
   integer, parameter :: nder  = 1 !number of derivatives from Largange polynomial interpolation
   logical :: load=.true.
   integer :: nlabel,ntheta
-  double precision :: rmn,rmx,zmn,zmx,raxis,zaxis,h_theta,twopi,psipol_max,psitor_max
+  double precision :: rmn,rmx,zmn,zmx,raxis,zaxis,h_theta,psipol_max,psitor_max,btor,rbig
+  double precision, parameter :: twopi = atan(1.0d0)*8.0d0
   double precision, dimension(nplag)        :: R_lag,Z_lag,sqrtg_lag,bmod_lag,dbmod_dt_lag, &
                                                dR_dt_lag, dZ_dt_lag
   double precision, dimension(0:nder,nplag) :: coef
@@ -25,8 +26,6 @@ contains
 !
   integer :: i,nthetap1
   double precision, dimension(:,:), allocatable :: splcoe
-!
-  twopi = atan(1.d0)*8.d0
 !
 !-----------------------------------------------------------------------
 !
@@ -235,6 +234,15 @@ contains
   !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
   subroutine unload_magdata_in_symfluxcoord
-    deallocate(rbeg, rsmall, qsaf, psisurf, phitor, R_st, Z_st, bmod_st, sqgnorm_st)
+    if (allocated(rbeg)) deallocate(rbeg)
+    if (allocated(rsmall)) deallocate(rsmall)
+    if (allocated(qsaf)) deallocate(qsaf)
+    if (allocated(psisurf)) deallocate(psisurf)
+    if (allocated(phitor)) deallocate(phitor)
+    if (allocated(circumf)) deallocate(circumf)
+    if (allocated(R_st)) deallocate(R_st)
+    if (allocated(Z_st)) deallocate(Z_st)
+    if (allocated(bmod_st)) deallocate(bmod_st)
+    if (allocated(sqgnorm_st)) deallocate(sqgnorm_st)
   end subroutine unload_magdata_in_symfluxcoord
 end module magdata_in_symfluxcoor_mod

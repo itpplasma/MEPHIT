@@ -1,5 +1,6 @@
   subroutine preload_for_SYNCH
 !
+  use magdata_in_symfluxcoor_mod, only: btor, rbig
   implicit none
 !
   integer :: nstep,nsurfmax,nlabel,ntheta,i
@@ -25,6 +26,10 @@
                                         rbeg,rsmall,qsaf,psisurf,phitor, &
                                         circumf,R_st,Z_st,bmod_st,sqgnorm_st)
 !
+  open(1,file='btor_rbig.dat')
+  write (1,*) btor,rbig
+  close(1)
+
   open(1,form='formatted',file='box_size_axis.dat')
   write (1,*) rmn,rmx, '<= rmn, rmx (cm)'
   write (1,*) zmn,zmx, '<= zmn, zmx (cm)'

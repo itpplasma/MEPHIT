@@ -158,7 +158,7 @@ module mephit_mesh
      !> array index).
      real(dp), allocatable :: psi_res(:)
 
-     !> Normalized small radius (along line connecting X point and O point) at resonance
+     !> Normalized small radius (outboard from O point, or towards X point) at resonance
      !> position corresponding to a poloidal mode (given as array index).
      real(dp), allocatable :: rad_norm_res(:)
 
@@ -1668,9 +1668,9 @@ inner: do
 
   subroutine create_mesh_points
     use mephit_conf, only: conf, conf_arr, logger
-    use mephit_util, only: interp_psi_pol, resample1d, pos_angle
+    use mephit_util, only: interp_psi_pol, resample1d, pos_angle, generate_symfluxcoord
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
-         rsmall, circumf, raxis, zaxis, load_magdata_in_symfluxcoord
+         rsmall, circumf, raxis, zaxis
     use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, theta0_at_xpoint
     use points_2d, only: s_min, create_points_2d
 
@@ -1690,11 +1690,7 @@ inner: do
        o_point = [equil%rmaxis, equil%zmaxis]
        x_point = o_point + [rad_max, 0d0]
     end if
-    ! calculates points on a fine grid in the core region by integrating along field lines
-    call preload_for_SYNCH
-    ! loads points that are calculated in preload_for_SYNCH into module variables
-    ! and spline interpolates them for use with magdata_in_symfluxcoord_ext
-    call load_magdata_in_symfluxcoord
+    call generate_symfluxcoord
     mesh%R_O = raxis
     mesh%Z_O = zaxis
     mesh%R_X = X_point(1)
@@ -2717,7 +2713,8 @@ inner: do
          comment = 'poloidal modes that are expected to actually be in resonance')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/rad_norm_res', mesh%rad_norm_res, &
          lbound(mesh%rad_norm_res), ubound(mesh%rad_norm_res), unit = '1', &
-         comment = 'normalized small radius (along X-O line) in resonance with given poloidal mode number')
+         comment = 'normalized small radius (outboard from O point, or towards X point)' // &
+         ' in resonance with given poloidal mode number')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/rsmall_res', mesh%rsmall_res, &
          lbound(mesh%rsmall_res), ubound(mesh%rsmall_res), unit = 'cm', &
          comment = 'normalized small radius (of equivalent-area circle) in resonance with given poloidal mode number')

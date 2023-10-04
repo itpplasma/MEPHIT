@@ -158,6 +158,7 @@ contains
        call init_field(equil)
        ! generate mesh and vacuum field
        call generate_mesh
+       call save_symfluxcoord(datafile, 'symfluxcoord')
        call mesh_write(mesh, datafile, 'mesh')
        call write_cache
        call resample_profiles
@@ -174,6 +175,7 @@ contains
        call geqdsk_import_hdf5(equil, datafile, 'equil')
        call init_field(equil)
        ! read in preprocessed data
+       call load_symfluxcoord(datafile, 'symfluxcoord')
        call mesh_read(mesh, datafile, 'mesh')
        call read_cache
        call read_profiles_hdf5(datafile, 'equil/profiles')

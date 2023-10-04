@@ -13,7 +13,8 @@ module mephit_util
   public :: neumaier_accumulator_real, neumaier_accumulator_complex
 
   ! utility procedures
-  public :: init_field, deinit_field, geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5, &
+  public :: init_field, deinit_field, generate_symfluxcoord, load_symfluxcoord, save_symfluxcoord, &
+       geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5, &
        straight_cyl2bent_cyl, bent_cyl2straight_cyl, zd_cross, dd_cross, &
        interp_psi_pol, interp1d, resample1d, pos_angle, linspace, &
        binsearch, interleave, heapsort_real, heapsort_complex, complex_abs_asc, complex_abs_desc, &
@@ -134,6 +135,169 @@ contains
     ! field_divB0.f90 adds psib (SIBRY, i.e., flux at the boundary) to interpolated psi[f]
     psi_pol = psif - psib
   end function interp_psi_pol
+
+  !> calculates points on a fine grid in the core region by integrating along field lines
+  !> and spline interpolates them for use with magdata_in_symfluxcoord_ext
+  subroutine generate_symfluxcoord
+    use magdata_in_symfluxcoor_mod, only: unload_magdata_in_symfluxcoord, load, &
+         nspl, nlabel, ntheta, twopi, h_theta, &
+         rmn, rmx, zmn, zmx, raxis, zaxis, h_theta, psipol_max, psitor_max, &
+         rbeg, rsmall, qsaf, psisurf, phitor, circumf, R_st, Z_st, bmod_st, sqgnorm_st
+    real(dp), dimension(:, :), allocatable :: R_transp, Z_transp, bmod_transp, sqgnorm_transp
+    integer :: fid, nstep, nsurfmax, k
+
+    open(newunit = fid, file = 'preload_for_SYNCH.inp', status = 'old', form = 'formatted', action = 'read')
+    ! number of integration steps
+    read (fid, *) nstep
+    ! grid size over radial variable
+    read (fid, *) nlabel
+    ! grid size over poloidal angle
+    read (fid, *) ntheta
+    ! number of starting points between the magnetic axis and right box boundary when searching for the separatrix
+    read (fid, *) nsurfmax
+    close(fid)
+    call unload_magdata_in_symfluxcoord
+    allocate(rbeg(nlabel), rsmall(nlabel), qsaf(nlabel), psisurf(0:nlabel), phitor(0:nlabel), circumf(nlabel))
+    allocate(R_transp(nlabel, ntheta), Z_transp(nlabel, ntheta), bmod_transp(nlabel, ntheta), sqgnorm_transp(nlabel, ntheta))
+    call field_line_integration_for_SYNCH(nstep, nsurfmax, nlabel, ntheta, &
+         rmn, rmx, zmn, zmx, raxis, zaxis, rbeg, rsmall, qsaf, psisurf(1:), phitor(1:), circumf, &
+         R_transp, Z_transp, bmod_transp, sqgnorm_transp)
+    psisurf(0) = 0.0d0
+    phitor(0) = 0.0d0
+    psipol_max = psisurf(nlabel)
+    psitor_max = phitor(nlabel)
+    psisurf = psisurf / psipol_max
+    phitor = phitor / psitor_max
+    h_theta = twopi / ntheta
+    allocate(R_st(0:nspl, 0:ntheta, nlabel))
+    allocate(Z_st(0:nspl, 0:ntheta, nlabel))
+    allocate(bmod_st(0:nspl, 0:ntheta, nlabel))
+    allocate(sqgnorm_st(0:nspl, 0:ntheta, nlabel))
+    R_st(0, 1:, :) = transpose(R_transp)
+    R_st(0, 0, :) = R_st(0, ntheta, :)
+    do k = 1, nlabel
+       call spl_per(nspl, ntheta + 1, h_theta, R_st(:, :, k))
+    end do
+    Z_st(0, 1:, :) = transpose(Z_transp)
+    Z_st(0, 0, :) = Z_st(0, ntheta, :)
+    do k = 1, nlabel
+       call spl_per(nspl, ntheta + 1, h_theta, Z_st(:, :, k))
+    end do
+    bmod_st(0, 1:, :) = transpose(bmod_transp)
+    bmod_st(0, 0, :) = bmod_st(0, ntheta, :)
+    do k = 1, nlabel
+       call spl_per(nspl, ntheta + 1, h_theta, bmod_st(:, :, k))
+    end do
+    sqgnorm_st(0, 1:, :) = transpose(sqgnorm_transp)
+    sqgnorm_st(0, 0, :) = sqgnorm_st(0, ntheta, :)
+    do k = 1, nlabel
+       call spl_per(nspl, ntheta + 1, h_theta, sqgnorm_st(:, :, k))
+    end do
+    load = .false.  ! just in case it is used externally
+    deallocate(R_transp, Z_transp, bmod_transp, sqgnorm_transp)
+  end subroutine generate_symfluxcoord
+
+  subroutine save_symfluxcoord(file, group)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use magdata_in_symfluxcoor_mod, only: nlabel, ntheta, h_theta, &
+         rmn, rmx, zmn, zmx, raxis, zaxis, h_theta, psipol_max, psitor_max, &
+         rbeg, rsmall, qsaf, psisurf, phitor, circumf, R_st, Z_st, bmod_st, sqgnorm_st
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+
+    grp = trim(group)
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/nlabel', nlabel, comment = 'number of flux surfaces')
+    call h5_add(h5id_root, grp // '/ntheta', ntheta, comment = 'number of poloidal divisions')
+    call h5_add(h5id_root, grp // '/rmn', rmn, unit = 'cm', &
+         comment = 'minimum R of computational domain')
+    call h5_add(h5id_root, grp // '/rmx', rmx, unit = 'cm', &
+         comment = 'maximum R of computational domain')
+    call h5_add(h5id_root, grp // '/zmn', zmn, unit = 'cm', &
+         comment = 'minimum Z of computational domain')
+    call h5_add(h5id_root, grp // '/zmx', zmx, unit = 'cm', &
+         comment = 'maximum Z of computational domain')
+    call h5_add(h5id_root, grp // '/raxis', raxis, unit = 'cm', &
+         comment = 'R coordinate of magnetic axis')
+    call h5_add(h5id_root, grp // '/zaxis', zaxis, unit = 'cm', &
+         comment = 'Z coordinate of magnetic axis')
+    call h5_add(h5id_root, grp // '/h_theta', h_theta, unit = 'rad', &
+         comment = 'angle between poloidal divisions')
+    call h5_add(h5id_root, grp // '/psipol_max', psipol_max, unit = 'Mx rad^-1', &
+         comment = 'poloidal flux over 2 pi at separatrix')
+    call h5_add(h5id_root, grp // '/psitor_max', psitor_max, unit = 'Mx rad^-1', &
+         comment = 'toroidal flux over 2 pi at separatrix')
+    call h5_add(h5id_root, grp // '/rbeg', rbeg, lbound(rbeg), ubound(rbeg), &
+         unit = 'cm', comment = 'small radius (outboard from O point, or towards X point)')
+    call h5_add(h5id_root, grp // '/rsmall', rsmall, lbound(rsmall), ubound(rsmall), &
+         unit = 'cm', comment = 'equivalent radius of poloidal cross-section area')
+    call h5_add(h5id_root, grp // '/qsaf', qsaf, lbound(qsaf), ubound(qsaf), &
+         unit = '1', comment = 'safety factor')
+    call h5_add(h5id_root, grp // '/psisurf', psisurf, lbound(psisurf), ubound(psisurf), &
+         unit = '1', comment = 'normalized poloidal flux')
+    call h5_add(h5id_root, grp // '/phitor', phitor, lbound(phitor), ubound(phitor), &
+         unit = '1', comment = 'normalized toroidal flux')
+    call h5_add(h5id_root, grp // '/circumf', circumf, lbound(circumf), ubound(circumf), &
+         unit = 'cm', comment = 'poloidal cross-section circumference')
+    call h5_add(h5id_root, grp // '/R_st', R_st, lbound(R_st), ubound(R_st), &
+         comment = 'spline of R in s and theta')
+    call h5_add(h5id_root, grp // '/Z_st', Z_st, lbound(Z_st), ubound(Z_st), &
+         comment = 'spline of Z in s and theta')
+    call h5_add(h5id_root, grp // '/bmod_st', bmod_st, lbound(bmod_st), ubound(bmod_st), &
+         comment = 'spline of magnetic field modulus in s and theta')
+    call h5_add(h5id_root, grp // '/sqgnorm_st', sqgnorm_st, lbound(sqgnorm_st), ubound(sqgnorm_st), &
+         comment = 'spline of the (s, theta, phi) Jacobian in s and theta')
+    call h5_close(h5id_root)
+  end subroutine save_symfluxcoord
+
+  !> loads points that are calculated in preload_for_SYNCH into module variables
+  subroutine load_symfluxcoord(file, group)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    use magdata_in_symfluxcoor_mod, only: unload_magdata_in_symfluxcoord, load, &
+         nlabel, ntheta, nspl, twopi, h_theta, &
+         rmn, rmx, zmn, zmx, raxis, zaxis, h_theta, psipol_max, psitor_max, &
+         rbeg, rsmall, qsaf, psisurf, phitor, circumf, R_st, Z_st, bmod_st, sqgnorm_st
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+
+    grp = trim(group)
+    call unload_magdata_in_symfluxcoord
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, grp // '/nlabel', nlabel)
+    call h5_get(h5id_root, grp // '/ntheta', ntheta)
+    call h5_get(h5id_root, grp // '/rmn', rmn)
+    call h5_get(h5id_root, grp // '/rmx', rmx)
+    call h5_get(h5id_root, grp // '/zmn', zmn)
+    call h5_get(h5id_root, grp // '/zmx', zmx)
+    call h5_get(h5id_root, grp // '/raxis', raxis)
+    call h5_get(h5id_root, grp // '/zaxis', zaxis)
+    call h5_get(h5id_root, grp // '/h_theta', h_theta)
+    call h5_get(h5id_root, grp // '/psipol_max', psipol_max)
+    call h5_get(h5id_root, grp // '/psitor_max', psitor_max)
+    allocate(rbeg(nlabel), rsmall(nlabel), qsaf(nlabel), psisurf(0:nlabel), phitor(0:nlabel), circumf(nlabel))
+    call h5_get(h5id_root, grp // '/rbeg', rbeg)
+    call h5_get(h5id_root, grp // '/rsmall', rsmall)
+    call h5_get(h5id_root, grp // '/qsaf', qsaf)
+    call h5_get(h5id_root, grp // '/psisurf', psisurf)
+    call h5_get(h5id_root, grp // '/phitor', phitor)
+    call h5_get(h5id_root, grp // '/circumf', circumf)
+    allocate(R_st(0:nspl, 0:ntheta, nlabel))
+    allocate(Z_st(0:nspl, 0:ntheta, nlabel))
+    allocate(bmod_st(0:nspl, 0:ntheta, nlabel))
+    allocate(sqgnorm_st(0:nspl, 0:ntheta, nlabel))
+    call h5_get(h5id_root, grp // '/R_st', R_st)
+    call h5_get(h5id_root, grp // '/Z_st', Z_st)
+    call h5_get(h5id_root, grp // '/bmod_st', bmod_st)
+    call h5_get(h5id_root, grp // '/sqgnorm_st', sqgnorm_st)
+    call h5_close(h5id_root)
+    h_theta = twopi / ntheta
+    load = .false.  ! just in case it is used externally
+  end subroutine load_symfluxcoord
 
   pure elemental function pos_angle(atan_angle)
     real(dp), intent(in) :: atan_angle
