@@ -60,46 +60,56 @@ void wait_for_exit(child_process_t *child, const char *name)
   }
 }
 
-extern void mephit_run(const int runmode, const char* config_file);
+extern void mephit_run(const int runmode, const char *config_file, const char *suffix);
 extern char shared_namedpipe[path_max];
 
 int main(int argc, char *argv[])
 {
-  char *config = NULL, *tmpdir = NULL, *scriptpath = NULL;
-  int runmode = 0, bytes_written, errno_save;
+  char *config = NULL, *suffix = NULL, *tmpdir = NULL, *scriptpath = NULL;
+  int argi = 0, runmode = 0, bytes_written, errno_save;
   struct sigaction infanticide, prev_sigint, prev_sigterm;
 
-  if (argc > 1) {
-    if (!strlen(argv[1])) {
+  // first argument
+  if (argc > ++argi) {
+    if (!strlen(argv[argi])) {
       errno_msg(exit, __FILE__, __LINE__, EINVAL, "Empty string for numeric runmode");
     }
-    runmode = (int) strtol(argv[1], NULL, 0);
+    runmode = (int) strtol(argv[argi], NULL, 0);
   } else {
     errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected numeric runmode as first argument");
   }
-  if (argc > 2) {
-    if (!strlen(argv[2])) {
+  // second argument
+  if (argc > ++argi) {
+    if (!strlen(argv[argi])) {
       errno_msg(exit, __FILE__, __LINE__, EINVAL, "Empty string for config file");
     }
-    config = argv[2];
+    config = argv[argi];
   } else {
     errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to config file as second argument");
   }
-  if (argc > 3) {
-    if (!strlen(argv[3])) {
+  // third argument
+  if (argc > ++argi) {
+    suffix = argv[argi];
+  } else {
+    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected file basename suffix as third argument");
+  }
+  // fourth argument
+  if (argc > ++argi) {
+    if (!strlen(argv[argi])) {
       errno_msg(exit, __FILE__, __LINE__, EINVAL, "Empty string for temporary directory");
     }
-    tmpdir = argv[3];
+    tmpdir = argv[argi];
   } else {
-    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to temporary directory as third argument");
+    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to temporary directory as fourth argument");
   }
-  if (argc > 4) {
-    if (!strlen(argv[4])) {
+  // fifth argument
+  if (argc > ++argi) {
+    if (!strlen(argv[argi])) {
       errno_msg(exit, __FILE__, __LINE__, EINVAL, "Empty string for FreeFem script file");
     }
-    scriptpath = argv[4];
+    scriptpath = argv[argi];
   } else {
-    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to FreeFem script file as fourth argument");
+    errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to FreeFem script file as fifth argument");
   }
   /* TODO: if exclusive flock on mephit.h5 fails, exit with error; else, release acquired lock */
   bytes_written = snprintf(shared_namedpipe, path_max, "%s/MEPHIT_0x%.8x.dat", tmpdir, getpid());
@@ -113,14 +123,14 @@ int main(int argc, char *argv[])
   }
   fem.pid = fork();
   if (fem.pid == (pid_t) 0) {
-    execl(scriptpath, scriptpath, shared_namedpipe, (char *) NULL);
+    execl(scriptpath, scriptpath, shared_namedpipe, suffix, (char *) NULL);
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to execute FreeFem");
   } else if (fem.pid == (pid_t) -1) {
     errno_msg(exit, __FILE__, __LINE__, errno, "Failed to create child process for FreeFem");
   }
  mephit_fork: mephit.pid = fork();
   if (mephit.pid == (pid_t) 0) {
-    mephit_run(runmode, config);
+    mephit_run(runmode, config, suffix);
     exit(0);
   } else if (mephit.pid == (pid_t) -1) {
     errno_save = errno;

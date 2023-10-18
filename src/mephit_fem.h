@@ -40,7 +40,8 @@ void FEM_triangulate_external(const int npt_inner,
                               const double *bdry_R,
                               const double *bdry_Z,
                               const double R_mid,
-                              const double Z_mid);
+                              const double Z_mid,
+                              const char *fname);
 void Rtree_init(int ntri, double *tri_bb);
 void Rtree_query(double R, double Z, int *result_size, int **results);
 

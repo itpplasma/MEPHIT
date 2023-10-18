@@ -268,12 +268,13 @@ module mephit_mesh
   end type mesh_t
 
   interface
-     subroutine FEM_triangulate_external(npt_inner, npt_outer, node_R, node_Z, R_O, Z_O) &
+     subroutine FEM_triangulate_external(npt_inner, npt_outer, node_R, node_Z, R_O, Z_O, fname) &
           bind(C, name = 'FEM_triangulate_external')
-       use iso_c_binding, only: c_int, c_double
+       use iso_c_binding, only: c_char, c_int, c_double
        integer(c_int), intent(in), value :: npt_inner, npt_outer
        real(c_double), intent(in), dimension(1:npt_inner + npt_outer) :: node_R, node_Z
        real(c_double), intent(in), value :: R_O, Z_O
+       character(c_char), intent(in) :: fname(*)
      end subroutine FEM_triangulate_external
 
      subroutine Rtree_init(ntri, tri_bb) bind(C, name = 'Rtree_init')
@@ -2834,10 +2835,11 @@ inner: do
   end subroutine mesh_write
 
   subroutine mesh_write_MFEM
+    use mephit_conf, only: basename_suffix, decorate_filename
     integer :: fid, ktri, kp, kpoi
 
-    open(newunit = fid, file = 'core_plasma.mesh', status = 'replace', &
-         form = 'formatted', action = 'write')
+    open(newunit = fid, file = decorate_filename('core_plasma.mesh', '', basename_suffix), &
+         status = 'replace', form = 'formatted', action = 'write')
     write (fid, '("MFEM mesh v1.0", /)')
     write (fid, '("dimension", /, "2", /)')
     write (fid, '("elements", /, i0)') mesh%ntri
@@ -2861,13 +2863,16 @@ inner: do
   end subroutine mesh_write_MFEM
 
   subroutine write_FreeFem_mesh
+    use iso_c_binding, only: c_null_char
     use mephit_util, only: pi, linspace
+    use mephit_conf, only: basename_suffix, decorate_filename
     integer :: fid, kpoi, ktri, kp, kedge, npt_inner, npt_outer
     real(dp) :: R_min, R_max, R_mid, R_rad, Z_min, Z_max, Z_mid, Z_rad
     real(dp), parameter :: outer_border_refinement = 0.125d0, outer_box_scale = 2d0
     real(dp), allocatable :: bdry_R(:), bdry_Z(:), theta(:)
 
-    open(newunit = fid, file = 'core_plasma.msh', status = 'replace', form = 'formatted', action = 'write')
+    open(newunit = fid, file = decorate_filename('core_plasma.msh', '', basename_suffix), &
+         status = 'replace', form = 'formatted', action = 'write')
     write (fid, '(3(1x, i0))') mesh%npoint, mesh%ntri, mesh%kp_max(mesh%nflux) - 1
     do kpoi = 1, mesh%npoint
        write (fid, '(2(1x, es23.15e3), 1x, i0)') &
@@ -2882,7 +2887,8 @@ inner: do
     end do
     close(fid)
     ! edge numbering as defined in mephit_mesh::connect_mesh_points
-    open(newunit = fid, file = 'edgemap.dat', status = 'replace', form = 'formatted', action = 'write')
+    open(newunit = fid, file = decorate_filename('edgemap.dat', '', basename_suffix), &
+         status = 'replace', form = 'formatted', action = 'write')
     ! poloidal edges: node indices are sorted in ascending order except for the last triangle
     do kedge = 1, mesh%npoint - 1
        write (fid, '(2(1x, i0))') mesh%edge_tri(1, kedge), sign(1, &
@@ -2913,7 +2919,8 @@ inner: do
     theta(:) = linspace(0d0, 2d0 * pi, npt_outer, 0, 1)
     bdry_R(npt_inner+1:) = R_mid + R_rad * cos(theta)
     bdry_Z(npt_inner+1:) = Z_mid + Z_rad * sin(theta)
-    call FEM_triangulate_external(npt_inner, npt_outer, bdry_R, bdry_Z, R_mid, Z_mid)
+    call FEM_triangulate_external(npt_inner, npt_outer, bdry_R, bdry_Z, R_mid, Z_mid, &
+         decorate_filename('outer.msh', '', basename_suffix) // c_null_char)
     deallocate(bdry_R, bdry_Z, theta)
   end subroutine write_FreeFem_mesh
 

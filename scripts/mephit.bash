@@ -157,14 +157,11 @@ mephit_convert() {
 }
 
 mephit_run() {
-    config=mephit.in
-    log=mephit.log
     meshing=0
     iterations=0
     analysis=0
     debug=0
-    memcheck=0
-    TEMP=$(getopt -o 'mia' --long 'meshing,analysis,iterations,debug,memcheck' -n "$scriptname" -- "$@")
+    TEMP=$(getopt -o 'mia' --long 'meshing,analysis,iterations,debug,memcheck,test' -n "$scriptname" -- "$@")
     eval set -- "$TEMP"
     unset TEMP
     while true; do
@@ -190,7 +187,12 @@ mephit_run() {
                 continue
                 ;;
             '--memcheck')
-                memcheck=1
+                debug=2
+                shift
+                continue
+                ;;
+            '--test')
+                debug=3
                 shift
                 continue
                 ;;
@@ -213,79 +215,82 @@ mephit_run() {
     runmode=$(( analysis << 2 | iterations << 1 | meshing << 0 ))
 
     # default to current directory if none is given on the command line
-    workdirs=( "$(pwd)" )
+    arglist=( "$(pwd)" )
     if [ $# -gt 0 ]; then
-        workdirs=( "$@" )
+        arglist=( "$@" )
     fi
-    for workdir in "${workdirs[@]}"; do
-        if [ ! -d "$workdir" ]; then
-            echo "$scriptname: skipping nonexistent directory '$workdir'."
+    for arg in "${arglist[@]}"; do
+        if [ -d "$arg" ]; then
+            workdir="$arg"
+            pushd "$workdir"
+            configlist=( mephit*.in )
+        elif [ -e "$arg" ]; then
+            workdir="${arg%/*}"
+            configlist=( "${arg##*/}" )
+            pushd "$workdir"
+        else
+            echo "$scriptname: skipping nonexistent directory/file '$arg'."
             anyerr+=1
             continue
         fi
-        pushd "$workdir"
-        rm -f "$log"
         if [ -f "field_divB0_unprocessed.inp" ]; then
             # backwards compatibility for directories
             # initialized with previous version of this script
             mv -b -f field_divB0_unprocessed.inp field_divB0.inp
         fi
         export GFORTRAN_ERROR_BACKTRACE=1
-        if [ $memcheck -eq 1 ]; then
-            valgrind -v \
-                --leak-check=full \
-                --show-leak-kinds=all \
-                --track-origins=yes \
-                --log-file="valgrind_%p_%n.log" \
-                "$bindir/mephit_run.x" $runmode "$config" "$tmpdir" "$scriptdir/ff-mephit.bash" 2>&1 | tee -a "$log"
-            lasterr=$?
-        elif [ $debug -eq 1 ]; then
-            gdb -x "$scriptdir/mephit.gdb" --args \
-                "$bindir/mephit_run.x" $runmode "$config" "$tmpdir" "$scriptdir/ff-mephit.bash"
-            lasterr=$?
-        else
-            "$bindir/mephit_run.x" $runmode "$config" "$tmpdir" "$scriptdir/ff-mephit.bash" 2>&1 | tee -a "$log"
-            lasterr=$?
-        fi
-        if [ "$lasterr" -ne 0 ]; then
-            echo "$scriptname: mephit_run.x exited with code $lasterr during run in $workdir" | tee -a "$log" >&2
-            popd
-            anyerr+=1
-            continue
-        fi
-        popd
-    done
-}
-
-mephit_test() {
-    config=mephit.in
-    log=mephit.log
-
-    # default to current directory if none is given on the command line
-    workdirs=( "$(pwd)" )
-    if [ $# -gt 0 ]; then
-        workdirs=( "$@" )
-    fi
-    for workdir in "${workdirs[@]}"; do
-        if [ ! -d "$workdir" ]; then
-            echo "$scriptname: skipping nonexistent directory '$workdir'."
-            anyerr+=1
-            continue
-        fi
-        pushd "$workdir"
-        export GFORTRAN_ERROR_BACKTRACE=1
-        # uncomment to use memcheck
-        # valgrind -v --leak-check=full --show-leak-kinds=all --track-origins=yes \
-        "$bindir/mephit_test.x" \
-            "$config" \
-            2>&1 | tee -a "$log"
-        lasterr=$?
-        if [ "$lasterr" -ne 0 ]; then
-            echo "$scriptname: mephit_test.x exited with code $lasterr during run in $workdir" | tee -a "$log" >&2
-            popd
-            anyerr+=1
-            continue
-        fi
+        for config in "${configlist[@]}"; do
+            log="${config%.*}.log"
+            rm -f "$log"
+            suffix="${config#mephit}"
+            suffix="${suffix%.*}"
+            lasterr=0
+            case "$debug" in
+                '3')
+                    "$bindir/mephit_test.x" "$config" "$suffix" 2>&1 | tee -a "$log"
+                    ;;
+                '2')
+                    valgrind -v \
+                             --leak-check=full \
+                             --show-leak-kinds=all \
+                             --track-origins=yes \
+                             --log-file="valgrind_%p_%n.log" \
+                             "$bindir/mephit_run.x" \
+                             $runmode \
+                             "$config" \
+                             "$suffix" \
+                             "$tmpdir" \
+                             "$scriptdir/ff-mephit.bash" \
+                             2>&1 | tee -a "$log"
+                    lasterr=$?
+                    ;;
+                '1')
+                    gdb -x "$scriptdir/mephit.gdb" --args \
+                        "$bindir/mephit_run.x" \
+                        $runmode \
+                        "$config" \
+                        "$suffix" \
+                        "$tmpdir" \
+                        "$scriptdir/ff-mephit.bash"
+                    lasterr=$?
+                    ;;
+                *)
+                    "$bindir/mephit_run.x" \
+                        $runmode \
+                        "$config" \
+                        "$suffix" \
+                        "$tmpdir" \
+                        "$scriptdir/ff-mephit.bash" \
+                        2>&1 | tee -a "$log"
+                    lasterr=$?
+                    ;;
+            esac
+            if [ "$lasterr" -ne 0 ]; then
+                echo "$scriptname: MEPHIT exited with code $lasterr while running '$arg'." | tee -a "$log" >&2
+                anyerr+=1
+                continue
+            fi
+        done
         popd
     done
 }
@@ -353,7 +358,7 @@ set -o pipefail
 scriptname=$0
 anyerr=0
 case "$1" in
-    init|convert|run|test|plot|clean)
+    init|convert|run|plot|clean)
         mode=$1
         shift
         mephit_$mode "$@"

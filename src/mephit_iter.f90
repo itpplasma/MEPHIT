@@ -109,21 +109,23 @@ module mephit_iter
 
 contains
 
-  subroutine mephit_run(runmode, config) bind(C, name = 'mephit_run')
+  subroutine mephit_run(runmode, config, suffix) bind(C, name = 'mephit_run')
     use iso_c_binding, only: c_int, c_ptr
     use input_files, only: gfile
     use geqdsk_tools, only: geqdsk_read, geqdsk_classify, geqdsk_standardise
     use mephit_util, only: C_F_string, init_field, geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5, &
          save_symfluxcoord, load_symfluxcoord
-    use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
+    use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, &
+         datafile, basename_suffix, decorate_filename
     use mephit_mesh, only: equil, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
          resample_profiles, write_profiles_hdf5, read_profiles_hdf5
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
     use hdf5_tools, only: h5_init, h5overwrite
     integer(c_int), intent(in), value :: runmode
     type(c_ptr), intent(in), value :: config
-    integer(c_int) :: runmode_flags
+    type(c_ptr), intent(in), value :: suffix
     character(len = 1024) :: config_filename
+    integer(c_int) :: runmode_flags
     logical :: meshing, analysis, iterations
 
     meshing = iand(runmode, ishft(1, 0)) /= 0
@@ -136,6 +138,8 @@ contains
        analysis = .true.
        runmode_flags = ior(ior(ishft(1, 0), ishft(1, 1)), ishft(1, 2))
     end if
+    call C_F_string(suffix, basename_suffix)
+    datafile = decorate_filename(datafile, '', basename_suffix)
     call C_F_string(config, config_filename)
     call config_read(conf, config_filename)
     if (conf%debug_projection) then
@@ -656,10 +660,11 @@ contains
 
   subroutine MFEM_test()
     use iso_c_binding, only: c_int, c_null_char, c_loc, c_funloc
-    use mephit_conf, only: conf, logger
-    character(len = *), parameter :: mesh_file = 'core_plasma.mesh'
+    use mephit_conf, only: conf, logger, basename_suffix, decorate_filename
+    character(len = 1024) :: mesh_file
     integer(c_int) :: status
 
+    mesh_file = decorate_filename('core_plasma.mesh', '', basename_suffix)
     status = FEM_test(trim(mesh_file) // c_null_char, conf%n, size(pn%DOF), &
          pn%DOF, c_funloc(unit_B0), c_funloc(presn_inhom))
     if (logger%debug) then

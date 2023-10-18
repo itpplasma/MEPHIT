@@ -3,6 +3,7 @@ scriptname=${0##*/}
 scriptdir=$(dirname "$0")
 scriptdir=$(realpath "$scriptdir")
 shared_namedpipe=$1
+suffix=$2
 
 # check whether FreeFem++ runs with MPI and
 # use subshell to suppress error message and change error code
@@ -25,14 +26,14 @@ ff_cmd=FreeFem++
 if [ $err_MPI -eq 0 ]; then
     ff_cmd=$ff_cmd-mpi
 fi
-ff_args=( "-ne" "-fglut" "fglut_dump" )
+ff_args=( "-ne" "-fglut" "fglut_dump$suffix" )
 if [ $graphical -ne 0 ]; then
     ff_args=( "-wg" "-wait" "${ff_args[@]}" )
 else
     ff_args=( "-nw" "-nowait" "${ff_args[@]}" )
 fi
 ff_script=$scriptdir/maxwell_daemon.edp
-ff_script_args=( "-P" "$shared_namedpipe" )
+ff_script_args=( "-P" "$shared_namedpipe" "-S" "$suffix" )
 
 exec $ff_cmd "${ff_args[@]}" "$ff_script" "${ff_script_args[@]}"
 exit $?

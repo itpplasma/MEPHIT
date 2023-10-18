@@ -11,7 +11,11 @@ load "MUMPS"
 real c = 29979245800.0; // speed of light
 
 include "getARGV.idp"
-string edgefile = "edgemap.dat";
+string suffix = getARGV("-S", "");
+string edgefile = "edgemap" + suffix + ".dat";
+string innermeshfile = "core_plasma" + suffix + ".msh";
+string outermeshfile = "outer" + suffix + ".msh";
+string meshfile = "maxwell" + suffix + ".msh";
 string datapipe = getARGV("-P", "maxwell.dat");
 bool doplot = false;
 int nRichardson = 3;  // number of Richardson iterations
@@ -28,20 +32,33 @@ flag(runmode, datapipe);
 if (runmode % 2) {
   LoadFlag(state, datapipe);
   flag(state, datapipe);
-  include "extmesh.edp"
+  mesh Thinner = readmesh(innermeshfile);
+  mesh Thouter = readmesh(outermeshfile);
+  int[int] regionmap = [0, 1];
+  Thouter = change(Thouter, region = regionmap);
+  mesh Thextended = Thinner + Thouter;
+  savemesh(Thextended, meshfile);
+  if (Thinner.nv + Thouter.nv - Thextended.nv != Thinner.nbe) {
+    cerr << "Error: expected "
+         << Thinner.nbe
+         << " border points to be merged, but got "
+         << Thinner.nv + Thouter.nv - Thextended.nv
+         << ".\n";
+    exit(1);
+  }
 }
 if (!((runmode / 2) % 2)) {
   exit(0);
 }
 bool debugprojection = (runmode / 8) % 2;
-mesh Th = readmesh("maxwell.msh");
+mesh Th = readmesh(meshfile);
 // count triangles in internal region 0
 int ntri = 0;
 for (int k = 0; k < Th.nt; k++) {
   if (Th[k].label == 0)
     ntri++;
 }
-cout << "Number of triangles in internal region: " << ntri << endl;
+cout << "Number of triangles in core plasma region: " << ntri << endl;
 fespace Vh1(Th, P1);
 fespace Hrot(Th, RT0Ortho);
 fespace Hdiv(Th, RT0);

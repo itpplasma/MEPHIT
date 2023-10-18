@@ -15,7 +15,7 @@ module mephit_conf
 
   ! module variables
   public :: conf, conf_arr, logger
-  public :: longlines, cmplx_fmt, nl_fmt, datafile, &
+  public :: longlines, cmplx_fmt, nl_fmt, basename_suffix, datafile, &
        runmode_single, runmode_direct, runmode_precon, &
        pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
        curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
@@ -26,7 +26,8 @@ module mephit_conf
 
   character(len = *), parameter :: cmplx_fmt = 'es24.16e3, 1x, sp, es24.16e3, s, " i"'
   character(len = *), parameter :: nl_fmt = '"' // new_line('A') // '"'
-  character(len = *), parameter :: datafile = 'mephit.h5'
+  character(len = 1024) :: basename_suffix = ''
+  character(len = 1024) :: datafile = 'mephit.h5'
 
   integer, parameter :: longlines = 1024
 
@@ -472,7 +473,7 @@ contains
   !> @param postfix string to be postfixed to the file basename
   !>
   !> No attempt is made to check whether the given filename is valid or accessible.
-  function decorate_filename(in_name, prefix, postfix) result(out_name)
+  pure function decorate_filename(in_name, prefix, postfix) result(out_name)
     character(len = *), intent(in) :: in_name
     character(len = *), intent(in) :: prefix
     character(len = *), intent(in) :: postfix
@@ -485,7 +486,7 @@ contains
     basename_end = basename_start - 2 + scan(in_name(basename_start:), '.', .true.)
     if (basename_end - basename_start == -1) basename_start = basename_start + 1 ! dotfile
     if (basename_end < basename_start) basename_end = name_end
-    out_name = in_name(:basename_start-1) // prefix // in_name(basename_start: &
-         basename_end) // postfix // in_name(basename_end+1:name_end)
+    out_name = in_name(:basename_start-1) // trim(prefix) // in_name(basename_start: &
+         basename_end) // trim(postfix) // in_name(basename_end+1:name_end)
   end function decorate_filename
 end module mephit_conf

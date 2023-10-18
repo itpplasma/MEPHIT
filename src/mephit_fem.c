@@ -206,7 +206,8 @@ void FEM_triangulate_external(const int npt_inner,
                               const double *bdry_R,
                               const double *bdry_Z,
                               const double R_mid,
-                              const double Z_mid)
+                              const double Z_mid,
+                              const char *fname)
 {
   int k;
   FILE *fid;
@@ -250,7 +251,7 @@ void FEM_triangulate_external(const int npt_inner,
   // z - use zero indexing
   triangulate("BejnpqYz", &in, &out, &vorout);
 
-  fid = fopen("outer.msh", "w");
+  fid = fopen(fname, "w");
   fprintf(fid, "%i %i %i\n",
           out.numberofpoints,
           out.numberoftriangles,
