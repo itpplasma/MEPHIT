@@ -113,8 +113,8 @@ contains
     use iso_c_binding, only: c_int, c_ptr
     use input_files, only: gfile
     use geqdsk_tools, only: geqdsk_read, geqdsk_classify, geqdsk_standardise
-    use magdata_in_symfluxcoor_mod, only: load_magdata_in_symfluxcoord
-    use mephit_util, only: C_F_string, init_field, geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5
+    use mephit_util, only: C_F_string, init_field, geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5, &
+         save_symfluxcoord, load_symfluxcoord
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, datafile
     use mephit_mesh, only: equil, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
          resample_profiles, write_profiles_hdf5, read_profiles_hdf5
@@ -179,7 +179,6 @@ contains
        call mesh_read(mesh, datafile, 'mesh')
        call read_cache
        call read_profiles_hdf5(datafile, 'equil/profiles')
-       call load_magdata_in_symfluxcoord
        call vac_init(vac, mesh%nedge, mesh%ntri, mesh%m_res_min, mesh%m_res_max)
        call vac_read(vac, datafile, 'vac')
        ! reload config parameters here in case they changed since the meshing phase
