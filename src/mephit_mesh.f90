@@ -1076,15 +1076,16 @@ contains
   end subroutine read_cache
 
   subroutine read_profiles
+    use mephit_conf, only: conf
     use mephit_util, only: func1d_read_formatted
 
-    call func1d_read_formatted(dens_e, 'n.dat')
+    call func1d_read_formatted(dens_e, conf%dens_file)
     if (abs(dens_e%x(ubound(dens_e%x, 1)) - 1d0) <= 0.05d0) then
        dens_e%y(:) = dens_e%y * 1d-6  ! SI units
     end if
-    call func1d_read_formatted(temp_e, 'Te.dat')
-    call func1d_read_formatted(temp_i, 'Ti.dat')
-    call func1d_read_formatted(E_r, 'Er.dat')
+    call func1d_read_formatted(temp_e, conf%temp_e_file)
+    call func1d_read_formatted(temp_i, conf%temp_i_file)
+    call func1d_read_formatted(E_r, conf%E_r_file)
   end subroutine read_profiles
 
   subroutine compute_auxiliary_profiles

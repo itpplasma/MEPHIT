@@ -103,6 +103,18 @@ module mephit_conf
      !> Average over quadrilaterals for non-resonant test case. Defaults to true.
      logical :: quad_avg = .true.
 
+     !> File containing equilibrium density profile. Defaults to 'n.dat'.
+     character(len = 1024) :: dens_file = 'n.dat'
+
+     !> File containing equilibrium electron temperature profile. Defaults to 'Te.dat'.
+     character(len = 1024) :: temp_e_file = 'Te.dat'
+
+     !> File containing equilibrium ion temperature profile. Defaults to 'Ti.dat'.
+     character(len = 1024) :: temp_i_file = 'Ti.dat'
+
+     !> File containing equilibrium radial electric field profile. Defaults to 'Er.dat'.
+     character(len = 1024) :: E_r_file = 'Er.dat'
+
      !> Coil currents for AUG B coils; upper coils come first
      real(dp), dimension(16) :: Ic = 0d0
 
@@ -248,65 +260,72 @@ contains
     config%config_file = trim(filename)
   end subroutine config_read
 
-  subroutine config_export_hdf5(config, file, dataset)
+  subroutine config_export_hdf5(config, file, group)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     type(config_t), intent(in) :: config
-    character(len = *), intent(in) :: file, dataset
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
     integer(HID_T) :: h5id_root
 
+    grp = trim(group)
     call h5_open_rw(file, h5id_root)
-    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/runmode', config%runmode)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/pres_prof', config%pres_prof)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/curr_prof', config%curr_prof)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/q_prof', config%q_prof)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/vac_src', config%vac_src)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/currn_model', config%currn_model)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/refinement_scheme', config%refinement_scheme)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nonres', config%nonres)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/quad_avg', config%quad_avg)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Ic', config%Ic, &
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/runmode', config%runmode)
+    call h5_add(h5id_root, grp // '/pres_prof', config%pres_prof)
+    call h5_add(h5id_root, grp // '/curr_prof', config%curr_prof)
+    call h5_add(h5id_root, grp // '/q_prof', config%q_prof)
+    call h5_add(h5id_root, grp // '/vac_src', config%vac_src)
+    call h5_add(h5id_root, grp // '/currn_model', config%currn_model)
+    call h5_add(h5id_root, grp // '/refinement_scheme', config%refinement_scheme)
+    call h5_add(h5id_root, grp // '/nonres', config%nonres)
+    call h5_add(h5id_root, grp // '/quad_avg', config%quad_avg)
+    call h5_add(h5id_root, grp // '/dens_file', config%dens_file)
+    call h5_add(h5id_root, grp // '/temp_e_file', config%temp_e_file)
+    call h5_add(h5id_root, grp // '/temp_i_file', config%temp_i_file)
+    call h5_add(h5id_root, grp // '/E_r_file', config%E_r_file)
+    call h5_add(h5id_root, grp // '/Ic', config%Ic, &
          lbound(config%Ic), ubound(config%Ic), unit = 'c_0 statA', &
          comment = 'coil currents for AUG B coils; upper coils come first')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/niter', config%niter, &
+    call h5_add(h5id_root, grp // '/niter', config%niter, &
          comment = 'maximum number of iterations')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/iter_rel_err', config%iter_rel_err, &
+    call h5_add(h5id_root, grp // '/iter_rel_err', config%iter_rel_err, &
          comment = 'convergence threshold in L2 integral in fixed-point iteration')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/nkrylov', config%nkrylov, &
+    call h5_add(h5id_root, grp // '/nkrylov', config%nkrylov, &
          comment = 'maximum number of iterations in Arnoldi method')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ritz_threshold', config%ritz_threshold, &
+    call h5_add(h5id_root, grp // '/ritz_threshold', config%ritz_threshold, &
          comment = 'threshold for eigenvalues'' magnitude in Arnoldi method')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ritz_rel_err', config%ritz_rel_err, &
+    call h5_add(h5id_root, grp // '/ritz_rel_err', config%ritz_rel_err, &
          comment = 'relative error for eigenvalues in Arnoldi method')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/n', config%n, &
+    call h5_add(h5id_root, grp // '/n', config%n, &
          comment = 'index of toroidal harmonics of perturbation')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_max', config%m_max, &
+    call h5_add(h5id_root, grp // '/m_max', config%m_max, &
          comment = 'maximum poloidal mode number for Fourier transform of results')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/pol_max', config%pol_max, &
+    call h5_add(h5id_root, grp // '/pol_max', config%pol_max, &
          comment = 'maximum number of points per flux surface')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/max_Delta_rad', config%max_Delta_rad, &
+    call h5_add(h5id_root, grp // '/max_Delta_rad', config%max_Delta_rad, &
          comment = 'maximum distance between flux surfaces along theta = 0', unit = 'cm')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/shielding_fourier', config%shielding_fourier, &
+    call h5_add(h5id_root, grp // '/shielding_fourier', config%shielding_fourier, &
          comment = 'use only resonant Fourier mode in shielding current perturbation')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/temp_min', config%temp_min, &
+    call h5_add(h5id_root, grp // '/temp_min', config%temp_min, &
          comment = 'minimum temperature', unit = 'eV')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/dens_min', config%dens_min, &
+    call h5_add(h5id_root, grp // '/dens_min', config%dens_min, &
          comment = 'minimum density', unit = 'cm^-3')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/temp_max', config%temp_max, &
+    call h5_add(h5id_root, grp // '/temp_max', config%temp_max, &
          comment = 'maximum temperature', unit = 'eV')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/dens_max', config%dens_max, &
+    call h5_add(h5id_root, grp // '/dens_max', config%dens_max, &
          comment = 'maximum density', unit = 'cm^-3')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/damp', config%damp, &
+    call h5_add(h5id_root, grp // '/damp', config%damp, &
          comment = 'enable damping of Pfirsch-Schlueter current')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_pol_mode', config%kilca_pol_mode, &
+    call h5_add(h5id_root, grp // '/kilca_pol_mode', config%kilca_pol_mode, &
          comment = 'single poloidal mode used in comparison with KiLCA code')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/kilca_scale_factor', config%kilca_scale_factor, &
+    call h5_add(h5id_root, grp // '/kilca_scale_factor', config%kilca_scale_factor, &
          comment = 'scaling factor used for comparison with results from KiLCA code')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/max_eig_out', config%max_eig_out, &
+    call h5_add(h5id_root, grp // '/max_eig_out', config%max_eig_out, &
          comment = 'maximum number of exported eigenvectors')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/debug_pol_offset', config%debug_pol_offset)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/debug_kilca_geom_theta', config%debug_kilca_geom_theta)
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/debug_projection', config%debug_projection)
+    call h5_add(h5id_root, grp // '/debug_pol_offset', config%debug_pol_offset)
+    call h5_add(h5id_root, grp // '/debug_kilca_geom_theta', config%debug_kilca_geom_theta)
+    call h5_add(h5id_root, grp // '/debug_projection', config%debug_projection)
     call h5_close(h5id_root)
   end subroutine config_export_hdf5
 
