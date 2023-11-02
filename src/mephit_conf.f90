@@ -85,9 +85,9 @@ module mephit_conf
      !> (default), and #q_prof_geqdsk
      integer :: q_prof = q_prof_rot
 
-     !> Source of vacuum field perturbation. Possible values are #vac_src_nemov (default)
-     !> and #vac_src_gpec.
-     integer :: vac_src = vac_src_nemov
+     !> Source of vacuum field perturbation. Possible values are #vac_src_nemov,
+     !> #vac_src_gpec, and #vac_src_fourier (default).
+     integer :: vac_src = vac_src_fourier
 
      !> Method to compute response current. Possible values are #currn_model_mhd (default)
      !> and #currn_model_kilca.
@@ -103,6 +103,16 @@ module mephit_conf
      !> Average over quadrilaterals for non-resonant test case. Defaults to true.
      logical :: quad_avg = .true.
 
+     !> Prefactor in Biot-Savart law, e.g. 5 windings
+     !> and conversion from A to statA / c_0.
+     real(dp) :: Biot_Savart_prefactor = 5.0d-1
+
+     !> File containing coil currents. Defaults to 'coil.dat'.
+     character(len = 1024) :: currents_file = 'coil.dat'
+
+     !> File containing coil geometries. Defaults to 'AUG_B_coils.h5'.
+     character(len = 1024) :: coil_file = 'AUG_B_coils.h5'
+
      !> File containing equilibrium density profile. Defaults to 'n.dat'.
      character(len = 1024) :: dens_file = 'n.dat'
 
@@ -114,9 +124,6 @@ module mephit_conf
 
      !> File containing equilibrium radial electric field profile. Defaults to 'Er.dat'.
      character(len = 1024) :: E_r_file = 'Er.dat'
-
-     !> Coil currents for AUG B coils; upper coils come first
-     real(dp), dimension(16) :: Ic = 0d0
 
      !> Maximum number of iterations. Does not apply when #runmode equals
      !> #runmode_single. Defaults to 50.
@@ -284,9 +291,6 @@ contains
     call h5_add(h5id_root, grp // '/temp_e_file', config%temp_e_file)
     call h5_add(h5id_root, grp // '/temp_i_file', config%temp_i_file)
     call h5_add(h5id_root, grp // '/E_r_file', config%E_r_file)
-    call h5_add(h5id_root, grp // '/Ic', config%Ic, &
-         lbound(config%Ic), ubound(config%Ic), unit = 'c_0 statA', &
-         comment = 'coil currents for AUG B coils; upper coils come first')
     call h5_add(h5id_root, grp // '/niter', config%niter, &
          comment = 'maximum number of iterations')
     call h5_add(h5id_root, grp // '/iter_rel_err', config%iter_rel_err, &

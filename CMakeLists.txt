@@ -140,7 +140,6 @@ set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
 set_source_files_properties(${MEPHIT_FORTRAN_SRC_FILES}
   src/mephit_test.f90
-  src/vacfield.f90
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS} ${LEGACY_FLAGS}")
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS}")
@@ -185,10 +184,8 @@ target_link_libraries(mephit ${MEPHIT_LIBS})
 ### Define executables
 add_executable(mephit_run.x src/mephit_run.c)
 add_executable(mephit_test.x src/mephit_test.f90)
-add_executable(vacfield.x src/vacfield.f90)
 target_link_libraries(mephit_run.x mephit)
 target_link_libraries(mephit_test.x mephit)
-target_link_libraries(vacfield.x mephit)
 
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)
