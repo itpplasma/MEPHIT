@@ -14,12 +14,12 @@ module mephit_util
 
   ! utility procedures
   public :: init_field, deinit_field, generate_symfluxcoord, load_symfluxcoord, save_symfluxcoord, &
-       geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5, &
-       straight_cyl2bent_cyl, bent_cyl2straight_cyl, zd_cross, dd_cross, &
-       interp_psi_pol, interp1d, resample1d, pos_angle, linspace, &
-       binsearch, interleave, heapsort_real, heapsort_complex, complex_abs_asc, complex_abs_desc, &
-       arnoldi_break, hessenberg_eigvals, hessenberg_eigvecs, &
-       gauss_legendre_unit_interval, C_F_string
+    geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5, &
+    straight_cyl2bent_cyl, bent_cyl2straight_cyl, zd_cross, dd_cross, &
+    interp_psi_pol, interp1d, resample1d, pos_angle, linspace, &
+    binsearch, interleave, heapsort_real, heapsort_complex, complex_abs_asc, complex_abs_desc, &
+    arnoldi_break, hessenberg_eigvals, hessenberg_eigvecs, &
+    gauss_legendre_unit_interval, C_F_string
 
   ! module variables
   public :: pi, clight, ev2erg, imun
@@ -32,42 +32,42 @@ module mephit_util
   ! types and interfaces
 
   type :: fft_t
-     integer :: N = 0
-     complex(c_double_complex), dimension(:), pointer :: samples => null()
-     complex(c_double_complex), dimension(:), pointer, private :: modes => null()
-     type(c_ptr), private :: plan_p = c_null_ptr, samples_p = c_null_ptr, modes_p = c_null_ptr
-   contains
-     procedure :: init => fft_init
-     procedure :: apply => fft_apply
-     procedure :: deinit => fft_deinit
+    integer :: N = 0
+    complex(c_double_complex), dimension(:), pointer :: samples => null()
+    complex(c_double_complex), dimension(:), pointer, private :: modes => null()
+    type(c_ptr), private :: plan_p = c_null_ptr, samples_p = c_null_ptr, modes_p = c_null_ptr
+  contains
+    procedure :: init => fft_init
+    procedure :: apply => fft_apply
+    procedure :: deinit => fft_deinit
   end type fft_t
 
   !> 1D function sample
   type :: func1d_t
-     real(dp), dimension(:), allocatable :: x
-     real(dp), dimension(:), allocatable :: y
+    real(dp), dimension(:), allocatable :: x
+    real(dp), dimension(:), allocatable :: y
   end type func1d_t
 
   type :: neumaier_accumulator_real
-     private
-     real(dp) :: sum, c, t
-   contains
-     procedure :: init => neumaier_accumulator_real_init
-     procedure :: add => neumaier_accumulator_real_add
-     procedure :: get_sum => neumaier_accumulator_real_get_sum
+    private
+    real(dp) :: sum, c, t
+  contains
+    procedure :: init => neumaier_accumulator_real_init
+    procedure :: add => neumaier_accumulator_real_add
+    procedure :: get_sum => neumaier_accumulator_real_get_sum
   end type neumaier_accumulator_real
 
   type :: neumaier_accumulator_complex
-     private
-     type(neumaier_accumulator_real) :: real_part, imag_part
-   contains
-     procedure :: init => neumaier_accumulator_complex_init
-     procedure :: add => neumaier_accumulator_complex_add
-     procedure :: get_sum => neumaier_accumulator_complex_get_sum
+    private
+    type(neumaier_accumulator_real) :: real_part, imag_part
+  contains
+    procedure :: init => neumaier_accumulator_complex_init
+    procedure :: add => neumaier_accumulator_complex_add
+    procedure :: get_sum => neumaier_accumulator_complex_get_sum
   end type neumaier_accumulator_complex
 
   interface interleave
-     procedure interleave_vv, interleave_vs, interleave_sv, interleave_ss
+    procedure interleave_vv, interleave_vs, interleave_sv, interleave_ss
   end interface interleave
 
 contains
@@ -76,7 +76,7 @@ contains
   subroutine init_field(equil)
     use field_mod, only: icall, ipert, iequil
     use field_eq_mod, only: skip_read, icall_eq, nwindow_r, nwindow_z, &
-         nrad, nzet, psi_axis, psi_sep, btf, rtf, splfpol, rad, zet, psi, psi0
+      nrad, nzet, psi_axis, psi_sep, btf, rtf, splfpol, rad, zet, psi, psi0
     use geqdsk_tools, only: geqdsk_t
     type(geqdsk_t), intent(in) :: equil
     real(dp) :: dum
@@ -140,9 +140,9 @@ contains
   !> and spline interpolates them for use with magdata_in_symfluxcoord_ext
   subroutine generate_symfluxcoord
     use magdata_in_symfluxcoor_mod, only: unload_magdata_in_symfluxcoord, load, &
-         nspl, nlabel, ntheta, twopi, h_theta, &
-         rmn, rmx, zmn, zmx, raxis, zaxis, h_theta, psipol_max, psitor_max, &
-         rbeg, rsmall, qsaf, psisurf, phitor, circumf, R_st, Z_st, bmod_st, sqgnorm_st
+      nspl, nlabel, ntheta, twopi, h_theta, &
+      rmn, rmx, zmn, zmx, raxis, zaxis, h_theta, psipol_max, psitor_max, &
+      rbeg, rsmall, qsaf, psisurf, phitor, circumf, R_st, Z_st, bmod_st, sqgnorm_st
     real(dp), dimension(:, :), allocatable :: R_transp, Z_transp, bmod_transp, sqgnorm_transp
     integer :: fid, nstep, nsurfmax, k
 
@@ -160,8 +160,8 @@ contains
     allocate(rbeg(nlabel), rsmall(nlabel), qsaf(nlabel), psisurf(0:nlabel), phitor(0:nlabel), circumf(nlabel))
     allocate(R_transp(nlabel, ntheta), Z_transp(nlabel, ntheta), bmod_transp(nlabel, ntheta), sqgnorm_transp(nlabel, ntheta))
     call field_line_integration_for_SYNCH(nstep, nsurfmax, nlabel, ntheta, &
-         rmn, rmx, zmn, zmx, raxis, zaxis, rbeg, rsmall, qsaf, psisurf(1:), phitor(1:), circumf, &
-         R_transp, Z_transp, bmod_transp, sqgnorm_transp)
+      rmn, rmx, zmn, zmx, raxis, zaxis, rbeg, rsmall, qsaf, psisurf(1:), phitor(1:), circumf, &
+      R_transp, Z_transp, bmod_transp, sqgnorm_transp)
     psisurf(0) = 0.0d0
     phitor(0) = 0.0d0
     psipol_max = psisurf(nlabel)
@@ -176,22 +176,22 @@ contains
     R_st(0, 1:, :) = transpose(R_transp)
     R_st(0, 0, :) = R_st(0, ntheta, :)
     do k = 1, nlabel
-       call spl_per(nspl, ntheta + 1, h_theta, R_st(:, :, k))
+      call spl_per(nspl, ntheta + 1, h_theta, R_st(:, :, k))
     end do
     Z_st(0, 1:, :) = transpose(Z_transp)
     Z_st(0, 0, :) = Z_st(0, ntheta, :)
     do k = 1, nlabel
-       call spl_per(nspl, ntheta + 1, h_theta, Z_st(:, :, k))
+      call spl_per(nspl, ntheta + 1, h_theta, Z_st(:, :, k))
     end do
     bmod_st(0, 1:, :) = transpose(bmod_transp)
     bmod_st(0, 0, :) = bmod_st(0, ntheta, :)
     do k = 1, nlabel
-       call spl_per(nspl, ntheta + 1, h_theta, bmod_st(:, :, k))
+      call spl_per(nspl, ntheta + 1, h_theta, bmod_st(:, :, k))
     end do
     sqgnorm_st(0, 1:, :) = transpose(sqgnorm_transp)
     sqgnorm_st(0, 0, :) = sqgnorm_st(0, ntheta, :)
     do k = 1, nlabel
-       call spl_per(nspl, ntheta + 1, h_theta, sqgnorm_st(:, :, k))
+      call spl_per(nspl, ntheta + 1, h_theta, sqgnorm_st(:, :, k))
     end do
     load = .false.  ! just in case it is used externally
     deallocate(R_transp, Z_transp, bmod_transp, sqgnorm_transp)
@@ -200,8 +200,8 @@ contains
   subroutine save_symfluxcoord(file, group)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use magdata_in_symfluxcoor_mod, only: nlabel, ntheta, h_theta, &
-         rmn, rmx, zmn, zmx, raxis, zaxis, h_theta, psipol_max, psitor_max, &
-         rbeg, rsmall, qsaf, psisurf, phitor, circumf, R_st, Z_st, bmod_st, sqgnorm_st
+      rmn, rmx, zmn, zmx, raxis, zaxis, h_theta, psipol_max, psitor_max, &
+      rbeg, rsmall, qsaf, psisurf, phitor, circumf, R_st, Z_st, bmod_st, sqgnorm_st
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: group
     character(len = len_trim(group)) :: grp
@@ -213,43 +213,43 @@ contains
     call h5_add(h5id_root, grp // '/nlabel', nlabel, comment = 'number of flux surfaces')
     call h5_add(h5id_root, grp // '/ntheta', ntheta, comment = 'number of poloidal divisions')
     call h5_add(h5id_root, grp // '/rmn', rmn, unit = 'cm', &
-         comment = 'minimum R of computational domain')
+      comment = 'minimum R of computational domain')
     call h5_add(h5id_root, grp // '/rmx', rmx, unit = 'cm', &
-         comment = 'maximum R of computational domain')
+      comment = 'maximum R of computational domain')
     call h5_add(h5id_root, grp // '/zmn', zmn, unit = 'cm', &
-         comment = 'minimum Z of computational domain')
+      comment = 'minimum Z of computational domain')
     call h5_add(h5id_root, grp // '/zmx', zmx, unit = 'cm', &
-         comment = 'maximum Z of computational domain')
+      comment = 'maximum Z of computational domain')
     call h5_add(h5id_root, grp // '/raxis', raxis, unit = 'cm', &
-         comment = 'R coordinate of magnetic axis')
+      comment = 'R coordinate of magnetic axis')
     call h5_add(h5id_root, grp // '/zaxis', zaxis, unit = 'cm', &
-         comment = 'Z coordinate of magnetic axis')
+      comment = 'Z coordinate of magnetic axis')
     call h5_add(h5id_root, grp // '/h_theta', h_theta, unit = 'rad', &
-         comment = 'angle between poloidal divisions')
+      comment = 'angle between poloidal divisions')
     call h5_add(h5id_root, grp // '/psipol_max', psipol_max, unit = 'Mx rad^-1', &
-         comment = 'poloidal flux over 2 pi at separatrix')
+      comment = 'poloidal flux over 2 pi at separatrix')
     call h5_add(h5id_root, grp // '/psitor_max', psitor_max, unit = 'Mx rad^-1', &
-         comment = 'toroidal flux over 2 pi at separatrix')
+      comment = 'toroidal flux over 2 pi at separatrix')
     call h5_add(h5id_root, grp // '/rbeg', rbeg, lbound(rbeg), ubound(rbeg), &
-         unit = 'cm', comment = 'small radius (outboard from O point, or towards X point)')
+      unit = 'cm', comment = 'small radius (outboard from O point, or towards X point)')
     call h5_add(h5id_root, grp // '/rsmall', rsmall, lbound(rsmall), ubound(rsmall), &
-         unit = 'cm', comment = 'equivalent radius of poloidal cross-section area')
+      unit = 'cm', comment = 'equivalent radius of poloidal cross-section area')
     call h5_add(h5id_root, grp // '/qsaf', qsaf, lbound(qsaf), ubound(qsaf), &
-         unit = '1', comment = 'safety factor')
+      unit = '1', comment = 'safety factor')
     call h5_add(h5id_root, grp // '/psisurf', psisurf, lbound(psisurf), ubound(psisurf), &
-         unit = '1', comment = 'normalized poloidal flux')
+      unit = '1', comment = 'normalized poloidal flux')
     call h5_add(h5id_root, grp // '/phitor', phitor, lbound(phitor), ubound(phitor), &
-         unit = '1', comment = 'normalized toroidal flux')
+      unit = '1', comment = 'normalized toroidal flux')
     call h5_add(h5id_root, grp // '/circumf', circumf, lbound(circumf), ubound(circumf), &
-         unit = 'cm', comment = 'poloidal cross-section circumference')
+      unit = 'cm', comment = 'poloidal cross-section circumference')
     call h5_add(h5id_root, grp // '/R_st', R_st, lbound(R_st), ubound(R_st), &
-         comment = 'spline of R in s and theta')
+      comment = 'spline of R in s and theta')
     call h5_add(h5id_root, grp // '/Z_st', Z_st, lbound(Z_st), ubound(Z_st), &
-         comment = 'spline of Z in s and theta')
+      comment = 'spline of Z in s and theta')
     call h5_add(h5id_root, grp // '/bmod_st', bmod_st, lbound(bmod_st), ubound(bmod_st), &
-         comment = 'spline of magnetic field modulus in s and theta')
+      comment = 'spline of magnetic field modulus in s and theta')
     call h5_add(h5id_root, grp // '/sqgnorm_st', sqgnorm_st, lbound(sqgnorm_st), ubound(sqgnorm_st), &
-         comment = 'spline of the (s, theta, phi) Jacobian in s and theta')
+      comment = 'spline of the (s, theta, phi) Jacobian in s and theta')
     call h5_close(h5id_root)
   end subroutine save_symfluxcoord
 
@@ -257,9 +257,9 @@ contains
   subroutine load_symfluxcoord(file, group)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
     use magdata_in_symfluxcoor_mod, only: unload_magdata_in_symfluxcoord, load, &
-         nlabel, ntheta, nspl, twopi, h_theta, &
-         rmn, rmx, zmn, zmx, raxis, zaxis, h_theta, psipol_max, psitor_max, &
-         rbeg, rsmall, qsaf, psisurf, phitor, circumf, R_st, Z_st, bmod_st, sqgnorm_st
+      nlabel, ntheta, nspl, twopi, h_theta, &
+      rmn, rmx, zmn, zmx, raxis, zaxis, h_theta, psipol_max, psitor_max, &
+      rbeg, rsmall, qsaf, psisurf, phitor, circumf, R_st, Z_st, bmod_st, sqgnorm_st
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: group
     character(len = len_trim(group)) :: grp
@@ -305,10 +305,10 @@ contains
 
     pos_angle = atan_angle
     if (pos_angle < 0d0) then
-       pos_angle = pos_angle + 2d0 * pi
+      pos_angle = pos_angle + 2d0 * pi
     end if
     if (pos_angle > 2d0 * pi) then
-       pos_angle = pos_angle - 2d0 * pi
+      pos_angle = pos_angle - 2d0 * pi
     end if
   end function pos_angle
 
@@ -342,25 +342,25 @@ contains
     k_min = lbound(x, 1)
     k_max = ubound(x, 1)
     if (x(k_min) < x(k_max)) then
-       do iter = 1, size(x) - 1
-          k = (k_max - k_min) / 2 + k_min
-          if (x(k) > xi) then
-             k_max = k
-          else
-             k_min = k
-          end if
-          if (k_max == k_min + 1) exit
-       end do
+      do iter = 1, size(x) - 1
+        k = (k_max - k_min) / 2 + k_min
+        if (x(k) > xi) then
+          k_max = k
+        else
+          k_min = k
+        end if
+        if (k_max == k_min + 1) exit
+      end do
     else
-       do iter = 1, size(x) - 1
-          k = (k_max - k_min) / 2 + k_min
-          if (x(k) < xi) then
-             k_max = k
-          else
-             k_min = k
-          end if
-          if (k_max == k_min + 1) exit
-       end do
+      do iter = 1, size(x) - 1
+        k = (k_max - k_min) / 2 + k_min
+        if (x(k) < xi) then
+          k_max = k
+        else
+          k_min = k
+        end if
+        if (k_max == k_min + 1) exit
+      end do
     end if
     k = k_max
   end subroutine binsearch
@@ -368,33 +368,33 @@ contains
   subroutine gauss_legendre_unit_interval(order, points, weights)
     use mephit_conf, only: logger
     use fgsl, only: fgsl_size_t, fgsl_double, fgsl_int, fgsl_success, &
-         fgsl_integration_glfixed_point, fgsl_integration_glfixed_table, &
-         fgsl_integration_glfixed_table_alloc, fgsl_integration_glfixed_table_free
+      fgsl_integration_glfixed_point, fgsl_integration_glfixed_table, &
+      fgsl_integration_glfixed_table_alloc, fgsl_integration_glfixed_table_free
     integer, intent(in) :: order
     real(fgsl_double), dimension(:), intent(out) :: points, weights
     type(fgsl_integration_glfixed_table) :: table
     integer(fgsl_size_t) :: k
     integer(fgsl_int) :: err
     if (order /= size(points)) then
-       call logger%msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(points)', &
-            order, size(points))
-       if (logger%err) call logger%write_msg
-       error stop
+      call logger%msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(points)', &
+        order, size(points))
+      if (logger%err) call logger%write_msg
+      error stop
     end if
     if (order /= size(weights)) then
-       call logger%msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(weights)', &
-            order, size(weights))
-       if (logger%err) call logger%write_msg
-       error stop
+      call logger%msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(weights)', &
+        order, size(weights))
+      if (logger%err) call logger%write_msg
+      error stop
     end if
     table = fgsl_integration_glfixed_table_alloc(int(order, fgsl_size_t))
     do k = 1, int(order, fgsl_size_t)
-       err = fgsl_integration_glfixed_point(0d0, 1d0, k-1, points(k), weights(k), table)
-       if (err /= fgsl_success) then
-          write (logger%msg, '("fgsl_integration_glfixed_point returned error ", i0)') err
-          if (logger%err) call logger%write_msg
-          error stop
-       end if
+      err = fgsl_integration_glfixed_point(0d0, 1d0, k-1, points(k), weights(k), table)
+      if (err /= fgsl_success) then
+        write (logger%msg, '("fgsl_integration_glfixed_point returned error ", i0)') err
+        if (logger%err) call logger%write_msg
+        error stop
+      end if
     end do
     call fgsl_integration_glfixed_table_free(table)
   end subroutine gauss_legendre_unit_interval
@@ -402,7 +402,7 @@ contains
   subroutine fft_init(fft, N)
     use iso_c_binding, only: c_size_t, c_f_pointer
     use fftw3, only: fftw_alloc_complex, fftw_plan_dft_1d, &
-         FFTW_FORWARD, FFTW_PATIENT, FFTW_DESTROY_INPUT
+      FFTW_FORWARD, FFTW_PATIENT, FFTW_DESTROY_INPUT
     class(fft_t), intent(inout) :: fft
     integer, intent(in) :: N
 
@@ -413,7 +413,7 @@ contains
     fft%modes_p = fftw_alloc_complex(int(N, c_size_t))
     call c_f_pointer(fft%modes_p, fft%modes, [N])
     fft%plan_p = fftw_plan_dft_1d(N, fft%samples, fft%modes, &
-         FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_DESTROY_INPUT))
+      FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_DESTROY_INPUT))
   end subroutine fft_init
 
   subroutine fft_apply(fft, m_min, m_max, modes)
@@ -425,27 +425,27 @@ contains
     complex(dp), dimension(m_min:), intent(inout) :: modes
 
     if (ubound(modes, 1) /= m_max) then
-       call logger%msg_arg_size('fft_apply', &
-            'ubound(modes, 1)', 'm_max', &
-            ubound(modes, 1), m_max)
-       if (logger%err) call logger%write_msg
-       error stop
+      call logger%msg_arg_size('fft_apply', &
+        'ubound(modes, 1)', 'm_max', &
+        ubound(modes, 1), m_max)
+      if (logger%err) call logger%write_msg
+      error stop
     end if
     if (.not. (c_associated(fft%plan_p) .and. &
-         c_associated(fft%modes_p) .and. &
-         c_associated(fft%samples_p))) then
-       logger%msg = 'Attempt to dereference null pointer in fft_apply'
-       if (logger%err) call logger%write_msg
-       error stop
+      c_associated(fft%modes_p) .and. &
+      c_associated(fft%samples_p))) then
+      logger%msg = 'Attempt to dereference null pointer in fft_apply'
+      if (logger%err) call logger%write_msg
+      error stop
     end if
     call fftw_execute_dft(fft%plan_p, fft%samples, fft%modes)
     if (m_min >= 0 .and. m_max >= 0) then
-       modes(:) = fft%modes(m_min+1:m_max+1) / dble(fft%N)
+      modes(:) = fft%modes(m_min+1:m_max+1) / dble(fft%N)
     else if (m_min < 0 .and. m_max < 0) then
-       modes(:) = fft%modes(fft%N+m_min+1:fft%N+m_max+1) / dble(fft%N)
+      modes(:) = fft%modes(fft%N+m_min+1:fft%N+m_max+1) / dble(fft%N)
     else
-       modes(m_min:-1) = fft%modes(fft%N+m_min+1:fft%N) / dble(fft%N)
-       modes(0:m_max) = fft%modes(:m_max+1) / dble(fft%N)
+      modes(m_min:-1) = fft%modes(fft%N+m_min+1:fft%N) / dble(fft%N)
+      modes(0:m_max) = fft%modes(:m_max+1) / dble(fft%N)
     end if
   end subroutine fft_apply
 
@@ -458,16 +458,16 @@ contains
     fft%samples => null()
     fft%modes => null()
     if (c_associated(fft%plan_p)) then
-       call fftw_destroy_plan(fft%plan_p)
-       fft%plan_p = c_null_ptr
+      call fftw_destroy_plan(fft%plan_p)
+      fft%plan_p = c_null_ptr
     end if
     if (c_associated(fft%modes_p)) then
-       call fftw_free(fft%modes_p)
-       fft%modes_p = c_null_ptr
+      call fftw_free(fft%modes_p)
+      fft%modes_p = c_null_ptr
     end if
     if (c_associated(fft%samples_p)) then
-       call fftw_free(fft%samples_p)
-       fft%samples_p = c_null_ptr
+      call fftw_free(fft%samples_p)
+      fft%samples_p = c_null_ptr
     end if
   end subroutine fft_deinit
 
@@ -483,7 +483,7 @@ contains
   !> @param comp_phi physical component \f$ v_{(\varphi)} \f$
   !> @param comp_Z physical component \f$ v_{Z} \f$
   subroutine straight_cyl2bent_cyl(comp_rad, comp_pol, comp_tor, theta, &
-       comp_R, comp_phi, comp_Z)
+    comp_R, comp_phi, comp_Z)
     complex(dp), intent(in) :: comp_rad, comp_pol, comp_tor
     real(dp), intent(in) :: theta
     complex(dp), intent(out) :: comp_R, comp_phi, comp_Z
@@ -505,7 +505,7 @@ contains
   !> @param comp_pol physical component \f$ v_{(\theta)} \f$
   !> @param comp_tor physical component \f$ v_{z} \f$
   subroutine bent_cyl2straight_cyl(comp_R, comp_phi, comp_Z, theta, &
-       comp_rad, comp_pol, comp_tor)
+    comp_rad, comp_pol, comp_tor)
     complex(dp), intent(in) :: comp_R, comp_phi, comp_Z
     real(dp), intent(in) :: theta
     complex(dp), intent(out) :: comp_rad, comp_pol, comp_tor
@@ -647,7 +647,7 @@ contains
     call h5_add(h5id_root, grp // '/cocos/sgn_pol', geqdsk%cocos%sgn_pol)
     call h5_add(h5id_root, grp // '/cocos/index', geqdsk%cocos%index)
     call h5_add(h5id_root, grp // '/fname', geqdsk%fname, &
-         comment = 'original GEQDSK filename')
+      comment = 'original GEQDSK filename')
     call h5_add(h5id_root, grp // '/header', geqdsk%header)
     call h5_add(h5id_root, grp // '/nw', geqdsk%nw)
     call h5_add(h5id_root, grp // '/nh', geqdsk%nh)
@@ -665,33 +665,33 @@ contains
     call h5_add(h5id_root, grp // '/bcentr', geqdsk%bcentr, unit = 'G')
     call h5_add(h5id_root, grp // '/current', geqdsk%current, unit = 'statA')
     call h5_add(h5id_root, grp // '/fpol', geqdsk%fpol, &
-         lbound(geqdsk%fpol), ubound(geqdsk%fpol), unit = 'G cm')
+      lbound(geqdsk%fpol), ubound(geqdsk%fpol), unit = 'G cm')
     call h5_add(h5id_root, grp // '/pres', geqdsk%pres, &
-         lbound(geqdsk%pres), ubound(geqdsk%pres), unit = 'dyn cm^-2')
+      lbound(geqdsk%pres), ubound(geqdsk%pres), unit = 'dyn cm^-2')
     call h5_add(h5id_root, grp // '/ffprim', geqdsk%ffprim, &
-         lbound(geqdsk%ffprim), ubound(geqdsk%ffprim), unit = 'G')
+      lbound(geqdsk%ffprim), ubound(geqdsk%ffprim), unit = 'G')
     call h5_add(h5id_root, grp // '/pprime', geqdsk%pprime, &
-         lbound(geqdsk%pprime), ubound(geqdsk%pprime), unit = 'dyn cm^-2 Mx^-1')
+      lbound(geqdsk%pprime), ubound(geqdsk%pprime), unit = 'dyn cm^-2 Mx^-1')
     call h5_add(h5id_root, grp // '/psirz', geqdsk%psirz, &
-         lbound(geqdsk%psirz), ubound(geqdsk%psirz), unit = 'Mx')
+      lbound(geqdsk%psirz), ubound(geqdsk%psirz), unit = 'Mx')
     call h5_add(h5id_root, grp // '/qpsi', geqdsk%qpsi, &
-         lbound(geqdsk%qpsi), ubound(geqdsk%qpsi), unit = '1')
+      lbound(geqdsk%qpsi), ubound(geqdsk%qpsi), unit = '1')
     call h5_add(h5id_root, grp // '/rbbbs', geqdsk%rbbbs, &
-         lbound(geqdsk%rbbbs), ubound(geqdsk%rbbbs), unit = 'cm')
+      lbound(geqdsk%rbbbs), ubound(geqdsk%rbbbs), unit = 'cm')
     call h5_add(h5id_root, grp // '/zbbbs', geqdsk%zbbbs, &
-         lbound(geqdsk%zbbbs), ubound(geqdsk%zbbbs), unit = 'cm')
+      lbound(geqdsk%zbbbs), ubound(geqdsk%zbbbs), unit = 'cm')
     call h5_add(h5id_root, grp // '/rlim', geqdsk%rlim, &
-         lbound(geqdsk%rlim), ubound(geqdsk%rlim), unit = 'cm')
+      lbound(geqdsk%rlim), ubound(geqdsk%rlim), unit = 'cm')
     call h5_add(h5id_root, grp // '/zlim', geqdsk%zlim, &
-         lbound(geqdsk%zlim), ubound(geqdsk%zlim), unit = 'cm')
+      lbound(geqdsk%zlim), ubound(geqdsk%zlim), unit = 'cm')
     call h5_add(h5id_root, grp // '/psi_eqd', geqdsk%psi_eqd, &
-         lbound(geqdsk%psi_eqd), ubound(geqdsk%psi_eqd), unit = 'Mx', comment = 'equidistant psi grid values')
+      lbound(geqdsk%psi_eqd), ubound(geqdsk%psi_eqd), unit = 'Mx', comment = 'equidistant psi grid values')
     call h5_add(h5id_root, grp // '/R_eqd', geqdsk%R_eqd, &
-         lbound(geqdsk%R_eqd), ubound(geqdsk%R_eqd), unit = 'cm', comment = 'equidistant R grid values')
+      lbound(geqdsk%R_eqd), ubound(geqdsk%R_eqd), unit = 'cm', comment = 'equidistant R grid values')
     call h5_add(h5id_root, grp // '/Z_eqd', geqdsk%Z_eqd, &
-         lbound(geqdsk%Z_eqd), ubound(geqdsk%Z_eqd), unit = 'cm', comment = 'equidistant Z grid values')
+      lbound(geqdsk%Z_eqd), ubound(geqdsk%Z_eqd), unit = 'cm', comment = 'equidistant Z grid values')
     call h5_add(h5id_root, grp // '/fprime', geqdsk%fprime, &
-         lbound(geqdsk%fprime), ubound(geqdsk%fprime), unit = 'cm^-1')
+      lbound(geqdsk%fprime), ubound(geqdsk%fprime), unit = 'cm^-1')
     call h5_close(h5id_root)
   end subroutine geqdsk_export_hdf5
 
@@ -728,11 +728,11 @@ contains
     call h5_open_rw(file, h5id_root)
     call h5_create_parent_groups(h5id_root, grp // '/')
     call h5_add(h5id_root, grp // '/x', &
-         func1d%x, lbound(func1d%x), ubound(func1d%x), &
-         comment = trim(adjustl(x_comment)), unit = trim(adjustl(x_unit)))
+      func1d%x, lbound(func1d%x), ubound(func1d%x), &
+      comment = trim(adjustl(x_comment)), unit = trim(adjustl(x_unit)))
     call h5_add(h5id_root, grp // '/y', &
-         func1d%y, lbound(func1d%y), ubound(func1d%y), &
-         comment = trim(adjustl(y_comment)), unit = trim(adjustl(y_unit)))
+      func1d%y, lbound(func1d%y), ubound(func1d%y), &
+      comment = trim(adjustl(y_comment)), unit = trim(adjustl(y_unit)))
     call h5_close(h5id_root)
   end subroutine func1d_write
 
@@ -760,17 +760,17 @@ contains
     integer :: fid, status, n, k
 
     open(newunit = fid, file = trim(adjustl(fname)), &
-         status = 'old', form = 'formatted', action = 'read')
+      status = 'old', form = 'formatted', action = 'read')
     n = 0
     do
-       read(fid, *, iostat = status)
-       if (status /= 0) exit
-       n = n + 1
+      read(fid, *, iostat = status)
+      if (status /= 0) exit
+      n = n + 1
     end do
     rewind fid
     call func1d_init(func1d, 1, n)
     do k = 1, n
-       read (fid, *) func1d%x(k), func1d%y(k)
+      read (fid, *) func1d%x(k), func1d%y(k)
     end do
     close(fid)
   end subroutine func1d_read_formatted
@@ -788,34 +788,34 @@ contains
     integer :: kder, k, k_lo, k_hi
 
     if (size(sample_x) /= size(sample_y)) then
-       call logger%msg_arg_size('interp1d', 'size(sample_x)', &
-            'size(sample_y)', size(sample_x), size(sample_y))
-       if (logger%err) call logger%write_msg
-       error stop
+      call logger%msg_arg_size('interp1d', 'size(sample_x)', &
+        'size(sample_y)', size(sample_x), size(sample_y))
+      if (logger%err) call logger%write_msg
+      error stop
     end if
     if (n_lag >= size(sample_x)) then
-       write (logger%msg, '("Lagrange polynomial order ", i0, ' // &
-            '" must be lower than number of sample points ", i0)') &
-            n_lag, size(sample_x)
-       if (logger%err) call logger%write_msg
-       error stop
+      write (logger%msg, '("Lagrange polynomial order ", i0, ' // &
+        '" must be lower than number of sample points ", i0)') &
+        n_lag, size(sample_x)
+      if (logger%err) call logger%write_msg
+      error stop
     end if
     kder = 0
     if (present(deriv)) then
-       if (deriv) then
-          kder = 1
-       end if
+      if (deriv) then
+        kder = 1
+      end if
     end if
     call binsearch(sample_x, lbound(sample_x, 1), resampled_x, k)
     k_lo = k - (n_lag + 1) / 2
     k_hi = k_lo + n_lag
     ! ensure that polynomial sample points remain within the bounds of sample_x
     if (k_lo < lbound(sample_x, 1)) then
-       k_lo = lbound(sample_x, 1)
-       k_hi = k_lo + n_lag
+      k_lo = lbound(sample_x, 1)
+      k_hi = k_lo + n_lag
     elseif (k_hi > ubound(sample_x, 1)) then
-       k_hi = ubound(sample_x, 1)
-       k_lo = k_hi - n_lag
+      k_hi = ubound(sample_x, 1)
+      k_lo = k_hi - n_lag
     end if
     call plag_coeff(n_lag + 1, 1, resampled_x, sample_x(k_lo:k_hi), lag_coeff)
     resampled_y = sum(sample_y(k_lo:k_hi) * lag_coeff(kder, :))
@@ -834,44 +834,44 @@ contains
     integer :: kder, k, k_lo, k_hi, k_re
 
     if (size(sample_x) /= size(sample_y)) then
-       call logger%msg_arg_size('resample1d', 'size(sample_x)', &
-            'size(sample_y)', size(sample_x), size(sample_y))
-       if (logger%err) call logger%write_msg
-       error stop
+      call logger%msg_arg_size('resample1d', 'size(sample_x)', &
+        'size(sample_y)', size(sample_x), size(sample_y))
+      if (logger%err) call logger%write_msg
+      error stop
     end if
     if (size(resampled_x) /= size(resampled_y)) then
-       call logger%msg_arg_size('resample1d', 'size(resampled_x)', &
-            'size(resampled_y)', size(resampled_x), size(resampled_y))
-       if (logger%err) call logger%write_msg
-       error stop
+      call logger%msg_arg_size('resample1d', 'size(resampled_x)', &
+        'size(resampled_y)', size(resampled_x), size(resampled_y))
+      if (logger%err) call logger%write_msg
+      error stop
     end if
     if (n_lag >= size(sample_x)) then
-       write (logger%msg, '("Lagrange polynomial order ", i0, ' // &
-            '" must be lower than number of sample points ", i0)') &
-            n_lag, size(sample_x)
-       if (logger%err) call logger%write_msg
-       error stop
+      write (logger%msg, '("Lagrange polynomial order ", i0, ' // &
+        '" must be lower than number of sample points ", i0)') &
+        n_lag, size(sample_x)
+      if (logger%err) call logger%write_msg
+      error stop
     end if
     kder = 0
     if (present(deriv)) then
-       if (deriv) then
-          kder = 1
-       end if
+      if (deriv) then
+        kder = 1
+      end if
     end if
     do k_re = lbound(resampled_x, 1), ubound(resampled_x, 1)
-       call binsearch(sample_x, lbound(sample_x, 1), resampled_x(k_re), k)
-       k_lo = k - (n_lag + 1) / 2
-       k_hi = k_lo + n_lag
-       ! ensure that polynomial sample points remain within the bounds of sample_x
-       if (k_lo < lbound(sample_x, 1)) then
-          k_lo = lbound(sample_x, 1)
-          k_hi = k_lo + n_lag
-       elseif (k_hi > ubound(sample_x, 1)) then
-          k_hi = ubound(sample_x, 1)
-          k_lo = k_hi - n_lag
-       end if
-       call plag_coeff(n_lag + 1, 1, resampled_x(k_re), sample_x(k_lo:k_hi), lag_coeff)
-       resampled_y(k_re) = sum(sample_y(k_lo:k_hi) * lag_coeff(kder, :))
+      call binsearch(sample_x, lbound(sample_x, 1), resampled_x(k_re), k)
+      k_lo = k - (n_lag + 1) / 2
+      k_hi = k_lo + n_lag
+      ! ensure that polynomial sample points remain within the bounds of sample_x
+      if (k_lo < lbound(sample_x, 1)) then
+        k_lo = lbound(sample_x, 1)
+        k_hi = k_lo + n_lag
+      elseif (k_hi > ubound(sample_x, 1)) then
+        k_hi = ubound(sample_x, 1)
+        k_lo = k_hi - n_lag
+      end if
+      call plag_coeff(n_lag + 1, 1, resampled_x(k_re), sample_x(k_lo:k_hi), lag_coeff)
+      resampled_y(k_re) = sum(sample_y(k_lo:k_hi) * lag_coeff(kder, :))
     end do
   end subroutine resample1d
 
@@ -887,9 +887,9 @@ contains
     real(dp) :: val
     this%t = this%sum + val
     if (abs(this%sum) >= abs(val)) then
-       this%c = this%c + ((this%sum - this%t) + val)
+      this%c = this%c + ((this%sum - this%t) + val)
     else
-       this%c = this%c + ((val - this%t) + this%sum)
+      this%c = this%c + ((val - this%t) + this%sum)
     end if
     this%sum = this%t
   end subroutine neumaier_accumulator_real_add
@@ -929,54 +929,54 @@ contains
 
     n = size(array)
     if (present(permutation)) then
-       if (n /= size(permutation)) then
-          call logger%msg_arg_size('heapsort_real', 'size(array)', 'size(permutation)', &
-               n, size(permutation))
-          if (logger%err) call logger%write_msg
-          error stop
-       end if
-       permutation = [(k, k = 1, n)]
+      if (n /= size(permutation)) then
+        call logger%msg_arg_size('heapsort_real', 'size(array)', 'size(permutation)', &
+          n, size(permutation))
+        if (logger%err) call logger%write_msg
+        error stop
+      end if
+      permutation = [(k, k = 1, n)]
     end if
     do k = (n - 2) / 2, 0, -1
-       call siftdown(k, n)
+      call siftdown(k, n)
     end do
     do k = n - 1, 1, -1
-       temp = array(0)
-       array(0) = array(k)
-       array(k) = temp
-       if (present(permutation)) then
-          itemp = permutation(0)
-          permutation(0) = permutation(k)
-          permutation(k) = itemp
-       end if
-       call siftdown(0, k)
+      temp = array(0)
+      array(0) = array(k)
+      array(k) = temp
+      if (present(permutation)) then
+        itemp = permutation(0)
+        permutation(0) = permutation(k)
+        permutation(k) = itemp
+      end if
+      call siftdown(0, k)
     end do
   contains
     subroutine siftdown(start, bottom)
       integer, intent(in) :: start, bottom
       root = start
       do while (root * 2 + 1 < bottom)
-         child = root * 2 + 1
-         if (child + 1 < bottom) then
-            if ((ascending .and. array(child) < array(child+1)) .or. &
-                 (.not. ascending .and. array(child) > array(child+1))) then
-               child = child + 1
-            end if
-         end if
-         if ((ascending .and. array(root) < array(child)) .or. &
-              (.not. ascending .and. array(root) > array(child))) then
-            temp = array(child)
-            array(child) = array(root)
-            array(root) = temp
-            if (present(permutation)) then
-               itemp = permutation(child)
-               permutation(child) = permutation(root)
-               permutation(root) = itemp
-            end if
-            root = child
-         else
-            return
-         end if
+        child = root * 2 + 1
+        if (child + 1 < bottom) then
+          if ((ascending .and. array(child) < array(child+1)) .or. &
+            (.not. ascending .and. array(child) > array(child+1))) then
+            child = child + 1
+          end if
+        end if
+        if ((ascending .and. array(root) < array(child)) .or. &
+          (.not. ascending .and. array(root) > array(child))) then
+          temp = array(child)
+          array(child) = array(root)
+          array(root) = temp
+          if (present(permutation)) then
+            itemp = permutation(child)
+            permutation(child) = permutation(root)
+            permutation(root) = itemp
+          end if
+          root = child
+        else
+          return
+        end if
       end do
     end subroutine siftdown
   end subroutine heapsort_real
@@ -984,43 +984,43 @@ contains
   subroutine heapsort_complex(array, comparison)
     complex(dp), intent(inout) :: array(0:)
     interface
-       function comparison(val1, val2)
-         import :: dp
-         complex(dp), intent(in) :: val1, val2
-         logical :: comparison
-       end function comparison
+      function comparison(val1, val2)
+        import :: dp
+        complex(dp), intent(in) :: val1, val2
+        logical :: comparison
+      end function comparison
     end interface
     integer :: n, k, child, root
     complex(dp) :: temp
     n = size(array)
     do k = (n - 2) / 2, 0, -1
-       call siftdown(k, n)
+      call siftdown(k, n)
     end do
     do k = n - 1, 1, -1
-       temp = array(0)
-       array(0) = array(k)
-       array(k) = temp
-       call siftdown(0, k)
+      temp = array(0)
+      array(0) = array(k)
+      array(k) = temp
+      call siftdown(0, k)
     end do
   contains
     subroutine siftdown(start, bottom)
       integer, intent(in) :: start, bottom
       root = start
       do while (root * 2 + 1 < bottom)
-         child = root * 2 + 1
-         if (child + 1 < bottom) then
-            if (comparison(array(child), array(child+1))) then
-               child = child + 1
-            end if
-         end if
-         if (comparison(array(root), array(child))) then
-            temp = array(child)
-            array(child) = array(root)
-            array(root) = temp
-            root = child
-         else
-            return
-         end if
+        child = root * 2 + 1
+        if (child + 1 < bottom) then
+          if (comparison(array(child), array(child+1))) then
+            child = child + 1
+          end if
+        end if
+        if (comparison(array(root), array(child))) then
+          temp = array(child)
+          array(child) = array(root)
+          array(root) = temp
+          root = child
+        else
+          return
+        end if
       end do
     end subroutine siftdown
   end subroutine heapsort_complex
@@ -1056,55 +1056,55 @@ contains
   !> LAPACK subroutines fail, \p eigvecs and possibly \p eigvals are not allocated
   !> and the `info` parameter is propagated via \p ierr.
   subroutine arnoldi_break(ndim, nkrylov, nmin, threshold, tol, next_iteration, &
-       ierr, nritz, eigvals, eigvecs)
+    ierr, nritz, eigvals, eigvecs)
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     integer, intent(in) :: ndim, nkrylov, nmin
     real(dp), intent(in) :: threshold, tol
     interface
-       subroutine next_iteration(old_val, new_val)
-         import :: dp
-         complex(dp), intent(in) :: old_val(:)
-         complex(dp), intent(out) :: new_val(:)
-       end subroutine next_iteration
+      subroutine next_iteration(old_val, new_val)
+        import :: dp
+        complex(dp), intent(in) :: old_val(:)
+        complex(dp), intent(out) :: new_val(:)
+      end subroutine next_iteration
     end interface
     integer, intent(out) :: ierr, nritz
     complex(dp), intent(out), allocatable :: eigvals(:)
     complex(dp), intent(out), allocatable, optional :: eigvecs(:, :)
     real(dp), parameter :: nearzero = 1d0 / huge(1d0)
     complex(dp), allocatable :: fold(:), fnew(:), fzero(:), &
-         qvecs(:, :), hmat(:, :), ritzvals(:), ritzvecs(:, :), progression(:, :)
+      qvecs(:, :), hmat(:, :), ritzvals(:), ritzvecs(:, :), progression(:, :)
     integer :: j, k, n
     logical, allocatable :: selection(:), converged(:)
 
     ierr = 0
     nritz = 0
     if (ndim < 1) then
-       ierr = -1
-       print '("arnoldi_break: ndim = ", i0, " < 1")', ndim
-       return
+      ierr = -1
+      print '("arnoldi_break: ndim = ", i0, " < 1")', ndim
+      return
     end if
     if (nkrylov < 1) then
-       ierr = -2
-       print '("arnoldi_break: nkrylov = ", i0, " < 1")', nkrylov
-       return
+      ierr = -2
+      print '("arnoldi_break: nkrylov = ", i0, " < 1")', nkrylov
+      return
     end if
     if (nkrylov > ndim) then
-       ierr = -2
-       print '("arnoldi_break: nkrylov = ", i0, " > ndim = ", i0)', nkrylov, ndim
-       return
+      ierr = -2
+      print '("arnoldi_break: nkrylov = ", i0, " > ndim = ", i0)', nkrylov, ndim
+      return
     end if
     if (nmin < 1) then
-       ierr = -3
-       print '("arnoldi_break: nmin = ", i0, " < 1")', nmin
-       return
+      ierr = -3
+      print '("arnoldi_break: nmin = ", i0, " < 1")', nmin
+      return
     end if
     if (nmin > nkrylov) then
-       ierr = -3
-       print '("arnoldi_break: nmin = ", i0, " > nkrylov = ", i0)', nmin, nkrylov
-       return
+      ierr = -3
+      print '("arnoldi_break: nmin = ", i0, " > nkrylov = ", i0)', nmin, nkrylov
+      return
     end if
     allocate(fold(ndim), fnew(ndim), fzero(ndim), qvecs(ndim, nkrylov), hmat(nkrylov, nkrylov), &
-         ritzvals(nkrylov), progression(nkrylov, nkrylov), selection(nkrylov), converged(nkrylov))
+      ritzvals(nkrylov), progression(nkrylov, nkrylov), selection(nkrylov), converged(nkrylov))
     ! initialize
     fold = (0d0, 0d0)
     print '("Iteration 1 of ", i0)', nkrylov
@@ -1119,48 +1119,48 @@ contains
     ! Arnoldi iterations
     n = nkrylov
     do k = 2, nkrylov
-       print '("Iteration ", i0, " of ", i0)', k, nkrylov
-       fold(:) = qvecs(:, k-1)
-       call next_iteration(fold, fnew)
-       qvecs(:, k) = fnew - fzero
-       do j = 1, k-1
-          hmat(j, k-1) = sum(conjg(qvecs(:, j)) * qvecs(:, k))
-          qvecs(:, k) = qvecs(:, k) - hmat(j, k-1) * qvecs(:, j)
-       end do
-       hmat(k, k-1) = sqrt(sum(conjg(qvecs(:, k)) * qvecs(:, k)))
-       if (abs(hmat(k, k-1)) < nearzero) then
-          n = k
-          exit
-       end if
-       qvecs(:, k) = qvecs(:, k) / hmat(k, k-1)
-       ! calculate Ritz values
-       call hessenberg_eigvals(hmat(:k, :k), ritzvals(:k), ierr)
-       if (ierr < 0) return
-       progression(:k, k) = ritzvals(:k)
-       selection(:k) = abs(ritzvals(:k)) >= threshold
-       nritz = count(selection)
-       converged(:k) = abs(progression(:k, k) - progression(:k, k - 1)) / &
-            abs(progression(:k, k - 1)) < tol .and. k >= nmin
-       if (all(pack(converged, selection))) then
-          n = k
-          exit
-       end if
+      print '("Iteration ", i0, " of ", i0)', k, nkrylov
+      fold(:) = qvecs(:, k-1)
+      call next_iteration(fold, fnew)
+      qvecs(:, k) = fnew - fzero
+      do j = 1, k-1
+        hmat(j, k-1) = sum(conjg(qvecs(:, j)) * qvecs(:, k))
+        qvecs(:, k) = qvecs(:, k) - hmat(j, k-1) * qvecs(:, j)
+      end do
+      hmat(k, k-1) = sqrt(sum(conjg(qvecs(:, k)) * qvecs(:, k)))
+      if (abs(hmat(k, k-1)) < nearzero) then
+        n = k
+        exit
+      end if
+      qvecs(:, k) = qvecs(:, k) / hmat(k, k-1)
+      ! calculate Ritz values
+      call hessenberg_eigvals(hmat(:k, :k), ritzvals(:k), ierr)
+      if (ierr < 0) return
+      progression(:k, k) = ritzvals(:k)
+      selection(:k) = abs(ritzvals(:k)) >= threshold
+      nritz = count(selection)
+      converged(:k) = abs(progression(:k, k) - progression(:k, k - 1)) / &
+        abs(progression(:k, k - 1)) < tol .and. k >= nmin
+      if (all(pack(converged, selection))) then
+        n = k
+        exit
+      end if
     end do
     if (.not. all(pack(converged, selection))) then
-       ierr = count(converged)
-       print '("arnoldi_break: only ", i0, " eigenvalues of ", i0, " converged")', &
-            ierr, nritz
+      ierr = count(converged)
+      print '("arnoldi_break: only ", i0, " eigenvalues of ", i0, " converged")', &
+        ierr, nritz
     end if
     ! sort eigenvalues in descending order and optionall compute eigenvectors in this order
     call heapsort_complex(ritzvals(:n), complex_abs_desc)
     allocate(eigvals(nritz))
     eigvals(:) = pack(ritzvals, selection)
     if (present(eigvecs)) then
-       allocate(ritzvecs(n, nritz), eigvecs(ndim, nritz))
-       call hessenberg_eigvecs(hmat(:n, :n), ritzvals(:n), selection(:n), ritzvecs, ierr)
-       if (ierr < 0) return
-       eigvecs = matmul(qvecs(:, :n), ritzvecs)
-       deallocate(ritzvecs)
+      allocate(ritzvecs(n, nritz), eigvecs(ndim, nritz))
+      call hessenberg_eigvecs(hmat(:n, :n), ritzvals(:n), selection(:n), ritzvecs, ierr)
+      if (ierr < 0) return
+      eigvecs = matmul(qvecs(:, :n), ritzvecs)
+      deallocate(ritzvecs)
     end if
     deallocate(fold, fnew, fzero, qvecs, hmat, ritzvals, progression, selection, converged)
   end subroutine arnoldi_break
@@ -1183,41 +1183,41 @@ contains
 
     ndim = size(hmat, 2)
     if (size(hmat, 1) /= ndim) then
-       print '("hessenberg_eigvals: hmat has shape (", i0, ", ", i0, "), ' // &
-            'but expected (", i0, ", ", i0, ")")', shape(hmat), ndim, ndim
-       ierr = -1
-       return
+      print '("hessenberg_eigvals: hmat has shape (", i0, ", ", i0, "), ' // &
+        'but expected (", i0, ", ", i0, ")")', shape(hmat), ndim, ndim
+      ierr = -1
+      return
     end if
     if (size(eigvals, 1) /= ndim) then
-       print '("hessenberg_eigvals: eigvals has shape (", i0, "), ' // &
-            'but expected (", i0, ")")', shape(hmat), ndim
-       ierr = -2
-       return
+      print '("hessenberg_eigvals: eigvals has shape (", i0, "), ' // &
+        'but expected (", i0, ")")', shape(hmat), ndim
+      ierr = -2
+      return
     end if
     allocate(hmat_work(ndim, ndim), zdum(1, ndim))
     hmat_work(:, :) = hmat
     allocate(work(1))
     lwork = -1
     call zhseqr('E', 'N', ndim, 1, ndim, hmat_work, ndim, eigvals, &
-         zdum, 1, work, lwork, ierr)
+      zdum, 1, work, lwork, ierr)
     if (ierr < 0) then
-       print '("ZHSEQR: illegal value in argument #", i0)', -ierr
-       return
+      print '("ZHSEQR: illegal value in argument #", i0)', -ierr
+      return
     elseif (ierr > 0) then
-       print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
-            ierr, ndim
+      print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
+        ierr, ndim
     end if
     lwork = int(work(1))
     deallocate(work)
     allocate(work(lwork))
     call zhseqr('E', 'N', ndim, 1, ndim, hmat_work, ndim, eigvals, &
-         zdum, 1, work, lwork, ierr)
+      zdum, 1, work, lwork, ierr)
     deallocate(work, hmat_work, zdum)
     if (ierr < 0) then
-       print '("ZHSEQR: illegal value in argument #", i0)', -ierr
+      print '("ZHSEQR: illegal value in argument #", i0)', -ierr
     elseif (ierr > 0) then
-       print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
-            ierr, ndim
+      print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
+        ierr, ndim
     end if
   end subroutine hessenberg_eigvals
 
@@ -1246,40 +1246,40 @@ contains
 
     ndim = size(hmat, 2)
     if (size(hmat, 1) /= ndim) then
-       print '("hessenberg_eigvecs: hmat has shape (", i0, ", ", i0, "), ' // &
-            'but expected (", i0, ", ", i0, ")")', shape(hmat), ndim, ndim
-       ierr = -1
-       return
+      print '("hessenberg_eigvecs: hmat has shape (", i0, ", ", i0, "), ' // &
+        'but expected (", i0, ", ", i0, ")")', shape(hmat), ndim, ndim
+      ierr = -1
+      return
     end if
     if (size(eigvals, 1) /= ndim) then
-       print '("hessenberg_eigvecs: eigvals has shape (", i0, "), ' // &
-            'but expected (", i0, ")")', shape(eigvals), ndim
-       ierr = -2
-       return
+      print '("hessenberg_eigvecs: eigvals has shape (", i0, "), ' // &
+        'but expected (", i0, ")")', shape(eigvals), ndim
+      ierr = -2
+      return
     end if
     if (size(mask, 1) /= ndim) then
-       print '("hessenberg_eigvecs: mask has shape (", i0, "), ' // &
-            'but expected (", i0, ")")', shape(mask), ndim
-       ierr = -3
-       return
+      print '("hessenberg_eigvecs: mask has shape (", i0, "), ' // &
+        'but expected (", i0, ")")', shape(mask), ndim
+      ierr = -3
+      return
     end if
     if (size(eigvecs, 1) /= ndim .or. size(eigvecs, 2) /= count(mask)) then
-       print '("hessenberg_eigvecs: eigvecs has shape (", i0, ", ", i0, "), ' // &
-            'but expected (", i0, ", ", i0, ")")', shape(eigvecs), ndim, count(mask)
-       ierr = -4
-       return
+      print '("hessenberg_eigvecs: eigvecs has shape (", i0, ", ", i0, "), ' // &
+        'but expected (", i0, ", ", i0, ")")', shape(eigvecs), ndim, count(mask)
+      ierr = -4
+      return
     end if
     allocate(eigvals_work(ndim), work(ndim, ndim), rwork(ndim), &
-         zdum(1, count(mask)), idum(count(mask)), ifailr(count(mask)))
+      zdum(1, count(mask)), idum(count(mask)), ifailr(count(mask)))
     eigvals_work(:) = eigvals
     call zhsein('R', 'Q', 'N', mask, ndim, hmat, ndim, eigvals_work, &
-         zdum, 1, eigvecs, ndim, count(mask), neff, work, rwork, &
-         idum, ifailr, ierr)
+      zdum, 1, eigvecs, ndim, count(mask), neff, work, rwork, &
+      idum, ifailr, ierr)
     if (ierr < 0) then
-       print '("ZHSEIN: illegal value in argument #", i0)', -ierr
+      print '("ZHSEIN: illegal value in argument #", i0)', -ierr
     elseif (ierr > 0) then
-       print '("ZHSEIN: only ", i0, " of ", i0, " eigenvectors converged")', &
-            ierr, ndim
+      print '("ZHSEIN: only ", i0, " of ", i0, " eigenvectors converged")', &
+        ierr, ndim
     end if
     deallocate(eigvals_work, work, rwork, zdum, idum, ifailr)
   end subroutine hessenberg_eigvecs
@@ -1296,7 +1296,7 @@ contains
     integer :: merged(num)
     integer :: k
     merged = merge(first_v, [(second_s, k = 1, num)], &
-         [([.true., .false.], k = 1, num / 2)])
+      [([.true., .false.], k = 1, num / 2)])
   end function interleave_vs
 
   pure function interleave_sv(first_s, second_v, num) result(merged)
@@ -1304,7 +1304,7 @@ contains
     integer :: merged(num)
     integer :: k
     merged = merge([(first_s, k = 1, num)], second_v, &
-         [([.true., .false.], k = 1, num / 2)])
+      [([.true., .false.], k = 1, num / 2)])
   end function interleave_sv
 
   pure function interleave_ss(first_s, second_s, num) result(merged)
@@ -1322,17 +1322,17 @@ contains
     integer :: k
 
     if (c_associated(C)) then
-       call c_f_pointer(C, p, [huge(0)])
-       k = 1
-       do while (p(k) /= c_null_char .and. k <= len(F))
-          F(k:k) = p(k)
-          k = k + 1
-       end do
-       if (k < len(f)) then
-          F(k:) = ' '
-       end if
+      call c_f_pointer(C, p, [huge(0)])
+      k = 1
+      do while (p(k) /= c_null_char .and. k <= len(F))
+        F(k:k) = p(k)
+        k = k + 1
+      end do
+      if (k < len(f)) then
+        F(k:) = ' '
+      end if
     else
-       F = ''
+      F = ''
     end if
   end subroutine C_F_string
 
