@@ -124,38 +124,6 @@ mephit_init() {
     done
 }
 
-mephit_convert() {
-    in_type=$1
-    out_type=$2
-    in_dir=$3
-    out_dir=$4
-    if [ -z "$in_dir" ]; then
-        echo "$scriptname: expected directory at third position after convert"
-        anyerr=1
-        return
-    fi
-    if [ ! -d "$in_dir" ]; then
-        echo "$scriptname: directory $in_dir does not exist"
-        anyerr=1
-        return
-    fi
-    in_dir=$(absolutize "$in_dir")
-    if [ -n "$out_dir" ]; then
-        if [ ! -d "$out_dir" ]; then
-            mkdir -p "$out_dir"
-        fi
-        out_dir=$(absolutize "$out_dir")
-    else
-        out_dir=$in_dir
-    fi
-    "$bindir/vacfield.x" "$in_type" "$out_type" "$in_dir" "$out_dir"
-    lasterr=$?
-    if [ $lasterr -ne 0 ]; then
-        echo "$scriptname: error $lasterr during coil geometry / vacuum field conversion"
-        anyerr+=1
-    fi
-}
-
 mephit_run() {
     meshing=0
     iterations=0

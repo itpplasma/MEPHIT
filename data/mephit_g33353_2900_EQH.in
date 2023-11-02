@@ -1,0 +1,92 @@
+&scalars
+   ! 0: None, 1: Err, 2: Warn, 3: Info, 4: Debug
+   config%log_level = 4
+   ! 0: single iteration, 1: direct iterations, 2: preconditioned iterations
+   config%runmode = 2
+   ! use non-resonant test case
+   config%nonres = .false.
+   ! average over quadrilaterals for non-resonant test case
+   config%quad_avg = .true.
+   ! 0: EPS paper profile, 1: parabolic profile, 2: EQDSK profile
+   config%pres_prof = 2
+   ! 0: only PS current, 1: rot B_0, 2: EQDSK profile
+   config%curr_prof = 2
+   ! 0: surface integral, 1: field line integral, 2: EQDSK profile
+   config%q_prof = 1
+   ! 0: iMHD, 1: KiLCA interface
+   config%currn_model = 1
+   ! 0: Viktor Nemov's code, 1: GPEC, 2: pre-computed Fourier transform
+   config%vac_src = 2
+   ! prefactor in Biot-Savart law, e.g. 5 windings and conversion from A to statA / c_0
+   config%Biot_Savart_prefactor = 5.0d-1
+   !> file containing coil currents
+   config%currents_file = '/proj/plasma/DATA/BALANCE/COIL/33353/33353.2900_coil_markl.dat'
+   !> file containing coil geometries
+   config%coil_file = '/temp/AG-plasma/codes/MEPHIT/data/AUG_B_coils.h5'
+   !> file containing equilibrium density profile
+   config%dens_file = '/proj/plasma/DATA/BALANCE/PROF/33353/33353.2900_ne_PED_MMARKL_rho_pol.dat'
+   !> file containing equilibrium electron temperature profile
+   config%temp_e_file = '/proj/plasma/DATA/BALANCE/PROF/33353/33353.2900_Te_PED_MMARKL_rho_pol.dat'
+   !> file containing equilibrium ion temperature profile
+   config%temp_i_file = '/proj/plasma/DATA/BALANCE/PROF/33353/33353.2900_Ti_PED_MMARKL_rho_pol.dat'
+   !> file containing equilibrium radial electric field profile
+   config%E_r_file = '/proj/plasma/DATA/BALANCE/PROF/33353/33353_2900_Er.dat'
+   ! toroidal mode number of perturbation
+   config%n = 2
+   ! maximum number of iteration steps
+   config%niter = 75
+   ! maximum relative error in fixed-point iteration
+   config%iter_rel_err = 1d-9
+   ! maximum number of iterations in Arnoldi method
+   config%nkrylov = 300
+   ! threshold for eigenvalues in preconditioner
+   config%ritz_threshold = 0.5d0
+   ! maximim relative error for eigenvalues in preconditioner
+   config%ritz_rel_err = 1d-8
+   ! maximum distance between flux surfaces along theta = 0
+   config%max_Delta_rad = 1.0d0
+   ! use only resonant Fourier mode in shielding current computation
+   config%shielding_fourier = .true.
+   ! enable damping of Pfirsch-Schlueter current
+   config%damp = .true.
+   ! maximal number of eigenvectors to be saved
+   config%max_eig_out = 10
+/
+&arrays
+   refinement(3) = 0.0d0
+   refinement(4) = 1.5d0
+   refinement(5) = 0.0d0
+   refinement(6) = 0.0d0
+   refinement(7) = 0.0d0
+   refinement(8) = 0.0d0
+   refinement(9) = 0.0d0
+   refinement(10) = 0.0d0
+   refinement(11) = 0.0d0
+   add_fine(3) = 4
+   add_fine(4) = 4
+   add_fine(5) = 4
+   add_fine(6) = 4
+   add_fine(7) = 4
+   add_fine(8) = 4
+   add_fine(9) = 2
+   add_fine(10) = 0
+   add_fine(11) = 0
+   Delta_rad_res(3) = 1.951001692897710d-02
+   Delta_rad_res(4) = 4.452869623678642d-02
+   Delta_rad_res(5) = 4.083076803405798d-02
+   Delta_rad_res(6) = 3.705604564427034d-02
+   Delta_rad_res(7) = 3.374910431946887d-02
+   Delta_rad_res(8) = 3.094747455799525d-02
+   Delta_rad_res(9) = 2.794510752167885d-02
+   Delta_rad_res(10) = 2.519245652245653d-02
+   Delta_rad_res(11) = 2.267778045125842d-02
+   sheet_current_factor(3) = 0d0
+   sheet_current_factor(4) = 0d0
+   sheet_current_factor(5) = 0d0
+   sheet_current_factor(6) = 0d0
+   sheet_current_factor(7) = 0d0
+   sheet_current_factor(8) = 0d0
+   sheet_current_factor(9) = 0d0
+   sheet_current_factor(10) = 0d0
+   sheet_current_factor(11) = 0d0
+/
