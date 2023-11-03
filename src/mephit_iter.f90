@@ -203,9 +203,8 @@ contains
         ! FEM_deinit is not needed because scripts/maxwell_daemon.edp exits
         ! if iterations are not requested
       end if
-      if (analysis) then
-        call mephit_postprocess
-      end if
+      ! analysis/postprocessing is now included in iterations,
+      ! so this phase will be replaced later
       call iter_deinit
     end if
     call mephit_deinit
@@ -296,15 +295,12 @@ contains
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, logger, datafile, cmplx_fmt, runmode_precon, runmode_single, currn_model_kilca
     use mephit_util, only: arnoldi_break
-    use mephit_mesh, only: mesh, cache
-    use mephit_pert, only: L1_write, &
-      RT0_init, RT0_deinit, RT0_write, RT0_tor_comp_from_zero_div, RT0_L2int, &
-      vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, &
-      polmodes_t, polmodes_init, polmodes_deinit, polmodes_write, &
-      L1_poloidal_modes, RT0_poloidal_modes, vac
+    use mephit_mesh, only: mesh
+    use mephit_pert, only: vac, L1_write, &
+      RT0_init, RT0_deinit, RT0_write, RT0_tor_comp_from_zero_div, RT0_L2int
 
     logical :: preconditioned
-    integer :: kiter, niter, maxiter, ndim, nritz, i, j, info, m
+    integer :: kiter, niter, maxiter, ndim, nritz, i, j, info
     integer(HID_T) :: h5id_root
     real(dp), allocatable :: L2int_Bn_diff(:)
     real(dp) :: L2int_Bnvac, rel_err
@@ -313,9 +309,6 @@ contains
     integer, allocatable :: ipiv(:)
     character(len = 4) :: postfix
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
-    type(polmodes_t) :: pmn, jmnpar_Bmod
-    type(vec_polmodes_t) :: jmn
-    complex(dp) :: Ires(mesh%m_res_min:mesh%m_res_max)
 
     if (conf%damp) then
       if (debug_initial) then
@@ -415,9 +408,6 @@ contains
     call h5_close(h5id_root)
     allocate(L2int_Bn_diff(0:maxiter))
     L2int_Bn_diff = ieee_value(0d0, ieee_quiet_nan)
-    call polmodes_init(pmn, conf%m_max, mesh%nflux)
-    call polmodes_init(jmnpar_Bmod, conf%m_max, mesh%nflux)
-    call vec_polmodes_init(jmn, conf%m_max, mesh%nflux)
     call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
     call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
     if (preconditioned) then
@@ -455,17 +445,11 @@ contains
       ! compute B_(n+1) = K * B_n + B_vac ... different from next_iteration_arnoldi
       if (kiter <= 1) then
         call MFEM_test
-        call L1_poloidal_modes(pn, pmn)
-        call L1_write(pn, datafile, 'iter/MFEM_pn' // postfix, &
-          'pressure (after MFEM iteration)', 'dyn cm^-2')
-        call polmodes_write(pmn, datafile, 'iter/MFEM_pmn' // postfix, &
-          'pressure modes (after MFEM iteration)', 'dyn cm^-2')
+        call perteq_write('("iter/", a, "MFEM_' // postfix // '")', &
+          ' (after MFEM iteration)', presn = pn, presmn = pn)
         call compute_presn
-        call L1_poloidal_modes(pn, pmn)
-        call L1_write(pn, datafile, 'iter/pn' // postfix, &
-          'pressure (after iteration)', 'dyn cm^-2')
-        call polmodes_write(pmn, datafile, 'iter/pmn' // postfix, &
-          'pressure modes (after iteration)', 'dyn cm^-2')
+        call perteq_write('("iter/", a, "' // postfix // '")', &
+          ' (after iteration)', presn = pn, presmn = pn)
       else
         call compute_presn
       end if
@@ -485,40 +469,18 @@ contains
       write (logger%msg, '("L2int_Bn_diff = ", es24.16e3)') L2int_Bn_diff(kiter)
       if (logger%info) call logger%write_msg
       if (kiter <= 1) then
-        call L1_write(jnpar_B0, datafile, 'iter/jnpar_Bmod' // postfix, &
-          'parallel current density (after iteration)', 's^-1')  ! SI: H^-1
-        call RT0_write(jn, datafile, 'iter/jn' // postfix, &
-          'current density (after iteration)', 'statA cm^-2', 1)
-        call RT0_write(Bn, datafile, 'iter/Bn' // postfix, &
-          'magnetic field (after iteration)', 'G', 1)
-        call RT0_write(Bn_diff, datafile, 'iter/Bn_diff' // postfix, &
-          'magnetic field (difference between iterations)', 'G', 1)
+        call perteq_write('("iter/", a, "' // postfix // '")', ' (after iteration)', &
+          parcurrn = jnpar_B0, currn = jn, magfn = Bn)  ! 1 -> triplot
+        call perteq_write('("iter/", a, "_diff' // postfix // '")', &
+          ' (difference between iterations)', magfn = Bn_diff)  ! 1 -> triplot
       else
         if (L2int_Bn_diff(kiter) < conf%iter_rel_err * L2int_Bnvac) then
           niter = kiter
           exit
         end if
       end if
-      call L1_poloidal_modes(pn, pmn)
-      call polmodes_write(pmn, datafile, 'iter/pmn' // postfix, &
-        'pressure (after iteration)', 'dyn cm^-2')
-      call L1_poloidal_modes(jnpar_B0, jmnpar_Bmod)
-      call polmodes_write(jmnpar_Bmod, datafile, 'iter/jmnpar_Bmod' // postfix, &
-        'parallel current density (after iteration)', 's^-1')  ! SI: H^-1
-      do m = mesh%m_res_min, mesh%m_res_max
-        call compute_Ires(cache%shielding(m)%sample_Ires, cache%shielding(m)%GL_weights, &
-          jnpar_B0, m, Ires(m))
-      end do
-      call h5_open_rw(datafile, h5id_root)
-      call h5_add(h5id_root, 'iter/Ires' // postfix, Ires, lbound(Ires), ubound(Ires), &
-        comment = 'resonant currents (after iteration)', unit = 'statA')
-      call h5_close(h5id_root)
-      call RT0_poloidal_modes(jn, jmn)
-      call vec_polmodes_write(jmn, datafile, 'iter/jmn' // postfix, &
-        'current density (after iteration)', 'statA cm^-2')
-      call RT0_poloidal_modes(Bn, Bmn)
-      call vec_polmodes_write(Bmn, datafile, 'iter/Bmn' // postfix, &
-        'magnetic field (after iteration)', 'G')
+      call perteq_write('("iter/", a, "' // postfix // '")', ' (after iteration)', &
+        presmn = pn, parcurrmn = jnpar_B0, Ires = jnpar_B0, currmn = jn, magfmn = Bn)
     end do
     rel_err = L2int_Bn_diff(niter) / L2int_Bnvac
     write (logger%msg, '("Relative error after ", i0, " iterations: ", es24.16e3)') &
@@ -535,6 +497,10 @@ contains
     end if
     Bnplas%DOF(:) = Bn%DOF - vac%Bn%DOF
     Bnplas%comp_phi(:) = Bn%comp_phi - vac%Bn%comp_phi
+    if (conf%kilca_scale_factor /= 0) then
+      call check_furth(jn, Bnplas)
+    end if
+    ! save results
     call h5_open_rw(datafile, h5id_root)
     call h5_add(h5id_root, 'iter/niter', niter, comment = 'actual number of iterations')
     call h5_add(h5id_root, 'iter/rel_err', rel_err, comment = 'relative error of iterations')
@@ -547,29 +513,21 @@ contains
         comment = 'electric potential perturbation', unit = 'statV')
       call h5_add(h5id_root, 'iter/Phi_aligned_mn', Phi_aligned_mn, &
         lbound(Phi_aligned_mn), ubound(Phi_aligned_mn), &
-        comment = 'electric potential perturbation', unit = 'statV')
+        comment = 'aligned electric potential perturbation', unit = 'statV')
     end if
     call h5_close(h5id_root)
     deallocate(L2int_Bn_diff)
-    call L1_write(pn, datafile, 'iter/pn', &
-      'pressure (full perturbation)', 'dyn cm^-2')
-    call L1_write(jnpar_B0, datafile, 'iter/jnpar_Bmod', &
-      'parallel current density (full perturbation)', 's^-1')  ! SI: H^-1
     call L1_write(AnR, datafile, 'iter/AnR', &
       'R component of vector potential for GORILLA (full perturbation)', 'G cm')
     call L1_write(AnZ, datafile, 'iter/AnZ', &
       'Z component of vector potential for GORILLA (full perturbation)', 'G cm')
-    call RT0_write(Bn, datafile, 'iter/Bn', &
-      'magnetic field (full perturbation)', 'G', 2)
-    call RT0_write(Bnplas, datafile, 'iter/Bnplas', &
-      'magnetic field (plasma response)', 'G', 2)
-    call RT0_write(jn, datafile, 'iter/jn', &
-      'current density (full perturbation)', 'statA cm^-2', 1)
+    call perteq_write('("iter/", a)', ' (full perturbation)', &
+      pn, pn, jnpar_B0, jnpar_B0, jnpar_B0, jn, jn, Bn, Bn)
+    call perteq_write('("iter/", a, "_plas")', ' (plasma response)', &
+      magfn = Bnplas, magfmn = Bnplas)
+
     call RT0_deinit(Bn_prev)
     call RT0_deinit(Bn_diff)
-    call polmodes_deinit(pmn)
-    call polmodes_deinit(jmnpar_Bmod)
-    call vec_polmodes_deinit(jmn)
 
   contains
 
@@ -581,20 +539,12 @@ contains
       Bn%DOF(:) = old_val + vac%Bn%DOF
       call RT0_tor_comp_from_zero_div(Bn)
       if (debug_initial) then
-        call polmodes_init(pmn, conf%m_max, mesh%nflux)
         call MFEM_test
-        call L1_poloidal_modes(pn, pmn)
-        call L1_write(pn, datafile, 'debug_MDE_initial/MFEM_pn', &
-          'pressure (initial iteration from MFEM)', 'dyn cm^-2')
-        call polmodes_write(pmn, datafile, 'debug_MDE_initial/MFEM_pmn', &
-          'pressure modes (initial iteration from MFEM)', 'dyn cm^-2')
+        call perteq_write('("debug_MDE_initial/MFEM_", a)', &
+          ' (initial MFEM iteration)', presn = pn, presmn = pn)
         call compute_presn
-        call L1_poloidal_modes(pn, pmn)
-        call L1_write(pn, datafile, 'debug_MDE_initial/MEPHIT_pn', &
-          'pressure (initial iteration)', 'dyn cm^-2')
-        call polmodes_write(pmn, datafile, 'debug_MDE_initial/MEPHIT_pmn', &
-          'pressure modes (initial iteration)', 'dyn cm^-2')
-        call polmodes_deinit(pmn)
+        call perteq_write('("debug_MDE_initial/MEPHIT_", a)', &
+          ' (initial iteration)', presn = pn, presmn = pn)
       else
         call compute_presn
       end if
@@ -865,17 +815,15 @@ contains
   end subroutine debug_MDE
 
   subroutine compute_currn
-    use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger, datafile
+    use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger
     use mephit_mesh, only: mesh, cache, field_cache_t
-    use mephit_pert, only: L1_interp, RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp, &
-      polmodes_t, polmodes_init, polmodes_write, polmodes_deinit, L1_poloidal_modes
+    use mephit_pert, only: L1_interp, RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
     use mephit_util, only: pi, clight, zd_cross
     integer :: kf, kp, ktri, kedge
     real(dp), dimension(3) :: grad_j0B0, B0_grad_B0
     complex(dp) :: zdum, B0_jnpar
     complex(dp), dimension(3) :: grad_pn, B_n, dBn_dR, dBn_dZ, dBn_dphi, grad_BnB0
     complex(dp), dimension(mesh%npoint) :: inhom
-    type(polmodes_t) :: polmodes
 
     jn%DOF(:) = (0d0, 0d0)
     jn%comp_phi(:) = (0d0, 0d0)
@@ -914,24 +862,18 @@ contains
       call RT0_project_pol_comp(jn, project_combined)
       call RT0_project_tor_comp(jn, project_combined)
       if (debug_initial) then
-        call polmodes_init(polmodes, conf%m_max, mesh%nflux)
-        call L1_poloidal_modes(jnpar_B0, polmodes)
         if (damp) then
-          call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_incl', &
-            'parallel current density from iMHD including damping', 's^-1')  ! SI: H^-1
+          call perteq_write('("debug_KiLCA/", a, "_incl")', &
+            ' from iMHD including damping', parcurrmn = jnpar_B0)
         else
-          call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_excl', &
-            'parallel current density from iMHD excluding damping', 's^-1')  ! SI: H^-1
+          call perteq_write('("debug_KiLCA/", a, "_excl")', &
+            ' from iMHD excluding damping', parcurrmn = jnpar_B0)
         end if
-        call polmodes_deinit(polmodes)
       end if
       call add_kilca_current
       if (debug_initial) then
-        call polmodes_init(polmodes, conf%m_max, mesh%nflux)
-        call L1_poloidal_modes(jnpar_B0, polmodes)
-        call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_total', &
-          'parallel current density including KiLCA current', 's^-1')  ! SI: H^-1
-        call polmodes_deinit(polmodes)
+        call perteq_write('("debug_KiLCA/", a, "_total")', &
+          ' including KiLCA current', parcurrmn = jnpar_B0)
       end if
     case default
       write (logger%msg, '("unknown response current model selection", i0)') conf%currn_model
@@ -1131,71 +1073,124 @@ contains
     end if
   end subroutine add_shielding_current
 
-  subroutine mephit_postprocess
+  subroutine perteq_write(name_fmt, comment, &
+    presn, presmn, parcurrn, parcurrmn, Ires, currn, currmn, magfn, magfmn)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
     use mephit_conf, only: conf, datafile
     use mephit_mesh, only: mesh, cache
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, &
       polmodes_t, polmodes_init, polmodes_deinit, polmodes_write, &
-      L1_poloidal_modes, RT0_poloidal_modes, vac
+      L1_poloidal_modes, RT0_poloidal_modes, L1_write, RT0_write
+    character(len = *), intent(in) :: name_fmt
+    character(len = *), intent(in) :: comment
+    type(L1_t), intent(in), optional :: presn
+    type(L1_t), intent(in), optional :: presmn
+    type(L1_t), intent(in), optional :: parcurrn
+    type(L1_t), intent(in), optional :: parcurrmn
+    type(L1_t), intent(in), optional :: Ires
+    type(RT0_t), intent(in), optional :: currn
+    type(RT0_t), intent(in), optional :: currmn
+    type(RT0_t), intent(in), optional :: magfn
+    type(RT0_t), intent(in), optional :: magfmn
+    character(len = 1024) :: name
     integer(HID_T) :: h5id_root
     type(polmodes_t) :: polmodes
     type(vec_polmodes_t) :: vec_polmodes
     integer :: m
-    complex(dp), allocatable :: Ires(:)
+    complex(dp), allocatable :: Imn_res(:)
 
-    ! poloidal modes
-    call polmodes_init(polmodes, conf%m_max, mesh%nflux)
-    call L1_poloidal_modes(pn, polmodes)
-    call polmodes_write(polmodes, datafile, 'postprocess/pmn', &
-      'poloidal modes of pressure perturbation', 'dyn cm^-2')
-    call L1_poloidal_modes(jnpar_B0, polmodes)
-    call polmodes_write(polmodes, datafile, 'iter/jmnpar_Bmod', &
-      'parallel current density', 's^-1')  ! SI: H^-1
-    call polmodes_deinit(polmodes)
-    call vec_polmodes_init(vec_polmodes, conf%m_max, mesh%nflux)
-    call RT0_poloidal_modes(Bn, vec_polmodes)
-    call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn', &
-      'poloidal modes of magnetic field (full perturbation)', 'G')
-    call RT0_poloidal_modes(vac%Bn, vec_polmodes)
-    call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn_vac', &
-      'poloidal modes of magnetic field (vacuum perturbation)', 'G')
-    call RT0_poloidal_modes(Bnplas, vec_polmodes)
-    call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/Bmn_plas', &
-      'poloidal modes of magnetic field (plasma response)', 'G')
-    if (conf%kilca_scale_factor /= 0) then
-      call check_furth(jn, vec_polmodes)
+    if (present(presmn) .or. present(parcurrmn)) then
+      call polmodes_init(polmodes, conf%m_max, mesh%nflux)
     end if
-    call RT0_poloidal_modes(jn, vec_polmodes)
-    call vec_polmodes_write(vec_polmodes, datafile, 'postprocess/jmn', &
-      'poloidal modes of current density perturbation', 'statA cm^-2')
-    call vec_polmodes_deinit(vec_polmodes)
-    ! resonant currents
-    allocate(Ires(mesh%m_res_min:mesh%m_res_max))
-    do m = mesh%m_res_min, mesh%m_res_max
-      call compute_Ires(cache%shielding(m)%sample_Ires, cache%shielding(m)%GL_weights, &
-        jnpar_B0, m, Ires(m))
-    end do
-    call h5_open_rw(datafile, h5id_root)
-    call h5_add(h5id_root, 'postprocess/Ires', Ires, lbound(Ires), ubound(Ires), &
-      comment = 'resonant currents', unit = 'statA')
-    call h5_close(h5id_root)
-  end subroutine mephit_postprocess
+    if (present(currmn) .or. present(magfmn)) then
+      call vec_polmodes_init(vec_polmodes, conf%m_max, mesh%nflux)
+    end if
 
-  subroutine check_furth(currn, Bmn_plas)
+    if (present(presn)) then
+      write (name, name_fmt) 'pn'
+      call L1_write(presn, datafile, trim(name), &
+        'pressure' // comment, 'dyn cm^-2')
+    end if
+    if (present(presmn)) then
+      write (name, name_fmt) 'pmn'
+      call L1_poloidal_modes(presmn, polmodes)
+      call polmodes_write(polmodes, datafile, trim(name), &
+        'poloidal modes of pressure' // comment, 'dyn cm^-2')
+    end if
+    if (present(parcurrn)) then
+      write (name, name_fmt) 'jnpar_Bmod'
+      call L1_write(parcurrn, datafile, trim(name), &
+        'parallel current density' // comment, 's^-1')  ! SI: H^-1
+    end if
+    if (present(parcurrmn)) then
+      write (name, name_fmt) 'jmnpar_Bmod'
+      call L1_poloidal_modes(parcurrmn, polmodes)
+      call polmodes_write(polmodes, datafile, trim(name), &
+        'poloidal modes of parallel current density' // comment, 's^-1')  ! SI: H^-1
+    end if
+    if (present(currn)) then
+      write (name, name_fmt) 'jn'
+      call RT0_write(currn, datafile, trim(name), &
+        'current density' // comment, 'statA cm^-2', 1)
+    end if
+    if (present(currmn)) then
+      write (name, name_fmt) 'jmn'
+      call RT0_poloidal_modes(currmn, vec_polmodes)
+      call vec_polmodes_write(vec_polmodes, datafile, trim(name), &
+        'poloidal modes of current density' // comment, 'statA cm^-2')
+    end if
+    if (present(magfn)) then
+      write (name, name_fmt) 'Bn'
+      call RT0_write(magfn, datafile, trim(name), &
+        'magnetic field' // comment, 'G', 1)
+    end if
+    if (present(magfmn)) then
+      write (name, name_fmt) 'Bmn'
+      call RT0_poloidal_modes(magfmn, vec_polmodes)
+      call vec_polmodes_write(vec_polmodes, datafile, trim(name), &
+        'poloidal modes of magnetic field' // comment, 'G')
+    end if
+
+    if (present(presmn) .or. present(parcurrmn)) then
+      call polmodes_deinit(polmodes)
+    end if
+    if (present(currmn) .or. present(magfmn)) then
+      call vec_polmodes_deinit(vec_polmodes)
+    end if
+
+    ! resonant currents
+    if (present(Ires)) then
+      allocate(Imn_res(mesh%m_res_min:mesh%m_res_max))
+      do m = mesh%m_res_min, mesh%m_res_max
+        call compute_Ires(cache%shielding(m)%sample_Ires, cache%shielding(m)%GL_weights, &
+          Ires, m, Imn_res(m))
+      end do
+      write (name, name_fmt) 'Ires'
+      call h5_open_rw(datafile, h5id_root)
+      call h5_add(h5id_root, trim(name), Imn_res, lbound(Imn_res), ubound(Imn_res), &
+        comment = 'resonant currents' // comment, unit = 'statA')
+      call h5_close(h5id_root)
+    end if
+  end subroutine perteq_write
+
+  subroutine check_furth(currn, Bn_plas)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, datafile
     use mephit_util, only: imun, clight
     use mephit_mesh, only: equil, fs_half, mesh, cache
-    use mephit_pert, only: RT0_t, vec_polmodes_t
+    use mephit_pert, only: RT0_t, vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
+      RT0_poloidal_modes
     type(RT0_t), intent(in) :: currn
-    type(vec_polmodes_t), intent(in) :: Bmn_plas
+    type(RT0_t), intent(in) :: Bn_plas
+    type(vec_polmodes_t) :: Bmn_plas
     character(len = *), parameter :: dataset = 'debug_furth'
     integer(HID_T) :: h5id_root
     integer :: kf, log2, npol, kpol, k, kilca_m_res
     complex(dp) :: sheet_flux(mesh%nflux)
     real(dp) :: k_z, k_theta(mesh%nflux)
 
+    call vec_polmodes_init(Bmn_plas, conf%m_max, mesh%nflux)
+    call RT0_poloidal_modes(Bn_plas, Bmn_plas)
     kilca_m_res = -equil%cocos%sgn_q * abs(conf%kilca_pol_mode)
     k_z = mesh%n / mesh%R_O
     k_theta(:) = kilca_m_res / fs_half%rad
@@ -1225,6 +1220,7 @@ contains
     call h5_add(h5id_root, dataset // '/sheet_flux', sheet_flux, &
       lbound(sheet_flux), ubound(sheet_flux), unit = 'statA')
     call h5_close(h5id_root)
+    call vec_polmodes_deinit(Bmn_plas)
   end subroutine check_furth
 
   !> compute resonant currents
