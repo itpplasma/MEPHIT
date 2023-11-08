@@ -8,13 +8,6 @@ module mephit_iter
 
   public :: mephit_run, mephit_deinit
 
-  !> Switch to enable debugging of initial iterations without plasma response
-  !> and without additional shielding currents / damping.
-  logical :: debug_initial = .true.
-
-  !> Switch to enable damping in solve_MDE().
-  logical :: damp = .false.
-
   !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
   type(L1_t) :: pn
 
@@ -310,19 +303,24 @@ contains
     character(len = 4) :: postfix
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
 
-    if (conf%damp) then
-      if (debug_initial) then
-        damp = .false.
-        Bn%DOF(:) = vac%Bn%DOF
-        Bn%comp_phi(:) = vac%Bn%comp_phi
-        call compute_presn
-        call compute_currn
-        Bn%DOF(:) = vac%Bn%DOF
-        Bn%comp_phi(:) = vac%Bn%comp_phi
+    if (conf%debug_initial) then
+      Bn%DOF(:) = vac%Bn%DOF
+      Bn%comp_phi(:) = vac%Bn%comp_phi
+      if (conf%debug_MFEM) then
+        call MFEM_test
+        call perteq_write('("debug_MFEM_initial/MFEM_", a)', &
+          ' (initial MFEM iteration)', presn = pn, presmn = pn)
       end if
-      damp = .true.
-    else
-      damp = .false.
+      call compute_presn(.false.)
+      if (conf%debug_MFEM) then
+        call perteq_write('("debug_MFEM_initial/", a)', &
+          ' (initial iteration)', presn = pn, presmn = pn)
+      end if
+      call compute_currn(.false., .true.)
+      Bn%DOF(:) = vac%Bn%DOF
+      Bn%comp_phi(:) = vac%Bn%comp_phi
+      call compute_presn(.true.)
+      call compute_currn(.true., .true.)
     end if
     ! system dimension: number of non-redundant edges in core plasma
     ndim = mesh%nedge
@@ -419,8 +417,8 @@ contains
       Bn%DOF(:) = RT0_L2int(Bn) / L2int_Bnvac * Bn%DOF
       call RT0_tor_comp_from_zero_div(Bn)
       Bn_prev%DOF(:) = Bn%DOF
-      call compute_presn
-      call compute_currn
+      call compute_presn(conf%damp)
+      call compute_currn(conf%damp, .false.)
       call compute_Bn
       Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
         matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF - Bn_prev%DOF)))
@@ -443,24 +441,22 @@ contains
       Bn_prev%DOF(:) = Bn%DOF
       Bn_prev%comp_phi(:) = Bn%comp_phi
       ! compute B_(n+1) = K * B_n + B_vac ... different from next_iteration_arnoldi
-      if (kiter <= 1) then
+      if (kiter <= 1 .and. conf%debug_MFEM) then
         call MFEM_test
         call perteq_write('("iter/", a, "MFEM_' // postfix // '")', &
-          ' (after MFEM iteration)', presn = pn, presmn = pn)
-        call compute_presn
+            ' (after MFEM iteration)', presn = pn, presmn = pn)
+      end if
+      call compute_presn(conf%damp)
+      if (kiter <= 1) then
         call perteq_write('("iter/", a, "' // postfix // '")', &
           ' (after iteration)', presn = pn, presmn = pn)
-      else
-        call compute_presn
       end if
-      call compute_currn
+      call compute_currn(conf%damp, .false.)
       call compute_Bn
       Bn%DOF(:) = Bn%DOF + vac%Bn%DOF
       if (preconditioned) then
         Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
           matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF - Bn_prev%DOF)))
-      elseif (kiter == 0) then
-        debug_initial = .false.
       end if
       call RT0_tor_comp_from_zero_div(Bn)
       Bn_diff%DOF(:) = Bn%DOF - Bn_prev%DOF
@@ -470,9 +466,9 @@ contains
       if (logger%info) call logger%write_msg
       if (kiter <= 1) then
         call perteq_write('("iter/", a, "' // postfix // '")', ' (after iteration)', &
-          parcurrn = jnpar_B0, currn = jn, magfn = Bn)  ! 1 -> triplot
+          parcurrn = jnpar_B0, currn = jn, magfn = Bn)
         call perteq_write('("iter/", a, "_diff' // postfix // '")', &
-          ' (difference between iterations)', magfn = Bn_diff)  ! 1 -> triplot
+          ' (difference between iterations)', magfn = Bn_diff)
       else
         if (L2int_Bn_diff(kiter) < conf%iter_rel_err * L2int_Bnvac) then
           niter = kiter
@@ -538,20 +534,8 @@ contains
 
       Bn%DOF(:) = old_val + vac%Bn%DOF
       call RT0_tor_comp_from_zero_div(Bn)
-      if (debug_initial) then
-        call MFEM_test
-        call perteq_write('("debug_MDE_initial/MFEM_", a)', &
-          ' (initial MFEM iteration)', presn = pn, presmn = pn)
-        call compute_presn
-        call perteq_write('("debug_MDE_initial/MEPHIT_", a)', &
-          ' (initial iteration)', presn = pn, presmn = pn)
-      else
-        call compute_presn
-      end if
-      call compute_currn
-      if (debug_initial) then
-        debug_initial = .false.
-      end if
+      call compute_presn(conf%damp)
+      call compute_currn(conf%damp, .false.)
       call compute_Bn
       new_val(:) = Bn%DOF
     end subroutine next_iteration_arnoldi
@@ -623,13 +607,14 @@ contains
     end if
   end subroutine MFEM_test
 
-  subroutine solve_MDE(inhom, solution)
+  subroutine solve_MDE(inhom, solution, apply_damping)
     use sparse_mod, only: sparse_solve, sparse_matmul
     use mephit_conf, only: logger
     use mephit_util, only: imun
     use mephit_mesh, only: mesh, cache
     complex(dp), dimension(:), intent(in) :: inhom
     complex(dp), dimension(:), intent(out) :: solution
+    logical, intent(in) :: apply_damping
     complex(dp), dimension(maxval(mesh%kp_max)) :: a, b, x, d, du
     complex(dp), dimension(:), allocatable :: resid
     real(dp), dimension(maxval(mesh%kp_max)) :: rel_err
@@ -662,7 +647,7 @@ contains
         associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge))
           a(kp) = (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
             (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
-          if (damp) then
+          if (apply_damping) then
             b(kp) = imun * (mesh%n + imun * mesh%damping(kf)) * f%B0(2) / R
           else
             b(kp) = imun * mesh%n * f%B0(2) / R
@@ -718,8 +703,9 @@ contains
     if (allocated(resid)) deallocate(resid)
   end subroutine solve_MDE
 
-  subroutine compute_presn
+  subroutine compute_presn(apply_damping)
     use mephit_mesh, only: fs, mesh, cache
+    logical, intent(in) :: apply_damping
     complex(dp), dimension(mesh%npoint) :: inhom
     integer :: kf, kp, kedge
 
@@ -735,7 +721,7 @@ contains
         end associate
       end do
     end do
-    call solve_MDE(inhom, pn%DOF)
+    call solve_MDE(inhom, pn%DOF, apply_damping)
   end subroutine compute_presn
 
   subroutine debug_MDE(group, presn, magfn, currn_perp, currn_par)
@@ -814,11 +800,13 @@ contains
     deallocate(lorentz, pn, grad_pn, Bn_psi_contravar, jnpar_Bmod, grad_jnpar_Bmod, div_jnperp, div_jnperp_RT0)
   end subroutine debug_MDE
 
-  subroutine compute_currn
+  subroutine compute_currn(apply_damping, debug_initial)
     use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger
     use mephit_mesh, only: mesh, cache, field_cache_t
     use mephit_pert, only: L1_interp, RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
     use mephit_util, only: pi, clight, zd_cross
+    logical, intent(in) :: apply_damping
+    logical, intent(in) :: debug_initial
     integer :: kf, kp, ktri, kedge
     real(dp), dimension(3) :: grad_j0B0, B0_grad_B0
     complex(dp) :: zdum, B0_jnpar
@@ -845,7 +833,7 @@ contains
         end associate
       end do
     end do
-    call solve_MDE(inhom, jnpar_B0%DOF)
+    call solve_MDE(inhom, jnpar_B0%DOF, apply_damping)
     if (debug_initial) then
       call RT0_project_pol_comp(jn, project_combined)
       call RT0_project_tor_comp(jn, project_combined)
@@ -862,7 +850,7 @@ contains
       call RT0_project_pol_comp(jn, project_combined)
       call RT0_project_tor_comp(jn, project_combined)
       if (debug_initial) then
-        if (damp) then
+        if (apply_damping) then
           call perteq_write('("debug_KiLCA/", a, "_incl")', &
             ' from iMHD including damping', parcurrmn = jnpar_B0)
         else
@@ -870,7 +858,7 @@ contains
             ' from iMHD excluding damping', parcurrmn = jnpar_B0)
         end if
       end if
-      call add_kilca_current
+      call add_kilca_current(debug_initial)
       if (debug_initial) then
         call perteq_write('("debug_KiLCA/", a, "_total")', &
           ' including KiLCA current', parcurrmn = jnpar_B0)
@@ -900,13 +888,14 @@ contains
     end function project_combined
   end subroutine compute_currn
 
-  subroutine add_kilca_current
+  subroutine add_kilca_current(debug_initial)
     use mephit_conf, only: conf, datafile
     use mephit_util, only: imun, ev2erg, resample1d, interp1d
     use mephit_mesh, only: equil, mesh, cache, fs, fs_half, mesh_interp_theta_flux, field_cache_t, &
       m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
       RT0_poloidal_modes, polmodes_t, polmodes_init, polmodes_write, polmodes_deinit
+    logical, intent(in) :: debug_initial
     integer :: m, m_res, kf, kf_min, kpoi_min, kpoi_max, kedge, ktri, kt, kp, k
     real(dp) :: edge_perp(2), lin_interp(2), q_interp, dum
     complex(dp) :: jmnpar_over_Bmod_interp, B0pol(mesh%npoint)

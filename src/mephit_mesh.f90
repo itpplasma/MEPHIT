@@ -1039,7 +1039,9 @@ contains
     call init_flux_variables
     call compare_gpec_coordinates
     call connect_mesh_points
-    call mesh_write_MFEM
+    if (conf%debug_MFEM) then
+      call mesh_write_MFEM
+    end if
     call write_FreeFem_mesh
     call cache_init(cache, 4)
     call cache_equilibrium_field
