@@ -35,6 +35,11 @@ module mephit_iter
   !> Poloidal modes of aligned electric potential perturbation in units of statV.
   complex(dp), allocatable :: Phi_aligned_mn(:, :)
 
+  type :: precond_t
+    integer :: nritz = 0
+    complex(dp), allocatable :: Lr(:, :), eigvecs(:, :)
+  end type precond_t
+
   abstract interface
     subroutine real_vector_field(R, Z, vector) bind(C)
       use iso_c_binding, only: c_double
@@ -120,6 +125,7 @@ contains
     character(len = 1024) :: config_filename
     integer(c_int) :: runmode_flags
     logical :: meshing, analysis, iterations
+    type(precond_t) :: precond
 
     meshing = iand(runmode, ishft(1, 0)) /= 0
     iterations = iand(runmode, ishft(1, 1)) /= 0
@@ -187,7 +193,10 @@ contains
     if (iterations .or. analysis) then
       call iter_init
       if (iterations) then
-        call mephit_iterate
+        call debug_initial_iteration
+        call precond_compute(precond)
+        call perteq_iterate(precond)
+        call precond_deinit(precond)
         call FEM_deinit
       else
         if (analysis) then
@@ -283,58 +292,43 @@ contains
     end if
   end subroutine iter_read
 
-  subroutine mephit_iterate
-    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+  subroutine precond_deinit(precond)
+    type(precond_t), intent(inout) :: precond
+
+    precond%nritz = 0
+    if (allocated(precond%Lr)) deallocate(precond%Lr)
+    if (allocated(precond%eigvecs)) deallocate(precond%eigvecs)
+  end subroutine precond_deinit
+
+  pure function precond_apply(precond, vec)
+    type(precond_t), intent(in) :: precond
+    complex(dp), intent(in) :: vec(:)
+    complex(dp) :: precond_apply(size(vec))
+
+    precond_apply = matmul(precond%eigvecs(:, 1:precond%nritz), matmul(precond%Lr, &
+      matmul(transpose(conjg(precond%eigvecs(:, 1:precond%nritz))), vec)))
+  end function precond_apply
+
+  subroutine precond_compute(precond)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use mephit_conf, only: conf, logger, datafile, cmplx_fmt, runmode_precon, runmode_single, currn_model_kilca
+    use mephit_conf, only: conf, logger, datafile, cmplx_fmt, runmode_precon
     use mephit_util, only: arnoldi_break
     use mephit_mesh, only: mesh
-    use mephit_pert, only: vac, L1_write, &
-      RT0_init, RT0_deinit, RT0_write, RT0_tor_comp_from_zero_div, RT0_L2int
-
-    logical :: preconditioned
-    integer :: kiter, niter, maxiter, ndim, nritz, i, j, info
+    use mephit_pert, only: vac, RT0_init, RT0_deinit, RT0_write, RT0_tor_comp_from_zero_div, RT0_L2int
+    type(precond_t), intent(inout) :: precond
+    integer :: i, j, info
     integer(HID_T) :: h5id_root
-    real(dp), allocatable :: L2int_Bn_diff(:)
-    real(dp) :: L2int_Bnvac, rel_err
-    type(RT0_t) :: Bn_prev, Bn_diff
-    complex(dp), allocatable :: eigvals(:), eigvecs(:, :), Lr(:, :), Yr(:, :)
+    complex(dp), allocatable :: eigvals(:), Yr(:, :)
     integer, allocatable :: ipiv(:)
     character(len = 4) :: postfix
     character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
+    type(RT0_t) :: Bn_prev
 
-    if (conf%debug_initial) then
-      Bn%DOF(:) = vac%Bn%DOF
-      Bn%comp_phi(:) = vac%Bn%comp_phi
-      if (conf%debug_MFEM) then
-        call MFEM_test
-        call perteq_write('("debug_MFEM_initial/MFEM_", a)', &
-          ' (initial MFEM iteration)', presn = pn, presmn = pn)
-      end if
-      call compute_presn(.false.)
-      if (conf%debug_MFEM) then
-        call perteq_write('("debug_MFEM_initial/", a)', &
-          ' (initial iteration)', presn = pn, presmn = pn)
-      end if
-      call compute_currn(.false., .true.)
-      Bn%DOF(:) = vac%Bn%DOF
-      Bn%comp_phi(:) = vac%Bn%comp_phi
-      call compute_presn(.true.)
-      call compute_currn(.true., .true.)
-    end if
-    ! system dimension: number of non-redundant edges in core plasma
-    ndim = mesh%nedge
-    ! runmodes
-    preconditioned = runmode_precon == conf%runmode
-    if (runmode_single == conf%runmode) then
-      maxiter = 0
-    else
-      maxiter = conf%niter
-    end if
-    if (preconditioned) then
-      ! calculate eigenvectors
-      call arnoldi_break(ndim, conf%nkrylov, 3, conf%ritz_threshold, conf%ritz_rel_err, &
-        next_iteration_arnoldi, info, nritz, eigvals, eigvecs)
+    call precond_deinit(precond)
+    if (runmode_precon == conf%runmode) then
+      ! calculate eigenvectors -- system dimension: number of non-redundant edges in core plasma
+      call arnoldi_break(mesh%nedge, conf%nkrylov, 3, conf%ritz_threshold, conf%ritz_rel_err, &
+        next_iteration_arnoldi, info, precond%nritz, eigvals, precond%eigvecs)
       if (info < 0) then
         write (logger%msg, '("Error ", i0, " in routine arnoldi_break")') info
         if (logger%err) call logger%write_msg
@@ -347,9 +341,9 @@ contains
       call h5_close(h5id_root)
       if (logger%info) then
         write (logger%msg, '("Arnoldi method yields ", i0, " Ritz eigenvalues > ", es24.16e3)') &
-          nritz, conf%ritz_threshold
+          precond%nritz, conf%ritz_threshold
         call logger%write_msg
-        do i = 1, nritz
+        do i = 1, precond%nritz
           write (logger%msg, '("lambda ", i0, ": ", ' // cmplx_fmt // ')') i, eigvals(i)
           call logger%write_msg
         end do
@@ -359,24 +353,26 @@ contains
           'your configuration (nkrylov, ritz_threshold, ritz_rel_err)'
         if (logger%warn) call logger%write_msg
       end if
-      if (nritz > 0) then
-        do i = 1, min(nritz, conf%max_eig_out)
+      if (precond%nritz > 0) then
+        do i = 1, min(precond%nritz, conf%max_eig_out)
           write (postfix, postfix_fmt) i
-          Bn%DOF(:) = eigvecs(:, i)
+          Bn%DOF(:) = precond%eigvecs(:, i)
           call RT0_tor_comp_from_zero_div(Bn)
           call RT0_write(Bn, datafile, 'iter/eigvec' // postfix, &
             'iteration eigenvector', 'G', 1)
         end do
-        allocate(Lr(nritz, nritz), Yr(nritz, nritz))
+        allocate(precond%Lr(precond%nritz, precond%nritz), Yr(precond%nritz, precond%nritz))
         Yr = (0d0, 0d0)
-        do i = 1, nritz
+        do i = 1, precond%nritz
           Yr(i, i) = (1d0, 0d0)
-          do j = 1, nritz
-            Lr(i, j) = sum(conjg(eigvecs(:, i)) * eigvecs(:, j)) * (eigvals(j) - (1d0, 0d0))
+          do j = 1, precond%nritz
+            precond%Lr(i, j) = sum(conjg(precond%eigvecs(:, i)) * &
+              precond%eigvecs(:, j)) * (eigvals(j) - (1d0, 0d0))
           end do
         end do
-        allocate(ipiv(nritz))
-        call zgesv(nritz, nritz, Lr, nritz, ipiv, Yr, nritz, info)
+        allocate(ipiv(precond%nritz))
+        call zgesv(precond%nritz, precond%nritz, precond%Lr, &
+          precond%nritz, ipiv, Yr, precond%nritz, info)
         deallocate(ipiv)
         if (info == 0) then
           logger%msg = 'Successfully inverted matrix for preconditioner'
@@ -387,14 +383,61 @@ contains
           if (logger%err) call logger%write_msg
           error stop
         end if
-        do i = 1, nritz
-          Lr(i, :) = eigvals(i) * Yr(i, :)
+        do i = 1, precond%nritz
+          precond%Lr(i, :) = eigvals(i) * Yr(i, :)
         end do
         deallocate(Yr)
-      else
-        preconditioned = .false.
+        ! debug kernel of linear operator
+        Bn%DOF(:) = 0d0
+        do i = 1, precond%nritz
+          if (abs(eigvals(i)) < 1d0) exit
+          Bn%DOF(:) = Bn%DOF + precond%eigvecs(:, i)
+        end do
+        Bn%DOF(:) = RT0_L2int(Bn) / RT0_L2int(vac%Bn) * Bn%DOF
+        call RT0_tor_comp_from_zero_div(Bn)
+        call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
+        Bn_prev%DOF(:) = Bn%DOF
+        call compute_presn(conf%damp)
+        call compute_currn(conf%damp, .false.)
+        call compute_Bn
+        Bn%DOF(:) = Bn%DOF - precond_apply(precond, Bn%DOF - Bn_prev%DOF)
+        call RT0_tor_comp_from_zero_div(Bn)
+        call RT0_write(Bn, datafile, 'iter/debug_kernel', &
+          'preconditioner applied to its kernel', 'G', 1)
+        call RT0_deinit(Bn_prev)
       end if
     end if
+
+  contains
+
+    ! computes B_(n+1) = K * (B_n + B_vac) for Arnoldi iterations
+    subroutine next_iteration_arnoldi(old_val, new_val)
+      complex(dp), intent(in) :: old_val(:)
+      complex(dp), intent(out) :: new_val(:)
+
+      Bn%DOF(:) = old_val + vac%Bn%DOF
+      call RT0_tor_comp_from_zero_div(Bn)
+      call compute_presn(conf%damp)
+      call compute_currn(conf%damp, .false.)
+      call compute_Bn
+      new_val(:) = Bn%DOF
+    end subroutine next_iteration_arnoldi
+  end subroutine precond_compute
+
+  subroutine perteq_iterate(precond)
+    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use mephit_conf, only: conf, logger, datafile, runmode_single, currn_model_kilca
+    use mephit_mesh, only: mesh
+    use mephit_pert, only: vac, L1_write, RT0_init, RT0_deinit, RT0_tor_comp_from_zero_div, RT0_L2int
+    type(precond_t), intent(inout) :: precond
+    integer :: kiter, niter, maxiter
+    integer(HID_T) :: h5id_root
+    real(dp), allocatable :: L2int_Bn_diff(:)
+    real(dp) :: L2int_Bnvac, rel_err
+    type(RT0_t) :: Bn_prev, Bn_diff
+    character(len = 4) :: postfix
+    character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
 
     L2int_Bnvac = RT0_L2int(vac%Bn)
     write (logger%msg, '("L2int_Bnvac = ", es24.16e3)') L2int_Bnvac
@@ -404,33 +447,19 @@ contains
     call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int_Bnvac, &
       comment = 'L2 integral of magnetic field (vacuum)', unit = 'Mx')
     call h5_close(h5id_root)
+    if (runmode_single == conf%runmode) then
+      maxiter = 0
+    else
+      maxiter = conf%niter
+    end if
     allocate(L2int_Bn_diff(0:maxiter))
     L2int_Bn_diff = ieee_value(0d0, ieee_quiet_nan)
     call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
     call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
-    if (preconditioned) then
-      Bn%DOF(:) = 0d0
-      do i = 1, nritz
-        if (abs(eigvals(i)) < 1d0) exit
-        Bn%DOF(:) = Bn%DOF + eigvecs(:, i)
-      end do
-      Bn%DOF(:) = RT0_L2int(Bn) / L2int_Bnvac * Bn%DOF
-      call RT0_tor_comp_from_zero_div(Bn)
-      Bn_prev%DOF(:) = Bn%DOF
-      call compute_presn(conf%damp)
-      call compute_currn(conf%damp, .false.)
-      call compute_Bn
-      Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
-        matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF - Bn_prev%DOF)))
-      call RT0_tor_comp_from_zero_div(Bn)
-      call RT0_write(Bn, datafile, 'iter/debug_kernel', &
-        'preconditioner applied to its kernel', 'G', 1)
-    end if
     Bn%DOF(:) = vac%Bn%DOF
     Bn%comp_phi(:) = vac%Bn%comp_phi
-    if (preconditioned) then
-      Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
-        matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF)))
+    if (precond%nritz > 0) then
+      Bn%DOF(:) = Bn%DOF - precond_apply(precond, Bn%DOF)
       call RT0_tor_comp_from_zero_div(Bn)
     end if
     niter = maxiter
@@ -454,9 +483,8 @@ contains
       call compute_currn(conf%damp, .false.)
       call compute_Bn
       Bn%DOF(:) = Bn%DOF + vac%Bn%DOF
-      if (preconditioned) then
-        Bn%DOF(:) = Bn%DOF - matmul(eigvecs(:, 1:nritz), matmul(Lr, &
-          matmul(transpose(conjg(eigvecs(:, 1:nritz))), Bn%DOF - Bn_prev%DOF)))
+      if (precond%nritz > 0) then
+        Bn%DOF(:) = Bn%DOF - precond_apply(precond, Bn%DOF - Bn_prev%DOF)
       end if
       call RT0_tor_comp_from_zero_div(Bn)
       Bn_diff%DOF(:) = Bn%DOF - Bn_prev%DOF
@@ -487,9 +515,6 @@ contains
         '" could not be reached within the requested ", i0, " iterations")') &
         conf%iter_rel_err, conf%niter
       if (logger%warn) call logger%write_msg
-    end if
-    if (preconditioned) then
-      deallocate(Lr, eigvals, eigvecs)
     end if
     Bnplas%DOF(:) = Bn%DOF - vac%Bn%DOF
     Bnplas%comp_phi(:) = Bn%comp_phi - vac%Bn%comp_phi
@@ -524,22 +549,32 @@ contains
 
     call RT0_deinit(Bn_prev)
     call RT0_deinit(Bn_diff)
+  end subroutine perteq_iterate
 
-  contains
+  subroutine debug_initial_iteration
+    use mephit_conf, only: conf
+    use mephit_pert, only: vac
 
-    ! computes B_(n+1) = K * (B_n + B_vac) for Arnoldi iterations
-    subroutine next_iteration_arnoldi(old_val, new_val)
-      complex(dp), intent(in) :: old_val(:)
-      complex(dp), intent(out) :: new_val(:)
-
-      Bn%DOF(:) = old_val + vac%Bn%DOF
-      call RT0_tor_comp_from_zero_div(Bn)
-      call compute_presn(conf%damp)
-      call compute_currn(conf%damp, .false.)
-      call compute_Bn
-      new_val(:) = Bn%DOF
-    end subroutine next_iteration_arnoldi
-  end subroutine mephit_iterate
+    if (conf%debug_initial) then
+      Bn%DOF(:) = vac%Bn%DOF
+      Bn%comp_phi(:) = vac%Bn%comp_phi
+      if (conf%debug_MFEM) then
+        call MFEM_test
+        call perteq_write('("debug_MFEM_initial/MFEM_", a)', &
+          ' (initial MFEM iteration)', presn = pn, presmn = pn)
+      end if
+      call compute_presn(.false.)
+      if (conf%debug_MFEM) then
+        call perteq_write('("debug_MFEM_initial/", a)', &
+          ' (initial iteration)', presn = pn, presmn = pn)
+      end if
+      call compute_currn(.false., .true.)
+      Bn%DOF(:) = vac%Bn%DOF
+      Bn%comp_phi(:) = vac%Bn%comp_phi
+      call compute_presn(.true.)
+      call compute_currn(.true., .true.)
+    end if
+  end subroutine debug_initial_iteration
 
   !> Computes #bnflux and #bnphi from #jnflux and #jnphi.
   !>
