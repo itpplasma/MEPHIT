@@ -126,10 +126,10 @@ mephit_init() {
 
 mephit_run() {
     meshing=0
+    preconditioner=0
     iterations=0
-    analysis=0
     debug=0
-    TEMP=$(getopt -o 'mia' --long 'meshing,analysis,iterations,debug,memcheck,test' -n "$scriptname" -- "$@")
+    TEMP=$(getopt -o 'mpi' --long 'meshing,preconditioner,iterations,debug,memcheck,test' -n "$scriptname" -- "$@")
     eval set -- "$TEMP"
     unset TEMP
     while true; do
@@ -139,13 +139,13 @@ mephit_run() {
                 shift
                 continue
                 ;;
-            '-i'|'--iterations')
-                iterations=1
+            '-p'|'--preconditioner')
+                preconditioner=1
                 shift
                 continue
                 ;;
-            '-a'|'--analysis')
-                analysis=1
+            '-i'|'--iterations')
+                iterations=1
                 shift
                 continue
                 ;;
@@ -174,13 +174,13 @@ mephit_run() {
                 ;;
         esac
     done
-    if [ $analysis -eq 0 ] && [ $iterations -eq 0 ] && [ $meshing -eq 0 ]; then
+    if [ $meshing -eq 0 ] && [ $preconditioner -eq 0 ] && [ $iterations -eq 0 ]; then
         # if no options are set, default to go through all phases
-        analysis=1
-        iterations=1
         meshing=1
+        preconditioner=1
+        iterations=1
     fi
-    runmode=$(( analysis << 2 | iterations << 1 | meshing << 0 ))
+    runmode=$(( iterations << 2 | preconditioner << 1 | meshing << 0 ))
 
     # default to current directory if none is given on the command line
     arglist=( "$(pwd)" )

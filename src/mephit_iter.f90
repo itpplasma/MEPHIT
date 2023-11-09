@@ -124,17 +124,17 @@ contains
     type(c_ptr), intent(in), value :: suffix
     character(len = 1024) :: config_filename
     integer(c_int) :: runmode_flags
-    logical :: meshing, analysis, iterations
+    logical :: meshing, preconditioner, iterations
     type(precond_t) :: precond
 
     meshing = iand(runmode, ishft(1, 0)) /= 0
-    iterations = iand(runmode, ishft(1, 1)) /= 0
-    analysis = iand(runmode, ishft(1, 2)) /= 0
+    preconditioner = iand(runmode, ishft(1, 1)) /= 0
+    iterations = iand(runmode, ishft(1, 2)) /= 0
     runmode_flags = runmode
-    if (.not. (meshing .or. iterations .or. analysis)) then
+    if (.not. (meshing .or. preconditioner .or. iterations)) then
       meshing = .true.
+      preconditioner = .true.
       iterations = .true.
-      analysis = .true.
       runmode_flags = ior(ior(ishft(1, 0), ishft(1, 1)), ishft(1, 2))
     end if
     call C_F_string(suffix, basename_suffix)
@@ -190,25 +190,22 @@ contains
       ! pass effective toroidal mode number and runmode to FreeFem++
       call FEM_init(mesh%n, mesh%nedge, mesh%npoint, runmode)
     end if
-    if (iterations .or. analysis) then
+    if (preconditioner .or. iterations) then
       call iter_init
-      if (iterations) then
+      if (preconditioner) then
         call debug_initial_iteration
         call precond_compute(precond)
-        call perteq_iterate(precond)
-        call precond_deinit(precond)
-        call FEM_deinit
+        call precond_write(precond, datafile, 'iter')
       else
-        if (analysis) then
-          call iter_read
-        end if
-        ! FEM_deinit is not needed because scripts/maxwell_daemon.edp exits
-        ! if iterations are not requested
+        call precond_read(precond, datafile, 'iter')
       end if
-      ! analysis/postprocessing is now included in iterations,
-      ! so this phase will be replaced later
+      if (iterations) then
+        call perteq_iterate(precond)
+      end if
+      call precond_deinit(precond)
       call iter_deinit
     end if
+    call FEM_deinit
     call mephit_deinit
   end subroutine mephit_run
 
@@ -300,6 +297,73 @@ contains
     if (allocated(precond%eigvecs)) deallocate(precond%eigvecs)
   end subroutine precond_deinit
 
+  subroutine precond_write(precond, datafile, group)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use mephit_pert, only: RT0_init, RT0_deinit, RT0_write, RT0_tor_comp_from_zero_div
+    use mephit_mesh, only: mesh
+    type(precond_t), intent(in) :: precond
+    character(len = *), intent(in) :: datafile
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    character(len = 4) :: postfix
+    character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
+    type(RT0_t) :: eigvec
+    integer(HID_T) :: h5id_root
+    integer :: i
+
+    grp = trim(group)
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/nritz', precond%nritz, comment = 'number of Ritz values')
+    if (precond%nritz > 0) then
+      call h5_add(h5id_root, grp // '/Lr', precond%Lr, lbound(precond%Lr), ubound(precond%Lr), &
+        comment = 'matrix used in preconditioner', unit = '1')
+    end if
+    call h5_close(h5id_root)
+    if (precond%nritz > 0) then
+      call RT0_init(eigvec, mesh%nedge, mesh%ntri)
+      do i = 1, precond%nritz
+        write (postfix, postfix_fmt) i
+        eigvec%DOF(:) = precond%eigvecs(:, i)
+        call RT0_tor_comp_from_zero_div(eigvec)
+        call RT0_write(eigvec, datafile, grp // 'eigvec' // postfix, &
+          'iteration eigenvector', 'G', 1)
+      end do
+      call RT0_deinit(eigvec)
+    end if
+  end subroutine precond_write
+
+  subroutine precond_read(precond, datafile, group)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    use mephit_pert, only: RT0_init, RT0_deinit, RT0_read
+    use mephit_mesh, only: mesh
+    type(precond_t), intent(inout) :: precond
+    character(len = *), intent(in) :: datafile
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    character(len = 4) :: postfix
+    character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
+    integer(HID_T) :: h5id_root
+    integer :: i
+
+    grp = trim(group)
+    call precond_deinit(precond)
+    call h5_open(datafile, h5id_root)
+    call h5_get(h5id_root, grp // '/nritz', precond%nritz)
+    if (precond%nritz > 0) then
+      allocate(precond%Lr(precond%nritz, precond%nritz))
+      call h5_get(h5id_root, grp // '/Lr', precond%Lr)
+    end if
+    call h5_close(h5id_root)
+    if (precond%nritz > 0) then
+      allocate(precond%eigvecs(mesh%nedge, precond%nritz))
+      do i = 1, precond%nritz
+        write (postfix, postfix_fmt) i
+        call h5_get(h5id_root, grp // 'eigvec' // postfix // '/RT0_DOF', precond%eigvecs(:, i))
+      end do
+    end if
+  end subroutine precond_read
+
   pure function precond_apply(precond, vec)
     type(precond_t), intent(in) :: precond
     complex(dp), intent(in) :: vec(:)
@@ -320,8 +384,6 @@ contains
     integer(HID_T) :: h5id_root
     complex(dp), allocatable :: eigvals(:), Yr(:, :)
     integer, allocatable :: ipiv(:)
-    character(len = 4) :: postfix
-    character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
     type(RT0_t) :: Bn_prev
 
     call precond_deinit(precond)
@@ -354,13 +416,6 @@ contains
         if (logger%warn) call logger%write_msg
       end if
       if (precond%nritz > 0) then
-        do i = 1, min(precond%nritz, conf%max_eig_out)
-          write (postfix, postfix_fmt) i
-          Bn%DOF(:) = precond%eigvecs(:, i)
-          call RT0_tor_comp_from_zero_div(Bn)
-          call RT0_write(Bn, datafile, 'iter/eigvec' // postfix, &
-            'iteration eigenvector', 'G', 1)
-        end do
         allocate(precond%Lr(precond%nritz, precond%nritz), Yr(precond%nritz, precond%nritz))
         Yr = (0d0, 0d0)
         do i = 1, precond%nritz

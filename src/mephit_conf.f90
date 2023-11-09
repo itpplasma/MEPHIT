@@ -204,9 +204,6 @@ module mephit_conf
     !> topology assumed in KiLCA.
     integer :: kilca_scale_factor = 0
 
-    !> Maximum number of eigenvectors to be dumped in #eigvec_file. Defaults to 10.
-    integer :: max_eig_out = 10
-
     !> Check mesh in mephit_test.f90 (expensive)
     logical :: check_mesh = .false.
 
@@ -335,8 +332,6 @@ contains
       comment = 'single poloidal mode used in comparison with KiLCA code')
     call h5_add(h5id_root, grp // '/kilca_scale_factor', config%kilca_scale_factor, &
       comment = 'scaling factor used for comparison with results from KiLCA code')
-    call h5_add(h5id_root, grp // '/max_eig_out', config%max_eig_out, &
-      comment = 'maximum number of exported eigenvectors')
     call h5_add(h5id_root, grp // '/debug_pol_offset', config%debug_pol_offset)
     call h5_add(h5id_root, grp // '/debug_kilca_geom_theta', config%debug_kilca_geom_theta)
     call h5_add(h5id_root, grp // '/debug_projection', config%debug_projection)

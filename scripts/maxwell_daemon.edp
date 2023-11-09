@@ -47,9 +47,6 @@ if (runmode % 2) {
     exit(1);
   }
 }
-if (!((runmode / 2) % 2)) {
-  exit(0);
-}
 bool debugprojection = (runmode / 8) % 2;
 mesh Th = readmesh(meshfile);
 // count triangles in internal region 0
