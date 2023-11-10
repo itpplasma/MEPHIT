@@ -301,6 +301,7 @@ contains
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_pert, only: RT0_init, RT0_deinit, RT0_write, RT0_tor_comp_from_zero_div
     use mephit_mesh, only: mesh
+    use mephit_conf, only: conf
     type(precond_t), intent(in) :: precond
     character(len = *), intent(in) :: datafile
     character(len = *), intent(in) :: group
@@ -316,20 +317,24 @@ contains
     call h5_create_parent_groups(h5id_root, grp // '/')
     call h5_add(h5id_root, grp // '/nritz', precond%nritz, comment = 'number of Ritz values')
     if (precond%nritz > 0) then
-      call h5_add(h5id_root, grp // '/Lr', precond%Lr, lbound(precond%Lr), ubound(precond%Lr), &
+      call h5_add(h5id_root, grp // '/Lr', precond%Lr, &
+        lbound(precond%Lr), ubound(precond%Lr), &
         comment = 'matrix used in preconditioner', unit = '1')
-    end if
-    call h5_close(h5id_root)
-    if (precond%nritz > 0) then
+      call h5_add(h5id_root, grp // '/eigvecs', precond%eigvecs, &
+        lbound(precond%eigvecs), ubound(precond%eigvecs), &
+        comment = 'iteration eigenvectors', unit = '1')
+      call h5_close(h5id_root)
       call RT0_init(eigvec, mesh%nedge, mesh%ntri)
-      do i = 1, precond%nritz
+      do i = 1, min(precond%nritz, conf%max_eig_out)
         write (postfix, postfix_fmt) i
         eigvec%DOF(:) = precond%eigvecs(:, i)
         call RT0_tor_comp_from_zero_div(eigvec)
-        call RT0_write(eigvec, datafile, grp // 'eigvec' // postfix, &
+        call RT0_write(eigvec, datafile, grp // '/eigvec' // postfix, &
           'iteration eigenvector', 'G', 1)
       end do
       call RT0_deinit(eigvec)
+    else
+      call h5_close(h5id_root)
     end if
   end subroutine precond_write
 
@@ -341,10 +346,7 @@ contains
     character(len = *), intent(in) :: datafile
     character(len = *), intent(in) :: group
     character(len = len_trim(group)) :: grp
-    character(len = 4) :: postfix
-    character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
     integer(HID_T) :: h5id_root
-    integer :: i
 
     grp = trim(group)
     call precond_deinit(precond)
@@ -353,15 +355,10 @@ contains
     if (precond%nritz > 0) then
       allocate(precond%Lr(precond%nritz, precond%nritz))
       call h5_get(h5id_root, grp // '/Lr', precond%Lr)
+      allocate(precond%eigvecs(mesh%nedge, precond%nritz))
+      call h5_get(h5id_root, grp // '/eigvecs', precond%eigvecs)
     end if
     call h5_close(h5id_root)
-    if (precond%nritz > 0) then
-      allocate(precond%eigvecs(mesh%nedge, precond%nritz))
-      do i = 1, precond%nritz
-        write (postfix, postfix_fmt) i
-        call h5_get(h5id_root, grp // 'eigvec' // postfix // '/RT0_DOF', precond%eigvecs(:, i))
-      end do
-    end if
   end subroutine precond_read
 
   pure function precond_apply(precond, vec)
