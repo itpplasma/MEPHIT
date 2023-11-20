@@ -19,6 +19,7 @@ Prerequisites from external sources for running MEPHIT are as follows.
 - [HDF5](https://www.hdfgroup.org/downloads/hdf5)
 - [NetCDF](https://github.com/Unidata/netcdf-fortran)
 - Python 3 including packages listed in [`requirements.txt`](requirements.txt)
+- [jupytext](https://github.com/mwouts/jupytext) to use plotting scripts as Jupyter Notebooks
 
 ### Initial build
 
