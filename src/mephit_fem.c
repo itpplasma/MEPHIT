@@ -103,11 +103,17 @@ void receive_double1_from_FreeFem(const char *namedpipe, const int size, double 
   }
   fd = open(namedpipe, O_RDONLY);
   if (fd < 0) {
-    errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to open pipe %s for writing", namedpipe);
+    errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to open pipe %s for reading", namedpipe);
   }
-  bytes_read = read(fd, (void *) &dum, sizeof(long int));
-  if (bytes_read < (ssize_t) sizeof(long int)) {
-    errno_msg(_exit, __FILE__, __LINE__, errno ? errno : EIO, "Failed to read from pipe %s", namedpipe);
+  bytes_expected = (ssize_t) sizeof(long int);
+  total_bytes_read = (ssize_t) 0;
+  do {
+    bytes_read = read(fd, (char *) &dum + total_bytes_read, (size_t) (bytes_expected - total_bytes_read));
+    total_bytes_read += bytes_read;
+  } while (bytes_read != 0 && total_bytes_read < bytes_expected);
+  if (total_bytes_read < bytes_expected) {
+    errno_msg(_exit, __FILE__, __LINE__, errno ? errno : EIO, "Received %li bytes from pipe %s, "
+              "expected %li.\n", total_bytes_read, namedpipe, bytes_expected);
   }
   if (dum < size) {
     errno_msg(_exit, __FILE__, __LINE__, EIO, "Pipe %s only contains %li double precision values, "
