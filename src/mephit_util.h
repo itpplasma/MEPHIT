@@ -13,6 +13,7 @@
 extern "C" {
 #endif
 
+void timestamp(char *buffer);
 void errno_msg(void (*exit_func)(int), const char *file, int line, int errnum, const char *msg_fmt, ...);
 
 #ifdef __cplusplus

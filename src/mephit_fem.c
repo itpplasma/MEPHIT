@@ -113,11 +113,11 @@ void receive_double1_from_FreeFem(const char *namedpipe, const int size, double 
   } while (bytes_read != 0 && total_bytes_read < bytes_expected);
   if (total_bytes_read < bytes_expected) {
     errno_msg(_exit, __FILE__, __LINE__, errno ? errno : EIO, "Received %li bytes from pipe %s, "
-              "expected %li.\n", total_bytes_read, namedpipe, bytes_expected);
+              "expected %li", total_bytes_read, namedpipe, bytes_expected);
   }
   if (dum < size) {
     errno_msg(_exit, __FILE__, __LINE__, EIO, "Pipe %s only contains %li double precision values, "
-            "expected %i.\n", namedpipe, dum, size);
+            "expected %i", namedpipe, dum, size);
   }
   bytes_expected = (ssize_t) ((unsigned) size * sizeof(double));
   total_bytes_read = (ssize_t) 0;
@@ -127,7 +127,7 @@ void receive_double1_from_FreeFem(const char *namedpipe, const int size, double 
   } while (bytes_read != 0 && total_bytes_read < bytes_expected);
   if (total_bytes_read < bytes_expected) {
     errno_msg(_exit, __FILE__, __LINE__, errno ? errno : EIO, "Received %li bytes from pipe %s, "
-              "expected %li.\n", total_bytes_read, namedpipe, bytes_expected);
+              "expected %li", total_bytes_read, namedpipe, bytes_expected);
   }
   if (close(fd)) {
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to close read end of pipe %s", namedpipe);
