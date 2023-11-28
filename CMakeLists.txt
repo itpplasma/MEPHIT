@@ -25,6 +25,9 @@ else ()
   set(BLA_VENDOR OpenBLAS)
 endif ()
 
+# Prevent linker error with hdf5tools on Ubuntu
+set(CMAKE_EXE_LINKER_FLAGS "-Wl,--copy-dt-needed-entries")
+
 ### Define external paths
 if ("${CMAKE_SYSTEM}" MATCHES "Darwin")
   set(tmpdir $TMPDIR)
