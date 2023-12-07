@@ -159,12 +159,12 @@ void FEM_extend_mesh(void)
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
 }
 
-void FEM_compute_Bn(const int nedge,
-                    const int npoint,
-                    const complex_double *Jn,
-                    complex_double *Bn,
-                    complex_double *AnR,
-                    complex_double *AnZ)
+void FEM_compute_magfn(const int nedge,
+                       const int npoint,
+                       const complex_double *Jn,
+                       complex_double *Bn,
+                       complex_double *AnR,
+                       complex_double *AnZ)
 {
   long int flag = -1L;
   int size = 2 * nedge;

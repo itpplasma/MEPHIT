@@ -23,12 +23,12 @@ extern "C" {
 
 void FEM_init(const int tormode, const int nedge, const int npoint, const int runmode);
 void FEM_extend_mesh(void);
-void FEM_compute_Bn(const int nedge,
-                    const int npoint,
-                    const complex_double *Jn,
-                    complex_double *Bn,
-                    complex_double *AnR,
-                    complex_double *AnZ);
+void FEM_compute_magfn(const int nedge,
+                       const int npoint,
+                       const complex_double *Jn,
+                       complex_double *Bn,
+                       complex_double *AnR,
+                       complex_double *AnZ);
 void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2int);
 void FEM_debug_projection(const int npoint,
                           const complex_double *JnparB0,

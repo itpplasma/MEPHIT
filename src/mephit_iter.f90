@@ -1,6 +1,6 @@
 module mephit_iter
   use iso_fortran_env, only: dp => real64
-  use mephit_pert, only: L1_t, RT0_t, vec_polmodes_t
+  use mephit_pert, only: L1_t, RT0_t
 
   implicit none
 
@@ -8,38 +8,38 @@ module mephit_iter
 
   public :: mephit_run, mephit_deinit
 
-  !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
-  type(L1_t) :: pn
+  type :: perteq_t
+    !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
+    type(L1_t) :: pn
 
-  !> Perturbation field in units of Gauss.
-  type(RT0_t) :: Bn
+    !> Perturbation field in units of Gauss.
+    type(RT0_t) :: Bn
 
-  !> Plasma perturbation field in units of Gauss.
-  type(RT0_t) :: Bnplas
+    !> Plasma perturbation field in units of Gauss.
+    type(RT0_t) :: Bnplas
 
-  !> Current density perturbation in units of statampere cm^-2.
-  type(RT0_t) :: jn
+    !> Current density perturbation in units of statampere cm^-2.
+    type(RT0_t) :: jn
 
-  !> Parallel current density perturbation in units of statampere cm^-2 G^-1.
-  type(L1_t) :: jnpar_B0
+    !> Parallel current density perturbation in units of statampere cm^-2 G^-1.
+    type(L1_t) :: jnpar_B0
 
-  !> Vector potential components for GORILLA
-  type(L1_t) :: AnR, AnZ
+    !> Vector potential components for GORILLA
+    type(L1_t) :: AnR, AnZ
 
-  !> Poloidal modes of perturbation field in units of Gauss.
-  type(vec_polmodes_t) :: Bmn
+    !> Poloidal modes of electric potential perturbation in units of statV.
+    complex(dp), allocatable :: Phi_mn(:, :)
 
-  !> Poloidal modes of electric potential perturbation in units of statV.
-  complex(dp), allocatable :: Phi_mn(:, :)
-
-  !> Poloidal modes of aligned electric potential perturbation in units of statV.
-  complex(dp), allocatable :: Phi_aligned_mn(:, :)
+    !> Poloidal modes of aligned electric potential perturbation in units of statV.
+    complex(dp), allocatable :: Phi_aligned_mn(:, :)
+  end type perteq_t
 
   type :: precond_t
     integer :: nritz = 0
     complex(dp), allocatable :: Lr(:, :), eigvecs(:, :)
   end type precond_t
 
+  ! interfaces
   abstract interface
     subroutine real_vector_field(R, Z, vector) bind(C)
       use iso_c_binding, only: c_double
@@ -65,7 +65,7 @@ module mephit_iter
     subroutine FEM_extend_mesh() bind(C, name = 'FEM_extend_mesh')
     end subroutine FEM_extend_mesh
 
-    subroutine FEM_compute_Bn(nedge, npoint, Jn, Bn, AnR, AnZ) bind(C, name = 'FEM_compute_Bn')
+    subroutine FEM_compute_magfn(nedge, npoint, Jn, Bn, AnR, AnZ) bind(C, name = 'FEM_compute_magfn')
       use iso_c_binding, only: c_int, c_double_complex
       integer(c_int), intent(in), value :: nedge
       integer(c_int), intent(in), value :: npoint
@@ -73,7 +73,7 @@ module mephit_iter
       complex(c_double_complex), intent(out) :: Bn(1:nedge)
       complex(c_double_complex), intent(out) :: AnR(1:npoint)
       complex(c_double_complex), intent(out) :: AnZ(1:npoint)
-    end subroutine FEM_compute_Bn
+    end subroutine FEM_compute_magfn
 
     subroutine FEM_compute_L2int(nedge, elem, L2int) bind(C, name = 'FEM_compute_L2int')
       use iso_c_binding, only: c_int, c_double_complex, c_double
@@ -125,6 +125,7 @@ contains
     character(len = 1024) :: config_filename
     integer(c_int) :: runmode_flags
     logical :: meshing, preconditioner, iterations
+    type(perteq_t) :: perteq
     type(precond_t) :: precond
 
     meshing = iand(runmode, ishft(1, 0)) /= 0
@@ -191,19 +192,19 @@ contains
       call FEM_init(mesh%n, mesh%nedge, mesh%npoint, runmode)
     end if
     if (preconditioner .or. iterations) then
-      call iter_init
+      call perteq_init(perteq)
       if (preconditioner) then
-        call debug_initial_iteration
-        call precond_compute(precond)
+        call debug_initial_iteration(perteq)
+        call precond_compute(precond, perteq)
         call precond_write(precond, datafile, 'iter')
       else
         call precond_read(precond, datafile, 'iter')
       end if
       if (iterations) then
-        call perteq_iterate(precond)
+        call perteq_iterate(perteq, precond)
       end if
       call precond_deinit(precond)
-      call iter_deinit
+      call perteq_deinit(perteq)
     end if
     call FEM_deinit
     call mephit_deinit
@@ -234,60 +235,61 @@ contains
     call h5_deinit
   end subroutine mephit_deinit
 
-  subroutine iter_init
+  subroutine perteq_init(perteq)
     use mephit_conf, only: conf, currn_model_kilca
     use mephit_mesh, only: mesh
-    use mephit_pert, only: RT0_init, L1_init, vec_polmodes_init
+    use mephit_pert, only: RT0_init, L1_init
+    type(perteq_t), intent(inout) :: perteq
 
-    call L1_init(pn, mesh%npoint)
-    call RT0_init(Bn, mesh%nedge, mesh%ntri)
-    call RT0_init(Bnplas, mesh%nedge, mesh%ntri)
-    call RT0_init(jn, mesh%nedge, mesh%ntri)
-    call L1_init(jnpar_B0, mesh%npoint)
-    call L1_init(AnR, mesh%npoint)
-    call L1_init(AnZ, mesh%npoint)
-    call vec_polmodes_init(Bmn, conf%m_max, mesh%nflux)
+    call L1_init(perteq%pn, mesh%npoint)
+    call RT0_init(perteq%Bn, mesh%nedge, mesh%ntri)
+    call RT0_init(perteq%Bnplas, mesh%nedge, mesh%ntri)
+    call RT0_init(perteq%jn, mesh%nedge, mesh%ntri)
+    call L1_init(perteq%jnpar_B0, mesh%npoint)
+    call L1_init(perteq%AnR, mesh%npoint)
+    call L1_init(perteq%AnZ, mesh%npoint)
     if (conf%currn_model == currn_model_kilca) then
-      allocate(Phi_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max))
-      allocate(Phi_aligned_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max))
+      allocate(perteq%Phi_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max))
+      allocate(perteq%Phi_aligned_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max))
     end if
-  end subroutine iter_init
+  end subroutine perteq_init
 
-  subroutine iter_deinit
-    use mephit_pert, only: L1_deinit, RT0_deinit, vec_polmodes_deinit
+  subroutine perteq_deinit(perteq)
+    use mephit_pert, only: L1_deinit, RT0_deinit
+    type(perteq_t), intent(inout) :: perteq
 
-    call L1_deinit(pn)
-    call RT0_deinit(Bn)
-    call RT0_deinit(Bnplas)
-    call RT0_deinit(jn)
-    call L1_deinit(jnpar_B0)
-    call L1_deinit(AnR)
-    call L1_deinit(AnZ)
-    call vec_polmodes_deinit(Bmn)
-    if (allocated(Phi_mn)) deallocate(Phi_mn)
-    if (allocated(Phi_aligned_mn)) deallocate(Phi_aligned_mn)
-  end subroutine iter_deinit
+    call L1_deinit(perteq%pn)
+    call RT0_deinit(perteq%Bn)
+    call RT0_deinit(perteq%Bnplas)
+    call RT0_deinit(perteq%jn)
+    call L1_deinit(perteq%jnpar_B0)
+    call L1_deinit(perteq%AnR)
+    call L1_deinit(perteq%AnZ)
+    if (allocated(perteq%Phi_mn)) deallocate(perteq%Phi_mn)
+    if (allocated(perteq%Phi_aligned_mn)) deallocate(perteq%Phi_aligned_mn)
+  end subroutine perteq_deinit
 
-  subroutine iter_read
+  subroutine perteq_read(perteq)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
     use mephit_conf, only: datafile, conf, currn_model_kilca
     use mephit_pert, only: L1_read, RT0_read
+    type(perteq_t), intent(inout) :: perteq
     integer(HID_T) :: h5id_root
 
-    call L1_read(pn, datafile, 'iter/pn')
-    call RT0_read(Bn, datafile, 'iter/Bn')
-    call RT0_read(Bnplas, datafile, 'iter/Bnplas')
-    call RT0_read(jn, datafile, 'iter/jn')
-    call L1_read(jnpar_B0, datafile, 'iter/jnpar_Bmod')
-    call L1_read(AnR, datafile, 'iter/AnR')
-    call L1_read(AnZ, datafile, 'iter/AnZ')
+    call L1_read(perteq%pn, datafile, 'iter/pn')
+    call RT0_read(perteq%Bn, datafile, 'iter/Bn')
+    call RT0_read(perteq%Bnplas, datafile, 'iter/Bnplas')
+    call RT0_read(perteq%jn, datafile, 'iter/jn')
+    call L1_read(perteq%jnpar_B0, datafile, 'iter/jnpar_Bmod')
+    call L1_read(perteq%AnR, datafile, 'iter/AnR')
+    call L1_read(perteq%AnZ, datafile, 'iter/AnZ')
     if (conf%currn_model == currn_model_kilca) then
       call h5_open(datafile, h5id_root)
-      call h5_get(h5id_root, 'iter/Phi_mn', Phi_mn)
-      call h5_get(h5id_root, 'iter/Phi_aligned_mn', Phi_aligned_mn)
+      call h5_get(h5id_root, 'iter/Phi_mn', perteq%Phi_mn)
+      call h5_get(h5id_root, 'iter/Phi_aligned_mn', perteq%Phi_aligned_mn)
       call h5_close(h5id_root)
     end if
-  end subroutine iter_read
+  end subroutine perteq_read
 
   subroutine precond_deinit(precond)
     type(precond_t), intent(inout) :: precond
@@ -370,13 +372,14 @@ contains
       matmul(transpose(conjg(precond%eigvecs(:, 1:precond%nritz))), vec)))
   end function precond_apply
 
-  subroutine precond_compute(precond)
+  subroutine precond_compute(precond, perteq)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, logger, datafile, cmplx_fmt, runmode_precon
     use mephit_util, only: arnoldi_break
     use mephit_mesh, only: mesh
     use mephit_pert, only: vac, RT0_init, RT0_deinit, RT0_write, RT0_tor_comp_from_zero_div, RT0_L2int
     type(precond_t), intent(inout) :: precond
+    type(perteq_t), intent(inout) :: perteq
     integer :: i, j, info
     integer(HID_T) :: h5id_root
     complex(dp), allocatable :: eigvals(:), Yr(:, :)
@@ -440,21 +443,21 @@ contains
         end do
         deallocate(Yr)
         ! debug kernel of linear operator
-        Bn%DOF(:) = 0d0
+        perteq%Bn%DOF(:) = 0d0
         do i = 1, precond%nritz
           if (abs(eigvals(i)) < 1d0) exit
-          Bn%DOF(:) = Bn%DOF + precond%eigvecs(:, i)
+          perteq%Bn%DOF(:) = perteq%Bn%DOF + precond%eigvecs(:, i)
         end do
-        Bn%DOF(:) = RT0_L2int(Bn) / RT0_L2int(vac%Bn) * Bn%DOF
-        call RT0_tor_comp_from_zero_div(Bn)
+        perteq%Bn%DOF(:) = RT0_L2int(perteq%Bn) / RT0_L2int(vac%Bn) * perteq%Bn%DOF
+        call RT0_tor_comp_from_zero_div(perteq%Bn)
         call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
-        Bn_prev%DOF(:) = Bn%DOF
-        call compute_presn(conf%damp)
-        call compute_currn(conf%damp, .false.)
-        call compute_Bn
-        Bn%DOF(:) = Bn%DOF - precond_apply(precond, Bn%DOF - Bn_prev%DOF)
-        call RT0_tor_comp_from_zero_div(Bn)
-        call RT0_write(Bn, datafile, 'iter/debug_kernel', &
+        Bn_prev%DOF(:) = perteq%Bn%DOF
+        call compute_presn(perteq, conf%damp)
+        call compute_currn(perteq, conf%damp, .false.)
+        call compute_magfn(perteq)
+        perteq%Bn%DOF(:) = perteq%Bn%DOF - precond_apply(precond, perteq%Bn%DOF - Bn_prev%DOF)
+        call RT0_tor_comp_from_zero_div(perteq%Bn)
+        call RT0_write(perteq%Bn, datafile, 'iter/debug_kernel', &
           'preconditioner applied to its kernel', 'G', 1)
         call RT0_deinit(Bn_prev)
       end if
@@ -467,21 +470,22 @@ contains
       complex(dp), intent(in) :: old_val(:)
       complex(dp), intent(out) :: new_val(:)
 
-      Bn%DOF(:) = old_val + vac%Bn%DOF
-      call RT0_tor_comp_from_zero_div(Bn)
-      call compute_presn(conf%damp)
-      call compute_currn(conf%damp, .false.)
-      call compute_Bn
-      new_val(:) = Bn%DOF
+      perteq%Bn%DOF(:) = old_val + vac%Bn%DOF
+      call RT0_tor_comp_from_zero_div(perteq%Bn)
+      call compute_presn(perteq, conf%damp)
+      call compute_currn(perteq, conf%damp, .false.)
+      call compute_magfn(perteq)
+      new_val(:) = perteq%Bn%DOF
     end subroutine next_iteration_arnoldi
   end subroutine precond_compute
 
-  subroutine perteq_iterate(precond)
+  subroutine perteq_iterate(perteq, precond)
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, logger, datafile, runmode_single, currn_model_kilca
     use mephit_mesh, only: mesh
     use mephit_pert, only: vac, L1_write, RT0_init, RT0_deinit, RT0_tor_comp_from_zero_div, RT0_L2int
+    type(perteq_t), intent(inout) :: perteq
     type(precond_t), intent(inout) :: precond
     integer :: kiter, niter, maxiter
     integer(HID_T) :: h5id_root
@@ -508,45 +512,45 @@ contains
     L2int_Bn_diff = ieee_value(0d0, ieee_quiet_nan)
     call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
     call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
-    Bn%DOF(:) = vac%Bn%DOF
-    Bn%comp_phi(:) = vac%Bn%comp_phi
+    perteq%Bn%DOF(:) = vac%Bn%DOF
+    perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
     if (precond%nritz > 0) then
-      Bn%DOF(:) = Bn%DOF - precond_apply(precond, Bn%DOF)
-      call RT0_tor_comp_from_zero_div(Bn)
+      perteq%Bn%DOF(:) = perteq%Bn%DOF - precond_apply(precond, perteq%Bn%DOF)
+      call RT0_tor_comp_from_zero_div(perteq%Bn)
     end if
     niter = maxiter
     do kiter = 0, maxiter
       write (logger%msg, '("Iteration ", i2, " of ", i2)') kiter, maxiter
       if (logger%info) call logger%write_msg
       write (postfix, postfix_fmt) kiter
-      Bn_prev%DOF(:) = Bn%DOF
-      Bn_prev%comp_phi(:) = Bn%comp_phi
+      Bn_prev%DOF(:) = perteq%Bn%DOF
+      Bn_prev%comp_phi(:) = perteq%Bn%comp_phi
       ! compute B_(n+1) = K * B_n + B_vac ... different from next_iteration_arnoldi
       if (kiter <= 1 .and. conf%debug_MFEM) then
-        call MFEM_test
+        call MFEM_test(perteq%pn)
         call perteq_write('("iter/", a, "MFEM_' // postfix // '")', &
-            ' (after MFEM iteration)', presn = pn, presmn = pn)
+            ' (after MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
       end if
-      call compute_presn(conf%damp)
+      call compute_presn(perteq, conf%damp)
       if (kiter <= 1) then
         call perteq_write('("iter/", a, "' // postfix // '")', &
-          ' (after iteration)', presn = pn, presmn = pn)
+          ' (after iteration)', presn = perteq%pn, presmn = perteq%pn)
       end if
-      call compute_currn(conf%damp, .false.)
-      call compute_Bn
-      Bn%DOF(:) = Bn%DOF + vac%Bn%DOF
+      call compute_currn(perteq, conf%damp, .false.)
+      call compute_magfn(perteq)
+      perteq%Bn%DOF(:) = perteq%Bn%DOF + vac%Bn%DOF
       if (precond%nritz > 0) then
-        Bn%DOF(:) = Bn%DOF - precond_apply(precond, Bn%DOF - Bn_prev%DOF)
+        perteq%Bn%DOF(:) = perteq%Bn%DOF - precond_apply(precond, perteq%Bn%DOF - Bn_prev%DOF)
       end if
-      call RT0_tor_comp_from_zero_div(Bn)
-      Bn_diff%DOF(:) = Bn%DOF - Bn_prev%DOF
-      Bn_diff%comp_phi(:) = Bn%comp_phi - Bn_prev%comp_phi
+      call RT0_tor_comp_from_zero_div(perteq%Bn)
+      Bn_diff%DOF(:) = perteq%Bn%DOF - Bn_prev%DOF
+      Bn_diff%comp_phi(:) = perteq%Bn%comp_phi - Bn_prev%comp_phi
       L2int_Bn_diff(kiter) = RT0_L2int(Bn_diff)
       write (logger%msg, '("L2int_Bn_diff = ", es24.16e3)') L2int_Bn_diff(kiter)
       if (logger%info) call logger%write_msg
       if (kiter <= 1) then
         call perteq_write('("iter/", a, "' // postfix // '")', ' (after iteration)', &
-          parcurrn = jnpar_B0, currn = jn, magfn = Bn)
+          parcurrn = perteq%jnpar_B0, currn = perteq%jn, magfn = perteq%Bn)
         call perteq_write('("iter/", a, "_diff' // postfix // '")', &
           ' (difference between iterations)', magfn = Bn_diff)
       else
@@ -556,7 +560,8 @@ contains
         end if
       end if
       call perteq_write('("iter/", a, "' // postfix // '")', ' (after iteration)', &
-        presmn = pn, parcurrmn = jnpar_B0, Ires = jnpar_B0, currmn = jn, magfmn = Bn)
+        presmn = perteq%pn, parcurrmn = perteq%jnpar_B0, Ires = perteq%jnpar_B0, &
+        currmn = perteq%jn, magfmn = perteq%Bn)
     end do
     rel_err = L2int_Bn_diff(niter) / L2int_Bnvac
     write (logger%msg, '("Relative error after ", i0, " iterations: ", es24.16e3)') &
@@ -568,10 +573,10 @@ contains
         conf%iter_rel_err, conf%niter
       if (logger%warn) call logger%write_msg
     end if
-    Bnplas%DOF(:) = Bn%DOF - vac%Bn%DOF
-    Bnplas%comp_phi(:) = Bn%comp_phi - vac%Bn%comp_phi
+    perteq%Bnplas%DOF(:) = perteq%Bn%DOF - vac%Bn%DOF
+    perteq%Bnplas%comp_phi(:) = perteq%Bn%comp_phi - vac%Bn%comp_phi
     if (conf%kilca_scale_factor /= 0) then
-      call check_furth(jn, Bnplas)
+      call check_furth(perteq%jn, perteq%Bnplas)
     end if
     ! save results
     call h5_open_rw(datafile, h5id_root)
@@ -581,63 +586,65 @@ contains
       lbound(L2int_Bn_diff), ubound(L2int_Bn_diff), &
       comment = 'L2 integral of magnetic field (difference between iterations)', unit = 'Mx')
     if (conf%currn_model == currn_model_kilca) then
-      call h5_add(h5id_root, 'iter/Phi_mn', Phi_mn, &
-        lbound(Phi_mn), ubound(Phi_mn), &
+      call h5_add(h5id_root, 'iter/Phi_mn', perteq%Phi_mn, &
+        lbound(perteq%Phi_mn), ubound(perteq%Phi_mn), &
         comment = 'electric potential perturbation', unit = 'statV')
-      call h5_add(h5id_root, 'iter/Phi_aligned_mn', Phi_aligned_mn, &
-        lbound(Phi_aligned_mn), ubound(Phi_aligned_mn), &
+      call h5_add(h5id_root, 'iter/Phi_aligned_mn', perteq%Phi_aligned_mn, &
+        lbound(perteq%Phi_aligned_mn), ubound(perteq%Phi_aligned_mn), &
         comment = 'aligned electric potential perturbation', unit = 'statV')
     end if
     call h5_close(h5id_root)
     deallocate(L2int_Bn_diff)
-    call L1_write(AnR, datafile, 'iter/AnR', &
+    call L1_write(perteq%AnR, datafile, 'iter/AnR', &
       'R component of vector potential for GORILLA (full perturbation)', 'G cm')
-    call L1_write(AnZ, datafile, 'iter/AnZ', &
+    call L1_write(perteq%AnZ, datafile, 'iter/AnZ', &
       'Z component of vector potential for GORILLA (full perturbation)', 'G cm')
     call perteq_write('("iter/", a)', ' (full perturbation)', &
-      pn, pn, jnpar_B0, jnpar_B0, jnpar_B0, jn, jn, Bn, Bn)
+      perteq%pn, perteq%pn, perteq%jnpar_B0, perteq%jnpar_B0, perteq%jnpar_B0, &
+      perteq%jn, perteq%jn, perteq%Bn, perteq%Bn)
     call perteq_write('("iter/", a, "_plas")', ' (plasma response)', &
-      magfn = Bnplas, magfmn = Bnplas)
+      magfn = perteq%Bnplas, magfmn = perteq%Bnplas)
 
     call RT0_deinit(Bn_prev)
     call RT0_deinit(Bn_diff)
   end subroutine perteq_iterate
 
-  subroutine debug_initial_iteration
+  subroutine debug_initial_iteration(perteq)
     use mephit_conf, only: conf
     use mephit_pert, only: vac
+    type(perteq_t), intent(inout) :: perteq
 
     if (conf%debug_initial) then
-      Bn%DOF(:) = vac%Bn%DOF
-      Bn%comp_phi(:) = vac%Bn%comp_phi
+      perteq%Bn%DOF(:) = vac%Bn%DOF
+      perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
       if (conf%debug_MFEM) then
-        call MFEM_test
+        call MFEM_test(perteq%pn)
         call perteq_write('("debug_MFEM_initial/MFEM_", a)', &
-          ' (initial MFEM iteration)', presn = pn, presmn = pn)
+          ' (initial MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
       end if
-      call compute_presn(.false.)
+      call compute_presn(perteq, .false.)
       if (conf%debug_MFEM) then
         call perteq_write('("debug_MFEM_initial/", a)', &
-          ' (initial iteration)', presn = pn, presmn = pn)
+          ' (initial iteration)', presn = perteq%pn, presmn = perteq%pn)
       end if
-      call compute_currn(.false., .true.)
-      Bn%DOF(:) = vac%Bn%DOF
-      Bn%comp_phi(:) = vac%Bn%comp_phi
-      call compute_presn(.true.)
-      call compute_currn(.true., .true.)
+      call compute_currn(perteq, .false., .true.)
+      perteq%Bn%DOF(:) = vac%Bn%DOF
+      perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
+      call compute_presn(perteq, .true.)
+      call compute_currn(perteq, .true., .true.)
     end if
   end subroutine debug_initial_iteration
 
-  !> Computes #bnflux and #bnphi from #jnflux and #jnphi.
-  !>
-  !> This subroutine calls a C function that pipes the data to/from FreeFem.
-  subroutine compute_Bn
+  ! This subroutine calls a C function that pipes the data to/from FreeFem.
+  subroutine compute_magfn(perteq)
     use mephit_mesh, only: mesh
     use mephit_pert, only: RT0_tor_comp_from_zero_div
+    type(perteq_t), intent(inout) :: perteq
 
-    call FEM_compute_Bn(mesh%nedge, mesh%npoint, jn%DOF, Bn%DOF, AnR%DOF, AnZ%DOF)
-    call RT0_tor_comp_from_zero_div(Bn)
-  end subroutine compute_Bn
+    call FEM_compute_magfn(mesh%nedge, mesh%npoint, perteq%jn%DOF, &
+      perteq%Bn%DOF, perteq%AnR%DOF, perteq%AnZ%DOF)
+    call RT0_tor_comp_from_zero_div(perteq%Bn)
+  end subroutine compute_magfn
 
   subroutine unit_B0(R, Z, vector) bind(C, name = 'unit_B0')
     use iso_c_binding, only: c_double
@@ -679,9 +686,10 @@ contains
     scalar = -dp0_dpsi * (B_n(1) * B_0(3) - B_n(3) * B_0(1)) * R / sqrt(sum(B_0 * B_0))
   end subroutine presn_inhom
 
-  subroutine MFEM_test()
+  subroutine MFEM_test(pn)
     use iso_c_binding, only: c_int, c_null_char, c_loc, c_funloc
     use mephit_conf, only: conf, logger, basename_suffix, decorate_filename
+    type(L1_t), intent(inout) :: pn
     character(len = 1024) :: mesh_file
     integer(c_int) :: status
 
@@ -790,8 +798,9 @@ contains
     if (allocated(resid)) deallocate(resid)
   end subroutine solve_MDE
 
-  subroutine compute_presn(apply_damping)
+  subroutine compute_presn(perteq, apply_damping)
     use mephit_mesh, only: fs, mesh, cache
+    type(perteq_t), intent(inout) :: perteq
     logical, intent(in) :: apply_damping
     complex(dp), dimension(mesh%npoint) :: inhom
     integer :: kf, kp, kedge
@@ -802,13 +811,13 @@ contains
         kedge = mesh%kp_low(kf) + kp - 1
         ! use midpoint of poloidal edge
         associate (f => cache%mid_fields(kedge))
-          inhom(kedge + 1) = -fs%dp_dpsi(kf) * Bn%DOF(kedge) * &
+          inhom(kedge + 1) = -fs%dp_dpsi(kf) * perteq%Bn%DOF(kedge) * &
             (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
             (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
         end associate
       end do
     end do
-    call solve_MDE(inhom, pn%DOF, apply_damping)
+    call solve_MDE(inhom, perteq%pn%DOF, apply_damping)
   end subroutine compute_presn
 
   subroutine debug_MDE(group, presn, magfn, currn_perp, currn_par)
@@ -887,11 +896,12 @@ contains
     deallocate(lorentz, pn, grad_pn, Bn_psi_contravar, jnpar_Bmod, grad_jnpar_Bmod, div_jnperp, div_jnperp_RT0)
   end subroutine debug_MDE
 
-  subroutine compute_currn(apply_damping, debug_initial)
+  subroutine compute_currn(perteq, apply_damping, debug_initial)
     use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger
     use mephit_mesh, only: mesh, cache, field_cache_t
     use mephit_pert, only: L1_interp, RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
     use mephit_util, only: pi, clight, zd_cross
+    type(perteq_t), intent(inout) :: perteq
     logical, intent(in) :: apply_damping
     logical, intent(in) :: debug_initial
     integer :: kf, kp, ktri, kedge
@@ -900,17 +910,17 @@ contains
     complex(dp), dimension(3) :: grad_pn, B_n, dBn_dR, dBn_dZ, dBn_dphi, grad_BnB0
     complex(dp), dimension(mesh%npoint) :: inhom
 
-    jn%DOF(:) = (0d0, 0d0)
-    jn%comp_phi(:) = (0d0, 0d0)
-    jnpar_B0%DOF(:) = (0d0, 0d0)
+    perteq%jn%DOF(:) = (0d0, 0d0)
+    perteq%jn%comp_phi(:) = (0d0, 0d0)
+    perteq%jnpar_B0%DOF(:) = (0d0, 0d0)
     do kf = 1, mesh%nflux
       do kp = 1, mesh%kp_max(kf)
         kedge = mesh%kp_low(kf) + kp - 1
         ktri = mesh%edge_tri(1, kedge)
         ! use midpoint of poloidal edge
         associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge))
-          call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
-          call RT0_interp(Bn, ktri, R, Z, B_n, dBn_dR, dBn_dphi, dBn_dZ)
+          call L1_interp(perteq%pn, ktri, R, Z, zdum, grad_pn)
+          call RT0_interp(perteq%Bn, ktri, R, Z, B_n, dBn_dR, dBn_dphi, dBn_dZ)
           grad_j0B0 = [sum(f%dj0_dR * f%B0 + f%dB0_dR * f%j0), 0d0, sum(f%dj0_dZ * f%B0 + f%dB0_dZ * f%j0)]
           grad_BnB0 = [sum(dBn_dR * f%B0 + f%dB0_dR * B_n), sum(dBn_dphi * f%B0), sum(dBn_dZ * f%B0 + f%dB0_dZ * B_n)]
           B0_grad_B0 = [sum(f%dB0_dR * f%B0), 0d0, sum(f%dB0_dZ * f%B0)]
@@ -920,35 +930,36 @@ contains
         end associate
       end do
     end do
-    call solve_MDE(inhom, jnpar_B0%DOF, apply_damping)
+    call solve_MDE(inhom, perteq%jnpar_B0%DOF, apply_damping)
     if (debug_initial) then
-      call RT0_project_pol_comp(jn, project_combined)
-      call RT0_project_tor_comp(jn, project_combined)
-      call debug_MDE("debug_MDE_initial", pn, Bn, jn, jnpar_B0)
-      jn%DOF(:) = (0d0, 0d0)
-      jn%comp_phi(:) = (0d0, 0d0)
+      call RT0_project_pol_comp(perteq%jn, project_combined)
+      call RT0_project_tor_comp(perteq%jn, project_combined)
+      call debug_MDE("debug_MDE_initial", perteq%pn, perteq%Bn, perteq%jn, perteq%jnpar_B0)
+      perteq%jn%DOF(:) = (0d0, 0d0)
+      perteq%jn%comp_phi(:) = (0d0, 0d0)
     end if
     select case (conf%currn_model)
     case (currn_model_mhd)
-      call add_shielding_current
-      call RT0_project_pol_comp(jn, project_combined)
-      call RT0_project_tor_comp(jn, project_combined)
+      call add_shielding_current(perteq%jnpar_B0, perteq%pn)
+      call RT0_project_pol_comp(perteq%jn, project_combined)
+      call RT0_project_tor_comp(perteq%jn, project_combined)
     case (currn_model_kilca)
-      call RT0_project_pol_comp(jn, project_combined)
-      call RT0_project_tor_comp(jn, project_combined)
+      call RT0_project_pol_comp(perteq%jn, project_combined)
+      call RT0_project_tor_comp(perteq%jn, project_combined)
       if (debug_initial) then
         if (apply_damping) then
           call perteq_write('("debug_KiLCA/", a, "_incl")', &
-            ' from iMHD including damping', parcurrmn = jnpar_B0)
+            ' from iMHD including damping', parcurrmn = perteq%jnpar_B0)
         else
           call perteq_write('("debug_KiLCA/", a, "_excl")', &
-            ' from iMHD excluding damping', parcurrmn = jnpar_B0)
+            ' from iMHD excluding damping', parcurrmn = perteq%jnpar_B0)
         end if
       end if
-      call add_kilca_current(debug_initial)
+      call add_kilca_current(perteq%jn, perteq%jnpar_B0, &
+        perteq%Phi_mn, perteq%Phi_aligned_mn, perteq%Bn, debug_initial)
       if (debug_initial) then
         call perteq_write('("debug_KiLCA/", a, "_total")', &
-          ' including KiLCA current', parcurrmn = jnpar_B0)
+          ' including KiLCA current', parcurrmn = perteq%jnpar_B0)
       end if
     case default
       write (logger%msg, '("unknown response current model selection", i0)') conf%currn_model
@@ -956,7 +967,7 @@ contains
       error stop
     end select
     ! hack: overwrite to save only last iteration step
-    call debug_MDE("debug_MDE_final", pn, Bn, jn, jnpar_B0)
+    call debug_MDE("debug_MDE_final", perteq%pn, perteq%Bn, perteq%jn, perteq%jnpar_B0)
 
   contains
     function project_combined(ktri, weight, R, Z, n_f, f)
@@ -965,9 +976,9 @@ contains
       real(dp), intent(in) :: weight, R, Z, n_f(:)
       type(field_cache_t), intent(in) :: f
 
-      call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
-      call RT0_interp(Bn, ktri, R, Z, B_n)
-      call L1_interp(jnpar_B0, ktri, R, Z, B0_jnpar)
+      call L1_interp(perteq%pn, ktri, R, Z, zdum, grad_pn)
+      call RT0_interp(perteq%Bn, ktri, R, Z, B_n)
+      call L1_interp(perteq%jnpar_B0, ktri, R, Z, B0_jnpar)
       B0_jnpar = B0_jnpar * f%Bmod ** 2
       project_combined = weight * &
         (B0_jnpar * sum(f%B0 * n_f) - clight * sum(zd_cross(grad_pn, f%B0) * n_f) + &
@@ -975,19 +986,25 @@ contains
     end function project_combined
   end subroutine compute_currn
 
-  subroutine add_kilca_current(debug_initial)
+  subroutine add_kilca_current(jn, jnpar_B0, Phi_mn, Phi_aligned_mn, Bn, debug_initial)
     use mephit_conf, only: conf, datafile
     use mephit_util, only: imun, ev2erg, resample1d, interp1d
     use mephit_mesh, only: equil, mesh, cache, fs, fs_half, mesh_interp_theta_flux, field_cache_t, &
       m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
       RT0_poloidal_modes, polmodes_t, polmodes_init, polmodes_write, polmodes_deinit
+    type(RT0_t), intent(inout) :: jn
+    type(L1_t), intent(inout) :: jnpar_B0
+    complex(dp), intent(inout) :: Phi_mn(:, :)
+    complex(dp), intent(inout) :: Phi_aligned_mn(:, :)
+    type(RT0_t), intent(in) :: Bn
     logical, intent(in) :: debug_initial
     integer :: m, m_res, kf, kf_min, kpoi_min, kpoi_max, kedge, ktri, kt, kp, k
     real(dp) :: edge_perp(2), lin_interp(2), q_interp, dum
     complex(dp) :: jmnpar_over_Bmod_interp, B0pol(mesh%npoint)
     logical, save :: first = .true.  ! quick and dirty
     complex(dp), dimension(0:mesh%nflux) :: Bmnpsi_over_B0phi, jmnpar_over_Bmod
+    type(vec_polmodes_t) :: Bmn
     type(polmodes_t) :: polmodes
 
     if (debug_initial) then
@@ -995,6 +1012,7 @@ contains
       polmodes%coeff(:, :) = (0d0, 0d0)
     end if
     kf_min = max(1, mesh%res_ind(mesh%m_res_min) / 4)
+    call vec_polmodes_init(Bmn, conf%m_max, mesh%nflux)
     call RT0_poloidal_modes(Bn, Bmn)
     do m = mesh%m_res_min, mesh%m_res_max
       m_res = -equil%cocos%sgn_q * m
@@ -1073,6 +1091,7 @@ contains
         end do
       end if
     end do
+    call vec_polmodes_deinit(Bmn)
     if (conf%debug_projection) then
       if (first) then
         do kp = 1, mesh%npoint
@@ -1090,10 +1109,12 @@ contains
     end if
   end subroutine add_kilca_current
 
-  subroutine add_shielding_current
+  subroutine add_shielding_current(jnpar_B0, pn)
     use mephit_conf, only: conf, conf_arr
     use mephit_util, only: imun
     use mephit_mesh, only: equil, mesh, cache
+    type(L1_t), intent(inout) :: jnpar_B0
+    type(L1_t), intent(in) :: pn
     integer :: m, m_res, kf, kpoi_min, kpoi_max, kp, kpoi
     complex(dp) :: pn_outer, pn_inner
 
