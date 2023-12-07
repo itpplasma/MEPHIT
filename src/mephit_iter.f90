@@ -710,13 +710,11 @@ contains
     complex(dp), dimension(:), intent(in) :: inhom
     complex(dp), dimension(:), intent(out) :: solution
     logical, intent(in) :: apply_damping
-    complex(dp), dimension(maxval(mesh%kp_max)) :: a, b, x, d, du
-    complex(dp), dimension(:), allocatable :: resid
-    real(dp), dimension(maxval(mesh%kp_max)) :: rel_err
+    integer, dimension(:), allocatable :: irow, icol
+    complex(dp), dimension(:), allocatable :: a, b, x, d, du, aval, resid
+    real(dp), dimension(:), allocatable :: rel_err
     real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kp, kedge, k
-    integer, dimension(2 * maxval(mesh%kp_max)) :: irow, icol
-    complex(dp), dimension(2 * maxval(mesh%kp_max)) :: aval
+    integer :: kf, kp, kedge, ndim, nnz
     real(dp), parameter :: small = tiny(0d0)
 
     if (size(inhom) /= mesh%npoint) then
@@ -729,72 +727,69 @@ contains
       if (logger%err) call logger%write_msg
       error stop
     end if
-    max_rel_err = 0d0
-    avg_rel_err = 0d0
-    solution(:) = (0d0, 0d0)
-    a = (0d0, 0d0)
-    b = (0d0, 0d0)
-    x = (0d0, 0d0)
+    ndim = mesh%npoint - 1
+    nnz = 2 * ndim
+    allocate(a(ndim), b(ndim), x(ndim), d(ndim), du(ndim), aval(nnz), icol(nnz), irow(nnz), rel_err(ndim))
+    a(:) = (0d0, 0d0)
+    b(:) = (0d0, 0d0)
     do kf = 1, mesh%nflux
       do kp = 1, mesh%kp_max(kf)
         kedge = mesh%kp_low(kf) + kp - 1
         ! use midpoint of poloidal edge
         associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge))
-          a(kp) = (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
+          a(kedge) = (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
             (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
           if (apply_damping) then
-            b(kp) = imun * (mesh%n + imun * mesh%damping(kf)) * f%B0(2) / R
+            b(kedge) = imun * (mesh%n + imun * mesh%damping(kf)) * f%B0(2) / R
           else
-            b(kp) = imun * mesh%n * f%B0(2) / R
+            b(kedge) = imun * mesh%n * f%B0(2) / R
           end if
-          x(kp) = inhom(kedge + 1)
         end associate
       end do
-      d = -a + b * 0.5d0
-      du = a + b * 0.5d0
-      associate (ndim => mesh%kp_max(kf), nz => 2 * mesh%kp_max(kf), &
-        k_min => mesh%kp_low(kf) + 1, k_max => mesh%kp_low(kf) + mesh%kp_max(kf))
-        ! assemble sparse matrix (COO format)
-        ! first column, diagonal
-        irow(1) = 1
-        icol(1) = 1
-        aval(1) = d(1)
-        ! first column, off-diagonal
-        irow(2) = ndim
-        icol(2) = 1
-        aval(2) = du(ndim)
-        do k = 2, ndim
-          ! off-diagonal
-          irow(2*k-1) = k-1
-          icol(2*k-1) = k
-          aval(2*k-1) = du(k-1)
-          ! diagonal
-          irow(2*k) = k
-          icol(2*k) = k
-          aval(2*k) = d(k)
-        end do
-        call sparse_solve(ndim, ndim, nz, irow(:nz), icol(:nz), aval(:nz), x(:ndim))
-        call sparse_matmul(ndim, ndim, irow(:nz), icol(:nz), aval(:nz), x(:ndim), resid)
-        resid(:) = resid - inhom(k_min:k_max)
-        where (abs(inhom(k_min:k_max)) >= small)
-          rel_err(:ndim) = abs(resid(:ndim)) / abs(inhom(k_min:k_max))
-        elsewhere
-          rel_err(:ndim) = 0d0
-        end where
-        max_rel_err = max(max_rel_err, maxval(rel_err(:ndim)))
-        avg_rel_err = avg_rel_err + sum(rel_err(:ndim))
-      end associate
-      if (kf == 1) then ! first point on axis - average over enclosing flux surface
-        solution(1) = sum(x(:mesh%kp_max(1))) / dble(mesh%kp_max(1))
-      end if
-      do kp = 1, mesh%kp_max(kf)
-        solution(mesh%kp_low(kf) + kp) = x(kp)
+    end do
+    d(:) = -a + b * 0.5d0
+    du(:) = a + b * 0.5d0
+    ! assemble sparse matrix (COO format) from blocks
+    do kf = 1, mesh%nflux
+      kedge = mesh%kp_low(kf)
+      ! first column, diagonal
+      irow(2 * kedge - 1) = kedge
+      icol(2 * kedge - 1) = kedge
+      aval(2 * kedge - 1) = d(kedge)
+      ! first column, off-diagonal (lower left corner)
+      irow(2 * kedge) = kedge + mesh%kp_max(kf) - 1
+      icol(2 * kedge) = kedge
+      aval(2 * kedge) = du(kedge + mesh%kp_max(kf) - 1)
+      do kp = 2, mesh%kp_max(kf)
+        kedge = mesh%kp_low(kf) + kp - 1
+        ! off-diagonal
+        irow(2 * kedge - 1) = kedge - 1
+        icol(2 * kedge - 1) = kedge
+        aval(2 * kedge - 1) = du(kedge - 1)
+        ! diagonal
+        irow(2 * kedge) = kedge
+        icol(2 * kedge) = kedge
+        aval(2 * kedge) = d(kedge)
       end do
     end do
-    avg_rel_err = avg_rel_err / dble(mesh%npoint - 1)
+    x(:) = inhom(2:)
+    call sparse_solve(ndim, ndim, nnz, irow, icol, aval, x)
+    call sparse_matmul(ndim, ndim, irow, icol, aval, x, resid)
+    resid(:) = resid - inhom(2:)
+    where (abs(inhom(2:)) >= small)
+      rel_err(:) = abs(resid) / abs(inhom(2:))
+    elsewhere
+      rel_err(:) = 0d0
+    end where
+    ! first point on axis - average over enclosing flux surface
+    solution(1) = sum(x(:mesh%kp_max(1))) / dble(mesh%kp_max(1))
+    solution(2:) = x
+    max_rel_err = maxval(rel_err)
+    avg_rel_err = sum(rel_err) / dble(mesh%npoint - 1)
     write (logger%msg, '("solve_MDE: diagonalization max_rel_err = ", ' // &
       'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (logger%debug) call logger%write_msg
+    deallocate(a, b, x, d, du, aval, icol, irow)
     if (allocated(resid)) deallocate(resid)
   end subroutine solve_MDE
 
