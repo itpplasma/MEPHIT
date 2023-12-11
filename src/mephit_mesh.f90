@@ -322,6 +322,7 @@ module mephit_mesh
     type(fft_t), allocatable :: fft(:)
     type(shielding_t), allocatable :: shielding(:)
     type(coord_cache_t), allocatable :: sample_polmodes_half(:), sample_polmodes(:)
+    type(coord_cache_t), allocatable :: sample_jnperp(:)
     type(field_cache_t), allocatable :: edge_fields(:, :), area_fields(:, :)
     type(field_cache_t), allocatable :: mid_fields(:), cntr_fields(:)
   end type cache_t
@@ -910,6 +911,7 @@ contains
     end do
     allocate(cache%sample_polmodes(sum(shiftl(1, cache%log2_kp_max))))
     allocate(cache%sample_polmodes_half(sum(shiftl(1, cache%log2_kt_max))))
+    allocate(cache%sample_jnperp(mesh%npoint - 1))
     allocate(cache%shielding(mesh%m_res_min:mesh%m_res_max))
     do m = mesh%m_res_min, mesh%m_res_max
       call shielding_init(cache%shielding(m), m, GL_order)
@@ -931,6 +933,7 @@ contains
     if (allocated(cache%kt_low)) deallocate(cache%kt_low)
     if (allocated(cache%sample_polmodes)) deallocate(cache%sample_polmodes)
     if (allocated(cache%sample_polmodes_half)) deallocate(cache%sample_polmodes_half)
+    if (allocated(cache%sample_jnperp)) deallocate(cache%sample_jnperp)
     if (allocated(cache%fft)) then
       do kl = lbound(cache%fft, 1), ubound(cache%fft, 1)
         call cache%fft(kl)%deinit
@@ -965,6 +968,8 @@ contains
       '/sample_polmodes_half', 'poloidal mode sampling points between flux surfaces')
     call coord_cache_write(cache%sample_polmodes, file, grp // &
       '/sample_polmodes', 'poloidal mode sampling points on flux surfaces')
+    call coord_cache_write(cache%sample_jnperp, file, grp // &
+      '/sample_jnperp', 'sampling points for FDM computation of perpendicular current')
     call field_cache_write(cache%edge_fields, file, grp // &
       '/edge_fields', 'GL quadrature points on triangle edges')
     call field_cache_write(cache%area_fields, file, grp // &
@@ -1016,6 +1021,8 @@ contains
       grp // '/sample_polmodes_half')
     call coord_cache_read(cache%sample_polmodes, file, &
       grp // '/sample_polmodes')
+    call coord_cache_read(cache%sample_jnperp, file, &
+      grp // '/sample_jnperp')
     do m = mesh%m_res_min, mesh%m_res_max
       write (suffix, fmt) m
       call shielding_read(cache%shielding(m), file, grp // '/shielding' // suffix)
@@ -1047,6 +1054,7 @@ contains
     call cache_equilibrium_field
     call compute_sample_polmodes(cache%sample_polmodes_half, .true.)
     call compute_sample_polmodes(cache%sample_polmodes, .false.)
+    call compute_sample_jnperp(cache%sample_jnperp)
     do m = mesh%m_res_min, mesh%m_res_max
       call compute_sample_Ires(cache%shielding(m)%sample_Ires, &
         cache%shielding(m)%GL_weights, cache%GL_order, m)
@@ -2060,6 +2068,27 @@ contains
     end if
   end function upper_branch
 
+  subroutine extend_over_branch(angles, ext, angles_ext)
+    use mephit_conf, only: logger
+    use mephit_util, only: pi
+    real(dp), dimension(:), intent(in) :: angles
+    integer, intent(in) :: ext
+    real(dp), dimension(-ext:), intent(out) :: angles_ext
+    integer :: N
+
+    if (size(angles) + 2 * ext /= size(angles_ext)) then
+      call logger%msg_arg_size('extend_over_branch', &
+        'size(angles) + 2 * ext', 'size(angles_ext)', &
+        size(angles) + 2 * ext, size(angles_ext))
+      if (logger%err) call logger%write_msg
+      error stop
+    end if
+    N = size(angles) - 1
+    angles_ext(0:N) = angles
+    angles_ext(-ext:-1) = angles_ext(N - ext + 1:N) - 2d0 * pi
+    angles_ext(N + 1:N + ext) = angles_ext(0:ext - 1) + 2d0 * pi
+  end subroutine extend_over_branch
+
   !> Computes the "weighted" centroid for a triangle so that it is approximately
   !> equidistant between the enclosing flux surfaces, independent of triangle orientation.
   !>
@@ -2214,18 +2243,10 @@ contains
       real(dp), dimension(src_kp_max) :: src_theta, dest_theta
       integer :: kp, inf_kp
 
-      theta_flux_ext(1:dest_kp_max) = theta_flux(dest_kpoi_low + 1:&
-        dest_kpoi_low + dest_kp_max)
-      theta_flux_ext(-1:0) = theta_flux(dest_kpoi_low + dest_kp_max-1:&
-        dest_kpoi_low + dest_kp_max) - 2d0 * pi
-      theta_flux_ext(dest_kp_max + 1:dest_kp_max + 2) = theta_flux(dest_kpoi_low + 1:&
-        dest_kpoi_low + 2) + 2d0 * pi
-      theta_geom_ext(1:dest_kp_max) = theta_geom(dest_kpoi_low + 1:&
-        dest_kpoi_low + dest_kp_max)
-      theta_geom_ext(-1:0) = theta_geom(dest_kpoi_low + dest_kp_max-1:&
-        dest_kpoi_low + dest_kp_max) - 2d0 * pi
-      theta_geom_ext(dest_kp_max + 1:dest_kp_max + 2) = theta_geom(dest_kpoi_low + 1:&
-        dest_kpoi_low + 2) + 2d0 * pi
+      call extend_over_branch(theta_flux(dest_kpoi_low + 1:&
+        dest_kpoi_low + dest_kp_max), 2, theta_flux_ext)
+      call extend_over_branch(theta_geom(dest_kpoi_low + 1:&
+        dest_kpoi_low + dest_kp_max), 2, theta_geom_ext)
       src_theta = theta_flux(src_kpoi_low + 1:src_kpoi_low + src_kp_max)
       call resample1d(theta_flux_ext, theta_geom_ext, src_theta, dest_theta, 3)
       kpois(:, 1) = [dest_kpoi_low + 1, dest_kpoi_low + 2]
@@ -2325,6 +2346,42 @@ contains
     end do
     deallocate(psi, rad)
   end subroutine compute_sample_polmodes
+
+  subroutine compute_sample_jnperp(sample_jnperp)
+    use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
+    use mephit_util, only: interp1d
+    type(coord_cache_t), dimension(:), intent(out) :: sample_jnperp
+    integer :: kf, kp, kpoi_lo, kpoi_hi, kedge
+    real(dp) :: dum, theta_geom_mid, q
+    real(dp), dimension(:), allocatable :: theta_flux_ext, theta_geom_ext
+
+    do kf = 1, mesh%nflux
+      kpoi_lo = mesh%kp_low(kf) + 1
+      kpoi_hi = mesh%kp_low(kf) + mesh%kp_max(kf)
+      allocate(theta_flux_ext(mesh%kp_max(kf) + 4), theta_geom_ext(mesh%kp_max(kf) + 4))
+      call extend_over_branch(mesh%node_theta_flux(kpoi_lo:kpoi_hi), 2, theta_flux_ext)
+      call extend_over_branch(mesh%node_theta_geom(kpoi_lo:kpoi_hi), 2, theta_geom_ext)
+      do kp = 1, mesh%kp_max(kf)
+        kedge = mesh%kp_low(kf) + kp - 1
+        associate (s => sample_jnperp(kedge), f => cache%mid_fields(kedge))
+          theta_geom_mid = upper_branch(atan2(mesh%mid_Z(kedge) - mesh%Z_O, &
+                                              mesh%mid_R(kedge) - mesh%R_O))
+          s%theta = interp1d(theta_geom_ext, theta_flux_ext, theta_geom_mid, 3)
+          ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
+          call magdata_in_symfluxcoord_ext(2, dum, fs%psi(kf) - fs%psi(0), s%theta, &
+            q, dum, s%sqrt_g, dum, dum, s%R, dum, s%dR_dtheta, s%Z, dum, s%dZ_dtheta)
+          s%psi = f%psi
+          s%B0_R = f%B0(1)
+          s%B0_phi = f%B0(2)
+          s%B0_Z = f%B0(3)
+          ! sqrt_g misses a factor of q and the signs of dpsi_drad and B0_phi
+          ! taken together, these three always yield a positive sign in COCOS 3
+          s%sqrt_g = s%sqrt_g * abs(q)
+        end associate
+      end do
+      deallocate(theta_flux_ext, theta_geom_ext)
+    end do
+  end subroutine compute_sample_jnperp
 
   !> Compute fine grid for parallel current sampling points.
   subroutine compute_sample_Ires(sample_Ires, GL_weights, GL_order, m)

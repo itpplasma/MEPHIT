@@ -42,7 +42,7 @@ module mephit_iter
   type :: FDM_t
     integer :: nnz = 0
     integer, allocatable :: irow(:), icol(:)
-    complex(dp), allocatable :: aval_MDE(:), aval_MDE_damped(:)
+    complex(dp), allocatable :: aval_MDE(:), aval_MDE_damped(:), aval_jnperp(:)
   end type FDM_t
 
   ! interfaces
@@ -726,6 +726,7 @@ contains
     allocate(fdm%icol(nnz))
     allocate(fdm%aval_MDE(nnz))
     allocate(fdm%aval_MDE_damped(nnz))
+    allocate(fdm%aval_jnperp(nnz))
   end subroutine FDM_init
 
   subroutine FDM_deinit(fdm)
@@ -736,6 +737,7 @@ contains
     if (allocated(fdm%icol)) deallocate(fdm%icol)
     if (allocated(fdm%aval_MDE)) deallocate(fdm%aval_MDE)
     if (allocated(fdm%aval_MDE_damped)) deallocate(fdm%aval_MDE_damped)
+    if (allocated(fdm%aval_jnperp)) deallocate(fdm%aval_jnperp)
   end subroutine FDM_deinit
 
   subroutine FDM_write(fdm, datafile, group)
@@ -761,6 +763,9 @@ contains
     call h5_add(h5id_root, grp // '/aval_MDE_damped', fdm%aval_MDE_damped, &
       lbound(fdm%aval_MDE_damped), ubound(fdm%aval_MDE_damped), &
       comment = 'sparse matrix entries for damped MDE (COO format)', unit = 'G cm^-1')
+    call h5_add(h5id_root, grp // '/aval_jnperp', fdm%aval_jnperp, &
+      lbound(fdm%aval_jnperp), ubound(fdm%aval_jnperp), &
+      comment = 'sparse matrix entries for helical current ODE (COO format)', unit = '1')
     call h5_close(h5id_root)
   end subroutine FDM_write
 
@@ -781,14 +786,15 @@ contains
     call h5_get(h5id_root, grp // '/icol', fdm%icol)
     call h5_get(h5id_root, grp // '/aval_MDE', fdm%aval_MDE)
     call h5_get(h5id_root, grp // '/aval_MDE_damped', fdm%aval_MDE_damped)
+    call h5_get(h5id_root, grp // '/aval_jnperp', fdm%aval_jnperp)
     call h5_close(h5id_root)
   end subroutine FDM_read
 
   subroutine FDM_compute_matrix(fdm)
     use mephit_util, only: imun
-    use mephit_mesh, only: mesh, cache
+    use mephit_mesh, only: mesh, cache, fs
     type(FDM_t), intent(inout) :: fdm
-    complex(dp), dimension(:), allocatable :: a, b, b_damped
+    complex(dp), dimension(:), allocatable :: a, b, b_damped, a_jnperp, b_jnperp
     integer :: kf, kp, kedge, ndim
 
     ! discretised ODE: $a_{k} (y_{k+1} - y_{k}) + b_{k} (y_{k+1} + y_{k}), k \mod N$
@@ -799,6 +805,7 @@ contains
     allocate(a(ndim), b(ndim), b_damped(ndim))
     a(:) = (0d0, 0d0)
     b(:) = (0d0, 0d0)
+    b_damped(:) = (0d0, 0d0)
     do kf = 1, mesh%nflux
       do kp = 1, mesh%kp_max(kf)
         kedge = mesh%kp_low(kf) + kp - 1
@@ -811,6 +818,20 @@ contains
         end associate
       end do
     end do
+    allocate(a_jnperp(ndim), b_jnperp(ndim))
+    a_jnperp(:) = (0d0, 0d0)
+    b_jnperp(:) = (0d0, 0d0)
+    do kf = 1, mesh%nflux
+      do kp = 1, mesh%kp_max(kf)
+        kedge = mesh%kp_low(kf) + kp - 1
+        associate (s => cache%sample_jnperp(kedge))
+          a_jnperp(kedge) = (s%dR_dtheta * mesh%edge_R(kedge) + s%dZ_dtheta * mesh%edge_Z(kedge)) / &
+            (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
+          b_jnperp(kedge) = -0.5d0 * imun * mesh%n / fs%F(kf) * &
+            (s%dR_dtheta * s%B0_R + s%dZ_dtheta * s%B0_Z)
+        end associate
+      end do
+    end do
     ! assemble sparse matrix (COO format) from blocks
     call FDM_init(fdm, 2 * ndim)
     do kf = 1, mesh%nflux
@@ -820,6 +841,7 @@ contains
       fdm%icol(2 * kedge - 1) = kedge
       fdm%aval_MDE(2 * kedge - 1) = -a(kedge) + b(kedge)
       fdm%aval_MDE_damped(2 * kedge - 1) = -a(kedge) + b_damped(kedge)
+      fdm%aval_jnperp(2 * kedge - 1) = -a_jnperp(kedge) + b_jnperp(kedge)
       ! first column, off-diagonal (lower left corner)
       fdm%irow(2 * kedge) = kedge + mesh%kp_max(kf) - 1
       fdm%icol(2 * kedge) = kedge
@@ -827,6 +849,8 @@ contains
         a(kedge + mesh%kp_max(kf) - 1) + b(kedge + mesh%kp_max(kf) - 1)
       fdm%aval_MDE_damped(2 * kedge) = &
         a(kedge + mesh%kp_max(kf) - 1) + b_damped(kedge + mesh%kp_max(kf) - 1)
+      fdm%aval_jnperp(2 * kedge) = &
+        a_jnperp(kedge + mesh%kp_max(kf) - 1) + b_jnperp(kedge + mesh%kp_max(kf) - 1)
       do kp = 2, mesh%kp_max(kf)
         kedge = mesh%kp_low(kf) + kp - 1
         ! off-diagonal
@@ -834,14 +858,16 @@ contains
         fdm%icol(2 * kedge - 1) = kedge
         fdm%aval_MDE(2 * kedge - 1) = a(kedge - 1) + b(kedge - 1)
         fdm%aval_MDE_damped(2 * kedge - 1) = a(kedge - 1) + b_damped(kedge - 1)
+        fdm%aval_jnperp(2 * kedge - 1) = a_jnperp(kedge - 1) + b_jnperp(kedge - 1)
         ! diagonal
         fdm%irow(2 * kedge) = kedge
         fdm%icol(2 * kedge) = kedge
         fdm%aval_MDE(2 * kedge) = -a(kedge) + b(kedge)
         fdm%aval_MDE_damped(2 * kedge) = -a(kedge) + b_damped(kedge)
+        fdm%aval_jnperp(2 * kedge) = -a_jnperp(kedge) + b_jnperp(kedge)
       end do
     end do
-    deallocate(a, b, b_damped)
+    deallocate(a, b, b_damped, a_jnperp, b_jnperp)
   end subroutine FDM_compute_matrix
 
   subroutine FDM_solve(fdm, aval, inhom, solution)
