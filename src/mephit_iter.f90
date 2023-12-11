@@ -39,6 +39,12 @@ module mephit_iter
     complex(dp), allocatable :: Lr(:, :), eigvecs(:, :)
   end type precond_t
 
+  type :: FDM_t
+    integer :: nnz = 0
+    integer, allocatable :: irow(:), icol(:)
+    complex(dp), allocatable :: aval_MDE(:), aval_MDE_damped(:)
+  end type FDM_t
+
   ! interfaces
   abstract interface
     subroutine real_vector_field(R, Z, vector) bind(C)
@@ -125,6 +131,7 @@ contains
     character(len = 1024) :: config_filename
     integer(c_int) :: runmode_flags
     logical :: meshing, preconditioner, iterations
+    type(fdm_t) :: fdm
     type(perteq_t) :: perteq
     type(precond_t) :: precond
 
@@ -194,15 +201,19 @@ contains
     if (preconditioner .or. iterations) then
       call perteq_init(perteq)
       if (preconditioner) then
-        call debug_initial_iteration(perteq)
-        call precond_compute(precond, perteq)
+        call FDM_compute_matrix(fdm)
+        call FDM_write(fdm, datafile, 'iter/FDM')
+        call debug_initial_iteration(perteq, fdm)
+        call precond_compute(precond, perteq, fdm)
         call precond_write(precond, datafile, 'iter')
       else
+        call FDM_read(fdm, datafile, 'iter/FDM')
         call precond_read(precond, datafile, 'iter')
       end if
       if (iterations) then
-        call perteq_iterate(perteq, precond)
+        call perteq_iterate(perteq, precond, fdm)
       end if
+      call FDM_deinit(fdm)
       call precond_deinit(precond)
       call perteq_deinit(perteq)
     end if
@@ -372,7 +383,7 @@ contains
       matmul(transpose(conjg(precond%eigvecs(:, 1:precond%nritz))), vec)))
   end function precond_apply
 
-  subroutine precond_compute(precond, perteq)
+  subroutine precond_compute(precond, perteq, fdm)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, logger, datafile, cmplx_fmt, runmode_precon
     use mephit_util, only: arnoldi_break
@@ -380,6 +391,7 @@ contains
     use mephit_pert, only: vac, RT0_init, RT0_deinit, RT0_write, RT0_tor_comp_from_zero_div, RT0_L2int
     type(precond_t), intent(inout) :: precond
     type(perteq_t), intent(inout) :: perteq
+    type(fdm_t), intent(in) :: fdm
     integer :: i, j, info
     integer(HID_T) :: h5id_root
     complex(dp), allocatable :: eigvals(:), Yr(:, :)
@@ -452,8 +464,8 @@ contains
         call RT0_tor_comp_from_zero_div(perteq%Bn)
         call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
         Bn_prev%DOF(:) = perteq%Bn%DOF
-        call compute_presn(perteq, conf%damp)
-        call compute_currn(perteq, conf%damp, .false.)
+        call compute_presn(perteq, fdm, conf%damp)
+        call compute_currn(perteq, fdm, conf%damp, .false.)
         call compute_magfn(perteq)
         perteq%Bn%DOF(:) = perteq%Bn%DOF - precond_apply(precond, perteq%Bn%DOF - Bn_prev%DOF)
         call RT0_tor_comp_from_zero_div(perteq%Bn)
@@ -472,14 +484,14 @@ contains
 
       perteq%Bn%DOF(:) = old_val + vac%Bn%DOF
       call RT0_tor_comp_from_zero_div(perteq%Bn)
-      call compute_presn(perteq, conf%damp)
-      call compute_currn(perteq, conf%damp, .false.)
+      call compute_presn(perteq, fdm, conf%damp)
+      call compute_currn(perteq, fdm, conf%damp, .false.)
       call compute_magfn(perteq)
       new_val(:) = perteq%Bn%DOF
     end subroutine next_iteration_arnoldi
   end subroutine precond_compute
 
-  subroutine perteq_iterate(perteq, precond)
+  subroutine perteq_iterate(perteq, precond, fdm)
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, logger, datafile, runmode_single, currn_model_kilca
@@ -487,6 +499,7 @@ contains
     use mephit_pert, only: vac, L1_write, RT0_init, RT0_deinit, RT0_tor_comp_from_zero_div, RT0_L2int
     type(perteq_t), intent(inout) :: perteq
     type(precond_t), intent(inout) :: precond
+    type(fdm_t), intent(in) :: fdm
     integer :: kiter, niter, maxiter
     integer(HID_T) :: h5id_root
     real(dp), allocatable :: L2int_Bn_diff(:)
@@ -531,12 +544,12 @@ contains
         call perteq_write('("iter/", a, "MFEM_' // postfix // '")', &
             ' (after MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
       end if
-      call compute_presn(perteq, conf%damp)
+      call compute_presn(perteq, fdm, conf%damp)
       if (kiter <= 1) then
         call perteq_write('("iter/", a, "' // postfix // '")', &
           ' (after iteration)', presn = perteq%pn, presmn = perteq%pn)
       end if
-      call compute_currn(perteq, conf%damp, .false.)
+      call compute_currn(perteq, fdm, conf%damp, .false.)
       call compute_magfn(perteq)
       perteq%Bn%DOF(:) = perteq%Bn%DOF + vac%Bn%DOF
       if (precond%nritz > 0) then
@@ -609,10 +622,11 @@ contains
     call RT0_deinit(Bn_diff)
   end subroutine perteq_iterate
 
-  subroutine debug_initial_iteration(perteq)
+  subroutine debug_initial_iteration(perteq, fdm)
     use mephit_conf, only: conf
     use mephit_pert, only: vac
     type(perteq_t), intent(inout) :: perteq
+    type(fdm_t), intent(in) :: fdm
 
     if (conf%debug_initial) then
       perteq%Bn%DOF(:) = vac%Bn%DOF
@@ -622,16 +636,16 @@ contains
         call perteq_write('("debug_MFEM_initial/MFEM_", a)', &
           ' (initial MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
       end if
-      call compute_presn(perteq, .false.)
+      call compute_presn(perteq, fdm, .false.)
       if (conf%debug_MFEM) then
         call perteq_write('("debug_MFEM_initial/", a)', &
           ' (initial iteration)', presn = perteq%pn, presmn = perteq%pn)
       end if
-      call compute_currn(perteq, .false., .true.)
+      call compute_currn(perteq, fdm, .false., .true.)
       perteq%Bn%DOF(:) = vac%Bn%DOF
       perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
-      call compute_presn(perteq, .true.)
-      call compute_currn(perteq, .true., .true.)
+      call compute_presn(perteq, fdm, .true.)
+      call compute_currn(perteq, fdm, .true., .true.)
     end if
   end subroutine debug_initial_iteration
 
@@ -702,34 +716,87 @@ contains
     end if
   end subroutine MFEM_test
 
-  subroutine solve_MDE(inhom, solution, apply_damping)
-    use sparse_mod, only: sparse_solve, sparse_matmul
-    use mephit_conf, only: logger
+  subroutine FDM_init(fdm, nnz)
+    type(FDM_t), intent(inout) :: fdm
+    integer, intent(in) :: nnz
+
+    call FDM_deinit(fdm)
+    fdm%nnz = nnz
+    allocate(fdm%irow(nnz))
+    allocate(fdm%icol(nnz))
+    allocate(fdm%aval_MDE(nnz))
+    allocate(fdm%aval_MDE_damped(nnz))
+  end subroutine FDM_init
+
+  subroutine FDM_deinit(fdm)
+    type(FDM_t), intent(inout) :: fdm
+
+    fdm%nnz = 0
+    if (allocated(fdm%irow)) deallocate(fdm%irow)
+    if (allocated(fdm%icol)) deallocate(fdm%icol)
+    if (allocated(fdm%aval_MDE)) deallocate(fdm%aval_MDE)
+    if (allocated(fdm%aval_MDE_damped)) deallocate(fdm%aval_MDE_damped)
+  end subroutine FDM_deinit
+
+  subroutine FDM_write(fdm, datafile, group)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    type(FDM_t), intent(in) :: fdm
+    character(len = *), intent(in) :: datafile
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+
+    grp = trim(group)
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/nnz', fdm%nnz, &
+      comment = 'number of nonzero entries in sparse matrix')
+    call h5_add(h5id_root, grp // '/irow', fdm%irow, lbound(fdm%irow), ubound(fdm%irow), &
+      comment = 'row indices of sparse matrix entries (COO format)')
+    call h5_add(h5id_root, grp // '/icol', fdm%icol, lbound(fdm%icol), ubound(fdm%icol), &
+      comment = 'column indices of sparse matrix entries (COO format)')
+    call h5_add(h5id_root, grp // '/aval_MDE', fdm%aval_MDE, &
+      lbound(fdm%aval_MDE), ubound(fdm%aval_MDE), &
+      comment = 'sparse matrix entries for MDE (COO format)', unit = 'G cm^-1')
+    call h5_add(h5id_root, grp // '/aval_MDE_damped', fdm%aval_MDE_damped, &
+      lbound(fdm%aval_MDE_damped), ubound(fdm%aval_MDE_damped), &
+      comment = 'sparse matrix entries for damped MDE (COO format)', unit = 'G cm^-1')
+    call h5_close(h5id_root)
+  end subroutine FDM_write
+
+  subroutine FDM_read(fdm, datafile, group)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    type(FDM_t), intent(inout) :: fdm
+    character(len = *), intent(in) :: datafile
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+    integer :: nnz
+
+    grp = trim(group)
+    call h5_open(datafile, h5id_root)
+    call h5_get(h5id_root, grp // '/nnz', nnz)
+    call FDM_init(fdm, nnz)
+    call h5_get(h5id_root, grp // '/irow', fdm%irow)
+    call h5_get(h5id_root, grp // '/icol', fdm%icol)
+    call h5_get(h5id_root, grp // '/aval_MDE', fdm%aval_MDE)
+    call h5_get(h5id_root, grp // '/aval_MDE_damped', fdm%aval_MDE_damped)
+    call h5_close(h5id_root)
+  end subroutine FDM_read
+
+  subroutine FDM_compute_matrix(fdm)
     use mephit_util, only: imun
     use mephit_mesh, only: mesh, cache
-    complex(dp), dimension(:), intent(in) :: inhom
-    complex(dp), dimension(:), intent(out) :: solution
-    logical, intent(in) :: apply_damping
-    integer, dimension(:), allocatable :: irow, icol
-    complex(dp), dimension(:), allocatable :: a, b, x, d, du, aval, resid
-    real(dp), dimension(:), allocatable :: rel_err
-    real(dp) :: max_rel_err, avg_rel_err
-    integer :: kf, kp, kedge, ndim, nnz
-    real(dp), parameter :: small = tiny(0d0)
+    type(FDM_t), intent(inout) :: fdm
+    complex(dp), dimension(:), allocatable :: a, b, b_damped
+    integer :: kf, kp, kedge, ndim
 
-    if (size(inhom) /= mesh%npoint) then
-      call logger%msg_arg_size('solve_MDE', 'size(inhom)', 'mesh%npoint', size(inhom), mesh%npoint)
-      if (logger%err) call logger%write_msg
-      error stop
-    end if
-    if (size(solution) /= mesh%npoint) then
-      call logger%msg_arg_size('solve_MDE', 'size(solution)', 'mesh%npoint', size(solution), mesh%npoint)
-      if (logger%err) call logger%write_msg
-      error stop
-    end if
+    ! discretised ODE: $a_{k} (y_{k+1} - y_{k}) + b_{k} (y_{k+1} + y_{k}), k \mod N$
+    ! resulting (upper) diagonal elements:
+    ! d = -a + b
+    ! du = a + b
     ndim = mesh%npoint - 1
-    nnz = 2 * ndim
-    allocate(a(ndim), b(ndim), x(ndim), d(ndim), du(ndim), aval(nnz), icol(nnz), irow(nnz), rel_err(ndim))
+    allocate(a(ndim), b(ndim), b_damped(ndim))
     a(:) = (0d0, 0d0)
     b(:) = (0d0, 0d0)
     do kf = 1, mesh%nflux
@@ -739,64 +806,103 @@ contains
         associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge))
           a(kedge) = (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
             (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
-          if (apply_damping) then
-            b(kedge) = imun * (mesh%n + imun * mesh%damping(kf)) * f%B0(2) / R
-          else
-            b(kedge) = imun * mesh%n * f%B0(2) / R
-          end if
+          b(kedge) = 0.5d0 * imun * mesh%n * f%B0(2) / R
+          b_damped(kedge) = 0.5d0 * imun * (mesh%n + imun * mesh%damping(kf)) * f%B0(2) / R
         end associate
       end do
     end do
-    d(:) = -a + b * 0.5d0
-    du(:) = a + b * 0.5d0
     ! assemble sparse matrix (COO format) from blocks
+    call FDM_init(fdm, 2 * ndim)
     do kf = 1, mesh%nflux
       kedge = mesh%kp_low(kf)
       ! first column, diagonal
-      irow(2 * kedge - 1) = kedge
-      icol(2 * kedge - 1) = kedge
-      aval(2 * kedge - 1) = d(kedge)
+      fdm%irow(2 * kedge - 1) = kedge
+      fdm%icol(2 * kedge - 1) = kedge
+      fdm%aval_MDE(2 * kedge - 1) = -a(kedge) + b(kedge)
+      fdm%aval_MDE_damped(2 * kedge - 1) = -a(kedge) + b_damped(kedge)
       ! first column, off-diagonal (lower left corner)
-      irow(2 * kedge) = kedge + mesh%kp_max(kf) - 1
-      icol(2 * kedge) = kedge
-      aval(2 * kedge) = du(kedge + mesh%kp_max(kf) - 1)
+      fdm%irow(2 * kedge) = kedge + mesh%kp_max(kf) - 1
+      fdm%icol(2 * kedge) = kedge
+      fdm%aval_MDE(2 * kedge) = &
+        a(kedge + mesh%kp_max(kf) - 1) + b(kedge + mesh%kp_max(kf) - 1)
+      fdm%aval_MDE_damped(2 * kedge) = &
+        a(kedge + mesh%kp_max(kf) - 1) + b_damped(kedge + mesh%kp_max(kf) - 1)
       do kp = 2, mesh%kp_max(kf)
         kedge = mesh%kp_low(kf) + kp - 1
         ! off-diagonal
-        irow(2 * kedge - 1) = kedge - 1
-        icol(2 * kedge - 1) = kedge
-        aval(2 * kedge - 1) = du(kedge - 1)
+        fdm%irow(2 * kedge - 1) = kedge - 1
+        fdm%icol(2 * kedge - 1) = kedge
+        fdm%aval_MDE(2 * kedge - 1) = a(kedge - 1) + b(kedge - 1)
+        fdm%aval_MDE_damped(2 * kedge - 1) = a(kedge - 1) + b_damped(kedge - 1)
         ! diagonal
-        irow(2 * kedge) = kedge
-        icol(2 * kedge) = kedge
-        aval(2 * kedge) = d(kedge)
+        fdm%irow(2 * kedge) = kedge
+        fdm%icol(2 * kedge) = kedge
+        fdm%aval_MDE(2 * kedge) = -a(kedge) + b(kedge)
+        fdm%aval_MDE_damped(2 * kedge) = -a(kedge) + b_damped(kedge)
       end do
     end do
-    x(:) = inhom(2:)
-    call sparse_solve(ndim, ndim, nnz, irow, icol, aval, x)
-    call sparse_matmul(ndim, ndim, irow, icol, aval, x, resid)
+    deallocate(a, b, b_damped)
+  end subroutine FDM_compute_matrix
+
+  subroutine FDM_solve(fdm, aval, inhom, solution)
+    use sparse_mod, only: sparse_solve, sparse_matmul
+    use mephit_conf, only: logger
+    use mephit_mesh, only: mesh
+    type(FDM_t), intent(in) :: fdm
+    complex(dp), dimension(:), intent(in) :: aval
+    complex(dp), dimension(:), intent(in) :: inhom
+    complex(dp), dimension(:), intent(out) :: solution
+    complex(dp), dimension(:), allocatable :: resid
+    real(dp), dimension(:), allocatable :: rel_err
+    real(dp) :: max_rel_err, avg_rel_err
+    integer :: ndim
+    real(dp), parameter :: small = tiny(0d0)
+
+    if (size(aval) /= fdm%nnz) then
+      call logger%msg_arg_size('FDM_solve', &
+        'size(aval)', 'fdm%nnz', size(aval), fdm%nnz)
+      if (logger%err) call logger%write_msg
+      error stop
+    end if
+    if (size(inhom) /= mesh%npoint) then
+      call logger%msg_arg_size('FDM_solve', &
+        'size(inhom)', 'mesh%npoint', size(inhom), mesh%npoint)
+      if (logger%err) call logger%write_msg
+      error stop
+    end if
+    if (size(solution) /= mesh%npoint) then
+      call logger%msg_arg_size('FDM_solve', &
+        'size(solution)', 'mesh%npoint', size(solution), mesh%npoint)
+      if (logger%err) call logger%write_msg
+      error stop
+    end if
+    ndim = mesh%npoint - 1
+    solution(:) = inhom
+    call sparse_solve(ndim, ndim, fdm%nnz, fdm%irow, fdm%icol, aval, solution(2:))
+    ! first point on axis - average over enclosing flux surface
+    solution(1) = sum(solution(2:mesh%kp_max(1) + 1)) / dble(mesh%kp_max(1))
+    ! check relative error
+    call sparse_matmul(ndim, ndim, fdm%irow, fdm%icol, aval, solution(2:), resid)
     resid(:) = resid - inhom(2:)
+    allocate(rel_err(ndim))
     where (abs(inhom(2:)) >= small)
       rel_err(:) = abs(resid) / abs(inhom(2:))
     elsewhere
       rel_err(:) = 0d0
     end where
-    ! first point on axis - average over enclosing flux surface
-    solution(1) = sum(x(:mesh%kp_max(1))) / dble(mesh%kp_max(1))
-    solution(2:) = x
     max_rel_err = maxval(rel_err)
-    avg_rel_err = sum(rel_err) / dble(mesh%npoint - 1)
-    write (logger%msg, '("solve_MDE: diagonalization max_rel_err = ", ' // &
+    avg_rel_err = sum(rel_err) / ndim
+    write (logger%msg, '("FDM_solve: diagonalization max_rel_err = ", ' // &
       'es24.16e3, ", avg_rel_err = ", es24.16e3)') max_rel_err, avg_rel_err
     if (logger%debug) call logger%write_msg
-    deallocate(a, b, x, d, du, aval, icol, irow)
-    if (allocated(resid)) deallocate(resid)
-  end subroutine solve_MDE
+    deallocate(resid, rel_err)
+  end subroutine FDM_solve
 
-  subroutine compute_presn(perteq, apply_damping)
+  subroutine compute_presn(perteq, fdm, apply_damping)
     use mephit_mesh, only: fs, mesh, cache
     type(perteq_t), intent(inout) :: perteq
     logical, intent(in) :: apply_damping
+    type(FDM_t), intent(in) :: fdm
     complex(dp), dimension(mesh%npoint) :: inhom
     integer :: kf, kp, kedge
 
@@ -812,7 +918,11 @@ contains
         end associate
       end do
     end do
-    call solve_MDE(inhom, perteq%pn%DOF, apply_damping)
+    if (apply_damping) then
+      call FDM_solve(fdm, fdm%aval_MDE_damped, inhom, perteq%pn%DOF)
+    else
+      call FDM_solve(fdm, fdm%aval_MDE, inhom, perteq%pn%DOF)
+    end if
   end subroutine compute_presn
 
   subroutine debug_MDE(group, presn, magfn, currn_perp, currn_par)
@@ -891,12 +1001,13 @@ contains
     deallocate(lorentz, pn, grad_pn, Bn_psi_contravar, jnpar_Bmod, grad_jnpar_Bmod, div_jnperp, div_jnperp_RT0)
   end subroutine debug_MDE
 
-  subroutine compute_currn(perteq, apply_damping, debug_initial)
+  subroutine compute_currn(perteq, fdm, apply_damping, debug_initial)
     use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger
     use mephit_mesh, only: mesh, cache, field_cache_t
     use mephit_pert, only: L1_interp, RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
     use mephit_util, only: pi, clight, zd_cross
     type(perteq_t), intent(inout) :: perteq
+    type(fdm_t), intent(in) :: fdm
     logical, intent(in) :: apply_damping
     logical, intent(in) :: debug_initial
     integer :: kf, kp, ktri, kedge
@@ -925,7 +1036,11 @@ contains
         end associate
       end do
     end do
-    call solve_MDE(inhom, perteq%jnpar_B0%DOF, apply_damping)
+    if (apply_damping) then
+      call FDM_solve(fdm, fdm%aval_MDE_damped, inhom, perteq%jnpar_B0%DOF)
+    else
+      call FDM_solve(fdm, fdm%aval_MDE, inhom, perteq%jnpar_B0%DOF)
+    end if
     if (debug_initial) then
       call RT0_project_pol_comp(perteq%jn, project_combined)
       call RT0_project_tor_comp(perteq%jn, project_combined)
