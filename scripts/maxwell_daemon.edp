@@ -47,7 +47,7 @@ if (runmode % 2) {
     exit(1);
   }
 }
-bool debugprojection = (runmode / 8) % 2;
+bool debugprojection = false; // (runmode / 8) % 2;  // TODO: check this later
 mesh Th = readmesh(meshfile);
 // count triangles in internal region 0
 int ntri = 0;
