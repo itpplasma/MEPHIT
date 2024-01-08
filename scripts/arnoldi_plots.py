@@ -91,10 +91,9 @@ for c in cases:
     if 'kernel' in c:
         fig = plt.figure(layout='constrained')
         ax = fig.subplots()
-        im = ax.tripcolor(c['triangulation'], c['kernel'], cmap='RdBu')
+        im = ax.tripcolor(c['triangulation'], c['kernel'], cmap='magma')
         ax.set_aspect('equal')
         ax.set_title('Preconditioner kernel: ' + c['title'])
         cbar = fig.colorbar(im)
-        im.set_clim([-max(abs(c['kernel'])),
-                      max(abs(c['kernel']))])
+        # im.set_clim([0.0, max(abs(c['kernel']))])
         fig.show()
