@@ -1092,7 +1092,7 @@ contains
         end if
       end if
       call add_kilca_current(perteq%jn, perteq%jnpar_B0, &
-        perteq%Phi_mn, perteq%Phi_aligned_mn, perteq%Bn, debug_initial)
+        perteq%Phi_mn, perteq%Phi_aligned_mn, perteq%Bn, fdm, debug_initial)
       if (debug_initial) then
         call perteq_write('("debug_KiLCA/", a, "_total")', &
           ' including KiLCA current', parcurrmn = perteq%jnpar_B0)
@@ -1122,30 +1122,34 @@ contains
     end function project_combined
   end subroutine compute_currn
 
-  subroutine add_kilca_current(jn, jnpar_B0, Phi_mn, Phi_aligned_mn, Bn, debug_initial)
+  subroutine add_kilca_current(jn, jnpar_B0, Phi_mn, Phi_aligned_mn, Bn, fdm, debug_initial)
     use mephit_conf, only: conf, datafile
     use mephit_util, only: imun, ev2erg, resample1d, interp1d
     use mephit_mesh, only: equil, mesh, cache, fs, fs_half, mesh_interp_theta_flux, field_cache_t, &
       m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
-      RT0_poloidal_modes, polmodes_t, polmodes_init, polmodes_write, polmodes_deinit
+      RT0_poloidal_modes, polmodes_t, polmodes_init, polmodes_write, polmodes_deinit, &
+      L1_init, L1_interp, L1_write, L1_deinit
     type(RT0_t), intent(inout) :: jn
     type(L1_t), intent(inout) :: jnpar_B0
     complex(dp), intent(inout) :: Phi_mn(:, mesh%m_res_min:)
     complex(dp), intent(inout) :: Phi_aligned_mn(:, mesh%m_res_min:)
     type(RT0_t), intent(in) :: Bn
+    type(fdm_t), intent(in) :: fdm
     logical, intent(in) :: debug_initial
-    integer :: m, m_res, kf, kf_min, kpoi_min, kpoi_max, kedge, ktri, kt, kp, k
+    integer :: m, m_res, kf, kf_min, kpoi_min, kpoi_max, kedge, ktri, kt, kp, k, kpoi
     real(dp) :: edge_perp(2), lin_interp(2), q_interp, dum
-    complex(dp) :: jmnpar_over_Bmod_interp, B0pol(mesh%npoint)
+    complex(dp) :: jmnpar_over_Bmod_interp, B0pol(mesh%npoint), inhom_jnperp(mesh%npoint)
     logical, save :: first = .true.  ! quick and dirty
     complex(dp), dimension(0:mesh%nflux) :: Bmnpsi_over_B0phi, jmnpar_over_Bmod
     type(vec_polmodes_t) :: Bmn
     type(polmodes_t) :: polmodes
+    type(L1_t) :: coeff_jnperp
 
     if (debug_initial) then
       call polmodes_init(polmodes, conf%m_max, mesh%nflux)
       polmodes%coeff(:, :) = (0d0, 0d0)
+      call L1_init(coeff_jnperp, mesh%npoint)
     end if
     kf_min = max(1, mesh%res_ind(mesh%m_res_min) / 4)
     call vec_polmodes_init(Bmn, conf%m_max, mesh%nflux)
@@ -1239,6 +1243,40 @@ contains
       call FEM_debug_projection(mesh%npoint, jnpar_B0%DOF, B0pol)
     end if
     if (debug_initial) then
+      inhom_jnperp(:) = (0d0, 0d0)
+      do kf = 1, mesh%nflux
+        do kp = 1, mesh%kp_max(kf)
+          kedge = mesh%kp_low(kf) + kp - 1
+          associate (s => cache%sample_jnperp(kedge))
+            do m = mesh%m_res_min, mesh%m_res_max
+              m_res = -equil%cocos%sgn_q * m
+              inhom_jnperp(kedge + 1) = inhom_jnperp(kedge + 1) + &
+                (mesh%n * fs%q(kf) + m_res) * polmodes%coeff(m_res, kf) * exp(imun * m_res * s%theta)
+            end do
+            inhom_jnperp(kedge + 1) = inhom_jnperp(kedge + 1) * imun / fs%F(kf)
+          end associate
+        end do
+      end do
+      call FDM_solve(fdm, fdm%aval_jnperp, inhom_jnperp, coeff_jnperp%DOF)
+      call L1_write(coeff_jnperp, datafile, 'debug_KiLCA/coeff_jnperp_ODE', &
+        'perpendicular current density coefficient via ODE', 'c_0 Mx^-1 cm^-1 ?')
+      coeff_jnperp%DOF(:) = (0d0, 0d0)
+      do kf = 1, mesh%nflux
+        do kp = 1, mesh%kp_max(kf)
+          kpoi = mesh%kp_low(kf) + kp
+          associate (theta => mesh%node_theta_flux(kpoi))
+            do m = mesh%m_res_min, mesh%m_res_max
+              m_res = -equil%cocos%sgn_q * m
+              coeff_jnperp%DOF(kpoi) = coeff_jnperp%DOF(kpoi) + &
+                (1d0 + mesh%n * fs%q(kf) / m_res) * polmodes%coeff(m_res, kf) * exp(imun * m_res * theta)
+            end do
+            coeff_jnperp%DOF(kpoi) = coeff_jnperp%DOF(kpoi) / fs%F(kf)
+          end associate
+        end do
+      end do
+      call L1_write(coeff_jnperp, datafile, 'debug_KiLCA/coeff_jnperp_approx', &
+        'perpendicular current density coefficient via analytical approximation', 'c_0 Mx^-1 cm^-1 ?')
+      call L1_deinit(coeff_jnperp)
       call polmodes_write(polmodes, datafile, 'debug_KiLCA/jmnpar_Bmod_KiLCA', &
         'parallel current density from KiLCA', 's^-1')  ! SI: H^-1
       call polmodes_deinit(polmodes)
