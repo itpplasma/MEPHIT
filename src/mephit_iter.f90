@@ -1131,8 +1131,8 @@ contains
       RT0_poloidal_modes, polmodes_t, polmodes_init, polmodes_write, polmodes_deinit
     type(RT0_t), intent(inout) :: jn
     type(L1_t), intent(inout) :: jnpar_B0
-    complex(dp), intent(inout) :: Phi_mn(:, :)
-    complex(dp), intent(inout) :: Phi_aligned_mn(:, :)
+    complex(dp), intent(inout) :: Phi_mn(:, mesh%m_res_min:)
+    complex(dp), intent(inout) :: Phi_aligned_mn(:, mesh%m_res_min:)
     type(RT0_t), intent(in) :: Bn
     logical, intent(in) :: debug_initial
     integer :: m, m_res, kf, kf_min, kpoi_min, kpoi_max, kedge, ktri, kt, kp, k
