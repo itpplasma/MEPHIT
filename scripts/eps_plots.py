@@ -1,16 +1,34 @@
+# ---
+# jupyter:
+#   jupytext:
+#     cell_metadata_filter: -all
+#     formats: ipynb,py:percent
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.15.2
+#   kernelspec:
+#     language: python
+#     name: python3
+# ---
+
+# %%
 from os import environ, path
 from numpy import abs, pi
 from scipy.constants import c as clight
-from matplotlib.figure import Figure
-from matplotlib.backends.backend_agg import FigureCanvasAgg as FigureCanvas
+import matplotlib.pyplot as plt
 from mephit_plot import Mephit, set_matplotlib_defaults
 
 
+# %%
 set_matplotlib_defaults()
 work_dir = path.join(environ['MEPHIT_DIR'], 'run/33353_2900_EQH')
 testcase = Mephit(work_dir, 'mephit.h5')
 testcase.open_datafile()
 testcase.postprocess()
+
+# %%
 m_res_min = testcase.data['/mesh/m_res_min'][()]
 kf_res = testcase.data['/mesh/res_ind'][()]
 nflux = testcase.data['/mesh/nflux'][()]
@@ -29,9 +47,10 @@ Bmn = [
     testcase.get_polmodes('full perturbation', '/iter/Bmn/coeff_rad')
 ]
 
+# %%
 for m in testcase.post['m_res']:
     k = abs(m) - m_res_min
-    fig = Figure(figsize=(3, 2.5))
+    fig = plt.figure(layout='constrained')
     ax = fig.subplots()
     mask = (jmnpar_Bmod[0]['rho'][m] >= res[k] - 4.5 * delta_mn[k]) & \
         (jmnpar_Bmod[0]['rho'][m] <= res[k] + 4.5 * delta_mn[k])
@@ -42,11 +61,11 @@ for m in testcase.post['m_res']:
         ax.semilogy(polmode['rho'][m][mask], abs(polmode['var'][m][mask]), label=polmode['label'])
     ax.set_xlabel(r'$\hat{\psi}$')
     ax.set_ylabel(r'$\mu_{0} \lvert (j_{\parallel} / B_{0})_{\V{m}} \rvert$ [\si{\per\meter}]')
-    ax.legend(loc='lower left')
-    canvas = FigureCanvas(fig)
-    fig.savefig(path.join(work_dir, f"plot_jmnpar_Bmod_abs_m{abs(m)}.pdf"))
+    ax.set_title(f"$m = {m}$")
+    ax.legend(loc='upper left')
+    plt.show()
 
-    fig = Figure(figsize=(3, 2.5))
+    fig = plt.figure(layout='constrained')
     ax = fig.subplots()
     ax.axhline(0.0, color='k', lw=0.5)
     ax.axvline(res[k], color='k', lw=0.5)
@@ -54,7 +73,7 @@ for m in testcase.post['m_res']:
         ax.plot(polmode['rho'][m], abs(polmode['var'][m]) / q, label=polmode['label'])
     ax.set_xlabel(r'$\hat{\psi}$')
     ax.set_ylabel(r'$\lvert (B^{\psi} / B_{0}^{\varphi})_{\V{m}} \rvert$ [\si{\tesla\meter\squared}]')
+    ax.set_title(f"$m = {m}$")
     ax.legend(loc='upper left')
-    canvas = FigureCanvas(fig)
-    fig.savefig(path.join(work_dir, f"plot_Bmn_psi_abs_m{abs(m)}.pdf"))
+    plt.show()
 

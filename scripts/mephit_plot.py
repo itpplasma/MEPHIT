@@ -10,7 +10,7 @@ def set_matplotlib_defaults():
     from cycler import cycler
     from matplotlib import rcParams
     rcParams['text.usetex'] = True
-    rcParams['font.family'] = 'serif'
+    # rcParams['font.family'] = 'serif'
     rcParams['mathtext.fontset'] = 'cm'
     rcParams['figure.constrained_layout.use'] = True
     rcParams['xtick.direction'] = 'in'
