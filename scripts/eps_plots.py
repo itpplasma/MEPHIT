@@ -25,8 +25,8 @@ jmnpar_Bmod = [
     testcase.get_polmodes('iMHD (undamped)', '/debug_KiLCA/jmnpar_Bmod_excl/coeff', conversion, L1=True),
 ]
 Bmn = [
-    testcase.get_polmodes('vacuum perturbation', '/postprocess/Bmn_vac/coeff_rad'),
-    testcase.get_polmodes('full perturbation', '/postprocess/Bmn/coeff_rad')
+    testcase.get_polmodes('vacuum perturbation', '/iter/Bmn_vac/coeff_rad'),
+    testcase.get_polmodes('full perturbation', '/iter/Bmn/coeff_rad')
 ]
 
 for m in testcase.post['m_res']:

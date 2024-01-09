@@ -84,7 +84,7 @@ class Mephit:
             self.post['psi_norm_res_neighbourhood'][m] = self.post['psi_norm'][kf_min:kf_max+1]
             self.post['rad_res_neighbourhood'][m] = self.post['rad'][kf_min:kf_max+1]
 
-    def get_polmodes(self, label, var_name='/postprocess/Bmn/coeff_rad', conversion=1.0e-4, L1=False, rad=False):
+    def get_polmodes(self, label, var_name='/iter/Bmn/coeff_rad', conversion=1.0e-4, L1=False, rad=False):
         from numpy import array
         polmodes = {'m_max': 0, 'label': label, 'rho': dict(), 'var': dict()}
         polmodes['m_max'] = (self.data[var_name].shape[1] - 1) // 2
@@ -99,7 +99,7 @@ class Mephit:
         from scipy.constants import c as clight
         scaling = self.data['/config/kilca_scale_factor'][()]
         scaling = scaling if scaling != 0 else 1
-        return dict(zip(self.post['m_res'], abs(self.data['/postprocess/Ires'][()]) * scaling * 0.1 / clight))
+        return dict(zip(self.post['m_res'], abs(self.data['/iter/Ires'][()]) * scaling * 0.1 / clight))
 
 
 class Kilca:

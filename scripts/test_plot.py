@@ -202,8 +202,8 @@ if __name__ == "__main__":
 
     # GPEC comparison
     conversion = 1.0e-04 / testcase.data['/mesh/gpec_jacfac'][()]
-    mephit_Bmn = testcase.get_polmodes('full perturbation (MEPHIT)', '/postprocess/Bmn/coeff_rad', conversion)
-    mephit_Bmn_vac = testcase.get_polmodes('vacuum perturbation (MEPHIT)', '/postprocess/Bmn_vac/coeff_rad', conversion)
+    mephit_Bmn = testcase.get_polmodes('full perturbation (MEPHIT)', '/iter/Bmn/coeff_rad', conversion)
+    mephit_Bmn_vac = testcase.get_polmodes('vacuum perturbation (MEPHIT)', '/iter/Bmn_vac/coeff_rad', conversion)
     mephit_Ires = testcase.get_Ires()
     reference = Gpec(work_dir, 2)
     reference.open_datafiles()

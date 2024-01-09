@@ -527,6 +527,7 @@ contains
     call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
     perteq%Bn%DOF(:) = vac%Bn%DOF
     perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
+    call perteq_write('("iter/", a, "_vac")', ' (vacuum)', magfmn = perteq%Bn)
     if (precond%nritz > 0) then
       perteq%Bn%DOF(:) = perteq%Bn%DOF - precond_apply(precond, perteq%Bn%DOF)
       call RT0_tor_comp_from_zero_div(perteq%Bn)
