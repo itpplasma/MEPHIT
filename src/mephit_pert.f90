@@ -858,48 +858,6 @@ contains
     end if
   end subroutine vac_write
 
-  subroutine vector_potential_single_mode(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
-    use bdivfree_mod, only: nR_mod => nr, nZ_mod => nz, Rmin_mod => rmin, Zmin_mod => zmin, &
-      ntor, icp, ipoint, hr, hz, rpoi, zpoi, aznre, aznim, arnre, arnim
-    use mephit_util, only: imun, linspace
-    use mephit_conf, only: conf
-    integer, intent(in) :: nR, nZ
-    real(dp), intent(in) :: Rmin, Rmax, Zmin, Zmax
-    complex(dp), intent(in) :: Bn_R(:, :), Bn_Z(:, :)
-    integer :: iz, imi(nz), ima(nz), jmi(nr), jma(nr)
-    complex(dp) :: An_R(size(Bn_Z, 1), size(Bn_Z, 2)), An_Z(size(Bn_R, 1), size(Bn_R, 2))
-
-    nR_mod = nR
-    nZ_mod = nZ
-    ntor = conf%n
-    icp = nr * nz
-    Rmin_mod = Rmin
-    Zmin_mod = Zmin
-    hr = (Rmax - Rmin) / dble(nR - 1)
-    hz = (Zmax - Zmin) / dble(nZ - 1)
-    allocate(rpoi(nR), zpoi(nZ), ipoint(nR, nZ))
-    rpoi(:) = linspace(Rmin, Rmax, nR, 0, 0)
-    zpoi(:) = linspace(Zmin, Zmax, nZ, 0, 0)
-    do iZ = 1, nZ
-      An_Z(:, iZ) = -imun * Bn_R(:, iZ) * rpoi(:) / dble(ntor)
-      An_R(:, iZ) = imun * Bn_Z(:, iZ) * rpoi(:) / dble(ntor)
-    end do
-    allocate(aznre(6, 6, icp, ntor), aznim(6, 6, icp, ntor))
-    allocate(arnre(6, 6, icp, ntor), arnim(6, 6, icp, ntor))
-    aznre(:, :, :, :ntor-1) = (0d0, 0d0)
-    aznim(:, :, :, :ntor-1) = (0d0, 0d0)
-    arnre(:, :, :, :ntor-1) = (0d0, 0d0)
-    arnim(:, :, :, :ntor-1) = (0d0, 0d0)
-    imi(:) = 1
-    ima(:) = nR
-    jmi(:) = 1
-    jma(:) = nZ
-    call s2dcut(nr, nz, hr, hz, An_Z%re, imi, ima, jmi, jma, icp, aznre(:, :, :, ntor), ipoint)
-    call s2dcut(nr, nz, hr, hz, An_Z%im, imi, ima, jmi, jma, icp, aznim(:, :, :, ntor), ipoint)
-    call s2dcut(nr, nz, hr, hz, An_R%re, imi, ima, jmi, jma, icp, arnre(:, :, :, ntor), ipoint)
-    call s2dcut(nr, nz, hr, hz, An_R%im, imi, ima, jmi, jma, icp, arnim(:, :, :, ntor), ipoint)
-  end subroutine vector_potential_single_mode
-
   subroutine read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bnvac_R, Bnvac_Z)
     use input_files, only: pfile
     use mephit_conf, only: conf
@@ -1035,7 +993,7 @@ contains
       if (logger%err) call logger%write_msg
       error stop
     end select
-    call vector_potential_single_mode(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
+    call vector_potential_single_mode(conf%n, nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
     deallocate(Bn_R, Bn_Z)
     ! project to finite elements
     Bn%DOF = (0d0, 0d0)
