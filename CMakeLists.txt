@@ -39,12 +39,6 @@ else ()
   endif ()
 endif ()
 
-if ("$ENV{KILCA_DIR}" STREQUAL "")
-  set(KILCA_DIR "${CMAKE_SOURCE_DIR}/../KiLCA/build")
-else ()
-  set(KILCA_DIR "$ENV{KILCA_DIR}")
-endif ()
-
 if ("$ENV{LIBNEO_DIR}" STREQUAL "")
   set(LIBNEO_DIR "${CMAKE_SOURCE_DIR}/../libneo/build")
 else ()
@@ -89,9 +83,6 @@ set(FGSL_LIB ${FGSL_PATH}/lib/ CACHE STRING "FGSL lib")
 set(FGSL_INC ${FGSL_PATH}/include/fgsl/ CACHE STRING "FGSL include")
 find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
 
-# KiLCA
-find_library(kilca_lib libkilca.a ${KILCA_DIR} NO_DEFAULT_PATH)
-
 # hdf5_tools
 find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
 
@@ -130,6 +121,7 @@ set(MEPHIT_FORTRAN_SRC_FILES
 set(MEPHIT_C_SRC_FILES
   src/mephit_util.c
   src/mephit_fem.c
+  src/hyper1F1.c
 )
 
 set(MEPHIT_CPP_SRC_FILES
@@ -176,7 +168,6 @@ set(MEPHIT_LIBS
   ${gsl_lib}
   ${fgsl_lib}
   ${MFEM_LIBRARIES}
-  ${kilca_lib}
   blas
   lapack
   fftw3

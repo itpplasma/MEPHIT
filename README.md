@@ -23,11 +23,10 @@ Prerequisites from external sources for running MEPHIT are as follows.
 
 ### Initial build
 
-In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the desired build directory. If libneo & KiLCA, MFEM & FGSL are not in their default location (adjacent to MEPHIT and in the system default, respectively), the environment variables `LIBNEO_DIR`, `KILCA_DIR`, `MFEM_DIR`, and `FGSL_PATH` need to be set as well. At ITPcp, you can put the following into your `~/.bashrc`:
+In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the desired build directory. If libneo & KiLCA, MFEM & FGSL are not in their default location (adjacent to MEPHIT and in the system default, respectively), the environment variables `LIBNEO_DIR`, `MFEM_DIR`, and `FGSL_PATH` need to be set as well. At ITPcp, you can put the following into your `~/.bashrc`:
 
 ```bash
 export LIBNEO_DIR=/temp/AG-plasma/codes/libneo/build-master
-export KILCA_DIR=/temp/AG-plasma/codes/KiLCA-2.4.2/lib
 export FGSL_PATH=/temp/AG-plasma/codes/contrib/fgsl-1.5.0/LIB
 export MFEM_DIR=/temp/AG-plasma/codes/mfem/build
 ```

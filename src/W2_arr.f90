@@ -6,6 +6,22 @@ subroutine W2_arr (x1_in,x2_in,Imn)
 
 implicit none;
 
+interface
+  subroutine hypergeometric1f1_cont_fract_1_modified_0_ada(b_re, b_im, z_re, z_im, f_re, f_im) &
+    bind(C, name = 'hypergeometric1f1_cont_fract_1_modified_0_ada')
+    use iso_c_binding, only: c_double
+    real(c_double), intent(in) :: b_re, b_im, z_re, z_im
+    real(c_double), intent(out) :: f_re, f_im
+  end subroutine hypergeometric1f1_cont_fract_1_modified_0_ada
+
+  subroutine hypergeometric1f1_kummer_modified_0_ada(b_re, b_im, z_re, z_im, f_re, f_im) &
+    bind(C, name = 'hypergeometric1f1_kummer_modified_0_ada')
+    use iso_c_binding, only: c_double
+    real(c_double), intent(in) :: b_re, b_im, z_re, z_im
+    real(c_double), intent(out) :: f_re, f_im
+  end subroutine hypergeometric1f1_kummer_modified_0_ada
+end interface
+
 integer, parameter :: dp = 8
 integer, parameter :: dpc = 8
 real(dp), parameter :: pi    = 3.141592653589793238462643383279502884197_dp
