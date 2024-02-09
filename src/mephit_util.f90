@@ -1041,10 +1041,11 @@ contains
   !>
   !> @ndim dimension of the linear operator
   !> @nkrylov maximum dimension of the Krylov subspace
-  !> @nmin minimum dimension of the Krylov subspace
+  !> @nmin minimum number of iterations (to avoid false positive convergence)
   !> @threshold find eigenvalues with absolute value abive this threshold
   !> @tol consider eigenvalues converged when this relative error is reached
   !> @next_iteration subroutine yielding matrix-vector product for given input vector
+  !> @start_vector start vector
   !> @ierr error flag
   !> @nritz number of eigenvalues fulfilling \p threshold condition
   !> @eigvals sorted eigenvalues fulfilling \p threshold condition
@@ -1056,8 +1057,7 @@ contains
   !> LAPACK subroutines fail, \p eigvecs and possibly \p eigvals are not allocated
   !> and the `info` parameter is propagated via \p ierr.
   subroutine arnoldi_break(ndim, nkrylov, nmin, threshold, tol, next_iteration, &
-    ierr, nritz, eigvals, eigvecs)
-    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+    start_vector, ierr, nritz, eigvals, eigvecs)
     integer, intent(in) :: ndim, nkrylov, nmin
     real(dp), intent(in) :: threshold, tol
     interface
@@ -1067,13 +1067,14 @@ contains
         complex(dp), intent(out) :: new_val(:)
       end subroutine next_iteration
     end interface
+    complex(dp), intent(in) :: start_vector(:)
     integer, intent(out) :: ierr, nritz
     complex(dp), intent(out), allocatable :: eigvals(:)
     complex(dp), intent(out), allocatable, optional :: eigvecs(:, :)
     real(dp), parameter :: nearzero = 1d0 / huge(1d0)
-    complex(dp), allocatable :: fold(:), fnew(:), fzero(:), &
+    complex(dp), allocatable :: &
       qvecs(:, :), hmat(:, :), ritzvals(:), ritzvecs(:, :), progression(:, :)
-    integer :: j, k, n
+    integer :: j, k
     logical, allocatable :: selection(:), converged(:)
 
     ierr = 0
@@ -1103,66 +1104,54 @@ contains
       print '("arnoldi_break: nmin = ", i0, " > nkrylov = ", i0)', nmin, nkrylov
       return
     end if
-    allocate(fold(ndim), fnew(ndim), fzero(ndim), qvecs(ndim, nkrylov), hmat(nkrylov, nkrylov), &
-      ritzvals(nkrylov), progression(nkrylov, nkrylov), selection(nkrylov), converged(nkrylov))
+    allocate(qvecs(ndim, nkrylov + 1), hmat(nkrylov + 1, nkrylov), ritzvals(nkrylov), &
+      progression(nkrylov, nkrylov), selection(nkrylov), converged(nkrylov))
     ! initialize
-    fold = (0d0, 0d0)
-    print '("Iteration 1 of ", i0)', nkrylov
-    call next_iteration(fold, fnew)
-    fzero(:) = fnew
-    qvecs(:, 1) = fnew / sqrt(sum(conjg(fnew) * fnew))
+    qvecs(:, 1) = start_vector / sqrt(sum(conjg(start_vector) * start_vector))
     hmat = (0d0, 0d0)
     ritzvals = (0d0, 0d0)
     selection = .false.
     converged = .false.
-    progression = cmplx(ieee_value(0d0, ieee_quiet_nan), ieee_value(0d0, ieee_quiet_nan), dp)
+    progression = (0d0, 0d0)
     ! Arnoldi iterations
-    n = nkrylov
-    do k = 2, nkrylov
+    do k = 1, nkrylov
       print '("Iteration ", i0, " of ", i0)', k, nkrylov
-      fold(:) = qvecs(:, k-1)
-      call next_iteration(fold, fnew)
-      qvecs(:, k) = fnew - fzero
-      do j = 1, k-1
-        hmat(j, k-1) = sum(conjg(qvecs(:, j)) * qvecs(:, k))
-        qvecs(:, k) = qvecs(:, k) - hmat(j, k-1) * qvecs(:, j)
+      call next_iteration(qvecs(:, k), qvecs(:, k + 1))
+      do j = 1, k
+        hmat(j, k) = sum(conjg(qvecs(:, j)) * qvecs(:, k + 1))
+        qvecs(:, k + 1) = qvecs(:, k + 1) - hmat(j, k) * qvecs(:, j)
       end do
-      hmat(k, k-1) = sqrt(sum(conjg(qvecs(:, k)) * qvecs(:, k)))
-      if (abs(hmat(k, k-1)) < nearzero) then
-        n = k
-        exit
-      end if
-      qvecs(:, k) = qvecs(:, k) / hmat(k, k-1)
+      hmat(k + 1, k) = sqrt(sum(conjg(qvecs(:, k + 1)) * qvecs(:, k + 1)))
+      if (abs(hmat(k + 1, k)) < nearzero) exit
+      qvecs(:, k + 1) = qvecs(:, k + 1) / hmat(k + 1, k)
       ! calculate Ritz values
       call hessenberg_eigvals(hmat(:k, :k), ritzvals(:k), ierr)
       if (ierr < 0) return
       progression(:k, k) = ritzvals(:k)
       selection(:k) = abs(ritzvals(:k)) >= threshold
-      nritz = count(selection)
-      converged(:k) = abs(progression(:k, k) - progression(:k, k - 1)) / &
-        abs(progression(:k, k - 1)) < tol .and. k >= nmin
-      if (all(pack(converged, selection))) then
-        n = k
-        exit
+      if (k > nmin) then
+        converged(:k - 1) = abs(progression(:k - 1, k) - progression(:k - 1, k - 1)) / &
+          abs(progression(:k - 1, k - 1)) < tol
       end if
+      if (all(pack(converged, selection))) exit
     end do
+    k = min(k, nkrylov)  ! k = nkrylov + 1 unless the loop exits early
+    nritz = count(selection)
     if (.not. all(pack(converged, selection))) then
       ierr = count(converged)
       print '("arnoldi_break: only ", i0, " eigenvalues of ", i0, " converged")', &
         ierr, nritz
     end if
-    ! sort eigenvalues in descending order and optionall compute eigenvectors in this order
-    call heapsort_complex(ritzvals(:n), complex_abs_desc)
     allocate(eigvals(nritz))
     eigvals(:) = pack(ritzvals, selection)
     if (present(eigvecs)) then
-      allocate(ritzvecs(n, nritz), eigvecs(ndim, nritz))
-      call hessenberg_eigvecs(hmat(:n, :n), ritzvals(:n), selection(:n), ritzvecs, ierr)
+      allocate(ritzvecs(k, nritz), eigvecs(ndim, nritz))
+      call hessenberg_eigvecs(hmat(:k, :k), ritzvals(:k), selection(:k), ritzvecs, ierr)
       if (ierr < 0) return
-      eigvecs = matmul(qvecs(:, :n), ritzvecs)
+      eigvecs = matmul(qvecs(:, :k), ritzvecs)
       deallocate(ritzvecs)
     end if
-    deallocate(fold, fnew, fzero, qvecs, hmat, ritzvals, progression, selection, converged)
+    deallocate(qvecs, hmat, ritzvals, progression, selection, converged)
   end subroutine arnoldi_break
 
   !> Compute eigenvalues of square Hessenberg matrix.
@@ -1180,6 +1169,7 @@ contains
     integer, intent(out) :: ierr
     integer :: ndim, lwork
     complex(dp), allocatable :: hmat_work(:, :), zdum(:, :), work(:)
+    complex(dp) :: work1(1)
 
     ndim = size(hmat, 2)
     if (size(hmat, 1) /= ndim) then
@@ -1196,10 +1186,9 @@ contains
     end if
     allocate(hmat_work(ndim, ndim), zdum(1, ndim))
     hmat_work(:, :) = hmat
-    allocate(work(1))
     lwork = -1
     call zhseqr('E', 'N', ndim, 1, ndim, hmat_work, ndim, eigvals, &
-      zdum, 1, work, lwork, ierr)
+      zdum, 1, work1, lwork, ierr)
     if (ierr < 0) then
       print '("ZHSEQR: illegal value in argument #", i0)', -ierr
       return
@@ -1207,8 +1196,7 @@ contains
       print '("ZHSEQR: only ", i0, " of ", i0, " eigenvalues converged")', &
         ierr, ndim
     end if
-    lwork = int(work(1))
-    deallocate(work)
+    lwork = int(work1(1))
     allocate(work(lwork))
     call zhseqr('E', 'N', ndim, 1, ndim, hmat_work, ndim, eigvals, &
       zdum, 1, work, lwork, ierr)

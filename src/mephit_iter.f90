@@ -402,7 +402,7 @@ contains
     if (runmode_precon == conf%runmode) then
       ! calculate eigenvectors -- system dimension: number of non-redundant edges in core plasma
       call arnoldi_break(mesh%nedge, conf%nkrylov, 3, conf%ritz_threshold, conf%ritz_rel_err, &
-        next_iteration_arnoldi, info, precond%nritz, eigvals, precond%eigvecs)
+        next_iteration_arnoldi, vac%Bn%DOF, info, precond%nritz, eigvals, precond%eigvecs)
       if (info < 0) then
         write (logger%msg, '("Error ", i0, " in routine arnoldi_break")') info
         if (logger%err) call logger%write_msg
@@ -482,7 +482,7 @@ contains
       complex(dp), intent(in) :: old_val(:)
       complex(dp), intent(out) :: new_val(:)
 
-      perteq%Bn%DOF(:) = old_val + vac%Bn%DOF
+      perteq%Bn%DOF(:) = old_val
       call RT0_tor_comp_from_zero_div(perteq%Bn)
       call compute_presn(perteq, fdm, conf%damp)
       call compute_currn(perteq, fdm, conf%damp, .false.)
