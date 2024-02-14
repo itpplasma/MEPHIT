@@ -88,7 +88,7 @@ mephit_init() {
         anyerr+=1
     else
         case "$type" in
-            asdex|kilca)
+            asdex|kilca|mastu)
                 convexwall=$datadir/convexwall_$type.dat
                 ;;
             *)
@@ -115,9 +115,6 @@ mephit_init() {
            "$datadir/preload_for_SYNCH.inp" \
            "$convexwall" \
            "$geqdsk"
-        if [ "$type" != "kilca" ]; then
-            ln -s "$datadir/AUG_B_coils.h5" "$workdir/AUG_B_coils.h5"
-        fi
         cp "$config" "$workdir/mephit.in"
         replace_first_in_line "$workdir/field_divB0.inp" 7 "'${geqdsk##*/}'"     # gfile
         replace_first_in_line "$workdir/field_divB0.inp" 9 "'${convexwall##*/}'" # convex

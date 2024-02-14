@@ -53,7 +53,7 @@ This should take about 20 minutes and the resulting file uses about 2 GB of disk
 ## Setting up working directories
 
 ```bash
-$MEPHIT_DIR/scripts/mephit.bash init { -c | --config } <config> { -g | --g-eqdsk } <gfile> { -t | --type } { asdex | kilca } <working_directory> ...
+$MEPHIT_DIR/scripts/mephit.bash init { -c | --config } <config> { -g | --g-eqdsk } <gfile> { -t | --type } { asdex | kilca | mastu } <working_directory> ...
 ```
 
 This copies the `<config>`, `<gfile>`, and other necessary files to each given `<working_directory>`. The `<config>` file and some sample gfiles can be taken from a list of templates `mephit_<gfile>.in` in the `data` directory, e.g. [`data/mephit_g33353_2900_EQH.in`](data/mephit_g33353_2900.in). Currently, only geometry files for ASDEX Upgrade and KiLCA (large aspect ratio) are available.
