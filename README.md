@@ -19,17 +19,10 @@ Prerequisites from external sources for running MEPHIT are as follows.
 - [HDF5](https://www.hdfgroup.org/downloads/hdf5)
 - [NetCDF](https://github.com/Unidata/netcdf-fortran)
 - Python 3 including packages listed in [`requirements.txt`](requirements.txt)
-- [jupytext](https://github.com/mwouts/jupytext) to use plotting scripts as Jupyter Notebooks
 
 ### Initial build
 
-In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the desired build directory. If libneo & KiLCA, MFEM & FGSL are not in their default location (adjacent to MEPHIT and in the system default, respectively), the environment variables `LIBNEO_DIR`, `MFEM_DIR`, and `FGSL_PATH` need to be set as well. At ITPcp, you can put the following into your `~/.bashrc`:
-
-```bash
-export LIBNEO_DIR=/temp/AG-plasma/codes/libneo/build-master
-export FGSL_PATH=/temp/AG-plasma/codes/contrib/fgsl-1.5.0/LIB
-export MFEM_DIR=/temp/AG-plasma/codes/mfem/build
-```
+In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the desired build directory. If libneo, MFEM & FGSL are not in their default location (adjacent to MEPHIT), the environment variables `LIBNEO_DIR`, `MFEM_DIR`, and `FGSL_DIR` need to be set to the corresponding build directories as well. At ITPcp, you can refer to the `.gitlab-ci.yml` in plasma/CODE>.
 
 To build MEPHIT, run
 

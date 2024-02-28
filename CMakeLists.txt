@@ -54,14 +54,10 @@ else ()
   set(MFEM_DIR "$ENV{MFEM_DIR}")
 endif ()
 
-if ("$ENV{FGSL_PATH}" STREQUAL "")
-  if ("${CMAKE_SYSTEM}" MATCHES "Darwin")
-    set(FGSL_PATH /usr/local)
-  else ()
-    set(FGSL_PATH /usr)
-  endif ()
+if ("$ENV{FGSL_DIR}" STREQUAL "")
+  set(FGSL_DIR ${CMAKE_SOURCE_DIR}/../fgsl)
 else ()
-  set(FGSL_PATH $ENV{FGSL_PATH})
+  set(FGSL_DIR $ENV{FGSL_DIR})
 endif ()
 
 ### Find dependencies in standard directories
@@ -79,8 +75,8 @@ find_package(Boost 1.74 REQUIRED)
 find_library(gsl_lib gsl ${GSL_LIB})
 
 # FGSL
-set(FGSL_LIB ${FGSL_PATH}/lib/ CACHE STRING "FGSL lib")
-set(FGSL_INC ${FGSL_PATH}/include/fgsl/ CACHE STRING "FGSL include")
+set(FGSL_LIB ${FGSL_DIR}/.libs CACHE STRING "FGSL lib")
+set(FGSL_INC ${FGSL_DIR} CACHE STRING "FGSL include")
 find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
 
 # hdf5_tools
