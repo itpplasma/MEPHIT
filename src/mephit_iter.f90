@@ -394,15 +394,23 @@ contains
     type(fdm_t), intent(in) :: fdm
     integer :: i, j, info
     integer(HID_T) :: h5id_root
-    complex(dp), allocatable :: eigvals(:), Yr(:, :)
+    complex(dp), allocatable :: start_vector(:), eigvals(:), Yr(:, :)
     integer, allocatable :: ipiv(:)
     type(RT0_t) :: Bn_prev
 
     call precond_deinit(precond)
     if (runmode_precon == conf%runmode) then
+      ! construct start vector K * B_vac
+      perteq%Bn%DOF(:) = vac%Bn%DOF
+      perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
+      call compute_presn(perteq, fdm, conf%damp)
+      call compute_currn(perteq, fdm, conf%damp, .false.)
+      call compute_magfn(perteq)
+      allocate(start_vector, source = perteq%Bn%DOF)
       ! calculate eigenvectors -- system dimension: number of non-redundant edges in core plasma
       call arnoldi_break(mesh%nedge, conf%nkrylov, 3, conf%ritz_threshold, conf%ritz_rel_err, &
-        next_iteration_arnoldi, vac%Bn%DOF, info, precond%nritz, eigvals, precond%eigvecs)
+        next_iteration_arnoldi, start_vector, info, precond%nritz, eigvals, precond%eigvecs)
+      deallocate(start_vector)
       if (info < 0) then
         write (logger%msg, '("Error ", i0, " in routine arnoldi_break")') info
         if (logger%err) call logger%write_msg
