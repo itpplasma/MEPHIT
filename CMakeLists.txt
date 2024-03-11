@@ -44,7 +44,7 @@ if ("$ENV{LIBNEO_DIR}" STREQUAL "")
 else ()
   set(LIBNEO_DIR "$ENV{LIBNEO_DIR}")
 endif ()
-set(magfie_dir ${LIBNEO_DIR}/src)
+set(magfie_dir ${LIBNEO_DIR})
 set(HDF5_tools_include_dir ${LIBNEO_DIR})
 set(HDF5_tools_lib_dir ${LIBNEO_DIR}/src/hdf5_tools)
 
