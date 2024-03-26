@@ -958,6 +958,7 @@ contains
     else
       call FDM_solve(fdm, fdm%aval_MDE, inhom, perteq%pn%DOF)
     end if
+    perteq%pn%DOF(1) = (0d0, 0d0)
   end subroutine compute_presn
 
   subroutine debug_MDE(group, presn, magfn, currn_perp, currn_par)
@@ -1038,7 +1039,7 @@ contains
 
   subroutine compute_currn(perteq, fdm, apply_damping, debug_initial)
     use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger
-    use mephit_mesh, only: mesh, cache, field_cache_t
+    use mephit_mesh, only: mesh, cache, fs, field_cache_t
     use mephit_pert, only: L1_interp, RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
     use mephit_util, only: pi, clight, zd_cross
     type(perteq_t), intent(inout) :: perteq
@@ -1047,7 +1048,7 @@ contains
     logical, intent(in) :: debug_initial
     integer :: kf, kp, ktri, kedge
     real(dp), dimension(3) :: grad_j0B0, B0_grad_B0
-    complex(dp) :: zdum, B0_jnpar
+    complex(dp) :: zdum, B0_jnpar, avg_Bn_tor
     complex(dp), dimension(3) :: grad_pn, B_n, dBn_dR, dBn_dZ, dBn_dphi, grad_BnB0
     complex(dp), dimension(mesh%npoint) :: inhom
 
@@ -1076,6 +1077,9 @@ contains
     else
       call FDM_solve(fdm, fdm%aval_MDE, inhom, perteq%jnpar_B0%DOF)
     end if
+    avg_Bn_tor = sum(perteq%Bn%comp_phi(1:mesh%kp_max(1)) * mesh%area(1:mesh%kp_max(1))) / sum(mesh%area(1:mesh%kp_max(1)))
+    perteq%jnpar_B0%DOF(1) = clight * (fs%dp_dpsi(0) * mesh%R_O + fs%FdF_dpsi(0) / (4d0 * pi * mesh%R_O)) * &
+      (mesh%R_O / fs%F(0)) ** 2 * (avg_Bn_tor + 4d0 * pi * perteq%pn%DOF(1) * mesh%R_O / fs%F(0))
     if (debug_initial) then
       call RT0_project_pol_comp(perteq%jn, project_combined)
       call RT0_project_tor_comp(perteq%jn, project_combined)
