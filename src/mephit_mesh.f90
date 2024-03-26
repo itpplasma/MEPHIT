@@ -1750,7 +1750,7 @@ contains
     allocate(mesh%kp_low(mesh%nflux))
     allocate(mesh%kt_low(mesh%nflux))
     ! round to even numbers
-    mesh%kp_max(:) = 2 * nint(0.5d0 * fs%perimeter(1:) / opt_pol_edge_len)
+    mesh%kp_max(:) = max(2 * conf%m_max, 2 * nint(0.5d0 * fs%perimeter(1:) / opt_pol_edge_len))
     if (conf%pol_max > 0) then
       mesh%kp_max(:) = min(mesh%kp_max, 2 * nint(0.5d0 * dble(conf%pol_max)))
     end if
