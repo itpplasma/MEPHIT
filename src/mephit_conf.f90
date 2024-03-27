@@ -161,10 +161,6 @@ module mephit_conf
     !> to 0.45 cm.
     real(dp) :: max_Delta_rad = 0.2d0
 
-    !> Use Fourier expansion of resonant mode in shielding current computation.
-    !> Defaults to true.
-    logical :: shielding_fourier = .true.
-
     !> Minimum temperature. Does not apply when #pres_prof equals #pres_prof_geqdsk.
     !> Defaults to 20 eV.
     real(dp) :: temp_min = 2d1
@@ -315,8 +311,6 @@ contains
       comment = 'maximum number of points per flux surface')
     call h5_add(h5id_root, grp // '/max_Delta_rad', config%max_Delta_rad, &
       comment = 'maximum distance between flux surfaces along theta = 0', unit = 'cm')
-    call h5_add(h5id_root, grp // '/shielding_fourier', config%shielding_fourier, &
-      comment = 'use only resonant Fourier mode in shielding current perturbation')
     call h5_add(h5id_root, grp // '/temp_min', config%temp_min, &
       comment = 'minimum temperature', unit = 'eV')
     call h5_add(h5id_root, grp // '/dens_min', config%dens_min, &

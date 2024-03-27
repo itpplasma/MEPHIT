@@ -189,16 +189,6 @@ void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2in
   receive_double1_from_FreeFem(shared_namedpipe, 1, L2int);
 }
 
-void FEM_debug_projection(const int npoint,
-                          const complex_double *JnparB0,
-                          const complex_double *B0pol)
-{
-  int size = 2 * npoint;
-
-  send_double1_to_FreeFem(shared_namedpipe, size, (double *) JnparB0);
-  send_double1_to_FreeFem(shared_namedpipe, size, (double *) B0pol);
-}
-
 void FEM_deinit(void)
 {
   long int flag = -3L;

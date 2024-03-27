@@ -47,7 +47,6 @@ if (runmode % 2) {
     exit(1);
   }
 }
-bool debugprojection = false; // (runmode / 8) % 2;  // TODO: check this later
 mesh Th = readmesh(meshfile);
 // count triangles in internal region 0
 int ntri = 0;
@@ -130,18 +129,6 @@ while (state != -3) {
     [ReJR, ReJZ] = [0.0, 0.0];
     [ImJR, ImJZ] = [0.0, 0.0];
     deserializeRT0(ReJR, ImJR);
-    if (debugprojection) {
-      ReJnparB0 = 0.0;
-      ImJnparB0 = 0.0;
-      B0R = 0.0;
-      B0Z = 0.0;
-      LoadVec(pointdata, datapipe);
-      deserializeP1(ReJnparB0, ImJnparB0);
-      LoadVec(pointdata, datapipe);
-      deserializeP1(B0R, B0Z);
-      [ReJR, ReJZ] = [ReJR + ReJnparB0 * B0R, ReJZ + ReJnparB0 * B0Z];
-      [ImJR, ImJZ] = [ImJR + ImJnparB0 * B0R, ImJZ + ImJnparB0 * B0Z];
-    }
     // real part
     qx[] = rhsRe(0, Hrot);
     ax[] = L^-1 * qx[];

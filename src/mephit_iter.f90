@@ -88,13 +88,6 @@ module mephit_iter
       real(c_double), intent(out) :: L2int
     end subroutine FEM_compute_L2int
 
-    subroutine FEM_debug_projection(npoint, JnparB0, B0pol) bind(C, name = 'FEM_debug_projection')
-      use iso_c_binding, only: c_int, c_double_complex
-      integer(c_int), intent(in), value :: npoint
-      complex(c_double_complex), intent(in) :: JnparB0(1:npoint)
-      complex(c_double_complex), intent(in) :: B0pol(1:npoint)
-    end subroutine FEM_debug_projection
-
     subroutine FEM_deinit() bind(C, name = 'FEM_deinit')
     end subroutine FEM_deinit
 
@@ -149,9 +142,6 @@ contains
     datafile = decorate_filename(datafile, '', basename_suffix)
     call C_F_string(config, config_filename)
     call config_read(conf, config_filename)
-    if (conf%debug_projection) then
-      runmode_flags = ior(runmode_flags, ishft(1, 3))
-    end if
     call logger%init('-', conf%log_level, conf%quiet)
     call h5_init
     h5overwrite = .true.
@@ -1038,10 +1028,12 @@ contains
   end subroutine debug_MDE
 
   subroutine compute_currn(perteq, fdm, apply_damping, debug_initial)
-    use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger
-    use mephit_mesh, only: mesh, cache, fs, field_cache_t
-    use mephit_pert, only: L1_interp, RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
+    use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger, datafile
     use mephit_util, only: pi, clight, zd_cross
+    use mephit_mesh, only: mesh, cache, fs, field_cache_t
+    use mephit_pert, only: polmodes_t, polmodes_init, polmodes_write, polmodes_deinit, &
+      L1_t, L1_init, L1_interp, L1_deinit, RT0_t, RT0_init, RT0_deinit, &
+      RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
     type(perteq_t), intent(inout) :: perteq
     type(fdm_t), intent(in) :: fdm
     logical, intent(in) :: apply_damping
@@ -1051,6 +1043,13 @@ contains
     complex(dp) :: zdum, B0_jnpar, avg_Bn_tor
     complex(dp), dimension(3) :: grad_pn, B_n, dBn_dR, dBn_dZ, dBn_dphi, grad_BnB0
     complex(dp), dimension(mesh%npoint) :: inhom
+    type(polmodes_t) :: resonant_jmnpar_over_Bmod
+    type(L1_t) :: resonant_jnpar_over_Bmod
+    type(RT0_t) :: resonant_jn
+
+    call polmodes_init(resonant_jmnpar_over_Bmod, conf%m_max, mesh%nflux)
+    call L1_init(resonant_jnpar_over_Bmod, mesh%npoint)
+    call RT0_init(resonant_jn, mesh%nedge, mesh%ntri)
 
     perteq%jn%DOF(:) = (0d0, 0d0)
     perteq%jn%comp_phi(:) = (0d0, 0d0)
@@ -1080,43 +1079,45 @@ contains
     avg_Bn_tor = sum(perteq%Bn%comp_phi(1:mesh%kp_max(1)) * mesh%area(1:mesh%kp_max(1))) / sum(mesh%area(1:mesh%kp_max(1)))
     perteq%jnpar_B0%DOF(1) = clight * (fs%dp_dpsi(0) * mesh%R_O + fs%FdF_dpsi(0) / (4d0 * pi * mesh%R_O)) * &
       (mesh%R_O / fs%F(0)) ** 2 * (avg_Bn_tor + 4d0 * pi * perteq%pn%DOF(1) * mesh%R_O / fs%F(0))
+    call RT0_project_pol_comp(perteq%jn, project_combined)
+    call RT0_project_tor_comp(perteq%jn, project_combined)
     if (debug_initial) then
-      call RT0_project_pol_comp(perteq%jn, project_combined)
-      call RT0_project_tor_comp(perteq%jn, project_combined)
       call debug_MDE("debug_MDE_initial", perteq%pn, perteq%Bn, perteq%jn, perteq%jnpar_B0)
-      perteq%jn%DOF(:) = (0d0, 0d0)
-      perteq%jn%comp_phi(:) = (0d0, 0d0)
+      if (apply_damping) then
+        call perteq_write('("debug_KiLCA/", a, "_incl")', &
+          ' from iMHD including damping', parcurrmn = perteq%jnpar_B0)
+      else
+        call perteq_write('("debug_KiLCA/", a, "_excl")', &
+          ' from iMHD excluding damping', parcurrmn = perteq%jnpar_B0)
+      end if
     end if
     select case (conf%currn_model)
     case (currn_model_mhd)
-      call add_shielding_current(perteq%jnpar_B0, perteq%pn)
-      call RT0_project_pol_comp(perteq%jn, project_combined)
-      call RT0_project_tor_comp(perteq%jn, project_combined)
+      call compute_shielding_current(perteq%pn, resonant_jmnpar_over_Bmod)
     case (currn_model_kilca)
-      call RT0_project_pol_comp(perteq%jn, project_combined)
-      call RT0_project_tor_comp(perteq%jn, project_combined)
-      if (debug_initial) then
-        if (apply_damping) then
-          call perteq_write('("debug_KiLCA/", a, "_incl")', &
-            ' from iMHD including damping', parcurrmn = perteq%jnpar_B0)
-        else
-          call perteq_write('("debug_KiLCA/", a, "_excl")', &
-            ' from iMHD excluding damping', parcurrmn = perteq%jnpar_B0)
-        end if
-      end if
-      call add_kilca_current(perteq%jn, perteq%jnpar_B0, &
-        perteq%Phi_mn, perteq%Phi_aligned_mn, perteq%Bn, fdm, debug_initial)
-      if (debug_initial) then
-        call perteq_write('("debug_KiLCA/", a, "_total")', &
-          ' including KiLCA current', parcurrmn = perteq%jnpar_B0)
-      end if
+      call compute_kilca_current(perteq%Bn, resonant_jmnpar_over_Bmod, &
+        perteq%Phi_mn, perteq%Phi_aligned_mn)
     case default
       write (logger%msg, '("unknown response current model selection", i0)') conf%currn_model
       if (logger%err) call logger%write_msg
       error stop
     end select
+    call helical_current_from_parallel_current(resonant_jmnpar_over_Bmod, fdm, &
+      resonant_jnpar_over_Bmod, resonant_jn)
+    perteq%jnpar_B0%DOF(:) = perteq%jnpar_B0%DOF + resonant_jnpar_over_Bmod%DOF
+    perteq%jn%DOF(:) = perteq%jn%DOF + resonant_jn%DOF
+    if (debug_initial) then
+      call polmodes_write(resonant_jmnpar_over_Bmod, datafile, 'debug_KiLCA/jmnpar_Bmod_KiLCA', &
+        'parallel current density from KiLCA', 's^-1')  ! SI: H^-1
+      call perteq_write('("debug_KiLCA/", a, "_total")', &
+        ' including KiLCA current', parcurrmn = perteq%jnpar_B0)
+    end if
     ! hack: overwrite to save only last iteration step
     call debug_MDE("debug_MDE_final", perteq%pn, perteq%Bn, perteq%jn, perteq%jnpar_B0)
+
+    call polmodes_deinit(resonant_jmnpar_over_Bmod)
+    call L1_deinit(resonant_jnpar_over_Bmod)
+    call RT0_deinit(resonant_jn)
 
   contains
     function project_combined(ktri, weight, R, Z, n_f, f)
@@ -1135,52 +1136,24 @@ contains
     end function project_combined
   end subroutine compute_currn
 
-  subroutine add_kilca_current(jn, jnpar_B0, Phi_mn, Phi_aligned_mn, Bn, fdm, debug_initial)
-    use mephit_conf, only: conf, datafile
-    use mephit_util, only: imun, ev2erg, resample1d, interp1d
-    use mephit_mesh, only: equil, mesh, cache, fs, fs_half, field_cache_t, &
-      m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
-    use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
-      RT0_poloidal_modes, polmodes_t, polmodes_init, polmodes_write, polmodes_deinit, &
-      L1_init, L1_interp, L1_deinit
-    type(RT0_t), intent(inout) :: jn
-    type(L1_t), intent(inout) :: jnpar_B0
-    complex(dp), intent(inout) :: Phi_mn(:, mesh%m_res_min:)
-    complex(dp), intent(inout) :: Phi_aligned_mn(:, mesh%m_res_min:)
-    type(RT0_t), intent(in) :: Bn
+  subroutine helical_current_from_parallel_current(jmnpar_over_Bmod, fdm, jnpar_over_Bmod, jn)
+    use mephit_util, only: imun
+    use mephit_mesh, only: equil, mesh, cache, fs
+    use mephit_pert, only: RT0_t, polmodes_t, L1_t, L1_init, L1_interp, L1_deinit
+    type(polmodes_t), intent(in) :: jmnpar_over_Bmod
     type(fdm_t), intent(in) :: fdm
-    logical, intent(in) :: debug_initial
-    logical, save :: first = .true.  ! quick and dirty
-    integer :: m, m_res, kf, kf_min, kedge, ktri, kp, k, kpoi
-    real(dp) :: edge_perp(2), dum
-    complex(dp) :: Bmnpsi_over_B0phi(0:mesh%nflux), inhom_jnperp(mesh%npoint), &
-      coeff_jnperp_interp, jnpar_over_Bmod_interp, B0pol(mesh%npoint)
-    type(vec_polmodes_t) :: Bmn
-    type(polmodes_t) :: jmnpar_over_Bmod
-    type(L1_t) :: coeff_jnperp, jnpar_over_Bmod
+    type(L1_t), intent(inout) :: jnpar_over_Bmod
+    type(RT0_t), intent(inout) :: jn
+    integer :: m, m_res, kf, kedge, ktri, kp, k, kpoi
+    real(dp) :: edge_perp(2)
+    complex(dp) :: inhom_jnperp(mesh%npoint), coeff_jnperp_interp, jnpar_over_Bmod_interp
+    type(L1_t) :: coeff_jnperp
 
-    kf_min = 0 ! max(1, mesh%res_ind(mesh%m_res_min) / 4)
     inhom_jnperp(:) = (0d0, 0d0)
     call L1_init(coeff_jnperp, mesh%npoint)
-    call L1_init(jnpar_over_Bmod, mesh%npoint)
     jnpar_over_Bmod%DOF(:) = (0d0, 0d0)
-    call polmodes_init(jmnpar_over_Bmod, conf%m_max, mesh%nflux)
-    jmnpar_over_Bmod%coeff(:, :) = (0d0, 0d0)
-    call vec_polmodes_init(Bmn, conf%m_max, mesh%nflux)
-    call RT0_poloidal_modes(Bn, Bmn)
     do m = mesh%m_res_min, mesh%m_res_max
       m_res = -equil%cocos%sgn_q * m
-      call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Re / fs_half%q, &
-        fs%psi, Bmnpsi_over_B0phi%Re, 3)
-      call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Im / fs_half%q, &
-        fs%psi, Bmnpsi_over_B0phi%Im, 3)
-      ! negate m_res and q because theta is assumed clockwise in this interface
-      call response_current(1, -m_res, mesh%n, mesh%nflux, m_i, Z_i, &
-        mesh%R_O, fs%psi, -fs%q, fs%F, Phi0%y, mesh%avg_R2gradpsi2, &
-        dens_e%y, temp_e%y * ev2erg, temp_i%y * ev2erg, nu_e%y, nu_i%y, &
-        Bmnpsi_over_B0phi, jmnpar_over_Bmod%coeff(m_res, :), Phi_mn(:, m))
-      Phi_aligned_mn(:, m) = imun * Bmnpsi_over_B0phi * fs%q * dPhi0_dpsi%y / (m_res + mesh%n * fs%q)
-      jmnpar_over_Bmod%coeff(m_res, :kf_min) = (0d0, 0d0)  ! suppress spurious current near axis
       do kf = 1, mesh%nflux
         do kp = 1, mesh%kp_max(kf)
           ! expand Fourier modes
@@ -1194,24 +1167,8 @@ contains
         end do
       end do
     end do
-    ! add parallel current density
-    jnpar_B0%DOF(:) = jnpar_B0%DOF + jnpar_over_Bmod%DOF
-    if (debug_initial) then
-      call polmodes_write(jmnpar_over_Bmod, datafile, 'debug_KiLCA/jmnpar_Bmod_KiLCA', &
-        'parallel current density from KiLCA', 's^-1')  ! SI: H^-1
-    end if
     ! compute perpendicular current density coefficient
     call FDM_solve(fdm, fdm%aval_jnperp, inhom_jnperp, coeff_jnperp%DOF)
-    if (conf%debug_projection .and. .false.) then  ! TODO: check this later
-      if (first) then
-        do kp = 1, mesh%npoint
-          call field(mesh%node_R(kp), 0d0, mesh%node_Z(kp), B0pol(kp)%Re, dum, B0pol(kp)%Im, &
-            dum, dum, dum, dum, dum, dum, dum, dum, dum)
-        end do
-        first = .false.
-      end if
-      call FEM_debug_projection(mesh%npoint, jnpar_B0%DOF, B0pol)
-    end if
     ! add poloidal current density
     do kedge = 1, mesh%nedge
       ktri = mesh%edge_tri(1, kedge)
@@ -1237,72 +1194,68 @@ contains
         end associate
       end do
     end do
-    call vec_polmodes_deinit(Bmn)
-    call polmodes_deinit(jmnpar_over_Bmod)
-    call L1_deinit(jnpar_over_Bmod)
     call L1_deinit(coeff_jnperp)
-  end subroutine add_kilca_current
+  end subroutine helical_current_from_parallel_current
 
-  subroutine add_shielding_current(jnpar_B0, pn)
+  subroutine compute_kilca_current(Bn, jmnpar_over_Bmod, Phi_mn, Phi_aligned_mn)
+    use mephit_conf, only: conf
+    use mephit_util, only: imun, ev2erg, resample1d
+    use mephit_mesh, only: equil, mesh, fs, fs_half, &
+      m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
+    use mephit_pert, only: polmodes_t, &
+      vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, RT0_poloidal_modes
+    type(RT0_t), intent(in) :: Bn
+    type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
+    complex(dp), intent(inout) :: Phi_mn(:, mesh%m_res_min:)
+    complex(dp), intent(inout) :: Phi_aligned_mn(:, mesh%m_res_min:)
+    integer :: m, m_res, kf_min
+    complex(dp) :: Bmnpsi_over_B0phi(0:mesh%nflux)
+    type(vec_polmodes_t) :: Bmn
+
+    kf_min = 0 ! max(1, mesh%res_ind(mesh%m_res_min) / 4)
+    jmnpar_over_Bmod%coeff(:, :) = (0d0, 0d0)
+    call vec_polmodes_init(Bmn, conf%m_max, mesh%nflux)
+    call RT0_poloidal_modes(Bn, Bmn)
+    do m = mesh%m_res_min, mesh%m_res_max
+      m_res = -equil%cocos%sgn_q * m
+      call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Re / fs_half%q, &
+        fs%psi, Bmnpsi_over_B0phi%Re, 3)
+      call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Im / fs_half%q, &
+        fs%psi, Bmnpsi_over_B0phi%Im, 3)
+      ! negate m_res and q because theta is assumed clockwise in this interface
+      call response_current(1, -m_res, mesh%n, mesh%nflux, m_i, Z_i, &
+        mesh%R_O, fs%psi, -fs%q, fs%F, Phi0%y, mesh%avg_R2gradpsi2, &
+        dens_e%y, temp_e%y * ev2erg, temp_i%y * ev2erg, nu_e%y, nu_i%y, &
+        Bmnpsi_over_B0phi, jmnpar_over_Bmod%coeff(m_res, :), Phi_mn(:, m))
+      Phi_aligned_mn(:, m) = imun * Bmnpsi_over_B0phi * fs%q * dPhi0_dpsi%y / (m_res + mesh%n * fs%q)
+      jmnpar_over_Bmod%coeff(m_res, :kf_min) = (0d0, 0d0)  ! suppress spurious current near axis
+    end do
+    call vec_polmodes_deinit(Bmn)
+  end subroutine compute_kilca_current
+
+  subroutine compute_shielding_current(pn, jmnpar_over_Bmod)
     use mephit_conf, only: conf, conf_arr
-    use mephit_util, only: imun
     use mephit_mesh, only: equil, mesh, cache
-    type(L1_t), intent(inout) :: jnpar_B0
+    use mephit_pert, only: L1_t, polmodes_t, polmodes_init, polmodes_deinit, L1_poloidal_modes
     type(L1_t), intent(in) :: pn
-    integer :: m, m_res, kf, kpoi_min, kpoi_max, kp, kpoi
-    complex(dp) :: pn_outer, pn_inner
+    type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
+    type(polmodes_t) :: pmn
+    integer :: m, m_res, kf
 
-    if (conf%shielding_fourier) then
-      do m = mesh%m_res_min, mesh%m_res_max
-        m_res = -equil%cocos%sgn_q * m
-        if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then
-          kf = mesh%res_ind(m)
-          kpoi_min = mesh%kp_low(kf) + 1
-          kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
-          pn_outer = sum(exp(-imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max)) * &
-            pn%DOF(kpoi_min:kpoi_max)) / dble(mesh%kp_max(kf))
-          kf = mesh%res_ind(m) - 1
-          kpoi_min = mesh%kp_low(kf) + 1
-          kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
-          pn_inner = sum(exp(-imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max)) * &
-            pn%DOF(kpoi_min:kpoi_max)) / dble(mesh%kp_max(kf))
-          jnpar_B0%DOF(kpoi_min:kpoi_max) = jnpar_B0%DOF(kpoi_min:kpoi_max) + &
-            cache%shielding(m)%coeff * conf_arr%sheet_current_factor(m) * &
-            (pn_outer - pn_inner) * exp(imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max))
-          kf = mesh%res_ind(m)
-          kpoi_min = mesh%kp_low(kf) + 1
-          kpoi_max = mesh%kp_low(kf) + mesh%kp_max(kf)
-          jnpar_B0%DOF(kpoi_min:kpoi_max) = jnpar_B0%DOF(kpoi_min:kpoi_max) + &
-            cache%shielding(m)%coeff * conf_arr%sheet_current_factor(m) * &
-            (pn_outer - pn_inner) * exp(imun * m_res * mesh%node_theta_flux(kpoi_min:kpoi_max))
-        end if
-      end do
-    else
-      do m = mesh%m_res_min, mesh%m_res_max
-        if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then
-          associate (s => cache%shielding(m))
-            kf = mesh%res_ind(m) - 1
-            do kp = 1, mesh%kp_max(kf)
-              kpoi = mesh%kp_low(kf) + kp
-              pn_inner = pn%DOF(kpoi)
-              pn_outer = sum(s%weights(:, kp) * pn%DOF(s%kpois(:, kp)))
-              jnpar_B0%DOF(kpoi) = jnpar_B0%DOF(kpoi) + (pn_outer - pn_inner) * &
-                s%coeff * conf_arr%sheet_current_factor(m)
-            end do
-            kf = mesh%res_ind(m)
-            do kp = 1, mesh%kp_max(kf)
-              kpoi = mesh%kp_low(kf) + kp
-              pn_inner = sum(s%weights(:, s%inner_kp_max + kp) * &
-                pn%DOF(s%kpois(:, s%inner_kp_max + kp)))
-              pn_outer = pn%DOF(kpoi)
-              jnpar_B0%DOF(kpoi) = jnpar_B0%DOF(kpoi) + (pn_outer - pn_inner) * &
-                s%coeff * conf_arr%sheet_current_factor(m)
-            end do
-          end associate
-        end if
-      end do
-    end if
-  end subroutine add_shielding_current
+    jmnpar_over_Bmod%coeff(:, :) = (0d0, 0d0)
+    call polmodes_init(pmn, conf%m_max, mesh%nflux)
+    call L1_poloidal_modes(pn, pmn)
+    do m = mesh%m_res_min, mesh%m_res_max
+      m_res = -equil%cocos%sgn_q * m
+      if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then
+        kf = mesh%res_ind(m)
+        jmnpar_over_Bmod%coeff(m_res, kf-1:kf) = &
+          (pmn%coeff(m_res, kf) - pmn%coeff(m_res, kf-1)) * &
+          cache%shielding(m)%coeff * conf_arr%sheet_current_factor(m)
+      end if
+    end do
+    call polmodes_deinit(pmn)
+  end subroutine compute_shielding_current
 
   subroutine perteq_write(name_fmt, comment, &
     presn, presmn, parcurrn, parcurrmn, Ires, currn, currmn, magfn, magfmn)
