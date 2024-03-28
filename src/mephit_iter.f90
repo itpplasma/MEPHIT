@@ -1029,8 +1029,7 @@ contains
 
   subroutine compute_currn(perteq, fdm, apply_damping, debug_initial)
     use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger, datafile
-    use mephit_util, only: pi, clight, zd_cross
-    use mephit_mesh, only: mesh, cache, fs, field_cache_t
+    use mephit_mesh, only: mesh
     use mephit_pert, only: polmodes_t, polmodes_init, polmodes_write, polmodes_deinit, &
       L1_t, L1_init, L1_interp, L1_deinit, RT0_t, RT0_init, RT0_deinit, &
       RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
@@ -1038,11 +1037,6 @@ contains
     type(fdm_t), intent(in) :: fdm
     logical, intent(in) :: apply_damping
     logical, intent(in) :: debug_initial
-    integer :: kf, kp, ktri, kedge
-    real(dp), dimension(3) :: grad_j0B0, B0_grad_B0
-    complex(dp) :: zdum, B0_jnpar, avg_Bn_tor
-    complex(dp), dimension(3) :: grad_pn, B_n, dBn_dR, dBn_dZ, dBn_dphi, grad_BnB0
-    complex(dp), dimension(mesh%npoint) :: inhom
     type(polmodes_t) :: resonant_jmnpar_over_Bmod
     type(L1_t) :: resonant_jnpar_over_Bmod
     type(RT0_t) :: resonant_jn
@@ -1051,36 +1045,7 @@ contains
     call L1_init(resonant_jnpar_over_Bmod, mesh%npoint)
     call RT0_init(resonant_jn, mesh%nedge, mesh%ntri)
 
-    perteq%jn%DOF(:) = (0d0, 0d0)
-    perteq%jn%comp_phi(:) = (0d0, 0d0)
-    perteq%jnpar_B0%DOF(:) = (0d0, 0d0)
-    do kf = 1, mesh%nflux
-      do kp = 1, mesh%kp_max(kf)
-        kedge = mesh%kp_low(kf) + kp - 1
-        ktri = mesh%edge_tri(1, kedge)
-        ! use midpoint of poloidal edge
-        associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge))
-          call L1_interp(perteq%pn, ktri, R, Z, zdum, grad_pn)
-          call RT0_interp(perteq%Bn, ktri, R, Z, B_n, dBn_dR, dBn_dphi, dBn_dZ)
-          grad_j0B0 = [sum(f%dj0_dR * f%B0 + f%dB0_dR * f%j0), 0d0, sum(f%dj0_dZ * f%B0 + f%dB0_dZ * f%j0)]
-          grad_BnB0 = [sum(dBn_dR * f%B0 + f%dB0_dR * B_n), sum(dBn_dphi * f%B0), sum(dBn_dZ * f%B0 + f%dB0_dZ * B_n)]
-          B0_grad_B0 = [sum(f%dB0_dR * f%B0), 0d0, sum(f%dB0_dZ * f%B0)]
-          inhom(kedge + 1) = (-2d0 / f%Bmod ** 2 * (clight * sum(zd_cross(grad_pn, f%B0) * B0_grad_B0) + &
-            sum(B_n * f%B0) * sum(f%j0 * B0_grad_B0) - sum(B_n * B0_grad_B0) * sum(f%j0 * f%B0)) + &
-            sum(grad_BnB0 * f%j0 - B_n * grad_j0B0) + 4d0 * pi * sum(grad_pn * f%j0)) / f%Bmod ** 2
-        end associate
-      end do
-    end do
-    if (apply_damping) then
-      call FDM_solve(fdm, fdm%aval_MDE_damped, inhom, perteq%jnpar_B0%DOF)
-    else
-      call FDM_solve(fdm, fdm%aval_MDE, inhom, perteq%jnpar_B0%DOF)
-    end if
-    avg_Bn_tor = sum(perteq%Bn%comp_phi(1:mesh%kp_max(1)) * mesh%area(1:mesh%kp_max(1))) / sum(mesh%area(1:mesh%kp_max(1)))
-    perteq%jnpar_B0%DOF(1) = clight * (fs%dp_dpsi(0) * mesh%R_O + fs%FdF_dpsi(0) / (4d0 * pi * mesh%R_O)) * &
-      (mesh%R_O / fs%F(0)) ** 2 * (avg_Bn_tor + 4d0 * pi * perteq%pn%DOF(1) * mesh%R_O / fs%F(0))
-    call RT0_project_pol_comp(perteq%jn, project_combined)
-    call RT0_project_tor_comp(perteq%jn, project_combined)
+    call current_from_pressure_balance(perteq%pn, perteq%Bn, fdm, apply_damping, perteq%jnpar_B0, perteq%jn)
     if (debug_initial) then
       call debug_MDE("debug_MDE_initial", perteq%pn, perteq%Bn, perteq%jn, perteq%jnpar_B0)
       if (apply_damping) then
@@ -1118,23 +1083,83 @@ contains
     call polmodes_deinit(resonant_jmnpar_over_Bmod)
     call L1_deinit(resonant_jnpar_over_Bmod)
     call RT0_deinit(resonant_jn)
-
-  contains
-    function project_combined(ktri, weight, R, Z, n_f, f)
-      complex(dp) :: project_combined
-      integer, intent(in) :: ktri
-      real(dp), intent(in) :: weight, R, Z, n_f(:)
-      type(field_cache_t), intent(in) :: f
-
-      call L1_interp(perteq%pn, ktri, R, Z, zdum, grad_pn)
-      call RT0_interp(perteq%Bn, ktri, R, Z, B_n)
-      call L1_interp(perteq%jnpar_B0, ktri, R, Z, B0_jnpar)
-      B0_jnpar = B0_jnpar * f%Bmod ** 2
-      project_combined = weight * &
-        (B0_jnpar * sum(f%B0 * n_f) - clight * sum(zd_cross(grad_pn, f%B0) * n_f) + &
-        sum(f%j0 * f%B0) * sum(B_n * n_f) - sum(B_n * f%B0) * sum(f%j0 * n_f)) / f%Bmod ** 2
-    end function project_combined
   end subroutine compute_currn
+
+  subroutine current_from_pressure_balance(pn, Bn, fdm, apply_damping, jnpar_B0, jn)
+    use mephit_util, only: pi, clight, zd_cross
+    use mephit_mesh, only: mesh, cache, fs
+    use mephit_pert, only: L1_t, L1_interp, RT0_t, RT0_interp
+    type(L1_t), intent(in) :: pn
+    type(RT0_t), intent(in) :: Bn
+    type(fdm_t), intent(in) :: fdm
+    logical, intent(in) :: apply_damping
+    type(L1_t), intent(inout) :: jnpar_B0
+    type(RT0_t), intent(inout) :: jn
+    integer :: kf, kp, ktri, kedge, k
+    real(dp), dimension(3) :: grad_j0B0, B0_grad_B0, edge_perp
+    complex(dp) :: zdum, B0_jnpar, avg_Bn_tor
+    complex(dp), dimension(3) :: grad_pn, B_n, dBn_dR, dBn_dZ, dBn_dphi, grad_BnB0
+    complex(dp), dimension(mesh%npoint) :: inhom
+
+    jn%DOF(:) = (0d0, 0d0)
+    jn%comp_phi(:) = (0d0, 0d0)
+    jnpar_B0%DOF(:) = (0d0, 0d0)
+    do kf = 1, mesh%nflux
+      do kp = 1, mesh%kp_max(kf)
+        kedge = mesh%kp_low(kf) + kp - 1
+        ktri = mesh%edge_tri(1, kedge)
+        ! use midpoint of poloidal edge
+        associate (f => cache%mid_fields(kedge), R => mesh%mid_R(kedge), Z => mesh%mid_Z(kedge))
+          call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
+          call RT0_interp(Bn, ktri, R, Z, B_n, dBn_dR, dBn_dphi, dBn_dZ)
+          grad_j0B0 = [sum(f%dj0_dR * f%B0 + f%dB0_dR * f%j0), 0d0, sum(f%dj0_dZ * f%B0 + f%dB0_dZ * f%j0)]
+          grad_BnB0 = [sum(dBn_dR * f%B0 + f%dB0_dR * B_n), sum(dBn_dphi * f%B0), sum(dBn_dZ * f%B0 + f%dB0_dZ * B_n)]
+          B0_grad_B0 = [sum(f%dB0_dR * f%B0), 0d0, sum(f%dB0_dZ * f%B0)]
+          inhom(kedge + 1) = (-2d0 / f%Bmod ** 2 * (clight * sum(zd_cross(grad_pn, f%B0) * B0_grad_B0) + &
+            sum(B_n * f%B0) * sum(f%j0 * B0_grad_B0) - sum(B_n * B0_grad_B0) * sum(f%j0 * f%B0)) + &
+            sum(grad_BnB0 * f%j0 - B_n * grad_j0B0) + 4d0 * pi * sum(grad_pn * f%j0)) / f%Bmod ** 2
+        end associate
+      end do
+    end do
+    if (apply_damping) then
+      call FDM_solve(fdm, fdm%aval_MDE_damped, inhom, jnpar_B0%DOF)
+    else
+      call FDM_solve(fdm, fdm%aval_MDE, inhom, jnpar_B0%DOF)
+    end if
+    avg_Bn_tor = sum(Bn%comp_phi(1:mesh%kp_max(1)) * mesh%area(1:mesh%kp_max(1))) / sum(mesh%area(1:mesh%kp_max(1)))
+    jnpar_B0%DOF(1) = clight * (fs%dp_dpsi(0) * mesh%R_O + fs%FdF_dpsi(0) / (4d0 * pi * mesh%R_O)) * &
+      (mesh%R_O / fs%F(0)) ** 2 * (avg_Bn_tor + 4d0 * pi * pn%DOF(1) * mesh%R_O / fs%F(0))
+    ! project to poloidal current density
+    do kedge = 1, mesh%nedge
+      ktri = mesh%edge_tri(1, kedge)
+      edge_perp = [mesh%edge_Z(kedge), 0d0, -mesh%edge_R(kedge)]
+      do k = 1, mesh%GL_order
+        associate (f => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge), Z => mesh%GL_Z(k, kedge))
+          call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
+          call RT0_interp(Bn, ktri, R, Z, B_n)
+          call L1_interp(jnpar_B0, ktri, R, Z, B0_jnpar)
+          B0_jnpar = B0_jnpar * f%Bmod ** 2
+          jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * R * &
+            (B0_jnpar * sum(f%B0 * edge_perp) - clight * sum(zd_cross(grad_pn, f%B0) * edge_perp) + &
+            sum(f%j0 * f%B0) * sum(B_n * edge_perp) - sum(B_n * f%B0) * sum(f%j0 * edge_perp)) / f%Bmod ** 2
+        end associate
+      end do
+    end do
+    ! project to current density
+    do ktri = 1, mesh%ntri
+      do k = 1, mesh%GL2_order
+        associate (f => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri), Z => mesh%GL2_Z(k, ktri))
+          call L1_interp(pn, ktri, R, Z, zdum, grad_pn)
+          call RT0_interp(Bn, ktri, R, Z, B_n)
+          call L1_interp(jnpar_B0, ktri, R, Z, B0_jnpar)
+          B0_jnpar = B0_jnpar * f%Bmod ** 2
+          jn%comp_phi(ktri) = jn%comp_phi(ktri) + mesh%GL2_weights(k) * &
+            (B0_jnpar * f%B0(2) - clight * (grad_pn(3) * f%B0(1) - grad_pn(3) * f%B0(3)) + &
+            sum(f%j0 * f%B0) * B_n(2) - sum(B_n * f%B0) * f%j0(2)) / f%Bmod ** 2
+        end associate
+      end do
+    end do
+  end subroutine current_from_pressure_balance
 
   subroutine helical_current_from_parallel_current(jmnpar_over_Bmod, fdm, jnpar_over_Bmod, jn)
     use mephit_util, only: imun
