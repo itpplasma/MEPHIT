@@ -1,7 +1,0 @@
-$pdf_mode = 4; # use LuaLaTeX
-$postscript_mode = 0;
-$dvi_mode = 0;
-@cus_dep_list = (@cus_dep_list, "glo gls 0 makeglossaries");
-sub makeglossaries {
-    system("makeglossaries $_[0].glo"); }
-@generated_exts = (@generated_exts, 'glo', 'xdy');
