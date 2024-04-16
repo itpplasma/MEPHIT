@@ -1239,25 +1239,25 @@ contains
     call func1d_deinit(nu_i)
   end subroutine deinit_profiles
 
-  subroutine compute_resonance_positions(psi_sample, q_sample, psi2rho_norm)
+  subroutine compute_resonance_positions(psi_sample, q_sample, rad_norm_sample)
     use mephit_conf, only: conf, logger
     use mephit_util, only: interp1d
     use netlib_mod, only: zeroin
     real(dp), dimension(:), intent(in) :: psi_sample
     real(dp), dimension(:), intent(in) :: q_sample
-    interface
-      function psi2rho_norm(psi)
-        import :: dp
-        real(dp), intent(in) :: psi
-        real(dp) :: psi2rho_norm
-      end function psi2rho_norm
-    end interface
+    real(dp), dimension(:), intent(in) :: rad_norm_sample
     real(dp) :: psi_min, psi_max
     integer :: m
 
     if (size(psi_sample) /= size(q_sample)) then
-      call logger%msg_arg_size('refine_resonant_surfaces', 'size(psi_sample)', &
+      call logger%msg_arg_size('compute_resonance_positions', 'size(psi_sample)', &
         'size(q_sample)', size(psi_sample), size(q_sample))
+      if (logger%err) call logger%write_msg
+      error stop
+    end if
+    if (size(psi_sample) /= size(rad_norm_sample)) then
+      call logger%msg_arg_size('compute_resonance_positions', 'size(psi_sample)', &
+        'size(rad_norm_sample)', size(psi_sample), size(rad_norm_sample))
       if (logger%err) call logger%write_msg
       error stop
     end if
@@ -1286,8 +1286,8 @@ contains
     if (logger%debug) call logger%write_msg
     do m = mesh%m_res_min, mesh%m_res_max
       mesh%psi_res(m) = zeroin(psi_min, psi_max, q_interp_resonant, 1d-9)
-      mesh%rad_norm_res(m) = psi2rho_norm(mesh%psi_res(m))
-      write (logger%msg, '("m = ", i2, ", psi_m = ", es24.16e3, ", rho_m = ", f19.16)') &
+      mesh%rad_norm_res(m) = interp1d(psi_sample, rad_norm_sample, mesh%psi_res(m), 3)
+      write (logger%msg, '("m = ", i2, ", psi = ", es24.16e3, ", rad = ", f19.16)') &
         m, mesh%psi_res(m), mesh%rad_norm_res(m)
       if (logger%debug) call logger%write_msg
     end do
@@ -1717,7 +1717,7 @@ contains
     allocate(rho_norm_eqd(nlabel))
     rho_norm_eqd(:) = rbeg / rad_max
 
-    call compute_resonance_positions(psi_fine, qsaf, psi2rho_norm)
+    call compute_resonance_positions(psi_fine, qsaf, rho_norm_eqd)
     call read_profiles
     call compute_auxiliary_profiles
     call compute_resonant_layer_widths
@@ -1804,14 +1804,6 @@ contains
     deallocate(rho_norm_ref, rho_norm_eqd)
 
   contains
-    function psi2rho_norm(psi) result(rho_norm)
-      use mephit_util, only: interp1d
-      real(dp), intent(in) :: psi
-      real(dp) :: rho_norm
-
-      rho_norm = interp1d(psi_fine, rho_norm_eqd, psi, 3)
-    end function psi2rho_norm
-
     function psi_ref(psi_eqd)
       real(dp), dimension(:), intent(in) :: psi_eqd
       real(dp), dimension(size(psi_eqd)) :: psi_ref
