@@ -1,0 +1,45 @@
+\DeclareMathOperator\Real{Re}
+\DeclareMathOperator\Imag{Im}
+\DeclareMathOperator\sgn{sgn}
+
+\newcommand*\grad{\nabla}
+\newcommand*\divg{\nabla \cdot}
+\newcommand*\curl{\nabla \times}
+
+\newcommand*\pd[2][]{\frac{\partial #1}{\partial #2}}  % partial derivative
+\newcommand*\td[2][]{\frac{\diff #1}{\diff #2}}        % total derivative
+\newcommand*\norm[1]{\left\lVert #1 \right\rVert}
+
+\newcommand*\diff{\mathrm{d}}  % differential
+\newcommand*\e{\mathrm{e}}     % Euler's number
+\newcommand*\im{\mathrm{i}}    % imaginary unit
+
+\newcommand*\pol{\text{pol}}              % poloidal
+\newcommand*\tor{\text{\vphantom{p}tor}}  % toroidal
+\newcommand*\gradpol{\grad_{\negthickspace \pol}}
+
+\newcommand*\opgrad{\operatorname{\mathbf{grad}}}
+\newcommand*\opcurl{\operatorname{\mathbf{curl}}}
+\newcommand*\opdivg{\operatorname{div}}
+\newcommand*\opgradpol{\operatorname{\mathbf{grad}}_{\pol}}
+\newcommand*\opscurlpol{\operatorname{curl}_{\pol}}
+\newcommand*\opvcurlpol{\operatorname{\mathbf{curl}}_{\pol}}
+\newcommand*\opdivgpol{\operatorname{div}_{\pol}}
+
+\newcommand*\equi[2][]{#2_{0 #1}}
+\newcommand*\equipar[2][]{#2_{0 #1}^{\parallel}}
+\newcommand*\equiperp[2][]{#2_{0 #1}^{\perp}}
+\newcommand*\equipol[2][]{#2_{0 #1}^{\pol}}
+\newcommand*\equitor[2][]{#2_{0 #1}^{\tor}}
+\newcommand*\pert[1]{\delta #1}
+\newcommand*\pertpar[1]{\delta #1^{\parallel}}
+\newcommand*\pertperp[1]{\delta #1^{\perp}}
+\newcommand*\four[2][]{#2_{n #1}}
+\newcommand*\fourpar[2][]{#2_{n #1}^{\parallel}}
+\newcommand*\fourperp[2][]{#2_{n #1}^{\perp}}
+\newcommand*\fourpol[2][]{#2_{n #1}^{\pol}}
+\newcommand*\fourtor[2][]{#2_{n #1}^{\tor}}
+
+\newcommand*\res{\text{res}}  % resonant
+\newcommand*\vac{\text{v}}    % vacuum
+\newcommand*\plas{\text{p}}   % plasma

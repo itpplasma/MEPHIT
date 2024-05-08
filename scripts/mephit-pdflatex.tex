@@ -1,0 +1,20 @@
+\usepackage{etoolbox}
+\usepackage{amsmath}
+\usepackage{siunitx}
+\usepackage{mathtools}
+\usepackage{fixmath}
+\usepackage{mathpazo}
+\AfterPreamble{%
+  \let\temp\varrho
+  \let\varrho\rho
+  \let\rho\temp
+  \let\temp\vartheta
+  \let\vartheta\theta
+  \let\theta\temp
+  \let\temp\varphi
+  \let\varphi\phi
+  \let\phi\temp
+  \let\vecarr\vec
+  \let\vec\mathbold
+}
+\input{definitions.tex}

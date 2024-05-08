@@ -1,0 +1,20 @@
+text.usetex: True
+font.family: Palatino
+pgf.texsystem: lualatex
+pgf.rcfonts: False
+# text.latex.preamble and pgf.preamble have to be set in Python using import and absolute paths
+
+figure.constrained_layout.use: True
+xtick.direction: in
+xtick.top: True
+ytick.direction: in
+ytick.right: True
+lines.linewidth: 0.75
+axes.formatter.limits: -3, 4
+
+# https://www.w3schools.com/colors/colors_nbs.asp
+# black, vivid orange, strong purple, vivid yellow, vivid light blue, vivid red,
+# grayish yellow, medium gray, vivid green, strong purplish pink, strong blue, strong yellowish pink
+# dash_dot_dot = (0, (5, 1.2, 1, 1.2, 1, 1.2))
+# dash_dash_dot = (0, (5, 1.2, 5, 1.2, 1, 1.2))
+axes.prop_cycle: cycler('color', ['222222', 'f38400', '875692', 'f3c300', 'a1caf1', 'be0032', 'c2b280', '848482', '008856', 'e68fac', '0067a5', 'f99379']) + cycler('ls', ['-', '--', '-.', ':', (0, (5, 1.2, 1, 1.2, 1, 1.2)), (0, (5, 1.2, 5, 1.2, 1, 1.2)), '-', '--', '-.', ':', (0, (5, 1.2, 1, 1.2, 1, 1.2)), (0, (5, 1.2, 5, 1.2, 1, 1.2))])
