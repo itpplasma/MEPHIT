@@ -15,85 +15,70 @@
 # ---
 
 # %%
-from os import path, getenv
-from h5py import File, get_config
-import numpy as np
+# %matplotlib inline
+from os import environ, getcwd, path
+from matplotlib import rcParams
 import matplotlib.pyplot as plt
 from matplotlib.tri import Triangulation
-from mephit_plot import Mephit, run_dir, set_matplotlib_defaults
+from matplotlib.colors import LogNorm
+import numpy as np
+import h5py
+plt.style.use('./mephit.mplstyle')
+rcParams['text.latex.preamble'] = r'\usepackage{import}\import{' + getcwd() + r'}{mephit-pdflatex.tex}'
+rcParams['pgf.preamble'] = r'\usepackage{import}\import{' + getcwd() + r'}{mephit-pgf.tex}'
+h5py.get_config().complex_names = ('real', 'imag')
 
 # %%
-get_config().complex_names = ('real', 'imag')
-set_matplotlib_defaults()
-run_dir = path.join(getenv('MEPHIT_DIR'), 'run/33353_2900_EQH')
+data = {}
+with h5py.File(path.join(environ['MEPHIT_DIR'], 'run/33353_2900_EQH/mephit.h5'), 'r') as f:
+    data['eigvals'] = f['/iter/eigvals'][()]
+    data['rel_err'] = f['/iter/L2int_Bn_diff'][()] / f['/iter/L2int_Bnvac'][()]
+    data['triangulation'] = Triangulation(f['/mesh/node_R'][()], f['/mesh/node_Z'][()], f['/mesh/tri_node'][()] - 1)
+    if '/iter/debug_kernel' in f:
+        data['kernel'] = np.sqrt(
+            np.abs(f['/iter/debug_kernel/comp_R'][()]) ** 2 +
+            np.abs(f['/iter/debug_kernel/comp_Z'][()]) ** 2 +
+            np.abs(f['/iter/debug_kernel/RT0_comp_phi'][()]) ** 2)
+data['supremum'] = np.sort(np.abs(data['eigvals'][::-1]))[0]
+data['nritz'] = data['eigvals'].size
+data['nbad'] = np.sum(np.abs(data['eigvals']) >= 1.0)
+data['niter'] = np.sum(np.logical_not(np.isnan(data['rel_err'])))
+print(f"{data['nritz']} total eigenvalues and {data['nbad']} bad eigenvalues")
+print(f"relative error {data['rel_err'][data['niter'] - 1]} after {data['niter']} iterations")
 
 # %%
-cases = [
-    {'fname': 'mephit.h5', 'title': 'KiLCA, fine'},
-    {'fname': 'mephit_coarse.h5', 'title': 'KiLCA, coarse'},
-    {'fname': 'mephit_iMHD.h5', 'title': 'iMHD, fine'},
-    {'fname': 'mephit_iMHD_coarse.h5', 'title': 'iMHD, coarse'},
-    {'fname': 'mephit_iMHD_damped.h5', 'title': 'iMHD, fine, damped'},
-    {'fname': 'mephit_iMHD_coarse_damped.h5', 'title': 'iMHD, coarse, damped'},
-]
-
-# %%
-for c in cases:
-    with File(path.join(run_dir, c['fname']), 'r') as f:
-        c['eigvals'] = f['/iter/eigvals'][()]
-        c['rel_err'] = f['/iter/L2int_Bn_diff'][()] / f['/iter/L2int_Bnvac'][()]
-        c['triangulation'] = Triangulation(f['/mesh/node_R'][()],
-                                           f['/mesh/node_Z'][()],
-                                           f['/mesh/tri_node'][()] - 1)
-        nritz = c['eigvals'].size
-        nbad = np.sum(np.abs(c['eigvals']) >= 1.0)
-        print(f"{c['title']}: {nritz} total eigenvalues, {nbad} bad eigenvalues")
-        if '/iter/debug_kernel' in f:
-            c['kernel'] = np.sqrt(
-                np.abs(f['/iter/debug_kernel/comp_R'][()]) ** 2 +
-                np.abs(f['/iter/debug_kernel/comp_Z'][()]) ** 2 +
-                np.abs(f['/iter/debug_kernel/RT0_comp_phi'][()]) ** 2)
-
-# %%
-fig = plt.figure(layout='constrained')
+fig = plt.figure()
 ax = fig.subplots()
-for k, c in enumerate(cases):
-    niter = c['rel_err'].size
-    ax.semilogy(np.arange(niter), c['rel_err'][:niter], '-', label=c['title'])
-ax.legend()
+iter_range = np.arange(data['niter'])
+ax.semilogy(iter_range, data['rel_err'][:data['niter']], '-o')
+ax.semilogy(iter_range, data['supremum'] ** (iter_range + 1))
 ax.set_xlabel('iteration count')
-ax.set_ylabel('relative error after iteration')
-fig.show()
+ax.set_ylabel('relative error after iteration step')
+plt.show()
 
 # %%
-for k, c in enumerate(cases):
-    fig = plt.figure(layout='constrained')
-    ax = fig.subplots(subplot_kw={'projection': 'polar'})
-    ax.scatter(np.angle(c['eigvals']), np.abs(c['eigvals']))
-    ax.set_yscale('symlog', linthresh=1.0)
-    ax.set_title('Eigenvalues: ' + c['title'])
-    fig.show()
+fig = plt.figure()
+ax = fig.subplots(subplot_kw={'projection': 'polar'})
+ax.scatter(np.angle(data['eigvals']), np.abs(data['eigvals']))
+ax.set_yscale('symlog', linthresh=1.0)
+plt.show()
 
 # %%
-fig = plt.figure(layout='constrained')
+fig = plt.figure()
 ax = fig.subplots()
-for c in cases:
-    ax.plot(np.arange(c['eigvals'].size), np.abs(c['eigvals']),
-            '-x', label=c['title'])
+ax.plot(np.arange(data['nritz']), np.abs(data['eigvals']), '-o')
 ax.set_yscale('log')
 ax.set_xlabel('eigenvalue index')
 ax.set_ylabel('absolute value of eigenvalue')
 ax.legend()
-fig.show()
+plt.show()
 
 # %%
-for c in cases:
-    if 'kernel' in c:
-        fig = plt.figure(layout='constrained')
-        ax = fig.subplots()
-        im = ax.tripcolor(c['triangulation'], c['kernel'], cmap='magma')
-        ax.set_aspect('equal')
-        ax.set_title('Preconditioner kernel: ' + c['title'])
-        cbar = fig.colorbar(im)
-        # im.set_clim([0.0, max(abs(c['kernel']))])
-        fig.show()
+if 'kernel' in data:
+    fig = plt.figure()
+    ax = fig.subplots()
+    im = ax.tripcolor(data['triangulation'], data['kernel'], cmap='magma',
+                      norm=LogNorm(vmin=data['kernel'].min(), vmax=data['kernel'].max()))
+    ax.set_aspect('equal')
+    cbar = fig.colorbar(im)
+    plt.show()
