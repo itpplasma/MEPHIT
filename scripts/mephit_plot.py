@@ -314,27 +314,6 @@ class Plot1D(PlotObject):
         canvas = FigureCanvas(fig)
         fig.savefig(path.join(self.work_dir, self.filename))
 
-    @classmethod
-    def conv_plot(cls, work_dir, sup_eigval, L2int_Bnvac, L2int_Bn_diff, rel_err):
-        from numpy import arange
-        kiter = arange(1, L2int_Bn_diff.shape[0] + 1)
-        config = {
-            'xlabel': 'iteration step $k$',
-            'ylabel': r'$\lVert \V{B}_{n} \rVert_{2}$ / \si{\maxwell}',
-            'title': r'Convergence Estimation: $\V{B}_{n}^{(0)} = \V{B}_{n}^{\vac}, ' +
-                     fr"\lvert \lambda_{{\text{{sup}}}} \rvert = {sup_eigval:3}$",
-            'plotdata': [
-                {'x': kiter, 'y': L2int_Bnvac * sup_eigval ** kiter,
-                 'args': {'label': r'$\lvert \lambda_{\text{sup}} \rvert^{k} \lVert \V{B}_{n}^{(0)} \rVert_{2}$'}},
-                {'x': kiter, 'y': L2int_Bn_diff,
-                 'args': {'label': r'$\lVert \V{B}_{n}^{(k)} - \V{B}_{n}^{(k-1)} \rVert_{2}$', 'ls': '', 'marker': 'x'}}
-            ],
-            'postprocess': [XTicks(kiter), LogY(),
-                            HLine(rel_err * L2int_Bnvac, label='breaking condition', lw=0.5, ls='--')],
-            'legend': {'loc': 'upper right'},
-        }
-        return cls(work_dir, 'plot_conv.pdf', config)
-
 
 class PolmodePlots(PlotObject):
     def do_plot(self):

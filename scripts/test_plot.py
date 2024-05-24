@@ -201,14 +201,9 @@ if __name__ == "__main__":
     plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_debug_polmodes_jnpar_Bmod_arg.pdf', config))
 
     # GPEC comparison
-    conversion = 1.0e-04 / testcase.data['/mesh/gpec_jacfac'][()]
-    mephit_Bmn = testcase.get_polmodes('full perturbation (MEPHIT)', '/iter/Bmn/coeff_rad', conversion)
-    mephit_Bmn_vac = testcase.get_polmodes('vacuum perturbation (MEPHIT)', '/iter/Bmn_vac/coeff_rad', conversion)
     mephit_Ires = testcase.get_Ires()
     reference = Gpec(work_dir, 2)
     reference.open_datafiles()
-    gpec_Bmn = reference.get_polmodes('full perturbation (GPEC)', sgn_dpsi, 'Jbgradpsi')
-    gpec_Bmn_vac = reference.get_polmodes('vacuum perturbation (GPEC)', sgn_dpsi, 'Jbgradpsi_x')
     gpec_Ires = reference.get_Ires()
     config = {
         'xlabel': '$m$', 'ylabel': r'$\abs\, I_{m, n}^{\parallel}$ / \si{\ampere}', 'legend': {'fontsize': 'small'},
@@ -219,67 +214,7 @@ if __name__ == "__main__":
         'postprocess': [XTicks(mephit_Ires.keys())]
     }
     plotter.plot_objects.put(Plot1D(work_dir, 'plot_Ires.pdf', config))
-    config = {
-        'xlabel': r'$\hat{\psi}$',
-        'ylabel': r'$\abs\, [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\tesla}',
-        'rho': testcase.post['psi_norm'], 'q': testcase.data['/cache/fs/q'][()],
-        'resonances': testcase.post['psi_norm_res'], 'sgn_m_res': testcase.post['sgn_m_res'], 'omit_res': False,
-        'poldata': [mephit_Bmn_vac, gpec_Bmn_vac, mephit_Bmn, gpec_Bmn], 'comp': abs,
-        'res_neighbourhood': testcase.post['psi_norm_res_neighbourhood']
-    }
-    plotter.plot_objects.put(PolmodePlots(work_dir, 'GPEC_Bmn_psi_abs.pdf', config))
-    phase_ticks = YTicks(arange(-180, 180 + 1, 45))
-    config['postprocess'] = [phase_ticks]
-    config['comp'] = partial(angle, deg=True)
-    config['ylabel'] = r'$\arg\, [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\degree}'
-    plotter.plot_objects.put(PolmodePlots(work_dir, 'GPEC_Bmn_psi_arg.pdf', config))
-    ## zoomed plots
-    zoom_x = [0.001, 0.1]
-    zoom_m_max = 5
-    mephit_dpsi_Bmn = {'m_max': zoom_m_max, 'label': mephit_Bmn['label'], 'rho': dict(), 'var': dict()}
-    mephit_dpsi_Bmn_vac = {'m_max': zoom_m_max, 'label': mephit_Bmn_vac['label'], 'rho': dict(), 'var': dict()}
-    gpec_dpsi_Bmn = {'m_max': zoom_m_max, 'label': gpec_Bmn['label'], 'rho': dict(), 'var': dict()}
-    gpec_dpsi_Bmn_vac = {'m_max': zoom_m_max, 'label': gpec_Bmn_vac['label'], 'rho': dict(), 'var': dict()}
-    for m in mephit_Bmn['rho']:
-        if abs(m) <= zoom_m_max:
-            mephit_dpsi_Bmn['rho'][m] = mephit_Bmn['rho'][m]
-            mephit_dpsi_Bmn['var'][m] = full(mephit_Bmn['var'][m].shape, nan, dtype='D')
-            mephit_dpsi_Bmn['var'][m].real = gradient(mephit_Bmn['var'][m].real, mephit_Bmn['rho'][m])
-            mephit_dpsi_Bmn['var'][m].imag = gradient(mephit_Bmn['var'][m].imag, mephit_Bmn['rho'][m])
-    for m in mephit_Bmn_vac['rho']:
-        if abs(m) <= zoom_m_max:
-            mephit_dpsi_Bmn_vac['rho'][m] = mephit_Bmn_vac['rho'][m]
-            mephit_dpsi_Bmn_vac['var'][m] = full(mephit_Bmn_vac['var'][m].shape, nan, dtype='D')
-            mephit_dpsi_Bmn_vac['var'][m].real = gradient(mephit_Bmn_vac['var'][m].real, mephit_Bmn_vac['rho'][m])
-            mephit_dpsi_Bmn_vac['var'][m].imag = gradient(mephit_Bmn_vac['var'][m].imag, mephit_Bmn_vac['rho'][m])
-    for m in gpec_Bmn['rho']:
-        if abs(m) <= zoom_m_max:
-            gpec_dpsi_Bmn['rho'][m] = gpec_Bmn['rho'][m]
-            gpec_dpsi_Bmn['var'][m] = full(gpec_Bmn['var'][m].shape, nan, dtype='D')
-            gpec_dpsi_Bmn['var'][m].real = gradient(gpec_Bmn['var'][m].real, gpec_Bmn['rho'][m])
-            gpec_dpsi_Bmn['var'][m].imag = gradient(gpec_Bmn['var'][m].imag, gpec_Bmn['rho'][m])
-    for m in gpec_Bmn_vac['rho']:
-        if abs(m) <= zoom_m_max:
-            mask = nonzero((zoom_x[0] <= gpec_Bmn_vac['rho'][m]) & (gpec_Bmn_vac['rho'][m] <= zoom_x[1]))
-            gpec_dpsi_Bmn_vac['rho'][m] = gpec_Bmn_vac['rho'][m]
-            gpec_dpsi_Bmn_vac['var'][m] = full(gpec_Bmn_vac['var'][m].shape, nan, dtype='D')
-            gpec_dpsi_Bmn_vac['var'][m].real = gradient(gpec_Bmn_vac['var'][m].real, gpec_Bmn_vac['rho'][m])
-            gpec_dpsi_Bmn_vac['var'][m].imag = gradient(gpec_Bmn_vac['var'][m].imag, gpec_Bmn_vac['rho'][m])
-    mephit_Bmn['m_max'] = zoom_m_max
-    mephit_Bmn_vac['m_max'] = zoom_m_max
-    gpec_Bmn['m_max'] = zoom_m_max
-    gpec_Bmn_vac['m_max'] = zoom_m_max
-    config = {
-        'xlabel': r'$\psi$',
-        'ylabel': r'$\abs\, [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\tesla}',
-        'rho': testcase.post['psi_norm'], 'q': testcase.data['/cache/fs/q'][()],
-        'resonances': testcase.post['psi_norm_res'], 'sgn_m_res': testcase.post['sgn_m_res'], 'omit_res': True,
-        'poldata': [mephit_Bmn_vac, gpec_Bmn_vac, mephit_Bmn, gpec_Bmn], 'comp': abs, 'zoom_x': zoom_x
-    }
-    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_Jbgradpsi.pdf', config))
-    config['ylabel'] = r'$\abs\, \partial_{\psi} [\sqrt{g} \V{B}_{n} \cdot \nabla \psi]_{m} A^{-1}$ / \si{\tesla}'
-    config['poldata'] = [mephit_dpsi_Bmn_vac, gpec_dpsi_Bmn_vac, mephit_dpsi_Bmn, gpec_dpsi_Bmn]
-    plotter.plot_objects.put(PolmodePlots(work_dir, 'plot_dpsi_Jbgradpsi.pdf', config))
+
     ## normalization debugging
     cm_to_m = 1.0e-02
     G_to_T = 1.0e-04
@@ -412,6 +347,9 @@ if __name__ == "__main__":
         plotter.plot_objects.put(Plot1D(work_dir, f"comp_jacfac_{m}.pdf", config))
 
     # iteration comparisons
+    conversion = 1.0e-04 / testcase.data['/mesh/gpec_jacfac'][()]
+    mephit_Bmn = testcase.get_polmodes('full perturbation (MEPHIT)', '/iter/Bmn/coeff_rad', conversion)
+    mephit_Bmn_vac = testcase.get_polmodes('vacuum perturbation (MEPHIT)', '/iter/Bmn_vac/coeff_rad', conversion)
     n = testcase.data['/config/n'][()]
     m_res_min = testcase.data['/mesh/m_res_min'][()]
     m_res_max = testcase.data['/mesh/m_res_max'][()]
@@ -477,14 +415,6 @@ if __name__ == "__main__":
                         [Id(), Id(), HLine(0.0, color='k', alpha=0.5, lw=0.5)]]
     }
     plotter.plot_objects.put(IterationPlots(work_dir, f"plot_shielding.pdf", config))
-
-    # convergence estimation
-    niter = testcase.data['/iter/niter'][()]
-    sup_eigval = testcase.data['/config/ritz_threshold'][()]
-    L2int_Bnvac = testcase.data['/iter/L2int_Bnvac'][()]
-    L2int_Bn_diff = testcase.data['/iter/L2int_Bn_diff'][:niter]
-    rel_err = testcase.data['/config/iter_rel_err'][()]
-    plotter.plot_objects.put(Plot1D.conv_plot(work_dir, sup_eigval, L2int_Bnvac, L2int_Bn_diff, rel_err))
 
     plotter.finish()
     testcase.close_datafile()
