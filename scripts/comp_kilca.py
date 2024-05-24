@@ -206,13 +206,5 @@ if __name__ == "__main__":
     }
     plotter.plot_objects.put(IterationPlots(work_dir, f"plot_shielding.pdf", config))
 
-    # convergence estimation
-    niter = testcase.data['/iter/niter'][()]
-    sup_eigval = testcase.data['/config/ritz_threshold'][()]
-    L2int_Bnvac = testcase.data['/iter/L2int_Bnvac'][()]
-    L2int_Bn_diff = testcase.data['/iter/L2int_Bn_diff'][:niter]
-    rel_err = testcase.data['/config/iter_rel_err'][()]
-    plotter.plot_objects.put(Plot1D.conv_plot(work_dir, sup_eigval, L2int_Bnvac, L2int_Bn_diff, rel_err))
-
     plotter.finish()
     testcase.close_datafile()
