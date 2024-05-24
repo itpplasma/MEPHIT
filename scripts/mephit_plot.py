@@ -28,7 +28,7 @@ def set_matplotlib_defaults():
                                                     '#c2b280', '#848482', '#008856', '#e68fac', '#0067a5', '#f99379']) +
                                    cycler('ls', ['-', '--', '-.', ':', dash_dot_dot, dash_dash_dot,
                                                  '-', '--', '-.', ':', dash_dot_dot, dash_dash_dot]))
-    latex_preamble = path.join(scripts_dir, 'magdifplot.tex')
+    latex_preamble = path.join(scripts_dir, 'mephit-pdflatex.tex')
     rcParams['text.latex.preamble'] = fr"\input{{{latex_preamble}}}"
 
 

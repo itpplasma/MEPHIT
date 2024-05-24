@@ -45,7 +45,7 @@ rcParams['axes.prop_cycle'] = (cycler('color', ['k', 'tab:orange', 'tab:purple',
                                                 'tab:brown', 'tab:gray', 'tab:green', 'tab:pink', 'tab:blue']) +
                                cycler('ls', ['-', '--', '-.', ':', (0, (5, 1.2, 1, 1.2, 1, 1.2)),
                                              '-', '--', '-.', ':', (0, (5, 1.2, 1, 1.2, 1, 1.2))]))
-latex_preamble = path.join(scripts_dir, 'magdifplot.tex')
+latex_preamble = path.join(scripts_dir, 'outdated_plots/magdifplot.tex')
 rcParams['text.latex.preamble'] = fr"\input{{{latex_preamble}}}"
 
 c_cgs = 2.9979246e+10

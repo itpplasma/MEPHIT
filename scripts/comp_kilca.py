@@ -76,13 +76,13 @@ if __name__ == "__main__":
         config['plotdata'] = []
         for k in range(len(kfs)):
             config['plotdata'].append({'x': theta[k], 'y': lhs[it][k], 'args': {'lw': 0.5},
-                                       'label': '$q = ' + q[k] + r', B_{0}^{-1} \V{B}_{0} \cdot \grad p_{n}$'})
+                                       'label': '$q = ' + q[k] + r', B_{0}^{-1} \V{B}_{0} \cdot \opgrad p_{n}$'})
             config['plotdata'].append({'x': theta[k], 'y': lhs[it][k], 'args': {'lw': 0.5},
                                        'label': '$q = ' + q[k] + r', -B_{0}^{-1} B_{n}^{\psi} \partial_{\psi} p_{0}$'})
         plotter.plot_objects.put(ComplexPlot(work_dir, f"plot_MDE_pn_{it}.pdf", config))
         # grad p_n
         config['postprocess'] = [[theta_ticks, theta_ticks], [LogY(), Id()]]
-        config['ylabel'] = [r'$\abs \grad p_{n}$ / \si{\newton\per\cubic\meter}', r'$\arg \grad p_{n}$ / \si{\degree}']
+        config['ylabel'] = [r'$\abs \opgrad p_{n}$ / \si{\newton\per\cubic\meter}', r'$\arg \opgrad p_{n}$ / \si{\degree}']
         config['title'] = f"Solution for pressure perturbation, {it} perturbation"
         config['plotdata'] = []
         comps = [r'\partial_{R} p_{n}', r'\tfrac{\im n}{R} p_{n}', r'\partial_{Z} p_{n}']

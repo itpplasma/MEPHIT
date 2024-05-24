@@ -145,17 +145,17 @@ for it in iters:
     config['title'] = f"MDE for pressure perturbation, {it} iteration"
     for k in range(3):
         config['plotdata'] = [{'x': samples['theta'][2*k], 'y': samples['pn_lhs'][it][2*k], 'args': {'lw': 0.5},
-                                'label': '$q = ' + samples['q'][2*k] + r', B_{0}^{-1} \V{B}_{0} \cdot \grad p_{n}$'},
+                                'label': '$q = ' + samples['q'][2*k] + r', B_{0}^{-1} \V{B}_{0} \cdot \opgrad p_{n}$'},
                                 {'x': samples['theta'][2*k], 'y': samples['pn_rhs'][it][2*k], 'args': {'lw': 0.5},
                                 'label': '$q = ' + samples['q'][2*k] + r', -B_{0}^{-1} B_{n}^{\psi} \partial_{\psi} p_{0}$'},
                                 {'x': samples['theta'][2*k+1], 'y': samples['pn_lhs'][it][2*k+1], 'args': {'lw': 0.5},
-                                'label': '$q = ' + samples['q'][2*k+1] + r', B_{0}^{-1} \V{B}_{0} \cdot \grad p_{n}$'},
+                                'label': '$q = ' + samples['q'][2*k+1] + r', B_{0}^{-1} \V{B}_{0} \cdot \opgrad p_{n}$'},
                                 {'x': samples['theta'][2*k+1], 'y': samples['pn_rhs'][it][2*k+1], 'args': {'lw': 0.5},
                                 'label': '$q = ' + samples['q'][2*k+1] + r', -B_{0}^{-1} B_{n}^{\psi} \partial_{\psi} p_{0}$'}]
         plotter.plot_objects.put(ComplexPlot(work_dir, f"plot_{it}_MDE_pn_{m_res_min + k}.pdf", config))
     # grad p_n
     config['postprocess'] = [[theta_ticks, theta_ticks], [LogY(), Id()]]
-    config['ylabel'] = [r'$\abs \grad p_{n}$ / \si{\newton\per\cubic\meter}', r'$\arg \grad p_{n}$ / \si{\degree}']
+    config['ylabel'] = [r'$\abs \opgrad p_{n}$ / \si{\newton\per\cubic\meter}', r'$\arg \opgrad p_{n}$ / \si{\degree}']
     config['title'] = f"Solution for pressure perturbation, {it} perturbation"
     comps = [r'\partial_{R} p_{n}', r'\tfrac{\im n}{R} p_{n}', r'\partial_{Z} p_{n}']
     for k in range(3):
