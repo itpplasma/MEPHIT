@@ -260,28 +260,6 @@ mephit_run() {
     done
 }
 
-mephit_plot() {
-    config=mephit.in
-    data=mephit.h5
-    log=mephit.log
-
-    # default to current directory if none is given on the command line
-    workdirs=( "$(pwd)" )
-    if [ $# -gt 0 ]; then
-        workdirs=( "$@" )
-    fi
-    for workdir in "${workdirs[@]}"; do
-        if [ ! -d "$workdir" ]; then
-            echo "$scriptname: skipping nonexistent directory '$workdir'."
-            anyerr+=1
-            continue
-        fi
-        pushd "$workdir"
-        python3 "$scriptdir/magdifplot.py" "$(pwd)" "$data"
-        popd
-    done
-}
-
 mephit_clean() {
     # default to current directory if none is given on the command line
     workdirs=( "$(pwd)" )
@@ -297,8 +275,6 @@ mephit_clean() {
         pushd "$workdir"
         # files from mephit_run
         rm -f fort.* mephit.h5 mephit.log core_plasma.msh outer.msh maxwell.msh
-        # files from mephit_plot
-        rm -f plot*.pdf convergence.pdf Bmn*.pdf currmn*.pdf
         popd
     done
 }
@@ -323,7 +299,7 @@ set -o pipefail
 scriptname=$0
 anyerr=0
 case "$1" in
-    init|convert|run|plot|clean)
+    init|convert|run|clean)
         mode=$1
         shift
         mephit_$mode "$@"

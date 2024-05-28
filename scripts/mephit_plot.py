@@ -3,7 +3,7 @@ from os import path
 
 # supply path to scripts directory
 scripts_dir = path.dirname(path.realpath(__file__))
-run_dir = path.realpath(scripts_dir + '/../run')
+run_dir = path.realpath(scripts_dir + '/../build/run')
 
 
 def set_matplotlib_defaults():
@@ -28,8 +28,7 @@ def set_matplotlib_defaults():
                                                     '#c2b280', '#848482', '#008856', '#e68fac', '#0067a5', '#f99379']) +
                                    cycler('ls', ['-', '--', '-.', ':', dash_dot_dot, dash_dash_dot,
                                                  '-', '--', '-.', ':', dash_dot_dot, dash_dash_dot]))
-    latex_preamble = path.join(scripts_dir, 'mephit-pdflatex.tex')
-    rcParams['text.latex.preamble'] = fr"\input{{{latex_preamble}}}"
+    rcParams['text.latex.preamble'] = fr"\usepackage{{import}}\import{{{scripts_dir}}}{{mephit-pdflatex.tex}}"
 
 
 class Mephit:
