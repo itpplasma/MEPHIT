@@ -20,7 +20,6 @@ from os import environ, getcwd, path
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
 import numpy as np
-from scipy.constants import c as clight
 import h5py
 from mephit_plot import Mephit, Gpec, Mars
 plt.style.use('./mephit.mplstyle')
@@ -43,19 +42,9 @@ gpec.open_datafiles()
 
 # %%
 m_res_min = mephit.data['/mesh/m_res_min'][()]
-kf_res = mephit.data['/mesh/res_ind'][()]
-nflux = mephit.data['/mesh/nflux'][()]
 res = mephit.normalize_psi(mephit.data['/mesh/psi_res'][()])
 delta_mn = mephit.normalize_psi_diff(mephit.data['/mesh/delta_psi_mn'][()])
-q = mephit.data['/cache/fs_half/q'][()]
 sgn_dpsi = np.sign(mephit.data['/cache/fs/psi'][-1] - mephit.data['/cache/fs/psi'][0])
-conversion = 4.0 * np.pi / clight
-jmnpar_Bmod = [
-    mephit.get_polmodes('total', '/debug_KiLCA/jmnpar_Bmod_total/coeff', conversion, L1=True),
-    mephit.get_polmodes('gyrokinetic', '/debug_KiLCA/jmnpar_Bmod_KiLCA/coeff', conversion, L1=True),
-    mephit.get_polmodes('iMHD', '/debug_KiLCA/jmnpar_Bmod_incl/coeff', conversion, L1=True),
-    mephit.get_polmodes('iMHD (undamped)', '/debug_KiLCA/jmnpar_Bmod_excl/coeff', conversion, L1=True),
-]
 conversion = 1.0e-04 / mephit.data['/mesh/gpec_jacfac'][()]  # TODO: jacfac not accounted for in MARS output
 Bmn = [
     mephit.get_polmodes('MEPHIT vacuum perturbation', '/iter/Bmn_vac/coeff_rad', conversion),
@@ -65,27 +54,6 @@ Bmn = [
     # mars.get_polmodes('MARS vacuum perturbation', 'VACUUM'),
     # mars.get_polmodes('MARS full perturbation', 'PLASMA'),
 ]
-
-# %%
-for m in mephit.post['m_res']:
-    if abs(m) > 12:
-        break
-    k = abs(m) - m_res_min
-    fig = plt.figure()
-    ax = fig.subplots()
-    mask = (jmnpar_Bmod[0]['rho'][m] >= res[k] - 4.5 * delta_mn[k]) & \
-        (jmnpar_Bmod[0]['rho'][m] <= res[k] + 4.5 * delta_mn[k])
-    ax.axvline(res[k], color='k', lw=0.5)
-    ax.axvline(res[k] - 0.5 * delta_mn[k], color='k', lw=0.25, ls='--')
-    ax.axvline(res[k] + 0.5 * delta_mn[k], color='k', lw=0.25, ls='--')
-    for polmode in jmnpar_Bmod:
-        ax.semilogy(polmode['rho'][m][mask], np.abs(polmode['var'][m][mask]), label=polmode['label'])
-    ax.set_xlabel(r'$\hat{\psi}$')
-    ax.set_ylabel(r'$\mu_{0} \lvert (j_{\parallel} / B_{0})_{\vec{m}} \rvert$ [\si{\per\meter}]')
-    ax.set_title(f"$m = {m}$")
-    ax.legend(loc='upper left')
-    plt.show()
-
 
 # %%
 for m in mephit.post['m_res']:
@@ -123,3 +91,7 @@ for m in mephit.post['sgn_m_res'] * np.arange(6):
     ax.set_title(f"$m = {m}$")
     ax.legend(loc='upper left')
     plt.show()
+
+# %%
+mephit.close_datafile()
+gpec.close_datafiles()

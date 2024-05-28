@@ -1,34 +1,74 @@
-from mephit_plot import Gpec, Mephit, ParallelPlotter, Plot1D, \
-    run_dir, set_matplotlib_defaults, XTicks
-from numpy import sign
+# %%
+# %matplotlib inline
+from os import environ, getcwd, path
+from matplotlib import rcParams
+import matplotlib.pyplot as plt
+import numpy as np
+from scipy.constants import c as clight
+import h5py
+from mephit_plot import Mephit, Gpec, Mars
+plt.style.use('./mephit.mplstyle')
+rcParams['text.latex.preamble'] = r'\usepackage{import}\import{' + getcwd() + r'}{mephit-pdflatex.tex}'
+rcParams['pgf.preamble'] = r'\usepackage{import}\import{' + getcwd() + r'}{mephit-pgf.tex}'
+h5py.get_config().complex_names = ('real', 'imag')
 
 
-if __name__ == "__main__":
-    set_matplotlib_defaults()
-    plotter = ParallelPlotter()
-    plotter.start()
+# %%
+work_dir = path.join(environ['MEPHIT_DIR'], 'run/33353_2900_EQH')  # AUG
+# work_dir = path.join(environ['MEPHIT_DIR'], 'run/47046')  # MAST-U
+mephit = Mephit(work_dir, 'mephit.h5')
+mephit.open_datafile()
+mephit.postprocess()
+gpec = Gpec(mephit.work_dir, mephit.data['/config/n'][()])
+gpec.open_datafiles()
+# ref_dir = path.join(environ['HOME'], 'TU/PhD/MARS_MEPHIT/forPatrick')
+# mars = Mars(ref_dir)
+# mars.open_datafiles()
 
-    work_dir = run_dir + '/33353_2900_EQH'
-    testcase = Mephit(work_dir)
-    testcase.open_datafile()
-    testcase.postprocess()
-    sgn_dpsi = sign(testcase.data['/cache/fs/psi'][-1] - testcase.data['/cache/fs/psi'][0])
-    nflux = testcase.data['/mesh/nflux'][()]
+# %%
+m_res_min = mephit.data['/mesh/m_res_min'][()]
+res = mephit.normalize_psi(mephit.data['/mesh/psi_res'][()])
+delta_mn = mephit.normalize_psi_diff(mephit.data['/mesh/delta_psi_mn'][()])
+conversion = 4.0 * np.pi / clight
+jmnpar_Bmod = [
+    mephit.get_polmodes('total', '/debug_KiLCA/jmnpar_Bmod_total/coeff', conversion, L1=True),
+    mephit.get_polmodes('gyrokinetic', '/debug_KiLCA/jmnpar_Bmod_KiLCA/coeff', conversion, L1=True),
+    mephit.get_polmodes('iMHD', '/debug_KiLCA/jmnpar_Bmod_incl/coeff', conversion, L1=True),
+    mephit.get_polmodes('iMHD (undamped)', '/debug_KiLCA/jmnpar_Bmod_excl/coeff', conversion, L1=True),
+]
+mephit_Ires = mephit.get_Ires()
+gpec_Ires = gpec.get_Ires()
 
-    mephit_Ires = testcase.get_Ires()
-    reference = Gpec(work_dir, 2)
-    reference.open_datafiles()
-    gpec_Ires = reference.get_Ires()
-    config = {
-        'xlabel': '$m$', 'ylabel': r'$\abs\, I_{m, n}^{\parallel}$ / \si{\ampere}', 'legend': {'fontsize': 'small'},
-        'plotdata': [
-            {'x': mephit_Ires.keys(), 'y': mephit_Ires.values(), 'args': {'label': 'MEPHIT', 'marker': 'o', 'ls': ''}},
-            {'x': gpec_Ires.keys(), 'y': gpec_Ires.values(), 'args': {'label': 'GPEC', 'marker': 'x', 'ls': ''}}
-        ],
-        'postprocess': [XTicks(mephit_Ires.keys())]
-    }
-    plotter.plot_objects.put(Plot1D(work_dir, 'plot_Ires.pdf', config))
+# %%
+for m in mephit.post['m_res']:
+    if abs(m) > 12:
+        break
+    k = abs(m) - m_res_min
+    fig = plt.figure()
+    ax = fig.subplots()
+    mask = (jmnpar_Bmod[0]['rho'][m] >= res[k] - 4.5 * delta_mn[k]) & \
+        (jmnpar_Bmod[0]['rho'][m] <= res[k] + 4.5 * delta_mn[k])
+    ax.axvline(res[k], color='k', lw=0.5)
+    ax.axvline(res[k] - 0.5 * delta_mn[k], color='k', lw=0.25, ls='--')
+    ax.axvline(res[k] + 0.5 * delta_mn[k], color='k', lw=0.25, ls='--')
+    for polmode in jmnpar_Bmod:
+        ax.semilogy(polmode['rho'][m][mask], np.abs(polmode['var'][m][mask]), label=polmode['label'])
+    ax.set_xlabel(r'$\hat{\psi}$')
+    ax.set_ylabel(r'$\mu_{0} \lvert (j_{\parallel} / B_{0})_{\vec{m}} \rvert$ [\si{\per\meter}]')
+    ax.set_title(f"$m = {m}$")
+    ax.legend(loc='upper left')
+    plt.show()
 
-    plotter.finish()
-    testcase.close_datafile()
-    reference.close_datafiles()
+# %%
+fig = plt.figure(figsize=(6.6, 3.6), dpi=150)
+ax = fig.subplots()
+ax.semilogy(mephit_Ires.keys(), mephit_Ires.values(), 'o', label='MEPHIT')
+ax.semilogy(gpec_Ires.keys(), gpec_Ires.values(), 'x', label='GPEC')
+ax.set_xlabel('resonant poloidal mode number $m$')
+ax.set_ylabel(r'$\abs\, I_{m, n}^{\parallel}$ / \si{\ampere}')
+ax.legend(fontsize='small')
+plt.show()
+
+# %%
+mephit.close_datafile()
+gpec.close_datafiles()
