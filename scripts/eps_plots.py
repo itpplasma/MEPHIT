@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from scipy.constants import c as clight
 import h5py
-from mephit_plot import Mephit, Gpec
+from mephit_plot import Mephit, Gpec, Mars
 plt.style.use('./mephit.mplstyle')
 rcParams['text.latex.preamble'] = r'\usepackage{import}\import{' + getcwd() + r'}{mephit-pdflatex.tex}'
 rcParams['pgf.preamble'] = r'\usepackage{import}\import{' + getcwd() + r'}{mephit-pgf.tex}'
@@ -30,38 +30,46 @@ h5py.get_config().complex_names = ('real', 'imag')
 
 
 # %%
-work_dir = path.join(environ['MEPHIT_DIR'], 'run/33353_2900_EQH')
-testcase = Mephit(work_dir, 'mephit.h5')
-testcase.open_datafile()
-testcase.postprocess()
-reference = Gpec(testcase.work_dir, testcase.data['/config/n'][()])
-reference.open_datafiles()
+work_dir = path.join(environ['MEPHIT_DIR'], 'run/33353_2900_EQH')  # AUG
+# work_dir = path.join(environ['MEPHIT_DIR'], 'run/47046')  # MAST-U
+mephit = Mephit(work_dir, 'mephit.h5')
+mephit.open_datafile()
+mephit.postprocess()
+gpec = Gpec(mephit.work_dir, mephit.data['/config/n'][()])
+gpec.open_datafiles()
+# ref_dir = path.join(environ['HOME'], 'TU/PhD/MARS_MEPHIT/forPatrick')
+# mars = Mars(ref_dir)
+# mars.open_datafiles()
 
 # %%
-m_res_min = testcase.data['/mesh/m_res_min'][()]
-kf_res = testcase.data['/mesh/res_ind'][()]
-nflux = testcase.data['/mesh/nflux'][()]
-res = testcase.normalize_psi(testcase.data['/mesh/psi_res'][()])
-delta_mn = testcase.normalize_psi_diff(testcase.data['/mesh/delta_psi_mn'][()])
-q = testcase.data['/cache/fs_half/q'][()]
-sgn_dpsi = np.sign(testcase.data['/cache/fs/psi'][-1] - testcase.data['/cache/fs/psi'][0])
+m_res_min = mephit.data['/mesh/m_res_min'][()]
+kf_res = mephit.data['/mesh/res_ind'][()]
+nflux = mephit.data['/mesh/nflux'][()]
+res = mephit.normalize_psi(mephit.data['/mesh/psi_res'][()])
+delta_mn = mephit.normalize_psi_diff(mephit.data['/mesh/delta_psi_mn'][()])
+q = mephit.data['/cache/fs_half/q'][()]
+sgn_dpsi = np.sign(mephit.data['/cache/fs/psi'][-1] - mephit.data['/cache/fs/psi'][0])
 conversion = 4.0 * np.pi / clight
 jmnpar_Bmod = [
-    testcase.get_polmodes('total', '/debug_KiLCA/jmnpar_Bmod_total/coeff', conversion, L1=True),
-    testcase.get_polmodes('gyrokinetic', '/debug_KiLCA/jmnpar_Bmod_KiLCA/coeff', conversion, L1=True),
-    testcase.get_polmodes('iMHD', '/debug_KiLCA/jmnpar_Bmod_incl/coeff', conversion, L1=True),
-    testcase.get_polmodes('iMHD (undamped)', '/debug_KiLCA/jmnpar_Bmod_excl/coeff', conversion, L1=True),
+    mephit.get_polmodes('total', '/debug_KiLCA/jmnpar_Bmod_total/coeff', conversion, L1=True),
+    mephit.get_polmodes('gyrokinetic', '/debug_KiLCA/jmnpar_Bmod_KiLCA/coeff', conversion, L1=True),
+    mephit.get_polmodes('iMHD', '/debug_KiLCA/jmnpar_Bmod_incl/coeff', conversion, L1=True),
+    mephit.get_polmodes('iMHD (undamped)', '/debug_KiLCA/jmnpar_Bmod_excl/coeff', conversion, L1=True),
 ]
-conversion = 1.0e-04 / testcase.data['/mesh/gpec_jacfac'][()]
+conversion = 1.0e-04 / mephit.data['/mesh/gpec_jacfac'][()]  # TODO: jacfac not accounted for in MARS output
 Bmn = [
-    testcase.get_polmodes('MEPHIT vacuum perturbation', '/iter/Bmn_vac/coeff_rad', conversion),
-    testcase.get_polmodes('MEPHIT full perturbation', '/iter/Bmn/coeff_rad', conversion),
-    reference.get_polmodes('GPEC full perturbation', sgn_dpsi, 'Jbgradpsi'),
-    reference.get_polmodes('GPEC vacuum perturbation', sgn_dpsi, 'Jbgradpsi_x'),
+    mephit.get_polmodes('MEPHIT vacuum perturbation', '/iter/Bmn_vac/coeff_rad', conversion),
+    mephit.get_polmodes('MEPHIT full perturbation', '/iter/Bmn/coeff_rad', conversion),
+    gpec.get_polmodes('GPEC full perturbation', sgn_dpsi, 'Jbgradpsi'),
+    gpec.get_polmodes('GPEC vacuum perturbation', sgn_dpsi, 'Jbgradpsi_x'),
+    # mars.get_polmodes('MARS vacuum perturbation', 'VACUUM'),
+    # mars.get_polmodes('MARS full perturbation', 'PLASMA'),
 ]
 
 # %%
-for m in testcase.post['m_res']:
+for m in mephit.post['m_res']:
+    if abs(m) > 12:
+        break
     k = abs(m) - m_res_min
     fig = plt.figure()
     ax = fig.subplots()
@@ -80,7 +88,9 @@ for m in testcase.post['m_res']:
 
 
 # %%
-for m in testcase.post['m_res']:
+for m in mephit.post['m_res']:
+    if abs(m) > 12:
+        break
     k = abs(m) - m_res_min
     fig = plt.figure()
     ax = fig.subplots()
@@ -97,7 +107,7 @@ for m in testcase.post['m_res']:
     plt.show()
 
 # %%
-for m in testcase.post['sgn_m_res'] * np.arange(6):
+for m in mephit.post['sgn_m_res'] * np.arange(6):
     k = abs(m) - m_res_min
     fig = plt.figure()
     ax = fig.subplots()

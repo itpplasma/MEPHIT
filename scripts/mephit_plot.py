@@ -198,6 +198,29 @@ class Gpec:
         return Ires
 
 
+class Mars:
+    def __init__(self, work_dir):
+        self.work_dir = work_dir
+        self.data = dict()
+        self.post = dict()
+
+    def open_datafiles(self):
+        from os import path
+        from scipy.io import loadmat
+        self.data = loadmat(path.join(self.work_dir, 'OUTPUTS.mat')) | \
+            loadmat(path.join(self.work_dir, 'INPUTS.mat'), squeeze_me=True) | \
+            loadmat(path.join(self.work_dir, 'Normalizations.mat'))
+
+    def get_polmodes(self, label, var_name='PLASMA'):
+        from numpy.fft import fft
+        polmodes = {'m_max': 0, 'label': label, 'rho': dict(), 'var': dict()}
+        all_modes = self.data['Mag_field'][0, 0] * \
+            fft(self.data[var_name]['B'][0, 0] * self.data['Jacobian'], norm='forward')
+        for m in self.data['Mm']:
+            polmodes['rho'][-m] = self.data['sp']
+            polmodes['var'][-m] = all_modes[0, :self.data['sp'].size, m]
+        return polmodes
+
 class PlotObject:
     def __init__(self, work_dir, filename, config):
         from os import getcwd
