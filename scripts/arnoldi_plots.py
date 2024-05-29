@@ -30,12 +30,13 @@ rcParams['pgf.preamble'] = r'\usepackage{import}\import{' + getcwd() + r'}{mephi
 h5py.get_config().complex_names = ('real', 'imag')
 
 # %%
-work_dir = path.join(environ['MEPHIT_DIR'], 'run/33353_2900_EQH')
+work_dir = path.join(environ['MEPHIT_DIR'], 'run/47046')  # 33353_2900_EQH
 data = {}
 with h5py.File(path.join(work_dir, 'mephit.h5'), 'r') as f:
     data['eigvals'] = f['/iter/eigvals'][()]
     data['supremum'] = f['/config/ritz_threshold'][()]
     data['rel_err'] = f['/iter/L2int_Bn_diff'][()] / f['/iter/L2int_Bnvac'][()]
+    data['rel_err_requested'] = f['/config/iter_rel_err'][()]
     data['triangulation'] = Triangulation(f['/mesh/node_R'][()], f['/mesh/node_Z'][()], f['/mesh/tri_node'][()] - 1)
     if '/iter/eigvec_001' in f:
         data['eigvec'] = np.sqrt(
@@ -59,6 +60,7 @@ ax = fig.subplots()
 iter_range = np.arange(data['niter']) + 1
 ax.semilogy(iter_range, data['rel_err'][:data['niter']], '-o', markersize=3)
 ax.semilogy(iter_range, data['supremum'] ** iter_range)
+ax.axhline(data['rel_err_requested'], linestyle=':', linewidth=0.5, color='k')
 ax.set_xlabel('iteration count')
 ax.set_ylabel('relative error after iteration step')
 fig.savefig(path.join(work_dir, 'convergence.pdf'), backend='pgf')
