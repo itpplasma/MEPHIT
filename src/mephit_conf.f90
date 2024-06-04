@@ -154,6 +154,9 @@ module mephit_conf
     !> Maximum number of points per flux surface. Defaults to 0 (no maximum imposed).
     integer :: pol_max = 0
 
+    !> Minimum number of points per flux surface. Defaults to 0 (no minimum imposed).
+    integer :: pol_min = 0
+
     !> Ignore resonance position where q = 1, which is usually spurious. Defaults to true.
     logical :: ignore_q1_res = .true.
 
@@ -309,6 +312,8 @@ contains
       comment = 'maximum poloidal mode number for Fourier transform of results')
     call h5_add(h5id_root, grp // '/pol_max', config%pol_max, &
       comment = 'maximum number of points per flux surface')
+    call h5_add(h5id_root, grp // '/pol_min', config%pol_min, &
+      comment = 'minimum number of points per flux surface')
     call h5_add(h5id_root, grp // '/max_Delta_rad', config%max_Delta_rad, &
       comment = 'maximum distance between flux surfaces along theta = 0', unit = 'cm')
     call h5_add(h5id_root, grp // '/temp_min', config%temp_min, &

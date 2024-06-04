@@ -1750,7 +1750,15 @@ contains
     allocate(mesh%kp_low(mesh%nflux))
     allocate(mesh%kt_low(mesh%nflux))
     ! round to even numbers
-    mesh%kp_max(:) = max(2 * conf%m_max, 2 * nint(0.5d0 * fs%perimeter(1:) / opt_pol_edge_len))
+    mesh%kp_max(:) = 2 * nint(0.5d0 * fs%perimeter(1:) / opt_pol_edge_len)
+    if (conf%pol_max < conf%pol_min .and. conf%pol_max > 0) then
+      write (logger%msg, '("config%pol_max = ", i0, " < config%pol_min = ", i0, ' // &
+        '", number of points per flux surface is fixed at the former.")') conf%pol_max, conf%pol_min
+      if (logger%warn) call logger%write_msg
+    end if
+    if (conf%pol_min > 0) then
+      mesh%kp_max(:) = max(mesh%kp_max, 2 * nint(0.5d0 * dble(conf%pol_min)))
+    end if
     if (conf%pol_max > 0) then
       mesh%kp_max(:) = min(mesh%kp_max, 2 * nint(0.5d0 * dble(conf%pol_max)))
     end if
