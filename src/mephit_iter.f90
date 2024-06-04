@@ -972,12 +972,20 @@ contains
       jnpar_Bmod(:), grad_jnpar_Bmod(:, :), div_jnperp(:), div_jnperp_RT0(:)
 
     grp = trim(adjustl(group))
-    ndim = sum(shiftl(1, cache%log2_kp_max))
+    ndim = mesh%npoint
     allocate(lorentz(3, ndim), pn(ndim), grad_pn(3, ndim), Bn_psi_contravar(ndim), &
       jnpar_Bmod(ndim), grad_jnpar_Bmod(3, ndim), div_jnperp(ndim), div_jnperp_RT0(ndim))
+    lorentz(:, :) = (0d0, 0d0)
+    pn(:) = (0d0, 0d0)
+    grad_pn(:, :) = (0d0, 0d0)
+    Bn_psi_contravar(:) = (0d0, 0d0)
+    jnpar_Bmod(:) = (0d0, 0d0)
+    grad_jnpar_Bmod(:, :) = (0d0, 0d0)
+    div_jnperp(:) = (0d0, 0d0)
+    div_jnperp_RT0(:) = (0d0, 0d0)
     do kf = 1, mesh%nflux
-      do kpol = 1, shiftl(1, cache%log2_kp_max(kf))
-        k = cache%kp_low(kf) + kpol
+      do kpol = 1, mesh%kp_max(kf)
+        k = mesh%kp_low(kf) + kpol
         associate (s => cache%sample_polmodes(k))
           call equilibrium_field(s%R, s%Z, B0, dB0_dR, dB0_dZ, psi, Bmod, dum, dum)
           call curr0_geqdsk(s%R, psi, B0, dB0_dR, dB0_dZ, j0, dj0_dR, dj0_dZ)
@@ -1394,7 +1402,7 @@ contains
     type(vec_polmodes_t) :: Bmn_plas
     character(len = *), parameter :: dataset = 'debug_furth'
     integer(HID_T) :: h5id_root
-    integer :: kf, log2, npol, kpol, k, kilca_m_res
+    integer :: kf, kt, ktri, kilca_m_res
     complex(dp) :: sheet_flux(mesh%nflux)
     real(dp) :: k_z, k_theta(mesh%nflux)
 
@@ -1405,16 +1413,14 @@ contains
     k_theta(:) = kilca_m_res / fs_half%rad
     sheet_flux(:) = (0d0, 0d0)
     do kf = 1, mesh%nflux
-      log2 = cache%log2_kt_max(kf)
-      npol = shiftl(1, log2)
-      do kpol = 1, npol
-        k = cache%kt_low(kf) + kpol
-        associate (s => cache%sample_polmodes_half(k))
+      do kt = 1, mesh%kt_max(kf)
+        ktri = mesh%kt_low(kf) + kt
+        associate (s => cache%sample_polmodes_half(ktri))
           sheet_flux(kf) = sheet_flux(kf) + mesh%area(s%ktri) * currn%comp_phi(s%ktri) * &
             exp(-imun * kilca_m_res * s%theta)
         end associate
       end do
-      sheet_flux(kf) = sheet_flux(kf) / dble(shiftl(1, log2))
+      sheet_flux(kf) = sheet_flux(kf) / dble(mesh%kt_max(kf))
     end do
     sheet_flux(:) = -2d0 * imun / clight / k_theta * sheet_flux
     call h5_open_rw(datafile, h5id_root)

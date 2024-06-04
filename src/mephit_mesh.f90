@@ -2,7 +2,7 @@ module mephit_mesh
 
   use iso_fortran_env, only: dp => real64
   use geqdsk_tools, only: geqdsk_t
-  use mephit_util, only: interp1d, fft_t, func1d_t
+  use mephit_util, only: interp1d, func1d_t
 
   implicit none
 
@@ -317,9 +317,7 @@ module mephit_mesh
   end type shielding_t
 
   type :: cache_t
-    integer :: GL_order, min_log2, max_log2
-    integer, allocatable :: log2_kp_max(:), log2_kt_max(:), kp_low(:), kt_low(:)
-    type(fft_t), allocatable :: fft(:)
+    integer :: GL_order
     type(shielding_t), allocatable :: shielding(:)
     type(coord_cache_t), allocatable :: sample_polmodes_half(:), sample_polmodes(:)
     type(coord_cache_t), allocatable :: sample_jnperp(:)
@@ -807,13 +805,12 @@ contains
   subroutine shielding_init(s, m, GL_order)
     type(shielding_t), intent(inout) :: s
     integer, intent(in) :: m, GL_order
-    integer :: npol, kf
+    integer :: kf
 
     call shielding_deinit(s)
     kf = mesh%res_ind(m)
-    npol = shiftl(1, cache%log2_kp_max(kf))
     allocate(s%GL_weights(3 * GL_order))
-    allocate(s%sample_Ires(npol, 3 * GL_order))
+    allocate(s%sample_Ires(mesh%kp_max(kf), 3 * GL_order))
     s%inner_kp_max = mesh%kp_max(kf - 1)
     s%outer_kp_max = mesh%kp_max(kf)
     allocate(s%kpois(2, s%inner_kp_max + s%outer_kp_max))
@@ -885,32 +882,12 @@ contains
   subroutine cache_init(cache, GL_order)
     type(cache_t), intent(inout) :: cache
     integer, intent(in) :: GL_order
-    integer :: kf, log2, m
+    integer :: m
 
     call cache_deinit(cache)
     cache%GL_order = GL_order
-    allocate(cache%log2_kp_max(mesh%nflux))
-    allocate(cache%log2_kt_max(mesh%nflux))
-    allocate(cache%kp_low(mesh%nflux))
-    allocate(cache%kt_low(mesh%nflux))
-    cache%log2_kp_max(:) = max(6, bit_size(mesh%kp_max) - leadz(mesh%kp_max))
-    cache%log2_kt_max(:) = max(6, bit_size(mesh%kt_max) - leadz(mesh%kt_max))
-    cache%kp_low(1) = 0
-    do kf = 2, mesh%nflux
-      cache%kp_low(kf) = cache%kp_low(kf - 1) + shiftl(1, cache%log2_kp_max(kf - 1))
-    end do
-    cache%kt_low(1) = 0
-    do kf = 2, mesh%nflux
-      cache%kt_low(kf) = cache%kt_low(kf - 1) + shiftl(1, cache%log2_kt_max(kf - 1))
-    end do
-    cache%min_log2 = min(minval(cache%log2_kp_max), minval(cache%log2_kt_max))
-    cache%max_log2 = max(maxval(cache%log2_kp_max), maxval(cache%log2_kt_max))
-    allocate(cache%fft(cache%min_log2:cache%max_log2))
-    do log2 = cache%min_log2, cache%max_log2
-      call cache%fft(log2)%init(shiftl(1, log2))
-    end do
-    allocate(cache%sample_polmodes(sum(shiftl(1, cache%log2_kp_max))))
-    allocate(cache%sample_polmodes_half(sum(shiftl(1, cache%log2_kt_max))))
+    allocate(cache%sample_polmodes(mesh%npoint))
+    allocate(cache%sample_polmodes_half(mesh%ntri))
     allocate(cache%sample_jnperp(mesh%npoint - 1))
     allocate(cache%shielding(mesh%m_res_min:mesh%m_res_max))
     do m = mesh%m_res_min, mesh%m_res_max
@@ -922,24 +899,12 @@ contains
 
   subroutine cache_deinit(cache)
     type(cache_t), intent(inout) :: cache
-    integer :: kl, m
+    integer :: m
 
     cache%GL_order = 0
-    cache%min_log2 = 0
-    cache%max_log2 = 0
-    if (allocated(cache%log2_kp_max)) deallocate(cache%log2_kp_max)
-    if (allocated(cache%log2_kt_max)) deallocate(cache%log2_kt_max)
-    if (allocated(cache%kp_low)) deallocate(cache%kp_low)
-    if (allocated(cache%kt_low)) deallocate(cache%kt_low)
     if (allocated(cache%sample_polmodes)) deallocate(cache%sample_polmodes)
     if (allocated(cache%sample_polmodes_half)) deallocate(cache%sample_polmodes_half)
     if (allocated(cache%sample_jnperp)) deallocate(cache%sample_jnperp)
-    if (allocated(cache%fft)) then
-      do kl = lbound(cache%fft, 1), ubound(cache%fft, 1)
-        call cache%fft(kl)%deinit
-      end do
-      deallocate(cache%fft)
-    end if
     if (allocated(cache%shielding)) then
       do m = lbound(cache%shielding, 1), ubound(cache%shielding, 1)
         call shielding_deinit(cache%shielding(m))
@@ -981,18 +946,6 @@ contains
     call h5_open_rw(file, h5id_root)
     call h5_add(h5id_root, grp // '/GL_order', cache%GL_order, &
       comment = 'order of G-L quadrature for resonant current sampling points')
-    call h5_add(h5id_root, grp // '/log2_kp_max', cache%log2_kp_max, &
-      lbound(cache%log2_kp_max), ubound(cache%log2_kp_max), &
-      comment = 'binary logarithm of poloidal sampling points on flux surfaces')
-    call h5_add(h5id_root, grp // '/log2_kt_max', cache%log2_kt_max, &
-      lbound(cache%log2_kt_max), ubound(cache%log2_kt_max), &
-      comment = 'binary logarithm of poloidal sampling points between flux surfaces')
-    call h5_add(h5id_root, grp // '/kp_low', cache%kp_low, &
-      lbound(cache%kp_low), ubound(cache%kp_low), &
-      comment = 'cumulative sum of poloidal sampling points on flux surfaces')
-    call h5_add(h5id_root, grp // '/kt_low', cache%kt_low, &
-      lbound(cache%kt_low), ubound(cache%kt_low), &
-      comment = 'cumulative sum of poloidal sampling points between flux surfaces')
     call h5_close(h5id_root)
     do m = mesh%m_res_min, mesh%m_res_max
       write (suffix, fmt) m
@@ -2261,20 +2214,19 @@ contains
   end subroutine compute_shielding_auxiliaries
 
   subroutine compute_gpec_jacfac
-    integer :: kf, kpol, k, npol
+    integer :: kf, kt, ktri
 
     allocate(mesh%gpec_jacfac(mesh%nflux))
     mesh%gpec_jacfac(:) = 0d0
     do kf = 1, mesh%nflux
-      npol = shiftl(1, cache%log2_kt_max(kf))
-      do kpol = 1, npol
-        k = cache%kt_low(kf) + kpol
-        associate (s => cache%sample_polmodes_half(k))
+      do kt = 1, mesh%kt_max(kf)
+        ktri = mesh%kt_low(kf) + kt
+        associate (s => cache%sample_polmodes_half(ktri))
           mesh%gpec_jacfac(kf) = mesh%gpec_jacfac(kf) + &
             s%sqrt_g * s%R * hypot(s%B0_Z, -s%B0_R)
         end associate
       end do
-      mesh%gpec_jacfac(kf) = mesh%gpec_jacfac(kf) / dble(npol)
+      mesh%gpec_jacfac(kf) = mesh%gpec_jacfac(kf) / dble(mesh%kt_max(kf))
     end do
   end subroutine compute_gpec_jacfac
 
@@ -2291,27 +2243,27 @@ contains
     real(dp), allocatable, dimension(:) :: psi, rad
 
     if (half_grid) then
-      npol = shiftl(1, cache%log2_kt_max)
-      if (size(sample) /= sum(npol)) then
+      if (size(sample) /= mesh%ntri) then
         call logger%msg_arg_size('compute_sample_polmodes', &
-          'size(sample)', 'sum(npol)', size(sample), sum(npol))
+          'size(sample)', 'mesh%ntri', size(sample), mesh%ntri)
         if (logger%err) call logger%write_msg
         error stop
       end if
       allocate(psi, source = fs_half%psi)
       allocate(rad, source = fs_half%rad)
-      k_low = cache%kt_low
+      npol = mesh%kt_max
+      k_low = mesh%kt_low
     else
-      npol = shiftl(1, cache%log2_kp_max)
-      if (size(sample) /= sum(npol)) then
+      if (size(sample) /= mesh%npoint) then
         call logger%msg_arg_size('compute_sample_polmodes', &
-          'size(sample)', 'sum(npol)', size(sample), sum(npol))
+          'size(sample)', 'mesh%npoint', size(sample), mesh%npoint)
         if (logger%err) call logger%write_msg
         error stop
       end if
       allocate(psi, source = fs%psi)
       allocate(rad, source = fs%rad)
-      k_low = cache%kp_low
+      npol = mesh%kp_max
+      k_low = mesh%kp_low
     end if
     do kf = 1, mesh%nflux
       do kpol = 1, npol(kf)
@@ -2450,21 +2402,20 @@ contains
 
   subroutine compute_kilca_auxiliaries
     use mephit_util, only: resample1d
-    integer :: kf, kpol, k, npol, m
+    integer :: kf, kp, kpoi, m
     real(dp), dimension(0:mesh%nflux) :: q_prime
 
     allocate(mesh%avg_R2gradpsi2(mesh%nflux))
     mesh%avg_R2gradpsi2(:) = 0d0
     do kf = 1, mesh%nflux
-      npol = shiftl(1, cache%log2_kp_max(kf))
-      do kpol = 1, npol
-        k = cache%kp_low(kf) + kpol
-        associate (s => cache%sample_polmodes(k))
+      do kp = 1, mesh%kp_max(kf)
+        kpoi = mesh%kp_low(kf) + kp
+        associate (s => cache%sample_polmodes(kpoi))
           mesh%avg_R2gradpsi2(kf) = mesh%avg_R2gradpsi2(kf) + &
             s%R ** 4 * (s%B0_Z ** 2 + s%B0_R ** 2)
         end associate
       end do
-      mesh%avg_R2gradpsi2(kf) = mesh%avg_R2gradpsi2(kf) / dble(npol)
+      mesh%avg_R2gradpsi2(kf) = mesh%avg_R2gradpsi2(kf) / dble(mesh%kp_max(kf))
     end do
     call resample1d(fs%psi, fs%q, fs%psi, q_prime, 3, .true.)
     if (allocated(mesh%damping)) deallocate(mesh%damping)
