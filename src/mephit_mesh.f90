@@ -1350,10 +1350,10 @@ contains
         m, mesh%rsmall_res(m), mesh%delta_mn(m)
       if (logger%debug) call logger%write_msg
       call resample1d(rsmall, psisurf(1:) * psipol_max, &
-        mesh%rsmall_res(m) + [-0.5d0, 0.5d0] * mesh%delta_mn, delta, 3)
+        mesh%rsmall_res(m) + [-0.5d0, 0.5d0] * mesh%delta_mn(m), delta, 3)
       mesh%delta_psi_mn(m) = delta(2) - delta(1)
       call resample1d(rsmall, rbeg, &
-        mesh%rsmall_res(m) + [-0.5d0, 0.5d0] * mesh%delta_mn, delta, 3)
+        mesh%rsmall_res(m) + [-0.5d0, 0.5d0] * mesh%delta_mn(m), delta, 3)
       mesh%delta_rad_mn(m) = delta(2) - delta(1)
     end do
   end subroutine compute_resonant_layer_widths
