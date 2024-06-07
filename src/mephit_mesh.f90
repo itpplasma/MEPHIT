@@ -802,15 +802,13 @@ contains
     call h5_close(h5id_root)
   end subroutine field_cache_read
 
-  subroutine shielding_init(s, m, GL_order)
+  subroutine shielding_init(s, m)
     type(shielding_t), intent(inout) :: s
-    integer, intent(in) :: m, GL_order
+    integer, intent(in) :: m
     integer :: kf
 
     call shielding_deinit(s)
     kf = mesh%res_ind(m)
-    allocate(s%GL_weights(3 * GL_order))
-    allocate(s%sample_Ires(mesh%kp_max(kf), 3 * GL_order))
     s%inner_kp_max = mesh%kp_max(kf - 1)
     s%outer_kp_max = mesh%kp_max(kf)
     allocate(s%kpois(2, s%inner_kp_max + s%outer_kp_max))
@@ -860,22 +858,28 @@ contains
   end subroutine shielding_write
 
   subroutine shielding_read(shielding, file, group)
-    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_get_bounds, h5_close
     type(shielding_t), intent(inout) :: shielding
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: group
     character(len = len_trim(group)) :: grp
     integer(HID_T) :: h5id_root
+    integer :: lb1, lb2, ub1, ub2
 
     grp = trim(group)
     call h5_open(file, h5id_root)
-    call h5_get(h5id_root, grp // '/GL_weights', shielding%GL_weights)
     call h5_get(h5id_root, grp // '/coeff', shielding%coeff)
     call h5_get(h5id_root, grp // '/inner_kp_max', shielding%inner_kp_max)
     call h5_get(h5id_root, grp // '/outer_kp_max', shielding%outer_kp_max)
     call h5_get(h5id_root, grp // '/kpois', shielding%kpois)
     call h5_get(h5id_root, grp // '/weights', shielding%weights)
+    call h5_get_bounds(h5id_root, grp // '/sample_Ires/R', lb1, lb2, ub1, ub2)
+    if (allocated(shielding%GL_weights)) deallocate(shielding%GL_weights)
+    allocate(shielding%GL_weights(lb2:ub2))
+    call h5_get(h5id_root, grp // '/GL_weights', shielding%GL_weights)
     call h5_close(h5id_root)
+    if (allocated(shielding%sample_Ires)) deallocate(shielding%sample_Ires)
+    allocate(shielding%sample_Ires(lb1:ub1, lb2:ub2))
     call coord_cache_read(shielding%sample_Ires, file, grp // '/sample_Ires')
   end subroutine shielding_read
 
@@ -891,7 +895,7 @@ contains
     allocate(cache%sample_jnperp(mesh%npoint - 1))
     allocate(cache%shielding(mesh%m_res_min:mesh%m_res_max))
     do m = mesh%m_res_min, mesh%m_res_max
-      call shielding_init(cache%shielding(m), m, GL_order)
+      call shielding_init(cache%shielding(m), m)
     end do
     allocate(cache%edge_fields(mesh%GL_order, mesh%nedge), cache%area_fields(mesh%GL2_order, mesh%ntri))
     allocate(cache%mid_fields(mesh%nedge), cache%cntr_fields(mesh%ntri))
@@ -2338,49 +2342,37 @@ contains
   !> Compute fine grid for parallel current sampling points.
   subroutine compute_sample_Ires(sample_Ires, GL_weights, GL_order, m)
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
-    use mephit_conf, only: logger
-    use mephit_util, only: pi, interp_psi_pol, gauss_legendre_unit_interval
-    type(coord_cache_t), dimension(:, :), intent(out) :: sample_Ires
-    real(dp), dimension(:), intent(out) :: GL_weights
+    use mephit_util, only: pi, binsearch, interp_psi_pol, gauss_legendre_unit_interval
+    type(coord_cache_t), dimension(:, :), intent(inout), allocatable :: sample_Ires
+    real(dp), dimension(:), intent(inout), allocatable :: GL_weights
     integer, intent(in) :: GL_order
     integer, intent(in) :: m
-    integer :: nrad, krad, npol, kpol, k, kf, kGL
-    real(dp) :: theta(size(sample_Ires, 1)), psi(size(sample_Ires, 2)), &
-      weights(GL_order), points(GL_order), q, dum
+    integer :: nrad, krad, npol, kpol, kf_min, kf_max, kf, kGL
+    real(dp) :: weights(GL_order), points(GL_order), q, dum
+    real(dp), allocatable :: theta(:), psi(:)
 
-    if (size(sample_Ires, 2) /= 3 * GL_order) then
-      call logger%msg_arg_size('compute_sample_Ires', &
-        'size(sample_Ires, 2)', '3 * GL_order', &
-        size(sample_Ires, 2), 3 * GL_order)
-      if (logger%err) call logger%write_msg
-      error stop
-    end if
-    if (size(GL_weights) /= 3 * GL_order) then
-      call logger%msg_arg_size('compute_sample_Ires', &
-        'size(GL_weights)', '3 * GL_order', &
-        size(GL_weights), 3 * GL_order)
-      if (logger%err) call logger%write_msg
-      error stop
-    end if
-    npol = size(sample_Ires, 1)
-    nrad = 3 * GL_order
-    theta = 2d0 * pi * [(dble(kpol - 1), kpol = 1, npol)] / dble(npol)
+    npol = mesh%kp_max(mesh%res_ind(m))
+    allocate(theta(npol))
+    theta(:) = 2d0 * pi * [(dble(kpol - 1), kpol = 1, npol)] / dble(npol)
     call gauss_legendre_unit_interval(GL_order, points, weights)
-    do k = 1, 3
-      kf = mesh%res_ind(m) + k - 2
+    call binsearch(fs%rad, lbound(fs%rad, 1), fs%rad(mesh%nflux) * &
+      mesh%rad_norm_res(m) - mesh%Delta_rad_mn(m), kf_min)
+    call binsearch(fs%rad, lbound(fs%rad, 1), fs%rad(mesh%nflux) * &
+      mesh%rad_norm_res(m) + mesh%Delta_rad_mn(m), kf_max)
+    nrad = (kf_max - kf_min + 1) * GL_order
+    allocate(psi(nrad))
+    if (allocated(GL_weights)) deallocate(GL_weights)
+    allocate(GL_weights(nrad))
+    do kf = kf_min, kf_max
       do kGL = 1, GL_order
-        krad = (k - 1) * GL_order + kGL
-        if (kf > mesh%nflux) then
-          psi(krad) = fs%psi(mesh%nflux) * points(kGL) + &
-            fs%psi(mesh%nflux - 1) * points(GL_order - kGL + 1)
-          GL_weights(krad) = 0d0
-        else
-          psi(krad) = fs%psi(kf) * points(kGL) + &
-            fs%psi(kf - 1) * points(GL_order - kGL + 1)
-          GL_weights(krad) = weights(kGL) * abs(fs%psi(kf) - fs%psi(kf - 1))
-        end if
+        krad = (kf - kf_min) * GL_order + kGL
+        psi(krad) = fs%psi(kf) * points(kGL) + &
+          fs%psi(kf - 1) * points(GL_order - kGL + 1)
+        GL_weights(krad) = weights(kGL) * abs(fs%psi(kf) - fs%psi(kf - 1))
       end do
     end do
+    if (allocated(sample_Ires)) deallocate(sample_Ires)
+    allocate(sample_Ires(npol, nrad))
     do krad = 1, nrad
       do kpol = 1, npol
         associate (s => sample_Ires(kpol, krad))
@@ -2398,6 +2390,7 @@ contains
         end associate
       end do
     end do
+    deallocate(theta, psi)
   end subroutine compute_sample_Ires
 
   subroutine compute_kilca_auxiliaries
