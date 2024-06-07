@@ -19,6 +19,7 @@
 from os import environ, getcwd, path
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
+import colorcet as cc
 import numpy as np
 import h5py
 from mephit_plot import Mephit, Gpec, Mars
@@ -41,7 +42,10 @@ gpec.open_datafiles()
 # mars.open_datafiles()
 
 # %%
+n = mephit.data['/config/n'][()]
 m_res_min = mephit.data['/mesh/m_res_min'][()]
+m_res_max = mephit.data['/mesh/m_res_max'][()]
+q = mephit.data['/cache/fs/q'][()]
 res = mephit.normalize_psi(mephit.data['/mesh/psi_res'][()])
 delta_mn = mephit.normalize_psi_diff(mephit.data['/mesh/delta_psi_mn'][()])
 sgn_dpsi = np.sign(mephit.data['/cache/fs/psi'][-1] - mephit.data['/cache/fs/psi'][0])
@@ -54,6 +58,44 @@ Bmn = [
     # mars.get_polmodes('MARS vacuum perturbation', 'VACUUM'),
     # mars.get_polmodes('MARS full perturbation', 'PLASMA'),
 ]
+for polmode in Bmn:
+    polmode['m_range'] = np.arange(min(polmode['var'].keys()), max(polmode['var'].keys()) + 1)
+    polmode['arr'] = np.zeros((polmode['m_range'].size, polmode['rho'][0].size), dtype=complex)
+    for i, m in enumerate(polmode['m_range']):
+        polmode['arr'][i, :] = polmode['var'][m]
+
+
+# %%
+mephit.close_datafile()
+gpec.close_datafiles()
+
+# %%
+fig = plt.figure(figsize=(6.6, 3.6), dpi=150)
+axs = fig.subplots(1, 2, sharex='all', sharey='all')
+ims = [None, None]
+for i in range(2):
+    # ims[i] = axs[i].pcolormesh(*np.meshgrid(Bmn[i]['m_range'], Bmn[i]['rho'][0], indexing='ij'),
+    #                             np.abs(Bmn[i]['arr']), shading='nearest', cmap=cc.m_fire_r)
+    ims[i] = axs[i].contourf(*np.meshgrid(Bmn[i]['m_range'], Bmn[i]['rho'][0], indexing='ij'),
+                              np.abs(Bmn[i]['arr']), levels=256, cmap=cc.m_fire_r)
+    for m in range(m_res_min, m_res_max + 1):
+        legend_handle = axs[i].plot(m * mephit.post['sgn_m_res'],
+                                    mephit.post['psi_norm'][np.argmin(np.abs((np.abs(q) * n - m)))],
+                                    '+', color='tab:cyan', label='rational surfaces ($n = 2$)')
+    axs[i].set_xlabel('poloidal mode number $m$')
+axs[0].set_ylabel(r'normalized poloidal flux $\hat{\psi}$')
+axs[0].set_title('vacuum perturbation')
+axs[1].set_title('with plasma response')
+cmax = max([im.get_clim()[1] for im in ims])
+ims[0].set_clim([0.0, cmax])
+ims[1].set_clim([0.0, cmax])
+order_of_magnitude = 10.0 ** np.floor(np.log10(cmax))
+ticks = np.arange(0.0, cmax, order_of_magnitude)
+cbar = fig.colorbar(ims[1], ticks=ticks)
+cbar.set_label(r'$\lvert (\sqrt{g} B^{\psi}_{n})_{m} \rvert A^{-1}$ [\si{\tesla}]', rotation=90)
+axs[0].legend(handles=legend_handle, fontsize='small', loc='lower left')
+fig.savefig(path.join(work_dir, 'Bn_spectrum.png'))
+plt.show()
 
 # %%
 for m in mephit.post['m_res']:
@@ -69,7 +111,7 @@ for m in mephit.post['m_res']:
             (polmode['rho'][m] <= res[k] + 4.5 * delta_mn[k])
         ax.plot(polmode['rho'][m], np.abs(polmode['var'][m]), label=polmode['label'])
     ax.set_xlabel(r'$\hat{\psi}$')
-    ax.set_ylabel(r'$\lvert (\sqrt{g} B^{\psi})_{\vec{m}} \rvert A^{-1}$ [\si{\tesla}]')
+    ax.set_ylabel(r'$\lvert (\sqrt{g} B^{\psi}_{n})_{m} \rvert A^{-1}$ [\si{\tesla}]')
     ax.set_title(f"$m = {m}$")
     ax.legend(loc='upper left')
     plt.show()
@@ -87,11 +129,7 @@ for m in mephit.post['sgn_m_res'] * np.arange(6):
         mask = (polmode['rho'][m] >= 0.001) & (polmode['rho'][m] <= 0.1)
         ax.plot(polmode['rho'][m][mask], np.abs(polmode['var'][m][mask]), label=polmode['label'])
     ax.set_xlabel(r'$\hat{\psi}$')
-    ax.set_ylabel(r'$\lvert (\sqrt{g} B^{\psi})_{\vec{m}} \rvert A^{-1}$ [\si{\tesla}]')
+    ax.set_ylabel(r'$\lvert (\sqrt{g} B^{\psi}_{n})_{m} \rvert A^{-1}$ [\si{\tesla}]')
     ax.set_title(f"$m = {m}$")
     ax.legend(loc='upper left')
     plt.show()
-
-# %%
-mephit.close_datafile()
-gpec.close_datafiles()
