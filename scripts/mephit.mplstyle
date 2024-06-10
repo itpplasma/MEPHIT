@@ -1,5 +1,6 @@
 text.usetex: True
-font.family: Palatino
+font.family: serif
+font.serif: Palatino, TeX Gyre Pagella
 pgf.texsystem: lualatex
 pgf.rcfonts: False
 # text.latex.preamble and pgf.preamble have to be set in Python using import and absolute paths
