@@ -78,7 +78,7 @@ for i in range(2):
     #                             np.abs(Bmn[i]['arr']), shading='nearest', cmap=cc.m_fire_r)
     ims[i] = axs[i].contourf(*np.meshgrid(Bmn[i]['m_range'], Bmn[i]['rho'][0], indexing='ij'),
                               np.abs(Bmn[i]['arr']), levels=256, cmap=cc.m_fire_r)
-    for m in range(m_res_min, m_res_max + 1):
+    for m in range(m_res_min, m_res_max):  # ignore 'last' resonance
         legend_handle = axs[i].plot(m * mephit.post['sgn_m_res'],
                                     mephit.post['psi_norm'][np.argmin(np.abs((np.abs(q) * n - m)))],
                                     '+', color='tab:cyan', label='rational surfaces ($n = 2$)')
@@ -92,7 +92,7 @@ ims[1].set_clim([0.0, cmax])
 order_of_magnitude = 10.0 ** np.floor(np.log10(cmax))
 ticks = np.arange(0.0, cmax, order_of_magnitude)
 cbar = fig.colorbar(ims[1], ticks=ticks)
-cbar.set_label(r'$\lvert (\sqrt{g} B^{\psi}_{n})_{m} \rvert A^{-1}$ [\si{\tesla}]', rotation=90)
+cbar.set_label(r'$\lvert (\sqrt{g} B^{\psi}_{n})_{m} \rvert A^{-1}$ / \si{\tesla}', rotation=90)
 axs[0].legend(handles=legend_handle, fontsize='small', loc='lower left')
 fig.savefig(path.join(work_dir, 'Bn_spectrum.png'))
 plt.show()
@@ -105,15 +105,16 @@ for m in mephit.post['m_res']:
     fig = plt.figure()
     ax = fig.subplots()
     ax.axhline(0.0, color='k', lw=0.5)
-    ax.axvline(res[k], color='k', lw=0.5)
+    ax.axvline(res[k], color='k', lw=0.5, ls=':')
     for polmode in Bmn:
         mask = (polmode['rho'][m] >= res[k] - 4.5 * delta_mn[k]) & \
             (polmode['rho'][m] <= res[k] + 4.5 * delta_mn[k])
         ax.plot(polmode['rho'][m], np.abs(polmode['var'][m]), label=polmode['label'])
     ax.set_xlabel(r'$\hat{\psi}$')
-    ax.set_ylabel(r'$\lvert (\sqrt{g} B^{\psi}_{n})_{m} \rvert A^{-1}$ [\si{\tesla}]')
+    ax.set_ylabel(r'$\lvert (\sqrt{g} B^{\psi}_{n})_{m} \rvert A^{-1}$ / \si{\tesla}')
     ax.set_title(f"$m = {m}$")
     ax.legend(loc='upper left')
+    fig.savefig(path.join(work_dir, f'Bmn_psi_{abs(m)}.pdf'), backend='pgf', dpi=150)
     plt.show()
 
 # %%
@@ -129,7 +130,8 @@ for m in mephit.post['sgn_m_res'] * np.arange(6):
         mask = (polmode['rho'][m] >= 0.001) & (polmode['rho'][m] <= 0.1)
         ax.plot(polmode['rho'][m][mask], np.abs(polmode['var'][m][mask]), label=polmode['label'])
     ax.set_xlabel(r'$\hat{\psi}$')
-    ax.set_ylabel(r'$\lvert (\sqrt{g} B^{\psi}_{n})_{m} \rvert A^{-1}$ [\si{\tesla}]')
+    ax.set_ylabel(r'$\lvert (\sqrt{g} B^{\psi}_{n})_{m} \rvert A^{-1}$ / \si{\tesla}')
     ax.set_title(f"$m = {m}$")
     ax.legend(loc='upper left')
+    fig.savefig(path.join(work_dir, f'Bmn_psi_zoom_axis_{abs(m)}.pdf'), backend='pgf', dpi=150)
     plt.show()

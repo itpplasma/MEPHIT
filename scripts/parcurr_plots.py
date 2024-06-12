@@ -40,6 +40,10 @@ mephit_Ires = mephit.get_Ires()
 gpec_Ires = gpec.get_Ires()
 
 # %%
+mephit.close_datafile()
+gpec.close_datafiles()
+
+# %%
 for m in mephit.post['m_res']:
     if abs(m) > 12:
         break
@@ -54,9 +58,10 @@ for m in mephit.post['m_res']:
     for polmode in jmnpar_Bmod:
         ax.semilogy(polmode['rho'][m][mask], np.abs(polmode['var'][m][mask]), label=polmode['label'])
     ax.set_xlabel(r'$\hat{\psi}$')
-    ax.set_ylabel(r'$\mu_{0} \lvert (j_{\parallel} / B_{0})_{\vec{m}} \rvert$ [\si{\per\meter}]')
+    ax.set_ylabel(r'$\mu_{0} \lvert (J_{n}^{\parallel} B_{0}^{-1})_{m} \rvert$ / \si{\per\meter}')
     ax.set_title(f"$m = {m}$")
     ax.legend(loc='upper left')
+    fig.savefig(path.join(work_dir, f'parcurrmn_{abs(m)}.pdf'), backend='pgf', dpi=150)
     plt.show()
 
 # %%
@@ -65,10 +70,7 @@ ax = fig.subplots()
 ax.semilogy(mephit_Ires.keys(), mephit_Ires.values(), 'o', label='MEPHIT')
 ax.semilogy(gpec_Ires.keys(), gpec_Ires.values(), 'x', label='GPEC')
 ax.set_xlabel('resonant poloidal mode number $m$')
-ax.set_ylabel(r'$\abs\, I_{m, n}^{\parallel}$ / \si{\ampere}')
+ax.set_ylabel(r'$\lvert I_{mn}^{\parallel} \rvert$ / \si{\ampere}')
 ax.legend(fontsize='small')
+fig.savefig(path.join(work_dir, 'Ipar.pdf'), backend='pgf', dpi=150)
 plt.show()
-
-# %%
-mephit.close_datafile()
-gpec.close_datafiles()

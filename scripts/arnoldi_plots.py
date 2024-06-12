@@ -37,7 +37,9 @@ with h5py.File(path.join(work_dir, 'mephit.h5'), 'r') as f:
     data['supremum'] = f['/config/ritz_threshold'][()]
     data['rel_err'] = f['/iter/L2int_Bn_diff'][()] / f['/iter/L2int_Bnvac'][()]
     data['rel_err_requested'] = f['/config/iter_rel_err'][()]
-    data['triangulation'] = Triangulation(f['/mesh/node_R'][()], f['/mesh/node_Z'][()], f['/mesh/tri_node'][()] - 1)
+    data['triangulation'] = Triangulation(f['/mesh/node_R'][()] * 1.0e-2,
+                                          f['/mesh/node_Z'][()] * 1.0e-2,
+                                          f['/mesh/tri_node'][()] - 1)
     if '/iter/eigvec_001' in f:
         data['eigvec'] = np.sqrt(
             np.abs(f['/iter/eigvec_001/comp_R'][()]) ** 2 +
@@ -92,6 +94,8 @@ if 'kernel' in data:
     im = ax.tripcolor(data['triangulation'], data['kernel'], cmap=cc.m_fire,
                       norm=LogNorm(vmin=data['kernel'].min(), vmax=data['kernel'].max()))
     ax.set_aspect('equal')
+    ax.set_xlabel(r'$R$ / \si{\meter}')
+    ax.set_ylabel(r'$Z$ / \si{\meter}')
     cbar = fig.colorbar(im)
     fig.savefig(path.join(work_dir, 'preconditioner_kernel.png'))
     plt.show()
@@ -102,6 +106,8 @@ if 'eigvec' in data:
     ax = fig.subplots()
     im = ax.tripcolor(data['triangulation'], data['eigvec'], cmap=cc.m_fire)
     ax.set_aspect('equal')
+    ax.set_xlabel(r'$R$ / \si{\meter}')
+    ax.set_ylabel(r'$Z$ / \si{\meter}')
     cbar = fig.colorbar(im)
     fig.savefig(path.join(work_dir, 'dominant_eigenvector.png'))
     plt.show()
