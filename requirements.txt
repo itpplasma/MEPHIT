@@ -1,8 +1,8 @@
 colorcet>=3.0.0
 h5pickle
 h5py
+jupytext
 matplotlib
 netCDF4
 numpy
 scipy
-jupytext
