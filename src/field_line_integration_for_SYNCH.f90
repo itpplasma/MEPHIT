@@ -297,6 +297,7 @@
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   subroutine rhs_axis(phi,y,dy)
+  use field_sub, only : field_eq
 !
   implicit none
 !
@@ -328,6 +329,7 @@
   subroutine rhs_surf(phi,y,dy)
 !
   use rhs_surf_mod , only: dr_dphi, dz_dphi
+  use field_sub, only : field_eq
 !
   implicit none
 !

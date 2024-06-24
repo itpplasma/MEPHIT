@@ -118,6 +118,7 @@ contains
       resample_profiles, write_profiles_hdf5, read_profiles_hdf5
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
     use hdf5_tools, only: h5_init, h5overwrite
+    use field_sub, only : read_field_input
     integer(c_int), intent(in), value :: runmode
     type(c_ptr), intent(in), value :: config
     type(c_ptr), intent(in), value :: suffix
@@ -680,6 +681,7 @@ contains
     use mephit_util, only: interp1d
     use mephit_mesh, only: equil, mesh, point_location
     use mephit_pert, only: RT0_interp, vac
+    use field_sub, only : field
     real(c_double), intent(in), value :: R
     real(c_double), intent(in), value :: Z
     complex(c_double_complex), intent(out) :: scalar

@@ -853,6 +853,7 @@ contains
     use input_files, only: pfile
     use mephit_conf, only: conf
     use mephit_util, only: imun, pi, linspace
+    use field_sub, only : read_field_input
     integer, intent(out) :: nR, nZ
     real(dp), intent(out) :: Rmin, Rmax, Zmin, Zmax
     complex(dp), intent(out), dimension(:, :), allocatable :: Bnvac_R, Bnvac_Z
