@@ -661,6 +661,7 @@ contains
 
   subroutine unit_B0(R, Z, vector) bind(C, name = 'unit_B0')
     use iso_c_binding, only: c_double
+    use field_sub, only : field
     real(c_double), intent(in), value :: R
     real(c_double), intent(in), value :: Z
     real(c_double), intent(out) :: vector(3)

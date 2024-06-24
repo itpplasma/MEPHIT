@@ -1073,6 +1073,7 @@ contains
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use bdivfree_mod, only: nR, nZ, Rpoi, Zpoi
     use mephit_conf, only: datafile
+    use field_sub, only : field
     character(len = *), parameter :: dataset = 'equil'
     integer :: kR, kZ
     integer(HID_T) :: h5id_root

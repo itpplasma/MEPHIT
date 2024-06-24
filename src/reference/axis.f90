@@ -6,6 +6,7 @@ program axis
   use const, only : pi, twopi
   use check_cw
   use inside_of_wall
+  use field_sub, only : field
   implicit none
   integer, parameter :: nequat = 2, nr=200, nz=200
   real*8, parameter :: eps_separ=1.d-4, rhohuge=1.d40 ! should be less than in rtbis
@@ -13,7 +14,7 @@ program axis
   real*8 :: rmn, rmx, zmn, zmx, raxis, zaxis, rmnplot, rmxplot, phi0, zet0
   real*8 :: hn1, hn1min, relerr, ah, r, z, phi, phiout, rrr, zzz, ppp
   real*8 :: Br,Bp,Bz,dBrdR,dBrdp,dBrdZ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
-  real*8 :: epsB, divB, dist_max, r_maxdist, z_maxdist 
+  real*8 :: epsB, divB, dist_max, r_maxdist, z_maxdist
   integer idir, nplot, nturns, neqn, nphi, npoint, i, j, ifile, nbad, nok, icontinue, k
   real*8 :: hr, hz, psipol(nr), r_psimax, z_psimax, psimax, theta_o_x
   real*8 :: a_min, b_min, c_min, tlr_min, f_min, x_min, z_min, brent, x1_min, x2_min, z1_min
@@ -26,17 +27,17 @@ program axis
   real*8 :: R_dpr_1, Z_dpr_1, R_dpr_2, Z_dpr_2, Z_cw_o_x, R_cw_o_x, theta_dpr, R_cw_dpr, Z_cw_dpr
   real*8 :: R_dpl_1, Z_dpl_1, R_dpl_2, Z_dpl_2, theta_dpl, R_cw_dpl, Z_cw_dpl
 ! mesh resolution:
-!  integer, parameter :: iterat=200, nt_core=100, nr_core=20, nr_pfr=30, nt_pfr=20, nr_sol=20 
+!  integer, parameter :: iterat=200, nt_core=100, nr_core=20, nr_pfr=30, nt_pfr=20, nr_sol=20
 !
 ! case: "finer":
-  integer, parameter :: iterat=200, nt_core=200, nr_core_max=150, nr_pfr=30, nt_pfr=20, nr_sol=60 
+  integer, parameter :: iterat=200, nt_core=200, nr_core_max=150, nr_pfr=30, nt_pfr=20, nr_sol=60
 ! case: "coarse":
 !  integer, parameter :: iterat=200, nt_core=100, nr_core_max=100, nr_pfr=30, nt_pfr=20, nr_sol=60
 ! case: "fine":
 !  integer, parameter :: iterat=200, nt_core=200, nr_core_max=200, nr_pfr=30, nt_pfr=20, nr_sol=60
 ! case: "extracoarse":
-!integer, parameter :: iterat=200, nt_core=50, nr_core_max=30, nr_pfr=30, nt_pfr=20, nr_sol=20  
-  
+!integer, parameter :: iterat=200, nt_core=50, nr_core_max=30, nr_pfr=30, nt_pfr=20, nr_sol=20
+
   integer, parameter :: nt_sol=nt_core+2*nt_pfr+1
   real*8, dimension(1:nt_sol) :: R_sep, Z_sep
   real*8, dimension(:), allocatable :: R_0_sol, Z_0_sol, psif_0_sol
@@ -50,7 +51,7 @@ program axis
   real*8 :: d_rational(n_rational) ! TODO: don't hardcode this
   real*8 :: tau_rad, tau_rad_old
   integer :: nr_core
-  
+
   external fff, rkqs, f_min, f_root
 
 !! default EFIT
@@ -70,7 +71,7 @@ program axis
 
   ! for case "finer"
 !!  d_rational(1) = .5675d0  ! q=1.5
-!!  d_rational(2) = .694d0  ! q=2 
+!!  d_rational(2) = .694d0  ! q=2
 !!  d_rational(3) = .7585d0  ! q=2.5
 !!  d_rational(4) = .808d0  ! q=3
 !!  d_rational(5) = .850d0  ! q=3.5
@@ -79,14 +80,14 @@ program axis
 !!  d_rational(8) = .971d0  ! q=5
 !!  d_rational(9) = .985d0  ! q=5.5
 !  !  d_rational(10) = .997d0 ! q=6
-  
+
 !  d_rational(1) = .335d0  ! q=1.5
-!  d_rational(2) = .445d0  ! q=2 
+!  d_rational(2) = .445d0  ! q=2
 !  d_rational(3) = .506d0  ! q=2.5
 !  d_rational(4) = .561d0  ! q=3
 !  d_rational(5) = .611d0  ! q=3.5
 !  ! d_rational(6) = .667d0 ! q=4.0
-  
+
   open(11, file='flt.inp')
   read(11,*)
   read(11,*)
@@ -123,7 +124,7 @@ program axis
 !!$zmx = -342.d0
 !!$
 !!$  hr = (rmx -  rmn)/dfloat(nr - 1)
-!!$  hz = (zmx -  zmn)/dfloat(nz - 1)  
+!!$  hz = (zmx -  zmn)/dfloat(nz - 1)
 !!$  psimax = -1.d30
 !!$  do i= 1,nz
 !!$     zzz = zmn + (i-1)*hz
@@ -131,7 +132,7 @@ program axis
 !!$     do j= 1,nr
 !!$        rrr = rmn + (j-1)*hr
 !!$        call field(rrr,ppp,zzz,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ                &
-!!$             ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ) 
+!!$             ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ)
 !!$!        psipol(j) = psif
 !!$        write(222,102) rrr, zzz, psif
 !!$        if(psif .gt. psimax) then
@@ -140,7 +141,7 @@ program axis
 !!$           z_psimax = zzz
 !!$        endif
 !!$     enddo
-!!$!     write(222,102)(psipol(k),k=200,300) !1,nr) 
+!!$!     write(222,102)(psipol(k),k=200,300) !1,nr)
 !!$  enddo
 !!$  close(222)
 
@@ -160,16 +161,16 @@ program axis
 
      r = y(1)
      z = y(2)
-     
-     write(*,*) i, raxis, zaxis 
+
+     write(*,*) i, raxis, zaxis
 
      dist_max = 0.d0
      do j=1,nturns
 
         phiout = phi + per_phi*idir
 
-        call odeint(y,neqn,phi,phiout,relerr,hn1,hn1min,nok,nbad,fff,rkqs) 
-        
+        call odeint(y,neqn,phi,phiout,relerr,hn1,hn1min,nok,nbad,fff,rkqs)
+
         npoint = npoint + 1
         phi = phiout
         rrr = y(1)  ! cylindic R
@@ -179,7 +180,7 @@ program axis
         if (ppp .lt. 0.) ppp = ppp + (int(abs(ppp)/per_phi) +1)*per_phi
         call field(rrr,ppp,zzz,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ                &
              ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ)
-           
+
         divB = Br/rrr + dBrdR + dBzdZ + dBpdp/rrr
         epsB = divB*rrr/Bp
 !        write(ifile,101)rrr,zzz,phi,epsB,Br,Bp,Bz, psif
@@ -210,9 +211,9 @@ program axis
 !        num_fixed = modulo(j,2) + 1
         if(j .eq. 1) then
            num_fixed = 2
-           a_min = 138.d0 
-           b_min = 143.d0 
-           c_min = 147.d0 
+           a_min = 138.d0
+           b_min = 143.d0
+           c_min = 147.d0
         else
            num_fixed = 1
            a_min = -93.d0 !50.d0
@@ -234,7 +235,7 @@ program axis
   enddo
   print *, "X-point: "
   print *, x1_min, x2_min, z_min
-  R_x = x1_min 
+  R_x = x1_min
   Z_x = x2_min
 
 ! core region, lines of psi=const:
@@ -258,13 +259,13 @@ program axis
         tau_rad_old = tau_rad
      end if
      if(tau_rad > 1.d0) then
-        R_o_x(i) = R_x  
-        Z_o_x(i) = Z_x 
+        R_o_x(i) = R_x
+        Z_o_x(i) = Z_x
     else
         R_o_x(i) = R_x + (1.d0-tau_rad)*(R_o - R_x)
         Z_o_x(i) = Z_x + (1.d0-tau_rad)*(Z_o - Z_x)
-        
-    !   R_o_x(i) = R_x + sqrt(1.d0-tau_rad)*(R_o - R_x)  
+
+    !   R_o_x(i) = R_x + sqrt(1.d0-tau_rad)*(R_o - R_x)
     !   Z_o_x(i) = Z_x + sqrt(1.d0-tau_rad)*(Z_o - Z_x)
      end if
      R_coord(1,i) = R_o_x(i)
@@ -301,7 +302,7 @@ program axis
   call field(rrr, ppp, zzz, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ   &
           ,dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
   psif_o_x(nr_core) = psif
-  write(112,101)R_o_x(nr_core), Z_o_x(nr_core), psif_o_x(nr_core), rho 
+  write(112,101)R_o_x(nr_core), Z_o_x(nr_core), psif_o_x(nr_core), rho
   close(112)
 
 print*, 'theta_o_x=', theta_o_x
@@ -314,7 +315,7 @@ print*, 'theta_o_x=', theta_o_x
   i=0
   do j=nt_core/2+1,nt_core-1
      i = nt_core - j + 1
-     delta_theta(j) =  delta_theta(j-1) + (delta_theta(i)-delta_theta(i-1)) 
+     delta_theta(j) =  delta_theta(j-1) + (delta_theta(i)-delta_theta(i-1))
   enddo
   tlr_root = 1.d-7
   do i=2,nr_core !-1
@@ -346,7 +347,7 @@ print*, 'theta_o_x=', theta_o_x
   zzz = Z_coord(1,1)
   call field(rrr, ppp, zzz, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ   &
           ,dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-  write(212,101)R_coord(1,1), Z_coord(1,1), psif, sqrt(Br**2 + Bp**2 + Bz**2), Bp 
+  write(212,101)R_coord(1,1), Z_coord(1,1), psif, sqrt(Br**2 + Bp**2 + Bz**2), Bp
   number_of_points =   number_of_points + 1
   ipoi_core(1:nt_core,1) = 1
   do i=2, nr_core
@@ -356,13 +357,13 @@ print*, 'theta_o_x=', theta_o_x
         call field(rrr, ppp, zzz, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ   &
              ,dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
         write(212,101)R_coord(j,i), Z_coord(j,i), psif, sqrt(Br**2 + Bp**2 + Bz**2), Bp
-        number_of_points =   number_of_points + 1 
+        number_of_points =   number_of_points + 1
         ipoi_core(j,i) = number_of_points
      enddo
   enddo
-  ipoi_core(nt_core+1,1:nr_core) = ipoi_core(1,1:nr_core) 
+  ipoi_core(nt_core+1,1:nr_core) = ipoi_core(1,1:nr_core)
   open(211,file='index_core.pnt')
-  write(211,*) number_of_points, nr_core, nt_core+1  
+  write(211,*) number_of_points, nr_core, nt_core+1
   write(211,999) ipoi_core(1:nt_core+1,1)
   do i=2, nr_core
      write(211,999) ipoi_core(1:nt_core+1,i)
@@ -382,7 +383,7 @@ print*, 'theta_o_x=', theta_o_x
   ipoi_pfr(:,:) = 0 ! all points are outside
   ibou_b2_pfr = nr_pfr
   do i=1,nr_pfr
-     R_0_pfr(i) = R_cw_o_x + delta_xo*(R_x - R_cw_o_x)*dfloat(i-1)  
+     R_0_pfr(i) = R_cw_o_x + delta_xo*(R_x - R_cw_o_x)*dfloat(i-1)
      Z_0_pfr(i) = Z_cw_o_x + delta_xo*(Z_x - Z_cw_o_x)*dfloat(i-1)
      R_coord(0,i) = R_0_pfr(i)
      Z_coord(0,i) = Z_0_pfr(i)
@@ -396,7 +397,7 @@ print*, 'theta_o_x=', theta_o_x
      write(114,101)R_0_pfr(i), Z_0_pfr(i), psif_0_pfr(i), sqrt((rrr-R_cw_o_x)**2 + (zzz-Z_cw_o_x)**2)
      if( PointIsInside(rrr, zzz) .and. i.ne.nr_pfr) then
         write(212,101)R_coord(0,i), Z_coord(0,i), psif, sqrt(Br**2 + Bp**2 + Bz**2), Bp
-        number_of_points = number_of_points + 1 
+        number_of_points = number_of_points + 1
         ipoi_pfr(0,i) = number_of_points
      else
         wall_touch=.true.
@@ -411,9 +412,9 @@ print*, 'theta_o_x=', theta_o_x
 !--------------------------------------------------------------------
 ! polar center for the right half of PFR:
   R_dpr_1 = 1.605d2
-  Z_dpr_1 = -1.2d2  
+  Z_dpr_1 = -1.2d2
   R_dpr_2 = 1.71146d2 !1.6034d2
-  Z_dpr_2 = 4.57d0 ! -1.6d1 
+  Z_dpr_2 = 4.57d0 ! -1.6d1
   call twostreights(R_o, Z_o, R_x, Z_x, R_dpr_1, Z_dpr_1, R_dpr_2, Z_dpr_2, R_dpr_o_x, Z_dpr_o_x)
   R0 = R_dpr_o_x !R_cw_o_x ! for f_root
   Z0 = Z_dpr_o_x !Z_cw_o_x
@@ -436,13 +437,13 @@ print*, 'theta_o_x=', theta_o_x
         if (theta .ge. twopi) theta = theta - (int(theta/twopi))*twopi
         if (theta .lt. 0.) theta = theta + (int(abs(theta)/twopi) +1)*twopi
 ! intersection of new theta=const with CW:
-        call in_out_cw(R_dpr_o_x, Z_dpr_o_x, rrr, zzz, out_of_cw, R_cw_dpr, Z_cw_dpr, theta)        
+        call in_out_cw(R_dpr_o_x, Z_dpr_o_x, rrr, zzz, out_of_cw, R_cw_dpr, Z_cw_dpr, theta)
         a_root = sqrt((R_cw_dpr-R0)**2 + (Z_cw_dpr-Z0)**2)
         rho = rtbis(f_root, a_root, b_root, tlr_root)
         if(rho .gt. rhohuge) cycle
-!        call in_out_cw(R_dpr_o_x, Z_dpr_o_x, rrr, zzz, out_of_cw, r_wall, z_wall, theta) 
-        r_tmp = rho*cos(theta) + R0 
-        z_tmp = rho*sin(theta) + Z0 
+!        call in_out_cw(R_dpr_o_x, Z_dpr_o_x, rrr, zzz, out_of_cw, r_wall, z_wall, theta)
+        r_tmp = rho*cos(theta) + R0
+        z_tmp = rho*sin(theta) + Z0
         if(i .eq. nr_pfr) then
            R_sep(nt_pfr-j+1) = r_tmp
            Z_sep(nt_pfr-j+1) = z_tmp
@@ -453,14 +454,14 @@ print*, 'theta_o_x=', theta_o_x
 !!$           call field(r_tmp, ppp, z_tmp, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ   &
 !!$                ,dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
 !!$           write(212,101)r_tmp, z_tmp, psif, sqrt(Br**2 + Bp**2 + Bz**2), Bp
-!!$           number_of_points = number_of_points + 1 
+!!$           number_of_points = number_of_points + 1
 !!$           ipoi_pfr(j,i) = -number_of_points
 !!$        else
         if( PointIsInside(r_tmp, z_tmp) .and. j.ne.nt_pfr) then
            call field(r_tmp, ppp, z_tmp, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ   &
                 ,dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
            write(212,101)r_tmp, z_tmp, psif, sqrt(Br**2 + Bp**2 + Bz**2), Bp
-           number_of_points = number_of_points + 1 
+           number_of_points = number_of_points + 1
            ipoi_pfr(j,i) = number_of_points
            R_coord(j,i) = r_tmp
            Z_coord(j,i) = z_tmp
@@ -472,10 +473,10 @@ print*, 'theta_o_x=', theta_o_x
   enddo
 ! -----------------------------------------------
 ! polar center for left half of PFR:
-  R_dpl_1 = 1.23d+02 
-  Z_dpl_1 =-1.10d+02 
-  R_dpl_2 = 1.71146d2 
-  Z_dpl_2 = 4.75d0 
+  R_dpl_1 = 1.23d+02
+  Z_dpl_1 =-1.10d+02
+  R_dpl_2 = 1.71146d2
+  Z_dpl_2 = 4.75d0
   call twostreights(R_o, Z_o, R_x, Z_x, R_dpl_1, Z_dpl_1, R_dpl_2, Z_dpl_2, R_dpl_o_x, Z_dpl_o_x)
   R0 = R_dpl_o_x !R_cw_o_x ! for f_root
   Z0 = Z_dpl_o_x !Z_cw_o_x
@@ -499,15 +500,15 @@ print*, 'theta_o_x=', theta_o_x
         if (theta .ge. twopi) theta = theta - (int(theta/twopi))*twopi
         if (theta .lt. 0.) theta = theta + (int(abs(theta)/twopi) +1)*twopi
 ! intersection of new theta=const with CW:
-        call in_out_cw(R_dpl_o_x, Z_dpl_o_x, rrr, zzz, out_of_cw, R_cw_dpl, Z_cw_dpl, theta)  
+        call in_out_cw(R_dpl_o_x, Z_dpl_o_x, rrr, zzz, out_of_cw, R_cw_dpl, Z_cw_dpl, theta)
 
         a_root = sqrt((R_cw_dpl-R0)**2 + (Z_cw_dpl-Z0)**2)
 
         rho = rtbis(f_root, a_root, b_root, tlr_root)
         if(rho .gt. rhohuge) cycle
-!        call in_out_cw(R_dpr_o_x, Z_dpr_o_x, rrr, zzz, out_of_cw, r_wall, z_wall, theta) 
-        r_tmp = rho*cos(theta) + R0 
-        z_tmp = rho*sin(theta) + Z0 
+!        call in_out_cw(R_dpr_o_x, Z_dpr_o_x, rrr, zzz, out_of_cw, r_wall, z_wall, theta)
+        r_tmp = rho*cos(theta) + R0
+        z_tmp = rho*sin(theta) + Z0
         if(i .eq. nr_pfr) then
 !print *,nt_pfr + nt_core -j +1
            R_sep(nt_pfr+nt_core-j+1) = r_tmp
@@ -517,7 +518,7 @@ print*, 'theta_o_x=', theta_o_x
 !!$           call field(r_tmp, ppp, z_tmp, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ   &
 !!$                ,dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
 !!$           write(212,101)r_tmp, z_tmp, psif, sqrt(Br**2 + Bp**2 + Bz**2), Bp
-!!$           number_of_points = number_of_points + 1 
+!!$           number_of_points = number_of_points + 1
 !!$           ipoi_pfr(j,i) = -number_of_points
 !!$           R_coord(j,i) = r_tmp
 !!$           Z_coord(j,i) = z_tmp
@@ -526,7 +527,7 @@ print*, 'theta_o_x=', theta_o_x
            call field(r_tmp, ppp, z_tmp, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ   &
                 ,dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
            write(212,101)r_tmp, z_tmp, psif, sqrt(Br**2 + Bp**2 + Bz**2), Bp
-           number_of_points = number_of_points + 1 
+           number_of_points = number_of_points + 1
            ipoi_pfr(j,i) = number_of_points
            R_coord(j,i) = r_tmp
            Z_coord(j,i) = z_tmp
@@ -536,8 +537,8 @@ print*, 'theta_o_x=', theta_o_x
         endif
      enddo
   enddo
-!!$  number_of_points = number_of_points - 1 ! remove X-point from the list 
-!!$  ipoi_pfr(0,nr_pfr) = 0                  ! 
+!!$  number_of_points = number_of_points - 1 ! remove X-point from the list
+!!$  ipoi_pfr(0,nr_pfr) = 0                  !
 !!$  do i=1,nr_pfr
 !!$     do j=-nt_pfr,nt_pfr
 !!$        if(ipoi_pfr(j,i) .ne. 0) then
@@ -558,24 +559,24 @@ print*, 'theta_o_x=', theta_o_x
   close(211)
 ! -------------------------------------------------------------------------
 ! SOL, radial mesh (given on bisectrix from X-point)
-  R0 = R_sep(nt_pfr+1) !  R_x 
+  R0 = R_sep(nt_pfr+1) !  R_x
   Z0 = Z_sep(nt_pfr+1) ! Z_x
   R1 = R_sep(nt_pfr)
-  Z1 = Z_sep(nt_pfr)  
+  Z1 = Z_sep(nt_pfr)
   R2 = R_sep(nt_pfr+2)
-  Z2 = Z_sep(nt_pfr+2) 
+  Z2 = Z_sep(nt_pfr+2)
   theta = (atan2(Z1-Z0,R1-R0) + atan2(Z2-Z0,R2-R0))*5.d-1
   if (theta .ge. twopi) theta = theta - (int(theta/twopi))*twopi
   if (theta .lt. 0.) theta = theta + (int(abs(theta)/twopi) +1)*twopi
 ! intersection of bisectrix passed from X-point with CW:
-  call in_out_cw(R_x, Z_x, rrr, zzz, out_of_cw, R_cw_bis, Z_cw_bis, theta)  
+  call in_out_cw(R_x, Z_x, rrr, zzz, out_of_cw, R_cw_bis, Z_cw_bis, theta)
   delta_xcw = 1.d0/dfloat(nr_sol-1)
   allocate(R_0_sol(nr_sol), Z_0_sol(nr_sol), psif_0_sol(nr_sol))
   deallocate(R_coord, Z_coord)
   allocate(R_coord(1:nt_sol,nr_sol), Z_coord(1:nt_sol,nr_sol), ipoi_sol(1:nt_sol,nr_sol))
   ipoi_sol(:,:) = 0 ! all points are outside
   do i=1,nr_sol
-     R_0_sol(i) = R_x - sqrt(delta_xcw*dfloat(i-1))*(R_x - R_cw_bis)  
+     R_0_sol(i) = R_x - sqrt(delta_xcw*dfloat(i-1))*(R_x - R_cw_bis)
      Z_0_sol(i) = Z_x - sqrt(delta_xcw*dfloat(i-1))*(Z_x - Z_cw_bis)
      ppp = 0.d0
      rrr = R_0_sol(i)
@@ -630,8 +631,8 @@ print*, 'theta_o_x=', theta_o_x
         print *,'No point found in SOL'
         stop
 11      continue
-        R_coord(j,i) = (R1 + R2)*5.d-1     
-        Z_coord(j,i) = (Z1 + Z2)*5.d-1   
+        R_coord(j,i) = (R1 + R2)*5.d-1
+        Z_coord(j,i) = (Z1 + Z2)*5.d-1
 
         R1 = R_coord(j,i)
         Z1 = Z_coord(j,i)
@@ -646,10 +647,10 @@ print*, 'theta_o_x=', theta_o_x
         psif1 = psif
         R2 = R1 - Bz*vec_norm
         Z2 = Z1 + Br*vec_norm
-        
+
         call field(R2, ppp, Z2, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ                &
              , dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
-        psif2 = psif  
+        psif2 = psif
      enddo rh
   enddo tht
   write(212,*) btf, rtf
@@ -657,7 +658,7 @@ print*, 'theta_o_x=', theta_o_x
 
 ! separatrix points:
   ipoi_sol(1:nt_pfr+1,1) = ipoi_pfr(nt_pfr:0:-1,nr_pfr)
-  ipoi_sol(nt_pfr+2:nt_pfr+1+nt_core,1) = ipoi_core(2:nt_core+1,nr_core) 
+  ipoi_sol(nt_pfr+2:nt_pfr+1+nt_core,1) = ipoi_core(2:nt_core+1,nr_core)
   ipoi_sol(nt_pfr+2+nt_core:nt_sol,1) = ipoi_pfr(-1:-nt_pfr:-1,nr_pfr)
   open(211,file='index_sol.pnt')
   write(211,*) number_of_points, nr_sol, nt_sol
@@ -674,6 +675,7 @@ end program axis
 ! -----------------------------------------------------------------
 subroutine fff(phi,y,yp)
   use period_mod
+  use field_sub, only : field
 
   implicit none
 
@@ -698,6 +700,7 @@ end subroutine fff
 function f_min(s)
   use fixed_coord, only : fixed, num_fixed
   use field_eq_mod, only : psif
+  use field_sub, only : field
   implicit none
   real*8 :: f_min, s
   real*8 :: rrr, zzz, ppp
@@ -712,7 +715,7 @@ function f_min(s)
      f_min = psif
   else
      rrr = s
-     zzz = fixed   
+     zzz = fixed
      call field(rrr, ppp, zzz, Br, Bp, Bz, dBrdR, dBrdp, dBrdZ   &
           ,dBpdR, dBpdp, dBpdZ, dBzdR, dBzdp, dBzdZ)
      f_min = -psif
@@ -725,6 +728,7 @@ end function f_min
 function f_root(rho)
   use field_eq_mod, only : psif
   use psi4root, only : psi_root, R0,  Z0, theta
+  use field_sub, only : field
   implicit none
   real*8 :: f_root, rho
   real*8 :: rrr, zzz, ppp
