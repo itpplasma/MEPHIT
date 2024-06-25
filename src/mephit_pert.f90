@@ -853,6 +853,7 @@ contains
     use input_files, only: pfile
     use mephit_conf, only: conf
     use mephit_util, only: imun, pi, linspace
+    use field_sub, only : read_field_input
     integer, intent(out) :: nR, nZ
     real(dp), intent(out) :: Rmin, Rmax, Zmin, Zmax
     complex(dp), intent(out), dimension(:, :), allocatable :: Bnvac_R, Bnvac_Z
@@ -1073,6 +1074,7 @@ contains
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use bdivfree_mod, only: nR, nZ, Rpoi, Zpoi
     use mephit_conf, only: datafile
+    use field_sub, only : field
     character(len = *), parameter :: dataset = 'equil'
     integer :: kR, kZ
     integer(HID_T) :: h5id_root

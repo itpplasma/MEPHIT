@@ -25,6 +25,7 @@
   use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
        theta0_at_xpoint, theta_axis, theta0
   use magdata_in_symfluxcoor_mod, only: btor, rbig
+  use field_sub, only : field_eq
 !
   implicit none
 !
@@ -199,7 +200,7 @@
   if (theta0_at_xpoint) then
     theta_axis = [x_point(1) - raxis, x_point(2) - zaxis]
     !theta0 = modulo(atan2(theta_axis(2),atan2(theta_axis(1))),2.d0*pi)
-    
+
   else
     theta_axis = [hbr*dfloat(nlabel), 0.d0]
   end if
@@ -296,6 +297,7 @@
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
   subroutine rhs_axis(phi,y,dy)
+  use field_sub, only : field_eq
 !
   implicit none
 !
@@ -327,6 +329,7 @@
   subroutine rhs_surf(phi,y,dy)
 !
   use rhs_surf_mod , only: dr_dphi, dz_dphi
+  use field_sub, only : field_eq
 !
   implicit none
 !
@@ -355,8 +358,8 @@
   end subroutine rhs_surf
 
 pure double precision function cross_2d_sign(a, b)
-  ! compute the sign of the 2d cross product a x b 
+  ! compute the sign of the 2d cross product a x b
   double precision, intent(in), dimension(2) :: a, b
-  
+
   cross_2d_sign = sign(1.d0, a(1) * b(2) - a(2) * b(1))
 end function cross_2d_sign

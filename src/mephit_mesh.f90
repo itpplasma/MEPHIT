@@ -2239,6 +2239,7 @@ contains
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
     use mephit_conf, only: conf, logger
     use mephit_util, only: pi
+    use field_sub, only : field
     type(coord_cache_t), dimension(:), intent(out) :: sample
     logical, intent(in) :: half_grid
     integer :: kf, kpol, k
@@ -2343,6 +2344,7 @@ contains
   subroutine compute_sample_Ires(sample_Ires, GL_weights, GL_order, m)
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
     use mephit_util, only: pi, binsearch, interp_psi_pol, gauss_legendre_unit_interval
+    use field_sub, only : field
     type(coord_cache_t), dimension(:, :), intent(inout), allocatable :: sample_Ires
     real(dp), dimension(:), intent(inout), allocatable :: GL_weights
     integer, intent(in) :: GL_order
@@ -3114,6 +3116,7 @@ contains
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext, psipol_max
     use mephit_conf, only: conf, logger, datafile
     use mephit_util, only: pi
+    use field_sub, only : field
     character(len = *), parameter :: dataset = 'debug_GPEC'
     character(len = 1024) :: filename
     logical :: file_exists
@@ -3618,6 +3621,7 @@ contains
 
   subroutine equilibrium_field(R, Z, B0, dB0_dR, dB0_dZ, psi, Bmod, dBmod_dR, dBmod_dZ)
     use field_eq_mod, only: psif, psib
+    use field_sub, only : field
     real(dp), intent(in) :: R, Z
     real(dp), intent(out), dimension(3) :: B0, dB0_dR, dB0_dZ
     real(dp), intent(out) :: psi, Bmod, dBmod_dR, dBmod_dZ
@@ -3884,6 +3888,7 @@ contains
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
     use mephit_conf, only: datafile
     use mephit_util, only: clight, pi, linspace
+    use field_sub, only : field
     character(len = *), parameter :: grp = 'debug_equil'
     integer, parameter :: ntheta = 512
     integer(HID_T) :: h5id_root

@@ -78,6 +78,7 @@ contains
     use field_eq_mod, only: skip_read, icall_eq, nwindow_r, nwindow_z, &
       nrad, nzet, psi_axis, psi_sep, btf, rtf, splfpol, rad, zet, psi, psi0
     use geqdsk_tools, only: geqdsk_t
+    use field_sub, only : field_eq
     type(geqdsk_t), intent(in) :: equil
     real(dp) :: dum
 
@@ -125,6 +126,7 @@ contains
 
   function interp_psi_pol(r, z) result(psi_pol)
     use field_eq_mod, only: psif, psib
+    use field_sub, only : field
 
     real(dp), intent(in) :: r, z
     real(dp) :: psi_pol
