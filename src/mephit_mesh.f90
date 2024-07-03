@@ -1101,7 +1101,7 @@ contains
     call func1d_init(Phi0, 1, nrad)
     Phi0%y(:) = 0d0
     do krad = 2, nrad
-      Phi0%y(krad) = Phi0%y(krad - 1) + (rsmall_interp(krad) - rsmall_interp(krad - 1)) &
+      Phi0%y(krad) = Phi0%y(krad - 1) - (rsmall_interp(krad) - rsmall_interp(krad - 1)) &
         * 0.5d0 * (E_r%y(krad) + E_r%y(krad - 1))
     end do
     Phi0%x(:) = E_r%x
