@@ -165,6 +165,9 @@ contains
       call write_cache
       call resample_profiles
       call write_profiles_hdf5(datafile, 'equil/profiles')
+      if (conf%resonance_sweep > 0) then
+        call resonance_sweep(datafile, 'resonance_sweep')
+      end if
       call vac_init(vac, mesh%nedge, mesh%ntri, mesh%m_res_min, mesh%m_res_max)
       call generate_vacfield(vac)
       call vac_write(vac, datafile, 'vac')
@@ -1237,7 +1240,7 @@ contains
     use mephit_conf, only: conf
     use mephit_util, only: imun, ev2erg, resample1d
     use mephit_mesh, only: equil, mesh, fs, fs_half, &
-      m_i, Z_i, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
+      dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
     use mephit_pert, only: polmodes_t, &
       vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, RT0_poloidal_modes
     type(RT0_t), intent(in) :: Bn
@@ -1259,7 +1262,7 @@ contains
       call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Im / fs_half%q, &
         fs%psi, Bmnpsi_over_B0phi%Im, 3)
       ! negate m_res and q because theta is assumed clockwise in this interface
-      call response_current(1, -m_res, mesh%n, mesh%nflux, m_i, Z_i, &
+      call response_current(1, -m_res, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
         mesh%R_O, fs%psi, -fs%q, fs%F, Phi0%y, mesh%avg_R2gradpsi2, &
         dens_e%y, temp_e%y * ev2erg, temp_i%y * ev2erg, nu_e%y, nu_i%y, &
         Bmnpsi_over_B0phi, jmnpar_over_Bmod%coeff(m_res, :), Phi_mn(:, m))
@@ -1300,7 +1303,7 @@ contains
     use mephit_mesh, only: mesh, cache
     use mephit_pert, only: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, vec_polmodes_write, &
       polmodes_t, polmodes_init, polmodes_deinit, polmodes_write, &
-      L1_poloidal_modes, RT0_poloidal_modes, L1_write, RT0_write
+      L1_poloidal_modes, RT0_poloidal_modes, L1_write, RT0_write, compute_Ires
     character(len = *), intent(in) :: name_fmt
     character(len = *), intent(in) :: comment
     type(L1_t), intent(in), optional :: presn
@@ -1393,6 +1396,79 @@ contains
     end if
   end subroutine perteq_write
 
+  subroutine resonance_sweep(file, group)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use netlib_mod, only: zeroin
+    use mephit_conf, only: conf, logger
+    use mephit_util, only: ev2erg, linspace, interp1d
+    use mephit_mesh, only: equil, mesh, cache, fs, dens_e, temp_e, temp_i, Phi0, nu_i, nu_e, E_r
+    use mephit_pert, only: L1_t, L1_init, L1_deinit, polmodes_t, polmodes_init, polmodes_deinit, &
+      L1_sum_poloidal_modes, compute_Ires
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    type(polmodes_t) :: jmnpar_over_Bmod
+    type(L1_t) :: jnpar_over_Bmod
+    real(dp) :: Delta_E_r(conf%resonance_sweep), E_r_zero(conf%resonance_sweep)
+    complex(dp) :: Bmnpsi_over_B0phi(0:mesh%nflux), &
+      Phi_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max), &
+      Imn_res(mesh%m_res_min:mesh%m_res_max, conf%resonance_sweep)
+    integer :: k, m, m_res, kf_min, kf_max
+    integer(HID_T) :: h5id_root
+
+    if (logger%info) then
+      write (logger%msg, '("Start resonance sweep with ", i0, " steps.")') &
+        conf%resonance_sweep
+      call logger%write_msg
+    end if
+    Bmnpsi_over_B0phi = (1d0, 0d0)
+    call polmodes_init(jmnpar_over_Bmod, conf%m_max, mesh%nflux)
+    jmnpar_over_Bmod%coeff(:, :) = (0d0, 0d0)
+    call L1_init(jnpar_over_Bmod, mesh%npoint)
+    kf_min = mesh%res_ind(mesh%m_res_min) - 1
+    kf_max = mesh%res_ind(mesh%m_res_max)
+    Delta_E_r = linspace(-E_r%y(kf_min), -E_r%y(kf_max), conf%resonance_sweep, 0, 0)
+    do k = 1, conf%resonance_sweep
+      E_r_zero(k) = zeroin(fs%rsmall(kf_min), fs%rsmall(kf_max), E_r_shifted, 1d-9)
+      do m = mesh%m_res_min, mesh%m_res_max
+        m_res = -equil%cocos%sgn_q * m
+        ! negate m_res and q because theta is assumed clockwise in this interface
+        call response_current(1, -m_res, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
+          mesh%R_O, fs%psi, -fs%q, fs%F, Phi0%y - fs%rsmall * Delta_E_r(k), mesh%avg_R2gradpsi2, &
+          dens_e%y, temp_e%y * ev2erg, temp_i%y * ev2erg, nu_e%y, nu_i%y, &
+          Bmnpsi_over_B0phi, jmnpar_over_Bmod%coeff(m_res, :), Phi_mn(:, m))
+      end do
+      call L1_sum_poloidal_modes(jmnpar_over_Bmod, jnpar_over_Bmod)
+      do m = mesh%m_res_min, mesh%m_res_max
+        call compute_Ires(cache%shielding(m)%sample_Ires, cache%shielding(m)%GL_weights, &
+          jnpar_over_Bmod, m, Imn_res(m, k))
+      end do
+    end do
+    call polmodes_deinit(jmnpar_over_Bmod)
+    call L1_deinit(jnpar_over_Bmod)
+    grp = trim(group)
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/E_r_zero', E_r_zero, lbound(E_r_zero), ubound(E_r_zero), &
+      comment = 'zero of electrical field in units of rsmall', unit = 'cm')
+    call h5_add(h5id_root, grp // '/Imn_res', Imn_res, lbound(Imn_res), ubound(Imn_res), &
+      comment = 'resonant current', unit = 'statA')
+    call h5_close(h5id_root)
+    if (logger%info) then
+      write (logger%msg, '("Finished resonance sweep with ", i0, " steps.")') &
+        conf%resonance_sweep
+      call logger%write_msg
+    end if
+
+  contains
+    function E_r_shifted(rsmall)
+      real(dp), intent(in) :: rsmall
+      real(dp) :: E_r_shifted
+
+      E_r_shifted = interp1d(fs%rsmall, E_r%y, rsmall, 3) + Delta_E_r(k)
+    end function E_r_shifted
+  end subroutine resonance_sweep
+
   subroutine check_furth(currn, Bn_plas)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, datafile
@@ -1440,44 +1516,5 @@ contains
     call h5_close(h5id_root)
     call vec_polmodes_deinit(Bmn_plas)
   end subroutine check_furth
-
-  !> compute resonant currents
-  subroutine compute_Ires(sample_Ires, GL_weights, jnpar_Bmod, m, Ires)
-    use mephit_conf, only: logger
-    use mephit_util, only: imun
-    use mephit_mesh, only: coord_cache_t, equil
-    use mephit_pert, only: L1_t, L1_interp
-    type(coord_cache_t), intent(in) :: sample_Ires(:, :)
-    real(dp), intent(in) :: GL_weights(:)
-    type(L1_t), intent(in) :: jnpar_Bmod
-    integer, intent(in) :: m
-    complex(dp), intent(out) :: Ires
-    integer :: nrad, npol, krad, kpol
-    complex(dp) :: jn_par, jmn_par
-
-    if (size(GL_weights) /= size(sample_Ires, 2)) then
-      call logger%msg_arg_size('compute_Ires', &
-        'size(GL_weights)', 'size(sample_Ires, 2)', &
-        size(GL_weights), size(sample_Ires, 2))
-      if (logger%err) call logger%write_msg
-      error stop
-    end if
-    npol = size(sample_Ires, 1)
-    nrad = size(sample_Ires, 2)
-    Ires = (0d0, 0d0)
-    do krad = 1, nrad
-      jmn_par = (0d0, 0d0)
-      do kpol = 1, npol
-        associate (s => sample_Ires(kpol, krad))
-          call L1_interp(jnpar_Bmod, s%ktri, s%R, s%Z, jn_par)
-          jn_par = jn_par * sqrt(s%B0_R ** 2 + s%B0_phi ** 2 + s%B0_Z ** 2)
-          ! jmn_par includes the area differential
-          jmn_par = jmn_par + s%sqrt_g / s%R * jn_par * &
-            exp(imun * equil%cocos%sgn_q * m * s%theta)
-        end associate
-      end do
-      Ires = Ires + jmn_par / dble(npol) * GL_weights(krad)
-    end do
-  end subroutine compute_Ires
 
 end module mephit_iter

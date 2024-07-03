@@ -107,6 +107,12 @@ module mephit_conf
     !> and conversion from A to statA / c_0.
     real(dp) :: Biot_Savart_prefactor = 5.0d-1
 
+    !> Mass number of ions. Defaults to 2.
+    real(dp) :: m_i = 2d0
+
+    !> Charge number of ions. Defaults to 1.
+    real(dp) :: Z_i = 1d0
+
     !> File containing coil currents. Defaults to 'coil.dat'.
     character(len = 1024) :: currents_file = 'coil.dat'
 
@@ -182,6 +188,9 @@ module mephit_conf
 
     !> Enable damping of the Pfirsch-Schlueter current. Defaults to true.
     logical :: damp = .true.
+
+    !> Number of points in sweep over electrical resonance. Defaults to 0 (sweep not performed).
+    integer :: resonance_sweep = 0
 
     !> Enable debugging of initial iterations without plasma response. Defaults to true.
     logical :: debug_initial = .true.
@@ -292,6 +301,10 @@ contains
     call h5_add(h5id_root, grp // '/refinement_scheme', config%refinement_scheme)
     call h5_add(h5id_root, grp // '/nonres', config%nonres)
     call h5_add(h5id_root, grp // '/quad_avg', config%quad_avg)
+    call h5_add(h5id_root, grp // '/m_i', config%m_i, &
+      comment = 'ion mass number')
+    call h5_add(h5id_root, grp // '/Z_i', config%Z_i, &
+      comment = 'ion charge number')
     call h5_add(h5id_root, grp // '/dens_file', config%dens_file)
     call h5_add(h5id_root, grp // '/temp_e_file', config%temp_e_file)
     call h5_add(h5id_root, grp // '/temp_i_file', config%temp_i_file)
@@ -326,6 +339,8 @@ contains
       comment = 'maximum density', unit = 'cm^-3')
     call h5_add(h5id_root, grp // '/damp', config%damp, &
       comment = 'enable damping of Pfirsch-Schlueter current')
+    call h5_add(h5id_root, grp // '/resonance_sweep', config%resonance_sweep, &
+      comment = 'Number of points for sweep over electrical resonance')
     call h5_add(h5id_root, grp // '/debug_initial', config%debug_initial, &
       comment = 'enable debugging of initial runs without plasma response')
     call h5_add(h5id_root, grp // '/debug_MFEM', config%debug_MFEM, &

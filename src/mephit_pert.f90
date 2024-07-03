@@ -12,9 +12,10 @@ module mephit_pert
     RT0_project_pol_comp, RT0_project_tor_comp, RT0_tor_comp_from_zero_div, &
     RT0_L2int_num, RT0_L2int, RT0_triplot, RT0_rectplot
   public :: polmodes_t, polmodes_init, polmodes_deinit, &
-    polmodes_write, polmodes_read, L1_poloidal_modes
+    polmodes_write, polmodes_read, L1_poloidal_modes, L1_sum_poloidal_modes
   public :: vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
     vec_polmodes_write, vec_polmodes_read, RT0_poloidal_modes
+  public :: compute_Ires
   public :: vac_t, vac_init, vac_deinit, vac_write, vac_read, generate_vacfield
 
   ! module variables
@@ -726,6 +727,28 @@ contains
     end do
   end subroutine L1_poloidal_modes
 
+  subroutine L1_sum_poloidal_modes(polmodes, elem)
+    use mephit_util, only: imun
+    use mephit_mesh, only: mesh, cache
+    type(polmodes_t), intent(in) :: polmodes
+    type(L1_t), intent(inout) :: elem
+    integer :: kf, kp, kpoi, m
+    complex(dp) :: fourier_basis(-polmodes%m_max:polmodes%m_max)
+
+    elem%DOF(:) = (0d0, 0d0)
+    elem%DOF(1) = polmodes%coeff(0, 0)
+    do kf = 1, mesh%nflux
+      do kp = 1, mesh%kp_max(kf)
+        kpoi = mesh%kp_low(kf) + kp
+        associate (s => cache%sample_polmodes(kpoi))
+          fourier_basis = [(exp(imun * m * s%theta), &
+            m = -polmodes%m_max, polmodes%m_max)]
+        end associate
+        elem%DOF(kpoi) = sum(polmodes%coeff(:, kf) * fourier_basis)
+      end do
+    end do
+  end subroutine L1_sum_poloidal_modes
+
   subroutine RT0_poloidal_modes(elem, vec_polmodes)
     use mephit_conf, only: conf
     use mephit_util, only: imun, bent_cyl2straight_cyl
@@ -765,6 +788,44 @@ contains
       end do
     end do
   end subroutine RT0_poloidal_modes
+
+  !> compute resonant currents
+  subroutine compute_Ires(sample_Ires, GL_weights, jnpar_Bmod, m, Ires)
+    use mephit_conf, only: logger
+    use mephit_util, only: imun
+    use mephit_mesh, only: coord_cache_t, equil
+    type(coord_cache_t), intent(in) :: sample_Ires(:, :)
+    real(dp), intent(in) :: GL_weights(:)
+    type(L1_t), intent(in) :: jnpar_Bmod
+    integer, intent(in) :: m
+    complex(dp), intent(out) :: Ires
+    integer :: nrad, npol, krad, kpol
+    complex(dp) :: jn_par, jmn_par
+
+    if (size(GL_weights) /= size(sample_Ires, 2)) then
+      call logger%msg_arg_size('compute_Ires', &
+        'size(GL_weights)', 'size(sample_Ires, 2)', &
+        size(GL_weights), size(sample_Ires, 2))
+      if (logger%err) call logger%write_msg
+      error stop
+    end if
+    npol = size(sample_Ires, 1)
+    nrad = size(sample_Ires, 2)
+    Ires = (0d0, 0d0)
+    do krad = 1, nrad
+      jmn_par = (0d0, 0d0)
+      do kpol = 1, npol
+        associate (s => sample_Ires(kpol, krad))
+          call L1_interp(jnpar_Bmod, s%ktri, s%R, s%Z, jn_par)
+          jn_par = jn_par * sqrt(s%B0_R ** 2 + s%B0_phi ** 2 + s%B0_Z ** 2)
+          ! jmn_par includes the area differential
+          jmn_par = jmn_par + s%sqrt_g / s%R * jn_par * &
+            exp(imun * equil%cocos%sgn_q * m * s%theta)
+        end associate
+      end do
+      Ires = Ires + jmn_par / dble(npol) * GL_weights(krad)
+    end do
+  end subroutine compute_Ires
 
   subroutine vac_init(this, nedge, ntri, m_min, m_max)
     use mephit_conf, only: conf

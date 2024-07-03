@@ -23,13 +23,7 @@ module mephit_mesh
 
   ! module variables
   public :: equil, psi_fine, fs, fs_half, mesh, cache
-  public :: m_i, Z_i, dens_e, temp_e, temp_i, E_r, Phi0, dPhi0_dpsi, nu_e, nu_i
-
-  !> mass number of ions
-  real(dp) :: m_i = 2d0
-
-  !> charge number of ions
-  real(dp) :: Z_i = 1d0
+  public :: dens_e, temp_e, temp_i, E_r, Phi0, dPhi0_dpsi, nu_e, nu_i
 
   !> Electron density profile \f$ n \f$ in cm^-3.
   type(func1d_t) :: dens_e
@@ -1057,7 +1051,7 @@ contains
 
   subroutine compute_auxiliary_profiles
     use magdata_in_symfluxcoor_mod, only: rsmall, psisurf, psipol_max
-    use mephit_conf, only: logger
+    use mephit_conf, only: conf, logger
     use mephit_util, only: func1d_init, resample1d
     integer :: nrad, krad
     real(dp), allocatable :: rsmall_interp(:), psi_interp(:)
@@ -1079,14 +1073,14 @@ contains
     ! (NRL Plasma Formulary 2016, p. 32)
     call func1d_init(nu_e, 1, nrad)
     nu_e%x(:) = dens_e%x
-    nu_e%y(:) = 7.7d-6 * (1d0 + Z_i) * dens_e%y / temp_e%y ** 1.5d0 &
-      * (24.d0 - log(sqrt(dens_e%y) / temp_e%y))
+    nu_e%y(:) = 7.7d-6 * (1d0 + conf%Z_i) * dens_e%y / temp_e%y ** 1.5d0 &
+      * (24.0d0 - log(sqrt(dens_e%y) / temp_e%y))
     ! transverse diffusion rate of fast ions in ion background
     ! (NRL Plasma Formulary 2016, p. 32)
     call func1d_init(nu_i, 1, nrad)
     nu_i%x(:) = dens_e%x
-    nu_i%y(:) = 1.8d-7 * Z_i ** 3 / sqrt(m_i) * dens_e%y / temp_i%y ** 1.5d0 &
-      * (23.d0 - log(Z_i ** 2.5d0 * sqrt(2.d0 * dens_e%y) / temp_i%y ** 1.5d0))
+    nu_i%y(:) = 1.8d-7 * conf%Z_i ** 3 / sqrt(conf%m_i) * dens_e%y / temp_i%y ** 1.5d0 &
+      * (23.0d0 - log(conf%Z_i ** 2.5d0 * sqrt(2.0d0 * dens_e%y) / temp_i%y ** 1.5d0))
     ! integrate electric field over rsmall to yield the electric potential
     nrad = size(E_r%x)
     allocate(rsmall_interp(nrad), psi_interp(nrad))
