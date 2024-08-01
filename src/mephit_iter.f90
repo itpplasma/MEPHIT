@@ -1429,7 +1429,7 @@ contains
     kf_max = mesh%res_ind(mesh%m_res_max)
     Delta_E_r = linspace(-E_r%y(kf_min), -E_r%y(kf_max), conf%resonance_sweep, 0, 0)
     do k = 1, conf%resonance_sweep
-      E_r_zero(k) = zeroin(fs%rsmall(kf_min), fs%rsmall(kf_max), E_r_shifted, 1d-9)
+      E_r_zero(k) = zeroin(fs%psi(kf_min), fs%psi(kf_max), E_r_shifted, 1d-9)
       do m = mesh%m_res_min, mesh%m_res_max
         m_res = -equil%cocos%sgn_q * m
         ! negate m_res and q because theta is assumed clockwise in this interface
@@ -1449,8 +1449,10 @@ contains
     grp = trim(group)
     call h5_open_rw(file, h5id_root)
     call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/Delta_E_r', Delta_E_r, lbound(Delta_E_r), ubound(Delta_E_r), &
+      comment = 'shift of electrical field', unit = 'statV cm^-1')
     call h5_add(h5id_root, grp // '/E_r_zero', E_r_zero, lbound(E_r_zero), ubound(E_r_zero), &
-      comment = 'zero of electrical field in units of rsmall', unit = 'cm')
+      comment = 'zero of electrical field in terms of poloidal flux', unit = 'Mx')
     call h5_add(h5id_root, grp // '/Imn_res', Imn_res, lbound(Imn_res), ubound(Imn_res), &
       comment = 'resonant current', unit = 'statA')
     call h5_close(h5id_root)
@@ -1461,11 +1463,11 @@ contains
     end if
 
   contains
-    function E_r_shifted(rsmall)
-      real(dp), intent(in) :: rsmall
+    function E_r_shifted(psi)
+      real(dp), intent(in) :: psi
       real(dp) :: E_r_shifted
 
-      E_r_shifted = interp1d(fs%rsmall, E_r%y, rsmall, 3) + Delta_E_r(k)
+      E_r_shifted = interp1d(fs%psi, E_r%y, psi, 3) + Delta_E_r(k)
     end function E_r_shifted
   end subroutine resonance_sweep
 

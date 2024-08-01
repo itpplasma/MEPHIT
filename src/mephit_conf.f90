@@ -192,6 +192,9 @@ module mephit_conf
     !> Number of points in sweep over electrical resonance. Defaults to 0 (sweep not performed).
     integer :: resonance_sweep = 0
 
+    !> Offset added to radial electric field. Defaults to 0.
+    real(dp) :: offset_E_r = 0d0
+
     !> Enable debugging of initial iterations without plasma response. Defaults to true.
     logical :: debug_initial = .true.
 
@@ -340,7 +343,9 @@ contains
     call h5_add(h5id_root, grp // '/damp', config%damp, &
       comment = 'enable damping of Pfirsch-Schlueter current')
     call h5_add(h5id_root, grp // '/resonance_sweep', config%resonance_sweep, &
-      comment = 'Number of points for sweep over electrical resonance')
+      comment = 'number of points for sweep over electrical resonance')
+    call h5_add(h5id_root, grp // '/offset_E_r', config%offset_E_r, &
+      comment = 'offset added to radial electric field', unit = 'statV cm^-1')
     call h5_add(h5id_root, grp // '/debug_initial', config%debug_initial, &
       comment = 'enable debugging of initial runs without plasma response')
     call h5_add(h5id_root, grp // '/debug_MFEM', config%debug_MFEM, &

@@ -1081,6 +1081,8 @@ contains
     nu_i%x(:) = dens_e%x
     nu_i%y(:) = 1.8d-7 * conf%Z_i ** 3 / sqrt(conf%m_i) * dens_e%y / temp_i%y ** 1.5d0 &
       * (23.0d0 - log(conf%Z_i ** 2.5d0 * sqrt(2.0d0 * dens_e%y) / temp_i%y ** 1.5d0))
+    ! add offset to electrical field
+    E_r%y = E_r%y + conf%offset_E_r
     ! integrate electric field over rsmall to yield the electric potential
     nrad = size(E_r%x)
     allocate(rsmall_interp(nrad), psi_interp(nrad))
