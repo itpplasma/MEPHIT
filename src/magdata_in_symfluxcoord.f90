@@ -84,7 +84,7 @@ contains
   do i=1,nlabel
     read (1,*) splcoe(0,1:ntheta)
     splcoe(0,0)=splcoe(0,ntheta)
-! 
+!
     call spl_per(nspl,nthetap1,h_theta,splcoe)
 !
     sqgnorm_st(:,:,i)=splcoe
@@ -119,15 +119,15 @@ contains
                                          sqrtg,bmod,dbmod_dtheta,R,dR_ds,dR_dtheta,       &
                                          Z,dZ_ds,dZ_dtheta, d2R_dpsi_dtheta, d2Z_dpsi_dtheta)
   !
-  ! Computes safety factor, sqrt(g) of symmetry flux coordinates, module of B, cylindrical 
+  ! Computes safety factor, sqrt(g) of symmetry flux coordinates, module of B, cylindrical
   ! coordinates R and Z
-  ! and poloidal angle of symmetry flux coordinates. 
-  ! Computes also derivative of module-B over the poloidal angle and derivatives of R, Z 
+  ! and poloidal angle of symmetry flux coordinates.
+  ! Computes also derivative of module-B over the poloidal angle and derivatives of R, Z
   ! Uses periodic spline interpolation over theta and Lagrange polynomial interpolation over flux srface label.
   ! Two flux surface labels can be used as an input: normalized toroidal flux s and dimensional poloidal
-  ! flux psi, depending on the input switch inp_label. If inp_label=1 s is an input variable and psi=psi(s) is computed. 
+  ! flux psi, depending on the input switch inp_label. If inp_label=1 s is an input variable and psi=psi(s) is computed.
   ! If inp_label=2, psi is an input variable, and s=s(psi) is computed.
-  ! 
+  !
   ! Input (inout) arguments:
   !                 inp_label - input switch: 1 for s and 2 for psi
   !                 s         - normalized toroidal flux (inout)
@@ -146,6 +146,8 @@ contains
   !                 dZ_ds     - derivative of Z over normalized toroidal or poloidal flux
   !                 dZ_dtheta - derivative of Z over polidal angle of symmetry flux coordinates theta
   !
+  use plag_coeff_sub, only : plag_coeff
+  use binsrc_sub, only : binsrc
   implicit none
   !
   integer :: inp_label,ir,it,k,km1,ibeg,iend

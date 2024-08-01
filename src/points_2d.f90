@@ -28,7 +28,7 @@ subroutine create_points_2d(inp_label, n_theta, points, points_s_theta_phi, r_sc
     logical, optional, intent(in) :: repeat_center_point ! set true if we are insym flux coords
     double precision, dimension(size(n_theta)) :: r_frac
     integer :: nlabel, i, j, isurf, point_idx, n_theta_current
-    
+
     double precision, dimension(:), allocatable :: theta_frac,theta_flux
 
     double precision :: s,psi,theta,q,dq_ds,sqrtg,bmod,dbmod_dtheta,R,dR_ds,dR_dtheta,Z,dZ_ds,dZ_dtheta
@@ -50,7 +50,7 @@ subroutine create_points_2d(inp_label, n_theta, points, points_s_theta_phi, r_sc
 !
     !r_frac = [(i, i = 1, nlabel,1)] / dfloat(nlabel)
     if (present(r_scaling_func)) r_frac = r_scaling_func(r_frac)
-    
+
     if(.not. allocated(r_frac_mod)) then
         allocate(r_frac_mod(nlabel))
         r_frac_mod = r_frac
@@ -59,15 +59,15 @@ subroutine create_points_2d(inp_label, n_theta, points, points_s_theta_phi, r_sc
         allocate(n_theta_vec(nlabel))
         n_theta_vec = n_theta
     endif
-!   
+!
 
-    !Switch for theta scaling 
+    !Switch for theta scaling
     !1 ... scaling in flux coordinates, 2 ... scaling in geometrical theta
     geom_flux = 2 !1 !<=sergei10.11.19
-!    
-! 
+!
+!
     point_idx = 1
-!     
+!
     do isurf=0, nlabel !for inner stuff
         if (isurf == 0) then
            n_theta_current = n_center_point
@@ -97,7 +97,7 @@ subroutine create_points_2d(inp_label, n_theta, points, points_s_theta_phi, r_sc
 
         theta_frac(:n_theta_current) = [(i, i=0, n_theta_current-1, 1)] / dfloat(n_theta_current)
         if (present(theta_scaling_func)) theta_frac(:n_theta_current) = &
-                         theta_scaling_func(theta_frac(:n_theta_current))        
+                         theta_scaling_func(theta_frac(:n_theta_current))
 !
         select case(geom_flux)
           case(1) !Theta scaling in flux coordinates
@@ -107,8 +107,8 @@ subroutine create_points_2d(inp_label, n_theta, points, points_s_theta_phi, r_sc
             !Transform geometric theta to symmetry flux theta (!De-normalize theta_frac --> real angle)
             call theta_geom2theta_flux(inp_label, s, psi, &
               theta_frac(:n_theta_current) * 2.d0 * pi, theta_flux(:n_theta_current))
-        end select   
-!              
+        end select
+!
         do j = 1, n_theta_current
             theta = theta_flux(j)
             call magdata_in_symfluxcoord_ext(inp_label, s,psi,theta,q,dq_ds,sqrtg,bmod,dbmod_dtheta, &
@@ -138,7 +138,7 @@ end subroutine create_points_2d
 !!$    double precision, dimension(size(n_theta)) :: r_frac
 !!$    integer :: nlabel, i, j, isurf, point_idx,n_theta_current
 !!$    integer :: n_center_point
-!!$    
+!!$
 !!$    double precision, dimension(:), allocatable :: theta_frac
 !!$
 !!$    double precision :: s,theta,vartheta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
@@ -161,7 +161,7 @@ end subroutine create_points_2d
 !!$!
 !!$    r_frac = s_min + [(dble(i)*(1.d0-s_min), i=1, size(r_frac), 1)] / (dble(nlabel))
 !!$    if (present(r_scaling_func)) r_frac = r_scaling_func(r_frac)
-!!$    
+!!$
 !!$    if(.not. allocated(r_frac_mod)) then
 !!$        allocate(r_frac_mod(nlabel))
 !!$        r_frac_mod = r_frac
@@ -170,8 +170,8 @@ end subroutine create_points_2d
 !!$        allocate(n_theta_vec(nlabel))
 !!$        n_theta_vec = n_theta
 !!$    endif
-!!$    
-!!$    
+!!$
+!!$
 !!$!
 !!$    point_idx = 1
 !!$    do isurf=0, nlabel
@@ -192,14 +192,14 @@ end subroutine create_points_2d
 !!$        theta_frac(:n_theta_current) = [(i, i=0, n_theta_current-1, 1)] / dfloat(n_theta_current)
 !!$        if (present(theta_scaling_func)) theta_frac(:n_theta_current) = &
 !!$                         theta_scaling_func(theta_frac(:n_theta_current))
-!!$!        
+!!$!
 !!$        do j = 1, n_theta_current
 !!$            theta = theta_frac(j) * 2.d0 * pi
 !!$            call splint_vmec_data(s,theta,varphi,A_phi,A_theta,dA_phi_ds,dA_theta_ds,aiota,       &
 !!$                                  R,Z,alam,dR_ds,dR_dt,dR_dp,dZ_ds,dZ_dt,dZ_dp,dl_ds,dl_dt,dl_dp)
-!!$!                                  
+!!$!
 !!$            vartheta = theta + alam
-!!$!            
+!!$!
 !!$            points_rphiz(:, point_idx) = [R, varphi, Z]
 !!$            points_sthetaphi(:, point_idx) = [s, theta, varphi]
 !!$            point_idx = point_idx + 1
@@ -214,6 +214,8 @@ end subroutine create_points_2d
 !
   subroutine theta_geom2theta_flux(inp_label, s, psi, theta_geom_vec,theta_flux_vec)
 !
+    use plag_coeff_sub, only: plag_coeff
+    use binsrc_sub, only: binsrc
     use magdata_in_symfluxcoor_mod, only : raxis,zaxis, magdata_in_symfluxcoord_ext
     use field_line_integration_mod, only: theta0_at_xpoint, theta0
 !
@@ -229,10 +231,10 @@ end subroutine create_points_2d
     double precision, dimension(ntheta_interp+nplag) :: theta_geom_interp, theta_flux_interp
 !
     ntheta = size(theta_geom_vec)
-    theta_flux_interp = dfloat([(i, i=-nplag/2,ntheta_interp-1+nplag/2, 1)])/ntheta_interp* 2.d0*pi 
-    
+    theta_flux_interp = dfloat([(i, i=-nplag/2,ntheta_interp-1+nplag/2, 1)])/ntheta_interp* 2.d0*pi
+
 !     print *, "theta_interp:",theta_flux_interp
-!     
+!
     !Calculate magnetic axis
 !    call magdata_in_symfluxcoord_ext(1,0.d0,psi,0.d0,q,dq_ds, &  !<=sergei10.11.19
 !                                           & sqrtg,bmod,dbmod_dtheta,R0,dR_ds,dR_dtheta, & !<=sergei10.11.19
@@ -259,8 +261,8 @@ end subroutine create_points_2d
         if(theta_geom_interp(i).lt.theta_geom_interp(i-1)) then
           theta_geom_interp(i) = theta_geom_interp(i)+ 2.d0*pi*(ceiling((theta_geom_interp(i-1)-(theta_geom_interp(i)))/(2.d0*pi))) !in case it intersects with 2pi-periodicity
 !         print *,'Error in theta_geom2theta_flux: Not monotonously ascending transformation function.'
-        endif  
-! 
+        endif
+!
         if(theta_geom_interp(i)-theta_geom_interp(i-1) .gt. pi) then
           print *, 'Error in theta_geom2theta_flux -> big jump in theta_geom_interp curve'
           !This error was likely caused by adding 2pi -> this means that the curve was not monotonously increasing
@@ -268,8 +270,8 @@ end subroutine create_points_2d
 !         print *,'Normalized theta_geom_interp values =',theta_geom_interp/(2.d0*pi)!(size(theta_geom_interp)-nplag/2)
 !         print *,'Normalized theta_flux_interp values =',theta_flux_interp/(2.d0*pi)!(size(theta_flux_interp)-nplag/2)
           error stop
-        endif  
-!          
+        endif
+!
       endif
     enddo
 !
@@ -279,7 +281,7 @@ end subroutine create_points_2d
 !        theta_flux_vec(i) = 0.d0                                     !<=sergei10.11.19
 !        cycle                                                        !<=sergei10.11.19
 !        endif                                                        !<=sergei10.11.19
-!         
+!
       !Find indices of theta_geom_vec(i) among sampling points
       theta = theta_geom_vec(i)                                       !<=sergei10.11.19
       if(theta.lt.theta_geom_interp(nplag/2+1)) then                  !<=sergei10.11.19
@@ -295,7 +297,7 @@ end subroutine create_points_2d
 !       print *, 'theta_geom_interp(i_theta_geom-1:i_theta_geom)',theta_geom_interp(i_theta_geom-1:i_theta_geom)
 !      call plag_coeff(nplag,0,theta_geom_vec(i),theta_geom_interp(i_theta_geom-nplag/2:i_theta_geom+nplag/2-1),coef)  !<=sergei10.11.19
       call plag_coeff(nplag,0,theta,theta_geom_interp(i_theta_geom-nplag/2:i_theta_geom+nplag/2-1),coef)  !<=sergei10.11.19
-      theta_flux_vec(i) = modulo(sum(coef*theta_flux_interp(i_theta_geom-nplag/2:i_theta_geom+nplag/2-1)),2.d0*pi)   
+      theta_flux_vec(i) = modulo(sum(coef*theta_flux_interp(i_theta_geom-nplag/2:i_theta_geom+nplag/2-1)),2.d0*pi)
 !       print *, 'geom values'
 !       print *, theta_geom_interp(i_theta_geom-nplag/2:i_theta_geom-nplag/2+1), &
 !      & theta_geom_vec(i),theta_geom_interp(i_theta_geom:i_theta_geom+1)
@@ -303,26 +305,25 @@ end subroutine create_points_2d
 !       print *, theta_flux_interp(i_theta_geom-nplag/2:i_theta_geom-nplag/2+1), &
 !      & theta_flux_vec(i),theta_flux_interp(i_theta_geom:i_theta_geom+1)
     enddo
-!     
+!
     do i = 1,ntheta
       if (theta_flux_vec(i).eq.0.d0) cycle
       theta = theta_flux_vec(i)
       call magdata_in_symfluxcoord_ext(1, s,psi,theta,q,dq_ds,sqrtg,bmod,dbmod_dtheta, &
                                              R,dR_ds,dR_dtheta,Z,dZ_ds,dZ_dtheta)
-!       
-!         
+!
+!
       diff1 = abs(modulo(atan2((Z-Z0),(R-R0)),2.d0*pi) - theta_geom_vec(i))
       diff2 = min(abs(modulo(atan2((Z-Z0),(R-R0)),2.d0*pi)), theta_geom_vec(i))+ 2.d0*pi - & !see if the distance over periodic
       &max(abs(modulo(atan2((Z-Z0),(R-R0)),2.d0*pi)), theta_geom_vec(i))                     !boundary is shorter than directly
-!              
-      diff = min(diff1,diff2)  
-! 
+!
+      diff = min(diff1,diff2)
+!
     enddo
-!    
+!
   end subroutine theta_geom2theta_flux
 !
 !ccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 !
 end module points_2d
 ! -----------------------------------------------------------------
-    
