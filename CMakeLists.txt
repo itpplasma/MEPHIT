@@ -84,7 +84,7 @@ find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
 find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
 
 # magfie
-find_library(magfie_lib magfie ${magfie_dir} NO_DEFAULT_PATH)
+find_library(magfie_lib magfie ${magfie_lib_dir} NO_DEFAULT_PATH)
 
 ### External source files
 include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
