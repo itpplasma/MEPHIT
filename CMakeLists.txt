@@ -44,7 +44,8 @@ if ("$ENV{LIBNEO_DIR}" STREQUAL "")
 else ()
   set(LIBNEO_DIR "$ENV{LIBNEO_DIR}")
 endif ()
-set(magfie_dir ${LIBNEO_DIR})
+set(magfie_include_dir ${LIBNEO_DIR}/include)
+set(magfie_lib_dir ${LIBNEO_DIR})
 set(HDF5_tools_include_dir ${LIBNEO_DIR})
 set(HDF5_tools_lib_dir ${LIBNEO_DIR}/src/hdf5_tools)
 
@@ -146,7 +147,7 @@ add_library(mephit SHARED
 )
 target_include_directories(mephit PUBLIC
   ${HDF5_tools_include_dir}
-  ${magfie_dir}
+  ${magfie_include_dir}
   ${FGSL_INC}
   ${NETCDF_INCLUDES}
   ${MFEM_INCLUDE_DIRS}
