@@ -2396,7 +2396,7 @@ contains
     integer :: kf, kp, kpoi, m
     real(dp), dimension(0:mesh%nflux) :: q_prime
 
-    allocate(mesh%avg_R2gradpsi2(mesh%nflux))
+    allocate(mesh%avg_R2gradpsi2(0:mesh%nflux))
     mesh%avg_R2gradpsi2(:) = 0d0
     do kf = 1, mesh%nflux
       do kp = 1, mesh%kp_max(kf)

@@ -1245,27 +1245,30 @@ contains
       vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, RT0_poloidal_modes
     type(RT0_t), intent(in) :: Bn
     type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
-    complex(dp), intent(inout) :: Phi_mn(:, mesh%m_res_min:)
-    complex(dp), intent(inout) :: Phi_aligned_mn(:, mesh%m_res_min:)
+    complex(dp), intent(out) :: Phi_mn(:, mesh%m_res_min:)
+    complex(dp), intent(out) :: Phi_aligned_mn(:, mesh%m_res_min:)
     integer :: m, m_res, kf_min
     complex(dp) :: Bmnpsi_over_B0phi(0:mesh%nflux)
     type(vec_polmodes_t) :: Bmn
 
     kf_min = 0 ! max(1, mesh%res_ind(mesh%m_res_min) / 4)
+    Bmnpsi_over_B0phi(:) = (0d0, 0d0)
     jmnpar_over_Bmod%coeff(:, :) = (0d0, 0d0)
+    Phi_mn(:, :) = (0d0, 0d0)
+    Phi_aligned_mn(:, :) = (0d0, 0d0)
     call vec_polmodes_init(Bmn, conf%m_max, mesh%nflux)
     call RT0_poloidal_modes(Bn, Bmn)
     do m = mesh%m_res_min, mesh%m_res_max
       m_res = -equil%cocos%sgn_q * m
       call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Re / fs_half%q, &
-        fs%psi, Bmnpsi_over_B0phi%Re, 3)
+        fs%psi(1:), Bmnpsi_over_B0phi(1:)%Re, 3)
       call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Im / fs_half%q, &
-        fs%psi, Bmnpsi_over_B0phi%Im, 3)
+        fs%psi(1:), Bmnpsi_over_B0phi(1:)%Im, 3)
       ! negate m_res and q because theta is assumed clockwise in this interface
       call response_current(1, -m_res, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
-        mesh%R_O, fs%psi, -fs%q, fs%F, Phi0%y, mesh%avg_R2gradpsi2, &
-        dens_e%y, temp_e%y * ev2erg, temp_i%y * ev2erg, nu_e%y, nu_i%y, &
-        Bmnpsi_over_B0phi, jmnpar_over_Bmod%coeff(m_res, :), Phi_mn(:, m))
+        mesh%R_O, fs%psi(1:), -fs%q(1:), fs%F(1:), Phi0%y(1:), mesh%avg_R2gradpsi2(1:), &
+        dens_e%y(1:), temp_e%y(1:) * ev2erg, temp_i%y(1:) * ev2erg, nu_e%y(1:), nu_i%y(1:), &
+        Bmnpsi_over_B0phi(1:), jmnpar_over_Bmod%coeff(m_res, 1:), Phi_mn(1:, m))
       Phi_aligned_mn(:, m) = imun * Bmnpsi_over_B0phi * fs%q * dPhi0_dpsi%y / (m_res + mesh%n * fs%q)
       jmnpar_over_Bmod%coeff(m_res, :kf_min) = (0d0, 0d0)  ! suppress spurious current near axis
     end do
@@ -1434,9 +1437,9 @@ contains
         m_res = -equil%cocos%sgn_q * m
         ! negate m_res and q because theta is assumed clockwise in this interface
         call response_current(1, -m_res, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
-          mesh%R_O, fs%psi, -fs%q, fs%F, Phi0%y - fs%rsmall * Delta_E_r(k), mesh%avg_R2gradpsi2, &
-          dens_e%y, temp_e%y * ev2erg, temp_i%y * ev2erg, nu_e%y, nu_i%y, &
-          Bmnpsi_over_B0phi, jmnpar_over_Bmod%coeff(m_res, :), Phi_mn(:, m))
+          mesh%R_O, fs%psi(1:), -fs%q(1:), fs%F(1:), Phi0%y(1:) - fs%rsmall(1:) * Delta_E_r(k), mesh%avg_R2gradpsi2(1:), &
+          dens_e%y(1:), temp_e%y(1:) * ev2erg, temp_i%y(1:) * ev2erg, nu_e%y(1:), nu_i%y(1:), &
+          Bmnpsi_over_B0phi(1:), jmnpar_over_Bmod%coeff(m_res, 1:), Phi_mn(1:, m))
       end do
       call L1_sum_poloidal_modes(jmnpar_over_Bmod, jnpar_over_Bmod)
       do m = mesh%m_res_min, mesh%m_res_max
