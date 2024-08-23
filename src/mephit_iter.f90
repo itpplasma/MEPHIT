@@ -1260,10 +1260,10 @@ contains
     call RT0_poloidal_modes(Bn, Bmn)
     do m = mesh%m_res_min, mesh%m_res_max
       m_res = -equil%cocos%sgn_q * m
-      call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Re / fs_half%q, &
-        fs%psi(1:), Bmnpsi_over_B0phi(1:)%Re, 3)
-      call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Im / fs_half%q, &
-        fs%psi(1:), Bmnpsi_over_B0phi(1:)%Im, 3)
+      call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Re / fs_half%q * &
+        equil%cocos%sgn_dpsi, fs%psi(1:), Bmnpsi_over_B0phi(1:)%Re, 3)
+      call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Im / fs_half%q * &
+        equil%cocos%sgn_dpsi, fs%psi(1:), Bmnpsi_over_B0phi(1:)%Im, 3)
       ! negate m_res and q because theta is assumed clockwise in this interface
       call response_current(1, -m_res, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
         mesh%R_O, fs%psi(1:), -fs%q(1:), fs%F(1:), Phi0%y(1:), mesh%avg_R2gradpsi2(1:), &
