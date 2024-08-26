@@ -43,6 +43,7 @@ with h5py.File(path.join(work_dir, 'mephit.h5'), 'r') as f:
     temp_i_interp = CubicSpline(f['/equil/profiles/temp_i/x'][()][::-1],
                                 f['/equil/profiles/temp_i/y'][()][::-1])
     data['B0'] = np.abs(f['/equil/bcentr'][()])
+    data['rsmall'] = f['/cache/fs/rsmall'][()]
     data['psi'] = f['/cache/fs/psi'][()]
     data['psi_res'] = f['/mesh/psi_res'][()]
     data['m_res_min'] = f['/mesh/m_res_min'][()]
@@ -53,6 +54,7 @@ with h5py.File(path.join(work_dir, 'mephit_protium.h5'), 'r') as f:
 
 data['E_r_res'] = E_r_interp(data['psi_res'])
 data['v_ExB'] = -1.0e2 * clight / data['B0'] * (data['E_r_res'] + data['Delta_E_r'][:, np.newaxis])
+data['v_ExB_orig'] = -1.0e2 * clight / data['B0'] * data['E_r_res']
 data['V_e_diamag'] = 1.0e1 / (-elementary_charge * data['B0'] * dens_interp(data['psi_res'])) * \
     (dens_interp(data['psi_res']) * temp_e_interp(data['psi_res'], nu=1) +
      dens_interp(data['psi_res'], nu=1) * temp_e_interp(data['psi_res']))
@@ -60,21 +62,22 @@ data['V_i_diamag'] = 1.0e1 / (elementary_charge * data['B0'] * dens_interp(data[
     (dens_interp(data['psi_res']) * temp_i_interp(data['psi_res'], nu=1) +
      dens_interp(data['psi_res'], nu=1) * temp_i_interp(data['psi_res']))
 
-for k in range(data['E_r_res'].size):
-    print(f"m = {k + data['m_res_min']:2}, E_r = {data['E_r_res'][k]:+.16e}")
-
 m_min = 6
 m_max = 7
 
 def normalize_psi(psi):
     return (psi - data['psi'][0]) / (data['psi'][-1] - data['psi'][0])
 
+psi_norm_to_rsmall = CubicSpline(normalize_psi(data['psi']), data['rsmall'])
+rsmall_to_psi_norm = CubicSpline(data['rsmall'], normalize_psi(data['psi']))
 
 # %%
-print(f"Delta_E_r at 0: {-data['E_r_res'][3]:+.16e}")
+for k in range(data['E_r_res'].size):
+    print(f"m = {k + data['m_res_min']:2}, E_r = {data['E_r_res'][k]:+.16e}")
+print(f"Delta_E_r(6) at 0: {-data['E_r_res'][3]:+.16e}")
 DeltaDelta_E_r = 0.2e5 * -1.0e-2 / clight * data['B0']
-print(f"Delta_E_r at +: {-data['E_r_res'][3] + DeltaDelta_E_r:+.16e}")
-print(f"Delta_E_r at -: {-data['E_r_res'][3] - DeltaDelta_E_r:+.16e}")
+print(f"Delta_E_r(6) at +: {-data['E_r_res'][3] + DeltaDelta_E_r:+.16e}")
+print(f"Delta_E_r(6) at -: {-data['E_r_res'][3] - DeltaDelta_E_r:+.16e}")
 
 # %%
 fig = plt.figure(figsize=(6, 4), dpi=150)
@@ -119,7 +122,7 @@ for m in range(m_min, m_max + 1):
 
 
 # %%
-fig = plt.figure(figsize=(6, 2 * (m_max - m_min + 1)), dpi=150)
+fig = plt.figure(figsize=(6, 2.25 * (m_max - m_min + 1)), dpi=150)
 axs = fig.subplots(m_max - m_min + 1, 1)
 for m in range(m_min, m_max + 1):
     k = m - data['m_res_min']
@@ -127,6 +130,7 @@ for m in range(m_min, m_max + 1):
     axs[m - m_min].axvline(0.0, linewidth=0.5, linestyle=':')
     axs[m - m_min].axvline(data['v_ExB'][eresoff[m - m_min], k], linewidth=0.5, linestyle='-')
     axs[m - m_min].axvline(data['v_ExB'][eres[m - m_min], k], linewidth=0.5, linestyle='--')
+    axs[m - m_min].axvline(data['v_ExB_orig'][m - data['m_res_min']], linewidth=0.5, linestyle='-.')
     # axs[m - m_min].axvline(0.5e-6 * data['V_e_diamag'][k], linewidth=0.5, linestyle='--')
     # axs[m - m_min].axvline(0.5e-6 * data['V_i_diamag'][k], linewidth=0.5, linestyle=':')
     mask = data['v_ExB'][:, k] > -data['v_ExB'][0, k]
@@ -139,12 +143,19 @@ for m in range(m_min, m_max + 1):
     xlim = np.array(axs[m - m_min].get_xlim())
     axs[m - m_min].set_xlim(np.array([-1.0, 1.0]) * np.amax(np.abs(xlim)))
     axs[m - m_min].set_xlabel(r'$V_{E \times B}$ / \si{\cm\per\second}')
-    axs[m - m_min].set_ylabel(r'$I_{\parallel \vec{m}}$ / \si{\ampere}')
+    axs[m - m_min].set_ylabel(r'$I_{\parallel \vec{m}}$ / a.u.')  # \si{\ampere}
     axs[m - m_min].legend(loc='lower right')
     axs[m - m_min].text(0.1, 0.1, fr"$\vec{{m}} = ({m * sgn_m_res}, 2)$",
                         ha='center', va='bottom', transform=axs[m - m_min].transAxes)
-    axs[m - m_min].text(data['v_ExB'][eres[m - m_min], k], 0.9, 'el.fl.res.', rotation=90,
-                        ha='right', va='top', transform=axs[m - m_min].get_xaxis_transform())
+    axs[m - m_min].text(data['v_ExB'][eres[m - m_min], k], 0.95,
+                        'on el.fl.res.', rotation=90, ha='right', va='top',
+                        transform=axs[m - m_min].get_xaxis_transform())
+    axs[m - m_min].text(data['v_ExB'][eresoff[m - m_min], k], 0.95,
+                        'off el.fl.res.', rotation=90, ha='right', va='top',
+                        transform=axs[m - m_min].get_xaxis_transform())
+    axs[m - m_min].text(data['v_ExB_orig'][m - data['m_res_min']], 0.45 if m == 7 else 0.95,
+                        r'orig.\ value', rotation=90, ha='right', va='top',
+                        transform=axs[m - m_min].get_xaxis_transform())
 fig.savefig(path.join(work_dir, 'sweep_resonance.pdf'), backend='pgf')
 plt.show()
 
@@ -193,7 +204,7 @@ for k, m in enumerate([6, 7]):
     axs[k].axhline(0.0, color='k', lw=0.5)
     axs[k].axvline(res[m - data['m_res_min']], color='k', lw=0.5, ls=':')
     axs[k].plot(Bmn['vac']['rho'][m_res][1:], np.abs(Bmn['vac']['var'][m_res][1:]),
-                ls=':', color='tab:purple', label='external perturbation only')
+                ls=':', color='tab:purple', label='vacuum perturbation')
     axs[k].plot(Bmn['GPEC']['rho'][m_res], np.abs(Bmn['GPEC']['var'][m_res]),
                 ls='-.', color='tab:purple', label='GPEC')
     axs[k].plot(Bmn['iMHD']['rho'][m_res][1:], np.abs(Bmn['iMHD']['var'][m_res][1:]),
@@ -256,4 +267,44 @@ for k, m in enumerate([6, 7]):
 ylims = axs[0].get_ylim()
 axs[0].set_ylim((ylims[0], 1.1 * ylims[1]))
 fig.savefig(path.join(work_dir, f'zoom_resonance.pdf'), backend='pgf', dpi=150)
+plt.show()
+
+# %%
+for isotope in ['D', 'H']:
+    txt = np.loadtxt(f'/temp/kasilov/MEPHIT-KILCA/VARENNA24/STANDALONE_PERTEFIELD/{isotope}/E_parallel.dat')
+    if isotope == 'D':
+        data['rad'] = txt[:, 0]
+    data[f'Epar_m6_{isotope}'] = np.empty(txt.shape[0], dtype=complex)
+    data[f'Epar_m6_{isotope}'].real = txt[:, 1] * clight * 1.0e-4
+    data[f'Epar_m6_{isotope}'].imag = txt[:, 2] * clight * 1.0e-4
+    data[f'Eperp_m6_{isotope}'] = np.empty(txt.shape[0], dtype=complex)
+    data[f'Eperp_m6_{isotope}'].real = txt[:, 4] * clight * 1.0e-4
+    data[f'Eperp_m6_{isotope}'].imag = txt[:, 5] * clight * 1.0e-4
+    txt = np.loadtxt(f'/temp/kasilov/MEPHIT-KILCA/VARENNA24/STANDALONE_PERTEFIELD/{isotope}/pert_current.dat')
+    data[f'Jpar_m6_{isotope}'] = np.empty(txt.shape[0], dtype=complex)
+    data[f'Jpar_m6_{isotope}'].real = txt[:, 1] * 1.75e-8  # a.u.
+    data[f'Jpar_m6_{isotope}'].imag = txt[:, 2] * 1.75e-8  # a.u.
+
+# %%
+fig = plt.figure(figsize=(6, 4), dpi=150)
+ax = fig.subplots()
+ax.plot(data['rad'], np.abs(data[f'Jpar_m6_D']), color='k', ls='-',
+        label=r'$\left\lvert J_{\parallel \vec{m}} \right\rvert$, D')
+ax.plot(data['rad'], np.abs(data[f'Jpar_m6_H']), color='tab:orange', ls='-',
+        label=r'$\left\lvert J_{\parallel \vec{m}} \right\rvert$, H')
+ax.plot(data['rad'], np.abs(data[f'Epar_m6_D']), color='k', ls='--',
+        label=r'$\bigl\lvert E_{\parallel \vec{m}}^{\text{MA}} \bigr\rvert$, D')
+ax.plot(data['rad'], np.abs(data[f'Epar_m6_H']), color='tab:orange', ls='--',
+        label=r'$\bigl\lvert E_{\parallel \vec{m}}^{\text{MA}} \bigr\rvert$, H')
+ax.set_xlim((48.75, 55.25))
+ax.set_xlabel(r'effective radius $r$ / \si{\centi\meter}')
+ax.xaxis.set_major_locator(ticker.MultipleLocator(0.5))
+secax = ax.secondary_xaxis(-0.2, functions=(rsmall_to_psi_norm, psi_norm_to_rsmall))
+secax.set_xlabel(r'normalized poloidal flux $\hat{\psi}$')
+secax.xaxis.set_major_locator(ticker.MultipleLocator(0.01))
+ax.set_ylabel(r'$\left\lvert J_{\parallel \vec{m}} \right\rvert$ / a.u., ' +
+              r'$\bigl\lvert E_{\parallel \vec{m}}^{\text{MA}} \bigr\rvert$ / \si{\volt\per\meter}')
+fig.legend(bbox_to_anchor=(1, 1), bbox_transform=ax.transAxes)
+ax.text(0.1, 0.9, fr"$\vec{{m}} = (-6, 2)$", ha='center', va='bottom', transform=ax.transAxes)
+fig.savefig(path.join(work_dir, f'Epar_Jpar.pdf'), backend='pgf', dpi=150)
 plt.show()
