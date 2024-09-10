@@ -779,6 +779,7 @@ contains
 
   !> 1D piecewise Lagrange polynomial interpolator
   function interp1d(sample_x, sample_y, resampled_x, n_lag, deriv) result(resampled_y)
+    use plag_coeff_sub, only : plag_coeff
     use mephit_conf, only: logger
     real(dp), intent(in) :: sample_x(:)
     real(dp), intent(in) :: sample_y(:)
@@ -825,6 +826,7 @@ contains
 
   !> 1D piecewise Lagrange polynomial resampler
   subroutine resample1d(sample_x, sample_y, resampled_x, resampled_y, n_lag, deriv)
+    use plag_coeff_sub, only : plag_coeff
     use mephit_conf, only: logger
     real(dp), intent(in) :: sample_x(:)
     real(dp), intent(in) :: sample_y(:)
