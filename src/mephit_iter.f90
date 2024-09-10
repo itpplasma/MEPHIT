@@ -838,6 +838,7 @@ contains
       end do
     end do
     ! assemble sparse matrix (COO format) from blocks
+    ! icol should be non-decreasing, and irow should be increasing for fixed icol
     call FDM_init(fdm, 2 * ndim)
     do kf = 1, mesh%nflux
       kedge = mesh%kp_low(kf)

@@ -86,27 +86,41 @@ find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
 # magfie
 find_library(magfie_lib magfie ${magfie_lib_dir} NO_DEFAULT_PATH)
 
-### External source files
-include(${CMAKE_SOURCE_DIR}/CMakeSources.txt)
-include_directories(${HDF5_INCLUDE_DIRS})
-
 ### Project source files
+# SuperLU
+set(SUPERLU_SRC_FILES
+  src/external/c_fortran_dgssv.c
+  src/external/c_fortran_zgssv.c
+)
+set(SUPERLU_FLAGS "${CFLAGS_DEBUG} ${CFLAGS} -I${SUPERLU_INCLUDES}")
+set_source_files_properties(${SUPERLU_SRC_FILES} PROPERTIES COMPILE_FLAGS ${SUPERLU_FLAGS})
+
+# SuiteSparse
+set(SUITESPARSE_SRC_FILES
+  src/external/umf4_f77wrapper.c
+  src/external/umf4_f77zwrapper.c
+)
+set(SUITESPARSE_FLAGS -I${SUITESPARSE_INCLUDE_DIRS})
+set_source_files_properties(src/external/umf4_f77wrapper.c  PROPERTIES COMPILE_FLAGS "${SUITESPARSE_FLAGS} -DDLONG")
+set_source_files_properties(src/external/umf4_f77zwrapper.c PROPERTIES COMPILE_FLAGS "${SUITESPARSE_FLAGS} -DZLONG")
+
 set(COMMON_FORTRAN_SRC_FILES
-  src/field_line_integration_for_SYNCH.f90
-  src/from_nrtype.f90
-  src/magdata_in_symfluxcoord.f90
-  src/odeint_allroutines.f
-  src/points_2d.f90
-  src/preload_for_SYNCH.f90
   src/external/netlib_mod.f90
   src/external/d1mach.f
   src/fftw3.f90
+  src/field_line_integration_for_SYNCH.f90
+  src/magdata_in_symfluxcoord.f90
+  src/odeint_allroutines.f
+  src/points_2d.f90
   src/sparse_mod.f90
   src/getIfunc.f90
   src/progonka.f90
   src/response_current.f90
   src/W2_arr.f90
 )
+set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
+  PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
+
 set(MEPHIT_FORTRAN_SRC_FILES
   src/mephit_conf.f90
   src/mephit_util.f90
@@ -114,25 +128,19 @@ set(MEPHIT_FORTRAN_SRC_FILES
   src/mephit_pert.f90
   src/mephit_iter.f90
 )
+set_source_files_properties(src/mephit_test.f90 ${MEPHIT_FORTRAN_SRC_FILES}
+  PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS}")
 
 set(MEPHIT_C_SRC_FILES
   src/mephit_util.c
   src/mephit_fem.c
   src/hyper1F1.c
 )
-
 set(MEPHIT_CPP_SRC_FILES
   src/mephit_fem.cpp
   src/magnetic_differential_equation.cpp
   src/miscellaneous.cpp
 )
-
-### Set compiler flags
-set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
-  PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
-set_source_files_properties(${MEPHIT_FORTRAN_SRC_FILES}
-  src/mephit_test.f90
-  PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS} ${LEGACY_FLAGS}")
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS}")
 
@@ -146,6 +154,7 @@ add_library(mephit SHARED
   ${MEPHIT_CPP_SRC_FILES}
 )
 target_include_directories(mephit PUBLIC
+  ${HDF5_INCLUDE_DIRS}
   ${HDF5_tools_include_dir}
   ${magfie_include_dir}
   ${FGSL_INC}
