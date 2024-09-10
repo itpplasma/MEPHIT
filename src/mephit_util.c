@@ -7,7 +7,7 @@
 void timestamp(char *buffer) {
   time_t t = time(NULL);
   struct tm *tm = localtime(&t);
-  snprintf(buffer, 20, "%04i-%02i-%02i %02i:%02i:%02i",
+  snprintf(buffer, 72, "%04i-%02i-%02i %02i:%02i:%02i",
            tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
            tm->tm_hour, tm->tm_min, tm->tm_sec);
 }
@@ -17,7 +17,7 @@ void errno_msg(void (*exit_func)(int), const char *file, int line, int errnum, c
   int bytes_written = 0;
   size_t size = 0;
   char *msg = NULL;
-  char now[20] = "1990-06-11 20:47:00";
+  char now[72] = "1990-06-11 20:47:00";
   va_list ap;
 
   va_start(ap, msg_fmt);

@@ -80,7 +80,7 @@ contains
     use geqdsk_tools, only: geqdsk_t
     use field_sub, only : field_eq
     type(geqdsk_t), intent(in) :: equil
-    real(dp) :: dum
+    real(dp), dimension(3) :: B0, dB0_dR, dB0_dphi, dB0_dZ
 
     ! compute equilibrium field
     ipert = 0
@@ -97,6 +97,7 @@ contains
     nrad = equil%nw
     nzet = equil%nh
     allocate(rad(nrad), zet(nzet), psi0(nrad, nzet), psi(nrad, nzet), splfpol(0:5, nrad))
+    ! convert to SI units because field_eq converts to Gaussian units on initialization
     psi_axis = equil%simag * 1d-8
     psi_sep = equil%sibry * 1d-8
     btf = equil%bcentr * 1d-4
@@ -105,7 +106,9 @@ contains
     psi(:, :) = equil%psirz * 1d-8
     rad(:) = equil%R_eqd * 1d-2
     zet(:) = equil%Z_eqd * 1d-2
-    call field_eq(0d0, 0d0, 0d0, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum, dum)
+    call field_eq(equil%rcentr, 0d0, equil%zmid, &
+      B0(1), B0(2), B0(3), dB0_dR(1), dB0_dphi(1), dB0_dZ(1), &
+      dB0_dR(2), db0_dphi(2), dB0_dZ(2), dB0_dR(3), dB0_dphi(3), dB0_dZ(3))
   end subroutine init_field
 
   subroutine deinit_field()

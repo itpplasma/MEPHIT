@@ -3617,14 +3617,14 @@ contains
 
   subroutine equilibrium_field(R, Z, B0, dB0_dR, dB0_dZ, psi, Bmod, dBmod_dR, dBmod_dZ)
     use field_eq_mod, only: psif, psib
-    use field_sub, only : field
+    use field_sub, only : field_eq
     real(dp), intent(in) :: R, Z
     real(dp), intent(out), dimension(3) :: B0, dB0_dR, dB0_dZ
     real(dp), intent(out) :: psi, Bmod, dBmod_dR, dBmod_dZ
-    real(dp) :: dum
+    real(dp), dimension(3) :: dB0_dphi
 
-    call field(R, 0d0, Z, B0(1), B0(2), B0(3), &
-      dB0_dR(1), dum, dB0_dZ(1), dB0_dR(2), dum, dB0_dZ(2), dB0_dR(3), dum, dB0_dZ(3))
+    call field_eq(R, 0d0, Z, B0(1), B0(2), B0(3), dB0_dR(1), dB0_dphi(1), dB0_dZ(1), &
+      dB0_dR(2), db0_dphi(2), dB0_dZ(2), dB0_dR(3), dB0_dphi(3), dB0_dZ(3))
     psi = psif - psib  ! see intperp_psi_pol in mephit_util
     Bmod = sqrt(sum(B0 ** 2))
     dBmod_dR = (sum(B0 * dB0_dR)) / Bmod

@@ -972,8 +972,8 @@ contains
     integer(HID_T) :: h5id_root
     character(len = len_trim(group)) :: grp
     integer :: ndim, kf, kpol, k
-    real(dp) :: dum, psi, B0(3), dB0_dR(3), dB0_dZ(3), Bmod, j0(3), dj0_dR(3), dj0_dZ(3), &
-      grad_j0B0(3), B0_grad_B0(3)
+    real(dp) :: psi, B0(3), dB0_dR(3), dB0_dZ(3), Bmod, dBmod_dR, dBmod_dZ, &
+      j0(3), dj0_dR(3), dj0_dZ(3), grad_j0B0(3), B0_grad_B0(3)
     complex(dp) :: Bn(3), dBn_dR(3), dBn_dphi(3), dBn_dZ(3), grad_BnB0(3), jnperp(3, 0:3)
     complex(dp), allocatable :: lorentz(:, :), pn(:), grad_pn(:, :), Bn_psi_contravar(:), &
       jnpar_Bmod(:), grad_jnpar_Bmod(:, :), div_jnperp(:), div_jnperp_RT0(:)
@@ -994,7 +994,7 @@ contains
       do kpol = 1, mesh%kp_max(kf)
         k = mesh%kp_low(kf) + kpol
         associate (s => cache%sample_polmodes(k))
-          call equilibrium_field(s%R, s%Z, B0, dB0_dR, dB0_dZ, psi, Bmod, dum, dum)
+          call equilibrium_field(s%R, s%Z, B0, dB0_dR, dB0_dZ, psi, Bmod, dBmod_dR, dBmod_dZ)
           call curr0_geqdsk(s%R, psi, B0, dB0_dR, dB0_dZ, j0, dj0_dR, dj0_dZ)
           call L1_interp(presn, s%ktri, s%R, s%Z, pn(k), grad_pn(:, k))
           call RT0_interp(magfn, s%ktri, s%R, s%Z, Bn, dBn_dR, dBn_dphi, dBn_dZ)
