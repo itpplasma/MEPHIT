@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.2
+#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: .venv
 #     language: python
@@ -122,8 +122,8 @@ for m in range(m_min, m_max + 1):
 
 
 # %%
-fig = plt.figure(figsize=(6, 2.25 * (m_max - m_min + 1)), dpi=150)
-axs = fig.subplots(m_max - m_min + 1, 1)
+fig = plt.figure(figsize=(3.6 * (m_max - m_min + 1), 2.9), dpi=150)
+axs = fig.subplots(1, m_max - m_min + 1)
 for m in range(m_min, m_max + 1):
     k = m - data['m_res_min']
     # axs[m - m_min].axhline(0.0, color='black', linewidth=0.5)
@@ -145,8 +145,8 @@ for m in range(m_min, m_max + 1):
     axs[m - m_min].set_xlabel(r'$V_{E \times B}$ / \si{\cm\per\second}')
     axs[m - m_min].set_ylabel(r'$I_{\parallel \vec{m}}$ / a.u.')  # \si{\ampere}
     axs[m - m_min].legend(loc='lower right')
-    axs[m - m_min].text(0.1, 0.1, fr"$\vec{{m}} = ({m * sgn_m_res}, 2)$",
-                        ha='center', va='bottom', transform=axs[m - m_min].transAxes)
+    axs[m - m_min].text(0.975, 0.25, fr"$\vec{{m}} = ({m * sgn_m_res}, 2)$",
+                        ha='right', va='bottom', transform=axs[m - m_min].transAxes)
     axs[m - m_min].text(data['v_ExB'][eres[m - m_min], k], 0.95,
                         'on el.fl.res.', rotation=90, ha='right', va='top',
                         transform=axs[m - m_min].get_xaxis_transform())
@@ -197,18 +197,18 @@ for m in [6, 7]:
             print(f"{sim}: {Ires[sim][m * sgn_m_res]}")
 
 # %%
-fig = plt.figure(figsize=(6, 5.4), dpi=150)
-axs = fig.subplots(2, 1, sharex='all')
+fig = plt.figure(figsize=(7.2, 2.9), dpi=150)
+axs = fig.subplots(2, 1, sharey='all')
 for k, m in enumerate([6, 7]):
     m_res = sgn_m_res * m
     axs[k].axhline(0.0, color='k', lw=0.5)
-    axs[k].axvline(res[m - data['m_res_min']], color='k', lw=0.5, ls=':')
+    axs[k].axvline(res[m - data['m_res_min']], color='k', lw=0.5)
     axs[k].plot(Bmn['vac']['rho'][m_res][1:], np.abs(Bmn['vac']['var'][m_res][1:]),
-                ls=':', color='tab:purple', label='vacuum perturbation')
-    axs[k].plot(Bmn['GPEC']['rho'][m_res], np.abs(Bmn['GPEC']['var'][m_res]),
-                ls='-.', color='tab:purple', label='GPEC')
+                ls=':', color='k', label='vacuum perturbation')  # purple
     axs[k].plot(Bmn['iMHD']['rho'][m_res][1:], np.abs(Bmn['iMHD']['var'][m_res][1:]),
                 ls='-.', color='tab:green', label='MEPHIT, iMHD')
+    axs[k].plot(Bmn['GPEC']['rho'][m_res], np.abs(Bmn['GPEC']['var'][m_res]),
+                ls='-.', color='tab:purple', label='GPEC')
     sim = f'D_eresoff_{m}'
     axs[k].plot(Bmn[sim]['rho'][m_res][1:], np.abs(Bmn[sim]['var'][m_res][1:]),
                 ls='-', color='k', label='MEPHIT, D off el.fl.res.')
@@ -223,17 +223,18 @@ for k, m in enumerate([6, 7]):
                 ls='--', color='tab:orange', label='MEPHIT, H on el.fl.res.')
     axs[k].xaxis.set_major_locator(ticker.MultipleLocator(0.1))
     axs[k].yaxis.set_major_locator(ticker.MultipleLocator(0.5e-4))
+    axs[k].set_xlabel(r'normalized poloidal flux $\hat{\psi}$')
     axs[k].yaxis.offsetText.set(x=-0.02, verticalalignment='top', horizontalalignment='right')
-    axs[k].set_ylabel(r'$\lvert (\sqrt{g} B^{\psi})_{\vec{m}} \rvert A^{-1}$ / \si{\tesla}')
     axs[k].text(0.1, 0.1, fr"$\vec{{m}} = ({m_res}, 2)$",
-            ha='center', va='bottom', transform=axs[k].transAxes)
-    axs[k].legend(loc='upper left')
-axs[1].set_xlabel(r'normalized poloidal flux $\hat{\psi}$')
-fig.savefig(path.join(work_dir, f'Bmn_67.pdf'), backend='pgf', dpi=150)
+        ha='center', va='bottom', transform=axs[k].transAxes)
+# axs[0].set_ylabel(r'$\lvert (\sqrt{g} B^{\psi})_{\vec{m}} \rvert A^{-1}$ / \si{\tesla}')
+axs[0].set_ylabel(r'normal mag. field perturbation / \si{\tesla}')
+axs[0].legend(loc='upper left')
+fig.savefig(path.join(work_dir, f'Bmn_6_kinetic.pdf'), backend='pgf', dpi=150)
 plt.show()
 
 # %%
-fig = plt.figure(figsize=(6, 3), dpi=150)
+fig = plt.figure(figsize=(6, 3.6), dpi=150)
 axs = fig.subplots(1, 2, sharey='all').ravel()
 for k, m in enumerate([6, 7]):
     axs[k].axhline(0.0, color='k', lw=0.5)
@@ -261,9 +262,9 @@ for k, m in enumerate([6, 7]):
     axs[k].xaxis.set_major_locator(ticker.MultipleLocator(0.025))
     axs[k].yaxis.set_tick_params(labelleft=True)
     axs[k].yaxis.offsetText.set(x=-0.02, verticalalignment='top', horizontalalignment='right')
-    axs[k].text(0.2, 0.1, fr"$\vec{{m}} = ({m * sgn_m_res}, 2)$",
+    axs[k].text(0.2, 0.05, fr"$\vec{{m}} = ({m * sgn_m_res}, 2)$",
                 ha='center', va='bottom', transform=axs[k].transAxes)
-    axs[k].legend(loc='upper left', fontsize='small')
+axs[0].legend(loc='upper left', fontsize='small')
 ylims = axs[0].get_ylim()
 axs[0].set_ylim((ylims[0], 1.1 * ylims[1]))
 fig.savefig(path.join(work_dir, f'zoom_resonance.pdf'), backend='pgf', dpi=150)
@@ -286,7 +287,7 @@ for isotope in ['D', 'H']:
     data[f'Jpar_m6_{isotope}'].imag = txt[:, 2] * 1.75e-8  # a.u.
 
 # %%
-fig = plt.figure(figsize=(6, 4), dpi=150)
+fig = plt.figure(figsize=(6, 3.6), dpi=150)
 ax = fig.subplots()
 ax.plot(data['rad'], np.abs(data[f'Jpar_m6_D']), color='k', ls='-',
         label=r'$\left\lvert J_{\parallel \vec{m}} \right\rvert$, D')

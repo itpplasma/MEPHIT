@@ -34,7 +34,7 @@ jmnpar_Bmod = [
     mephit.get_polmodes('total', '/debug_KiLCA/jmnpar_Bmod_total/coeff', conversion, L1=True),
     mephit.get_polmodes('gyrokinetic', '/debug_KiLCA/jmnpar_Bmod_KiLCA/coeff', conversion, L1=True),
     mephit.get_polmodes('iMHD', '/debug_KiLCA/jmnpar_Bmod_incl/coeff', conversion, L1=True),
-    mephit.get_polmodes('iMHD (undamped)', '/debug_KiLCA/jmnpar_Bmod_excl/coeff', conversion, L1=True),
+    # mephit.get_polmodes('iMHD (undamped)', '/debug_KiLCA/jmnpar_Bmod_excl/coeff', conversion, L1=True),
 ]
 mephit_Ires = mephit.get_Ires()
 gpec_Ires = gpec.get_Ires()
@@ -53,10 +53,10 @@ for m in mephit.post['m_res']:
     mask = (jmnpar_Bmod[0]['rho'][m] >= res[k] - 4.5 * delta_mn[k]) & \
         (jmnpar_Bmod[0]['rho'][m] <= res[k] + 4.5 * delta_mn[k])
     ax.axvline(res[k], color='k', lw=0.5)
-    ax.axvline(res[k] - 0.5 * delta_mn[k], color='k', lw=0.25, ls='--')
-    ax.axvline(res[k] + 0.5 * delta_mn[k], color='k', lw=0.25, ls='--')
+    ax.axvline(res[k] - delta_mn[k], color='k', lw=0.25, ls='--')
+    ax.axvline(res[k] + delta_mn[k], color='k', lw=0.25, ls='--')
     for polmode in jmnpar_Bmod:
-        ax.semilogy(polmode['rho'][m][mask], np.abs(polmode['var'][m][mask]), label=polmode['label'])
+        ax.plot(polmode['rho'][m][mask], np.abs(polmode['var'][m][mask]), label=polmode['label'])
     ax.set_xlabel(r'$\hat{\psi}$')
     ax.set_ylabel(r'$\mu_{0} \lvert (J_{n}^{\parallel} B_{0}^{-1})_{m} \rvert$ / \si{\per\meter}')
     ax.set_title(f"$m = {m}$")

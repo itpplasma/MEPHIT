@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.1
+#       jupytext_version: 1.16.4
 #   kernelspec:
 #     display_name: Python 3
 #     language: python
@@ -17,7 +17,7 @@
 # %%
 # %matplotlib inline
 from os import environ, getcwd, path
-from matplotlib import rcParams
+from matplotlib import rcParams, ticker
 import matplotlib.pyplot as plt
 from matplotlib.tri import Triangulation
 from matplotlib.colors import LogNorm
@@ -30,7 +30,7 @@ rcParams['pgf.preamble'] = r'\usepackage{import}\import{' + getcwd() + r'}{mephi
 h5py.get_config().complex_names = ('real', 'imag')
 
 # %%
-work_dir = path.join(environ['MEPHIT_DIR'], 'run/47046')  # 33353_2900_EQH
+work_dir = path.join(environ['MEPHIT_DIR'], 'run/33353_2900_EQH')  # 47046
 data = {}
 with h5py.File(path.join(work_dir, 'mephit.h5'), 'r') as f:
     data['eigvals'] = f['/iter/eigvals'][()]
@@ -71,6 +71,7 @@ plt.show()
 # %%
 fig = plt.figure(figsize=(3.3, 3.3), dpi=150)
 ax = fig.subplots(subplot_kw={'projection': 'polar'})
+ax.plot(np.linspace(0, 2 * np.pi, 100), np.ones(100) * data['supremum'], '--', color='tab:gray')
 ax.plot(np.angle(data['eigvals']), np.abs(data['eigvals']), 'o', markersize=3)
 ax.set_yscale('symlog', linthresh=1.0)
 ax.set_rlabel_position(90)
@@ -91,23 +92,25 @@ plt.show()
 if 'kernel' in data:
     fig = plt.figure(figsize=(3.3, 4.0), dpi=300)
     ax = fig.subplots()
-    im = ax.tripcolor(data['triangulation'], data['kernel'], cmap=cc.m_fire,
+    im = ax.tripcolor(data['triangulation'], data['kernel'], cmap=cc.m_fire, rasterized=True,
                       norm=LogNorm(vmin=data['kernel'].min(), vmax=data['kernel'].max()))
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(0.25))
     ax.set_aspect('equal')
     ax.set_xlabel(r'$R$ / \si{\meter}')
     ax.set_ylabel(r'$Z$ / \si{\meter}')
     cbar = fig.colorbar(im)
-    fig.savefig(path.join(work_dir, 'preconditioner_kernel.png'))
+    fig.savefig(path.join(work_dir, 'preconditioner_kernel.pdf'), backend='pgf')
     plt.show()
 
 # %%
 if 'eigvec' in data:
     fig = plt.figure(figsize=(3.3, 4.0), dpi=300)
     ax = fig.subplots()
-    im = ax.tripcolor(data['triangulation'], data['eigvec'], cmap=cc.m_fire)
+    im = ax.tripcolor(data['triangulation'], data['eigvec'], cmap=cc.m_fire, rasterized=True)
+    ax.xaxis.set_major_locator(ticker.MultipleLocator(0.25))
     ax.set_aspect('equal')
     ax.set_xlabel(r'$R$ / \si{\meter}')
     ax.set_ylabel(r'$Z$ / \si{\meter}')
     cbar = fig.colorbar(im)
-    fig.savefig(path.join(work_dir, 'dominant_eigenvector.png'))
+    fig.savefig(path.join(work_dir, 'dominant_eigenvector.pdf'), backend='pgf')
     plt.show()
