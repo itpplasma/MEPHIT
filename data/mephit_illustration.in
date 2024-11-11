@@ -3,24 +3,28 @@
    config%log_level = 4
    ! 0: single iteration, 1: direct iterations, 2: preconditioned iterations
    config%runmode = 2
-   ! 0: EPS 2018 paper profile, 1: parabolic profile, 2: EQDSK profile
+   ! use non-resonant test case
+   config%nonres = .false.
+   ! average over quadrilaterals for non-resonant test case
+   config%quad_avg = .true.
+   ! 0: EPS paper profile, 1: parabolic profile, 2: EQDSK profile
    config%pres_prof = 2
    ! 0: only PS current, 1: rot B_0, 2: EQDSK profile
    config%curr_prof = 2
    ! 0: surface integral, 1: field line integral, 2: EQDSK profile
    config%q_prof = 1
-   ! 0: geometric series around resonance, 1: Gaussian profile
-   config%refinement_scheme = 0
-   ! 0: iMHD, 1: FLRE 2nd order
+   ! 0: iMHD, 1: KiLCA interface
    config%currn_model = 1
    ! 0: Viktor Nemov's code, 1: GPEC, 2: pre-computed Fourier transform
    config%vac_src = 2
+   ! mass number of ions
+   config%m_i = 2.0
    ! prefactor in Biot-Savart law, e.g. 5 windings and conversion from A to statA / c_0
    config%Biot_Savart_prefactor = 5.0d-1
-   !> file containing coil field data
-   config%coil_file = '/proj/plasma/CODE/lainer_p/MEPHIT/build/run/AUG_B_coils.h5'
    !> file containing coil currents
    config%currents_file = '/proj/plasma/DATA/BALANCE/COIL/33353/33353.2900_coil_markl.dat'
+   !> file containing coil geometries
+   config%coil_file = '/temp/lainer_p/MEPHIT-run/AUG_B_coils.h5'
    !> file containing equilibrium density profile
    config%dens_file = '/proj/plasma/DATA/BALANCE/PROF/33353/33353.2900_ne_PED_MMARKL_rho_pol.dat'
    !> file containing equilibrium electron temperature profile
@@ -29,8 +33,6 @@
    config%temp_i_file = '/proj/plasma/DATA/BALANCE/PROF/33353/33353.2900_Ti_PED_MMARKL_rho_pol.dat'
    !> file containing equilibrium radial electric field profile
    config%E_r_file = '/proj/plasma/DATA/BALANCE/PROF/33353/33353_2900_Er.dat'
-   ! mass number of ions
-   config%m_i = 2.0
    ! toroidal mode number of perturbation
    config%n = 2
    ! maximum number of iteration steps
@@ -44,45 +46,36 @@
    ! maximim relative error for eigenvalues in preconditioner
    config%ritz_rel_err = 1d-9
    ! maximum distance between flux surfaces along theta = 0
-   config%max_Delta_rad = 1.0d0
-   ! maximum number of points per flux surface (0: no maximum)
-   config%pol_max = 0
-   ! minimum number of points per flux surface (0: no minimum)
-   config%pol_min = 0
-   ! ignore resonance position where q = 1, which is usually spurious
-   config%ignore_q1_res = .true.
-   ! enable damping of Pfirsch-Schlueter current near resonances
+   config%max_Delta_rad = 1.75d0
+   ! enable damping of Pfirsch-Schlueter current
    config%damp = .true.
-   ! maximal number of eigenvectors to be saved
-   config%max_eig_out = 10
-   ! maximum poloidal mode number for Fourier transform of results
-   config%m_max = 24
-   ! number of points in sweep over electron fluid resonance
+   ! number of points in resonance sweeep
    config%resonance_sweep = 0
-   ! offset added to radial electric field
-   config%offset_E_r = 0.0d0
+
+   config%debug_mfem = .false.
+   config%pol_max = 0
 /
 &arrays
-   refinement(3) = 1.5d0
-   refinement(4) = 1.5d0
-   refinement(5) = 1.5d0
-   refinement(6) = 1.5d0
-   refinement(7) = 1.5d0
-   refinement(8) = 1.5d0
-   refinement(9) = 1.5d0
+   refinement(3) = 1.618d0
+   refinement(4) = 1.618d0
+   refinement(5) = 0.0d0
+   refinement(6) = 0.0d0
+   refinement(7) = 0.0d0
+   refinement(8) = 0.0d0
+   refinement(9) = 0.0d0
    refinement(10) = 0.0d0
    refinement(11) = 0.0d0
-   add_fine(3) = 4
-   add_fine(4) = 4
-   add_fine(5) = 4
-   add_fine(6) = 4
-   add_fine(7) = 4
-   add_fine(8) = 4
-   add_fine(9) = 2
+   add_fine(3) = 1
+   add_fine(4) = 1
+   add_fine(5) = 1
+   add_fine(6) = 1
+   add_fine(7) = 1
+   add_fine(8) = 1
+   add_fine(9) = 1
    add_fine(10) = 0
    add_fine(11) = 0
-   Delta_rad_res(3) = 1.300211470239295e-02
-   Delta_rad_res(4) = 1.782989651072676e-02
+   Delta_rad_res(3) = 3.5e-01  ! 1.300211470239295e-02
+   Delta_rad_res(4) = 3.5e-01  ! 1.782989651072676e-02
    Delta_rad_res(5) = 1.786554488832890e-02
    Delta_rad_res(6) = 1.177360561550166e-02
    Delta_rad_res(7) = 1.330771149330919e-02

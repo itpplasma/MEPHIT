@@ -3,17 +3,16 @@
    config%log_level = 4
    ! 0: single iteration, 1: direct iterations, 2: preconditioned iterations
    config%runmode = 2
-   ! use non-resonant test case
-   config%nonres = .false.
-   ! average over quadrilaterals for non-resonant test case
-   config%quad_avg = .true.
-   ! 0: EPS paper profile, 1: parabolic profile, 2: EQDSK profile
+   ! 0: EPS 2018 paper profile, 1: parabolic profile, 2: EQDSK profile
    config%pres_prof = 2
    ! 0: only PS current, 1: rot B_0, 2: EQDSK profile
    config%curr_prof = 2
    ! 0: surface integral, 1: field line integral, 2: EQDSK profile
    config%q_prof = 1
-
+   ! 0: geometric series around resonance, 1: Gaussian profile
+   config%refinement_scheme = 0
+   ! 0: iMHD, 1: FLRE 2nd order
+   config%currn_model = 0
    ! toroidal mode number of perturbation
    config%n = 2
    ! maximum number of iteration steps
@@ -28,18 +27,18 @@
    config%ritz_rel_err = 1d-12
    ! maximum distance between flux surfaces along theta = 0
    config%max_Delta_rad = 0.45d0
-   ! temperature on magnetic axis
-   config%temp_max = 3.d3
-   ! minimum temperature
-   config%temp_min = 2d1
-   ! density on magnetic axis
-   config%dens_max = 5.d13
-   ! minimum density
-   config%dens_min = 2d11
-   ! damping factor for resonances
-   config%damp = 0d0
+   ! maximum number of points per flux surface (0: no maximum)
+   config%pol_max = 0
+   ! minimum number of points per flux surface (0: no minimum)
+   config%pol_min = 0
+   ! ignore resonance position where q = 1, which is usually spurious
+   config%ignore_q1_res = .true.
+   ! enable damping of Pfirsch-Schlueter current near resonances
+   config%damp = .true.
    ! maximal number of eigenvectors to be saved
    config%max_eig_out = 10
+   ! maximum poloidal mode number for Fourier transform of results
+   config%m_max = 24
    ! single poloidal mode number used with KiLCA
    config%kilca_pol_mode = 4
    ! scaling factor used in EQDSK rmaxis from KiLCA
@@ -53,5 +52,5 @@
    ! deleted flux surfaces around resonances
    deletions(4) = 1
    ! coefficients for sheet currents
-   sheet_current_factor(4) = (1d4, 1d4)
+   sheet_current_factor(4) = 1d4
 /

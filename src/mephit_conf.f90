@@ -81,7 +81,7 @@ module mephit_conf
     !> #curr_prof_rot, and #curr_prof_geqdsk (default).
     integer :: curr_prof = curr_prof_geqdsk
 
-    !> Source of safety factor profile. Possivle values are #q_prof_flux, #q_prof_rot
+    !> Source of safety factor profile. Possible values are #q_prof_flux, #q_prof_rot
     !> (default), and #q_prof_geqdsk
     integer :: q_prof = q_prof_rot
 
@@ -167,8 +167,8 @@ module mephit_conf
     logical :: ignore_q1_res = .true.
 
     !> Maximum distance between flux surfaces along \f$ \theta = 0 \f$. Defaults
-    !> to 0.45 cm.
-    real(dp) :: max_Delta_rad = 0.2d0
+    !> to 1 cm.
+    real(dp) :: max_Delta_rad = 1.0d0
 
     !> Minimum temperature. Does not apply when #pres_prof equals #pres_prof_geqdsk.
     !> Defaults to 20 eV.

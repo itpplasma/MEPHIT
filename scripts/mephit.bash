@@ -29,10 +29,10 @@ replace_first_in_line() {
 
 mephit_init() {
     config=
+    device=
     geqdsk=
-    type=
     convexwall=
-    TEMP=$(getopt -o 'c:g:t:' --long 'config:,g-eqdsk:,type:' -n "$scriptname" -- "$@")
+    TEMP=$(getopt -o 'c:d:g:' --long 'config:,device:,g-eqdsk:' -n "$scriptname" -- "$@")
     eval set -- "$TEMP"
     unset TEMP
     while true; do
@@ -42,13 +42,13 @@ mephit_init() {
                 shift 2
                 continue
                 ;;
-            '-g'|'--g-eqdsk')
-                geqdsk=$2
+            '-d'|'--device')
+                device=$2
                 shift 2
                 continue
                 ;;
-            '-t'|'--type')
-                type=$2
+            '-g'|'--g-eqdsk')
+                geqdsk=$2
                 shift 2
                 continue
                 ;;
@@ -83,16 +83,16 @@ mephit_init() {
             anyerr+=1
         fi
     fi
-    if [ -z "$type" ]; then
-        echo "$scriptname: no type given" >&2
+    if [ -z "$device" ]; then
+        echo "$scriptname: no device given" >&2
         anyerr+=1
     else
-        case "$type" in
+        case "$device" in
             asdex|kilca|mastu)
-                convexwall=$datadir/convexwall_$type.dat
+                convexwall=$datadir/convexwall_$device.dat
                 ;;
             *)
-                echo "$scriptname: unrecognized type '$type'" >&2
+                echo "$scriptname: unrecognized device '$device'" >&2
                 anyerr+=1
                 ;;
         esac
@@ -260,25 +260,6 @@ mephit_run() {
     done
 }
 
-mephit_clean() {
-    # default to current directory if none is given on the command line
-    workdirs=( "$(pwd)" )
-    if [ $# -gt 0 ]; then
-        workdirs=( "$@" )
-    fi
-    for workdir in "${workdirs[@]}"; do
-        if [ ! -d "$workdir" ]; then
-            echo "$scriptname: skipping nonexistent directory '$workdir'."
-            anyerr+=1
-            continue
-        fi
-        pushd "$workdir"
-        # files from mephit_run
-        rm -f fort.* mephit.h5 mephit.log core_plasma.msh outer.msh maxwell.msh
-        popd
-    done
-}
-
 mephit_help() {
     echo For now, please look at the README.md for how to run this script...
 }
@@ -299,7 +280,7 @@ set -o pipefail
 scriptname=$0
 anyerr=0
 case "$1" in
-    init|convert|run|clean)
+    init|run)
         mode=$1
         shift
         mephit_$mode "$@"
