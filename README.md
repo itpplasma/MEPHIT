@@ -43,9 +43,9 @@ In order to use the default configuration in `mephit.in` (see below) for pre-com
 $LIBNEO_DIR/vacfield.x AUG 16 /proj/plasma/DATA/AUG/COILS/B{u,l}{1..8}n.asc Fourier vacfield_AUG.in $MEPHIT_DIR/run/AUG_B_coils.h5
 ```
 
-This should take about 20 minutes and the resulting file uses about 2 GB of disk space. Note that the coils are consecutively numbered in the order given on the command line, starting from 1.
+This should take about 20 minutes and the resulting file uses about 2 GB of disk space. The coils are consecutively numbered in the order given on the command line, starting from 1, and the currents in `config%currents_file` are expected in this order. The `config%Biot_savart_prefactor` needs to be set such that the result is given in statampere-turns with the speed of light set to 1. Note that this factor is also given in `vacfield_AUG.in`, but it is only used when running with `sum` instead of `Fourier`, together with the currents file. This corresponds to the setting `config%vac_src = 0` in `mephit.in`, which then ignores its `config%currents_file`.
 
-You can also use [GPEC](https://princetonuniversity.github.io/GPEC/developers.html) coil data. Assuming the environment variable `GPECHOME` is set to the GPEC directory:
+You can also use [GPEC](https://princetonuniversity.github.io/GPEC/developers.html) coil data. Assuming the environment variable `GPECHOME` is set to the GPEC directory, the command above changes to:
 
 ```bash
 $LIBNEO_DIR/vacfield.x GPEC 2 $GPECHOME/coil/aug_b{u,l}.dat Fourier vacfield_AUG.in $MEPHIT_DIR/run/AUG_B_coils.h5
@@ -56,7 +56,8 @@ $LIBNEO_DIR/vacfield.x GPEC 2 $GPECHOME/coil/aug_b{u,l}.dat Fourier vacfield_AUG
 The general syntax is:
 
 ```text
-$MEPHIT_DIR/scripts/mephit.bash init { -c | --config } <config> { -g | --g-eqdsk } <gfile> { -d | --device } { asdex | kilca | mastu } <working_directory> ...
+$MEPHIT_DIR/scripts/mephit.bash init { -c | --config } <config> { -g | --g-eqdsk } <gfile>
+    { -d | --device } { asdex | kilca | mastu } <working_directory> ...
 ```
 
 This copies the `<config>`, `<gfile>`, and other necessary files to each given `<working_directory>`, specifically:
@@ -73,7 +74,7 @@ At ITPcp, you can reproduce the “standard” test case via:
 $MEPHIT_DIR/scripts/mephit.bash init -c data/mephit_g33353_2900_EQH.in -g /proj/plasma/DATA/BALANCE/EQUI/33353/g33353.2900_EQH_MARKL -d asdex $MEPHIT_DIR/run/33353_2900_EQH
 ```
 
-## Simulations
+## Running simulations
 
 The config file `mephit.in` needs do be adapated for each simulation:
 
@@ -85,7 +86,8 @@ The config file `mephit.in` needs do be adapated for each simulation:
 The general syntax is:
 
 ```text
-$MEPHIT_DIR/scripts/mephit.bash run [-m | --meshing] [-p | --preconditioner] [-i | --iterations] [--debug | --memcheck | --test] [<working_directory_or_file> ...]
+$MEPHIT_DIR/scripts/mephit.bash run [-m | --meshing] [-p | --preconditioner] [-i | --iterations]
+    [--debug | --memcheck | --test] [<working_directory_or_file> ...]
 ```
 
 Simulations consist of three phases:
@@ -94,9 +96,23 @@ Simulations consist of three phases:
 2. construction of preconditioner,
 3. preconditioned iterations.
 
-Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default. Use `--debug` to start a [GDB](https://www.gnu.org/software/gdb) session, `--memcheck` to run [Valgrind's Memcheck](https://valgrind.org/info/tools.html#memcheck), or `--test` to run internal tests (expensive, ignores phases). If no working directory is given, the current directory is used. If a file is given, it is used as an input namelist; if a directory is given, all files with pattern `mephit*.in` in it are used consecutively. Non-existing directories or files are skipped.
+Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default. For testing and debugging, there are additionally three mutually exclusive flags:
 
-### Plots
+- `--debug` starts a [GDB](https://www.gnu.org/software/gdb) session, using [a script](scripts/mephit.gdb) to navigate to the entry point of the main Fortran subroutine,
+- `--memcheck` runs [Valgrind's Memcheck](https://valgrind.org/info/tools.html#memcheck),
+- `--test` runs internal tests (expensive, ignores phases).
+
+If no working directory is given, the current directory is used. If a file is given, it is used as an input namelist; if a directory is given, all files with pattern `mephit*.in` in it are used consecutively. Non-existing directories or files are skipped.
+
+The following files are generated for `mephit*.in`, with `*` a possible suffix:
+
+- `mephit*.h5` contains all relevant numerical results,
+- `mephit*.log` contains the text output also displayed on the screen,
+- `core_plasma*.msh`, `outer*.msh`, and `maxwell*.msh` contain the meshes for the core plasma, the surrounding elliptical boundary for imposition of boundary conditions, and the union of the two, for use with FreeFem++,
+- `edgemap*.dat` contains the mapping of edge degrees of freedom between MEPHIT and FreeFem++,
+- `fglut_dump*` contains graphics generated by FreeFem++ which can be viewed with the command `ffglut`.
+
+### Plotting results
 
 Make the plotting routines available via:
 
@@ -110,6 +126,7 @@ To generate Jupyter notebooks for plotting, run:
 jupytext -s $MEPHIT_DIR/scripts/{arnoldi,kinetic,magf,parcurr,tri}_plots.py
 ```
 
+The input files for the plots are usually set near the top of the Jupyter notebook.
 To update the files actually under version control, run:
 
 ```bash
