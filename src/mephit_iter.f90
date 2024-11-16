@@ -1265,9 +1265,8 @@ contains
         equil%cocos%sgn_dpsi, fs%psi(1:), Bmnpsi_over_B0phi(1:)%Re, 3)
       call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Im / fs_half%q * &
         equil%cocos%sgn_dpsi, fs%psi(1:), Bmnpsi_over_B0phi(1:)%Im, 3)
-      ! negate m_res and q because theta is assumed clockwise in this interface
-      call response_current(1, -m_res, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
-        mesh%R_O, fs%psi(1:), -fs%q(1:), fs%F(1:), Phi0%y(1:), mesh%avg_R2gradpsi2(1:), &
+      call response_current(1, m_res, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
+        mesh%R_O, fs%psi(1:), fs%q(1:), fs%F(1:), Phi0%y(1:), mesh%avg_R2gradpsi2(1:), &
         dens_e%y(1:), temp_e%y(1:) * ev2erg, temp_i%y(1:) * ev2erg, nu_e%y(1:), nu_i%y(1:), &
         Bmnpsi_over_B0phi(1:), jmnpar_over_Bmod%coeff(m_res, 1:), Phi_mn(1:, m))
       Phi_aligned_mn(:, m) = imun * Bmnpsi_over_B0phi * fs%q * dPhi0_dpsi%y / (m_res + mesh%n * fs%q)
@@ -1436,9 +1435,8 @@ contains
       E_r_zero(k) = zeroin(fs%psi(kf_min), fs%psi(kf_max), E_r_shifted, 1d-9)
       do m = mesh%m_res_min, mesh%m_res_max
         m_res = -equil%cocos%sgn_q * m
-        ! negate m_res and q because theta is assumed clockwise in this interface
-        call response_current(1, -m_res, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
-          mesh%R_O, fs%psi(1:), -fs%q(1:), fs%F(1:), Phi0%y(1:) - fs%rsmall(1:) * Delta_E_r(k), mesh%avg_R2gradpsi2(1:), &
+        call response_current(1, m_res, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
+          mesh%R_O, fs%psi(1:), fs%q(1:), fs%F(1:), Phi0%y(1:) - fs%rsmall(1:) * Delta_E_r(k), mesh%avg_R2gradpsi2(1:), &
           dens_e%y(1:), temp_e%y(1:) * ev2erg, temp_i%y(1:) * ev2erg, nu_e%y(1:), nu_i%y(1:), &
           Bmnpsi_over_B0phi(1:), jmnpar_over_Bmod%coeff(m_res, 1:), Phi_mn(1:, m))
       end do
