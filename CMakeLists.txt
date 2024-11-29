@@ -71,6 +71,9 @@ set (NETCDF_F90 "YES")
 find_package (NetCDF REQUIRED)
 find_package(MFEM REQUIRED)
 find_package(Boost 1.74 REQUIRED)
+find_package(Triangle REQUIRED)
+
+message(STATUS "TRIANGLE_INCLUDE_DIR: ${TRIANGLE_INCLUDE_DIR}")
 
 # GSL
 find_library(gsl_lib gsl ${GSL_LIB})
@@ -142,7 +145,7 @@ set(MEPHIT_CPP_SRC_FILES
   src/miscellaneous.cpp
 )
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-  PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS}")
+  PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -I${TRIANGLE_INCLUDE_DIR}")
 
 ### Define library
 add_library(mephit SHARED
@@ -160,6 +163,7 @@ target_include_directories(mephit PUBLIC
   ${FGSL_INC}
   ${NETCDF_INCLUDES}
   ${MFEM_INCLUDE_DIRS}
+  ${TRIANGLE_INCLUDE_DIR}
 )
 set(MEPHIT_LIBS
   # ${SUPERLU_LIBRARIES}
