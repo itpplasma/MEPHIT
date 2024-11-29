@@ -26,7 +26,9 @@ else ()
 endif ()
 
 # Prevent linker error with hdf5tools on Ubuntu
-set(CMAKE_EXE_LINKER_FLAGS "-Wl,--copy-dt-needed-entries")
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  set(CMAKE_EXE_LINKER_FLAGS "-Wl,--copy-dt-needed-entries")
+endif()
 
 ### Define external paths
 if ("${CMAKE_SYSTEM}" MATCHES "Darwin")
@@ -89,6 +91,12 @@ find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
 
 # magfie
 find_library(magfie_lib magfie ${magfie_lib_dir} NO_DEFAULT_PATH)
+
+# libneo
+find_library(neo_lib neo ${magfie_lib_dir} NO_DEFAULT_PATH)
+
+# triangle
+find_library(triangle_lib triangle ${TRIANGLE_INCLUDE_DIR} NO_DEFAULT_PATH)
 
 ### Project source files
 # SuperLU
@@ -169,7 +177,6 @@ target_include_directories(mephit PUBLIC
 set(MEPHIT_LIBS
   # ${SUPERLU_LIBRARIES}
   ${SUITESPARSE_LIBRARIES}
-  ${magfie_lib}
   ${HDF5_tools_lib}
   ${HDF5_Fortran_HL_LIBRARIES}
   ${HDF5_HL_LIBRARIES}
@@ -182,7 +189,9 @@ set(MEPHIT_LIBS
   blas
   lapack
   ${FFTW_LIBRARIES}
-  triangle
+  ${triangle_lib}
+  ${magfie_lib}
+  ${neo_lib}
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
 
