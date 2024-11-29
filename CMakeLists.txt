@@ -26,7 +26,9 @@ else ()
 endif ()
 
 # Prevent linker error with hdf5tools on Ubuntu
-set(CMAKE_EXE_LINKER_FLAGS "-Wl,--copy-dt-needed-entries")
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  set(CMAKE_EXE_LINKER_FLAGS "-Wl,--copy-dt-needed-entries")
+endif()
 
 ### Define external paths
 if ("${CMAKE_SYSTEM}" MATCHES "Darwin")
@@ -71,6 +73,10 @@ set (NETCDF_F90 "YES")
 find_package (NetCDF REQUIRED)
 find_package(MFEM REQUIRED)
 find_package(Boost 1.74 REQUIRED)
+find_package(Triangle REQUIRED)
+find_package(FFTW REQUIRED)
+
+message(STATUS "TRIANGLE_INCLUDE_DIR: ${TRIANGLE_INCLUDE_DIR}")
 
 # GSL
 find_library(gsl_lib gsl ${GSL_LIB})
@@ -85,6 +91,12 @@ find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
 
 # magfie
 find_library(magfie_lib magfie ${magfie_lib_dir} NO_DEFAULT_PATH)
+
+# libneo
+find_library(neo_lib neo ${magfie_lib_dir} NO_DEFAULT_PATH)
+
+# triangle
+find_library(triangle_lib triangle ${TRIANGLE_INCLUDE_DIR} NO_DEFAULT_PATH)
 
 ### Project source files
 # SuperLU
@@ -142,7 +154,7 @@ set(MEPHIT_CPP_SRC_FILES
   src/miscellaneous.cpp
 )
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-  PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS}")
+  PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -I${TRIANGLE_INCLUDE_DIR}")
 
 ### Define library
 add_library(mephit SHARED
@@ -160,11 +172,11 @@ target_include_directories(mephit PUBLIC
   ${FGSL_INC}
   ${NETCDF_INCLUDES}
   ${MFEM_INCLUDE_DIRS}
+  ${TRIANGLE_INCLUDE_DIR}
 )
 set(MEPHIT_LIBS
   # ${SUPERLU_LIBRARIES}
   ${SUITESPARSE_LIBRARIES}
-  ${magfie_lib}
   ${HDF5_tools_lib}
   ${HDF5_Fortran_HL_LIBRARIES}
   ${HDF5_HL_LIBRARIES}
@@ -176,8 +188,10 @@ set(MEPHIT_LIBS
   ${MFEM_LIBRARIES}
   blas
   lapack
-  fftw3
-  triangle
+  ${FFTW_LIBRARIES}
+  ${triangle_lib}
+  ${magfie_lib}
+  ${neo_lib}
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
 
