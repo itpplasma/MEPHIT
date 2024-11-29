@@ -5,6 +5,7 @@ from copy import copy
 from matplotlib import rcParams
 import matplotlib.pyplot as plt
 from matplotlib.ticker import MultipleLocator
+from matplotlib.colors import Normalize
 import colorcet as cc
 import numpy as np
 import h5py
@@ -22,14 +23,14 @@ cmap_divg_clip.set_over(color='w', alpha=0.0)
 # %%
 work_dir = path.join(environ['MEPHIT_DIR'], 'run/33353_2900_EQH')
 data = {}
-with h5py.File(path.join(work_dir, 'mephit.h5'), 'r') as f:
-    data['R'] = f['/mesh/node_R'][()] * 1.0e-2
-    data['Z'] = f['/mesh/node_Z'][()] * 1.0e-2
-    data['tri'] = f['/mesh/tri_node'][()] - 1
-    data['Bn_psi'] = f['/iter/Bn/comp_psi_contravar_dens'][()]  # * 1.0e-5  # Mx to mWb
-    data['Bn_vac_psi'] = f['/vac/Bn/comp_psi_contravar_dens'][()]  # * 1.0e-5  # Mx to mWb
-    data['R_O'] = f['/mesh/R_O'][()] * 1.0e-2
-    data['Z_O'] = f['/mesh/Z_O'][()] * 1.0e-2
+with h5py.File(path.join(work_dir, 'mephit.h5'), 'r') as coil_data_file:
+    data['R'] = coil_data_file['/mesh/node_R'][()] * 1.0e-2
+    data['Z'] = coil_data_file['/mesh/node_Z'][()] * 1.0e-2
+    data['tri'] = coil_data_file['/mesh/tri_node'][()] - 1
+    data['Bn_psi'] = coil_data_file['/iter/Bn/comp_psi_contravar_dens'][()]  # * 1.0e-5  # Mx to mWb
+    data['Bn_vac_psi'] = coil_data_file['/vac/Bn/comp_psi_contravar_dens'][()]  # * 1.0e-5  # Mx to mWb
+    data['R_O'] = coil_data_file['/mesh/R_O'][()] * 1.0e-2
+    data['Z_O'] = coil_data_file['/mesh/Z_O'][()] * 1.0e-2
 
 
 # %%
@@ -67,3 +68,46 @@ for dataset in ['Bn_vac_psi', 'Bn_psi']:
 # for postprocessing, run e.g.
 # optipng -preserve -clobber -out Bn_psi_optim.png Bn_psi.png
 # convert Bn_psi_optim.png -trim +repage Bn_psi.png
+
+# %%
+currents = np.loadtxt('/proj/plasma/DATA/BALANCE/COIL/33353/33353.2900_coil_markl.dat')
+prefactor = 5.0e-1  # A to statA with c = 1, 5 windings
+vert = 2
+horz = 4
+nmax = vert * horz  # up to 64 in default file
+grid = dict()
+with h5py.File(path.join(environ['MEPHIT_DIR'], 'data/AUG_B_coils.h5'), 'r') as coil_data_file:
+    grid['nR'] = coil_data_file['/ntor_00/nR'][()]
+    grid['nZ'] = coil_data_file['/ntor_00/nZ'][()]
+    grid['R_min'] = coil_data_file['/ntor_00/R_min'][()]
+    grid['R_max'] = coil_data_file['/ntor_00/R_max'][()]
+    grid['Z_min'] = coil_data_file['/ntor_00/Z_min'][()]
+    grid['Z_max'] = coil_data_file['/ntor_00/Z_max'][()]
+    ncoil = coil_data_file['/ntor_00/ncoil'][()]
+    BnR = np.zeros((nmax, grid['nR'], grid['nZ']), dtype=np.complex128)
+    BnZ = np.zeros((nmax, grid['nR'], grid['nZ']), dtype=np.complex128)
+    Bnphi = np.zeros((nmax, grid['nR'], grid['nZ']), dtype=np.complex128)
+    for n in range(nmax):
+        for i in range(ncoil):
+            grp = f"/ntor_{n:02d}/coil_{i+1:02d}"
+            BnR[n, :, :] += prefactor * currents[i] * coil_data_file[grp + '/Bn_R'][()].T
+            BnZ[n, :, :] += prefactor * currents[i] * coil_data_file[grp + '/Bn_Z'][()].T
+            Bnphi[n, :, :] += prefactor * currents[i] * coil_data_file[grp + '/Bn_phi'][()].T
+log_Bn2 = np.empty((nmax, grid['nR'], grid['nZ']))
+for n in range(nmax):
+    log_Bn2[n, :, :] = np.log10((BnR[n, :, :] * np.conj(BnR[n, :, :]) +
+                                 BnZ[n, :, :] * np.conj(BnZ[n, :, :]) +
+                                 Bnphi[n, :, :] * np.conj(Bnphi[n, :, :])).real)
+
+# %%
+norm = Normalize(vmin=np.amin(log_Bn2), vmax=np.amax(log_Bn2))
+fig = plt.figure()
+axs = fig.subplots(vert, horz).ravel()
+for n in range(nmax):
+    im = axs[n].imshow(log_Bn2[n, :, :].T, origin='lower', cmap=cc.m_fire, rasterized=True,
+                        extent=[grid['R_min'], grid['R_max'], grid['Z_min'], grid['Z_max']])
+    im.set_norm(norm)
+    axs[n].set_title(f"$n = {n}$")
+cbar = fig.colorbar(im, ax=axs, location='bottom')
+cbar.set_label(r'$\log_{10} \lvert \vec{B}_{n} \rvert^{2}$ / \si{\gauss\squared}')
+plt.show()
