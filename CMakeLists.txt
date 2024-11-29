@@ -72,6 +72,7 @@ find_package (NetCDF REQUIRED)
 find_package(MFEM REQUIRED)
 find_package(Boost 1.74 REQUIRED)
 find_package(Triangle REQUIRED)
+find_package(FFTW REQUIRED)
 
 message(STATUS "TRIANGLE_INCLUDE_DIR: ${TRIANGLE_INCLUDE_DIR}")
 
@@ -180,7 +181,7 @@ set(MEPHIT_LIBS
   ${MFEM_LIBRARIES}
   blas
   lapack
-  fftw3
+  ${FFTW_LIBRARIES}
   triangle
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
