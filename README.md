@@ -117,21 +117,23 @@ The following files are generated for `mephit*.in`, with `*` a possible suffix:
 Make the plotting routines available via:
 
 ```bash
-python3 -m pip install -e .
+python3 -m pip install --no-build-isolation -e .
 ```
 
 To generate Jupyter notebooks for plotting, run:
 
 ```bash
-jupytext -s $MEPHIT_DIR/scripts/{arnoldi,kinetic,magf,parcurr,tri}_plots.py
+jupytext -s scripts/{arnoldi,kinetic,magf,parcurr,tri}_plots.py
 ```
 
 The input files for the plots are usually set near the top of the Jupyter notebook.
 To update the files actually under version control, run:
 
 ```bash
-jupytext -s $MEPHIT_DIR/scripts/*.ipynb
+jupytext -s scripts/*.ipynb
 ```
+
+*Note that the above commands are relative to the repository root, not to `$MEPHIT_DIR`.* The plotting routines, however, usually assume that this environment variable is set in order to read from the `$MEPHIT_DIR/run/*/mephit.h5` files.
 
 ## Call graphs
 
