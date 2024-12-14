@@ -2,6 +2,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <time.h>
+#include <unistd.h>
+#include <gsl/gsl_errno.h>
 #include "mephit_util.h"
 
 void timestamp(char *buffer) {
@@ -42,4 +44,14 @@ void errno_msg(void (*exit_func)(int), const char *file, int line, int errnum, c
   if (exit_func) {
     exit_func(1);
   }
+}
+
+void gsl_errno_msg(const char *reason, const char *file, int line, int gsl_errno)
+{
+  char now[72] = "1990-06-11 20:47:00";
+
+  timestamp(now);
+  fprintf(stderr, "[%s] %s:%i:%s: %s.\n",
+          now, file, line, gsl_strerror(gsl_errno), reason);
+  _exit(1);
 }

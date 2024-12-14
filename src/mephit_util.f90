@@ -19,7 +19,7 @@ module mephit_util
     interp_psi_pol, interp1d, resample1d, pos_angle, linspace, &
     binsearch, interleave, heapsort_real, heapsort_complex, complex_abs_asc, complex_abs_desc, &
     arnoldi_break, hessenberg_eigvals, hessenberg_eigvecs, &
-    gauss_legendre_unit_interval, C_F_string
+    C_F_string
 
   ! module variables
   public :: pi, clight, ev2erg, imun
@@ -369,40 +369,6 @@ contains
     end if
     k = k_max
   end subroutine binsearch
-
-  subroutine gauss_legendre_unit_interval(order, points, weights)
-    use mephit_conf, only: logger
-    use fgsl, only: fgsl_size_t, fgsl_double, fgsl_int, fgsl_success, &
-      fgsl_integration_glfixed_point, fgsl_integration_glfixed_table, &
-      fgsl_integration_glfixed_table_alloc, fgsl_integration_glfixed_table_free
-    integer, intent(in) :: order
-    real(fgsl_double), dimension(:), intent(out) :: points, weights
-    type(fgsl_integration_glfixed_table) :: table
-    integer(fgsl_size_t) :: k
-    integer(fgsl_int) :: err
-    if (order /= size(points)) then
-      call logger%msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(points)', &
-        order, size(points))
-      if (logger%err) call logger%write_msg
-      error stop
-    end if
-    if (order /= size(weights)) then
-      call logger%msg_arg_size('gauss_legendre_unit_interval', 'order', 'size(weights)', &
-        order, size(weights))
-      if (logger%err) call logger%write_msg
-      error stop
-    end if
-    table = fgsl_integration_glfixed_table_alloc(int(order, fgsl_size_t))
-    do k = 1, int(order, fgsl_size_t)
-      err = fgsl_integration_glfixed_point(0d0, 1d0, k-1, points(k), weights(k), table)
-      if (err /= fgsl_success) then
-        write (logger%msg, '("fgsl_integration_glfixed_point returned error ", i0)') err
-        if (logger%err) call logger%write_msg
-        error stop
-      end if
-    end do
-    call fgsl_integration_glfixed_table_free(table)
-  end subroutine gauss_legendre_unit_interval
 
   subroutine fft_init(fft, N)
     use iso_c_binding, only: c_size_t, c_f_pointer

@@ -262,6 +262,13 @@ module mephit_mesh
   end type mesh_t
 
   interface
+    subroutine gauss_legendre_unit_interval(order, points, weights) &
+      bind(C, name = 'gauss_legendre_unit_interval')
+      use iso_c_binding, only: c_int, c_double
+      integer(c_int), intent(in), value :: order
+      real(c_double), intent(out), dimension(1:order) :: points, weights
+    end subroutine gauss_legendre_unit_interval
+
     subroutine FEM_triangulate_external(npt_inner, npt_outer, node_R, node_Z, R_O, Z_O, fname) &
       bind(C, name = 'FEM_triangulate_external')
       use iso_c_binding, only: c_char, c_int, c_double
@@ -1827,7 +1834,7 @@ contains
 
   subroutine connect_mesh_points
     use mephit_conf, only: logger
-    use mephit_util, only: pi, gauss_legendre_unit_interval
+    use mephit_util, only: pi
     integer :: kf, kp, kp_lo, kp_hi, kt, ktri, ktri_adj, kedge, nodes(4), k
     real(dp) :: mat(3, 3), points(mesh%GL_order), points2(3, mesh%GL2_order)
     logical :: theta2pi
@@ -2339,7 +2346,7 @@ contains
   !> Compute fine grid for parallel current sampling points.
   subroutine compute_sample_Ires(sample_Ires, GL_weights, GL_order, m)
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
-    use mephit_util, only: pi, binsearch, interp_psi_pol, gauss_legendre_unit_interval
+    use mephit_util, only: pi, binsearch, interp_psi_pol
     use field_sub, only : field
     type(coord_cache_t), dimension(:, :), intent(inout), allocatable :: sample_Ires
     real(dp), dimension(:), intent(inout), allocatable :: GL_weights
@@ -2847,13 +2854,13 @@ contains
     write (fid, '("elements", /, i0)') mesh%ntri
     do ktri = 1, mesh%ntri
       ! <element attribute> <geometry type> <vertex indices ...>
-      ! attribute: 1 for plasma core, geomtry type: 2 for triangle
+      ! attribute: 1 for plasma core, geometry type: 2 for triangle
       write (fid, '("1 2", 3(1x, i0))') mesh%tri_node(:, ktri) - 1
     end do
     write (fid, '(/, "boundary", /, i0)') mesh%kp_max(mesh%nflux)
     do kp = 1, mesh%kp_max(mesh%nflux)
       ! <boundary element attribute> <geometry type> <vertex indices ...>
-      ! attribute: 1 for plasma core, geomtry type: 1 for segment
+      ! attribute: 1 for plasma core, geometry type: 1 for segment
       write (fid, '("1 1", 2(1x, i0))') mesh%kp_low(mesh%nflux) + kp - 1, &
         mesh%kp_low(mesh%nflux) + mod(kp, mesh%kp_max(mesh%nflux))
     end do

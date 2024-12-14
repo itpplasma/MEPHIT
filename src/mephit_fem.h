@@ -32,6 +32,8 @@ void FEM_compute_magfn(const int nedge,
 void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2int);
 void FEM_deinit(void);
 
+void gauss_legendre_unit_interval(int order, double *points, double *weights);
+
 void FEM_triangulate_external(const int npt_inner,
                               const int npt_outer,
                               const double *bdry_R,

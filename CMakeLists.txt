@@ -55,12 +55,6 @@ else ()
   set(MFEM_DIR "$ENV{MFEM_DIR}")
 endif ()
 
-if ("$ENV{FGSL_DIR}" STREQUAL "")
-  set(FGSL_DIR ${CMAKE_SOURCE_DIR}/../fgsl)
-else ()
-  set(FGSL_DIR $ENV{FGSL_DIR})
-endif ()
-
 ### Find dependencies in standard directories
 find_package(LAPACK)
 find_package(SuiteSparse REQUIRED)
@@ -74,11 +68,6 @@ find_package(Boost 1.74 REQUIRED)
 
 # GSL
 find_library(gsl_lib gsl ${GSL_LIB})
-
-# FGSL
-set(FGSL_LIB ${FGSL_DIR}/.libs CACHE STRING "FGSL lib")
-set(FGSL_INC ${FGSL_DIR} CACHE STRING "FGSL include")
-find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
 
 # hdf5_tools
 find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
@@ -157,7 +146,6 @@ target_include_directories(mephit PUBLIC
   ${HDF5_INCLUDE_DIRS}
   ${HDF5_tools_include_dir}
   ${magfie_include_dir}
-  ${FGSL_INC}
   ${NETCDF_INCLUDES}
   ${MFEM_INCLUDE_DIRS}
 )
@@ -172,7 +160,6 @@ set(MEPHIT_LIBS
   ${HDF5_LIBRARIES}
   ${NETCDF_LIBRARIES}
   ${gsl_lib}
-  ${fgsl_lib}
   ${MFEM_LIBRARIES}
   blas
   lapack
