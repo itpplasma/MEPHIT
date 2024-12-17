@@ -8,8 +8,8 @@
     "configurePresets": [
         {
             "name": "default",
-            "description": "Default build using Unix Makefiles generator",
-            "generator": "Unix Makefiles",
+            "description": "Default build using Ninja generator",
+            "generator": "Ninja",
             "binaryDir": "${sourceDir}/build"
         }
     ],
