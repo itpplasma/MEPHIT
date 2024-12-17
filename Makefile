@@ -1,20 +1,21 @@
 BUILD_DIR := build
-BUILD_NINJA := $(BUILD_DIR)/build.ninja
+MAKEFILE := $(BUILD_DIR)/Makefile
+NUM_CORES := $(shell nproc)
 
-.PHONY: all ninja test install clean
-all: ninja
+.PHONY: all build test install clean
+all: build
 
-$(BUILD_NINJA):
+$(MAKEFILE):
 	cmake --preset default
 
-ninja: $(BUILD_NINJA)
-	cmake --build --preset default
+build: $(MAKEFILE)
+	cmake --build --preset default --parallel $(NUM_CORES)
 
-test: ninja
+test: build
 	cd $(BUILD_DIR) && ctest
 
-install: ninja
-	cd $(BUILD_DIR) && ninja install
+install: build
+	cd $(BUILD_DIR) && make install
 
 clean:
 	rm -rf $(BUILD_DIR)
