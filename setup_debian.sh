@@ -1,7 +1,6 @@
 #!/bin/bash
 
-sudo apt update
-sudo apt install cmake make ninja-build gcc gfortran \
-    libopenblas-dev libsuitesparse-dev libhdf5-dev \
+sudo apt-get update -y && sudo apt-get install -y -q --no-install-recommends \
+    libopenblas-dev libsuitesparse-dev libmetis-dev libhdf5-dev \
     libnetcdf-dev libnetcdff-dev libboost-dev \
-    libfftw3-dev
+    libfftw3-dev openmpi-bin libopenmpi-dev
