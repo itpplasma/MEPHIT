@@ -10,8 +10,7 @@ Prerequisites from external sources for running MEPHIT are as follows.
 - [libneo](https://github.com/itpplasma/libneo)
 - [LAPACK](https://www.netlib.org/lapack/)
 - [SuiteSparse](https://github.com/DrTimothyAldenDavis/SuiteSparse)
-- [SuperLU](https://github.com/xiaoyeli/superlu)
-- [GSL](https://www.gnu.org/software/gsl/) and [FGSL](https://github.com/reinh-bader/fgsl)
+- [GSL](https://www.gnu.org/software/gsl/)
 - [FFTW3](http://fftw.org/)
 - [Triangle](https://www.cs.cmu.edu/~quake/triangle.html)
 - [Boost](https://www.boost.org/)
@@ -24,7 +23,7 @@ Prerequisites from external sources for running MEPHIT are as follows.
 
 ### Initial build
 
-In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the desired build directory and simulations are saved in `$MEPHIT_DIR/run`. If libneo, MFEM & FGSL are not in their default location (adjacent to MEPHIT), the environment variables `LIBNEO_DIR`, `MFEM_DIR`, and `FGSL_DIR` need to be set to the corresponding build directories as well. At ITPcp, you can refer to the `.gitlab-ci.yml` in [CODE](https://gitlab.tugraz.at/plasma/code).
+In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the desired build directory and simulations are saved in `$MEPHIT_DIR/run`. If libneo and MFEM are not in their default location (adjacent to MEPHIT), the environment variables `LIBNEO_DIR` and `MFEM_DIR` need to be set to the corresponding build directories as well. At ITPcp, you can refer to the `.gitlab-ci.yml` in [CODE](https://gitlab.tugraz.at/plasma/code).
 
 To build MEPHIT, run:
 

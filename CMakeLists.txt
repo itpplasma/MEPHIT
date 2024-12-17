@@ -1,9 +1,9 @@
 ### Basic settings
 cmake_minimum_required(VERSION 3.13.4)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR})
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 ### Define the project
-project(MEPHIT LANGUAGES Fortran C CXX)
+project(MEPHIT LANGUAGES C CXX Fortran)
 
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
@@ -26,7 +26,9 @@ else ()
 endif ()
 
 # Prevent linker error with hdf5tools on Ubuntu
-set(CMAKE_EXE_LINKER_FLAGS "-Wl,--copy-dt-needed-entries")
+if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+  set(CMAKE_EXE_LINKER_FLAGS "-Wl,--copy-dt-needed-entries")
+endif()
 
 ### Define external paths
 if ("${CMAKE_SYSTEM}" MATCHES "Darwin")
@@ -39,62 +41,25 @@ else ()
   endif ()
 endif ()
 
-if ("$ENV{LIBNEO_DIR}" STREQUAL "")
-  set(LIBNEO_DIR "${CMAKE_SOURCE_DIR}/../libneo/build")
-else ()
-  set(LIBNEO_DIR "$ENV{LIBNEO_DIR}")
-endif ()
-set(magfie_include_dir ${LIBNEO_DIR}/include)
-set(magfie_lib_dir ${LIBNEO_DIR})
-set(HDF5_tools_include_dir ${LIBNEO_DIR})
-set(HDF5_tools_lib_dir ${LIBNEO_DIR}/src/hdf5_tools)
-
-if ("$ENV{MFEM_DIR}" STREQUAL "")
-  set(MFEM_DIR "${CMAKE_SOURCE_DIR}/../mfem/build")
-else ()
-  set(MFEM_DIR "$ENV{MFEM_DIR}")
-endif ()
-
-if ("$ENV{FGSL_DIR}" STREQUAL "")
-  set(FGSL_DIR ${CMAKE_SOURCE_DIR}/../fgsl)
-else ()
-  set(FGSL_DIR $ENV{FGSL_DIR})
-endif ()
-
 ### Find dependencies in standard directories
-find_package(LAPACK)
+find_package(BLAS REQUIRED)
+find_package(LAPACK REQUIRED)
 find_package(SuiteSparse REQUIRED)
-find_package(SuperLU)
 cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 set (NETCDF_F90 "YES")
 find_package (NetCDF REQUIRED)
-find_package(MFEM REQUIRED)
 find_package(Boost 1.74 REQUIRED)
-
-# GSL
+find_package(FFTW REQUIRED)
 find_library(gsl_lib gsl ${GSL_LIB})
 
-# FGSL
-set(FGSL_LIB ${FGSL_DIR}/.libs CACHE STRING "FGSL lib")
-set(FGSL_INC ${FGSL_DIR} CACHE STRING "FGSL include")
-find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
-
-# hdf5_tools
-find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
-
-# magfie
-find_library(magfie_lib magfie ${magfie_lib_dir} NO_DEFAULT_PATH)
+include(ExternalProject)
+include(SetupCODE)
+include(SetupLIBNEO)
+include(SetupTriangle)
+include(SetupMFEM)
 
 ### Project source files
-# SuperLU
-set(SUPERLU_SRC_FILES
-  src/external/c_fortran_dgssv.c
-  src/external/c_fortran_zgssv.c
-)
-set(SUPERLU_FLAGS "${CFLAGS_DEBUG} ${CFLAGS} -I${SUPERLU_INCLUDES}")
-set_source_files_properties(${SUPERLU_SRC_FILES} PROPERTIES COMPILE_FLAGS ${SUPERLU_FLAGS})
-
 # SuiteSparse
 set(SUITESPARSE_SRC_FILES
   src/external/umf4_f77wrapper.c
@@ -142,29 +107,28 @@ set(MEPHIT_CPP_SRC_FILES
   src/miscellaneous.cpp
 )
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-  PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS}")
+	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
+
 
 ### Define library
 add_library(mephit SHARED
   ${SUITESPARSE_SRC_FILES}
-  # ${SUPERLU_SRC_FILES}
   ${COMMON_FORTRAN_SRC_FILES}
   ${MEPHIT_FORTRAN_SRC_FILES}
   ${MEPHIT_C_SRC_FILES}
   ${MEPHIT_CPP_SRC_FILES}
 )
+add_dependencies(mephit LIBNEO MFEM TRIANGLE)
 target_include_directories(mephit PUBLIC
   ${HDF5_INCLUDE_DIRS}
-  ${HDF5_tools_include_dir}
   ${magfie_include_dir}
-  ${FGSL_INC}
   ${NETCDF_INCLUDES}
   ${MFEM_INCLUDE_DIRS}
+  ${NETCDF_INCLUDES}
+  ${TRIANGLE_INCLUDE_DIR}
 )
 set(MEPHIT_LIBS
-  # ${SUPERLU_LIBRARIES}
-  ${SUITESPARSE_LIBRARIES}
-  ${magfie_lib}
+  ${SUITESPARSE_LIBRARIES} klu
   ${HDF5_tools_lib}
   ${HDF5_Fortran_HL_LIBRARIES}
   ${HDF5_HL_LIBRARIES}
@@ -172,12 +136,13 @@ set(MEPHIT_LIBS
   ${HDF5_LIBRARIES}
   ${NETCDF_LIBRARIES}
   ${gsl_lib}
-  ${fgsl_lib}
   ${MFEM_LIBRARIES}
-  blas
-  lapack
-  fftw3
-  triangle
+  ${BLAS_LIBRARIES}
+  ${LAPACK_LIBRARIES}
+  ${FFTW_LIBRARIES}
+  ${triangle_lib}
+  ${magfie_lib}
+  ${neo_lib}
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
 

@@ -13,6 +13,10 @@
 
 #include "hyper1F1.h"
 
+#ifndef CMPLX
+#define CMPLX(x, y) ((double complex)((x) + _Complex_I * (y)))
+#endif
+
 struct quad_params {
   complex_double b;
   complex_double z;
