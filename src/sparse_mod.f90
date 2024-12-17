@@ -46,12 +46,6 @@ MODULE sparse_mod
      MODULE PROCEDURE load_compressed_ex
   END INTERFACE load_compressed_example
 
-  PUBLIC load_standard_example
-  PRIVATE load_standard_ex
-  INTERFACE load_standard_example
-     MODULE PROCEDURE load_standard_ex
-  END INTERFACE load_standard_example
-
   PUBLIC load_octave_matrices
   PRIVATE load_octave_mat
   INTERFACE load_octave_matrices
@@ -105,8 +99,6 @@ MODULE sparse_mod
      MODULE PROCEDURE sp_test_A_b1,sp_test_b1,sp_test_A_b2,sp_test_b2, &
           sp_testComplex_A_b1, sp_testComplex_b1, sp_testComplex_A_b2, sp_testComplex_b2
   END INTERFACE sparse_solver_test
-
-  PUBLIC sparse_example
 
   PUBLIC remap_rc
   INTERFACE remap_rc
