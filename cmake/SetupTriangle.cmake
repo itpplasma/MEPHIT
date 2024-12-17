@@ -1,5 +1,8 @@
-if (DEFINED ENV{TRIANGLE_DIR} OR DEFINED TRIANGLE_DIR)
+if(NOT "${TRIANGLE_DIR}" STREQUAL "")
   add_custom_target(TRIANGLE ALL)
+elseif(DEFINED ENV{TRIANGLE_DIR})
+  add_custom_target(TRIANGLE ALL)
+  set(TRIANGLE_DIR $ENV{TRIANGLE_DIR} CACHE STRING "Triangle directory")
 else()# Define Triangle repository
   set(TRIANGLE_REPO "https://salsa.debian.org/science-team/triangle.git")
   set(TRIANGLE_PATCHES_DIR "debian/patches")

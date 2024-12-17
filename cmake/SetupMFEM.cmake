@@ -1,5 +1,8 @@
-if(DEFINED ENV{MFEM_DIR} OR DEFINED MFEM_DIR)
+if(NOT "${MFEM_DIR}" STREQUAL "")
   add_custom_target(MFEM ALL)
+elseif(DEFINED ENV{MFEM_DIR})
+  add_custom_target(MFEM ALL)
+  set(MFEM_DIR $ENV{MFEM_DIR} CACHE STRING "MFEM directory")
 else()
   message(STATUS "Downloading and building MFEM")
 
