@@ -12,9 +12,15 @@ fi
 
 
 echo "Building Triangle..."
-while read -r patch; do
-    patch -p1 < "debian/patches/$patch"
-done < debian/patches/series
+if [ -f is_patched ]; then
+    echo "Triangle already patched."
+else
+    echo "Patching Triangle..."
+    while read -r patch; do
+        patch -p1 < "debian/patches/$patch"
+    done < debian/patches/series
+    touch is_patched
+fi
 
 echo "Building Triangle..."
 
