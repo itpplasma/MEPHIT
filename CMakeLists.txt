@@ -42,17 +42,15 @@ else ()
 endif ()
 
 ### Find dependencies in standard directories
-find_package(LAPACK)
+find_package(BLAS REQUIRED)
+find_package(LAPACK REQUIRED)
 find_package(SuiteSparse REQUIRED)
-find_package(SuperLU)
 cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 set (NETCDF_F90 "YES")
 find_package (NetCDF REQUIRED)
 find_package(Boost 1.74 REQUIRED)
 find_package(FFTW REQUIRED)
-
-message(STATUS "TRIANGLE_INCLUDE_DIR: ${TRIANGLE_INCLUDE_DIR}")
 
 include(ExternalProject)
 include(SetupCODE)
@@ -62,14 +60,6 @@ include(SetupTriangle)
 include(SetupMFEM)
 
 ### Project source files
-# SuperLU
-set(SUPERLU_SRC_FILES
-  src/external/c_fortran_dgssv.c
-  src/external/c_fortran_zgssv.c
-)
-set(SUPERLU_FLAGS "${CFLAGS_DEBUG} ${CFLAGS} -I${SUPERLU_INCLUDES}")
-set_source_files_properties(${SUPERLU_SRC_FILES} PROPERTIES COMPILE_FLAGS ${SUPERLU_FLAGS})
-
 # SuiteSparse
 set(SUITESPARSE_SRC_FILES
   src/external/umf4_f77wrapper.c
@@ -117,12 +107,12 @@ set(MEPHIT_CPP_SRC_FILES
   src/miscellaneous.cpp
 )
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-  PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -I${TRIANGLE_INCLUDE_DIR}")
+  PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS}")
+
 
 ### Define library
 add_library(mephit SHARED
   ${SUITESPARSE_SRC_FILES}
-  # ${SUPERLU_SRC_FILES}
   ${COMMON_FORTRAN_SRC_FILES}
   ${MEPHIT_FORTRAN_SRC_FILES}
   ${MEPHIT_C_SRC_FILES}
@@ -133,13 +123,13 @@ target_include_directories(mephit PUBLIC
   ${HDF5_tools_include_dir}
   ${magfie_include_dir}
   ${FGSL_INC}
-  ${NETCDF_INCLUDES}
   ${MFEM_INCLUDE_DIRS}
+  ${NETCDF_INCLUDES}
   ${TRIANGLE_INCLUDE_DIR}
 )
 set(MEPHIT_LIBS
-  # ${SUPERLU_LIBRARIES}
   ${SUITESPARSE_LIBRARIES}
+  klu
   ${HDF5_tools_lib}
   ${HDF5_Fortran_HL_LIBRARIES}
   ${HDF5_HL_LIBRARIES}
@@ -149,8 +139,8 @@ set(MEPHIT_LIBS
   ${gsl_lib}
   ${fgsl_lib}
   ${MFEM_LIBRARIES}
-  blas
-  lapack
+  ${BLAS_LIBRARIES}
+  ${LAPACK_LIBRARIES}
   ${FFTW_LIBRARIES}
   ${triangle_lib}
   ${magfie_lib}
