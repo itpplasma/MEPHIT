@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.13.4)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 ### Define the project
-project(MEPHIT LANGUAGES Fortran C CXX)
+project(MEPHIT LANGUAGES C CXX Fortran)
 
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
