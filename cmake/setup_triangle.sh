@@ -8,15 +8,10 @@ CC=${CC:-gcc}
 if [ "$(uname)" == "Darwin" ]; then
     CFLAGS="-I/opt/homebrew/include"
     LDFLAGS="-L/opt/homebrew/lib"
-else
-    CFLAGS=""
-    LDFLAGS=""
 fi
 
 
-echo "Fetching and building Triangle..."
-git clone https://salsa.debian.org/science-team/triangle.git
-cd triangle
+echo "Building Triangle..."
 while read -r patch; do
     patch -p1 < "debian/patches/$patch"
 done < debian/patches/series

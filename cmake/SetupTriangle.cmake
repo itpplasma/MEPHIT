@@ -17,7 +17,7 @@ else()# Define Triangle repository
       BUILD_COMMAND /bin/bash ${CMAKE_SOURCE_DIR}/cmake/setup_triangle.sh <SOURCE_DIR>
       INSTALL_COMMAND ""
       DOWNLOAD_EXTRACT_TIMESTAMP TRUE
-      BUILD_BYPRODUCTS <SOURCE_DIR>/libtriangle.so
+      BUILD_BYPRODUCTS <SOURCE_DIR>/libtriangle${CMAKE_SHARED_LIBRARY_SUFFIX}
   )
   set(TRIANGLE_DIR ${CMAKE_BINARY_DIR}/triangle/src/TRIANGLE)
 endif()
