@@ -51,11 +51,11 @@ set (NETCDF_F90 "YES")
 find_package (NetCDF REQUIRED)
 find_package(Boost 1.74 REQUIRED)
 find_package(FFTW REQUIRED)
+find_library(gsl_lib gsl ${GSL_LIB})
 
 include(ExternalProject)
 include(SetupCODE)
 include(SetupLIBNEO)
-include(SetupFGSL)
 include(SetupTriangle)
 include(SetupMFEM)
 
@@ -118,11 +118,11 @@ add_library(mephit SHARED
   ${MEPHIT_C_SRC_FILES}
   ${MEPHIT_CPP_SRC_FILES}
 )
-add_dependencies(mephit LIBNEO FGSL MFEM TRIANGLE)
+add_dependencies(mephit LIBNEO MFEM TRIANGLE)
 target_include_directories(mephit PUBLIC
   ${HDF5_INCLUDE_DIRS}
   ${magfie_include_dir}
-  ${FGSL_INC}
+  ${NETCDF_INCLUDES}
   ${MFEM_INCLUDE_DIRS}
   ${NETCDF_INCLUDES}
   ${TRIANGLE_INCLUDE_DIR}
@@ -136,7 +136,6 @@ set(MEPHIT_LIBS
   ${HDF5_LIBRARIES}
   ${NETCDF_LIBRARIES}
   ${gsl_lib}
-  ${fgsl_lib}
   ${MFEM_LIBRARIES}
   ${BLAS_LIBRARIES}
   ${LAPACK_LIBRARIES}

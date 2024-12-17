@@ -1,6 +1,7 @@
 module mephit_pert
 
   use iso_fortran_env, only: dp => real64
+  use iso_c_binding, only: c_int, c_double
 
   implicit none
 
@@ -34,6 +35,17 @@ module mephit_pert
       type(field_cache_t), intent(in) :: f
       complex(dp) :: vector_element_projection
     end function vector_element_projection
+  end interface
+
+  interface
+    function gsl_sf_bessel_icn_array(nmin, nmax, x, result_array) &
+      bind(C, name='gsl_sf_bessel_In_array')
+      import :: c_int, c_double
+      integer(c_int), intent(in), value :: nmin, nmax
+      real(c_double), intent(in), value :: x
+      real(c_double), intent(inout), dimension(nmax - nmin + 1) :: result_array
+      integer(c_int) :: gsl_sf_bessel_icn_array
+    end function gsl_sf_bessel_icn_array
   end interface
 
   type :: L1_t
@@ -1384,20 +1396,19 @@ contains
   !> field
   subroutine kilca_vacuum_fourier(tor_mode, pol_mode, R_0, r, vac_coeff, &
     B_rad, B_pol, B_tor)
-    use fgsl, only: fgsl_double, fgsl_int, fgsl_success, fgsl_sf_bessel_icn_array
     use mephit_conf, only: logger
     use mephit_util, only: imun
     integer, intent(in) :: tor_mode, pol_mode
     real(dp), intent(in) :: R_0, r
     complex(dp), intent(in) :: vac_coeff
     complex(dp), intent(out) :: B_rad, B_pol, B_tor
-    real(fgsl_double) :: I_m(-1:1), k_z_r
-    integer(fgsl_int) :: status
+    real(c_double) :: I_m(-1:1), k_z_r
+    integer(c_int) :: status
 
     k_z_r = tor_mode / R_0 * r
-    status = fgsl_sf_bessel_icn_array(abs(pol_mode)-1, abs(pol_mode)+1, k_z_r, I_m)
-    if (status /= fgsl_success .and. logger%err) then
-      write (logger%msg, '("fgsl_sf_bessel_icn_array returned error ", i0)') status
+    status = gsl_sf_bessel_icn_array(abs(pol_mode)-1, abs(pol_mode)+1, k_z_r, I_m)
+    if (status /= 0 .and. logger%err) then
+      write (logger%msg, '("gsl_sf_bessel_In_array returned error ", i0)') status
       call logger%write_msg
     end if
     B_rad = 0.5d0 * (I_m(-1) + I_m(1)) * vac_coeff

@@ -15,6 +15,7 @@ extern "C" {
 
 void timestamp(char *buffer);
 void errno_msg(void (*exit_func)(int), const char *file, int line, int errnum, const char *msg_fmt, ...);
+void gsl_errno_msg(const char *reason, const char *file, int line, int gsl_errno);
 
 #ifdef __cplusplus
 }

@@ -8,6 +8,7 @@
 #include <sys/stat.h>
 #include <sys/wait.h>
 #include <signal.h>
+#include <gsl/gsl_errno.h>
 #include "mephit_util.h"
 
 static volatile sig_atomic_t caught_signal = 0;
@@ -130,6 +131,7 @@ int main(int argc, char *argv[])
   }
  mephit_fork: mephit.pid = fork();
   if (mephit.pid == (pid_t) 0) {
+    gsl_set_error_handler(gsl_errno_msg);
     mephit_run(runmode, config, suffix);
     exit(0);
   } else if (mephit.pid == (pid_t) -1) {
