@@ -8,7 +8,7 @@ $(BUILD_NINJA):
 	cmake --preset default
 
 ninja: $(BUILD_NINJA)
-	cmake --build --preset default
+	CMAKE_COLOR_DIAGNOSTICS=ON cmake --build --preset default
 
 test: ninja
 	cd $(BUILD_DIR) && ctest
