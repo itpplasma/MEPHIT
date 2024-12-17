@@ -1,4 +1,5 @@
-if(DEFINED ENV{LIBNEO_DIR} OR DEFINED LIBNEO_DIR)
+if(DEFINED ENV{LIBNEO_DIR})
+  set(LIBNEO_DIR $ENV{LIBNEO_DIR} CACHE STRING "libneo directory")
   add_custom_target(LIBNEO ALL)
 else()
   ExternalProject_Add(

@@ -7,7 +7,7 @@ else()# Define Triangle repository
 
   # External Project to fetch, patch, and build Triangle
   ExternalProject_Add(TRIANGLE
-      PREFIX ${CMAKE_BINARY_DIR}/external/triangle
+      PREFIX ${CMAKE_BINARY_DIR}/triangle
       GIT_REPOSITORY ${TRIANGLE_REPO}
       GIT_TAG master
       CONFIGURE_COMMAND "" # Skip configure step
