@@ -11,7 +11,6 @@ if [ "$(uname)" == "Darwin" ]; then
 fi
 
 
-echo "Building Triangle..."
 if [ -f is_patched ]; then
     echo "Triangle already patched."
 else
@@ -26,6 +25,10 @@ echo "Building Triangle..."
 
 $CC triangle.c -o triangle.o $CFLAGS -O2 -DTRILIBRARY -fPIC -DPIC -c
 $CC -shared triangle.o -o libtriangle-1.6.so $LDFLAGS -lm
-ln -s libtriangle-1.6.so libtriangle.so
+
+if [ ! -f libtriangle.so ]; then
+    ln -s libtriangle-1.6.so libtriangle.so
+fi
+
 
 echo "Triangle built successfully."
