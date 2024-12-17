@@ -1,6 +1,6 @@
 ### Basic settings
 cmake_minimum_required(VERSION 3.13.4)
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR})
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 ### Define the project
 project(MEPHIT LANGUAGES Fortran C CXX)
@@ -41,28 +41,6 @@ else ()
   endif ()
 endif ()
 
-if ("$ENV{LIBNEO_DIR}" STREQUAL "")
-  set(LIBNEO_DIR "${CMAKE_SOURCE_DIR}/../libneo/build")
-else ()
-  set(LIBNEO_DIR "$ENV{LIBNEO_DIR}")
-endif ()
-set(magfie_include_dir ${LIBNEO_DIR}/include)
-set(magfie_lib_dir ${LIBNEO_DIR})
-set(HDF5_tools_include_dir ${LIBNEO_DIR})
-set(HDF5_tools_lib_dir ${LIBNEO_DIR}/src/hdf5_tools)
-
-if ("$ENV{MFEM_DIR}" STREQUAL "")
-  set(MFEM_DIR "${CMAKE_SOURCE_DIR}/../mfem/build")
-else ()
-  set(MFEM_DIR "$ENV{MFEM_DIR}")
-endif ()
-
-if ("$ENV{FGSL_DIR}" STREQUAL "")
-  set(FGSL_DIR ${CMAKE_SOURCE_DIR}/../fgsl)
-else ()
-  set(FGSL_DIR $ENV{FGSL_DIR})
-endif ()
-
 ### Find dependencies in standard directories
 find_package(LAPACK)
 find_package(SuiteSparse REQUIRED)
@@ -71,32 +49,17 @@ cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 set (NETCDF_F90 "YES")
 find_package (NetCDF REQUIRED)
-find_package(MFEM REQUIRED)
 find_package(Boost 1.74 REQUIRED)
-find_package(Triangle REQUIRED)
 find_package(FFTW REQUIRED)
 
 message(STATUS "TRIANGLE_INCLUDE_DIR: ${TRIANGLE_INCLUDE_DIR}")
 
-# GSL
-find_library(gsl_lib gsl ${GSL_LIB})
-
-# FGSL
-set(FGSL_LIB ${FGSL_DIR}/.libs CACHE STRING "FGSL lib")
-set(FGSL_INC ${FGSL_DIR} CACHE STRING "FGSL include")
-find_library(fgsl_lib fgsl ${FGSL_LIB} NO_DEFAULT_PATH)
-
-# hdf5_tools
-find_library(HDF5_tools_lib hdf5_tools ${HDF5_tools_lib_dir} NO_DEFAULT_PATH)
-
-# magfie
-find_library(magfie_lib magfie ${magfie_lib_dir} NO_DEFAULT_PATH)
-
-# libneo
-find_library(neo_lib neo ${magfie_lib_dir} NO_DEFAULT_PATH)
-
-# triangle
-find_library(triangle_lib triangle ${TRIANGLE_INCLUDE_DIR} NO_DEFAULT_PATH)
+include(ExternalProject)
+include(SetupCODE)
+include(SetupLIBNEO)
+include(SetupFGSL)
+include(SetupTriangle)
+include(SetupMFEM)
 
 ### Project source files
 # SuperLU
