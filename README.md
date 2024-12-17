@@ -10,7 +10,6 @@ Prerequisites from external sources for running MEPHIT are as follows.
 - [libneo](https://github.com/itpplasma/libneo)
 - [LAPACK](https://www.netlib.org/lapack/)
 - [SuiteSparse](https://github.com/DrTimothyAldenDavis/SuiteSparse)
-- [SuperLU](https://github.com/xiaoyeli/superlu)
 - [GSL](https://www.gnu.org/software/gsl/)
 - [FFTW3](http://fftw.org/)
 - [Triangle](https://www.cs.cmu.edu/~quake/triangle.html)
