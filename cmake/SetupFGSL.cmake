@@ -1,6 +1,9 @@
 find_library(gsl_lib gsl ${GSL_LIB})
 
-if (NOT DEFINED ENV{FGSL_DIR} AND NOT DEFINED FGSL_DIR)
+if(DEFINED ENV{FGSL_DIR} AND DEFINED FGSL_DIR)
+  add_custom_target(FGSL ALL)
+  set(FGSL_DIR $ENV{FGSL_DIR} CACHE STRING "FGSL directory")
+else()
   ExternalProject_Add(
     FGSL
     URL https://github.com/reinh-bader/fgsl/archive/refs/tags/v1.6.0.tar.gz
@@ -11,13 +14,10 @@ if (NOT DEFINED ENV{FGSL_DIR} AND NOT DEFINED FGSL_DIR)
     BUILD_IN_SOURCE 1
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
     BUILD_BYPRODUCTS
-        ${CMAKE_BINARY_DIR}/fgsl/src/FGSL/.libs/libfgsl${CMAKE_SHARED_LIBRARY_SUFFIX}
+      ${CMAKE_BINARY_DIR}/fgsl/src/FGSL/.libs/libfgsl${CMAKE_SHARED_LIBRARY_SUFFIX}
   )
   set(FGSL_DIR ${CMAKE_BINARY_DIR}/fgsl/src/FGSL CACHE STRING "FGSL directory")
-else ()
-  add_custom_target(FGSL ALL)
-  set(FGSL_DIR $ENV{FGSL_DIR} CACHE STRING "FGSL directory")
-endif ()
+endif()
 
 set(FGSL_LIB ${FGSL_DIR}/.libs CACHE STRING "FGSL library path")
 set(FGSL_INC ${FGSL_DIR} CACHE STRING "FGSL include")

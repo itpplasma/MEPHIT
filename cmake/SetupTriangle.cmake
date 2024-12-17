@@ -1,7 +1,21 @@
 if (DEFINED ENV{TRIANGLE_DIR} OR DEFINED TRIANGLE_DIR)
   add_custom_target(TRIANGLE ALL)
-else()
-  message(STATUS "Downloading and building external libraries")
+else()# Define Triangle repository
+  set(TRIANGLE_REPO "https://salsa.debian.org/science-team/triangle.git")
+  set(TRIANGLE_PATCHES_DIR "debian/patches")
+  set(TRIANGLE_PATCH_SERIES "${TRIANGLE_PATCHES_DIR}/series")
+
+  # External Project to fetch, patch, and build Triangle
+  ExternalProject_Add(TRIANGLE
+      PREFIX ${CMAKE_BINARY_DIR}/external/triangle
+      GIT_REPOSITORY ${TRIANGLE_REPO}
+      GIT_TAG master
+      CONFIGURE_COMMAND "" # Skip configure step
+      BUILD_COMMAND /bin/bash ${CMAKE_SOURCE_DIR}/cmake/setup_triangle.sh <SOURCE_DIR>
+      INSTALL_COMMAND ""
+      DOWNLOAD_EXTRACT_TIMESTAMP TRUE
+      BUILD_BYPRODUCTS <SOURCE_DIR>/libtriangle.so
+  )
 endif()
 
 set(TRIANGLE_INCLUDE_DIR ${TRIANGLE_DIR} CACHE STRING "Path to triangle include")

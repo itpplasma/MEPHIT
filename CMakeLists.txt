@@ -118,9 +118,9 @@ add_library(mephit SHARED
   ${MEPHIT_C_SRC_FILES}
   ${MEPHIT_CPP_SRC_FILES}
 )
+add_dependencies(mephit LIBNEO FGSL MFEM TRIANGLE)
 target_include_directories(mephit PUBLIC
   ${HDF5_INCLUDE_DIRS}
-  ${HDF5_tools_include_dir}
   ${magfie_include_dir}
   ${FGSL_INC}
   ${MFEM_INCLUDE_DIRS}
@@ -128,8 +128,7 @@ target_include_directories(mephit PUBLIC
   ${TRIANGLE_INCLUDE_DIR}
 )
 set(MEPHIT_LIBS
-  ${SUITESPARSE_LIBRARIES}
-  klu
+  ${SUITESPARSE_LIBRARIES} klu
   ${HDF5_tools_lib}
   ${HDF5_Fortran_HL_LIBRARIES}
   ${HDF5_HL_LIBRARIES}

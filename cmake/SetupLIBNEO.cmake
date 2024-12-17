@@ -21,7 +21,6 @@ endif()
 
 set(magfie_include_dir ${LIBNEO_DIR}/include)
 set(magfie_lib_dir ${LIBNEO_DIR})
-set(HDF5_tools_include_dir ${LIBNEO_DIR})
 set(HDF5_tools_lib_dir ${LIBNEO_DIR}/src/hdf5_tools)
 
 set(neo_lib ${LIBNEO_DIR}/libneo${CMAKE_SHARED_LIBRARY_SUFFIX})
