@@ -21,14 +21,14 @@ else
     touch is_patched
 fi
 
-echo "Building Triangle..."
-
-$CC triangle.c -o triangle.o $CFLAGS -O2 -DTRILIBRARY -fPIC -DPIC -c
-$CC -shared triangle.o -o libtriangle-1.6.so $LDFLAGS -lm
+if [ ! -f libtriangle-1.6.so ]; then
+    echo "Building Triangle..."
+    $CC triangle.c -o triangle.o $CFLAGS -O2 -DTRILIBRARY -fPIC -DPIC -c
+    $CC -shared triangle.o -o libtriangle-1.6.so $LDFLAGS -lm
+fi
 
 if [ ! -f libtriangle.so ]; then
     ln -s libtriangle-1.6.so libtriangle.so
 fi
-
 
 echo "Triangle built successfully."
