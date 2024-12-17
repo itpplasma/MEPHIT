@@ -2,7 +2,7 @@ if(NOT "${LIBNEO_DIR}" STREQUAL "")
   add_custom_target(LIBNEO ALL)
 elseif(DEFINED ENV{LIBNEO_DIR})
   add_custom_target(LIBNEO ALL)
-  set(LIBNEO_DIR $ENV{LIBNEO_DIR} CACHE STRING "libneo directory")
+  set(LIBNEO_DIR $ENV{LIBNEO_DIR})
 else()
   ExternalProject_Add(
     LIBNEO
@@ -19,7 +19,7 @@ else()
         ${CMAKE_BINARY_DIR}/libneo/src/LIBNEO/build/libmagfie${CMAKE_SHARED_LIBRARY_SUFFIX}
         ${CMAKE_BINARY_DIR}/libneo/src/LIBNEO/build/src/hdf5_tools/libhdf5_tools${CMAKE_STATIC_LIBRARY_SUFFIX}
   )
-  set(LIBNEO_DIR ${CMAKE_BINARY_DIR}/libneo/src/LIBNEO/build CACHE STRING "libneo directory")
+  set(LIBNEO_DIR ${CMAKE_BINARY_DIR}/libneo/src/LIBNEO/build)
 endif()
 
 set(magfie_include_dir ${LIBNEO_DIR}/include)

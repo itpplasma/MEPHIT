@@ -2,7 +2,7 @@ if(NOT "${MFEM_DIR}" STREQUAL "")
   add_custom_target(MFEM ALL)
 elseif(DEFINED ENV{MFEM_DIR})
   add_custom_target(MFEM ALL)
-  set(MFEM_DIR $ENV{MFEM_DIR} CACHE STRING "MFEM directory")
+  set(MFEM_DIR $ENV{MFEM_DIR})
 else()
   message(STATUS "Downloading and building MFEM")
 
