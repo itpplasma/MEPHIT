@@ -22,7 +22,6 @@ else ()
   set(WARNING_FLAGS "-Wall -Wextra -pedantic -fmax-errors=1 -Wno-unused-label")
   set(LEGACY_FLAGS "-fcheck=no-array-temps")
   set(CMAKE_C_FLAGS "-O2 -g -march=native -Wconversion -Wfloat-equal -Wshadow -Wredundant-decls -Winline ${WARNING_FLAGS}")
-  set(BLA_VENDOR OpenBLAS)
 endif ()
 
 # Prevent linker error with hdf5tools on Ubuntu
@@ -47,11 +46,37 @@ find_package(LAPACK REQUIRED)
 find_package(SuiteSparse REQUIRED)
 cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
-set (NETCDF_F90 "YES")
-find_package (NetCDF REQUIRED)
 find_package(Boost 1.74 REQUIRED)
 find_package(FFTW REQUIRED)
-find_library(gsl_lib gsl ${GSL_LIB})
+find_package(GSL REQUIRED)
+
+### NetCDF
+find_program(NF_CONFIG "nf-config")
+
+if (NF_CONFIG)
+execute_process(COMMAND nf-config --includedir
+                OUTPUT_VARIABLE NETCDFINCLUDE_DIR)
+execute_process(COMMAND nc-config --libdir
+				OUTPUT_VARIABLE NETCDFLIB_DIR)
+execute_process(COMMAND nf-config --flibs
+                OUTPUT_VARIABLE NETCDF_FLIBS)
+else()
+message(SEND_ERROR "nf-config not found. Please install libnetcdff-dev")
+endif()
+
+string(STRIP ${NETCDFINCLUDE_DIR} NETCDFINCLUDE_DIR)
+string(STRIP ${NETCDFLIB_DIR} NETCDFLIB_DIR)
+string(STRIP ${NETCDF_FLIBS} NETCDF_FLIBS)
+
+message(STATUS "NetCDF include path: " ${NETCDFINCLUDE_DIR})
+message(STATUS "NetCDF lib path: " ${NETCDFLIB_DIR})
+message(STATUS "NetCDF Fortran libs: " ${NETCDF_FLIBS})
+
+# Replace space by semicolon in the Fortran libs
+string(REPLACE " " ";" NETCDF_FLIBS ${NETCDF_FLIBS})
+
+include_directories(${NETCDFINCLUDE_DIR})
+link_directories(${NETCDFLIB_DIR})
 
 include(ExternalProject)
 include(SetupCODE)
