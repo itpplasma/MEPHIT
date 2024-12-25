@@ -17,15 +17,12 @@ else()
     BUILD_BYPRODUCTS
         ${CMAKE_BINARY_DIR}/libneo/src/LIBNEO/build/libneo${CMAKE_SHARED_LIBRARY_SUFFIX}
         ${CMAKE_BINARY_DIR}/libneo/src/LIBNEO/build/libmagfie${CMAKE_SHARED_LIBRARY_SUFFIX}
-        ${CMAKE_BINARY_DIR}/libneo/src/LIBNEO/build/src/hdf5_tools/libhdf5_tools${CMAKE_STATIC_LIBRARY_SUFFIX}
   )
   set(LIBNEO_DIR ${CMAKE_BINARY_DIR}/libneo/src/LIBNEO/build)
 endif()
 
 set(magfie_include_dir ${LIBNEO_DIR}/include)
 set(magfie_lib_dir ${LIBNEO_DIR})
-set(HDF5_tools_lib_dir ${LIBNEO_DIR}/src/hdf5_tools)
 
 set(neo_lib ${LIBNEO_DIR}/libneo${CMAKE_SHARED_LIBRARY_SUFFIX})
 set(magfie_lib ${magfie_lib_dir}/libmagfie${CMAKE_SHARED_LIBRARY_SUFFIX})
-set(HDF5_tools_lib ${HDF5_tools_lib_dir}/libhdf5_tools${CMAKE_STATIC_LIBRARY_SUFFIX})

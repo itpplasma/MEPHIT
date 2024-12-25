@@ -166,8 +166,8 @@ target_include_directories(mephit PUBLIC
   ${TRIANGLE_INCLUDE_DIR}
 )
 set(MEPHIT_LIBS
-  ${HDF5_tools_lib}
   hdf5::hdf5
+  hdf5::hdf5_hl
   hdf5::hdf5_fortran
   hdf5::hdf5_hl_fortran
   GSL::gsl
