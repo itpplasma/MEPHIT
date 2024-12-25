@@ -180,7 +180,7 @@ set(MEPHIT_LIBS
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
 if(LEGACY_SUITESPARSE)
-  target_link_libraries(mephit ${SuiteSparse_LIBRARIES})
+  target_link_libraries(mephit ${SUITESPARSE_LIBRARIES} klu)
 else()
   target_link_libraries(mephit SuiteSparse::umfpack)
 endif()
