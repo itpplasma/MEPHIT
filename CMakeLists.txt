@@ -159,7 +159,6 @@ add_library(mephit SHARED
 )
 add_dependencies(mephit LIBNEO MFEM TRIANGLE)
 target_include_directories(mephit PUBLIC
-  ${HDF5_INCLUDE_DIRS}
   ${magfie_include_dir}
   ${NETCDF_INCLUDES}
   ${MFEM_INCLUDE_DIRS}
@@ -168,10 +167,9 @@ target_include_directories(mephit PUBLIC
 )
 set(MEPHIT_LIBS
   ${HDF5_tools_lib}
-  ${HDF5_Fortran_HL_LIBRARIES}
-  ${HDF5_HL_LIBRARIES}
-  ${HDF5_Fortran_LIBRARIES}
-  ${HDF5_LIBRARIES}
+  hdf5::hdf5
+  hdf5::hdf5_fortran
+  hdf5::hdf5_hl_fortran
   GSL::gsl
   ${MFEM_LIBRARIES}
   BLAS::BLAS
