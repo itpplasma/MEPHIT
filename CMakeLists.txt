@@ -43,7 +43,13 @@ endif ()
 ### Find dependencies in standard directories
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
-find_package(UMFPACK REQUIRED)
+find_package(UMFPACK)
+if(NOT UMFPACK_FOUND)
+  set(LEGACY_SUITESPARSE ON)
+  message(STATUS "UMFPACK not found. Trying legacy SuiteSparse.")
+  find_package(SuiteSparse REQUIRED)
+endif()
+
 cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 find_package(Boost 1.74 REQUIRED)
@@ -90,9 +96,13 @@ set(SUITESPARSE_SRC_FILES
   src/external/umf4_f77wrapper.c
   src/external/umf4_f77zwrapper.c
 )
-set(SUITESPARSE_FLAGS -I${SUITESPARSE_INCLUDE_DIRS})
-set_source_files_properties(src/external/umf4_f77wrapper.c  PROPERTIES COMPILE_FLAGS "-DDLONG")
-set_source_files_properties(src/external/umf4_f77zwrapper.c PROPERTIES COMPILE_FLAGS "-DZLONG")
+if(LEGACY_SUITESPARSE)
+  set(SUITESPARSE_FLAGS "-I${SUITESPARSE_INCLUDE_DIRS}")
+else()
+  set(SUITESPARSE_FLAGS "")
+endif()
+set_source_files_properties(src/external/umf4_f77wrapper.c  PROPERTIES COMPILE_FLAGS "${SUITESPARSE_FLAGS} -DDLONG")
+set_source_files_properties(src/external/umf4_f77zwrapper.c PROPERTIES COMPILE_FLAGS "${SUITESPARSE_FLAGS} -DZLONG")
 
 set(COMMON_FORTRAN_SRC_FILES
   src/external/netlib_mod.f90
@@ -153,7 +163,6 @@ target_include_directories(mephit PUBLIC
   ${TRIANGLE_INCLUDE_DIR}
 )
 set(MEPHIT_LIBS
-  SuiteSparse::UMFPACK
   ${HDF5_tools_lib}
   ${HDF5_Fortran_HL_LIBRARIES}
   ${HDF5_HL_LIBRARIES}
@@ -170,6 +179,11 @@ set(MEPHIT_LIBS
   ${neo_lib}
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
+if(LEGACY_SUITESPARSE)
+  target_link_libraries(mephit ${SuiteSparse_LIBRARIES})
+else()
+  target_link_libraries(mephit SuiteSparse::umfpack)
+endif()
 
 ### Define executables
 add_executable(mephit_run.x src/mephit_run.c)
