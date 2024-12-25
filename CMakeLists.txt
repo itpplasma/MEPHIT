@@ -43,7 +43,7 @@ endif ()
 ### Find dependencies in standard directories
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
-find_package(SuiteSparse REQUIRED)
+find_package(UMFPACK REQUIRED)
 cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 find_package(Boost 1.74 REQUIRED)
@@ -91,8 +91,8 @@ set(SUITESPARSE_SRC_FILES
   src/external/umf4_f77zwrapper.c
 )
 set(SUITESPARSE_FLAGS -I${SUITESPARSE_INCLUDE_DIRS})
-set_source_files_properties(src/external/umf4_f77wrapper.c  PROPERTIES COMPILE_FLAGS "${SUITESPARSE_FLAGS} -DDLONG")
-set_source_files_properties(src/external/umf4_f77zwrapper.c PROPERTIES COMPILE_FLAGS "${SUITESPARSE_FLAGS} -DZLONG")
+set_source_files_properties(src/external/umf4_f77wrapper.c  PROPERTIES COMPILE_FLAGS "-DDLONG")
+set_source_files_properties(src/external/umf4_f77zwrapper.c PROPERTIES COMPILE_FLAGS "-DZLONG")
 
 set(COMMON_FORTRAN_SRC_FILES
   src/external/netlib_mod.f90
@@ -153,17 +153,17 @@ target_include_directories(mephit PUBLIC
   ${TRIANGLE_INCLUDE_DIR}
 )
 set(MEPHIT_LIBS
-  ${SUITESPARSE_LIBRARIES} klu
+  SuiteSparse::UMFPACK
   ${HDF5_tools_lib}
   ${HDF5_Fortran_HL_LIBRARIES}
   ${HDF5_HL_LIBRARIES}
   ${HDF5_Fortran_LIBRARIES}
   ${HDF5_LIBRARIES}
   ${NETCDF_LIBRARIES}
-  ${gsl_lib}
+  GSL::gsl
   ${MFEM_LIBRARIES}
-  ${BLAS_LIBRARIES}
-  ${LAPACK_LIBRARIES}
+  BLAS::BLAS
+  LAPACK::LAPACK
   ${FFTW_LIBRARIES}
   ${triangle_lib}
   ${magfie_lib}
