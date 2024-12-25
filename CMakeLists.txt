@@ -178,6 +178,7 @@ set(MEPHIT_LIBS
   ${triangle_lib}
   ${magfie_lib}
   ${neo_lib}
+  ${hdf5_tools_lib}
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
 if(LEGACY_SUITESPARSE)
