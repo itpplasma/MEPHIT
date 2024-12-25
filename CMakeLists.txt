@@ -43,11 +43,14 @@ endif ()
 ### Find dependencies in standard directories
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
-find_package(UMFPACK)
-if(NOT UMFPACK_FOUND)
+
+find_package(SuiteSparse)
+if(SUITESPARSE_FOUND)
   set(LEGACY_SUITESPARSE ON)
-  message(STATUS "UMFPACK not found. Trying legacy SuiteSparse.")
-  find_package(SuiteSparse REQUIRED)
+  message(STATUS "SuiteSparse found.")
+else()
+  message(STATUS "SuiteSparse not found. Trying new cmake search.")
+  find_package(UMFPACK REQUIRED)
 endif()
 
 cmake_policy(SET CMP0074 NEW)
@@ -83,6 +86,7 @@ string(REPLACE " " ";" NETCDF_FLIBS ${NETCDF_FLIBS})
 
 include_directories(${NETCDFINCLUDE_DIR})
 link_directories(${NETCDFLIB_DIR})
+add_link_options(${NETCDF_FLIBS})
 
 include(ExternalProject)
 include(SetupCODE)
@@ -168,7 +172,6 @@ set(MEPHIT_LIBS
   ${HDF5_HL_LIBRARIES}
   ${HDF5_Fortran_LIBRARIES}
   ${HDF5_LIBRARIES}
-  ${NETCDF_LIBRARIES}
   GSL::gsl
   ${MFEM_LIBRARIES}
   BLAS::BLAS
@@ -180,7 +183,7 @@ set(MEPHIT_LIBS
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
 if(LEGACY_SUITESPARSE)
-  target_link_libraries(mephit ${SUITESPARSE_LIBRARIES} klu)
+  target_link_libraries(mephit ${SUITESPARSE_LIBRARIES})
 else()
   target_link_libraries(mephit SuiteSparse::umfpack)
 endif()
