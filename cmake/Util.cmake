@@ -1,7 +1,7 @@
 include(FetchContent)
 
 function(find_or_fetch DEPENDENCY)
-    if(DEFINED ENV{CODE})
+    if(DEFINED ENV{CODE} AND EXISTS $ENV{CODE}/${DEPENDENCY})
         set(${DEPENDENCY}_SOURCE_DIR $ENV{CODE}/${DEPENDENCY})
         message(STATUS "Using ${DEPENDENCY} in $ENV{CODE}/${DEPENDENCY}")
     else()
