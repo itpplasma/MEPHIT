@@ -56,7 +56,6 @@ endif()
 cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 find_package(Boost 1.74 REQUIRED)
-find_package(FFTW REQUIRED)
 find_package(GSL REQUIRED)
 
 ### NetCDF
@@ -90,9 +89,10 @@ add_link_options(${NETCDF_FLIBS})
 
 include(ExternalProject)
 include(SetupCODE)
-include(SetupLIBNEO)
 include(SetupTriangle)
 include(SetupMFEM)
+include(Util)
+find_or_fetch(libneo)
 
 ### Project source files
 # SuiteSparse
@@ -157,7 +157,7 @@ add_library(mephit SHARED
   ${MEPHIT_C_SRC_FILES}
   ${MEPHIT_CPP_SRC_FILES}
 )
-add_dependencies(mephit LIBNEO MFEM TRIANGLE)
+add_dependencies(mephit MFEM TRIANGLE)
 target_include_directories(mephit PUBLIC
   ${magfie_include_dir}
   ${NETCDF_INCLUDES}
@@ -176,9 +176,9 @@ set(MEPHIT_LIBS
   LAPACK::LAPACK
   ${FFTW_LIBRARIES}
   ${triangle_lib}
-  ${magfie_lib}
-  ${neo_lib}
-  ${hdf5_tools_lib}
+  LIBNEO::magfie
+  LIBNEO::neo
+  LIBNEO::hdf5_tools
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
 if(LEGACY_SUITESPARSE)
