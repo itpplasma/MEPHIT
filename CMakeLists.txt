@@ -134,9 +134,9 @@ set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
 set(MEPHIT_FORTRAN_SRC_FILES
   src/mephit_conf.f90
   src/mephit_util.f90
-  src/mephit_mesh.f90
+  src/mephit_mesh.F90
   src/mephit_pert.f90
-  src/mephit_iter.f90
+  src/mephit_iter.F90
 )
 set_source_files_properties(src/mephit_test.f90 ${MEPHIT_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS}")
