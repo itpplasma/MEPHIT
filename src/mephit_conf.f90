@@ -198,9 +198,6 @@ module mephit_conf
     !> Enable debugging of initial iterations without plasma response. Defaults to true.
     logical :: debug_initial = .true.
 
-    !> Enable MFEM interface. Defaults to false.
-    logical :: debug_mfem = .false.
-
     !> Single poloidal mode used in comparison with KiLCA code. Defaults to 0 (ASDEX
     !> geometry).
     integer :: kilca_pol_mode = 0
@@ -348,8 +345,6 @@ contains
       comment = 'offset added to radial electric field', unit = 'statV cm^-1')
     call h5_add(h5id_root, grp // '/debug_initial', config%debug_initial, &
       comment = 'enable debugging of initial runs without plasma response')
-    call h5_add(h5id_root, grp // '/debug_MFEM', config%debug_MFEM, &
-      comment = 'enable MFEM interface')
     call h5_add(h5id_root, grp // '/kilca_pol_mode', config%kilca_pol_mode, &
       comment = 'single poloidal mode used in comparison with KiLCA code')
     call h5_add(h5id_root, grp // '/kilca_scale_factor', config%kilca_scale_factor, &

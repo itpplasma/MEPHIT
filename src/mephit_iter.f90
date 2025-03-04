@@ -541,12 +541,14 @@ contains
       write (postfix, postfix_fmt) kiter
       Bn_prev%DOF(:) = perteq%Bn%DOF
       Bn_prev%comp_phi(:) = perteq%Bn%comp_phi
-      ! compute B_(n+1) = K * B_n + B_vac ... different from next_iteration_arnoldi
-      if (kiter <= 1 .and. conf%debug_MFEM) then
+#ifdef USE_MFEM
+      if (kiter <= 1) then
         call MFEM_test(perteq%pn)
         call perteq_write('("iter/", a, "MFEM_' // postfix // '")', &
             ' (after MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
       end if
+#endif
+      ! compute B_(n+1) = K * B_n + B_vac ... different from next_iteration_arnoldi
       call compute_presn(perteq, fdm, conf%damp)
       if (kiter <= 1) then
         call perteq_write('("iter/", a, "' // postfix // '")', &
@@ -634,16 +636,16 @@ contains
     if (conf%debug_initial) then
       perteq%Bn%DOF(:) = vac%Bn%DOF
       perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
-      if (conf%debug_MFEM) then
-        call MFEM_test(perteq%pn)
-        call perteq_write('("debug_MFEM_initial/MFEM_", a)', &
-          ' (initial MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
-      end if
+#ifdef USE_MFEM
+      call MFEM_test(perteq%pn)
+      call perteq_write('("debug_MFEM_initial/MFEM_", a)', &
+        ' (initial MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
+#endif
       call compute_presn(perteq, fdm, .false.)
-      if (conf%debug_MFEM) then
-        call perteq_write('("debug_MFEM_initial/", a)', &
-          ' (initial iteration)', presn = perteq%pn, presmn = perteq%pn)
-      end if
+#ifdef USE_MFEM
+      call perteq_write('("debug_MFEM_initial/", a)', &
+        ' (initial iteration)', presn = perteq%pn, presmn = perteq%pn)
+#endif
       call compute_currn(perteq, fdm, .false., .true.)
       perteq%Bn%DOF(:) = vac%Bn%DOF
       perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
@@ -705,6 +707,7 @@ contains
     scalar = -dp0_dpsi * (B_n(1) * B_0(3) - B_n(3) * B_0(1)) * R / sqrt(sum(B_0 * B_0))
   end subroutine presn_inhom
 
+#ifdef USE_MFEM
   subroutine MFEM_test(pn)
     use iso_c_binding, only: c_int, c_null_char, c_loc, c_funloc
     use mephit_conf, only: conf, logger, basename_suffix, decorate_filename
@@ -720,6 +723,7 @@ contains
       call logger%write_msg
     end if
   end subroutine MFEM_test
+#endif
 
   subroutine FDM_init(fdm, nnz)
     type(FDM_t), intent(inout) :: fdm

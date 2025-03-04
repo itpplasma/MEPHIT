@@ -15,7 +15,7 @@ Prerequisites from external sources for running MEPHIT are as follows.
 - [Triangle](https://www.cs.cmu.edu/~quake/triangle.html)
 - [Boost](https://www.boost.org/)
 - [FreeFem++](https://github.com/FreeFem/FreeFem-sources)
-- [MFEM](https://mfem.org/)
+- [MFEM](https://mfem.org/) is optional
 - [HDF5](https://www.hdfgroup.org/downloads/hdf5)
 - [NetCDF](https://github.com/Unidata/netcdf-fortran)
 - Python 3 including packages listed in [`requirements.txt`](requirements.txt) for plotting

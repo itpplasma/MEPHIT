@@ -1004,9 +1004,9 @@ contains
     call init_flux_variables
     call compare_gpec_coordinates
     call connect_mesh_points
-    if (conf%debug_MFEM) then
-      call mesh_write_MFEM
-    end if
+#ifdef USE_MFEM
+    call mesh_write_MFEM
+#endif
     call write_FreeFem_mesh
     call cache_init(cache, 4)
     call cache_equilibrium_field
@@ -2843,6 +2843,7 @@ contains
     call h5_close(h5id_root)
   end subroutine mesh_write
 
+#ifdef USE_MFEM
   subroutine mesh_write_MFEM
     use mephit_conf, only: basename_suffix, decorate_filename
     integer :: fid, ktri, kp, kpoi
@@ -2870,6 +2871,7 @@ contains
     end do
     close(fid)
   end subroutine mesh_write_MFEM
+#endif
 
   subroutine write_FreeFem_mesh
     use iso_c_binding, only: c_null_char

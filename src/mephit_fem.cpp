@@ -1,6 +1,8 @@
 #include "mephit_fem.h"
+#ifdef USE_MFEM
 #include "mfem.hpp"
 #include "magnetic_differential_equation.h"
+#endif  // USE_MFEM
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/index/rtree.hpp>
@@ -38,6 +40,8 @@ extern "C" void Rtree_query(double R, double Z, int *result_size, int **results)
   *result_size = static_cast<int>(query_results.size());
   *results = query_results.data();
 }
+
+#ifdef USE_MFEM
 
 typedef std::map<std::pair<double, double>, size_t> points_2D;
 
@@ -142,3 +146,5 @@ extern "C" int FEM_test(const char *mesh_file,
   }
   return 0;
 }
+
+#endif  // USE_MFEM
