@@ -28,18 +28,17 @@ In the following sections, it is assumed that the environment variable `MEPHIT_D
 To build MEPHIT, run:
 
 ```bash
-mkdir $MEPHIT_DIR
-cmake -B $MEPHIT_DIR
-cd $MEPHIT_DIR
-make -j
+make
+export MEPHIT_DIR="$(git rev-parse --show-toplevel)/build"
+export MEPHIT_RUN_DIR="$(git rev-parse --show-toplevel)/run"
 ```
 
 ### Coil geometry
 
-In order to use the default configuration in `mephit.in` (see below) for pre-computed Fourier modes for the vacuum field, i.e., `config%vac_src = 2`, you need to generate a coil file once to be used for `config%coil_file`. Create a namelist file for `coil_field`, like [libneo](https://github.com/itpplasma/libneo)'s `tools/vacfield_AUG.in`, and run `$LIBNEO_DIR/vacfield.x`. To generate the coil file for ASDEX Upgrade at ITPcp, run:
+In order to use the default configuration in `mephit.in` (see below) for pre-computed Fourier modes for the vacuum field, i.e., `config%vac_src = 2`, you need to generate a coil file once to be used for `config%coil_file`. **Create a namelist file for `coil_field`, like [libneo](https://github.com/itpplasma/libneo)'s `tools/vacfield_AUG.in`**, and run `$LIBNEO_DIR/vacfield.x`. To generate the coil file for ASDEX Upgrade at ITPcp, run:
 
 ```bash
-$LIBNEO_DIR/vacfield.x AUG 16 /proj/plasma/DATA/AUG/COILS/B{u,l}{1..8}n.asc Fourier vacfield_AUG.in $MEPHIT_DIR/run/AUG_B_coils.h5
+$LIBNEO_DIR/vacfield.x AUG 16 /proj/plasma/DATA/AUG/COILS/B{u,l}{1..8}n.asc Fourier vacfield_AUG.in $MEPHIT_RUN_DIR/AUG_B_coils.h5
 ```
 
 This should take about 20 minutes and the resulting file uses about 2 GB of disk space. The coils are consecutively numbered in the order given on the command line, starting from 1, and the currents in `config%currents_file` are expected in this order. The `config%Biot_savart_prefactor` needs to be set such that the result is given in statampere-turns with the speed of light set to 1. Note that this factor is also given in `vacfield_AUG.in`, but it is only used when running with `sum` instead of `Fourier`, together with the currents file. This corresponds to the setting `config%vac_src = 0` in `mephit.in`, which then ignores its `config%currents_file`.
@@ -47,7 +46,7 @@ This should take about 20 minutes and the resulting file uses about 2 GB of disk
 You can also use [GPEC](https://princetonuniversity.github.io/GPEC/developers.html) coil data. Assuming the environment variable `GPECHOME` is set to the GPEC directory, the command above changes to:
 
 ```bash
-$LIBNEO_DIR/vacfield.x GPEC 2 $GPECHOME/coil/aug_b{u,l}.dat Fourier vacfield_AUG.in $MEPHIT_DIR/run/AUG_B_coils.h5
+$LIBNEO_DIR/vacfield.x GPEC 2 $GPECHOME/coil/aug_b{u,l}.dat Fourier vacfield_AUG.in $MEPHIT_RUN_DIR/AUG_B_coils.h5
 ```
 
 ## Setting up working directories
