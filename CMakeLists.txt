@@ -5,6 +5,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 ### Define the project
 project(MEPHIT LANGUAGES C CXX Fortran)
 
+### Define options
+option(WITH_MFEM "Compile with MFEM" FALSE)
+
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
@@ -90,7 +93,10 @@ add_link_options(${NETCDF_FLIBS})
 include(ExternalProject)
 include(SetupCODE)
 include(SetupTriangle)
-include(SetupMFEM)
+if(WITH_MFEM)
+  include(SetupMFEM)
+  add_definitions(-DUSE_MFEM)
+endif()
 include(Util)
 find_or_fetch(libneo)
 
@@ -128,9 +134,9 @@ set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
 set(MEPHIT_FORTRAN_SRC_FILES
   src/mephit_conf.f90
   src/mephit_util.f90
-  src/mephit_mesh.f90
+  src/mephit_mesh.F90
   src/mephit_pert.f90
-  src/mephit_iter.f90
+  src/mephit_iter.F90
 )
 set_source_files_properties(src/mephit_test.f90 ${MEPHIT_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS}")
@@ -142,9 +148,13 @@ set(MEPHIT_C_SRC_FILES
 )
 set(MEPHIT_CPP_SRC_FILES
   src/mephit_fem.cpp
-  src/magnetic_differential_equation.cpp
-  src/miscellaneous.cpp
 )
+if(WITH_MFEM)
+  set(MEPHIT_CPP_SRC_FILES ${MEPHIT_CPP_SRC_FILES}
+    src/magnetic_differential_equation.cpp
+    src/miscellaneous.cpp
+  )
+endif()
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
 	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
 
@@ -157,11 +167,10 @@ add_library(mephit SHARED
   ${MEPHIT_C_SRC_FILES}
   ${MEPHIT_CPP_SRC_FILES}
 )
-add_dependencies(mephit MFEM TRIANGLE)
+add_dependencies(mephit TRIANGLE)
 target_include_directories(mephit PUBLIC
   ${magfie_include_dir}
   ${NETCDF_INCLUDES}
-  ${MFEM_INCLUDE_DIRS}
   ${NETCDF_INCLUDES}
   ${TRIANGLE_INCLUDE_DIR}
 )
@@ -171,7 +180,6 @@ set(MEPHIT_LIBS
   hdf5::hdf5_fortran
   hdf5::hdf5_hl_fortran
   GSL::gsl
-  ${MFEM_LIBRARIES}
   BLAS::BLAS
   LAPACK::LAPACK
   ${FFTW_LIBRARIES}
@@ -185,6 +193,11 @@ if(LEGACY_SUITESPARSE)
   target_link_libraries(mephit ${SUITESPARSE_LIBRARIES})
 else()
   target_link_libraries(mephit SuiteSparse::umfpack)
+endif()
+if(WITH_MFEM)
+  add_dependencies(mephit MFEM)
+  target_include_directories(mephit PUBLIC ${MFEM_INCLUDE_DIRS})
+  target_link_libraries(mephit ${MFEM_LIBRARIES})
 endif()
 
 ### Define executables

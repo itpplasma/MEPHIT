@@ -50,12 +50,15 @@ typedef void real_vector_field(const double R,
 typedef void complex_scalar_field(const double R,
                                   const double Z,
                                   complex_double *scalar);
+
+#ifdef USE_MFEM
 int FEM_test(const char *mesh_file,
              const int tor_mode,
              const int n_dof,
              complex_double *dof,
              real_vector_field *unit_B0,
              complex_scalar_field *MDE_inhom);
+#endif  // USE_MFEM
 
 #ifdef __cplusplus
 }
