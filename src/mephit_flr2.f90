@@ -190,7 +190,7 @@ contains
       c0(i) = d0(i)*factor_of_Phi
       c2_in(i) = d2_in(i)*factor_of_Phi
       c2_out(i) = c2_in(i)
-    enddo
+    end do
 
     ! Solve Laplace equation:
 
@@ -210,7 +210,7 @@ contains
 
   end subroutine response_current
 
-  !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
+
   subroutine getIfunc(x1,x2,symbI)
     integer :: m,n
     real(dp) :: x1,x2,z
@@ -247,38 +247,33 @@ contains
         do m=0,3
           do n=0,3
             symbI(m,n)=Imn(m,n)+(Imn(m,0)-Imn(m,2))*(Imn(n,0)-Imn(n,2))/denom
-          enddo
-        enddo
+          end do
+        end do
       else
         symbI=Imn
-      endif
-      !write (1234,*) x1,real(Imn(0,0)),dimag(Imn(0,0)),real(Imn(2,0)),dimag(Imn(2,0)), &
-      !real(Imn(2,2)),dimag(Imn(2,2)),real(Imn(1,0)-Imn(1,2)),dimag(Imn(1,0)-Imn(1,2))
+      end if
 
-    endif
+    end if
 
   end subroutine getIfunc
-  !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
-  !<Calculates array of W2 special functions.
 
-  !------------------------------------------------------------------------------
-
-  subroutine W2_arr (x1_in,x2_in,Imn)
-    real(dp) :: x1_in,x2_in;
+  !> Calculates array of W2 special functions.
+  subroutine W2_arr(x1_in,x2_in,Imn)
+    real(dp) :: x1_in,x2_in
     complex(dp), dimension(0:3,0:3) :: Imn
     complex(dp) :: t1, t2, F11m, x1, x2
     complex(dp), parameter :: I = (0.0d0, 1.0d0), one = (1.0d0, 0.0d0)
 
-    integer :: l,m,n;
+    integer :: l,m,n
 
-    real(dp) :: F_im, F_re;
-    complex(dp), allocatable, dimension(:,:,:) :: W2;
+    real(dp) :: F_im, F_re
+    complex(dp), allocatable, dimension(:,:,:) :: W2
 
     allocate (W2(0:3, 0:3, 0:mnmax))
     W2 = (0.0d0, 0.0d0)
 
-    x1 = dcmplx(x1_in,0.d0)
+    x1 = cmplx(x1_in, 0.d0, dp)
     t1 = x1**2
 
     do l = 0, mnmax ! does not work for 3, 2 and 1!
@@ -286,15 +281,15 @@ contains
 
       x2 = x2_in + I*l
 
-      t2 = - I*x2 + t1;
+      t2 = - I*x2 + t1
 
-      !      call Hypergeometric1F1_kummer_modified_0_ada (real(one+t2), aimag(one+t2), real(t1), aimag(t1), F_re, F_im);
+      ! call Hypergeometric1F1_kummer_modified_0_ada (real(one+t2), aimag(one+t2), real(t1), aimag(t1), F_re, F_im)
 
-      !      F11m = F_re + I*F_im;
+      ! F11m = F_re + I*F_im
 
-      call hypergeometric1f1_cont_fract_1_modified_0_ada (real(one+t2), aimag(one+t2), real(t1), aimag(t1), F_re, F_im);
+      call hypergeometric1f1_cont_fract_1_modified_0_ada (real(one+t2), aimag(one+t2), real(t1), aimag(t1), F_re, F_im)
 
-      F11m = F_re + I*F_im;
+      F11m = F_re + I*F_im
 
       !asymptotic form of expressions: has no fake singularity at kp=0
 
@@ -362,12 +357,10 @@ contains
     do m=0,3
       do n=0,m-1
         Imn(m,n)=Imn(n,m)
-      enddo
-    enddo
+      end do
+    end do
 
   end subroutine W2_arr
-
-  !------------------------------------------------------------------------------
 
 
   subroutine progonka(isw_f,npoi,x,q,  &
@@ -452,7 +445,7 @@ contains
       eqmat(:,i) = a2_out(i)*wsecder(:,i)      &
         + a2_in(i-1:i+1)*wsecder(:,i)
       eqmat(0,i) = eqmat(0,i) + a0(i)
-    enddo
+    end do
 
     eqmat(0,1)=(1.d0,0.d0)
     eqmat(0,npoi)=(1.d0,0.d0)
@@ -464,13 +457,13 @@ contains
       denom=eqmat(0,i)+alp(i)*eqmat(-1,i)
       alp(i+1)=-eqmat(1,i)/denom
       bet(i+1)=(quelle(i)-eqmat(-1,i)*bet(i))/denom
-    enddo
+    end do
 
     f(npoi)=b0(npoi)*q(npoi)/a0(npoi)
 
     do i=npoi-1,1,-1
       f(i)=alp(i+1)*f(i+1)+bet(i+1)
-    enddo
+    end do
 
     f=f*dble(isw_f)
 
@@ -483,13 +476,12 @@ contains
         + sum(d2_in(i-1:i+1)*q(i-1:i+1)*wsecder(:,i)) &
         + d0(i)*q(i)
 
-    enddo
+    end do
 
     deallocate(wsecder,eqmat,alp,bet,quelle)
 
   end subroutine progonka
 
-  !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
 
   subroutine first_deriv(npoi,x,f,df_dx)
 
@@ -515,7 +507,7 @@ contains
       dxm=x(i)-x(i-1)
       dxt=dxp+dxm
       df_dx(i)=((f(i+1)-f(i))*dxm**2-(f(i-1)-f(i))*dxp**2)/(dxp*dxm*dxt)
-    enddo
+    end do
 
     df_dx(1)=(df_dx(2)*(x(3)-x(1))+df_dx(3)*(x(1)-x(2)))/(x(3)-x(2))
     df_dx(npoi)=(df_dx(npoi-1)*(x(npoi-2)-x(npoi))+df_dx(npoi-2)*(x(npoi)-x(npoi-1)))/(x(npoi-2)-x(npoi-1))
