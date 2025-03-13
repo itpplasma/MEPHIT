@@ -27,10 +27,10 @@ module mephit_flr2
 
 contains
 
-  subroutine response_current(isw_Phi_m,mpol,ntor,npoi,am_i,z_i,Rtor,     &
-    psi,qsaf,bcovar_phi,Phi_0,avR2nabpsi2,      &
-    dens_e,temp_e,temp_i,anu_e,anu_i,           &
-    bpsi_over_bphi,parcur_over_b0,Phi_m)
+  subroutine response_current(isw_Phi_m, mpol, ntor, npoi, am_i, z_i, Rtor, &
+    psi, qsaf, bcovar_phi, Phi_0, avR2nabpsi2, &
+    dens_e, temp_e, temp_i, anu_e, anu_i, &
+    bpsi_over_bphi, parcur_over_b0, Phi_m)
 
     ! All units are Gaussian if not otherwise mentioned
 
@@ -61,8 +61,9 @@ contains
 
     use mephit_util, only: imun, pi, c => clight, e_charge => elem_charge, e_mass => m_e, p_mass => m_p
 
-    integer :: isw_Phi_m,mpol,ntor,npoi,i
-    real(dp) :: am_i,z_i,Rtor
+    integer, intent(in) :: isw_Phi_m, mpol, ntor, npoi
+    integer :: i
+    real(dp), intent(in) :: am_i, Z_i, Rtor
     real(dp) :: e_e,e_i,omega_E,x_1,x_2,v_T,rho2_factor
     real(dp) :: switch_flr_e,switch_flr_i
     real(dp) :: switch_cur_e,switch_cur_i
@@ -70,9 +71,10 @@ contains
     complex(dp)   :: F_m,Gtor_m,Htor
     complex(dp)   :: F_me,Gtor_me,Htore
     complex(dp)   :: F_mi,Gtor_mi,Htori
-    real(dp), dimension(npoi) :: psi,qsaf,bcovar_phi,Phi_0,avR2nabpsi2, &
-      dens_e,temp_e,temp_i,anu_e,anu_i
-    complex(dp),   dimension(npoi) :: bpsi_over_bphi,parcur_over_b0,Phi_m
+    real(dp), dimension(npoi), intent(in) :: psi, qsaf, bcovar_phi, Phi_0, avR2nabpsi2, &
+      dens_e, temp_e, temp_i, anu_e, anu_i
+    complex(dp), dimension(npoi), intent(in) :: bpsi_over_bphi
+    complex(dp), dimension(npoi), intent(out) :: parcur_over_b0, Phi_m
 
     complex(dp), dimension(0:mnmax,0:mnmax) :: symbI
     real(dp), dimension(:),   allocatable :: dens_i,dPhi_0_dpsi,derpar,A1e,A2e,A1i,A2i
@@ -211,11 +213,13 @@ contains
   end subroutine response_current
 
 
-  subroutine getIfunc(x1,x2,symbI)
-    integer :: m,n
-    real(dp) :: x1,x2,z
+  subroutine getIfunc(x1, x2, symbI)
+    integer :: m, n
+    real(dp), intent(in) :: x1, x2
+    real(dp) :: z
     complex(dp) :: denom
-    complex(dp), dimension(0:mnmax,0:mnmax) :: symbI,Imn
+    complex(dp), dimension(0:mnmax, 0:mnmax), intent(out) :: symbI
+    complex(dp), dimension(0:mnmax, 0:mnmax) :: Imn
 
     !  if(.true.) then
     if(.false.) then
@@ -259,9 +263,9 @@ contains
 
 
   !> Calculates array of W2 special functions.
-  subroutine W2_arr(x1_in,x2_in,Imn)
-    real(dp) :: x1_in,x2_in
-    complex(dp), dimension(0:3,0:3) :: Imn
+  subroutine W2_arr(x1_in, x2_in, Imn)
+    real(dp), intent(in) :: x1_in, x2_in
+    complex(dp), dimension(0:3, 0:3), intent(out) :: Imn
     complex(dp) :: t1, t2, F11m, x1, x2
     complex(dp), parameter :: I = (0.0d0, 1.0d0), one = (1.0d0, 0.0d0)
 
@@ -363,12 +367,12 @@ contains
   end subroutine W2_arr
 
 
-  subroutine progonka(isw_f,npoi,x,q,  &
-    a2_in,a2_out,a0, &
-    b2_in,b2_out,b0, &
-    c2_in,c2_out,c0, &
-    d2_in,d2_out,d0, &
-    f,g)
+  subroutine progonka(isw_f, npoi, x, q, &
+    a2_in, a2_out, a0, &
+    b2_in, b2_out, b0, &
+    c2_in, c2_out, c0, &
+    d2_in, d2_out, d0, &
+    f, g)
 
     ! Solves 2-nd order ODE for the unknown $f$
 
@@ -408,17 +412,19 @@ contains
     ! Output:
     ! phi(npoi)   - (complex) array of the solution $\Phi$
 
-    integer :: isw_f,npoi,i
+    integer, intent(in) :: isw_f, npoi
+    integer :: i
 
     real(dp) :: dxp,dxm,dxt
     complex(dp) :: denom
 
-    real(dp), dimension(npoi) :: x
-    complex(dp),   dimension(npoi) :: a2_in,a2_out,a0, &
-      b2_in,b2_out,b0, &
-      c2_in,c2_out,c0, &
-      d2_in,d2_out,d0, &
-      q,f,g
+    real(dp), dimension(npoi), intent(in) :: x
+    complex(dp), dimension(npoi), intent(in) :: q, &
+      a2_in, a2_out, a0, &
+      b2_in, b2_out, b0, &
+      c2_in, c2_out, c0, &
+      d2_in, d2_out, d0
+    complex(dp), dimension(npoi), intent(out) :: f, g
     complex(dp),   dimension(:),   allocatable :: alp,bet,quelle
     complex(dp),   dimension(:,:), allocatable :: wsecder,eqmat
 
@@ -483,7 +489,7 @@ contains
   end subroutine progonka
 
 
-  subroutine first_deriv(npoi,x,f,df_dx)
+  subroutine first_deriv(npoi, x, f, df_dx)
 
     ! Computes first derivative df_dx of function f over variable x
 
@@ -496,11 +502,13 @@ contains
     ! df_dx(npoi) - (real) array of derivative values
 
 
-    integer :: npoi,i
+    integer, intent(in) :: npoi
+    integer :: i
 
     real(dp) :: dxp,dxm,dxt
 
-    real(dp), dimension(npoi) :: x,f,df_dx
+    real(dp), dimension(npoi), intent(in) :: x, f
+    real(dp), dimension(npoi), intent(out) :: df_dx
 
     do i=2,npoi-1
       dxp=x(i+1)-x(i)
