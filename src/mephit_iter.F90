@@ -1248,6 +1248,7 @@ contains
       dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
     use mephit_pert, only: polmodes_t, &
       vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, RT0_poloidal_modes
+    use mephit_flr2, only: response_current
     type(RT0_t), intent(in) :: Bn
     type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
     complex(dp), intent(out) :: Phi_mn(:, mesh%m_res_min:)
@@ -1411,6 +1412,7 @@ contains
     use mephit_mesh, only: equil, mesh, cache, fs, dens_e, temp_e, temp_i, Phi0, nu_i, nu_e, E_r
     use mephit_pert, only: L1_t, L1_init, L1_deinit, polmodes_t, polmodes_init, polmodes_deinit, &
       L1_sum_poloidal_modes, compute_Ires
+    use mephit_flr2, only: response_current
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: group
     character(len = len_trim(group)) :: grp
