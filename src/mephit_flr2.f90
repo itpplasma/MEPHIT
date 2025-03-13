@@ -1,4 +1,6 @@
 module mephit_flr2
+  use iso_fortran_env, only: dp => real64
+
   implicit none
 
   private
@@ -20,53 +22,53 @@ contains
     ! mpol                 - (integer) poloidal mode number
     ! ntor                 - (integer) toroidal mode number
     ! npoi                 - (integer) number of radial grid points
-    ! am_i                 - (double precision) ion mass number (mass in units of proton mass)
-    ! Z_i                  - (double precision) ion charge number (charge in units of elementary charge)
-    ! Rtor                 - (double precision) reference major radius
-    ! psi(npoi)            - (double precision) unperturbed poloidal flux $\psi$
-    ! qsaf(npoi)           - (double precision) safety factor
-    ! bcovar_phi(npoi)     - (double precision) co-variant unperturbed toroidal magnetic field component
-    ! Phi_0(npoi)          - (double precision) equilibrium electrostatic potential
-    ! avR2nabpsi2(npoi)    - (double precision) average over the polodal angle of $R^2 |\nabla \psi|^2$
-    ! dens_e(npoi)         - (double precision) electron density
-    ! temp_e(npoi)         - (double precision) electron temperature
-    ! temp_i(npoi)         - (double precision) ion temperature
-    ! anu_e(npoi)          - (double precision) electron collision frequency
-    ! anu_i(npoi)          - (double precision) ion collision frequency
-    ! bpsi_over_bphi(npoi) - (double complex) psi-component of the perturbation magnetic field divided by 
+    ! am_i                 - (real) ion mass number (mass in units of proton mass)
+    ! Z_i                  - (real) ion charge number (charge in units of elementary charge)
+    ! Rtor                 - (real) reference major radius
+    ! psi(npoi)            - (real) unperturbed poloidal flux $\psi$
+    ! qsaf(npoi)           - (real) safety factor
+    ! bcovar_phi(npoi)     - (real) co-variant unperturbed toroidal magnetic field component
+    ! Phi_0(npoi)          - (real) equilibrium electrostatic potential
+    ! avR2nabpsi2(npoi)    - (real) average over the polodal angle of $R^2 |\nabla \psi|^2$
+    ! dens_e(npoi)         - (real) electron density
+    ! temp_e(npoi)         - (real) electron temperature
+    ! temp_i(npoi)         - (real) ion temperature
+    ! anu_e(npoi)          - (real) electron collision frequency
+    ! anu_i(npoi)          - (real) ion collision frequency
+    ! bpsi_over_bphi(npoi) - (complex) psi-component of the perturbation magnetic field divided by
     !                        contra-variant component of the unperturbed magnetic field
     ! Output:
-    ! parcur_over_b0(npoi) - (double complex) parallel current density divided by uperturbed magnetic field module
-    ! Phi_m(npoi)          - (double complex) perturbation of the electrostatic potential
+    ! parcur_over_b0(npoi) - (complex) parallel current density divided by uperturbed magnetic field module
+    ! Phi_m(npoi)          - (complex) perturbation of the electrostatic potential
 
     integer,          parameter :: mnmax=3
-    double precision, parameter :: pi=3.14159265358979d0
-    double precision, parameter :: c=2.9979d10
-    double precision, parameter :: e_charge=4.8032d-10
-    double precision, parameter :: e_mass=9.1094d-28
-    double precision, parameter :: p_mass=1.6726d-24
-    double precision, parameter :: ev=1.6022d-12
-    double complex,   parameter :: imun=(0.d0,1.d0)
+    real(dp), parameter :: pi=3.14159265358979d0
+    real(dp), parameter :: c=2.9979d10
+    real(dp), parameter :: e_charge=4.8032d-10
+    real(dp), parameter :: e_mass=9.1094d-28
+    real(dp), parameter :: p_mass=1.6726d-24
+    real(dp), parameter :: ev=1.6022d-12
+    complex(dp),   parameter :: imun=(0.d0,1.d0)
 
     integer :: isw_Phi_m,mpol,ntor,npoi,i
-    double precision :: am_i,z_i,Rtor
-    double precision :: e_e,e_i,omega_E,x_1,x_2,v_T,rho2_factor
-    double precision :: switch_flr_e,switch_flr_i
-    double precision :: switch_cur_e,switch_cur_i
-    double complex   :: factor_of_Phi
-    double complex   :: F_m,Gtor_m,Htor
-    double complex   :: F_me,Gtor_me,Htore
-    double complex   :: F_mi,Gtor_mi,Htori
-    double precision, dimension(npoi) :: psi,qsaf,bcovar_phi,Phi_0,avR2nabpsi2, &
+    real(dp) :: am_i,z_i,Rtor
+    real(dp) :: e_e,e_i,omega_E,x_1,x_2,v_T,rho2_factor
+    real(dp) :: switch_flr_e,switch_flr_i
+    real(dp) :: switch_cur_e,switch_cur_i
+    complex(dp)   :: factor_of_Phi
+    complex(dp)   :: F_m,Gtor_m,Htor
+    complex(dp)   :: F_me,Gtor_me,Htore
+    complex(dp)   :: F_mi,Gtor_mi,Htori
+    real(dp), dimension(npoi) :: psi,qsaf,bcovar_phi,Phi_0,avR2nabpsi2, &
       dens_e,temp_e,temp_i,anu_e,anu_i
-    double complex,   dimension(npoi) :: bpsi_over_bphi,parcur_over_b0,Phi_m
+    complex(dp),   dimension(npoi) :: bpsi_over_bphi,parcur_over_b0,Phi_m
 
-    double complex, dimension(0:mnmax,0:mnmax) :: symbI
-    double precision, dimension(:),   allocatable :: dens_i,dPhi_0_dpsi,derpar,A1e,A2e,A1i,A2i
-    double complex,   dimension(:),   allocatable :: a2_in,a2_out,a0
-    double complex,   dimension(:),   allocatable :: b2_in,b2_out,b0
-    double complex,   dimension(:),   allocatable :: c2_in,c2_out,c0
-    double complex,   dimension(:),   allocatable :: d2_in,d2_out,d0
+    complex(dp), dimension(0:mnmax,0:mnmax) :: symbI
+    real(dp), dimension(:),   allocatable :: dens_i,dPhi_0_dpsi,derpar,A1e,A2e,A1i,A2i
+    complex(dp),   dimension(:),   allocatable :: a2_in,a2_out,a0
+    complex(dp),   dimension(:),   allocatable :: b2_in,b2_out,b0
+    complex(dp),   dimension(:),   allocatable :: c2_in,c2_out,c0
+    complex(dp),   dimension(:),   allocatable :: d2_in,d2_out,d0
 
     allocate(dens_i(npoi),dPhi_0_dpsi(npoi),derpar(npoi))
     allocate(A1e(npoi),A2e(npoi),A1i(npoi),A2i(npoi))
@@ -201,9 +203,9 @@ contains
   subroutine getIfunc(x1,x2,symbI)
     integer, parameter :: mnmax=3
     integer :: m,n
-    double precision :: x1,x2,z
-    double complex :: denom
-    double complex, dimension(0:mnmax,0:mnmax) :: symbI,Imn
+    real(dp) :: x1,x2,z
+    complex(dp) :: denom
+    complex(dp), dimension(0:mnmax,0:mnmax) :: symbI,Imn
 
     !  if(.true.) then
     if(.false.) then
@@ -277,7 +279,7 @@ contains
     complex(dpc), dimension(0:3,0:3) :: Imn
     complex(dpc) :: t1, t2, F11m, x1, x2
     !complex(8), parameter :: I = cmplx(0.0d0, 1.0d0, 8), one = cmplx(1.0d0, 0.0d0, 8);
-    double complex, parameter :: I = (0.0d0, 1.0d0), one = (1.0d0, 0.0d0)
+    complex(dp), parameter :: I = (0.0d0, 1.0d0), one = (1.0d0, 0.0d0)
 
     integer :: l,nmax,m,n;
 
@@ -419,34 +421,34 @@ contains
     ! isw_f      - (integer) switch for account of f(x) in g(x):
     !              0 - skip the first line in the expression for g(x), 1 - compute g(x) as is
     ! npoi       - (integer) number of grid points
-    ! x(npoi)    - (double precision) array of independent variable, need not to be equidistant
-    ! c_1(npoi)  - (double complex) array of coefficient $C_1$
-    ! c_2(npoi)  - (double complex) array of coefficient $C_2$
-    ! b(npoi)    - (double complex) array of source $B$
+    ! x(npoi)    - (real) array of independent variable, need not to be equidistant
+    ! c_1(npoi)  - (complex) array of coefficient $C_1$
+    ! c_2(npoi)  - (complex) array of coefficient $C_2$
+    ! b(npoi)    - (complex) array of source $B$
 
     ! Output:
-    ! phi(npoi)   - (double complex) array of the solution $\Phi$
+    ! phi(npoi)   - (complex) array of the solution $\Phi$
 
     integer :: isw_f,npoi,i
 
-    double precision :: dxp,dxm,dxt
-    double complex :: denom
+    real(dp) :: dxp,dxm,dxt
+    complex(dp) :: denom
 
-    double precision, dimension(npoi) :: x
-    double complex,   dimension(npoi) :: a2_in,a2_out,a0, &
+    real(dp), dimension(npoi) :: x
+    complex(dp),   dimension(npoi) :: a2_in,a2_out,a0, &
       b2_in,b2_out,b0, &
       c2_in,c2_out,c0, &
       d2_in,d2_out,d0, &
       q,f,g
-    double complex,   dimension(:),   allocatable :: alp,bet,quelle
-    double complex,   dimension(:,:), allocatable :: wsecder,eqmat
+    complex(dp),   dimension(:),   allocatable :: alp,bet,quelle
+    complex(dp),   dimension(:,:), allocatable :: wsecder,eqmat
 
     allocate(wsecder(-1:1,npoi),eqmat(-1:1,npoi),alp(npoi),bet(npoi),quelle(npoi))
 
     wsecder(:,1)=0.d0
     wsecder(:,npoi)=0.d0
 
-    ! weights wsecder are defined so that the second derivative of function F(x) at the point x(i) is 
+    ! weights wsecder are defined so that the second derivative of function F(x) at the point x(i) is
     ! ddF(i)=sum(F(i-1:i+1)*wsecder(:,i))
 
     do i=2,npoi-1
@@ -509,18 +511,18 @@ contains
 
     ! Input:
     ! npoi        - (integer) number of grid points
-    ! x(npoi)     - (double precision) array of independent variable, need not to be equidistant
-    ! f(npoi)     - (double precision) array of function values
+    ! x(npoi)     - (real) array of independent variable, need not to be equidistant
+    ! f(npoi)     - (real) array of function values
 
     ! Output:
-    ! df_dx(npoi) - (double precision) array of derivative values
+    ! df_dx(npoi) - (real) array of derivative values
 
 
     integer :: npoi,i
 
-    double precision :: dxp,dxm,dxt
+    real(dp) :: dxp,dxm,dxt
 
-    double precision, dimension(npoi) :: x,f,df_dx
+    real(dp), dimension(npoi) :: x,f,df_dx
 
     do i=2,npoi-1
       dxp=x(i+1)-x(i)
