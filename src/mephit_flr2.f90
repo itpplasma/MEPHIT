@@ -7,6 +7,24 @@ module mephit_flr2
 
   public :: response_current
 
+  integer, parameter :: mnmax = 3
+
+  interface
+     subroutine hypergeometric1f1_cont_fract_1_modified_0_ada(b_re, b_im, z_re, z_im, f_re, f_im) &
+       bind(C, name = 'hypergeometric1f1_cont_fract_1_modified_0_ada')
+       use iso_c_binding, only: c_double
+       real(c_double), intent(in) :: b_re, b_im, z_re, z_im
+       real(c_double), intent(out) :: f_re, f_im
+     end subroutine hypergeometric1f1_cont_fract_1_modified_0_ada
+
+     subroutine hypergeometric1f1_kummer_modified_0_ada(b_re, b_im, z_re, z_im, f_re, f_im) &
+       bind(C, name = 'hypergeometric1f1_kummer_modified_0_ada')
+       use iso_c_binding, only: c_double
+       real(c_double), intent(in) :: b_re, b_im, z_re, z_im
+       real(c_double), intent(out) :: f_re, f_im
+     end subroutine hypergeometric1f1_kummer_modified_0_ada
+  end interface
+
 contains
 
   subroutine response_current(isw_Phi_m,mpol,ntor,npoi,am_i,z_i,Rtor,     &
@@ -41,14 +59,7 @@ contains
     ! parcur_over_b0(npoi) - (complex) parallel current density divided by uperturbed magnetic field module
     ! Phi_m(npoi)          - (complex) perturbation of the electrostatic potential
 
-    integer,          parameter :: mnmax=3
-    real(dp), parameter :: pi=3.14159265358979d0
-    real(dp), parameter :: c=2.9979d10
-    real(dp), parameter :: e_charge=4.8032d-10
-    real(dp), parameter :: e_mass=9.1094d-28
-    real(dp), parameter :: p_mass=1.6726d-24
-    real(dp), parameter :: ev=1.6022d-12
-    complex(dp),   parameter :: imun=(0.d0,1.d0)
+    use mephit_util, only: imun, pi, c => clight, e_charge => elem_charge, e_mass => m_e, p_mass => m_p
 
     integer :: isw_Phi_m,mpol,ntor,npoi,i
     real(dp) :: am_i,z_i,Rtor
@@ -201,7 +212,6 @@ contains
 
   !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
   subroutine getIfunc(x1,x2,symbI)
-    integer, parameter :: mnmax=3
     integer :: m,n
     real(dp) :: x1,x2,z
     complex(dp) :: denom
@@ -255,47 +265,23 @@ contains
   !------------------------------------------------------------------------------
 
   subroutine W2_arr (x1_in,x2_in,Imn)
-
-    interface
-       subroutine hypergeometric1f1_cont_fract_1_modified_0_ada(b_re, b_im, z_re, z_im, f_re, f_im) &
-         bind(C, name = 'hypergeometric1f1_cont_fract_1_modified_0_ada')
-         use iso_c_binding, only: c_double
-         real(c_double), intent(in) :: b_re, b_im, z_re, z_im
-         real(c_double), intent(out) :: f_re, f_im
-       end subroutine hypergeometric1f1_cont_fract_1_modified_0_ada
-
-       subroutine hypergeometric1f1_kummer_modified_0_ada(b_re, b_im, z_re, z_im, f_re, f_im) &
-         bind(C, name = 'hypergeometric1f1_kummer_modified_0_ada')
-         use iso_c_binding, only: c_double
-         real(c_double), intent(in) :: b_re, b_im, z_re, z_im
-         real(c_double), intent(out) :: f_re, f_im
-       end subroutine hypergeometric1f1_kummer_modified_0_ada
-    end interface
-
-    integer, parameter :: dp = 8
-    integer, parameter :: dpc = 8
-    real(dp), parameter :: pi    = 3.141592653589793238462643383279502884197_dp
     real(dp) :: x1_in,x2_in;
-    complex(dpc), dimension(0:3,0:3) :: Imn
-    complex(dpc) :: t1, t2, F11m, x1, x2
-    !complex(8), parameter :: I = cmplx(0.0d0, 1.0d0, 8), one = cmplx(1.0d0, 0.0d0, 8);
+    complex(dp), dimension(0:3,0:3) :: Imn
+    complex(dp) :: t1, t2, F11m, x1, x2
     complex(dp), parameter :: I = (0.0d0, 1.0d0), one = (1.0d0, 0.0d0)
 
-    integer :: l,nmax,m,n;
+    integer :: l,m,n;
 
     real(dp) :: F_im, F_re;
-    complex(dpc), allocatable, dimension(:,:,:) :: W2;
+    complex(dp), allocatable, dimension(:,:,:) :: W2;
 
-    nmax=3
-
-    !allocate (W2(0:1, 0:3, -Nmax:Nmax))
-    allocate (W2(0:3, 0:3, 0:nmax))
+    allocate (W2(0:3, 0:3, 0:mnmax))
     W2 = (0.0d0, 0.0d0)
 
     x1 = dcmplx(x1_in,0.d0)
     t1 = x1**2
 
-    do l = 0, nmax ! does not work for 3, 2 and 1!
+    do l = 0, mnmax ! does not work for 3, 2 and 1!
 
 
       x2 = x2_in + I*l

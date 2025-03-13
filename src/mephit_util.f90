@@ -22,12 +22,15 @@ module mephit_util
     C_F_string
 
   ! module variables
-  public :: pi, clight, ev2erg, imun
+  public :: imun, pi, clight, ev2erg, m_e, m_p, elem_charge
 
-  real(dp), parameter :: pi = 4d0 * atan(1d0)
-  real(dp), parameter :: clight = 2.99792458d10      !< Speed of light in cm sec^-1.
-  real(dp), parameter :: ev2erg = 1.6021766d-12      !< convert eV to erg
-  complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)  !< Imaginary unit in double precision.
+  complex(dp), parameter :: imun = (0.0_dp, 1.0_dp)    !< imaginary unit in double precision
+  real(dp), parameter :: pi = 4d0 * atan(1d0)          !< pi in double precision
+  real(dp), parameter :: clight = 2.99792458d10        !< speed of light in cm sec^-1
+  real(dp), parameter :: ev2erg = 1.6021766d-12        !< convert eV to erg
+  real(dp), parameter :: m_e = 9.1093837139d-28        !< electron mass in g
+  real(dp), parameter :: m_p = 1.67262192595d-24       !< proton mass in g
+  real(dp), parameter :: elem_charge = 4.80320425d-10  !< elementary charge in statC
 
   ! types and interfaces
 
