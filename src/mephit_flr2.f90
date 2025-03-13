@@ -1,4 +1,9 @@
 module mephit_flr2
+  implicit none
+
+  private
+
+  public :: response_current
 
 contains
 
@@ -33,8 +38,6 @@ contains
     ! Output:
     ! parcur_over_b0(npoi) - (double complex) parallel current density divided by uperturbed magnetic field module
     ! Phi_m(npoi)          - (double complex) perturbation of the electrostatic potential
-
-    implicit none
 
     integer,          parameter :: mnmax=3
     double precision, parameter :: pi=3.14159265358979d0
@@ -251,8 +254,6 @@ contains
 
   subroutine W2_arr (x1_in,x2_in,Imn)
 
-    implicit none;
-
     interface
        subroutine hypergeometric1f1_cont_fract_1_modified_0_ada(b_re, b_im, z_re, z_im, f_re, f_im) &
          bind(C, name = 'hypergeometric1f1_cont_fract_1_modified_0_ada')
@@ -426,8 +427,6 @@ contains
     ! Output:
     ! phi(npoi)   - (double complex) array of the solution $\Phi$
 
-    implicit none
-
     integer :: isw_f,npoi,i
 
     double precision :: dxp,dxm,dxt
@@ -516,8 +515,6 @@ contains
     ! Output:
     ! df_dx(npoi) - (double precision) array of derivative values
 
-
-    implicit none
 
     integer :: npoi,i
 
