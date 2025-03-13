@@ -123,10 +123,6 @@ set(COMMON_FORTRAN_SRC_FILES
   src/odeint_allroutines.f
   src/points_2d.f90
   src/sparse_mod.f90
-  src/getIfunc.f90
-  src/progonka.f90
-  src/response_current.f90
-  src/W2_arr.f90
 )
 set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
@@ -136,6 +132,7 @@ set(MEPHIT_FORTRAN_SRC_FILES
   src/mephit_util.f90
   src/mephit_mesh.F90
   src/mephit_pert.f90
+  src/mephit_flr2.f90
   src/mephit_iter.F90
 )
 set_source_files_properties(src/mephit_test.f90 ${MEPHIT_FORTRAN_SRC_FILES}
