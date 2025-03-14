@@ -59,6 +59,7 @@ contains
     ! parcur_over_b0(npoi) - (complex) parallel current density divided by uperturbed magnetic field module
     ! Phi_m(npoi)          - (complex) perturbation of the electrostatic potential
 
+    use mephit_conf, only: logger
     use mephit_util, only: imun, pi, c => clight, e_charge => elem_charge, e_mass => m_e, p_mass => m_p
 
     integer, intent(in) :: isw_Phi_m, mpol, ntor, npoi
@@ -71,10 +72,10 @@ contains
     complex(dp)   :: F_m,Gtor_m,Htor
     complex(dp)   :: F_me,Gtor_me,Htore
     complex(dp)   :: F_mi,Gtor_mi,Htori
-    real(dp), dimension(npoi), intent(in) :: psi, qsaf, bcovar_phi, Phi_0, avR2nabpsi2, &
+    real(dp), dimension(:), intent(in) :: psi, qsaf, bcovar_phi, Phi_0, avR2nabpsi2, &
       dens_e, temp_e, temp_i, anu_e, anu_i
-    complex(dp), dimension(npoi), intent(in) :: bpsi_over_bphi
-    complex(dp), dimension(npoi), intent(out) :: parcur_over_b0, Phi_m
+    complex(dp), dimension(:), intent(in) :: bpsi_over_bphi
+    complex(dp), dimension(:), intent(out) :: parcur_over_b0, Phi_m
 
     complex(dp), dimension(0:mnmax,0:mnmax) :: symbI
     real(dp), dimension(:),   allocatable :: dens_i,dPhi_0_dpsi,derpar,A1e,A2e,A1i,A2i
@@ -82,6 +83,24 @@ contains
     complex(dp),   dimension(:),   allocatable :: b2_in,b2_out,b0
     complex(dp),   dimension(:),   allocatable :: c2_in,c2_out,c0
     complex(dp),   dimension(:),   allocatable :: d2_in,d2_out,d0
+
+    character(len=14), dimension(13), parameter :: array_names = [character(len=14) :: &
+      'psi', 'qsaf', 'bcovar_phi', 'Phi_0', 'avR2nabpsi2', &
+      'dens_e', 'temp_e', 'temp_i', 'anu_e', 'anu_i', &
+      'bpsi_over_bphi', 'parcur_over_b0', 'Phi_m']
+    integer, dimension(13) :: array_sizes
+    array_sizes = [ &
+      size(psi), size(qsaf), size(bcovar_phi), size(Phi_0), size(avR2nabpsi2), &
+      size(dens_e), size(temp_e), size(temp_i), size(anu_e), size(anu_i), &
+      size(bpsi_over_bphi), size(parcur_over_b0), size(Phi_m)]
+    do i = 1, 13
+      if (npoi /= array_sizes(i)) then
+        call logger%msg_arg_size('response_current', &
+          'npoi', 'size(' // trim(array_names(i)) // ')', npoi, array_sizes(i))
+        if (logger%err) call logger%write_msg
+        error stop
+      end if
+    end do
 
     allocate(dens_i(npoi),dPhi_0_dpsi(npoi),derpar(npoi))
     allocate(A1e(npoi),A2e(npoi),A1i(npoi),A2i(npoi))
@@ -272,9 +291,8 @@ contains
     integer :: l,m,n
 
     real(dp) :: F_im, F_re
-    complex(dp), allocatable, dimension(:,:,:) :: W2
+    complex(dp), dimension(0:3, 0:3, 0:mnmax) :: W2
 
-    allocate (W2(0:3, 0:3, 0:mnmax))
     W2 = (0.0d0, 0.0d0)
 
     x1 = cmplx(x1_in, 0.d0, dp)
@@ -412,21 +430,43 @@ contains
     ! Output:
     ! phi(npoi)   - (complex) array of the solution $\Phi$
 
+    use mephit_conf, only: logger
+
     integer, intent(in) :: isw_f, npoi
     integer :: i
 
     real(dp) :: dxp,dxm,dxt
     complex(dp) :: denom
 
-    real(dp), dimension(npoi), intent(in) :: x
-    complex(dp), dimension(npoi), intent(in) :: q, &
+    real(dp), dimension(:), intent(in) :: x
+    complex(dp), dimension(:), intent(in) :: q, &
       a2_in, a2_out, a0, &
       b2_in, b2_out, b0, &
       c2_in, c2_out, c0, &
       d2_in, d2_out, d0
-    complex(dp), dimension(npoi), intent(out) :: f, g
+    complex(dp), dimension(:), intent(out) :: f, g
     complex(dp),   dimension(:),   allocatable :: alp,bet,quelle
     complex(dp),   dimension(:,:), allocatable :: wsecder,eqmat
+
+    character(len=6), dimension(16), parameter :: array_names = [character(len=6) :: &
+      'x', 'q', &
+      'a2_in', 'a2_out', 'a0', 'b2_in', 'b2_out', 'b0', &
+      'c2_in', 'c2_out', 'c0', 'd2_in', 'd2_out', 'd0', &
+      'f', 'g']
+    integer, dimension(16) :: array_sizes
+    array_sizes = [ &
+      size(x), size(q), &
+      size(a2_in), size(a2_out), size(a0), size(b2_in), size(b2_out), size(b0), &
+      size(c2_in), size(c2_out), size(c0), size(d2_in), size(d2_out), size(d0), &
+      size(f), size(g)]
+    do i = 1, 16
+      if (npoi /= array_sizes(i)) then
+        call logger%msg_arg_size('progonka', &
+          'npoi', 'size(' // trim(array_names(i)) // ')', npoi, array_sizes(i))
+        if (logger%err) call logger%write_msg
+        error stop
+      end if
+    end do
 
     allocate(wsecder(-1:1,npoi),eqmat(-1:1,npoi),alp(npoi),bet(npoi),quelle(npoi))
 
@@ -501,14 +541,31 @@ contains
     ! Output:
     ! df_dx(npoi) - (real) array of derivative values
 
+    use mephit_conf, only: logger
 
     integer, intent(in) :: npoi
     integer :: i
 
     real(dp) :: dxp,dxm,dxt
 
-    real(dp), dimension(npoi), intent(in) :: x, f
-    real(dp), dimension(npoi), intent(out) :: df_dx
+    real(dp), dimension(:), intent(in) :: x, f
+    real(dp), dimension(:), intent(out) :: df_dx
+
+    if (npoi /= size(x)) then
+      call logger%msg_arg_size('first_deriv', 'npoi', 'size(x)', npoi, size(x))
+      if (logger%err) call logger%write_msg
+      error stop
+    end if
+    if (npoi /= size(x)) then
+      call logger%msg_arg_size('first_deriv', 'npoi', 'size(f)', npoi, size(f))
+      if (logger%err) call logger%write_msg
+      error stop
+    end if
+    if (npoi /= size(x)) then
+      call logger%msg_arg_size('first_deriv', 'npoi', 'size(df_dx)', npoi, size(df_dx))
+      if (logger%err) call logger%write_msg
+      error stop
+    end if
 
     do i=2,npoi-1
       dxp=x(i+1)-x(i)
