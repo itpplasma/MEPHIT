@@ -7,9 +7,9 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.4
+#       jupytext_version: 1.16.7
 #   kernelspec:
-#     display_name: Python 3
+#     display_name: Python 3 (ipykernel)
 #     language: python
 #     name: python3
 # ---
@@ -30,9 +30,9 @@ rcParams['pgf.preamble'] = r'\usepackage{import}\import{' + getcwd() + r'}{mephi
 h5py.get_config().complex_names = ('real', 'imag')
 
 # %%
-work_dir = path.join(environ['MEPHIT_DIR'], 'run/33353_2900_EQH')  # 47046
+work_dir = path.join(environ['MEPHIT_RUN_DIR'], '33353_2900_EQH')  # 47046
 data = {}
-with h5py.File(path.join(work_dir, 'mephit.h5'), 'r') as f:
+with h5py.File(path.join(work_dir, 'mephit_imhd.h5'), 'r') as f:
     data['eigvals'] = f['/iter/eigvals'][()]
     data['supremum'] = f['/config/ritz_threshold'][()]
     data['rel_err'] = f['/iter/L2int_Bn_diff'][()] / f['/iter/L2int_Bnvac'][()]

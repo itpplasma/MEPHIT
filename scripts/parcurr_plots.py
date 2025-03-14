@@ -14,13 +14,13 @@ h5py.get_config().complex_names = ('real', 'imag')
 
 
 # %%
-work_dir = path.join(environ['MEPHIT_DIR'], 'run/33353_2900_EQH')  # AUG
+work_dir = path.join(environ['MEPHIT_RUN_DIR'], '33353_2900_EQH')  # AUG
 # work_dir = path.join(environ['MEPHIT_DIR'], 'run/47046')  # MAST-U
-mephit = Mephit(work_dir, 'mephit.h5')
+mephit = Mephit(work_dir, 'mephit_imhd.h5')
 mephit.open_datafile()
 mephit.postprocess()
-gpec = Gpec(mephit.work_dir, mephit.data['/config/n'][()])
-gpec.open_datafiles()
+#gpec = Gpec(mephit.work_dir, mephit.data['/config/n'][()])
+#gpec.open_datafiles()
 # ref_dir = path.join(environ['HOME'], 'TU/PhD/MARS_MEPHIT/forPatrick')
 # mars = Mars(ref_dir)
 # mars.open_datafiles()
@@ -37,11 +37,11 @@ jmnpar_Bmod = [
     # mephit.get_polmodes('iMHD (undamped)', '/debug_KiLCA/jmnpar_Bmod_excl/coeff', conversion, L1=True),
 ]
 mephit_Ires = mephit.get_Ires()
-gpec_Ires = gpec.get_Ires()
+#gpec_Ires = gpec.get_Ires()
 
 # %%
 mephit.close_datafile()
-gpec.close_datafiles()
+#gpec.close_datafiles()
 
 # %%
 for m in mephit.post['m_res']:
@@ -68,7 +68,7 @@ for m in mephit.post['m_res']:
 fig = plt.figure(figsize=(6.6, 3.6), dpi=150)
 ax = fig.subplots()
 ax.semilogy(mephit_Ires.keys(), mephit_Ires.values(), 'o', label='MEPHIT')
-ax.semilogy(gpec_Ires.keys(), gpec_Ires.values(), 'x', label='GPEC')
+#ax.semilogy(gpec_Ires.keys(), gpec_Ires.values(), 'x', label='GPEC')
 ax.set_xlabel('resonant poloidal mode number $m$')
 ax.set_ylabel(r'$\lvert I_{mn}^{\parallel} \rvert$ / \si{\ampere}')
 ax.legend(fontsize='small')
