@@ -5,9 +5,20 @@ module mephit_flr2
 
   private
 
-  public :: response_current
+  ! types and associated procedures
+  public :: flr2_t, flr2_init, flr2_deinit, flr2_write, flr2_read, &
+    flr2_coeff, flr2_response_current
 
-  integer, parameter :: mnmax = 3
+  type :: flr2_t
+     private
+
+     integer :: npoi = 0, m_min = 0, m_max = 0
+     real(dp), dimension(:), allocatable, public :: psi
+     complex(dp), dimension(:, :), allocatable, public :: a2_in, a2_out, a0
+     complex(dp), dimension(:, :), allocatable, public :: b2_in, b2_out, b0
+     complex(dp), dimension(:, :), allocatable, public :: c2_in, c2_out, c0
+     complex(dp), dimension(:, :), allocatable, public :: d2_in, d2_out, d0
+  end type flr2_t
 
   interface
      subroutine hypergeometric1f1_cont_fract_1_modified_0_ada(b_re, b_im, z_re, z_im, f_re, f_im) &
@@ -25,45 +36,177 @@ module mephit_flr2
      end subroutine hypergeometric1f1_kummer_modified_0_ada
   end interface
 
+  integer, parameter :: mnmax = 3
+
 contains
 
-  subroutine response_current(isw_Phi_m, mpol, ntor, npoi, am_i, z_i, Rtor, &
+  subroutine flr2_init(flr2, npoi, m_min, m_max)
+    type(flr2_t), intent(inout) :: flr2
+    integer, intent(in) :: npoi, m_min, m_max
+
+    call flr2_deinit(flr2)
+    flr2%npoi = npoi
+    flr2%m_min = m_min
+    flr2%m_max = m_max
+    allocate(flr2%psi(npoi))
+    allocate(flr2%a2_in(npoi, m_min:m_max))
+    allocate(flr2%a2_out(npoi, m_min:m_max))
+    allocate(flr2%a0(npoi, m_min:m_max))
+    allocate(flr2%b2_in(npoi, m_min:m_max))
+    allocate(flr2%b2_out(npoi, m_min:m_max))
+    allocate(flr2%b0(npoi, m_min:m_max))
+    allocate(flr2%c2_in(npoi, m_min:m_max))
+    allocate(flr2%c2_out(npoi, m_min:m_max))
+    allocate(flr2%c0(npoi, m_min:m_max))
+    allocate(flr2%d2_in(npoi, m_min:m_max))
+    allocate(flr2%d2_out(npoi, m_min:m_max))
+    allocate(flr2%d0(npoi, m_min:m_max))
+  end subroutine flr2_init
+
+  subroutine flr2_deinit(flr2)
+    type(flr2_t), intent(inout) :: flr2
+
+    flr2%npoi = 0
+    flr2%m_min = 0
+    flr2%m_max = 0
+    if (allocated(flr2%psi)) deallocate(flr2%psi)
+    if (allocated(flr2%a2_in)) deallocate(flr2%a2_in)
+    if (allocated(flr2%a2_out)) deallocate(flr2%a2_out)
+    if (allocated(flr2%a0)) deallocate(flr2%a0)
+    if (allocated(flr2%b2_in)) deallocate(flr2%b2_in)
+    if (allocated(flr2%b2_out)) deallocate(flr2%b2_out)
+    if (allocated(flr2%b0)) deallocate(flr2%b0)
+    if (allocated(flr2%c2_in)) deallocate(flr2%c2_in)
+    if (allocated(flr2%c2_out)) deallocate(flr2%c2_out)
+    if (allocated(flr2%c0)) deallocate(flr2%c0)
+    if (allocated(flr2%d2_in)) deallocate(flr2%d2_in)
+    if (allocated(flr2%d2_out)) deallocate(flr2%d2_out)
+    if (allocated(flr2%d0)) deallocate(flr2%d0)
+  end subroutine flr2_deinit
+
+  subroutine flr2_write(flr2, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    type(flr2_t), intent(in) :: flr2
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
+
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/npoi', flr2%npoi, &
+      comment = 'number of flux surfaces')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_min', flr2%m_min, &
+      comment = 'minimum poloidal mode number including sign')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/m_max', flr2%m_max, &
+      comment = 'maximum poloidal mode number including sign')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', &
+      flr2%psi, lbound(flr2%psi), ubound(flr2%psi), unit = 'Mx', &
+      comment = 'poloidal flux')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', &
+      flr2%psi, lbound(flr2%psi), ubound(flr2%psi), unit = '?', &
+      comment = 'Poisson equation coefficient')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/a2_in', &
+      flr2%a2_in, lbound(flr2%a2_in), ubound(flr2%a2_in), unit = '?', &
+      comment = 'Poisson equation coefficient')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/a2_out', &
+      flr2%a2_out, lbound(flr2%a2_out), ubound(flr2%a2_out), unit = '?', &
+      comment = 'Poisson equation coefficient')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/a0', &
+      flr2%a0, lbound(flr2%a0), ubound(flr2%a0), unit = '?', &
+      comment = 'Poisson equation coefficient')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/b2_in', &
+      flr2%b2_in, lbound(flr2%b2_in), ubound(flr2%b2_in), unit = '?', &
+      comment = 'Poisson equation coefficient')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/b2_out', &
+      flr2%b2_out, lbound(flr2%b2_out), ubound(flr2%b2_out), unit = '?', &
+      comment = 'Poisson equation coefficient')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/b0', &
+      flr2%b0, lbound(flr2%b0), ubound(flr2%b0), unit = '?', &
+      comment = 'Poisson equation coefficient')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/c2_in', &
+      flr2%c2_in, lbound(flr2%c2_in), ubound(flr2%c2_in), unit = '?', &
+      comment = 'Poisson equation coefficient')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/c2_out', &
+      flr2%c2_out, lbound(flr2%c2_out), ubound(flr2%c2_out), unit = '?', &
+      comment = 'Poisson equation coefficient')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/c0', &
+      flr2%c0, lbound(flr2%c0), ubound(flr2%c0), unit = '?', &
+      comment = 'Poisson equation coefficient')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/d2_in', &
+      flr2%d2_in, lbound(flr2%d2_in), ubound(flr2%d2_in), unit = '?', &
+      comment = 'Poisson equation coefficient')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/d2_out', &
+      flr2%d2_out, lbound(flr2%d2_out), ubound(flr2%d2_out), unit = '?', &
+      comment = 'Poisson equation coefficient')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/d0', &
+      flr2%d0, lbound(flr2%d0), ubound(flr2%d0), unit = '?', &
+      comment = 'Poisson equation coefficient')
+    call h5_close(h5id_root)
+  end subroutine flr2_write
+
+  subroutine flr2_read(flr2, file, dataset)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    type(flr2_t), intent(inout) :: flr2
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: dataset
+    integer(HID_T) :: h5id_root
+    integer :: npoi, m_min, m_max
+
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/npoi', npoi)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_min', m_min)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_max', m_max)
+    call flr2_init(flr2, npoi, m_min, m_max)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', flr2%psi)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/a2_in', flr2%a2_in)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/a2_out', flr2%a2_out)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/a0', flr2%a0)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/b2_in', flr2%b2_in)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/b2_out', flr2%b2_out)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/b0', flr2%b0)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/c2_in', flr2%c2_in)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/c2_out', flr2%c2_out)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/c0', flr2%c0)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/d2_in', flr2%d2_in)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/d2_out', flr2%d2_out)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/d0', flr2%d0)
+    call h5_close(h5id_root)
+  end subroutine flr2_read
+
+
+  ! All units are Gaussian if not otherwise mentioned
+
+  ! Input/Output ::
+  ! flr2                 - (flr2_t) Poisson equation coefficients
+  !
+  ! Input ::
+  ! mpol_min             - (integer) minimum poloidal mode number
+  ! mpol_max             - (integer) maximum poloidal mode number
+  ! ntor                 - (integer) toroidal mode number
+  ! npoi                 - (integer) number of radial grid points
+  ! am_i                 - (real) ion mass number (mass in units of proton mass)
+  ! Z_i                  - (real) ion charge number (charge in units of elementary charge)
+  ! Rtor                 - (real) reference major radius
+  ! psi(npoi)            - (real) unperturbed poloidal flux $\psi$
+  ! qsaf(npoi)           - (real) safety factor
+  ! bcovar_phi(npoi)     - (real) co-variant unperturbed toroidal magnetic field component
+  ! Phi_0(npoi)          - (real) equilibrium electrostatic potential
+  ! avR2nabpsi2(npoi)    - (real) average over the polodal angle of $R^2 |\nabla \psi|^2$
+  ! dens_e(npoi)         - (real) electron density
+  ! temp_e(npoi)         - (real) electron temperature
+  ! temp_i(npoi)         - (real) ion temperature
+  ! anu_e(npoi)          - (real) electron collision frequency
+  ! anu_i(npoi)          - (real) ion collision frequency
+  subroutine flr2_coeff(flr2, mpol_min, mpol_max, ntor, npoi, am_i, z_i, Rtor, &
     psi, qsaf, bcovar_phi, Phi_0, avR2nabpsi2, &
-    dens_e, temp_e, temp_i, anu_e, anu_i, &
-    bpsi_over_bphi, parcur_over_b0, Phi_m)
-
-    ! All units are Gaussian if not otherwise mentioned
-
-    ! Input ::
-    ! isw_Phi_m            - (integer) switch for the potential perturbation in the parallel current:
-    !                        0 - set it to zero in the current, 1 - use it as is in the current
-    ! mpol                 - (integer) poloidal mode number
-    ! ntor                 - (integer) toroidal mode number
-    ! npoi                 - (integer) number of radial grid points
-    ! am_i                 - (real) ion mass number (mass in units of proton mass)
-    ! Z_i                  - (real) ion charge number (charge in units of elementary charge)
-    ! Rtor                 - (real) reference major radius
-    ! psi(npoi)            - (real) unperturbed poloidal flux $\psi$
-    ! qsaf(npoi)           - (real) safety factor
-    ! bcovar_phi(npoi)     - (real) co-variant unperturbed toroidal magnetic field component
-    ! Phi_0(npoi)          - (real) equilibrium electrostatic potential
-    ! avR2nabpsi2(npoi)    - (real) average over the polodal angle of $R^2 |\nabla \psi|^2$
-    ! dens_e(npoi)         - (real) electron density
-    ! temp_e(npoi)         - (real) electron temperature
-    ! temp_i(npoi)         - (real) ion temperature
-    ! anu_e(npoi)          - (real) electron collision frequency
-    ! anu_i(npoi)          - (real) ion collision frequency
-    ! bpsi_over_bphi(npoi) - (complex) psi-component of the perturbation magnetic field divided by
-    !                        contra-variant component of the unperturbed magnetic field
-    ! Output:
-    ! parcur_over_b0(npoi) - (complex) parallel current density divided by uperturbed magnetic field module
-    ! Phi_m(npoi)          - (complex) perturbation of the electrostatic potential
+    dens_e, temp_e, temp_i, anu_e, anu_i)
 
     use mephit_conf, only: logger
     use mephit_util, only: imun, pi, c => clight, e_charge => elem_charge, e_mass => m_e, p_mass => m_p
 
-    integer, intent(in) :: isw_Phi_m, mpol, ntor, npoi
-    integer :: i
+    type(flr2_t), intent(inout) :: flr2
+    integer, intent(in) :: mpol_min, mpol_max, ntor, npoi
+    integer :: i, mpol
     real(dp), intent(in) :: am_i, Z_i, Rtor
     real(dp) :: e_e,e_i,omega_E,x_1,x_2,v_T,rho2_factor
     real(dp) :: switch_flr_e,switch_flr_i
@@ -74,40 +217,34 @@ contains
     complex(dp)   :: F_mi,Gtor_mi,Htori
     real(dp), dimension(:), intent(in) :: psi, qsaf, bcovar_phi, Phi_0, avR2nabpsi2, &
       dens_e, temp_e, temp_i, anu_e, anu_i
-    complex(dp), dimension(:), intent(in) :: bpsi_over_bphi
-    complex(dp), dimension(:), intent(out) :: parcur_over_b0, Phi_m
 
     complex(dp), dimension(0:mnmax,0:mnmax) :: symbI
     real(dp), dimension(:),   allocatable :: dens_i,dPhi_0_dpsi,derpar,A1e,A2e,A1i,A2i
-    complex(dp),   dimension(:),   allocatable :: a2_in,a2_out,a0
-    complex(dp),   dimension(:),   allocatable :: b2_in,b2_out,b0
-    complex(dp),   dimension(:),   allocatable :: c2_in,c2_out,c0
-    complex(dp),   dimension(:),   allocatable :: d2_in,d2_out,d0
 
-    character(len=14), dimension(13), parameter :: array_names = [character(len=14) :: &
+    character(len=11), dimension(10), parameter :: array_names = [character(len=11) :: &
       'psi', 'qsaf', 'bcovar_phi', 'Phi_0', 'avR2nabpsi2', &
-      'dens_e', 'temp_e', 'temp_i', 'anu_e', 'anu_i', &
-      'bpsi_over_bphi', 'parcur_over_b0', 'Phi_m']
-    integer, dimension(13) :: array_sizes
+      'dens_e', 'temp_e', 'temp_i', 'anu_e', 'anu_i']
+    integer, dimension(10) :: array_sizes
     array_sizes = [ &
       size(psi), size(qsaf), size(bcovar_phi), size(Phi_0), size(avR2nabpsi2), &
-      size(dens_e), size(temp_e), size(temp_i), size(anu_e), size(anu_i), &
-      size(bpsi_over_bphi), size(parcur_over_b0), size(Phi_m)]
-    do i = 1, 13
+      size(dens_e), size(temp_e), size(temp_i), size(anu_e), size(anu_i)]
+    do i = 1, 10
       if (npoi /= array_sizes(i)) then
-        call logger%msg_arg_size('response_current', &
+        call logger%msg_arg_size('flr2_coeff', &
           'npoi', 'size(' // trim(array_names(i)) // ')', npoi, array_sizes(i))
         if (logger%err) call logger%write_msg
         error stop
       end if
     end do
+    if (npoi /= flr2%npoi) then
+      call logger%msg_arg_size('flr2_coeff', 'npoi', 'flr2%npoi', npoi, flr2%npoi)
+      if (logger%err) call logger%write_msg
+      error stop
+    end if
 
+    flr2%psi(:) = psi
     allocate(dens_i(npoi),dPhi_0_dpsi(npoi),derpar(npoi))
     allocate(A1e(npoi),A2e(npoi),A1i(npoi),A2i(npoi))
-    allocate(a2_in(npoi),a2_out(npoi),a0(npoi))
-    allocate(b2_in(npoi),b2_out(npoi),b0(npoi))
-    allocate(c2_in(npoi),c2_out(npoi),c0(npoi))
-    allocate(d2_in(npoi),d2_out(npoi),d0(npoi))
 
     ! For playing around:
     ! switch for FLR effects in electrons (1 - on, 0 - off):
@@ -151,85 +288,126 @@ contains
     A1i=A1i-1.5d0*A2i
 
 
-    do i=1,npoi
+    do mpol = mpol_min, mpol_max
+      do i = 1, npoi
 
-      factor_of_Phi=imun*(mpol+qsaf(i)*ntor)/(qsaf(i)*dPhi_0_dpsi(i))
-      omega_E=ntor*c*dPhi_0_dpsi(i)
+        factor_of_Phi=imun*(mpol+qsaf(i)*ntor)/(qsaf(i)*dPhi_0_dpsi(i))
+        omega_E=ntor*c*dPhi_0_dpsi(i)
 
-      ! functions F_m and Gtor_m:
+        ! functions F_m and Gtor_m:
 
-      ! electron contribution:
-      v_T=sqrt(temp_e(i)/e_mass)
-      x_1=(mpol+qsaf(i)*ntor)*v_T/(qsaf(i)*Rtor*anu_e(i))
-      x_2=-omega_E/anu_e(i)
-      rho2_factor=(e_mass*c*v_T/(e_e*bcovar_phi(i)))**2*switch_flr_e
+        ! electron contribution:
+        v_T=sqrt(temp_e(i)/e_mass)
+        x_1=(mpol+qsaf(i)*ntor)*v_T/(qsaf(i)*Rtor*anu_e(i))
+        x_2=-omega_E/anu_e(i)
+        rho2_factor=(e_mass*c*v_T/(e_e*bcovar_phi(i)))**2*switch_flr_e
 
-      ! susceptibility functions for electrons:
+        ! susceptibility functions for electrons:
 
-      call getIfunc(x_1,x_2,symbI)
+        call getIfunc(x_1,x_2,symbI)
 
-      F_me = e_e*dens_e(i)*v_T**2/anu_e(i)                               &
-        * (symbI(1,1)*(A1e(i)+A2e(i))+0.5d0*symbI(1,3)*A2e(i))
-      Gtor_me = 0.5d0*rho2_factor*e_e*dens_e(i)*v_T**2/anu_e(i)          &
-        * (symbI(1,1)*(A1e(i)+2.d0*A2e(i))+0.5d0*symbI(1,3)*A2e(i))
-      Htore = 0.5d0*rho2_factor*e_e*dens_e(i)*Rtor**2/dPhi_0_dpsi(i)     &
-        * (A1e(i)+2.5d0*A2e(i))
+        F_me = e_e*dens_e(i)*v_T**2/anu_e(i)                               &
+          * (symbI(1,1)*(A1e(i)+A2e(i))+0.5d0*symbI(1,3)*A2e(i))
+        Gtor_me = 0.5d0*rho2_factor*e_e*dens_e(i)*v_T**2/anu_e(i)          &
+          * (symbI(1,1)*(A1e(i)+2.d0*A2e(i))+0.5d0*symbI(1,3)*A2e(i))
+        Htore = 0.5d0*rho2_factor*e_e*dens_e(i)*Rtor**2/dPhi_0_dpsi(i)     &
+          * (A1e(i)+2.5d0*A2e(i))
 
-      ! ion contribution:
-      v_T=sqrt(temp_i(i)/(am_i*p_mass))
-      x_1=(mpol+qsaf(i)*ntor)*v_T/(qsaf(i)*Rtor*anu_i(i))
-      x_2=-omega_E/anu_i(i)
-      rho2_factor=(am_i*p_mass*c*v_T/(e_i*bcovar_phi(i)))**2*switch_flr_i
+        ! ion contribution:
+        v_T=sqrt(temp_i(i)/(am_i*p_mass))
+        x_1=(mpol+qsaf(i)*ntor)*v_T/(qsaf(i)*Rtor*anu_i(i))
+        x_2=-omega_E/anu_i(i)
+        rho2_factor=(am_i*p_mass*c*v_T/(e_i*bcovar_phi(i)))**2*switch_flr_i
 
-      ! susceptibility functions for ions:
+        ! susceptibility functions for ions:
 
-      call getIfunc(x_1,x_2,symbI)
+        call getIfunc(x_1,x_2,symbI)
 
-      F_mi = e_i*dens_i(i)*v_T**2/anu_i(i)                               &
-        * (symbI(1,1)*(A1i(i)+A2i(i))+0.5d0*symbI(1,3)*A2i(i))
-      Gtor_mi = 0.5d0*rho2_factor*e_i*dens_i(i)*v_T**2/anu_i(i)          &
-        * (symbI(1,1)*(A1i(i)+2.d0*A2i(i))+0.5d0*symbI(1,3)*A2i(i))
-      Htori = 0.5d0*rho2_factor*e_i*dens_i(i)*Rtor**2/dPhi_0_dpsi(i)     &
-        * (A1i(i)+2.5d0*A2i(i))
+        F_mi = e_i*dens_i(i)*v_T**2/anu_i(i)                               &
+          * (symbI(1,1)*(A1i(i)+A2i(i))+0.5d0*symbI(1,3)*A2i(i))
+        Gtor_mi = 0.5d0*rho2_factor*e_i*dens_i(i)*v_T**2/anu_i(i)          &
+          * (symbI(1,1)*(A1i(i)+2.d0*A2i(i))+0.5d0*symbI(1,3)*A2i(i))
+        Htori = 0.5d0*rho2_factor*e_i*dens_i(i)*Rtor**2/dPhi_0_dpsi(i)     &
+          * (A1i(i)+2.5d0*A2i(i))
 
-      F_m = F_me + F_mi
-      Gtor_m = Gtor_me + Gtor_mi
-      Htor = Htore + Htori
+        F_m = F_me + F_mi
+        Gtor_m = Gtor_me + Gtor_mi
+        Htor = Htore + Htori
 
-      b0(i) = -4.d0*pi*(mpol+qsaf(i)*ntor)*F_m/(qsaf(i)*omega_E*avR2nabpsi2(i))
-      b2_in(i) = -4.d0*pi*(mpol+qsaf(i)*ntor)*Gtor_m/(qsaf(i)*omega_E)
-      b2_out(i) = b2_in(i)
+        flr2%b0(i, mpol) = -4.d0 * pi * (mpol + qsaf(i) * ntor) * F_m / (qsaf(i) * omega_E * avR2nabpsi2(i))
+        flr2%b2_in(i, mpol) = -4.d0 * pi * (mpol + qsaf(i) * ntor) * Gtor_m / (qsaf(i) * omega_E)
+        flr2%b2_out(i, mpol) = flr2%b2_in(i, mpol)
 
-      a0(i) = -b0(i)*factor_of_Phi
-      a2_in(i) = -b2_in(i)*factor_of_Phi+4.d0*pi*Htor
-      a2_out(i) = (1.d0,0.d0)+a2_in(i)
+        flr2%a0(i, mpol) = -flr2%b0(i, mpol) * factor_of_Phi
+        flr2%a2_in(i, mpol) = -flr2%b2_in(i, mpol) * factor_of_Phi + 4.d0 * pi * Htor
+        flr2%a2_out(i, mpol) = (1.d0, 0.d0) + flr2%a2_in(i, mpol)
 
-      d0(i) = -(F_me*switch_cur_e+F_mi*switch_cur_i)/bcovar_phi(i)
-      d2_in(i) = -(Gtor_me*switch_cur_e+Gtor_mi*switch_cur_i)*avR2nabpsi2(i)/bcovar_phi(i)
-      d2_out(i) = d2_in(i)
+        flr2%d0(i, mpol) = -(F_me * switch_cur_e + F_mi * switch_cur_i) / bcovar_phi(i)
+        flr2%d2_in(i, mpol) = -(Gtor_me * switch_cur_e + Gtor_mi * switch_cur_i) * avR2nabpsi2(i) / bcovar_phi(i)
+        flr2%d2_out(i, mpol) = flr2%d2_in(i, mpol)
 
-      c0(i) = d0(i)*factor_of_Phi
-      c2_in(i) = d2_in(i)*factor_of_Phi
-      c2_out(i) = c2_in(i)
+        flr2%c0(i, mpol) = flr2%d0(i, mpol) * factor_of_Phi
+        flr2%c2_in(i, mpol) = flr2%d2_in(i, mpol) * factor_of_Phi
+        flr2%c2_out(i, mpol) = flr2%c2_in(i, mpol)
+      end do
     end do
 
-    ! Solve Laplace equation:
-
-    call progonka(isw_Phi_m,npoi,       &
-      psi,bpsi_over_bphi,   &
-      a2_in,a2_out,a0,      &
-      b2_in,b2_out,b0,      &
-      c2_in,c2_out,c0,      &
-      d2_in,d2_out,d0,      &
-      Phi_m,parcur_over_b0)
-
     deallocate(dens_i,dPhi_0_dpsi,derpar,A1e,A2e,A1i,A2i)
-    deallocate(a2_in,a2_out,a0)
-    deallocate(b2_in,b2_out,b0)
-    deallocate(c2_in,c2_out,c0)
-    deallocate(d2_in,d2_out,d0)
+  end subroutine flr2_coeff
 
-  end subroutine response_current
+
+  ! Input/Output ::
+  ! flr2                 - (flr2_t) Poisson equation coefficients
+  !
+  ! Input ::
+  ! isw_Phi_m            - (integer) switch for the potential perturbation in the parallel current:
+  !                        0 - set it to zero in the current, 1 - use it as is in the current
+  ! mpol                 - (integer) poloidal mode number
+  ! npoi                 - (integer) number of radial grid points
+  ! psi(npoi)            - (real) unperturbed poloidal flux $\psi$
+  ! bpsi_over_bphi(npoi) - (complex) psi-component of the perturbation magnetic field divided by
+  !                        contra-variant component of the unperturbed magnetic field
+  ! Output ::
+  ! parcur_over_b0(npoi) - (complex) parallel current density divided by uperturbed magnetic field module
+  ! Phi_m(npoi)          - (complex) perturbation of the electrostatic potential
+  subroutine flr2_response_current(flr2, isw_Phi_m, mpol, npoi, bpsi_over_bphi, parcur_over_b0, Phi_m)
+
+    use mephit_conf, only: logger
+
+    type(flr2_t), intent(in) :: flr2
+    integer, intent(in) :: isw_Phi_m, mpol, npoi
+    complex(dp), dimension(:), intent(in) :: bpsi_over_bphi
+    complex(dp), dimension(:), intent(out) :: parcur_over_b0, Phi_m
+
+    integer :: i
+    character(len=14), dimension(3), parameter :: array_names = &
+      [character(len=14) :: 'bpsi_over_bphi', 'parcur_over_b0', 'Phi_m']
+    integer, dimension(3) :: array_sizes
+    array_sizes = [size(bpsi_over_bphi), size(parcur_over_b0), size(Phi_m)]
+    do i = 1, 3
+      if (npoi /= array_sizes(i)) then
+        call logger%msg_arg_size('flr2_response_current', &
+          'npoi', 'size(' // trim(array_names(i)) // ')', npoi, array_sizes(i))
+        if (logger%err) call logger%write_msg
+        error stop
+      end if
+    end do
+    if (npoi /= flr2%npoi) then
+      call logger%msg_arg_size('flr2_response_current', 'npoi', 'flr2%npoi', npoi, flr2%npoi)
+      if (logger%err) call logger%write_msg
+      error stop
+    end if
+
+    ! Solve Poisson equation:
+
+    call progonka(isw_Phi_m, npoi, &
+      flr2%psi, bpsi_over_bphi, &
+      flr2%a2_in(:, mpol), flr2%a2_out(:, mpol), flr2%a0(:, mpol), &
+      flr2%b2_in(:, mpol), flr2%b2_out(:, mpol), flr2%b0(:, mpol), &
+      flr2%c2_in(:, mpol), flr2%c2_out(:, mpol), flr2%c0(:, mpol), &
+      flr2%d2_in(:, mpol), flr2%d2_out(:, mpol), flr2%d0(:, mpol), &
+      Phi_m, parcur_over_b0)
+  end subroutine flr2_response_current
 
 
   subroutine getIfunc(x1, x2, symbI)
@@ -551,21 +729,18 @@ contains
     real(dp), dimension(:), intent(in) :: x, f
     real(dp), dimension(:), intent(out) :: df_dx
 
-    if (npoi /= size(x)) then
-      call logger%msg_arg_size('first_deriv', 'npoi', 'size(x)', npoi, size(x))
-      if (logger%err) call logger%write_msg
-      error stop
-    end if
-    if (npoi /= size(x)) then
-      call logger%msg_arg_size('first_deriv', 'npoi', 'size(f)', npoi, size(f))
-      if (logger%err) call logger%write_msg
-      error stop
-    end if
-    if (npoi /= size(x)) then
-      call logger%msg_arg_size('first_deriv', 'npoi', 'size(df_dx)', npoi, size(df_dx))
-      if (logger%err) call logger%write_msg
-      error stop
-    end if
+    character(len=5), dimension(3), parameter :: array_names = &
+      [character(len=5) :: 'x', 'f', 'df_dx']
+    integer, dimension(3) :: array_sizes
+    array_sizes = [size(x), size(f), size(df_dx)]
+    do i = 1, 3
+      if (npoi /= array_sizes(i)) then
+        call logger%msg_arg_size('first_deriv', &
+          'npoi', 'size(' // trim(array_names(i)) // ')', npoi, array_sizes(i))
+        if (logger%err) call logger%write_msg
+        error stop
+      end if
+    end do
 
     do i=2,npoi-1
       dxp=x(i+1)-x(i)
