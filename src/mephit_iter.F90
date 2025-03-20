@@ -1281,8 +1281,8 @@ contains
     type(RT0_t), intent(in) :: Bn
     type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
     type(flr2_t), intent(in) :: flr2
-    complex(dp), intent(out) :: Phi_mn(:, mesh%m_res_min:)
-    complex(dp), intent(out) :: Phi_aligned_mn(:, mesh%m_res_min:)
+    complex(dp), intent(out) :: Phi_mn(0:, mesh%m_res_min:)
+    complex(dp), intent(out) :: Phi_aligned_mn(0:, mesh%m_res_min:)
     integer :: m, m_res, kf_min
     complex(dp) :: Bmnpsi_over_B0phi(0:mesh%nflux)
     type(vec_polmodes_t) :: Bmn
