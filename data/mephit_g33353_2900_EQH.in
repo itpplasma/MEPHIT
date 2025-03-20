@@ -18,7 +18,7 @@
    ! prefactor in Biot-Savart law, e.g. 5 windings and conversion from A to statA / c_0
    config%Biot_Savart_prefactor = 5.0d-1
    !> file containing coil field data
-   config%coil_file = '/proj/plasma/CODE/lainer_p/MEPHIT/build/run/AUG_B_coils.h5'
+   config%coil_file = '/proj/plasma/CODE/lainer_p/MEPHIT/run/AUG_B_coils.h5'
    !> file containing coil currents
    config%currents_file = '/proj/plasma/DATA/BALANCE/COIL/33353/33353.2900_coil_markl.dat'
    !> file containing equilibrium density profile
@@ -33,9 +33,9 @@
    config%m_i = 2.0
    ! toroidal mode number of perturbation
    config%n = 2
-   ! maximum number of iteration steps
+   ! maximum number of (preconditioned) fixed-point iteration steps
    config%niter = 75
-   ! maximum relative error in fixed-point iteration
+   ! maximum relative error in (preconditioned) fixed-point iteration
    config%iter_rel_err = 1d-9
    ! maximum number of iterations in Arnoldi method
    config%nkrylov = 100
