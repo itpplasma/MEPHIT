@@ -23,7 +23,7 @@ Prerequisites from external sources for running MEPHIT are as follows.
 
 ### Initial build
 
-In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the desired build directory and simulations are saved in `$MEPHIT_DIR/run`. If libneo and MFEM are not in their default location (adjacent to MEPHIT), the environment variables `LIBNEO_DIR` and `MFEM_DIR` need to be set to the corresponding build directories as well. At ITPcp, you can refer to the `.gitlab-ci.yml` in [CODE](https://gitlab.tugraz.at/plasma/code).
+In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the absolute path of the `build` directory containing the binaries and `MEPHIT_RUN_DIR` points to the absolute path of the `run` directory containing the simulations. If libneo is not in its default location (adjacent to MEPHIT), the environment variable `LIBNEO_DIR` needs to be set to the corresponding build directory as well. At ITPcp, you can refer to the `.gitlab-ci.yml` in [CODE](https://gitlab.tugraz.at/plasma/code).
 
 To build MEPHIT, run:
 
@@ -69,14 +69,14 @@ The `<config>` file and some sample gfiles can be taken from a list of templates
 At ITPcp, you can reproduce the “standard” test case via:
 
 ```bash
-$MEPHIT_DIR/scripts/mephit.bash init -c data/mephit_g33353_2900_EQH.in -g /proj/plasma/DATA/BALANCE/EQUI/33353/g33353.2900_EQH_MARKL -d asdex $MEPHIT_DIR/run/33353_2900_EQH
+$MEPHIT_DIR/scripts/mephit.bash init -c data/mephit_g33353_2900_EQH.in -g /proj/plasma/DATA/BALANCE/EQUI/33353/g33353.2900_EQH_MARKL -d asdex $MEPHIT_RUN_DIR/33353_2900_EQH
 ```
 
 ## Running simulations
 
 The config file `mephit.in` needs do be adapated for each simulation:
 
-- In the `arrays` namelist, array indices must be within the range of `m_res_min` and `m_res_max`.
+- In the `arrays` namelist, array indices must be within the range of `m_res_min` and `m_res_max`, the minimal and maximal poloidal mode numbers for which resonances occur.
 - For ASDEX Upgrade and MAST Upgrade, the data files containing coil currents and kinetic profiles must be supplied. See [the provided example](data/mephit_g33353_2900_EQH.in).
 - For KiLCA, the requested poloidal mode must be set in `config%kilca_pol_mode`. For `config%kilca_scale_factor`, a value of `1000` yields reasonable results. Last but not least, the HDF5 output of the KiLCA vacuum run has to provied via `config%kilca_vac_output`. See [the provided example](data/mephit_g000001.0001_TCFP_hip.in).
 - Some more options, mostly for debugging, are given in [`mephit_conf`](src/mephit_conf.f90).
@@ -131,7 +131,7 @@ To update the files actually under version control, run:
 jupytext -s scripts/*.ipynb
 ```
 
-*Note that the above commands are relative to the repository root, not to `$MEPHIT_DIR`.* The plotting routines, however, usually assume that this environment variable is set in order to read from the `$MEPHIT_DIR/run/*/mephit.h5` files.
+*Note that the above commands are relative to the repository root, not to `$MEPHIT_DIR`.* The plotting routines themselves, however, usually read from the `$MEPHIT_RUN_DIR/*/mephit.h5` files.
 
 ## Call graphs
 

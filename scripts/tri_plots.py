@@ -21,9 +21,9 @@ cmap_divg_clip.set_under(color='w', alpha=0.0)
 cmap_divg_clip.set_over(color='w', alpha=0.0)
 
 # %%
-work_dir = path.join(environ['MEPHIT_DIR'], 'run/33353_2900_EQH')
+work_dir = path.join(environ['MEPHIT_RUN_DIR'], '33353_2900_EQH')
 data = {}
-with h5py.File(path.join(work_dir, 'mephit.h5'), 'r') as coil_data_file:
+with h5py.File(path.join(work_dir, 'mephit_imhd.h5'), 'r') as coil_data_file:
     data['R'] = coil_data_file['/mesh/node_R'][()] * 1.0e-2
     data['Z'] = coil_data_file['/mesh/node_Z'][()] * 1.0e-2
     data['tri'] = coil_data_file['/mesh/tri_node'][()] - 1
@@ -76,7 +76,7 @@ vert = 2
 horz = 4
 nmax = vert * horz  # up to 64 in default file
 grid = dict()
-with h5py.File(path.join(environ['MEPHIT_DIR'], 'data/AUG_B_coils.h5'), 'r') as coil_data_file:
+with h5py.File(path.join(environ['MEPHIT_RUN_DIR'], 'AUG_B_coils.h5'), 'r') as coil_data_file:
     grid['nR'] = coil_data_file['/ntor_00/nR'][()]
     grid['nZ'] = coil_data_file['/ntor_00/nZ'][()]
     grid['R_min'] = coil_data_file['/ntor_00/R_min'][()]
