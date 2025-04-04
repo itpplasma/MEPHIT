@@ -21,7 +21,7 @@ if ("$ENV{FC}" MATCHES "ifort")
   set(LEGACY_FLAGS "-check noarg_temp_created")
 else ()
   # gfortran configuration
-  set(CMAKE_Fortran_FLAGS "-O2 -march=native -cpp -g -fno-realloc-lhs -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow")
+  set(CMAKE_Fortran_FLAGS "-O2 -march=native -g -fno-realloc-lhs -fbacktrace -fcheck=all -ffpe-trap=invalid,zero,overflow")
   set(WARNING_FLAGS "-Wall -Wextra -pedantic -fmax-errors=1 -Wno-unused-label")
   set(LEGACY_FLAGS "-fcheck=no-array-temps")
   set(CMAKE_C_FLAGS "-O2 -g -march=native -Wconversion -Wfloat-equal -Wshadow -Wredundant-decls -Winline ${WARNING_FLAGS}")

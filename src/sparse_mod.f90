@@ -2126,7 +2126,7 @@ CONTAINS
     INTEGER, INTENT(in)                          :: nz
     INTEGER, INTENT(out)                         :: nz_sqeezed
     INTEGER, DIMENSION(nz), INTENT(inout)        :: irow,icol
-    DOUBLE COMPLEX, DIMENSION(nz), INTENT(inout) :: amat
+    COMPLEX(dp), DIMENSION(nz), INTENT(inout) :: amat
 
     INTEGER                            :: ncol,i,j,k,kbeg,kend,ips,iflag,ksq
     INTEGER, DIMENSION(:), ALLOCATABLE :: nrows,icount,ipoi

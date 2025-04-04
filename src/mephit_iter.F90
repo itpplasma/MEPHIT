@@ -6,7 +6,7 @@ module mephit_iter
 
   private
 
-  public :: mephit_run, mephit_deinit
+  public :: mephit_run, mephit_deinit, perteq_read
 
   type :: perteq_t
     !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
@@ -694,7 +694,8 @@ contains
   subroutine presn_inhom(R, Z, scalar) bind(C, name = 'presn_inhom')
     use iso_c_binding, only: c_double, c_double_complex
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
-    use field_eq_mod, only: psif, psib
+    use field_eq_mod, only: psib
+    use field_sub, only: psif
     use mephit_util, only: interp1d
     use mephit_mesh, only: equil, mesh, point_location
     use mephit_pert, only: RT0_interp, vac
