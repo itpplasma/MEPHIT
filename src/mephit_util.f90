@@ -88,7 +88,7 @@ contains
     ! default values - TODO: options in config_t
     nwindow_r = 0
     nwindow_z = 0
-    ! don't let subroutine field read from input file
+    ! do not let subroutine field read from input file
     icall = 1
     ! let subroutine field_eq do only initialization
     icall_eq = -1
@@ -450,7 +450,7 @@ contains
   !> @param comp_pol physical component \f$ v_{(\theta)} \f$
   !> @param comp_tor physical component \f$ v_{z} \f$
   !> @param theta geometrical poloidal angle \f$ theta \f$ (coinciding with symmetry flux
-  !> coordinates' poloidal angle in this geometry)
+  !> coordinates poloidal angle in this geometry)
   !> @param comp_R physical component \f$ v_{R} \f$
   !> @param comp_phi physical component \f$ v_{(\varphi)} \f$
   !> @param comp_Z physical component \f$ v_{Z} \f$
@@ -472,7 +472,7 @@ contains
   !> @param comp_phi physical component \f$ v_{(\varphi)} \f$
   !> @param comp_Z physical component \f$ v_{Z} \f$
   !> @param theta geometrical poloidal angle \f$ theta \f$ (coinciding with symmetry flux
-  !> coordinates' poloidal angle in this geometry)
+  !> coordinates poloidal angle in this geometry)
   !> @param comp_rad physical component \f$ v_{r} \f$
   !> @param comp_pol physical component \f$ v_{(\theta)} \f$
   !> @param comp_tor physical component \f$ v_{z} \f$
