@@ -128,8 +128,8 @@ contains
   end subroutine deinit_field
 
   function interp_psi_pol(r, z) result(psi_pol)
-    use field_eq_mod, only: psif, psib
-    use field_sub, only : field
+    use field_eq_mod, only : psib
+    use field_sub, only : field, psif
 
     real(dp), intent(in) :: r, z
     real(dp) :: psi_pol
@@ -144,6 +144,7 @@ contains
   !> calculates points on a fine grid in the core region by integrating along field lines
   !> and spline interpolates them for use with magdata_in_symfluxcoord_ext
   subroutine generate_symfluxcoord
+    use spl_three_to_five_sub, only: spl_per
     use magdata_in_symfluxcoor_mod, only: unload_magdata_in_symfluxcoord, load, &
       nspl, nlabel, ntheta, twopi, h_theta, &
       rmn, rmx, zmn, zmx, raxis, zaxis, h_theta, psipol_max, psitor_max, &
