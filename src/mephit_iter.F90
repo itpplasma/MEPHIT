@@ -109,7 +109,9 @@ contains
   subroutine mephit_run(runmode, config, suffix) bind(C, name = 'mephit_run')
     use iso_c_binding, only: c_int, c_ptr
     use input_files, only: gfile
+    use field_sub, only : read_field_input
     use geqdsk_tools, only: geqdsk_read, geqdsk_classify, geqdsk_standardise
+    use hdf5_tools, only: h5_init, h5overwrite
     use mephit_util, only: C_F_string, init_field, geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5, &
       save_symfluxcoord, load_symfluxcoord
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, &
@@ -117,8 +119,7 @@ contains
     use mephit_mesh, only: equil, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
       resample_profiles, write_profiles_hdf5, read_profiles_hdf5
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
-    use hdf5_tools, only: h5_init, h5overwrite
-    use field_sub, only : read_field_input
+    use mephit_flr2, only: flr2_t, flr2_write, flr2_read, flr2_deinit
     integer(c_int), intent(in), value :: runmode
     type(c_ptr), intent(in), value :: config
     type(c_ptr), intent(in), value :: suffix
@@ -126,6 +127,7 @@ contains
     integer(c_int) :: runmode_flags
     logical :: meshing, preconditioner, iterations
     type(fdm_t) :: fdm
+    type(flr2_t) :: flr2
     type(perteq_t) :: perteq
     type(precond_t) :: precond
 
@@ -197,17 +199,21 @@ contains
       if (preconditioner) then
         call FDM_compute_matrix(fdm)
         call FDM_write(fdm, datafile, 'iter/FDM')
-        call debug_initial_iteration(perteq, fdm)
-        call precond_compute(precond, perteq, fdm)
+        call compute_FLR2_coeff(flr2)
+        call FLR2_write(flr2, datafile, 'iter/FLR2')
+        call debug_initial_iteration(perteq, fdm, flr2)
+        call precond_compute(precond, perteq, fdm, flr2)
         call precond_write(precond, datafile, 'iter')
       else
         call FDM_read(fdm, datafile, 'iter/FDM')
+        call FLR2_read(flr2, datafile, 'iter/FLR2')
         call precond_read(precond, datafile, 'iter')
       end if
       if (iterations) then
-        call perteq_iterate(perteq, precond, fdm)
+        call perteq_iterate(perteq, precond, fdm, flr2)
       end if
       call FDM_deinit(fdm)
+      call FLR2_deinit(flr2)
       call precond_deinit(precond)
       call perteq_deinit(perteq)
     end if
@@ -377,15 +383,17 @@ contains
       matmul(transpose(conjg(precond%eigvecs(:, 1:precond%nritz))), vec)))
   end function precond_apply
 
-  subroutine precond_compute(precond, perteq, fdm)
+  subroutine precond_compute(precond, perteq, fdm, flr2)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, logger, datafile, cmplx_fmt, runmode_precon
     use mephit_util, only: arnoldi_break
     use mephit_mesh, only: mesh
     use mephit_pert, only: vac, RT0_init, RT0_deinit, RT0_write, RT0_tor_comp_from_zero_div, RT0_L2int
+    use mephit_flr2, only: flr2_t
     type(precond_t), intent(inout) :: precond
     type(perteq_t), intent(inout) :: perteq
     type(fdm_t), intent(in) :: fdm
+    type(flr2_t), intent(in) :: flr2
     integer :: i, j, info
     integer(HID_T) :: h5id_root
     complex(dp), allocatable :: start_vector(:), eigvals(:), Yr(:, :)
@@ -398,7 +406,7 @@ contains
       perteq%Bn%DOF(:) = vac%Bn%DOF
       perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
       call compute_presn(perteq, fdm, conf%damp)
-      call compute_currn(perteq, fdm, conf%damp, .false.)
+      call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
       call compute_magfn(perteq)
       allocate(start_vector, source = perteq%Bn%DOF)
       ! calculate eigenvectors -- system dimension: number of non-redundant edges in core plasma
@@ -467,7 +475,7 @@ contains
         call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
         Bn_prev%DOF(:) = perteq%Bn%DOF
         call compute_presn(perteq, fdm, conf%damp)
-        call compute_currn(perteq, fdm, conf%damp, .false.)
+        call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
         call compute_magfn(perteq)
         perteq%Bn%DOF(:) = perteq%Bn%DOF - precond_apply(precond, perteq%Bn%DOF - Bn_prev%DOF)
         call RT0_tor_comp_from_zero_div(perteq%Bn)
@@ -487,21 +495,23 @@ contains
       perteq%Bn%DOF(:) = old_val
       call RT0_tor_comp_from_zero_div(perteq%Bn)
       call compute_presn(perteq, fdm, conf%damp)
-      call compute_currn(perteq, fdm, conf%damp, .false.)
+      call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
       call compute_magfn(perteq)
       new_val(:) = perteq%Bn%DOF
     end subroutine next_iteration_arnoldi
   end subroutine precond_compute
 
-  subroutine perteq_iterate(perteq, precond, fdm)
+  subroutine perteq_iterate(perteq, precond, fdm, flr2)
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, logger, datafile, runmode_single, currn_model_kilca
     use mephit_mesh, only: mesh
     use mephit_pert, only: vac, L1_write, RT0_init, RT0_deinit, RT0_tor_comp_from_zero_div, RT0_L2int
+    use mephit_flr2, only: flr2_t
     type(perteq_t), intent(inout) :: perteq
     type(precond_t), intent(inout) :: precond
     type(fdm_t), intent(in) :: fdm
+    type(flr2_t), intent(in) :: flr2
     integer :: kiter, niter, maxiter
     integer(HID_T) :: h5id_root
     real(dp), allocatable :: L2int_Bn_diff(:)
@@ -554,7 +564,7 @@ contains
         call perteq_write('("iter/", a, "' // postfix // '")', &
           ' (after iteration)', presn = perteq%pn, presmn = perteq%pn)
       end if
-      call compute_currn(perteq, fdm, conf%damp, .false.)
+      call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
       call compute_magfn(perteq)
       perteq%Bn%DOF(:) = perteq%Bn%DOF + vac%Bn%DOF
       if (precond%nritz > 0) then
@@ -627,11 +637,13 @@ contains
     call RT0_deinit(Bn_diff)
   end subroutine perteq_iterate
 
-  subroutine debug_initial_iteration(perteq, fdm)
+  subroutine debug_initial_iteration(perteq, fdm, flr2)
     use mephit_conf, only: conf
     use mephit_pert, only: vac
+    use mephit_flr2, only: flr2_t
     type(perteq_t), intent(inout) :: perteq
     type(fdm_t), intent(in) :: fdm
+    type(flr2_t), intent(in) :: flr2
 
     if (conf%debug_initial) then
       perteq%Bn%DOF(:) = vac%Bn%DOF
@@ -646,11 +658,11 @@ contains
       call perteq_write('("debug_MFEM_initial/", a)', &
         ' (initial iteration)', presn = perteq%pn, presmn = perteq%pn)
 #endif
-      call compute_currn(perteq, fdm, .false., .true.)
+      call compute_currn(perteq, fdm, flr2, .false., .true.)
       perteq%Bn%DOF(:) = vac%Bn%DOF
       perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
       call compute_presn(perteq, fdm, .true.)
-      call compute_currn(perteq, fdm, .true., .true.)
+      call compute_currn(perteq, fdm, flr2, .true., .true.)
     end if
   end subroutine debug_initial_iteration
 
@@ -1047,14 +1059,16 @@ contains
     deallocate(lorentz, pn, grad_pn, Bn_psi_contravar, jnpar_Bmod, grad_jnpar_Bmod, div_jnperp, div_jnperp_RT0)
   end subroutine debug_MDE
 
-  subroutine compute_currn(perteq, fdm, apply_damping, debug_initial)
+  subroutine compute_currn(perteq, fdm, flr2, apply_damping, debug_initial)
     use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger, datafile
     use mephit_mesh, only: mesh
     use mephit_pert, only: polmodes_t, polmodes_init, polmodes_write, polmodes_deinit, &
       L1_t, L1_init, L1_interp, L1_deinit, RT0_t, RT0_init, RT0_deinit, &
       RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
+    use mephit_flr2, only: flr2_t
     type(perteq_t), intent(inout) :: perteq
     type(fdm_t), intent(in) :: fdm
+    type(flr2_t), intent(in) :: flr2
     logical, intent(in) :: apply_damping
     logical, intent(in) :: debug_initial
     type(polmodes_t) :: resonant_jmnpar_over_Bmod
@@ -1080,8 +1094,8 @@ contains
     case (currn_model_mhd)
       call compute_shielding_current(perteq%pn, resonant_jmnpar_over_Bmod)
     case (currn_model_kilca)
-      call compute_kilca_current(perteq%Bn, resonant_jmnpar_over_Bmod, &
-        perteq%Phi_mn, perteq%Phi_aligned_mn)
+      call compute_flr2_current(perteq%Bn, resonant_jmnpar_over_Bmod, &
+        flr2, perteq%Phi_mn, perteq%Phi_aligned_mn)
     case default
       write (logger%msg, '("unknown response current model selection", i0)') conf%currn_model
       if (logger%err) call logger%write_msg
@@ -1242,19 +1256,34 @@ contains
     call L1_deinit(coeff_jnperp)
   end subroutine helical_current_from_parallel_current
 
-  subroutine compute_kilca_current(Bn, jmnpar_over_Bmod, Phi_mn, Phi_aligned_mn)
+  subroutine compute_flr2_coeff(flr2)
     use mephit_conf, only: conf
-    use mephit_util, only: imun, ev2erg, resample1d
-    use mephit_mesh, only: equil, mesh, fs, fs_half, &
-      dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
+    use mephit_util, only: ev2erg
+    use mephit_mesh, only: equil, mesh, fs, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
+    use mephit_flr2, only: flr2_t, flr2_init, flr2_coeff
+    type(flr2_t), intent(inout) :: flr2
+    integer :: m_min, m_max
+
+    m_min = min(-equil%cocos%sgn_q * mesh%m_res_min, -equil%cocos%sgn_q * mesh%m_res_max)
+    m_max = max(-equil%cocos%sgn_q * mesh%m_res_min, -equil%cocos%sgn_q * mesh%m_res_max)
+    call flr2_init(flr2, mesh%nflux, m_min, m_max)
+    call flr2_coeff(flr2, m_min, m_max, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
+      mesh%R_O, fs%psi(1:), fs%q(1:), fs%F(1:), Phi0%y(1:), mesh%avg_R2gradpsi2(1:), &
+      dens_e%y(1:), temp_e%y(1:) * ev2erg, temp_i%y(1:) * ev2erg, nu_e%y(1:), nu_i%y(1:))
+  end subroutine compute_flr2_coeff
+
+  subroutine compute_flr2_current(Bn, jmnpar_over_Bmod, flr2, Phi_mn, Phi_aligned_mn)
+    use mephit_conf, only: conf
+    use mephit_util, only: imun, resample1d
+    use mephit_mesh, only: equil, mesh, fs, fs_half, dPhi0_dpsi
     use mephit_pert, only: polmodes_t, &
       vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, RT0_poloidal_modes
-    use mephit_flr2_sub, only: response_current
-
+    use mephit_flr2, only: flr2_t, flr2_response_current
     type(RT0_t), intent(in) :: Bn
     type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
-    complex(dp), intent(out) :: Phi_mn(:, mesh%m_res_min:)
-    complex(dp), intent(out) :: Phi_aligned_mn(:, mesh%m_res_min:)
+    type(flr2_t), intent(in) :: flr2
+    complex(dp), intent(out) :: Phi_mn(0:, mesh%m_res_min:)
+    complex(dp), intent(out) :: Phi_aligned_mn(0:, mesh%m_res_min:)
     integer :: m, m_res, kf_min
     complex(dp) :: Bmnpsi_over_B0phi(0:mesh%nflux)
     type(vec_polmodes_t) :: Bmn
@@ -1272,15 +1301,13 @@ contains
         equil%cocos%sgn_dpsi, fs%psi(1:), Bmnpsi_over_B0phi(1:)%Re, 3)
       call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Im / fs_half%q * &
         equil%cocos%sgn_dpsi, fs%psi(1:), Bmnpsi_over_B0phi(1:)%Im, 3)
-      call response_current(1, m_res, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
-        mesh%R_O, fs%psi(1:), fs%q(1:), fs%F(1:), Phi0%y(1:), mesh%avg_R2gradpsi2(1:), &
-        dens_e%y(1:), temp_e%y(1:) * ev2erg, temp_i%y(1:) * ev2erg, nu_e%y(1:), nu_i%y(1:), &
+      call flr2_response_current(flr2, 1, m_res, mesh%nflux, &
         Bmnpsi_over_B0phi(1:), jmnpar_over_Bmod%coeff(m_res, 1:), Phi_mn(1:, m))
       Phi_aligned_mn(:, m) = imun * Bmnpsi_over_B0phi * fs%q * dPhi0_dpsi%y / (m_res + mesh%n * fs%q)
       jmnpar_over_Bmod%coeff(m_res, :kf_min) = (0d0, 0d0)  ! suppress spurious current near axis
     end do
     call vec_polmodes_deinit(Bmn)
-  end subroutine compute_kilca_current
+  end subroutine compute_flr2_current
 
   subroutine compute_shielding_current(pn, jmnpar_over_Bmod)
     use mephit_conf, only: conf, conf_arr
@@ -1414,18 +1441,18 @@ contains
     use mephit_mesh, only: equil, mesh, cache, fs, dens_e, temp_e, temp_i, Phi0, nu_i, nu_e, E_r
     use mephit_pert, only: L1_t, L1_init, L1_deinit, polmodes_t, polmodes_init, polmodes_deinit, &
       L1_sum_poloidal_modes, compute_Ires
-    use mephit_flr2_sub, only: response_current
-
+    use mephit_flr2, only: flr2_t, flr2_init, flr2_deinit, flr2_coeff, flr2_response_current
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: group
     character(len = len_trim(group)) :: grp
     type(polmodes_t) :: jmnpar_over_Bmod
     type(L1_t) :: jnpar_over_Bmod
+    type(flr2_t) :: flr2
     real(dp) :: Delta_E_r(conf%resonance_sweep), E_r_zero(conf%resonance_sweep)
     complex(dp) :: Bmnpsi_over_B0phi(0:mesh%nflux), &
       Phi_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max), &
       Imn_res(mesh%m_res_min:mesh%m_res_max, conf%resonance_sweep)
-    integer :: k, m, m_res, kf_min, kf_max
+    integer :: k, m, m_res, m_min, m_max, kf_min, kf_max
     integer(HID_T) :: h5id_root
 
     if (logger%info) then
@@ -1437,16 +1464,20 @@ contains
     call polmodes_init(jmnpar_over_Bmod, conf%m_max, mesh%nflux)
     jmnpar_over_Bmod%coeff(:, :) = (0d0, 0d0)
     call L1_init(jnpar_over_Bmod, mesh%npoint)
+    m_min = min(-equil%cocos%sgn_q * mesh%m_res_min, -equil%cocos%sgn_q * mesh%m_res_max)
+    m_max = max(-equil%cocos%sgn_q * mesh%m_res_min, -equil%cocos%sgn_q * mesh%m_res_max)
+    call flr2_init(flr2, mesh%nflux, m_min, m_max)
     kf_min = mesh%res_ind(mesh%m_res_min) - 1
     kf_max = mesh%res_ind(mesh%m_res_max)
     Delta_E_r = linspace(-E_r%y(kf_min), -E_r%y(kf_max), conf%resonance_sweep, 0, 0)
     do k = 1, conf%resonance_sweep
       E_r_zero(k) = zeroin(fs%psi(kf_min), fs%psi(kf_max), E_r_shifted, 1d-9)
+      call flr2_coeff(flr2, m_min, m_max, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
+        mesh%R_O, fs%psi(1:), fs%q(1:), fs%F(1:), Phi0%y(1:) - fs%rsmall(1:) * Delta_E_r(k), mesh%avg_R2gradpsi2(1:), &
+        dens_e%y(1:), temp_e%y(1:) * ev2erg, temp_i%y(1:) * ev2erg, nu_e%y(1:), nu_i%y(1:))
       do m = mesh%m_res_min, mesh%m_res_max
         m_res = -equil%cocos%sgn_q * m
-        call response_current(1, m_res, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
-          mesh%R_O, fs%psi(1:), fs%q(1:), fs%F(1:), Phi0%y(1:) - fs%rsmall(1:) * Delta_E_r(k), mesh%avg_R2gradpsi2(1:), &
-          dens_e%y(1:), temp_e%y(1:) * ev2erg, temp_i%y(1:) * ev2erg, nu_e%y(1:), nu_i%y(1:), &
+        call flr2_response_current(flr2, 1, m_res, mesh%nflux, &
           Bmnpsi_over_B0phi(1:), jmnpar_over_Bmod%coeff(m_res, 1:), Phi_mn(1:, m))
       end do
       call L1_sum_poloidal_modes(jmnpar_over_Bmod, jnpar_over_Bmod)
@@ -1457,6 +1488,7 @@ contains
     end do
     call polmodes_deinit(jmnpar_over_Bmod)
     call L1_deinit(jnpar_over_Bmod)
+    call flr2_deinit(flr2)
     grp = trim(group)
     call h5_open_rw(file, h5id_root)
     call h5_create_parent_groups(h5id_root, grp // '/')
