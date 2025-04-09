@@ -3625,8 +3625,8 @@ contains
   end subroutine check_safety_factor
 
   subroutine equilibrium_field(R, Z, B0, dB0_dR, dB0_dZ, psi, Bmod, dBmod_dR, dBmod_dZ)
-    use field_eq_mod, only: psif, psib
-    use field_sub, only : field_eq
+    use field_eq_mod, only: psib
+    use field_sub, only : field_eq, psif
     real(dp), intent(in) :: R, Z
     real(dp), intent(out), dimension(3) :: B0, dB0_dR, dB0_dZ
     real(dp), intent(out) :: psi, Bmod, dBmod_dR, dBmod_dZ

@@ -91,7 +91,7 @@ contains
     ! default values - TODO: options in config_t
     nwindow_r = 0
     nwindow_z = 0
-    ! don't let subroutine field read from input file
+    ! do not let subroutine field read from input file
     icall = 1
     ! let subroutine field_eq do only initialization
     icall_eq = -1
@@ -131,8 +131,8 @@ contains
   end subroutine deinit_field
 
   function interp_psi_pol(r, z) result(psi_pol)
-    use field_eq_mod, only: psif, psib
-    use field_sub, only : field
+    use field_eq_mod, only : psib
+    use field_sub, only : field, psif
 
     real(dp), intent(in) :: r, z
     real(dp) :: psi_pol
@@ -147,6 +147,7 @@ contains
   !> calculates points on a fine grid in the core region by integrating along field lines
   !> and spline interpolates them for use with magdata_in_symfluxcoord_ext
   subroutine generate_symfluxcoord
+    use spl_three_to_five_sub, only: spl_per
     use magdata_in_symfluxcoor_mod, only: unload_magdata_in_symfluxcoord, load, &
       nspl, nlabel, ntheta, twopi, h_theta, &
       rmn, rmx, zmn, zmx, raxis, zaxis, h_theta, psipol_max, psitor_max, &
@@ -452,7 +453,7 @@ contains
   !> @param comp_pol physical component \f$ v_{(\theta)} \f$
   !> @param comp_tor physical component \f$ v_{z} \f$
   !> @param theta geometrical poloidal angle \f$ theta \f$ (coinciding with symmetry flux
-  !> coordinates' poloidal angle in this geometry)
+  !> coordinates poloidal angle in this geometry)
   !> @param comp_R physical component \f$ v_{R} \f$
   !> @param comp_phi physical component \f$ v_{(\varphi)} \f$
   !> @param comp_Z physical component \f$ v_{Z} \f$
@@ -474,7 +475,7 @@ contains
   !> @param comp_phi physical component \f$ v_{(\varphi)} \f$
   !> @param comp_Z physical component \f$ v_{Z} \f$
   !> @param theta geometrical poloidal angle \f$ theta \f$ (coinciding with symmetry flux
-  !> coordinates' poloidal angle in this geometry)
+  !> coordinates poloidal angle in this geometry)
   !> @param comp_rad physical component \f$ v_{r} \f$
   !> @param comp_pol physical component \f$ v_{(\theta)} \f$
   !> @param comp_tor physical component \f$ v_{z} \f$
