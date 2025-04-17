@@ -299,10 +299,30 @@ module mephit_mesh
     real(dp) :: R, Z, psi, theta, sqrt_g, B0_R, B0_phi, B0_Z, dR_dtheta, dZ_dtheta
   end type coord_cache_t
 
+  interface coord_cache_write
+    module procedure coord_cache_write_1
+    module procedure coord_cache_write_2
+  end interface coord_cache_write
+
+  interface coord_cache_read
+    module procedure coord_cache_read_1
+    module procedure coord_cache_read_2
+  end interface coord_cache_read
+
   type :: field_cache_t
     real(dp) :: psi, theta, B0(3), j0(3), Bmod, dBmod_dR, dBmod_dZ, &
       dB0_dR(3), dB0_dZ(3), dj0_dR(3), dj0_dZ(3)
   end type field_cache_t
+
+  interface field_cache_write
+    module procedure field_cache_write_1
+    module procedure field_cache_write_2
+  end interface field_cache_write
+
+  interface field_cache_read
+    module procedure field_cache_read_1
+    module procedure field_cache_read_2
+  end interface field_cache_read
 
   type :: shielding_t
     real(dp), allocatable :: GL_weights(:)
@@ -454,354 +474,561 @@ contains
     call h5_close(h5id_root)
   end subroutine flux_func_cache_read
 
-  subroutine coord_cache_write(cache, file, dataset, comment)
+  subroutine coord_cache_write_1(cache, file, group, comment)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    class(coord_cache_t), dimension(..), intent(in) :: cache
+    type(coord_cache_t), dimension(:), intent(in) :: cache
     character(len = *), intent(in) :: file
-    character(len = *), intent(in) :: dataset
+    character(len = *), intent(in) :: group
     character(len = *), intent(in) :: comment
+    character(len = len_trim(group)) :: grp
+    character(len = len_trim(comment)) :: cmnt
     integer(HID_T) :: h5id_root
+    integer, dimension(:), allocatable :: itemp
+    real(dp), dimension(:), allocatable :: rtemp
 
-    select rank (cache)
-    rank (2)
-      call h5_open_rw(file, h5id_root)
-      call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/ktri', cache(:, :)%ktri, &
-        lbound(cache), ubound(cache), &
-        comment = 'triangle index of ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/R', cache(:, :)%R, &
-        lbound(cache), ubound(cache), unit = 'cm', &
-        comment = 'R coordinate of ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z', cache(:, :)%Z, &
-        lbound(cache), ubound(cache), unit = 'cm', &
-        comment = 'Z coordinate of ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:, :)%psi, &
-        lbound(cache), ubound(cache), unit = 'Mx', &
-        comment = 'poloidal flux at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:, :)%theta, &
-        lbound(cache), ubound(cache), unit = 'rad', &
-        comment = 'flux poloidal angle at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/sqrt_g', cache(:, :)%sqrt_g, &
-        lbound(cache), ubound(cache), unit = 'cm G^-1', &
-        comment = 'Jacobian at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:, :)%B0_R, &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:, :)%B0_phi, &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:, :)%B0_Z, &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dR_dtheta', cache(:, :)%dR_dtheta, &
-        lbound(cache), ubound(cache), unit = 'cm rad^-1', &
-        comment = 'Jacobian element (R, theta) at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dZ_dtheta', cache(:, :)%dZ_dtheta, &
-        lbound(cache), ubound(cache), unit = 'cm rad^-1', &
-        comment = 'Jacobian element (Z, theta) at ' // trim(adjustl(comment)))
-      call h5_close(h5id_root)
-    rank (1)
-      call h5_open_rw(file, h5id_root)
-      call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/ktri', cache(:)%ktri, &
-        lbound(cache), ubound(cache), &
-        comment = 'triangle index of ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/R', cache(:)%R, &
-        lbound(cache), ubound(cache), unit = 'cm', &
-        comment = 'R coordinate of ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z', cache(:)%Z, &
-        lbound(cache), ubound(cache), unit = 'cm', &
-        comment = 'Z coordinate of ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:)%psi, &
-        lbound(cache), ubound(cache), unit = 'Mx', &
-        comment = 'poloidal flux at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:)%theta, &
-        lbound(cache), ubound(cache), unit = 'rad', &
-        comment = 'flux poloidal angle at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/sqrt_g', cache(:)%sqrt_g, &
-        lbound(cache), ubound(cache), unit = 'cm G^-1', &
-        comment = 'Jacobian at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:)%B0_R, &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:)%B0_phi, &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:)%B0_Z, &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dR_dtheta', cache(:)%dR_dtheta, &
-        lbound(cache), ubound(cache), unit = 'cm rad^-1', &
-        comment = 'Jacobian element (R, theta) at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dZ_dtheta', cache(:)%dZ_dtheta, &
-        lbound(cache), ubound(cache), unit = 'cm rad^-1', &
-        comment = 'Jacobian element (Z, theta) at ' // trim(adjustl(comment)))
-      call h5_close(h5id_root)
-    rank default
-      error stop 'coord_cache_write: rank-1 or rank-2 array expected for argument ''cache'''
-    end select
-  end subroutine coord_cache_write
-
-  subroutine coord_cache_read(cache, file, dataset)
-    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
-    class(coord_cache_t), dimension(..), intent(inout) :: cache
-    character(len = *), intent(in) :: file
-    character(len = *), intent(in) :: dataset
-    integer(HID_T) :: h5id_root
-
-    select rank (cache)
-    rank (2)
-      call h5_open(file, h5id_root)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/ktri', cache(:, :)%ktri)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/R', cache(:, :)%R)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z', cache(:, :)%Z)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:, :)%psi)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:, :)%theta)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/sqrt_g', cache(:, :)%sqrt_g)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:, :)%B0_R)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:, :)%B0_phi)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:, :)%B0_Z)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dR_dtheta', cache(:, :)%dR_dtheta)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dZ_dtheta', cache(:, :)%dZ_dtheta)
-      call h5_close(h5id_root)
-    rank (1)
-      call h5_open(file, h5id_root)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/ktri', cache(:)%ktri)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/R', cache(:)%R)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z', cache(:)%Z)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:)%psi)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:)%theta)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/sqrt_g', cache(:)%sqrt_g)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:)%B0_R)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:)%B0_phi)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:)%B0_Z)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dR_dtheta', cache(:)%dR_dtheta)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dZ_dtheta', cache(:)%dZ_dtheta)
-      call h5_close(h5id_root)
-    rank default
-      error stop 'coord_cache_read: rank-1 or rank-2 array expected for argument ''cache'''
-    end select
-  end subroutine coord_cache_read
-
-  subroutine field_cache_write(cache, file, dataset, comment)
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    class(field_cache_t), dimension(..), intent(in) :: cache
-    character(len = *), intent(in) :: file
-    character(len = *), intent(in) :: dataset
-    character(len = *), intent(in) :: comment
-    integer(HID_T) :: h5id_root
-
+    grp = trim(group)
+    cmnt = trim(comment)
+    allocate(itemp(size(cache)), rtemp(size(cache)))
     call h5_open_rw(file, h5id_root)
-    call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
-    select rank (cache)
-    rank (1)
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:)%psi, &
-        lbound(cache), ubound(cache), unit = 'Mx', &
-        comment = 'poloidal flux at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:)%theta, &
-        lbound(cache), ubound(cache), unit = 'rad', &
-        comment = 'flux poloidal angle at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:)%B0(1), &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:)%B0(3), &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:)%B0(2), &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache(:)%j0(1), &
-        lbound(cache), ubound(cache), unit = 'statA', &
-        comment = 'R component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache(:)%j0(3), &
-        lbound(cache), ubound(cache), unit = 'statA', &
-        comment = 'Z component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache(:)%j0(2), &
-        lbound(cache), ubound(cache), unit = 'statA', &
-        comment = 'physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0', cache(:)%Bmod, &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'magnitude of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0_dR', cache(:)%dBmod_dR, &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'R derivative of magnitude of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0_dZ', cache(:)%dBmod_dZ, &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'Z derivative of magnitude of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0R_dR', cache(:)%dB0_dR(1), &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'R derivative of R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0R_dZ', cache(:)%dB0_dZ(1), &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'Z derivative of R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dR', cache(:)%dB0_dR(2), &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'R derivative of physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dZ', cache(:)%dB0_dZ(2), &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'Z derivative of physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dR', cache(:)%dB0_dR(3), &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'R derivative of Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dZ', cache(:)%dB0_dZ(3), &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'Z derivative of Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0R_dR', cache(:)%dj0_dR(1), &
-        lbound(cache), ubound(cache), unit = 'statA cm^-1', &
-        comment = 'R derivative of R component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0R_dZ', cache(:)%dj0_dZ(1), &
-        lbound(cache), ubound(cache), unit = 'statA cm^-1', &
-        comment = 'Z derivative of R component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dR', cache(:)%dj0_dR(2), &
-        lbound(cache), ubound(cache), unit = 'statA cm^-1', &
-        comment = 'R derivative of physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dZ', cache(:)%dj0_dZ(2), &
-        lbound(cache), ubound(cache), unit = 'statA cm^-1', &
-        comment = 'Z derivative of physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dR', cache(:)%dj0_dR(3), &
-        lbound(cache), ubound(cache), unit = 'statA cm^-1', &
-        comment = 'R derivative of Z component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dZ', cache(:)%dj0_dZ(3), &
-        lbound(cache), ubound(cache), unit = 'statA cm^-1', &
-        comment = 'Z derivative of Z component of equilibrium current density at ' // trim(adjustl(comment)))
-    rank (2)
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:, :)%psi, &
-        lbound(cache), ubound(cache), unit = 'Mx', &
-        comment = 'poloidal flux at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:, :)%theta, &
-        lbound(cache), ubound(cache), unit = 'rad', &
-        comment = 'flux poloidal angle at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:, :)%B0(1), &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:, :)%B0(3), &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:, :)%B0(2), &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache(:, :)%j0(1), &
-        lbound(cache), ubound(cache), unit = 'statA', &
-        comment = 'R component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache(:, :)%j0(3), &
-        lbound(cache), ubound(cache), unit = 'statA', &
-        comment = 'Z component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache(:, :)%j0(2), &
-        lbound(cache), ubound(cache), unit = 'statA', &
-        comment = 'physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/B0', cache(:, :)%Bmod, &
-        lbound(cache), ubound(cache), unit = 'G', &
-        comment = 'magnitude of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0_dR', cache(:, :)%dBmod_dR, &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'R derivative of magnitude of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0_dZ', cache(:, :)%dBmod_dZ, &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'Z derivative of magnitude of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0R_dR', cache(:, :)%dB0_dR(1), &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'R derivative of R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0R_dZ', cache(:, :)%dB0_dZ(1), &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'Z derivative of R component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dR', cache(:, :)%dB0_dR(2), &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'R derivative of physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dZ', cache(:, :)%dB0_dZ(2), &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'Z derivative of physical phi component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dR', cache(:, :)%dB0_dR(3), &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'R derivative of Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dZ', cache(:, :)%dB0_dZ(3), &
-        lbound(cache), ubound(cache), unit = 'G cm^-1', &
-        comment = 'Z derivative of Z component of equilibrium magnetic field at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0R_dR', cache(:, :)%dj0_dR(1), &
-        lbound(cache), ubound(cache), unit = 'statA cm^-1', &
-        comment = 'R derivative of R component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0R_dZ', cache(:, :)%dj0_dZ(1), &
-        lbound(cache), ubound(cache), unit = 'statA cm^-1', &
-        comment = 'Z derivative of R component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dR', cache(:, :)%dj0_dR(2), &
-        lbound(cache), ubound(cache), unit = 'statA cm^-1', &
-        comment = 'R derivative of physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dZ', cache(:, :)%dj0_dZ(2), &
-        lbound(cache), ubound(cache), unit = 'statA cm^-1', &
-        comment = 'Z derivative of physical phi component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dR', cache(:, :)%dj0_dR(3), &
-        lbound(cache), ubound(cache), unit = 'statA cm^-1', &
-        comment = 'R derivative of Z component of equilibrium current density at ' // trim(adjustl(comment)))
-      call h5_add(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dZ', cache(:, :)%dj0_dZ(3), &
-        lbound(cache), ubound(cache), unit = 'statA cm^-1', &
-        comment = 'Z derivative of Z component of equilibrium current density at ' // trim(adjustl(comment)))
-    rank default
-      error stop 'field_cache_write: rank-1 or rank-2 array expected for argument ''cache'''
-    end select
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    itemp(:) = cache%ktri
+    call h5_add(h5id_root, grp // '/ktri', itemp, &
+      lbound(cache), ubound(cache), &
+      comment = 'triangle index of ' // cmnt)
+    rtemp(:) = cache%R
+    call h5_add(h5id_root, grp // '/R', rtemp, &
+      lbound(cache), ubound(cache), unit = 'cm', &
+      comment = 'R coordinate of ' // cmnt)
+    rtemp(:) = cache%Z
+    call h5_add(h5id_root, grp // '/Z', rtemp, &
+      lbound(cache), ubound(cache), unit = 'cm', &
+      comment = 'Z coordinate of ' // cmnt)
+    rtemp(:) = cache%psi
+    call h5_add(h5id_root, grp // '/psi', rtemp, &
+      lbound(cache), ubound(cache), unit = 'Mx', &
+      comment = 'poloidal flux at ' // cmnt)
+    rtemp(:) = cache%theta
+    call h5_add(h5id_root, grp // '/theta', rtemp, &
+      lbound(cache), ubound(cache), unit = 'rad', &
+      comment = 'flux poloidal angle at ' // cmnt)
+    rtemp(:) = cache%sqrt_g
+    call h5_add(h5id_root, grp // '/sqrt_g', rtemp, &
+      lbound(cache), ubound(cache), unit = 'cm G^-1', &
+      comment = 'Jacobian at ' // cmnt)
+    rtemp(:) = cache%B0_R
+    call h5_add(h5id_root, grp // '/B0_R', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'R component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%B0_phi
+    call h5_add(h5id_root, grp // '/B0_phi', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'physical phi component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%B0_Z
+    call h5_add(h5id_root, grp // '/B0_Z', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'Z component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%dR_dtheta
+    call h5_add(h5id_root, grp // '/dR_dtheta', rtemp, &
+      lbound(cache), ubound(cache), unit = 'cm rad^-1', &
+      comment = 'Jacobian element (R, theta) at ' // cmnt)
+    rtemp(:) = cache%dZ_dtheta
+    call h5_add(h5id_root, grp // '/dZ_dtheta', rtemp, &
+      lbound(cache), ubound(cache), unit = 'cm rad^-1', &
+      comment = 'Jacobian element (Z, theta) at ' // cmnt)
     call h5_close(h5id_root)
-  end subroutine field_cache_write
+    deallocate(itemp, rtemp)
+  end subroutine coord_cache_write_1
 
-  subroutine field_cache_read(cache, file, dataset)
-    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
-    class(field_cache_t), dimension(..), intent(inout) :: cache
+  subroutine coord_cache_write_2(cache, file, group, comment)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    type(coord_cache_t), dimension(:, :), intent(in) :: cache
     character(len = *), intent(in) :: file
-    character(len = *), intent(in) :: dataset
+    character(len = *), intent(in) :: group
+    character(len = *), intent(in) :: comment
+    character(len = len_trim(group)) :: grp
+    character(len = len_trim(comment)) :: cmnt
     integer(HID_T) :: h5id_root
+    integer, dimension(:, :), allocatable :: itemp
+    real(dp), dimension(:, :), allocatable :: rtemp
 
-    call h5_open(file, h5id_root)
-    select rank (cache)
-    rank (1)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:)%psi)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:)%theta)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:)%B0(1))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:)%B0(3))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:)%B0(2))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache(:)%j0(1))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache(:)%j0(3))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache(:)%j0(2))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0', cache(:)%Bmod)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0_dR', cache(:)%dBmod_dR)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0_dZ', cache(:)%dBmod_dZ)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0R_dR', cache(:)%dB0_dR(1))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0R_dZ', cache(:)%dB0_dZ(1))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dR', cache(:)%dB0_dR(2))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dZ', cache(:)%dB0_dZ(2))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dR', cache(:)%dB0_dR(3))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dZ', cache(:)%dB0_dZ(3))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0R_dR', cache(:)%dj0_dR(1))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0R_dZ', cache(:)%dj0_dZ(1))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dR', cache(:)%dj0_dR(2))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dZ', cache(:)%dj0_dZ(2))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dR', cache(:)%dj0_dR(3))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dZ', cache(:)%dj0_dZ(3))
-    rank (2)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/psi', cache(:, :)%psi)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/theta', cache(:, :)%theta)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_R', cache(:, :)%B0(1))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_Z', cache(:, :)%B0(3))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0_phi', cache(:, :)%B0(2))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_R', cache(:, :)%j0(1))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_Z', cache(:, :)%j0(3))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/j0_phi', cache(:, :)%j0(2))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/B0', cache(:, :)%Bmod)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0_dR', cache(:, :)%dBmod_dR)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0_dZ', cache(:, :)%dBmod_dZ)
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0R_dR', cache(:, :)%dB0_dR(1))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0R_dZ', cache(:, :)%dB0_dZ(1))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dR', cache(:, :)%dB0_dR(2))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0phi_dZ', cache(:, :)%dB0_dZ(2))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dR', cache(:, :)%dB0_dR(3))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dB0Z_dZ', cache(:, :)%dB0_dZ(3))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0R_dR', cache(:, :)%dj0_dR(1))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0R_dZ', cache(:, :)%dj0_dZ(1))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dR', cache(:, :)%dj0_dR(2))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0phi_dZ', cache(:, :)%dj0_dZ(2))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dR', cache(:, :)%dj0_dR(3))
-      call h5_get(h5id_root, trim(adjustl(dataset)) // '/dj0Z_dZ', cache(:, :)%dj0_dZ(3))
-    rank default
-      error stop 'field_cache_read: rank-1 or rank-2 array expected for argument ''cache'''
-    end select
+    grp = trim(group)
+    cmnt = trim(comment)
+    allocate(itemp(size(cache, 1), size(cache, 2)), rtemp(size(cache, 1), size(cache, 2)))
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    itemp(:, :) = cache%ktri
+    call h5_add(h5id_root, grp // '/ktri', itemp, &
+      lbound(cache), ubound(cache), &
+      comment = 'triangle index of ' // cmnt)
+    rtemp(:, :) = cache%R
+    call h5_add(h5id_root, grp // '/R', rtemp, &
+      lbound(cache), ubound(cache), unit = 'cm', &
+      comment = 'R coordinate of ' // cmnt)
+    rtemp(:, :) = cache%Z
+    call h5_add(h5id_root, grp // '/Z', rtemp, &
+      lbound(cache), ubound(cache), unit = 'cm', &
+      comment = 'Z coordinate of ' // cmnt)
+    rtemp(:, :) = cache%psi
+    call h5_add(h5id_root, grp // '/psi', rtemp, &
+      lbound(cache), ubound(cache), unit = 'Mx', &
+      comment = 'poloidal flux at ' // cmnt)
+    rtemp(:, :) = cache%theta
+    call h5_add(h5id_root, grp // '/theta', rtemp, &
+      lbound(cache), ubound(cache), unit = 'rad', &
+      comment = 'flux poloidal angle at ' // cmnt)
+    rtemp(:, :) = cache%sqrt_g
+    call h5_add(h5id_root, grp // '/sqrt_g', rtemp, &
+      lbound(cache), ubound(cache), unit = 'cm G^-1', &
+      comment = 'Jacobian at ' // cmnt)
+    rtemp(:, :) = cache%B0_R
+    call h5_add(h5id_root, grp // '/B0_R', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'R component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%B0_phi
+    call h5_add(h5id_root, grp // '/B0_phi', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'physical phi component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%B0_Z
+    call h5_add(h5id_root, grp // '/B0_Z', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'Z component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%dR_dtheta
+    call h5_add(h5id_root, grp // '/dR_dtheta', rtemp, &
+      lbound(cache), ubound(cache), unit = 'cm rad^-1', &
+      comment = 'Jacobian element (R, theta) at ' // cmnt)
+    rtemp(:, :) = cache%dZ_dtheta
+    call h5_add(h5id_root, grp // '/dZ_dtheta', rtemp, &
+      lbound(cache), ubound(cache), unit = 'cm rad^-1', &
+      comment = 'Jacobian element (Z, theta) at ' // cmnt)
     call h5_close(h5id_root)
-  end subroutine field_cache_read
+    deallocate(itemp, rtemp)
+  end subroutine coord_cache_write_2
+
+  subroutine coord_cache_read_1(cache, file, group)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    type(coord_cache_t), dimension(:), intent(inout) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+    integer, dimension(:), allocatable :: itemp
+    real(dp), dimension(:), allocatable :: rtemp
+
+    grp = trim(group)
+    allocate(itemp(size(cache)), rtemp(size(cache)))
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, grp // '/ktri', itemp)
+    cache%ktri = itemp
+    call h5_get(h5id_root, grp // '/R', rtemp)
+    cache%R = rtemp
+    call h5_get(h5id_root, grp // '/Z', rtemp)
+    cache%Z = rtemp
+    call h5_get(h5id_root, grp // '/psi', rtemp)
+    cache%psi = rtemp
+    call h5_get(h5id_root, grp // '/theta', rtemp)
+    cache%theta = rtemp
+    call h5_get(h5id_root, grp // '/sqrt_g', rtemp)
+    cache%sqrt_g = rtemp
+    call h5_get(h5id_root, grp // '/B0_R', rtemp)
+    cache%B0_R = rtemp
+    call h5_get(h5id_root, grp // '/B0_phi', rtemp)
+    cache%B0_phi = rtemp
+    call h5_get(h5id_root, grp // '/B0_Z', rtemp)
+    cache%B0_Z = rtemp
+    call h5_get(h5id_root, grp // '/dR_dtheta', rtemp)
+    cache%dR_dtheta = rtemp
+    call h5_get(h5id_root, grp // '/dZ_dtheta', rtemp)
+    cache%dZ_dtheta = rtemp
+    call h5_close(h5id_root)
+    deallocate(itemp, rtemp)
+  end subroutine coord_cache_read_1
+
+  subroutine coord_cache_read_2(cache, file, group)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    type(coord_cache_t), dimension(:, :), intent(inout) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+    integer, dimension(:, :), allocatable :: itemp
+    real(dp), dimension(:, :), allocatable :: rtemp
+
+    grp = trim(group)
+    allocate(itemp(size(cache, 1), size(cache, 2)), rtemp(size(cache, 1), size(cache, 2)))
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, grp // '/ktri', itemp)
+    cache%ktri = itemp
+    call h5_get(h5id_root, grp // '/R', rtemp)
+    cache%R = rtemp
+    call h5_get(h5id_root, grp // '/Z', rtemp)
+    cache%Z = rtemp
+    call h5_get(h5id_root, grp // '/psi', rtemp)
+    cache%psi = rtemp
+    call h5_get(h5id_root, grp // '/theta', rtemp)
+    cache%theta = rtemp
+    call h5_get(h5id_root, grp // '/sqrt_g', rtemp)
+    cache%sqrt_g = rtemp
+    call h5_get(h5id_root, grp // '/B0_R', rtemp)
+    cache%B0_R = rtemp
+    call h5_get(h5id_root, grp // '/B0_phi', rtemp)
+    cache%B0_phi = rtemp
+    call h5_get(h5id_root, grp // '/B0_Z', rtemp)
+    cache%B0_Z = rtemp
+    call h5_get(h5id_root, grp // '/dR_dtheta', rtemp)
+    cache%dR_dtheta = rtemp
+    call h5_get(h5id_root, grp // '/dZ_dtheta', rtemp)
+    cache%dZ_dtheta = rtemp
+    call h5_close(h5id_root)
+    deallocate(itemp, rtemp)
+  end subroutine coord_cache_read_2
+
+  subroutine field_cache_write_1(cache, file, group, comment)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    type(field_cache_t), dimension(:), intent(in) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = *), intent(in) :: comment
+    character(len = len_trim(group)) :: grp
+    character(len = len_trim(comment)) :: cmnt
+    integer(HID_T) :: h5id_root
+    real(dp), dimension(:), allocatable :: rtemp
+
+    grp = trim(group)
+    cmnt = trim(comment)
+    allocate(rtemp(size(cache)))
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    rtemp(:) = cache%psi
+    call h5_add(h5id_root, grp // '/psi', rtemp, &
+      lbound(cache), ubound(cache), unit = 'Mx', &
+      comment = 'poloidal flux at ' // cmnt)
+    rtemp(:) = cache%theta
+    call h5_add(h5id_root, grp // '/theta', rtemp, &
+      lbound(cache), ubound(cache), unit = 'rad', &
+      comment = 'flux poloidal angle at ' // cmnt)
+    rtemp(:) = cache%B0(1)
+    call h5_add(h5id_root, grp // '/B0_R', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'R component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%B0(3)
+    call h5_add(h5id_root, grp // '/B0_Z', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'Z component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%B0(2)
+    call h5_add(h5id_root, grp // '/B0_phi', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'physical phi component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%j0(1)
+    call h5_add(h5id_root, grp // '/j0_R', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA', &
+      comment = 'R component of equilibrium current density at ' // cmnt)
+    rtemp(:) = cache%j0(3)
+    call h5_add(h5id_root, grp // '/j0_Z', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA', &
+      comment = 'Z component of equilibrium current density at ' // cmnt)
+    rtemp(:) = cache%j0(2)
+    call h5_add(h5id_root, grp // '/j0_phi', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA', &
+      comment = 'physical phi component of equilibrium current density at ' // cmnt)
+    rtemp(:) = cache%Bmod
+    call h5_add(h5id_root, grp // '/B0', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'magnitude of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%dBmod_dR
+    call h5_add(h5id_root, grp // '/dB0_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'R derivative of magnitude of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%dBmod_dZ
+    call h5_add(h5id_root, grp // '/dB0_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'Z derivative of magnitude of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%dB0_dR(1)
+    call h5_add(h5id_root, grp // '/dB0R_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'R derivative of R component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%dB0_dZ(1)
+    call h5_add(h5id_root, grp // '/dB0R_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'Z derivative of R component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%dB0_dR(2)
+    call h5_add(h5id_root, grp // '/dB0phi_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'R derivative of physical phi component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%dB0_dZ(2)
+    call h5_add(h5id_root, grp // '/dB0phi_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'Z derivative of physical phi component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%dB0_dR(3)
+    call h5_add(h5id_root, grp // '/dB0Z_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'R derivative of Z component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%dB0_dZ(3)
+    call h5_add(h5id_root, grp // '/dB0Z_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'Z derivative of Z component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:) = cache%dj0_dR(1)
+    call h5_add(h5id_root, grp // '/dj0R_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+      comment = 'R derivative of R component of equilibrium current density at ' // cmnt)
+    rtemp(:) = cache%dj0_dZ(1)
+    call h5_add(h5id_root, grp // '/dj0R_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+      comment = 'Z derivative of R component of equilibrium current density at ' // cmnt)
+    rtemp(:) = cache%dj0_dR(2)
+    call h5_add(h5id_root, grp // '/dj0phi_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+      comment = 'R derivative of physical phi component of equilibrium current density at ' // cmnt)
+    rtemp(:) = cache%dj0_dZ(2)
+    call h5_add(h5id_root, grp // '/dj0phi_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+      comment = 'Z derivative of physical phi component of equilibrium current density at ' // cmnt)
+    rtemp(:) = cache%dj0_dR(3)
+    call h5_add(h5id_root, grp // '/dj0Z_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+      comment = 'R derivative of Z component of equilibrium current density at ' // cmnt)
+    rtemp(:) = cache%dj0_dZ(3)
+    call h5_add(h5id_root, grp // '/dj0Z_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+      comment = 'Z derivative of Z component of equilibrium current density at ' // cmnt)
+    call h5_close(h5id_root)
+    deallocate(rtemp)
+  end subroutine field_cache_write_1
+
+  subroutine field_cache_write_2(cache, file, group, comment)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    type(field_cache_t), dimension(:, :), intent(in) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = *), intent(in) :: comment
+    character(len = len_trim(group)) :: grp
+    character(len = len_trim(comment)) :: cmnt
+    integer(HID_T) :: h5id_root
+    real(dp), dimension(:, :), allocatable :: rtemp
+
+    grp = trim(group)
+    cmnt = trim(comment)
+    allocate(rtemp(size(cache, 1), size(cache, 2)))
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    rtemp(:, :) = cache%psi
+    call h5_add(h5id_root, grp // '/psi', rtemp, &
+      lbound(cache), ubound(cache), unit = 'Mx', &
+      comment = 'poloidal flux at ' // cmnt)
+    rtemp(:, :) = cache%theta
+    call h5_add(h5id_root, grp // '/theta', rtemp, &
+      lbound(cache), ubound(cache), unit = 'rad', &
+      comment = 'flux poloidal angle at ' // cmnt)
+    rtemp(:, :) = cache%B0(1)
+    call h5_add(h5id_root, grp // '/B0_R', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'R component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%B0(3)
+    call h5_add(h5id_root, grp // '/B0_Z', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'Z component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%B0(2)
+    call h5_add(h5id_root, grp // '/B0_phi', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'physical phi component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%j0(1)
+    call h5_add(h5id_root, grp // '/j0_R', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA', &
+      comment = 'R component of equilibrium current density at ' // cmnt)
+    rtemp(:, :) = cache%j0(3)
+    call h5_add(h5id_root, grp // '/j0_Z', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA', &
+      comment = 'Z component of equilibrium current density at ' // cmnt)
+    rtemp(:, :) = cache%j0(2)
+    call h5_add(h5id_root, grp // '/j0_phi', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA', &
+      comment = 'physical phi component of equilibrium current density at ' // cmnt)
+    rtemp(:, :) = cache%Bmod
+    call h5_add(h5id_root, grp // '/B0', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G', &
+      comment = 'magnitude of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%dBmod_dR
+    call h5_add(h5id_root, grp // '/dB0_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'R derivative of magnitude of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%dBmod_dZ
+    call h5_add(h5id_root, grp // '/dB0_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'Z derivative of magnitude of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%dB0_dR(1)
+    call h5_add(h5id_root, grp // '/dB0R_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'R derivative of R component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%dB0_dZ(1)
+    call h5_add(h5id_root, grp // '/dB0R_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'Z derivative of R component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%dB0_dR(2)
+    call h5_add(h5id_root, grp // '/dB0phi_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'R derivative of physical phi component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%dB0_dZ(2)
+    call h5_add(h5id_root, grp // '/dB0phi_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'Z derivative of physical phi component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%dB0_dR(3)
+    call h5_add(h5id_root, grp // '/dB0Z_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'R derivative of Z component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%dB0_dZ(3)
+    call h5_add(h5id_root, grp // '/dB0Z_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'G cm^-1', &
+      comment = 'Z derivative of Z component of equilibrium magnetic field at ' // cmnt)
+    rtemp(:, :) = cache%dj0_dR(1)
+    call h5_add(h5id_root, grp // '/dj0R_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+      comment = 'R derivative of R component of equilibrium current density at ' // cmnt)
+    rtemp(:, :) = cache%dj0_dZ(1)
+    call h5_add(h5id_root, grp // '/dj0R_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+      comment = 'Z derivative of R component of equilibrium current density at ' // cmnt)
+    rtemp(:, :) = cache%dj0_dR(2)
+    call h5_add(h5id_root, grp // '/dj0phi_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+      comment = 'R derivative of physical phi component of equilibrium current density at ' // cmnt)
+    rtemp(:, :) = cache%dj0_dZ(2)
+    call h5_add(h5id_root, grp // '/dj0phi_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+      comment = 'Z derivative of physical phi component of equilibrium current density at ' // cmnt)
+    rtemp(:, :) = cache%dj0_dR(3)
+    call h5_add(h5id_root, grp // '/dj0Z_dR', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+      comment = 'R derivative of Z component of equilibrium current density at ' // cmnt)
+    rtemp(:, :) = cache%dj0_dZ(3)
+    call h5_add(h5id_root, grp // '/dj0Z_dZ', rtemp, &
+      lbound(cache), ubound(cache), unit = 'statA cm^-1', &
+      comment = 'Z derivative of Z component of equilibrium current density at ' // cmnt)
+    call h5_close(h5id_root)
+    deallocate(rtemp)
+  end subroutine field_cache_write_2
+
+  subroutine field_cache_read_1(cache, file, group)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    type(field_cache_t), dimension(:), intent(inout) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+    real(dp), dimension(:), allocatable :: rtemp
+
+    grp = trim(group)
+    allocate(rtemp(size(cache)))
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, grp // '/psi', rtemp)
+    cache%psi = rtemp
+    call h5_get(h5id_root, grp // '/theta', rtemp)
+    cache%theta = rtemp
+    call h5_get(h5id_root, grp // '/B0_R', rtemp)
+    cache%B0(1) = rtemp
+    call h5_get(h5id_root, grp // '/B0_Z', rtemp)
+    cache%B0(3) = rtemp
+    call h5_get(h5id_root, grp // '/B0_phi', rtemp)
+    cache%B0(2) = rtemp
+    call h5_get(h5id_root, grp // '/j0_R', rtemp)
+    cache%j0(1) = rtemp
+    call h5_get(h5id_root, grp // '/j0_Z', rtemp)
+    cache%j0(3) = rtemp
+    call h5_get(h5id_root, grp // '/j0_phi', rtemp)
+    cache%j0(2) = rtemp
+    call h5_get(h5id_root, grp // '/B0', rtemp)
+    cache%Bmod = rtemp
+    call h5_get(h5id_root, grp // '/dB0_dR', rtemp)
+    cache%dBmod_dR = rtemp
+    call h5_get(h5id_root, grp // '/dB0_dZ', rtemp)
+    cache%dBmod_dZ = rtemp
+    call h5_get(h5id_root, grp // '/dB0R_dR', rtemp)
+    cache%dB0_dR(1) = rtemp
+    call h5_get(h5id_root, grp // '/dB0R_dZ', rtemp)
+    cache%dB0_dZ(1) = rtemp
+    call h5_get(h5id_root, grp // '/dB0phi_dR', rtemp)
+    cache%dB0_dR(2) = rtemp
+    call h5_get(h5id_root, grp // '/dB0phi_dZ', rtemp)
+    cache%dB0_dZ(2) = rtemp
+    call h5_get(h5id_root, grp // '/dB0Z_dR', rtemp)
+    cache%dB0_dR(3) = rtemp
+    call h5_get(h5id_root, grp // '/dB0Z_dZ', rtemp)
+    cache%dB0_dZ(3) = rtemp
+    call h5_get(h5id_root, grp // '/dj0R_dR', rtemp)
+    cache%dj0_dR(1) = rtemp
+    call h5_get(h5id_root, grp // '/dj0R_dZ', rtemp)
+    cache%dj0_dZ(1) = rtemp
+    call h5_get(h5id_root, grp // '/dj0phi_dR', rtemp)
+    cache%dj0_dR(2) = rtemp
+    call h5_get(h5id_root, grp // '/dj0phi_dZ', rtemp)
+    cache%dj0_dZ(2) = rtemp
+    call h5_get(h5id_root, grp // '/dj0Z_dR', rtemp)
+    cache%dj0_dR(3) = rtemp
+    call h5_get(h5id_root, grp // '/dj0Z_dZ', rtemp)
+    cache%dj0_dZ(3) = rtemp
+    call h5_close(h5id_root)
+    deallocate(rtemp)
+  end subroutine field_cache_read_1
+
+  subroutine field_cache_read_2(cache, file, group)
+    use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
+    type(field_cache_t), dimension(:, :), intent(inout) :: cache
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+    real(dp), dimension(:, :), allocatable :: rtemp
+
+    grp = trim(group)
+    allocate(rtemp(size(cache, 1), size(cache, 2)))
+    call h5_open(file, h5id_root)
+    call h5_get(h5id_root, grp // '/psi', rtemp)
+    cache%psi = rtemp
+    call h5_get(h5id_root, grp // '/theta', rtemp)
+    cache%theta = rtemp
+    call h5_get(h5id_root, grp // '/B0_R', rtemp)
+    cache%B0(1) = rtemp
+    call h5_get(h5id_root, grp // '/B0_Z', rtemp)
+    cache%B0(3) = rtemp
+    call h5_get(h5id_root, grp // '/B0_phi', rtemp)
+    cache%B0(2) = rtemp
+    call h5_get(h5id_root, grp // '/j0_R', rtemp)
+    cache%j0(1) = rtemp
+    call h5_get(h5id_root, grp // '/j0_Z', rtemp)
+    cache%j0(3) = rtemp
+    call h5_get(h5id_root, grp // '/j0_phi', rtemp)
+    cache%j0(2) = rtemp
+    call h5_get(h5id_root, grp // '/B0', rtemp)
+    cache%Bmod = rtemp
+    call h5_get(h5id_root, grp // '/dB0_dR', rtemp)
+    cache%dBmod_dR = rtemp
+    call h5_get(h5id_root, grp // '/dB0_dZ', rtemp)
+    cache%dBmod_dZ = rtemp
+    call h5_get(h5id_root, grp // '/dB0R_dR', rtemp)
+    cache%dB0_dR(1) = rtemp
+    call h5_get(h5id_root, grp // '/dB0R_dZ', rtemp)
+    cache%dB0_dZ(1) = rtemp
+    call h5_get(h5id_root, grp // '/dB0phi_dR', rtemp)
+    cache%dB0_dR(2) = rtemp
+    call h5_get(h5id_root, grp // '/dB0phi_dZ', rtemp)
+    cache%dB0_dZ(2) = rtemp
+    call h5_get(h5id_root, grp // '/dB0Z_dR', rtemp)
+    cache%dB0_dR(3) = rtemp
+    call h5_get(h5id_root, grp // '/dB0Z_dZ', rtemp)
+    cache%dB0_dZ(3) = rtemp
+    call h5_get(h5id_root, grp // '/dj0R_dR', rtemp)
+    cache%dj0_dR(1) = rtemp
+    call h5_get(h5id_root, grp // '/dj0R_dZ', rtemp)
+    cache%dj0_dZ(1) = rtemp
+    call h5_get(h5id_root, grp // '/dj0phi_dR', rtemp)
+    cache%dj0_dR(2) = rtemp
+    call h5_get(h5id_root, grp // '/dj0phi_dZ', rtemp)
+    cache%dj0_dZ(2) = rtemp
+    call h5_get(h5id_root, grp // '/dj0Z_dR', rtemp)
+    cache%dj0_dR(3) = rtemp
+    call h5_get(h5id_root, grp // '/dj0Z_dZ', rtemp)
+    cache%dj0_dZ(3) = rtemp
+    call h5_close(h5id_root)
+    deallocate(rtemp)
+  end subroutine field_cache_read_2
 
   subroutine shielding_init(s, m)
     type(shielding_t), intent(inout) :: s
