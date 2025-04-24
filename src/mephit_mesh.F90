@@ -330,11 +330,6 @@ module mephit_mesh
 
     !> Free parameter in the compensated scheme for shielding
     real(dp) :: coeff
-
-    !> pressure perturbation projection
-    integer :: inner_kp_max, outer_kp_max
-    integer, allocatable :: kpois(:, :)
-    real(dp), allocatable :: weights(:, :)
   end type shielding_t
 
   type :: cache_t
@@ -1030,29 +1025,12 @@ contains
     deallocate(rtemp)
   end subroutine field_cache_read_2
 
-  subroutine shielding_init(s, m)
-    type(shielding_t), intent(inout) :: s
-    integer, intent(in) :: m
-    integer :: kf
-
-    call shielding_deinit(s)
-    kf = mesh%res_ind(m)
-    s%inner_kp_max = mesh%kp_max(kf - 1)
-    s%outer_kp_max = mesh%kp_max(kf)
-    allocate(s%kpois(2, s%inner_kp_max + s%outer_kp_max))
-    allocate(s%weights(2, s%inner_kp_max + s%outer_kp_max))
-  end subroutine shielding_init
-
-  subroutine shielding_deinit(s)
+  elemental subroutine shielding_deinit(s)
     type(shielding_t), intent(inout) :: s
 
     s%coeff = 0d0
-    s%inner_kp_max = 0
-    s%outer_kp_max = 0
     if (allocated(s%GL_weights)) deallocate(s%GL_weights)
     if (allocated(s%sample_Ires)) deallocate(s%sample_Ires)
-    if (allocated(s%kpois)) deallocate(s%kpois)
-    if (allocated(s%weights)) deallocate(s%weights)
   end subroutine shielding_deinit
 
   subroutine shielding_write(shielding, file, group)
@@ -1072,16 +1050,6 @@ contains
       unit = 'Mx', comment = 'G-L quadrature weights including psi interval')
     call h5_add(h5id_root, grp // '/coeff', shielding%coeff, unit = 'g^-1 cm s', &
       comment = 'coefficient in the compensated scheme for shielding')
-    call h5_add(h5id_root, grp // '/inner_kp_max', shielding%inner_kp_max, &
-      comment = 'number of points on inner flux surface')
-    call h5_add(h5id_root, grp // '/outer_kp_max', shielding%outer_kp_max, &
-      comment = 'number of points on outer flux surface')
-    call h5_add(h5id_root, grp // '/kpois', shielding%kpois, &
-      lbound(shielding%kpois), ubound(shielding%kpois), &
-      comment = 'point indices of surrounding points of theta projection')
-    call h5_add(h5id_root, grp // '/weights', shielding%weights, &
-      lbound(shielding%weights), ubound(shielding%weights), &
-      unit = '1', comment = 'relative weighting of surrounding points of theta projection')
     call h5_close(h5id_root)
   end subroutine shielding_write
 
@@ -1097,10 +1065,6 @@ contains
     grp = trim(group)
     call h5_open(file, h5id_root)
     call h5_get(h5id_root, grp // '/coeff', shielding%coeff)
-    call h5_get(h5id_root, grp // '/inner_kp_max', shielding%inner_kp_max)
-    call h5_get(h5id_root, grp // '/outer_kp_max', shielding%outer_kp_max)
-    call h5_get(h5id_root, grp // '/kpois', shielding%kpois)
-    call h5_get(h5id_root, grp // '/weights', shielding%weights)
     call h5_get_bounds(h5id_root, grp // '/sample_Ires/R', lb1, lb2, ub1, ub2)
     if (allocated(shielding%GL_weights)) deallocate(shielding%GL_weights)
     allocate(shielding%GL_weights(lb2:ub2))
@@ -1114,7 +1078,6 @@ contains
   subroutine cache_init(cache, GL_order)
     type(cache_t), intent(inout) :: cache
     integer, intent(in) :: GL_order
-    integer :: m
 
     call cache_deinit(cache)
     cache%GL_order = GL_order
@@ -1122,25 +1085,19 @@ contains
     allocate(cache%sample_polmodes_half(mesh%ntri))
     allocate(cache%sample_jnperp(mesh%npoint - 1))
     allocate(cache%shielding(mesh%m_res_min:mesh%m_res_max))
-    do m = mesh%m_res_min, mesh%m_res_max
-      call shielding_init(cache%shielding(m), m)
-    end do
     allocate(cache%edge_fields(mesh%GL_order, mesh%nedge), cache%area_fields(mesh%GL2_order, mesh%ntri))
     allocate(cache%mid_fields(mesh%nedge), cache%cntr_fields(mesh%ntri))
   end subroutine cache_init
 
   subroutine cache_deinit(cache)
     type(cache_t), intent(inout) :: cache
-    integer :: m
 
     cache%GL_order = 0
     if (allocated(cache%sample_polmodes)) deallocate(cache%sample_polmodes)
     if (allocated(cache%sample_polmodes_half)) deallocate(cache%sample_polmodes_half)
     if (allocated(cache%sample_jnperp)) deallocate(cache%sample_jnperp)
     if (allocated(cache%shielding)) then
-      do m = lbound(cache%shielding, 1), ubound(cache%shielding, 1)
-        call shielding_deinit(cache%shielding(m))
-      end do
+      call shielding_deinit(cache%shielding)
       deallocate(cache%shielding)
     end if
     if (allocated(cache%edge_fields)) deallocate(cache%edge_fields)
@@ -1241,9 +1198,9 @@ contains
     call compute_sample_polmodes(cache%sample_polmodes, .false.)
     call compute_sample_jnperp(cache%sample_jnperp)
     do m = mesh%m_res_min, mesh%m_res_max
+      call compute_shielding_auxiliaries(cache%shielding(m), m)
       call compute_sample_Ires(cache%shielding(m)%sample_Ires, &
         cache%shielding(m)%GL_weights, cache%GL_order, m)
-      call compute_shielding_auxiliaries(cache%shielding(m), m)
     end do
     call compute_kilca_auxiliaries
     call compute_gpec_jacfac
@@ -2397,54 +2354,17 @@ contains
   end subroutine check_mesh
 
   subroutine compute_shielding_auxiliaries(s, m)
-    use mephit_util, only: pi, clight, resample1d, interp1d, binsearch
+    use mephit_util, only: pi, clight, interp1d
     type(shielding_t), intent(inout) :: s
     integer, intent(in) :: m
-    integer :: kf, inner_kp_low, outer_kp_low
+    integer :: kf
     real(dp) :: dq_dpsi
 
     kf = mesh%res_ind(m)
-    inner_kp_low = mesh%kp_low(kf - 1)
-    outer_kp_low = mesh%kp_low(kf)
-    s%kpois(:, :) = 0
-    s%weights(:, :) = 0d0
-    call project_theta(mesh%node_theta_flux, mesh%node_theta_geom, &
-      s%outer_kp_max, outer_kp_low, s%inner_kp_max, inner_kp_low, &
-      s%kpois(:, :s%inner_kp_max), s%weights(:, :s%inner_kp_max))
-    call project_theta(mesh%node_theta_flux, mesh%node_theta_geom, &
-      s%inner_kp_max, inner_kp_low, s%outer_kp_max, outer_kp_low, &
-      s%kpois(:, s%inner_kp_max + 1:), s%weights(:, s%inner_kp_max + 1:))
     dq_dpsi = interp1d(equil%psi_eqd, equil%qpsi, fs_half%psi(kf), 3, .true.)
     s%coeff = clight * mesh%n / (4d0 * pi * mesh%R_O) * &
       abs(dq_dpsi / (fs_half%q(kf) * fs_half%dp_dpsi(kf))) / &
       (mesh%n * abs(fs%q(kf) - fs%q(kf - 1)))
-
-  contains
-    subroutine project_theta(theta_flux, theta_geom, dest_kp_max, dest_kpoi_low, &
-      src_kp_max, src_kpoi_low, kpois, weights)
-      real(dp), dimension(:), intent(in) :: theta_flux, theta_geom
-      integer, intent(in) :: dest_kp_max, dest_kpoi_low, src_kp_max, src_kpoi_low
-      integer, dimension(:, :), intent(out) :: kpois
-      real(dp), dimension(:, :), intent(out) :: weights
-      real(dp), dimension(-1:dest_kp_max+2) :: theta_flux_ext, theta_geom_ext
-      real(dp), dimension(src_kp_max) :: src_theta, dest_theta
-      integer :: kp, inf_kp
-
-      call extend_over_branch(theta_flux(dest_kpoi_low + 1:&
-        dest_kpoi_low + dest_kp_max), 2, theta_flux_ext)
-      call extend_over_branch(theta_geom(dest_kpoi_low + 1:&
-        dest_kpoi_low + dest_kp_max), 2, theta_geom_ext)
-      src_theta = theta_flux(src_kpoi_low + 1:src_kpoi_low + src_kp_max)
-      call resample1d(theta_flux_ext, theta_geom_ext, src_theta, dest_theta, 3)
-      kpois(:, 1) = [dest_kpoi_low + 1, dest_kpoi_low + 2]
-      weights(:, 1) = [1d0, 0d0]
-      do kp = 2, src_kp_max
-        call binsearch(theta_geom_ext(1:dest_kp_max + 1), 0, dest_theta(kp), inf_kp)
-        kpois(:, kp) = [dest_kpoi_low + inf_kp, dest_kpoi_low + mod(inf_kp, dest_kp_max) + 1]
-        weights(:, kp) = abs(dest_theta(kp) - theta_geom_ext(inf_kp:inf_kp + 1)) / &
-          (theta_geom_ext(inf_kp + 1) - theta_geom_ext(inf_kp))
-      end do
-    end subroutine project_theta
   end subroutine compute_shielding_auxiliaries
 
   subroutine compute_gpec_jacfac
