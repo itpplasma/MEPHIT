@@ -228,7 +228,7 @@ module mephit_conf
 
     integer :: m_min, m_max
 
-    !> Width of refined flux surfaces around resonances in cm.
+    !> Width of refined flux surfaces around resonances in cm. Defaults to 0.
     real(dp), dimension(:), allocatable :: Delta_rad_res
 
     !> Number of additional fine flux surfaces. Defaults to 0.
@@ -237,7 +237,7 @@ module mephit_conf
     !> Width ratio of neighbouring refined flux surfaces. Defaults to 0 (no refinement).
     real(dp), dimension(:), allocatable :: refinement
 
-    !> Free parameters setting the magnitudes of sheet currents. Defaults to 0.
+    !> Free parameters setting the magnitudes of sheet currents. Only applied with refinement. Defaults to 1.
     real(dp), dimension(:), allocatable :: sheet_current_factor
 
   contains
@@ -372,7 +372,7 @@ contains
     Delta_rad_res = 0d0
     add_fine = 0
     refinement = 0d0
-    sheet_current_factor = 0d0
+    sheet_current_factor = 1d0
     open(newunit = fid, file = filename)
     read(fid, nml = arrays)
     close(fid)

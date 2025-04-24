@@ -1329,7 +1329,7 @@ contains
     call L1_poloidal_modes(pn, pmn)
     do m = mesh%m_res_min, mesh%m_res_max
       m_res = -equil%cocos%sgn_q * m
-      if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then
+      if (abs(conf_arr%refinement(m)) > 1d0) then
         kf = mesh%res_ind(m)
         jmnpar_over_Bmod%coeff(m_res, kf-1:kf) = &
           (pmn%coeff(m_res, kf) - pmn%coeff(m_res, kf-1)) * &

@@ -90,13 +90,4 @@
    Delta_rad_res(9) = 5.347772320733589e-02
    Delta_rad_res(10) = 6.066328245075899e-02
    Delta_rad_res(11) = 3.464590203985631e-02
-   sheet_current_factor(3) = 1d5
-   sheet_current_factor(4) = 1d5
-   sheet_current_factor(5) = 1d5
-   sheet_current_factor(6) = 1d5
-   sheet_current_factor(7) = 1d5
-   sheet_current_factor(8) = 1d5
-   sheet_current_factor(9) = 1d5
-   sheet_current_factor(10) = 0d0
-   sheet_current_factor(11) = 0d0
 /
