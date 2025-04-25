@@ -1063,8 +1063,7 @@ contains
     use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger, datafile
     use mephit_mesh, only: mesh
     use mephit_pert, only: polmodes_t, polmodes_init, polmodes_write, polmodes_deinit, &
-      L1_t, L1_init, L1_interp, L1_deinit, RT0_t, RT0_init, RT0_deinit, &
-      RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
+      L1_t, L1_init, L1_deinit, RT0_t, RT0_init, RT0_deinit
     use mephit_flr2, only: flr2_t
     type(perteq_t), intent(inout) :: perteq
     type(fdm_t), intent(in) :: fdm
