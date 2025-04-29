@@ -189,6 +189,9 @@ module mephit_conf
     !> Enable damping of the Pfirsch-Schlueter current. Defaults to true.
     logical :: damp = .true.
 
+    !> Enable cross fade between current components. Defaults to false.
+    logical :: cross_fade = .false.
+
     !> Number of points in sweep over electrical resonance. Defaults to 0 (sweep not performed).
     integer :: resonance_sweep = 0
 
@@ -339,6 +342,8 @@ contains
       comment = 'maximum density', unit = 'cm^-3')
     call h5_add(h5id_root, grp // '/damp', config%damp, &
       comment = 'enable damping of Pfirsch-Schlueter current')
+    call h5_add(h5id_root, grp // '/cross_fade', config%cross_fade, &
+      comment = 'enable cross fade of current components')
     call h5_add(h5id_root, grp // '/resonance_sweep', config%resonance_sweep, &
       comment = 'number of points for sweep over electrical resonance')
     call h5_add(h5id_root, grp // '/offset_E_r', config%offset_E_r, &
