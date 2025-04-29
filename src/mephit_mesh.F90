@@ -330,6 +330,8 @@ module mephit_mesh
 
     !> Free parameter in the compensated scheme for shielding
     real(dp) :: coeff
+
+    real(dp), allocatable :: cross_fade(:)
   end type shielding_t
 
   type :: cache_t
@@ -1025,12 +1027,20 @@ contains
     deallocate(rtemp)
   end subroutine field_cache_read_2
 
+  elemental subroutine shielding_init(s)
+    type(shielding_t), intent(inout) :: s
+
+    call shielding_deinit(s)
+    allocate(s%cross_fade(mesh%nflux))
+  end subroutine shielding_init
+
   elemental subroutine shielding_deinit(s)
     type(shielding_t), intent(inout) :: s
 
     s%coeff = 0d0
     if (allocated(s%GL_weights)) deallocate(s%GL_weights)
     if (allocated(s%sample_Ires)) deallocate(s%sample_Ires)
+    if (allocated(s%cross_fade)) deallocate(s%cross_fade)
   end subroutine shielding_deinit
 
   subroutine shielding_write(shielding, file, group)
@@ -1050,6 +1060,9 @@ contains
       unit = 'Mx', comment = 'G-L quadrature weights including psi interval')
     call h5_add(h5id_root, grp // '/coeff', shielding%coeff, unit = 'g^-1 cm s', &
       comment = 'coefficient in the compensated scheme for shielding')
+    call h5_add(h5id_root, grp // '/cross_fade', shielding%cross_fade, &
+      lbound(shielding%cross_fade), ubound(shielding%cross_fade), &
+      unit = '1', comment = 'Transition function between current components')
     call h5_close(h5id_root)
   end subroutine shielding_write
 
@@ -1065,6 +1078,7 @@ contains
     grp = trim(group)
     call h5_open(file, h5id_root)
     call h5_get(h5id_root, grp // '/coeff', shielding%coeff)
+    call h5_get(h5id_root, grp // '/cross_fade', shielding%cross_fade)
     call h5_get_bounds(h5id_root, grp // '/sample_Ires/R', lb1, lb2, ub1, ub2)
     if (allocated(shielding%GL_weights)) deallocate(shielding%GL_weights)
     allocate(shielding%GL_weights(lb2:ub2))
@@ -1085,6 +1099,7 @@ contains
     allocate(cache%sample_polmodes_half(mesh%ntri))
     allocate(cache%sample_jnperp(mesh%npoint - 1))
     allocate(cache%shielding(mesh%m_res_min:mesh%m_res_max))
+    call shielding_init(cache%shielding)
     allocate(cache%edge_fields(mesh%GL_order, mesh%nedge), cache%area_fields(mesh%GL2_order, mesh%ntri))
     allocate(cache%mid_fields(mesh%nedge), cache%cntr_fields(mesh%ntri))
   end subroutine cache_init
@@ -2358,13 +2373,25 @@ contains
     type(shielding_t), intent(inout) :: s
     integer, intent(in) :: m
     integer :: kf
-    real(dp) :: dq_dpsi
+    real(dp) :: dq_dpsi, normalized_distance
 
     kf = mesh%res_ind(m)
     dq_dpsi = interp1d(equil%psi_eqd, equil%qpsi, fs_half%psi(kf), 3, .true.)
     s%coeff = clight * mesh%n / (4d0 * pi * mesh%R_O) * &
       abs(dq_dpsi / (fs_half%q(kf) * fs_half%dp_dpsi(kf))) / &
       (mesh%n * abs(fs%q(kf) - fs%q(kf - 1)))
+    s%cross_fade(:) = 0d0
+    do kf = 1, mesh%nflux
+      normalized_distance = abs(fs%psi(kf) - mesh%psi_res(m)) / mesh%delta_psi_mn(m)
+      if (normalized_distance <= 0d0) then
+        s%cross_fade(kf) = 0d0
+      elseif (normalized_distance >= 1d0) then
+        s%cross_fade(kf) = 1d0
+      else
+        s%cross_fade(kf) = exp(-2d0 * pi / (1 - normalized_distance) * &
+          exp(-sqrt(2d0) / normalized_distance))
+      end if
+    end do
   end subroutine compute_shielding_auxiliaries
 
   subroutine compute_gpec_jacfac
