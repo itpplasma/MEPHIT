@@ -13,11 +13,29 @@
    config%refinement_scheme = 0
    ! 0: iMHD, 1: FLRE 2nd order
    config%currn_model = 0
+   ! 0: Viktor Nemov's code, 1: GPEC, 2: pre-computed Fourier transform
+   config%vac_src = 2
+   ! prefactor in Biot-Savart law, e.g. 5 windings and conversion from A to statA / c_0
+   config%Biot_Savart_prefactor = 5.0d-1
+   !> file containing coil field data
+   config%coil_file = '/proj/plasma/CODE/lainer_p/MEPHIT/run/AUG_B_coils.h5'
+   !> file containing coil currents
+   config%currents_file = '/proj/plasma/DATA/BALANCE/COIL/33353/33353.2900_coil_markl.dat'
+   !> file containing equilibrium density profile
+   config%dens_file = '/proj/plasma/DATA/BALANCE/PROF/33353/33353.2900_ne_PED_MMARKL_rho_pol.dat'
+   !> file containing equilibrium electron temperature profile
+   config%temp_e_file = '/proj/plasma/DATA/BALANCE/PROF/33353/33353.2900_Te_PED_MMARKL_rho_pol.dat'
+   !> file containing equilibrium ion temperature profile
+   config%temp_i_file = '/proj/plasma/DATA/BALANCE/PROF/33353/33353.2900_Ti_PED_MMARKL_rho_pol.dat'
+   !> file containing equilibrium radial electric field profile
+   config%E_r_file = '/proj/plasma/DATA/BALANCE/PROF/33353/33353_2900_Er.dat'
+   ! mass number of ions
+   config%m_i = 2.0
    ! toroidal mode number of perturbation
    config%n = 2
-   ! maximum number of iteration steps
+   ! maximum number of (preconditioned) fixed-point iteration steps
    config%niter = 50
-   ! maximum relative error in fixed-point iteration
+   ! maximum relative error in (preconditioned) fixed-point iteration
    config%iter_rel_err = 1d-12
    ! maximum number of iterations in Arnoldi method
    config%nkrylov = 100
@@ -49,8 +67,5 @@
 &arrays
    ! relative refinement around resonances
    refinement(4) = 1.414213562373095d0
-   ! deleted flux surfaces around resonances
-   deletions(4) = 1
-   ! coefficients for sheet currents
-   sheet_current_factor(4) = 1d4
+   Delta_rad_res(4) = 0.1125d0
 /

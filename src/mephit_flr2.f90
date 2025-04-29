@@ -102,44 +102,42 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', &
       flr2%psi, lbound(flr2%psi), ubound(flr2%psi), unit = 'Mx', &
       comment = 'poloidal flux')
-    call h5_add(h5id_root, trim(adjustl(dataset)) // '/psi', &
-      flr2%psi, lbound(flr2%psi), ubound(flr2%psi), unit = '?', &
-      comment = 'Poisson equation coefficient')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/a2_in', &
-      flr2%a2_in, lbound(flr2%a2_in), ubound(flr2%a2_in), unit = '?', &
+      flr2%a2_in, lbound(flr2%a2_in), ubound(flr2%a2_in), unit = '1', &
       comment = 'Poisson equation coefficient')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/a2_out', &
-      flr2%a2_out, lbound(flr2%a2_out), ubound(flr2%a2_out), unit = '?', &
+      flr2%a2_out, lbound(flr2%a2_out), ubound(flr2%a2_out), unit = '1', &
       comment = 'Poisson equation coefficient')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/a0', &
-      flr2%a0, lbound(flr2%a0), ubound(flr2%a0), unit = '?', &
+      flr2%a0, lbound(flr2%a0), ubound(flr2%a0), unit = 'Mx^-2', &
       comment = 'Poisson equation coefficient')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/b2_in', &
-      flr2%b2_in, lbound(flr2%b2_in), ubound(flr2%b2_in), unit = '?', &
+      flr2%b2_in, lbound(flr2%b2_in), ubound(flr2%b2_in), unit = 'statV Mx^-1', &
       comment = 'Poisson equation coefficient')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/b2_out', &
-      flr2%b2_out, lbound(flr2%b2_out), ubound(flr2%b2_out), unit = '?', &
+      flr2%b2_out, lbound(flr2%b2_out), ubound(flr2%b2_out), unit = 'statV Mx^-1', &
       comment = 'Poisson equation coefficient')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/b0', &
-      flr2%b0, lbound(flr2%b0), ubound(flr2%b0), unit = '?', &
+      flr2%b0, lbound(flr2%b0), ubound(flr2%b0), unit = 'statV Mx^-3', &
       comment = 'Poisson equation coefficient')
+    ! note: statA with c_0 = 1
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/c2_in', &
-      flr2%c2_in, lbound(flr2%c2_in), ubound(flr2%c2_in), unit = '?', &
+      flr2%c2_in, lbound(flr2%c2_in), ubound(flr2%c2_in), unit = 'statA statV^-1 Mx', &
       comment = 'Poisson equation coefficient')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/c2_out', &
-      flr2%c2_out, lbound(flr2%c2_out), ubound(flr2%c2_out), unit = '?', &
+      flr2%c2_out, lbound(flr2%c2_out), ubound(flr2%c2_out), unit = 'statA statV^-1 Mx', &
       comment = 'Poisson equation coefficient')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/c0', &
-      flr2%c0, lbound(flr2%c0), ubound(flr2%c0), unit = '?', &
+      flr2%c0, lbound(flr2%c0), ubound(flr2%c0), unit = 'statA statV^-1 M^-1', &
       comment = 'Poisson equation coefficient')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/d2_in', &
-      flr2%d2_in, lbound(flr2%d2_in), ubound(flr2%d2_in), unit = '?', &
+      flr2%d2_in, lbound(flr2%d2_in), ubound(flr2%d2_in), unit = 'statA', &
       comment = 'Poisson equation coefficient')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/d2_out', &
-      flr2%d2_out, lbound(flr2%d2_out), ubound(flr2%d2_out), unit = '?', &
+      flr2%d2_out, lbound(flr2%d2_out), ubound(flr2%d2_out), unit = 'statA', &
       comment = 'Poisson equation coefficient')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/d0', &
-      flr2%d0, lbound(flr2%d0), ubound(flr2%d0), unit = '?', &
+      flr2%d0, lbound(flr2%d0), ubound(flr2%d0), unit = 'statA Mx^-2', &
       comment = 'Poisson equation coefficient')
     call h5_close(h5id_root)
   end subroutine flr2_write

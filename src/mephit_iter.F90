@@ -1063,8 +1063,7 @@ contains
     use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger, datafile
     use mephit_mesh, only: mesh
     use mephit_pert, only: polmodes_t, polmodes_init, polmodes_write, polmodes_deinit, &
-      L1_t, L1_init, L1_interp, L1_deinit, RT0_t, RT0_init, RT0_deinit, &
-      RT0_interp, RT0_project_pol_comp, RT0_project_tor_comp
+      L1_t, L1_init, L1_deinit, RT0_t, RT0_init, RT0_deinit
     use mephit_flr2, only: flr2_t
     type(perteq_t), intent(inout) :: perteq
     type(fdm_t), intent(in) :: fdm
@@ -1285,7 +1284,8 @@ contains
     complex(dp), intent(out) :: Phi_mn(0:, mesh%m_res_min:)
     complex(dp), intent(out) :: Phi_aligned_mn(0:, mesh%m_res_min:)
     integer :: m, m_res, kf_min
-    complex(dp) :: Bmnpsi_over_B0phi(0:mesh%nflux)
+    real(dp) :: Bmnrho_over_B0theta(1:mesh%nflux), rtemp(1:mesh%nflux)
+    complex(dp) :: Bmnpsi_over_B0phi(1:mesh%nflux)
     type(vec_polmodes_t) :: Bmn
 
     kf_min = 0 ! max(1, mesh%res_ind(mesh%m_res_min) / 4)
@@ -1297,13 +1297,18 @@ contains
     call RT0_poloidal_modes(Bn, Bmn)
     do m = mesh%m_res_min, mesh%m_res_max
       m_res = -equil%cocos%sgn_q * m
-      call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Re / fs_half%q * &
-        equil%cocos%sgn_dpsi, fs%psi(1:), Bmnpsi_over_B0phi(1:)%Re, 3)
-      call resample1d(fs_half%psi, Bmn%coeff_rad(m_res, :)%Im / fs_half%q * &
-        equil%cocos%sgn_dpsi, fs%psi(1:), Bmnpsi_over_B0phi(1:)%Im, 3)
+      Bmnrho_over_B0theta(:) = Bmn%coeff_rad(m_res, :)%Re
+      call resample1d(fs_half%psi, Bmnrho_over_B0theta / fs_half%q * &
+        equil%cocos%sgn_dpsi, fs%psi(1:), rtemp, 3)
+      Bmnpsi_over_B0phi%Re = rtemp
+      Bmnrho_over_B0theta(:) = Bmn%coeff_rad(m_res, :)%Im
+      call resample1d(fs_half%psi, Bmnrho_over_B0theta / fs_half%q * &
+        equil%cocos%sgn_dpsi, fs%psi(1:), rtemp, 3)
+      Bmnpsi_over_B0phi%Im = rtemp
       call flr2_response_current(flr2, 1, m_res, mesh%nflux, &
-        Bmnpsi_over_B0phi(1:), jmnpar_over_Bmod%coeff(m_res, 1:), Phi_mn(1:, m))
-      Phi_aligned_mn(:, m) = imun * Bmnpsi_over_B0phi * fs%q * dPhi0_dpsi%y / (m_res + mesh%n * fs%q)
+        Bmnpsi_over_B0phi, jmnpar_over_Bmod%coeff(m_res, 1:), Phi_mn(1:, m))
+      Phi_aligned_mn(1:, m) = imun * Bmnpsi_over_B0phi * &
+        fs%q(1:) * dPhi0_dpsi%y(1:) / (m_res + mesh%n * fs%q(1:))
       jmnpar_over_Bmod%coeff(m_res, :kf_min) = (0d0, 0d0)  ! suppress spurious current near axis
     end do
     call vec_polmodes_deinit(Bmn)
@@ -1323,7 +1328,7 @@ contains
     call L1_poloidal_modes(pn, pmn)
     do m = mesh%m_res_min, mesh%m_res_max
       m_res = -equil%cocos%sgn_q * m
-      if (abs(conf_arr%sheet_current_factor(m)) > 0d0) then
+      if (abs(conf_arr%refinement(m)) > 1d0) then
         kf = mesh%res_ind(m)
         jmnpar_over_Bmod%coeff(m_res, kf-1:kf) = &
           (pmn%coeff(m_res, kf) - pmn%coeff(m_res, kf-1)) * &

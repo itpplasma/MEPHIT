@@ -336,14 +336,14 @@ contains
     type(RT0_t), intent(inout) :: elem
     procedure(vector_element_projection) :: proj
     integer :: kedge, k, ktri
-    real(dp) :: n_f(3)
+    real(dp) :: edge_perp(3)
 
     do kedge = 1, mesh%nedge
       ktri = mesh%edge_tri(1, kedge)
-      n_f = [mesh%edge_Z(kedge), 0d0, -mesh%edge_R(kedge)]
+      edge_perp = [mesh%edge_Z(kedge), 0d0, -mesh%edge_R(kedge)]
       do k = 1, mesh%GL_order
         elem%DOF(kedge) = elem%DOF(kedge) + proj(ktri, mesh%GL_weights(k) * mesh%GL_R(k, kedge), &
-          mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), n_f, cache%edge_fields(k, kedge))
+          mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), edge_perp, cache%edge_fields(k, kedge))
       end do
     end do
   end subroutine RT0_project_pol_comp
@@ -353,12 +353,12 @@ contains
     type(RT0_t), intent(inout) :: elem
     procedure(vector_element_projection) :: proj
     integer :: ktri, k
-    real(dp), parameter :: n_f(3) = [0d0, 1d0, 0d0]
+    real(dp), parameter :: area_perp(3) = [0d0, 1d0, 0d0]
 
     do ktri = 1, mesh%ntri
       do k = 1, mesh%GL2_order
         elem%comp_phi(ktri) = elem%comp_phi(ktri) + proj(ktri, mesh%GL2_weights(k), &
-          mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), n_f, cache%area_fields(k, ktri))
+          mesh%GL2_R(k, ktri), mesh%GL2_Z(k, ktri), area_perp, cache%area_fields(k, ktri))
       end do
     end do
   end subroutine RT0_project_tor_comp
@@ -1036,11 +1036,13 @@ contains
   subroutine compute_Bnvac(Bn)
     use coil_tools, only: read_currents, read_Bnvac_Fourier
     use mephit_conf, only: conf, logger, vac_src_nemov, vac_src_gpec, vac_src_fourier
+    use mephit_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
-    integer :: nR, nZ
-    real(dp) :: Rmin, Rmax, Zmin, Zmax
+    integer :: nR, nZ, kedge, k
+    real(dp) :: Rmin, Rmax, Zmin, Zmax, edge_perp(3)
     real(dp), dimension(:), allocatable :: Ic
     complex(dp), dimension(:, :), allocatable :: Bn_R, Bn_Z
+    complex(dp) :: Bn_splined(3)
 
     ! initialize vacuum field
     select case (conf%vac_src)
@@ -1062,21 +1064,16 @@ contains
     deallocate(Bn_R, Bn_Z)
     ! project to finite elements
     Bn%DOF = (0d0, 0d0)
-    call RT0_project_pol_comp(Bn, project_splined)
+    do kedge = 1, mesh%nedge
+      edge_perp = [mesh%edge_Z(kedge), 0d0, -mesh%edge_R(kedge)]
+      do k = 1, mesh%GL_order
+        call spline_bn(conf%n, mesh%GL_R(k, kedge), mesh%GL_Z(k, kedge), &
+          Bn_splined(1), Bn_splined(2), Bn_splined(3))
+        Bn%DOF(kedge) = Bn%DOF(kedge) + mesh%GL_weights(k) * mesh%GL_R(k, kedge) * &
+          sum(Bn_splined * edge_perp)
+      end do
+    end do
     call RT0_tor_comp_from_zero_div(Bn)
-
-  contains
-    function project_splined(ktri, weight, R, Z, n_f, f)
-      use mephit_mesh, only: field_cache_t
-      complex(dp) :: project_splined
-      integer, intent(in) :: ktri
-      real(dp), intent(in) :: weight, R, Z, n_f(:)
-      type(field_cache_t), intent(in) :: f
-      complex(dp) :: B(3)
-
-      call spline_bn(conf%n, R, Z, B(1), B(2), B(3))
-      project_splined = weight * sum(B * n_f)
-    end function project_splined
   end subroutine compute_Bnvac
 
   subroutine generate_vacfield(vac)
