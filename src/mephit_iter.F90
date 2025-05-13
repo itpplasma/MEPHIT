@@ -1093,7 +1093,7 @@ contains
     case (currn_model_mhd)
       call compute_shielding_current(perteq%pn, resonant_jmnpar_over_Bmod)
     case (currn_model_kilca)
-      call compute_flr2_current(perteq%Bn, resonant_jmnpar_over_Bmod, &
+      call compute_flr2_current(perteq%Bn, perteq%jnpar_B0, resonant_jmnpar_over_Bmod, &
         flr2, perteq%Phi_mn, perteq%Phi_aligned_mn)
     case default
       write (logger%msg, '("unknown response current model selection", i0)') conf%currn_model
@@ -1271,14 +1271,15 @@ contains
       dens_e%y(1:), temp_e%y(1:) * ev2erg, temp_i%y(1:) * ev2erg, nu_e%y(1:), nu_i%y(1:))
   end subroutine compute_flr2_coeff
 
-  subroutine compute_flr2_current(Bn, jmnpar_over_Bmod, flr2, Phi_mn, Phi_aligned_mn)
+  subroutine compute_flr2_current(Bn, jnpar_B0_mhd, jmnpar_over_Bmod, flr2, Phi_mn, Phi_aligned_mn)
     use mephit_conf, only: conf
     use mephit_util, only: imun, resample1d
-    use mephit_mesh, only: equil, mesh, fs, fs_half, dPhi0_dpsi
-    use mephit_pert, only: polmodes_t, &
+    use mephit_mesh, only: equil, mesh, fs, fs_half, dPhi0_dpsi, cache
+    use mephit_pert, only: polmodes_t, polmodes_init, polmodes_deinit, L1_poloidal_modes, &
       vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, RT0_poloidal_modes
     use mephit_flr2, only: flr2_t, flr2_response_current
     type(RT0_t), intent(in) :: Bn
+    type(L1_t), intent(in) :: jnpar_B0_mhd
     type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
     type(flr2_t), intent(in) :: flr2
     complex(dp), intent(out) :: Phi_mn(0:, mesh%m_res_min:)
@@ -1287,6 +1288,7 @@ contains
     real(dp) :: Bmnrho_over_B0theta(1:mesh%nflux), rtemp(1:mesh%nflux)
     complex(dp) :: Bmnpsi_over_B0phi(1:mesh%nflux)
     type(vec_polmodes_t) :: Bmn
+    type(polmodes_t) :: jmnpar_over_Bmod_mhd
 
     kf_min = 0 ! max(1, mesh%res_ind(mesh%m_res_min) / 4)
     Bmnpsi_over_B0phi(:) = (0d0, 0d0)
@@ -1295,6 +1297,10 @@ contains
     Phi_aligned_mn(:, :) = (0d0, 0d0)
     call vec_polmodes_init(Bmn, conf%m_max, mesh%nflux)
     call RT0_poloidal_modes(Bn, Bmn)
+    if (conf%cross_fade) then
+      call polmodes_init(jmnpar_over_Bmod_mhd, conf%m_max, mesh%nflux)
+      call L1_poloidal_modes(jnpar_B0_mhd, jmnpar_over_Bmod_mhd)
+    end if
     do m = mesh%m_res_min, mesh%m_res_max
       m_res = -equil%cocos%sgn_q * m
       Bmnrho_over_B0theta(:) = Bmn%coeff_rad(m_res, :)%Re
@@ -1310,8 +1316,16 @@ contains
       Phi_aligned_mn(1:, m) = imun * Bmnpsi_over_B0phi * &
         fs%q(1:) * dPhi0_dpsi%y(1:) / (m_res + mesh%n * fs%q(1:))
       jmnpar_over_Bmod%coeff(m_res, :kf_min) = (0d0, 0d0)  ! suppress spurious current near axis
+      print *, "jmnpar_over_Bmod: ", LBOUND(jmnpar_over_Bmod%coeff, 2), UBOUND(jmnpar_over_Bmod%coeff, 2)
+      print *, "jmnpar_over_Bmod_mhd: ", LBOUND(jmnpar_over_Bmod_mhd%coeff, 2), UBOUND(jmnpar_over_Bmod_mhd%coeff, 2)
+      print *, "cross_fade: ", SIZE(cache%shielding(m)%cross_fade)
+      if (conf%cross_fade) then
+        jmnpar_over_Bmod%coeff(m_res, :) = cache%shielding(m)%cross_fade * &
+          (jmnpar_over_Bmod%coeff(m_res, :) - jmnpar_over_Bmod_mhd%coeff(m_res, :))
+      end if
     end do
     call vec_polmodes_deinit(Bmn)
+    call polmodes_deinit(jmnpar_over_Bmod_mhd)
   end subroutine compute_flr2_current
 
   subroutine compute_shielding_current(pn, jmnpar_over_Bmod)
