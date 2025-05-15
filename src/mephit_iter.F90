@@ -1278,6 +1278,13 @@ contains
     use mephit_pert, only: polmodes_t, polmodes_init, polmodes_deinit, L1_poloidal_modes, &
       vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, RT0_poloidal_modes
     use mephit_flr2, only: flr2_t, flr2_response_current
+    
+    !DEBUG
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    character(len = 256) :: datafile = 'debug_cross_fade.h5'
+    integer(HID_T) :: h5id_root
+    !END DEBUG 
+
     type(RT0_t), intent(in) :: Bn
     type(L1_t), intent(in) :: jnpar_B0_mhd
     type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
@@ -1301,6 +1308,22 @@ contains
       call polmodes_init(jmnpar_over_Bmod_mhd, conf%m_max, mesh%nflux)
       call L1_poloidal_modes(jnpar_B0_mhd, jmnpar_over_Bmod_mhd)
     end if
+
+
+    ! DEBUG
+    
+    call h5_open_rw(datafile, h5id_root)
+    call h5_create_parent_groups(h5id_root, 'cross_fade/')
+    call h5_add(h5id_root,  'cross_fade/jmnpar_over_Bmod', jmnpar_over_Bmod%coeff, &
+      lbound(jmnpar_over_Bmod%coeff), ubound(jmnpar_over_Bmod%coeff))
+    print *, 'after h5_add 1'
+    call h5_add(h5id_root,  'cross_fade/jmnpar_over_Bmod_mhd', jmnpar_over_Bmod_mhd%coeff, &
+      lbound(jmnpar_over_Bmod%coeff), ubound(jmnpar_over_Bmod%coeff))
+    print *, 'after h5_add 2'
+      !print *, 'jmnpar_over_Bmod_mhd', jmnpar_over_Bmod_mhd%coeff
+    call h5_close(h5id_root) 
+    ! END DEBUG
+   
     do m = mesh%m_res_min, mesh%m_res_max
       m_res = -equil%cocos%sgn_q * m
       Bmnrho_over_B0theta(:) = Bmn%coeff_rad(m_res, :)%Re
@@ -1316,14 +1339,15 @@ contains
       Phi_aligned_mn(1:, m) = imun * Bmnpsi_over_B0phi * &
         fs%q(1:) * dPhi0_dpsi%y(1:) / (m_res + mesh%n * fs%q(1:))
       jmnpar_over_Bmod%coeff(m_res, :kf_min) = (0d0, 0d0)  ! suppress spurious current near axis
-      print *, "jmnpar_over_Bmod: ", LBOUND(jmnpar_over_Bmod%coeff, 2), UBOUND(jmnpar_over_Bmod%coeff, 2)
-      print *, "jmnpar_over_Bmod_mhd: ", LBOUND(jmnpar_over_Bmod_mhd%coeff, 2), UBOUND(jmnpar_over_Bmod_mhd%coeff, 2)
-      print *, "cross_fade: ", SIZE(cache%shielding(m)%cross_fade)
+      
       if (conf%cross_fade) then
         jmnpar_over_Bmod%coeff(m_res, :) = cache%shielding(m)%cross_fade * &
           (jmnpar_over_Bmod%coeff(m_res, :) - jmnpar_over_Bmod_mhd%coeff(m_res, :))
+        print *, 'here'
       end if
     end do
+
+
     call vec_polmodes_deinit(Bmn)
     call polmodes_deinit(jmnpar_over_Bmod_mhd)
   end subroutine compute_flr2_current
