@@ -1031,7 +1031,7 @@ contains
     type(shielding_t), intent(inout) :: s
 
     call shielding_deinit(s)
-    allocate(s%cross_fade(mesh%nflux))
+    allocate(s%cross_fade(0:mesh%nflux))
   end subroutine shielding_init
 
   elemental subroutine shielding_deinit(s)
@@ -1510,7 +1510,7 @@ contains
       if (logger%debug) call logger%write_msg
       call resample1d(rsmall, psisurf(1:) * psipol_max, &
         mesh%rsmall_res(m) + [-0.5d0, 0.5d0] * mesh%delta_mn(m), delta, 3)
-      mesh%delta_psi_mn(m) = delta(2) - delta(1)
+      mesh%delta_psi_mn(m) = abs(delta(2) - delta(1))
       call resample1d(rsmall, rbeg, &
         mesh%rsmall_res(m) + [-0.5d0, 0.5d0] * mesh%delta_mn(m), delta, 3)
       mesh%delta_rad_mn(m) = delta(2) - delta(1)
@@ -2381,12 +2381,12 @@ contains
       abs(dq_dpsi / (fs_half%q(kf) * fs_half%dp_dpsi(kf))) / &
       (mesh%n * abs(fs%q(kf) - fs%q(kf - 1)))
     s%cross_fade(:) = 0d0
-    do kf = 1, mesh%nflux
+    do kf = 0, mesh%nflux
       normalized_distance = abs(fs%psi(kf) - mesh%psi_res(m)) / mesh%delta_psi_mn(m)
       if (normalized_distance <= 0d0) then
-        s%cross_fade(kf) = 0d0
-      elseif (normalized_distance >= 1d0) then
         s%cross_fade(kf) = 1d0
+      elseif (normalized_distance >= 1d0) then
+        s%cross_fade(kf) = 0d0
       else
         s%cross_fade(kf) = exp(-2d0 * pi / (1 - normalized_distance) * &
           exp(-sqrt(2d0) / normalized_distance))
