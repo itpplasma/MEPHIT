@@ -2421,7 +2421,7 @@ contains
     logical, intent(in) :: half_grid
     integer :: kf, kpol, k
     integer, dimension(mesh%nflux) :: npol, k_low
-    real(dp) :: dum, q
+    real(dp) :: dum, q, inset_R, inset_Z
     real(dp), allocatable, dimension(:) :: psi, rad
 
     if (half_grid) then
@@ -2446,6 +2446,15 @@ contains
       allocate(rad, source = fs%rad)
       npol = mesh%kp_max
       k_low = mesh%kp_low
+      ! special treatment for magnetic axis
+      sample(1)%psi = psi(0)
+      sample(1)%theta = 0d0      ! or NaN?
+      sample(1)%R = mesh%R_O
+      sample(1)%Z = mesh%Z_O
+      sample(1)%dR_dtheta = 0d0  ! or NaN?
+      sample(1)%dZ_dtheta = 0d0  ! or NaN?
+      sample(1)%sqrt_g = fs%q(0) / fs%F(0) * mesh%R_O * mesh%R_O
+      sample(1)%ktri = -1
     end if
     do kf = 1, mesh%nflux
       do kpol = 1, npol(kf)
@@ -2464,7 +2473,20 @@ contains
               q, dum, s%sqrt_g, dum, dum, &
               s%R, dum, s%dR_dtheta, s%Z, dum, s%dZ_dtheta)
           end if
-          s%ktri = point_location(s%R, s%Z)
+          ! hack: at the LCFS, get the closest inscribed triangle instead
+          if (kf == mesh%nflux .and. .not. half_grid) then
+            if (conf%kilca_scale_factor /= 0 .and. conf%debug_kilca_geom_theta) then
+              inset_R = mesh%R_O + 0.5d0 * (fs_half%rad(kf) + rad(kf)) * cos(s%theta)
+              inset_Z = mesh%Z_O + 0.5d0 * (fs_half%rad(kf) + rad(kf)) * sin(s%theta)
+            else
+              call magdata_in_symfluxcoord_ext(2, dum, &
+                0.5d0 * (fs_half%psi(kf) + s%psi) - fs%psi(0), s%theta, &
+                dum, dum, dum, dum, dum, inset_R, dum, dum, inset_Z, dum, dum)
+            end if
+            s%ktri = point_location(inset_R, inset_Z)
+          else
+            s%ktri = point_location(s%R, s%Z)
+          end if
           call field(s%R, 0d0, s%Z, s%B0_R, s%B0_phi, s%B0_Z, &
             dum, dum, dum, dum, dum, dum, dum, dum, dum)
           if (conf%kilca_scale_factor /= 0 .and. conf%debug_kilca_geom_theta) then

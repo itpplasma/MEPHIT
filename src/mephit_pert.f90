@@ -752,10 +752,8 @@ contains
     do kf = 1, mesh%nflux
       do kp = 1, mesh%kp_max(kf)
         kpoi = mesh%kp_low(kf) + kp
-        associate (s => cache%sample_polmodes(kpoi))
-          fourier_basis = [(exp(imun * m * s%theta), &
-            m = -polmodes%m_max, polmodes%m_max)]
-        end associate
+        fourier_basis = [(exp(imun * m * mesh%node_theta_flux(kpoi)), &
+          m = -polmodes%m_max, polmodes%m_max)]
         elem%DOF(kpoi) = sum(polmodes%coeff(:, kf) * fourier_basis)
       end do
     end do
