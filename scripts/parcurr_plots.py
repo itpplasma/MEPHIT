@@ -74,3 +74,90 @@ ax.set_ylabel(r'$\lvert I_{mn}^{\parallel} \rvert$ / \si{\ampere}')
 ax.legend(fontsize='small')
 fig.savefig(path.join(work_dir, 'Ipar.pdf'), backend='pgf', dpi=150)
 plt.show()
+
+#%%
+plt.plot(psi, rad, 'o', label='rad')
+plt.plot(psi, rsmall, 'o', label='rsmall')
+plt.legend()
+plt.show()
+
+# %%
+from scipy.interpolate import interp1d
+from scipy.optimize import curve_fit
+
+def psi_to_rad_interpolator(psi_vals, rad_vals, kind='linear'):
+    return interp1d(psi_vals, rad_vals, kind=kind)
+
+psi_to_rad = psi_to_rad_interpolator(psi/psi[-1], rad)
+
+m=-3
+k = abs(m) - m_res_min
+mask = (jmnpar_Bmod[1]['rho'][m] >= res[k] - 4.5 * delta_mn[k]) & \
+    (jmnpar_Bmod[1]['rho'][m] <= res[k] + 4.5 * delta_mn[k])
+x = psi_to_rad(jmnpar_Bmod[1]['rho'][m][mask])
+y = np.abs(jmnpar_Bmod[1]['var'][m][mask])
+x_cut = np.concatenate([x[:6], x[-6:]])
+y_cut = np.concatenate([y[:6], y[-6:]])
+
+x0 = psi_to_rad(res[k])
+def gauss(x, a, sigma):
+    return a * np.exp(-(x - x0)**2 / (2 * sigma**2))
+p0 = [y.max(), delta_mn[k]]
+popt, _ = curve_fit(gauss, x, y, p0=p0)
+print(f"m = {m}, a = {popt[0]}, sigma = {popt[1]}")
+popt_cut, _ = curve_fit(gauss, x_cut, y_cut, p0=p0)
+print(f"m = {m}, a_cut = {popt_cut[0]}, sigma_cut = {popt_cut[1]}")
+x_fit = np.linspace(x.min(), x.max(), 300)
+plt.plot(x_fit, gauss(x_fit, *popt), 'r--', label='Gauss fit')
+plt.plot(x_fit, gauss(x_fit, *popt_cut), 'b--', label='Gauss fit cut')
+plt.plot(x, y, label=f"{jmnpar_Bmod[1]['label']}")
+plt.scatter(x_cut, y_cut, label=f"{jmnpar_Bmod[1]['label']} data")
+plt.legend()
+plt.show()
+
+for m in mephit.post['m_res'][1:]:
+    if abs(m) > 12:
+        break
+    k = abs(m) - m_res_min
+    mask = (jmnpar_Bmod[1]['rho'][m] >= res[k] - 4.5 * delta_mn[k]) & \
+        (jmnpar_Bmod[1]['rho'][m] <= res[k] + 4.5 * delta_mn[k])
+    x = psi_to_rad(jmnpar_Bmod[1]['rho'][m][mask])
+    y = np.abs(jmnpar_Bmod[1]['var'][m][mask])
+
+    x0 = psi_to_rad(res[k])
+    def gauss(x, a, sigma):
+        return a * np.exp(-(x - x0)**2 / (2 * sigma**2))
+    p0 = [y.max(), delta_mn[k]]
+    popt, _ = curve_fit(gauss, x, y, p0=p0)
+    print(f"m = {m}, a = {popt[0]}, sigma = {popt[1]}")
+    x_fit = np.linspace(x.min(), x.max(), 300)
+    plt.plot(x_fit, gauss(x_fit, *popt), 'r--', label='Gauss fit')
+    plt.plot(x, y, label=f"{jmnpar_Bmod[1]['label']}")
+    plt.axvline(x0+3*popt[1], color='k', lw=0.5, ls='--')
+    plt.axvline(x0-3*popt[1], color='k', lw=0.5, ls='--')
+    plt.scatter(x, y, label=f"{jmnpar_Bmod[1]['label']} data")
+    plt.legend()
+    plt.show()
+
+m=-11
+k = abs(m) - m_res_min
+mask = (jmnpar_Bmod[1]['rho'][m] >= res[k] - 4.5 * delta_mn[k]) & \
+    (jmnpar_Bmod[1]['rho'][m] <= res[k] + 4.5 * delta_mn[k])
+x = psi_to_rad(jmnpar_Bmod[1]['rho'][m][mask])
+y = np.abs(jmnpar_Bmod[1]['var'][m][mask])
+x_cut = x[22:]
+y_cut = y[22:]
+
+x0 = psi_to_rad(res[k])
+def gauss(x, a, sigma):
+    return a * np.exp(-(x - x0)**2 / (2 * sigma**2))
+p0 = [y.max(), delta_mn[k]]
+popt, _ = curve_fit(gauss, x_cut, y_cut, p0=p0)
+print(f"m = {m}, a = {popt[0]}, sigma = {popt[1]}")
+x_fit = np.linspace(x.min(), x.max(), 300)
+plt.plot(x_fit, gauss(x_fit, *popt), 'r--', label='Gauss fit')
+plt.plot(x, y, label=f"{jmnpar_Bmod[1]['label']}")
+
+plt.scatter(x_cut, y_cut, label=f"{jmnpar_Bmod[1]['label']} data")
+plt.legend()
+plt.show()
