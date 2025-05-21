@@ -37,6 +37,9 @@ jmnpar_Bmod = [
     # mephit.get_polmodes('iMHD (undamped)', '/debug_KiLCA/jmnpar_Bmod_excl/coeff', conversion, L1=True),
 ]
 mephit_Ires = mephit.get_Ires()
+rsmall = mephit.data['/cache/fs_half/rsmall'][()]
+rad = mephit.data['/cache/fs_half/rad'][()]
+psi = mephit.data['/cache/fs_half/psi'][()]
 #gpec_Ires = gpec.get_Ires()
 
 # %%
