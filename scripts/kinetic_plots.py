@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.7
+#       jupytext_version: 1.17.0
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -29,6 +29,8 @@ h5py.get_config().complex_names = ('real', 'imag')
 
 # %%
 work_dir = path.join(environ['MEPHIT_RUN_DIR'], '33353_2900_EQH')
+
+# %%
 data = {}
 with h5py.File(path.join(work_dir, 'mephit.h5'), 'r') as f:
     data['Delta_E_r'] = f['/resonance_sweep/Delta_E_r'][()]
@@ -42,16 +44,22 @@ with h5py.File(path.join(work_dir, 'mephit.h5'), 'r') as f:
                                 f['/equil/profiles/temp_e/y'][()][::-1])
     temp_i_interp = CubicSpline(f['/equil/profiles/temp_i/x'][()][::-1],
                                 f['/equil/profiles/temp_i/y'][()][::-1])
+    nu_e_interp = CubicSpline(f['/equil/profiles/nu_e/x'][()][::-1],
+                              f['/equil/profiles/nu_e/y'][()][::-1])
     data['B0'] = np.abs(f['/equil/bcentr'][()])
+    data['R0'] = f['/mesh/R_O'][()]
     data['rsmall'] = f['/cache/fs/rsmall'][()]
     data['psi'] = f['/cache/fs/psi'][()]
     data['psi_res'] = f['/mesh/psi_res'][()]
+    data['n'] = f['/mesh/n'][()]
     data['m_res_min'] = f['/mesh/m_res_min'][()]
+    data['m_res_max'] = f['/mesh/m_res_max'][()]
     sgn_m_res = int(np.sign(-f['/cache/fs/q'][-1]))  # consolidate with mephit_plot.py
-    data['delta_mn'] = f['/mesh/delta_psi_mn'][()]  / (data['psi'][-1] - data['psi'][0])
+    data['Delta_res'] = f['/mesh/Delta_psi_res'][()]  / (data['psi'][-1] - data['psi'][0])
 with h5py.File(path.join(work_dir, 'mephit_protium.h5'), 'r') as f:
     data['Imn_res_H'] = f['/resonance_sweep/Imn_res'][()] * 10.0 / clight
 
+# %%
 data['E_r_res'] = E_r_interp(data['psi_res'])
 data['v_ExB'] = -1.0e2 * clight / data['B0'] * (data['E_r_res'] + data['Delta_E_r'][:, np.newaxis])
 data['v_ExB_orig'] = -1.0e2 * clight / data['B0'] * data['E_r_res']
@@ -62,14 +70,26 @@ data['V_i_diamag'] = 1.0e1 / (elementary_charge * data['B0'] * dens_interp(data[
     (dens_interp(data['psi_res']) * temp_i_interp(data['psi_res'], nu=1) +
      dens_interp(data['psi_res'], nu=1) * temp_i_interp(data['psi_res']))
 
+# %%
 m_min = 6
 m_max = 7
 
+
+# %%
 def normalize_psi(psi):
     return (psi - data['psi'][0]) / (data['psi'][-1] - data['psi'][0])
 
 psi_norm_to_rsmall = CubicSpline(normalize_psi(data['psi']), data['rsmall'])
 rsmall_to_psi_norm = CubicSpline(data['rsmall'], normalize_psi(data['psi']))
+
+# %%
+rsmall_res = psi_norm_to_rsmall(normalize_psi(data['psi_res']))
+q = np.arange(data['m_res_min'], data['m_res_max'] + 1) / data['n']
+k_perp = data['n'] * q / rsmall_res
+v_Te = 4.19e7 * np.sqrt(np.abs(temp_e_interp(data['psi_res'])))
+nu_e = nu_e_interp(data['psi_res'])
+delta_mn = q * data['R0'] * data['v_ExB_orig'] / v_Te * max(1,
+    np.sqrt(nu_e / (k_perp * data['v_ExB_orig'])))
 
 # %%
 for k in range(data['E_r_res'].size):
@@ -240,18 +260,18 @@ for k, m in enumerate([6, 7]):
     axs[k].axhline(0.0, color='k', lw=0.5)
     axs[k].axvline(res[m - data['m_res_min']], color='k', lw=0.5, ls=':')
     axs[k].axvline(res[m - data['m_res_min']] - 0.5 *
-                   data['delta_mn'][m - data['m_res_min']],
+                   data['Delta_res'][m - data['m_res_min']],
                    color='k', lw=0.5, ls='--')
     axs[k].axvline(res[m - data['m_res_min']] + 0.5 *
-                   data['delta_mn'][m - data['m_res_min']],
+                   data['Delta_res'][m - data['m_res_min']],
                    color='k', lw=0.5, ls='--')
     for j, shift in enumerate(['eresoff', 'eres']):
         for i, isotope in enumerate(['D', 'H']):
             sim = f'{isotope}_{shift}_{m}'
             mask = (Bmn[sim]['rho'][m * sgn_m_res] >= res[m - data['m_res_min']] -
-                    15 * data['delta_mn'][m - data['m_res_min']]) & \
+                    15 * data['Delta_res'][m - data['m_res_min']]) & \
                    (Bmn[sim]['rho'][m * sgn_m_res] <= res[m - data['m_res_min']] +
-                    15 * data['delta_mn'][m - data['m_res_min']])
+                    15 * data['Delta_res'][m - data['m_res_min']])
             axs[k].plot(Bmn[sim]['rho'][m * sgn_m_res][mask],
                         np.abs(Bmn[sim]['var'][m * sgn_m_res][mask]),
                         color=('tab:orange' if i == 1 else 'k'),
