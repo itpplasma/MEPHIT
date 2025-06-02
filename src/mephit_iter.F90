@@ -117,7 +117,7 @@ contains
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, &
       datafile, basename_suffix, decorate_filename
     use mephit_mesh, only: equil, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
-      resample_profiles, write_profiles_hdf5, read_profiles_hdf5
+      read_profiles, compute_auxiliary_profiles, resample_profiles, write_profiles_hdf5, read_profiles_hdf5
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
     use mephit_flr2, only: flr2_t, flr2_write, flr2_read, flr2_deinit
     integer(c_int), intent(in), value :: runmode
@@ -165,6 +165,8 @@ contains
       call save_symfluxcoord(datafile, 'symfluxcoord')
       call mesh_write(mesh, datafile, 'mesh')
       call write_cache
+      call read_profiles
+      call compute_auxiliary_profiles
       call resample_profiles
       call write_profiles_hdf5(datafile, 'equil/profiles')
       if (conf%resonance_sweep > 0) then
@@ -1258,7 +1260,7 @@ contains
   subroutine compute_flr2_coeff(flr2)
     use mephit_conf, only: conf
     use mephit_util, only: ev2erg
-    use mephit_mesh, only: equil, mesh, fs, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
+    use mephit_mesh, only: equil, mesh, fs, dens_e, temp_e, temp_i, Phi0, nu_i, nu_e
     use mephit_flr2, only: flr2_t, flr2_init, flr2_coeff
     type(flr2_t), intent(inout) :: flr2
     integer :: m_min, m_max

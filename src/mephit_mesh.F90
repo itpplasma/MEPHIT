@@ -1202,6 +1202,7 @@ contains
     call compute_sample_polmodes(cache%sample_polmodes_half, .true.)
     call compute_sample_polmodes(cache%sample_polmodes, .false.)
     call compute_sample_jnperp(cache%sample_jnperp)
+    call compute_resonant_layer_widths
     do m = mesh%m_res_min, mesh%m_res_max
       call compute_shielding_auxiliaries(cache%shielding(m), m)
       call compute_sample_Ires(cache%shielding(m)%sample_Ires, &
@@ -1827,10 +1828,7 @@ contains
     rho_norm_eqd(:) = rbeg / rad_max
 
     call compute_resonance_positions(psi_fine, qsaf, rho_norm_eqd)
-    call read_profiles
-    call compute_auxiliary_profiles
     call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
-    call compute_resonant_layer_widths
     ! note discrepancy with thesis, where we have (2 L - 1) fine separations,
     ! while here we have (2 * add_fine + 1) * fine_sep due to refine_unit_partition
     call refine_resonant_surfaces(conf%max_Delta_rad / rad_max, conf_arr%Delta_rad_res / rad_max / &
