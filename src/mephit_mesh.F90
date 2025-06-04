@@ -1722,22 +1722,27 @@ contains
     case (refinement_scheme_geometric)
       allocate(mask(mesh%m_res_min:mesh%m_res_max))
       mask(:) = 1d0 < refinement .and. 0d0 < fine_sep .and. fine_sep < coarse_sep
-      if (conf%kilca_scale_factor /= 0) then
-        diverging_q = .false.
+      if (conf%diverging_q) then
+        if (conf%kilca_scale_factor /= 0) then
+          diverging_q = .false.
+        else
+          ! heuristic: if distance between resonances is too low,
+          ! take inner resonance as last to be refined; outside, only the fine separation is used
+          m_dense = mesh%m_res_min + 1
+          do while (m_dense <= mesh%m_res_max)
+            if (mesh%rad_norm_res(m_dense) - mesh%rad_norm_res(m_dense - 1) < &
+              sum((0.5d0 + add_fine(m_dense - 1:m_dense) + refinement(m_dense - 1:m_dense)) * &
+              fine_sep(m_dense - 1:m_dense))) then
+              exit
+            end if
+            m_dense = m_dense + 1
+          end do
+          diverging_q = m_dense > mesh%m_res_max
+          print *, diverging_q
+          mask(m_dense:mesh%m_res_max) = .false.
+        end if
       else
-        ! heuristic: if distance between resonances is too low,
-        ! take inner resonance as last to be refined; outside, only the fine separation is used
-        m_dense = mesh%m_res_min + 1
-        do while (m_dense <= mesh%m_res_max)
-          if (mesh%rad_norm_res(m_dense) - mesh%rad_norm_res(m_dense - 1) < &
-            sum((0.5d0 + add_fine(m_dense - 1:m_dense) + refinement(m_dense - 1:m_dense)) * &
-            fine_sep(m_dense - 1:m_dense))) then
-            exit
-          end if
-          m_dense = m_dense + 1
-        end do
-        diverging_q = m_dense > mesh%m_res_max
-        mask(m_dense:mesh%m_res_max) = .false.
+        diverging_q = .false.
       end if
       allocate(ref_ind(count(mask)))
       call refine_unit_partition(count(mask), coarse_sep, pack(fine_sep, mask), pack(add_fine, mask), &
@@ -2332,7 +2337,7 @@ contains
       (mesh%n * abs(fs%q(kf) - fs%q(kf - 1)))
     s%cross_fade(:) = 0d0
     do kf = 0, mesh%nflux
-      normalized_distance = abs(fs%psi(kf) - mesh%psi_res(m)) / mesh%Delta_psi_res(m)
+      normalized_distance = abs(fs%psi(kf) - mesh%psi_res(m)) / mesh%Delta_psi_res(m) * 0.5d0
       if (normalized_distance <= 0d0) then
         s%cross_fade(kf) = 1d0
       elseif (normalized_distance >= 1d0) then

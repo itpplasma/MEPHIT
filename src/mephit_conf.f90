@@ -186,6 +186,9 @@ module mephit_conf
     !> Defaults to 5.0e+13 cm^-3.
     real(dp) :: dens_max = 5d13
 
+    !> Switch to use fine mesh outside if resonance are too close
+    logical :: diverging_q = .false.
+
     !> Enable damping of the Pfirsch-Schlueter current. Defaults to true.
     logical :: damp = .true.
 
@@ -340,6 +343,8 @@ contains
       comment = 'maximum temperature', unit = 'eV')
     call h5_add(h5id_root, grp // '/dens_max', config%dens_max, &
       comment = 'maximum density', unit = 'cm^-3')
+    call h5_add(h5id_root, grp // '/diverging_q', config%diverging_q, &
+      comment = 'use fine mesh if resonances are too close outside the last refined one')
     call h5_add(h5id_root, grp // '/damp', config%damp, &
       comment = 'enable damping of Pfirsch-Schlueter current')
     call h5_add(h5id_root, grp // '/cross_fade', config%cross_fade, &
