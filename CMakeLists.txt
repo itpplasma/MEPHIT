@@ -200,8 +200,10 @@ endif()
 ### Define executables
 add_executable(mephit_run.x src/mephit_run.c)
 add_executable(mephit_test.x src/mephit_test.f90)
+add_executable(mephit_post.x src/mephit_post.f90)
 target_link_libraries(mephit_run.x mephit)
 target_link_libraries(mephit_test.x mephit)
+target_link_libraries(mephit_post.x mephit)
 
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)

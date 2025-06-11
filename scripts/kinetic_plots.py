@@ -5,7 +5,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.17.0
+#       jupytext_version: 1.16.7
 #   kernelspec:
 #     display_name: Python 3 (ipykernel)
 #     language: python
@@ -14,7 +14,10 @@
 
 # %%
 # %matplotlib inline
-from os import environ, getcwd, path
+from os import environ, getcwd, path, mkdir, remove
+from shutil import copy2
+from subprocess import Popen, PIPE, STDOUT
+from datetime import datetime
 from matplotlib import rcParams, ticker
 import matplotlib.pyplot as plt
 import numpy as np
@@ -178,6 +181,29 @@ for m in range(m_min, m_max + 1):
                         transform=axs[m - m_min].get_xaxis_transform())
 fig.savefig(path.join(work_dir, 'sweep_resonance.pdf'), backend='pgf')
 plt.show()
+
+# %%
+# post-process in Fortran before loading HDF5 files below
+# see last cell for data returned by Sergei
+command = path.join(environ['MEPHIT_DIR'], 'bin', 'mephit_post.x')
+out_dir = path.join(work_dir, 'KiLCA-MEPHIT_' + datetime.today().strftime('%Y-%m-%d'))
+if not path.exists(out_dir):
+    mkdir(out_dir)
+for isotope in ['D', 'H']:
+    for shift in ['eresoff', 'eres']:
+        for m in ['6', '7']:
+            sim_in = f'{isotope}_{shift}_{m}'
+            with Popen([command, path.join(work_dir, f'mephit_{sim_in}.h5'), m],
+                       cwd=work_dir, stdout=PIPE, stderr=STDOUT, text=True) as proc:
+                for line in proc.stdout:
+                    print(line, end='')
+            sim_out = isotope + ('_on' if shift == 'eres' else '_off') + '_el_fl_res_m' + m
+            if not path.exists(path.join(out_dir, sim_out)):
+                mkdir(path.join(out_dir, sim_out))
+            for fname in ['response_current.dat', 'bpsi_over_bphi.dat',
+                          'Phi_m.dat', 'Phi_m_aligned.dat']:
+                copy2(path.join(work_dir, fname), path.join(out_dir, sim_out, fname))
+                remove(path.join(work_dir, fname))
 
 # %%
 mephit = {}
