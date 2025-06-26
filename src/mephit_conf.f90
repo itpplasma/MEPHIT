@@ -237,6 +237,10 @@ module mephit_conf
     !> Width of refined flux surfaces around resonances in cm. Defaults to 0.
     real(dp), dimension(:), allocatable :: Delta_rad_res
 
+    !> Width of integration for parallel current calculation around resonances in cm. Defaults to 0.
+
+    real(dp), dimension(:), allocatable :: Delta_rad_res_curr
+
     !> Number of additional fine flux surfaces. Defaults to 0.
     integer, dimension(:), allocatable :: add_fine
 
@@ -374,12 +378,13 @@ contains
     integer, intent(in) :: m_min, m_max
     integer :: fid
     integer, dimension(m_min:m_max) :: add_fine
-    real(dp), dimension(m_min:m_max) :: Delta_rad_res, refinement, sheet_current_factor
-    namelist /arrays/ Delta_rad_res, add_fine, refinement, sheet_current_factor
+    real(dp), dimension(m_min:m_max) :: Delta_rad_res, Delta_rad_res_curr, refinement, sheet_current_factor
+    namelist /arrays/ Delta_rad_res, Delta_rad_res_curr, add_fine, refinement, sheet_current_factor
 
     config%m_min = m_min
     config%m_max = m_max
     Delta_rad_res = 0d0
+    Delta_rad_res_curr = 0d0
     add_fine = 0
     refinement = 0d0
     sheet_current_factor = 1d0
@@ -389,6 +394,9 @@ contains
     if (allocated(config%Delta_rad_res)) deallocate(config%Delta_rad_res)
     allocate(config%Delta_rad_res(m_min:m_max))
     config%Delta_rad_res(:) = Delta_rad_res
+    if (allocated(config%Delta_rad_res_curr)) deallocate(config%Delta_rad_res_curr)
+    allocate(config%Delta_rad_res_curr(m_min:m_max))
+    config%Delta_rad_res_curr(:) = Delta_rad_res_curr
     if (allocated(config%add_fine)) deallocate(config%add_fine)
     allocate(config%add_fine(m_min:m_max))
     config%add_fine(:) = add_fine
@@ -415,6 +423,9 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res', config%Delta_rad_res, &
       lbound(config%Delta_rad_res), ubound(config%Delta_rad_res), &
       comment = 'width of refined flux surfaces around resonances', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res_curr', config%Delta_rad_res_curr, &
+      lbound(config%Delta_rad_res_curr), ubound(config%Delta_rad_res_curr), &
+      comment = 'width of parcurr integration around resonances', unit = 'cm')  
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/add_fine', config%add_fine, &
       lbound(config%add_fine), ubound(config%add_fine), &
       comment = 'number of additional fine flux surfaces')
@@ -438,10 +449,12 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_min', config%m_min)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_max', config%m_max)
     allocate(config%Delta_rad_res(config%m_min:config%m_max))
+    allocate(config%Delta_rad_res_curr(config%m_min:config%m_max))
     allocate(config%add_fine(config%m_min:config%m_max))
     allocate(config%refinement(config%m_min:config%m_max))
     allocate(config%sheet_current_factor(config%m_min:config%m_max))
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res', config%Delta_rad_res)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res_curr', config%Delta_rad_res_curr)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/add_fine', config%add_fine)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', config%refinement)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor)
@@ -454,6 +467,7 @@ contains
     config%m_min = 0
     config%m_max = 0
     if (allocated(config%Delta_rad_res)) deallocate(config%Delta_rad_res)
+    if (allocated(config%Delta_rad_res_curr)) deallocate(config%Delta_rad_res_curr)
     if (allocated(config%add_fine)) deallocate(config%add_fine)
     if (allocated(config%refinement)) deallocate(config%refinement)
     if (allocated(config%sheet_current_factor)) deallocate(config%sheet_current_factor)

@@ -1206,7 +1206,7 @@ contains
     do m = mesh%m_res_min, mesh%m_res_max
       call compute_shielding_auxiliaries(cache%shielding(m), m)
       call compute_sample_Ires(cache%shielding(m)%sample_Ires, &
-        cache%shielding(m)%GL_weights, 2 * conf_arr%add_fine(m) + 1, m)
+        cache%shielding(m)%GL_weights, 4, m)
     end do
     call compute_kilca_auxiliaries
     call compute_gpec_jacfac
@@ -2498,7 +2498,7 @@ contains
   subroutine compute_sample_Ires(sample_Ires, GL_weights, GL_order, m)
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
     use mephit_conf, only: conf_arr
-    use mephit_util, only: pi, binsearch, interp_psi_pol
+    use mephit_util, only: pi, binsearch, interp_psi_pol, interp1d
     use field_sub, only : field
     type(coord_cache_t), dimension(:, :), intent(inout), allocatable :: sample_Ires
     real(dp), dimension(:), intent(inout), allocatable :: GL_weights
@@ -2507,13 +2507,26 @@ contains
     integer :: nrad, krad, npol, kpol, kf_min, kf_max, kf, kGL
     real(dp) :: weights(GL_order), points(GL_order), q, dum
     real(dp), allocatable :: theta(:), psi(:)
+    real(dp) :: rad_res, rad_min, rad_max, psi_min, psi_max
 
     npol = mesh%kp_max(mesh%res_ind(m))
     allocate(theta(npol))
     theta(:) = 2d0 * pi * [(dble(kpol - 1), kpol = 1, npol)] / dble(npol)
     call gauss_legendre_unit_interval(GL_order, points, weights)
-    kf_min = max(mesh%res_ind(m) - conf_arr%add_fine(m) - 1, 1)
-    kf_max = min(mesh%res_ind(m) + conf_arr%add_fine(m), mesh%nflux)
+    !kf_min = max(mesh%res_ind(m) - conf_arr%add_fine(m) - 1, 1)
+    !kf_max = min(mesh%res_ind(m) + conf_arr%add_fine(m), mesh%nflux)
+    rad_res = fs%rad(mesh%res_ind(m))
+    rad_min = rad_res - 0.5d0 * conf_arr%Delta_rad_res_curr(m)
+    rad_max = rad_res + 0.5d0 * conf_arr%Delta_rad_res_curr(m)
+
+    psi_min = interp1d(fs%rad, fs%psi, rad_min, 3)
+    psi_max = interp1d(fs%rad, fs%psi, rad_max, 3)
+
+    call binsearch(fs%psi, 0, psi_min, kf_min)
+    call binsearch(fs%psi, 0, psi_max, kf_max)
+    kf_min = max(kf_min, 1)
+    kf_max = min(kf_max, mesh%nflux)
+
     nrad = (kf_max - kf_min + 1) * GL_order
     allocate(psi(nrad))
     if (allocated(GL_weights)) deallocate(GL_weights)
