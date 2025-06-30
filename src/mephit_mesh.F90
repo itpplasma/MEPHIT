@@ -163,6 +163,9 @@ module mephit_mesh
     !> Resonant layer width in units of psi, interpolated from conf_arr%Delta_rad_res.
     real(dp), allocatable :: Delta_psi_res(:)
 
+    !> Resonant layer width in units of psi, interpolated from conf_arr%Delta_rad_res.
+    real(dp), allocatable :: Delta_psi_res_curr(:)
+
     !> Damping factor for MDE solutions when "KiLCA" currents are used.
     real(dp), allocatable :: damping(:)
 
@@ -1467,6 +1470,15 @@ contains
         [-0.5d0, 0.5d0] * conf_arr%Delta_rad_res(m), delta, 3)
       mesh%Delta_psi_res(m) = abs(delta(2) - delta(1))
     end do
+
+    if (allocated(mesh%Delta_psi_res_curr)) deallocate(mesh%Delta_psi_res_curr)
+    allocate(mesh%Delta_psi_res_curr(mesh%m_res_min:mesh%m_res_max))
+    do m = mesh%m_res_min, mesh%m_res_max
+      call resample1d(rbeg, psisurf(1:) * psipol_max, &
+        mesh%rad_norm_res(m) * fs%rad(mesh%nflux) + &
+        [-0.5d0, 0.5d0] * conf_arr%Delta_rad_res_curr(m), delta, 3)
+      mesh%Delta_psi_res_curr(m) = abs(delta(2) - delta(1))
+    end do
   end subroutine compute_resonant_layer_widths
 
   subroutine refine_unit_partition_gaussian(nref, coarse_sep, refinement, resonances, widths, nflux, partition)
@@ -2324,6 +2336,7 @@ contains
   end subroutine check_mesh
 
   subroutine compute_shielding_auxiliaries(s, m)
+    use mephit_conf, only: conf
     use mephit_util, only: pi, clight, interp1d
     type(shielding_t), intent(inout) :: s
     integer, intent(in) :: m
@@ -2337,14 +2350,24 @@ contains
       (mesh%n * abs(fs%q(kf) - fs%q(kf - 1)))
     s%cross_fade(:) = 0d0
     do kf = 0, mesh%nflux
-      normalized_distance = abs(fs%psi(kf) - mesh%psi_res(m)) / mesh%Delta_psi_res(m) * 0.5d0
-      if (normalized_distance <= 0d0) then
-        s%cross_fade(kf) = 1d0
-      elseif (normalized_distance >= 1d0) then
+      normalized_distance = abs(fs%psi(kf) - mesh%psi_res(m)) / mesh%Delta_psi_res_curr(m) * 0.5d0
+      if (conf%cross_fade == 0) then
         s%cross_fade(kf) = 0d0
-      else
-        s%cross_fade(kf) = exp(-2d0 * pi / (1 - normalized_distance) * &
-          exp(-sqrt(2d0) / normalized_distance))
+      elseif (conf%cross_fade == 1) then
+        if (normalized_distance <= 1d0) then
+          s%cross_fade(kf) = 1d0
+        elseif (normalized_distance >= 1d0) then
+          s%cross_fade(kf) = 0d0
+        end if
+      elseif (conf%cross_fade == 2) then
+        if (normalized_distance <= 0d0) then
+          s%cross_fade(kf) = 1d0
+        elseif (normalized_distance >= 1d0) then
+          s%cross_fade(kf) = 0d0
+        else
+          s%cross_fade(kf) = exp(-2d0 * pi / (1 - normalized_distance) * &
+            exp(-sqrt(2d0) / normalized_distance))
+        end if
       end if
     end do
   end subroutine compute_shielding_auxiliaries
@@ -2583,8 +2606,8 @@ contains
     allocate(mesh%damping(0:mesh%nflux))
     mesh%damping(:) = 0d0
     do m = mesh%m_res_min, mesh%m_res_max
-      mesh%damping(:) = mesh%damping + q_prime / fs%q * mesh%Delta_psi_res(m) * &
-        exp(-(fs%psi - mesh%psi_res(m)) ** 2 / mesh%Delta_psi_res(m) ** 2) * mesh%n
+      mesh%damping(:) = mesh%damping + q_prime / fs%q * mesh%Delta_psi_res_curr(m) * &
+        exp(-(fs%psi - mesh%psi_res(m)) ** 2 / mesh%Delta_psi_res_curr(m) ** 2) * mesh%n
     end do
   end subroutine compute_kilca_auxiliaries
 
