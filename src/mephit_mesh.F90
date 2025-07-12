@@ -1209,7 +1209,7 @@ contains
     do m = mesh%m_res_min, mesh%m_res_max
       call compute_shielding_auxiliaries(cache%shielding(m), m)
       call compute_sample_Ires(cache%shielding(m)%sample_Ires, &
-        cache%shielding(m)%GL_weights, 4, m)
+        cache%shielding(m)%GL_weights, 2 * conf_arr%add_fine(m) + 1, m)
     end do
     call compute_kilca_auxiliaries
     call compute_gpec_jacfac
