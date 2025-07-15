@@ -2,6 +2,7 @@ module triangulation_fortran
     use iso_fortran_env, only: dp => real64
     use delaunay_types
     use bowyer_watson
+    use constrained_delaunay
     implicit none
     
     private
@@ -34,8 +35,8 @@ subroutine triangulate_fortran(points, segments, result, status)
     
     if (present(status)) status = 0
     
-    ! Perform Delaunay triangulation
-    call delaunay_triangulate(points, mesh)
+    ! Perform constrained Delaunay triangulation
+    call constrained_delaunay_triangulate(points, segments, mesh)
     
     ! Convert mesh to result format
     call mesh_to_result(mesh, segments, result)
@@ -141,6 +142,9 @@ subroutine mesh_to_result(mesh, input_segments, result)
         if (mesh%triangles(i)%valid) valid_triangles = valid_triangles + 1
     end do
     
+    ! Debug output
+    !write(*,'(A,I0,A,I0,A,I0)') 'mesh_to_result: mesh has ', mesh%npoints, ' points (', valid_points, ' valid), ', mesh%ntriangles, ' triangles (', valid_triangles, ' valid)'
+    
     ! Allocate result arrays
     call allocate_result(result, valid_points, valid_triangles, size(input_segments, 2))
     
@@ -160,9 +164,11 @@ subroutine mesh_to_result(mesh, input_segments, result)
         if (mesh%triangles(i)%valid) then
             valid_triangles = valid_triangles + 1
             ! Map original vertex indices to new indices
+            !write(*,'(A,I0,A,3I0)') 'Original triangle ', i, ' vertices: ', mesh%triangles(i)%vertices
             result%triangles(1, valid_triangles) = remap_vertex_index(mesh, mesh%triangles(i)%vertices(1))
             result%triangles(2, valid_triangles) = remap_vertex_index(mesh, mesh%triangles(i)%vertices(2))
             result%triangles(3, valid_triangles) = remap_vertex_index(mesh, mesh%triangles(i)%vertices(3))
+            !write(*,'(A,I0,A,3I0)') 'Remapped triangle ', valid_triangles, ' vertices: ', result%triangles(:, valid_triangles)
         end if
     end do
     
@@ -177,6 +183,20 @@ integer function remap_vertex_index(mesh, original_idx)
     integer, intent(in) :: original_idx
     
     integer :: i, valid_count
+    
+    ! Check for invalid input
+    if (original_idx < 1 .or. original_idx > mesh%npoints) then
+        !write(*,'(A,I0,A,I0)') 'ERROR: Invalid original_idx: ', original_idx, ' (max: ', mesh%npoints, ')'
+        remap_vertex_index = -1
+        return
+    end if
+    
+    ! Check if the original vertex is valid
+    if (.not. mesh%points(original_idx)%valid) then
+        !write(*,'(A,I0)') 'ERROR: Trying to remap invalid vertex: ', original_idx
+        remap_vertex_index = -1
+        return
+    end if
     
     valid_count = 0
     do i = 1, original_idx
