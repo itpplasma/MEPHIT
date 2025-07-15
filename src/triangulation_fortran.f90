@@ -139,11 +139,18 @@ subroutine mesh_to_result(mesh, input_segments, result)
     
     valid_triangles = 0
     do i = 1, mesh%ntriangles
-        if (mesh%triangles(i)%valid) valid_triangles = valid_triangles + 1
+        if (mesh%triangles(i)%valid) then
+            ! Check if all vertices are valid before counting triangle
+            if (all(mesh%triangles(i)%vertices(1:3) >= 1 .and. mesh%triangles(i)%vertices(1:3) <= mesh%npoints)) then
+                if (all(mesh%points(mesh%triangles(i)%vertices(1:3))%valid)) then
+                    valid_triangles = valid_triangles + 1
+                end if
+            end if
+        end if
     end do
     
     ! Debug output
-    !write(*,'(A,I0,A,I0,A,I0)') 'mesh_to_result: mesh has ', mesh%npoints, ' points (', valid_points, ' valid), ', mesh%ntriangles, ' triangles (', valid_triangles, ' valid)'
+    !write(*,'(A,I0,A,I0,A,I0,A,I0)') 'mesh_to_result: mesh has ', mesh%npoints, ' points (', valid_points, ' valid), ', mesh%ntriangles, ' triangles (', valid_triangles, ' valid)'
     
     ! Allocate result arrays
     call allocate_result(result, valid_points, valid_triangles, size(input_segments, 2))
@@ -162,18 +169,31 @@ subroutine mesh_to_result(mesh, input_segments, result)
     valid_triangles = 0
     do i = 1, mesh%ntriangles
         if (mesh%triangles(i)%valid) then
-            valid_triangles = valid_triangles + 1
-            ! Map original vertex indices to new indices
-            !write(*,'(A,I0,A,3I0)') 'Original triangle ', i, ' vertices: ', mesh%triangles(i)%vertices
-            result%triangles(1, valid_triangles) = remap_vertex_index(mesh, mesh%triangles(i)%vertices(1))
-            result%triangles(2, valid_triangles) = remap_vertex_index(mesh, mesh%triangles(i)%vertices(2))
-            result%triangles(3, valid_triangles) = remap_vertex_index(mesh, mesh%triangles(i)%vertices(3))
-            !write(*,'(A,I0,A,3I0)') 'Remapped triangle ', valid_triangles, ' vertices: ', result%triangles(:, valid_triangles)
+            ! Check if all vertices are valid before adding triangle
+            if (all(mesh%triangles(i)%vertices(1:3) >= 1 .and. mesh%triangles(i)%vertices(1:3) <= mesh%npoints)) then
+                if (all(mesh%points(mesh%triangles(i)%vertices(1:3))%valid)) then
+                    valid_triangles = valid_triangles + 1
+                    ! Map original vertex indices to new indices
+                    !write(*,'(A,I0,A,3I0)') 'Original triangle ', i, ' vertices: ', mesh%triangles(i)%vertices
+                    result%triangles(1, valid_triangles) = remap_vertex_index(mesh, mesh%triangles(i)%vertices(1))
+                    result%triangles(2, valid_triangles) = remap_vertex_index(mesh, mesh%triangles(i)%vertices(2))
+                    result%triangles(3, valid_triangles) = remap_vertex_index(mesh, mesh%triangles(i)%vertices(3))
+                    !write(*,'(A,I0,A,3I0)') 'Remapped triangle ', valid_triangles, ' vertices: ', result%triangles(:, valid_triangles)
+                else
+                    !write(*,'(A,I0,A,3I0)') 'Skipping triangle ', i, ' with invalid vertices: ', mesh%triangles(i)%vertices
+                end if
+            else
+                !write(*,'(A,I0,A,3I0)') 'Skipping triangle ', i, ' with out-of-bounds vertices: ', mesh%triangles(i)%vertices
+            end if
         end if
     end do
     
     ! Copy input segments
     result%segments = input_segments
+    
+    ! Update actual counts to match what we copied
+    result%npoints = valid_points
+    result%ntriangles = valid_triangles
     
 end subroutine mesh_to_result
 
