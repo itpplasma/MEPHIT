@@ -22,7 +22,8 @@ module mephit_conf
     q_prof_flux, q_prof_rot, q_prof_geqdsk, &
     vac_src_nemov, vac_src_gpec, vac_src_fourier, &
     currn_model_mhd, currn_model_kilca, &
-    refinement_scheme_geometric, refinement_scheme_gaussian
+    refinement_scheme_geometric, refinement_scheme_gaussian, &
+    transition_func_none, transition_func_heaviside, transition_func_smooth
 
   character(len = *), parameter :: cmplx_fmt = 'es24.16e3, 1x, sp, es24.16e3, s, " i"'
   character(len = *), parameter :: nl_fmt = '"' // new_line('A') // '"'
@@ -56,6 +57,10 @@ module mephit_conf
 
   integer, parameter :: refinement_scheme_geometric = 0  !< radial refinement via geometric series
   integer, parameter :: refinement_scheme_gaussian = 1   !< radial refinement via sum of Gaussians
+
+  integer, parameter :: transition_func_none = 0       !< just add current contributions
+  integer, parameter :: transition_func_heaviside = 1  !< sharp transition between current contributions
+  integer, parameter :: transition_func_smooth = 2     !< smooth transition between current contributions
 
   type :: config_t
 
@@ -192,8 +197,8 @@ module mephit_conf
     !> Enable damping of the Pfirsch-Schlueter current. Defaults to true.
     logical :: damp = .true.
 
-    !> Enable cross fade between current components with transition function. Defaults to 0=no cross fade, 1=Heaviside, 2=smooth transition.
-    integer :: cross_fade = 0
+    !> Transition function between current contributions. Defaults to #transition_func_none.
+    integer :: transition_func = transition_func_none
 
     !> Number of points in sweep over electrical resonance. Defaults to 0 (sweep not performed).
     integer :: resonance_sweep = 0
@@ -238,7 +243,6 @@ module mephit_conf
     real(dp), dimension(:), allocatable :: Delta_rad_res
 
     !> Width of integration for parallel current calculation around resonances in cm. Defaults to 0.
-
     real(dp), dimension(:), allocatable :: Delta_rad_res_curr
 
     !> Number of additional fine flux surfaces. Defaults to 0.
@@ -351,9 +355,8 @@ contains
       comment = 'use fine mesh if resonances are too close outside the last refined one')
     call h5_add(h5id_root, grp // '/damp', config%damp, &
       comment = 'enable damping of Pfirsch-Schlueter current')
-    call h5_add(h5id_root, grp // '/cross_fade', config%cross_fade, &
-      comment = 'choose cross fade function of current components, &
-      & 0: no cross fade, 1: Heaviside, 2: smooth transition')
+    call h5_add(h5id_root, grp // '/transition_func', config%transition_func, &
+      comment = 'transition function between current contributions')
     call h5_add(h5id_root, grp // '/resonance_sweep', config%resonance_sweep, &
       comment = 'number of points for sweep over electrical resonance')
     call h5_add(h5id_root, grp // '/offset_E_r', config%offset_E_r, &
@@ -426,7 +429,7 @@ contains
       comment = 'width of refined flux surfaces around resonances', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res_curr', config%Delta_rad_res_curr, &
       lbound(config%Delta_rad_res_curr), ubound(config%Delta_rad_res_curr), &
-      comment = 'width of parcurr integration around resonances', unit = 'cm')  
+      comment = 'width of parralel current integration around resonances', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/add_fine', config%add_fine, &
       lbound(config%add_fine), ubound(config%add_fine), &
       comment = 'number of additional fine flux surfaces')

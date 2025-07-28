@@ -1274,7 +1274,7 @@ contains
   end subroutine compute_flr2_coeff
 
   subroutine compute_flr2_current(Bn, jnpar_B0_mhd, jmnpar_over_Bmod, flr2, Phi_mn, Phi_aligned_mn)
-    use mephit_conf, only: conf
+    use mephit_conf, only: conf, transition_func_none
     use mephit_util, only: imun, resample1d
     use mephit_mesh, only: equil, mesh, fs, fs_half, dPhi0_dpsi, cache
     use mephit_pert, only: polmodes_t, polmodes_init, polmodes_deinit, L1_poloidal_modes, &
@@ -1299,7 +1299,7 @@ contains
     Phi_aligned_mn(:, :) = (0d0, 0d0)
     call vec_polmodes_init(Bmn, conf%m_max, mesh%nflux)
     call RT0_poloidal_modes(Bn, Bmn)
-    if (conf%cross_fade /= 0) then
+    if (conf%transition_func /= transition_func_none) then
       call polmodes_init(jmnpar_over_Bmod_mhd, conf%m_max, mesh%nflux)
       call L1_poloidal_modes(jnpar_B0_mhd, jmnpar_over_Bmod_mhd)
     end if
@@ -1318,13 +1318,13 @@ contains
       Phi_aligned_mn(1:, m) = imun * Bmnpsi_over_B0phi * &
         fs%q(1:) * dPhi0_dpsi%y(1:) / (m_res + mesh%n * fs%q(1:))
       jmnpar_over_Bmod%coeff(m_res, :kf_min) = (0d0, 0d0)  ! suppress spurious current near axis
-      if (conf%cross_fade /= 0) then
+      if (conf%transition_func /= transition_func_none) then
         jmnpar_over_Bmod%coeff(m_res, :) = cache%shielding(m)%cross_fade * &
           (jmnpar_over_Bmod%coeff(m_res, :) - jmnpar_over_Bmod_mhd%coeff(m_res, :))
       end if
     end do
     call vec_polmodes_deinit(Bmn)
-    if (conf%cross_fade /= 0) then
+    if (conf%transition_func /= transition_func_none) then
       call polmodes_deinit(jmnpar_over_Bmod_mhd)
     end if
   end subroutine compute_flr2_current
