@@ -7,9 +7,9 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.16.7
+#       jupytext_version: 1.17.2
 #   kernelspec:
-#     display_name: Python 3 (ipykernel)
+#     display_name: .venv
 #     language: python
 #     name: python3
 # ---
@@ -32,11 +32,11 @@ h5py.get_config().complex_names = ('real', 'imag')
 # %%
 work_dir = path.join(environ['MEPHIT_RUN_DIR'], '33353_2900_EQH')  # AUG
 # work_dir = path.join(environ['MEPHIT_RUN_DIR'], '47046')  # MAST-U
-mephit = Mephit(work_dir, 'mephit_imhd.h5')
+mephit = Mephit(work_dir, 'mephit.h5')
 mephit.open_datafile()
 mephit.postprocess()
-#gpec = Gpec(mephit.work_dir, mephit.data['/config/n'][()])
-#gpec.open_datafiles()
+# gpec = Gpec(mephit.work_dir, mephit.data['/config/n'][()])
+# gpec.open_datafiles()
 # ref_dir = path.join(environ['HOME'], 'TU/PhD/MARS_MEPHIT/forPatrick')
 # mars = Mars(ref_dir)
 # mars.open_datafiles()
@@ -47,14 +47,14 @@ m_res_min = mephit.data['/mesh/m_res_min'][()]
 m_res_max = mephit.data['/mesh/m_res_max'][()]
 q = mephit.data['/cache/fs/q'][()]
 res = mephit.normalize_psi(mephit.data['/mesh/psi_res'][()])
-delta_mn = mephit.normalize_psi_diff(mephit.data['/mesh/delta_psi_mn'][()])
+delta_mn = np.abs(mephit.normalize_psi_diff(mephit.data['/mesh/Delta_psi_res_curr'][()]))
 sgn_dpsi = np.sign(mephit.data['/cache/fs/psi'][-1] - mephit.data['/cache/fs/psi'][0])
 conversion = 1.0e-04 / mephit.data['/mesh/gpec_jacfac'][()]  # TODO: jacfac not accounted for in MARS output
 Bmn = [
     mephit.get_polmodes('MEPHIT vacuum perturbation', '/iter/Bmn_vac/coeff_rad', conversion),
     mephit.get_polmodes('MEPHIT full perturbation', '/iter/Bmn/coeff_rad', conversion),
-    #gpec.get_polmodes('GPEC full perturbation', sgn_dpsi, 'Jbgradpsi'),
-    #gpec.get_polmodes('GPEC vacuum perturbation', sgn_dpsi, 'Jbgradpsi_x'),
+    # gpec.get_polmodes('GPEC full perturbation', sgn_dpsi, 'Jbgradpsi'),
+    # gpec.get_polmodes('GPEC vacuum perturbation', sgn_dpsi, 'Jbgradpsi_x'),
     # mars.get_polmodes('MARS vacuum perturbation', 'VACUUM'),
     # mars.get_polmodes('MARS full perturbation', 'PLASMA'),
 ]
@@ -67,7 +67,7 @@ for polmode in Bmn:
 
 # %%
 mephit.close_datafile()
-#gpec.close_datafiles()
+# gpec.close_datafiles()
 
 # %%
 fig = plt.figure(figsize=(6.6, 3.6), dpi=150)

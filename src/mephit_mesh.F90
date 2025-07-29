@@ -1181,7 +1181,7 @@ contains
   end subroutine cache_read
 
   subroutine generate_mesh
-    use mephit_conf, only: conf, conf_arr
+    use mephit_conf, only: conf
     integer :: m
 
     if (conf%kilca_scale_factor /= 0) then
@@ -2906,6 +2906,9 @@ contains
       lbound(mesh%rad_norm_res), ubound(mesh%rad_norm_res), unit = '1', &
       comment = 'normalized small radius (outboard from O point, or towards X point)' // &
       ' in resonance with given poloidal mode number')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_psi_res_curr', mesh%Delta_psi_res_curr, &
+      lbound(mesh%Delta_psi_res_curr), ubound(mesh%Delta_psi_res_curr), &
+      comment = 'resonant layer width (in units of psi)', unit = 'Mx')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/damping', mesh%damping, &
       lbound(mesh%damping), ubound(mesh%damping), &
       comment = 'damping factors', unit = '1')
