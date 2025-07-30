@@ -741,7 +741,7 @@ contains
 
   subroutine L1_sum_poloidal_modes(polmodes, elem)
     use mephit_util, only: imun
-    use mephit_mesh, only: mesh, cache
+    use mephit_mesh, only: mesh
     type(polmodes_t), intent(in) :: polmodes
     type(L1_t), intent(inout) :: elem
     integer :: kf, kp, kpoi, m
@@ -1032,34 +1032,53 @@ contains
   end subroutine read_Bnvac_GPEC
 
   subroutine compute_Bnvac(Bn)
-    use coil_tools, only: read_currents, read_Bnvac_Fourier
-    use mephit_conf, only: conf, logger, vac_src_nemov, vac_src_gpec, vac_src_fourier
+    use coil_tools, only: read_currents, read_Bnvac_Fourier, read_Anvac_Fourier, &
+      gauged_Anvac_from_Bnvac, sum_coils_gauge_single_mode_Anvac
+    use mephit_conf, only: conf, logger, vac_src_nemov, vac_src_gpec, vac_src_fourier, &
+      vac_src_vecpot
     use mephit_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
-    integer :: nR, nZ, kedge, k
+    integer :: nR, nZ, nphi, ncoil, nmax, kedge, k
     real(dp) :: Rmin, Rmax, Zmin, Zmax, edge_perp(3)
     real(dp), dimension(:), allocatable :: Ic
-    complex(dp), dimension(:, :), allocatable :: Bn_R, Bn_Z
+    complex(dp), dimension(:, :), allocatable :: BnR, BnZ, gauged_AnR, gauged_AnZ
+    complex(dp), dimension(:, :, :, :), allocatable :: AnR, Anphi, AnZ, dAnphi_dR, dAnphi_dZ
     complex(dp) :: Bn_splined(3)
 
     ! initialize vacuum field
     select case (conf%vac_src)
     case (vac_src_nemov)
-      call read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
+      call read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, BnR, BnZ)
+      call gauged_Anvac_from_Bnvac(BnR, BnZ, conf%n, Rmin, Rmax, nR, Zmin, Zmax, nZ, &
+        gauged_AnR, gauged_AnZ)
+      deallocate(BnR, BnZ)
     case (vac_src_gpec)
-      call read_Bnvac_GPEC(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
+      call read_Bnvac_GPEC(nR, nZ, Rmin, Rmax, Zmin, Zmax, BnR, BnZ)
+      call gauged_Anvac_from_Bnvac(BnR, BnZ, conf%n, Rmin, Rmax, nR, Zmin, Zmax, nZ, &
+        gauged_AnR, gauged_AnZ)
+      deallocate(BnR, BnZ)
     case (vac_src_fourier)
       call read_currents(conf%currents_file, Ic)
       call read_Bnvac_Fourier(conf%coil_file, conf%n, conf%Biot_Savart_prefactor * Ic, &
-        nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
-      deallocate(Ic)
+        nR, nZ, Rmin, Rmax, Zmin, Zmax, BnR, BnZ)
+      call gauged_Anvac_from_Bnvac(BnR, BnZ, conf%n, Rmin, Rmax, nR, Zmin, Zmax, nZ, &
+        gauged_AnR, gauged_AnZ)
+      deallocate(BnR, BnZ, Ic)
+    case (vac_src_vecpot)
+      call read_currents(conf%currents_file, Ic)
+      call read_Anvac_Fourier(conf%coil_file, ncoil, nmax, Rmin, Rmax, Zmin, Zmax, &
+        nR, nphi, nZ, AnR, Anphi, AnZ, dAnphi_dR, dAnphi_dZ)
+      call sum_coils_gauge_single_mode_Anvac(AnR, Anphi, AnZ, dAnphi_dR, dAnphi_dZ, &
+        Ic, conf%n, Rmin, Rmax, nR, Zmin, Zmax, nZ, gauged_AnR, gauged_AnZ)
+      deallocate(AnR, Anphi, AnZ, dAnphi_dR, dAnphi_dZ, Ic)
     case default
       write (logger%msg, '("unknown vacuum field source selection", i0)') conf%vac_src
       if (logger%err) call logger%write_msg
       error stop
     end select
-    call vector_potential_single_mode(conf%n, nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
-    deallocate(Bn_R, Bn_Z)
+    call vector_potential_single_mode(conf%n, nR, nZ, Rmin, Rmax, Zmin, Zmax, &
+      gauged_AnR, gauged_AnZ)
+    deallocate(gauged_AnR, gauged_AnZ)
     ! project to finite elements
     Bn%DOF = (0d0, 0d0)
     do kedge = 1, mesh%nedge

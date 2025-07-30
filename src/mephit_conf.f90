@@ -20,7 +20,7 @@ module mephit_conf
     pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
     curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
     q_prof_flux, q_prof_rot, q_prof_geqdsk, &
-    vac_src_nemov, vac_src_gpec, vac_src_fourier, &
+    vac_src_nemov, vac_src_gpec, vac_src_fourier, vac_src_vecpot, &
     currn_model_mhd, currn_model_kilca, &
     refinement_scheme_geometric, refinement_scheme_gaussian, &
     transition_func_none, transition_func_heaviside, transition_func_smooth
@@ -51,6 +51,7 @@ module mephit_conf
   integer, parameter :: vac_src_nemov = 0   !< vacuum field perturbation from Viktor Nemov's code
   integer, parameter :: vac_src_gpec = 1    !< vacuum field perturbation from GPEC
   integer, parameter :: vac_src_fourier = 2 !< vacuum field perturbation from precomputed Fourier modes
+  integer, parameter :: vac_src_vecpot = 3  !< vacuum field perturbation from precomputed Fourier modes of vector potential
 
   integer, parameter :: currn_model_mhd = 0    !< response current from iMHD model
   integer, parameter :: currn_model_kilca = 1  !< response current from KiLCA model
@@ -91,8 +92,8 @@ module mephit_conf
     integer :: q_prof = q_prof_rot
 
     !> Source of vacuum field perturbation. Possible values are #vac_src_nemov,
-    !> #vac_src_gpec, and #vac_src_fourier (default).
-    integer :: vac_src = vac_src_fourier
+    !> #vac_src_gpec, #vac_src_fourier, and #vac_src_vecpot (default).
+    integer :: vac_src = vac_src_vecpot
 
     !> Method to compute response current. Possible values are #currn_model_mhd (default)
     !> and #currn_model_kilca.
