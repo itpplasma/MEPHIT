@@ -1091,6 +1091,16 @@ contains
           ' from iMHD excluding damping', parcurrmn = perteq%jnpar_B0)
       end if
     end if
+
+    ! hack: overwrite to save only last iteration step
+    if (apply_damping) then
+        call perteq_write('("debug_KiLCA_final/", a, "_incl")', &
+          ' from iMHD including damping', parcurrmn = perteq%jnpar_B0)
+      else
+        call perteq_write('("debug_KiLCA_final/", a, "_excl")', &
+          ' from iMHD excluding damping', parcurrmn = perteq%jnpar_B0)
+      end if
+
     select case (conf%currn_model)
     case (currn_model_mhd)
       call compute_shielding_current(perteq%pn, resonant_jmnpar_over_Bmod)
@@ -1107,13 +1117,19 @@ contains
     perteq%jnpar_B0%DOF(:) = perteq%jnpar_B0%DOF + resonant_jnpar_over_Bmod%DOF
     perteq%jn%DOF(:) = perteq%jn%DOF + resonant_jn%DOF
     if (debug_initial) then
-      call polmodes_write(resonant_jmnpar_over_Bmod, datafile, 'debug_KiLCA/jmnpar_Bmod_KiLCA', &
+      call polmodes_write(resonant_jmnpar_over_Bmod, datafile, &
+        'debug_KiLCA/jmnpar_Bmod_KiLCA', &
         'parallel current density from KiLCA', 's^-1')  ! SI: H^-1
       call perteq_write('("debug_KiLCA/", a, "_total")', &
         ' including KiLCA current', parcurrmn = perteq%jnpar_B0)
     end if
     ! hack: overwrite to save only last iteration step
     call debug_MDE("debug_MDE_final", perteq%pn, perteq%Bn, perteq%jn, perteq%jnpar_B0)
+    call polmodes_write(resonant_jmnpar_over_Bmod, datafile, &
+        'debug_KiLCA_final/jmnpar_Bmod_KiLCA', &
+        'parallel current density from KiLCA', 's^-1')  ! SI: H^-1
+    call perteq_write('("debug_KiLCA_final/", a, "_total")', &
+        ' including KiLCA current', parcurrmn = perteq%jnpar_B0)
 
     call polmodes_deinit(resonant_jmnpar_over_Bmod)
     call L1_deinit(resonant_jnpar_over_Bmod)
