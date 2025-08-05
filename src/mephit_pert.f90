@@ -1069,7 +1069,8 @@ contains
       call read_Anvac_Fourier(conf%coil_file, ncoil, nmax, Rmin, Rmax, Zmin, Zmax, &
         nR, nphi, nZ, AnR, Anphi, AnZ, dAnphi_dR, dAnphi_dZ)
       call sum_coils_gauge_single_mode_Anvac(AnR, Anphi, AnZ, dAnphi_dR, dAnphi_dZ, &
-        Ic, conf%n, Rmin, Rmax, nR, Zmin, Zmax, nZ, gauged_AnR, gauged_AnZ)
+        conf%Biot_Savart_prefactor * Ic, conf%n, Rmin, Rmax, nR, Zmin, Zmax, nZ, &
+        gauged_AnR, gauged_AnZ)
       deallocate(AnR, Anphi, AnZ, dAnphi_dR, dAnphi_dZ, Ic)
     case default
       write (logger%msg, '("unknown vacuum field source selection", i0)') conf%vac_src
