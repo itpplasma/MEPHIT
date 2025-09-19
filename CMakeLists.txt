@@ -120,7 +120,6 @@ set(COMMON_FORTRAN_SRC_FILES
   src/fftw3.f90
   src/field_line_integration_for_SYNCH.f90
   src/magdata_in_symfluxcoord.f90
-  src/odeint_allroutines.f
   src/points_2d.f90
   src/sparse_mod.f90
 )
