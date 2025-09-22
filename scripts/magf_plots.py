@@ -80,10 +80,10 @@ conversion = 1.0e-04 / mephit.data['/mesh/gpec_jacfac'][()]  # TODO: jacfac not 
 Bmn = [
     mephit.get_polmodes('MEPHIT vacuum perturbation', '/iter/Bmn_vac/coeff_rad', conversion),
     mephit.get_polmodes('MEPHIT full perturbation', '/iter/Bmn/coeff_rad', conversion),
-    mephit.get_polmodes('MEPHIT full parallel pertubation', 'iter/Bmn/coeff_par', conversion),
     mephit.get_polmodes('MEPHIT full perturbation covariant pol', '/iter/Bmn/coeff_pol', 1.0e-04),
     mephit.get_polmodes('MEPHIT full perturbation tor', '/iter/Bmn/coeff_tor', 1.0e-04),
     mephit.get_polmodes('MEPHIT full perturbation pol', '/iter/Bmn/coeff_pol', 1.0e-04),
+    mephit.get_polmodes('MEPHIT full perturbation rad', '/iter/Bmn/coeff_par', 1.0e-04),
     # gpec.get_polmodes('GPEC full perturbation', sgn_dpsi, 'Jbgradpsi'),
     # gpec.get_polmodes('GPEC vacuum perturbation', sgn_dpsi, 'Jbgradpsi_x'),
     # mars.get_polmodes('MARS vacuum perturbation', 'VACUUM'),
@@ -362,28 +362,6 @@ for m in mephit.post['sgn_m_res'] * np.arange(6):
     plt.show()
 
 # %%
-for m in mephit.post['m_res']:
-    if abs(m) > 12:
-        break
-    k = abs(m) - m_res_min
-    fig = plt.figure()
-    ax = fig.subplots()
-    ax.axhline(0.0, color='k', lw=0.5)
-    ax.axvline(res[k], color='k', lw=0.5, ls=':')
-
-    # Define all simulations you want to plot with colors, styles, and labels
-    polmode_list = [
-        (Bmn[2], 'orange', '-', '4.0cm D'),
-    ]
-    for polmode, color, style, label_suffix in polmode_list:
-        ax.plot(polmode['rho'][m], np.abs(polmode['var'][m]), label=polmode['label'] + ' ' + label_suffix, ls=style, color=color)
-    ax.set_xlabel(r'$\hat{\psi}$')
-    ax.set_ylabel(r'$\lvert (\sqrt{g} B^{par}_{n})_{m} \rvert A^{-1}$ / \si{\tesla}')
-    ax.set_title(f"$m = {m}$")
-    ax.legend(loc='upper left')
-    fig.savefig(path.join(work_dir, f'Bmn_psi_{abs(m)}.pdf'), dpi=150)
-
-# %%
 B_equil["mod_B"] = np.sqrt(B_equil["B0_R"]**2 + B_equil["B0_Z"]**2 + B_equil["B0_phi"]**2)
 B_equil["h_R"] = B_equil["B0_R"] / B_equil["mod_B"]
 B_equil["h_Z"] = B_equil["B0_Z"] / B_equil["mod_B"]
@@ -448,7 +426,7 @@ psi_grid = Bmn[1]['rho'][0]
 psi_grid_norm = (psi_grid - psi_grid[0]) / (psi_grid[-1] - psi_grid[0])
 
 # Poloidal angle grid for reconstruction
-Ntheta = 2056
+Ntheta = 2048
 theta_grid = np.linspace(0, 2*np.pi, Ntheta, endpoint=False)
 
 B0_r_theta = np.zeros((len(psi_grid), Ntheta))
@@ -578,26 +556,22 @@ for m in mephit.post['m_res']:
 
 
 # %%
-interp_h_theta = RectBivariateSpline(B_equil["Z_rect"], B_equil["R_rect"],  B_equil["h_theta_contrav"])
-B_equil["h_theta_contrav_full"] = interp_h_theta.ev(B_equil["Z_mesh"], B_equil["R_mesh"])
+for m in mephit.post['m_res']:
+    fig = plt.figure()
+    ax = fig.subplots()
+    ax.axhline(0.0, color='k', lw=0.5)
+    polmode_list = [
+        (Bmn[5], 'orange', '-', '0.1cm D off'),
+    ]
 
-interp_h_phi = RectBivariateSpline(B_equil["Z_rect"], B_equil["R_rect"],  B_equil["h_phi"])
-B_equil["h_phi_full"] = interp_h_phi.ev(B_equil["Z_mesh"], B_equil["R_mesh"])
+    for polmode, color, style, label_suffix in polmode_list:
+        ax.plot(polmode['rho'][m], np.abs(polmode['var'][m]), label=polmode['label'] + ' ' + label_suffix, ls=style, color=color)
 
-#B_equil['Bn_par']= B_equil['Bn_theta']*B_equil['h_theta_contrav_full'] + B_equil['Bn_phi']*B_equil['h_phi_full']
+    ax.set_xlabel(r'$\hat{\psi}$')
+    ax.set_ylabel(r'$\lvert (B^{\theta, \phi}_{n})_{m} \rvert $ / \si{\tesla}')
+    ax.set_title(f"$m = {m}$")
+    ax.set_ylim(0,0.0005)
+    ax.legend(loc='upper left')
+    plt.savefig(path.join(work_dir, f'Bmn_par_{np.abs(m)}_0_1.pdf'), dpi=150)
+    plt.show()
 
-fig = plt.figure(figsize=(4.0, 4.4), dpi=300)
-ax = fig.subplots()
-im = ax.tripcolor(B_equil['R_mesh'], B_equil['Z_mesh'], B_equil['tri'], B_equil['Bn_theta'].real, cmap=cc.m_CET_D9, rasterized=True)
-# ax.plot(data['R_O'], data['Z_O'], 'k.', markersize=1)
-cbar = fig.colorbar(im)
-# cbar.ax.yaxis.set_offset_position('right')
-# cbar.ax.yaxis.offsetText.set(x=-0.02, verticalalignment='top', horizontalalignment='right')
-cbar.set_label(r'normal magnetic field perturbation $\Real \sqrt{g} B_{n}^{\psi}$ / \si{\gauss\centi\meter\squared}', rotation=90)
-im.set_clim([-2000, 2000])
-ax.set_aspect('equal')
-ax.set_xlabel(r'$R$ / m')
-ax.set_ylabel(r'$Z$ / m')
-#fig.savefig(path.join(work_dir, f'{dataset}.pdf'), backend='pgf', dpi=300)
-plt.show()
-print("Hello?")
