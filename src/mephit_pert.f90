@@ -103,6 +103,11 @@ module mephit_pert
     !> flux surface.
     complex(dp), allocatable :: coeff_n(:, :)
 
+    !> Component parallel to magnetic field line, indexed by poloidal mode number and flux surface.
+    !>
+    !> For tokamak and KiLCA geometry, this is the physical component parallel to magnetic field line.
+    complex(dp), allocatable :: coeff_par(:, :)
+
     !> Component in poloidal direction, indexed by poloidal mode number and flux surface.
     !>
     !> For tokamak geometry, this is the covariant theta component; for KiLCA geometry,
@@ -642,6 +647,7 @@ contains
     this%nflux = nflux
     allocate(this%coeff_rad(-this%m_max:this%m_max, 1:nflux))
     allocate(this%coeff_n(-this%m_max:this%m_max, 1:nflux))
+    allocate(this%coeff_par(-this%m_max:this%m_max, 1:nflux))
     allocate(this%coeff_pol(-this%m_max:this%m_max, 1:nflux))
     allocate(this%coeff_tor(-this%m_max:this%m_max, 1:nflux))
   end subroutine vec_polmodes_init
@@ -653,6 +659,7 @@ contains
     this%nflux = 0
     if (allocated(this%coeff_rad)) deallocate(this%coeff_rad)
     if (allocated(this%coeff_n)) deallocate(this%coeff_n)
+    if (allocated(this%coeff_par)) deallocate(this%coeff_par)
     if (allocated(this%coeff_pol)) deallocate(this%coeff_pol)
     if (allocated(this%coeff_tor)) deallocate(this%coeff_tor)
   end subroutine vec_polmodes_deinit
@@ -667,6 +674,7 @@ contains
     call h5_open(file, h5id_root)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_rad', vec_polmodes%coeff_rad)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_n', vec_polmodes%coeff_n)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_par', vec_polmodes%coeff_par)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_pol', vec_polmodes%coeff_pol)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_tor', vec_polmodes%coeff_tor)
     call h5_close(h5id_root)
@@ -708,6 +716,10 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_n', &
       vec_polmodes%coeff_n, lbound(vec_polmodes%coeff_n), ubound(vec_polmodes%coeff_n), &
       comment = 'physical component perpendicular to flux surface of ' // trim(adjustl(comment)), &
+      unit = trim(adjustl(unit)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_par', &
+      vec_polmodes%coeff_par, lbound(vec_polmodes%coeff_par), ubound(vec_polmodes%coeff_par), &
+      comment = 'physical component parallel to magnetic field of ' // trim(adjustl(comment)), &
       unit = trim(adjustl(unit)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_tor', &
       vec_polmodes%coeff_tor, lbound(vec_polmodes%coeff_tor), ubound(vec_polmodes%coeff_tor), &
@@ -766,11 +778,12 @@ contains
     type(RT0_t), intent(in) :: elem
     type(vec_polmodes_t), intent(inout) :: vec_polmodes
     integer :: kf, kt, ktri, m
-    complex(dp) :: cyl_vec(3), comp_rad, comp_n, comp_pol, comp_tor, &
+    complex(dp) :: cyl_vec(3), comp_rad, comp_n, comp_pol, comp_tor, comp_par, &
       fourier_basis(-vec_polmodes%m_max:vec_polmodes%m_max)
 
     vec_polmodes%coeff_rad(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_n(:, :) = (0d0, 0d0)
+    vec_polmodes%coeff_par(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_pol(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_tor(:, :) = (0d0, 0d0)
     do kf = 1, mesh%nflux
@@ -790,9 +803,12 @@ contains
             comp_pol = cyl_vec(1) * s%dR_dtheta + cyl_vec(3) * s%dZ_dtheta
             comp_tor = cyl_vec(2)
           end if
+          comp_par = (cyl_vec(1) * s%B0_R + cyl_vec(2) * s%B0_phi + cyl_vec(3) * s%B0_Z)/ &
+            hypot(hypot(s%B0_R, s%B0_Z), s%B0_phi)
         end associate
         vec_polmodes%coeff_rad(:, kf) = vec_polmodes%coeff_rad(:, kf) + comp_rad * fourier_basis
         vec_polmodes%coeff_n(:, kf) = vec_polmodes%coeff_n(:, kf) + comp_n * fourier_basis
+        vec_polmodes%coeff_par(:, kf) = vec_polmodes%coeff_par(:, kf) + comp_par * fourier_basis
         vec_polmodes%coeff_pol(:, kf) = vec_polmodes%coeff_pol(:, kf) + comp_pol * fourier_basis
         vec_polmodes%coeff_tor(:, kf) = vec_polmodes%coeff_tor(:, kf) + comp_tor * fourier_basis
       end do
