@@ -31,7 +31,7 @@ h5py.get_config().complex_names = ('real', 'imag')
 
 
 # %%
-work_dir = path.join('/afs/itp.tugraz.at/user/zenzphil/code/MEPHIT/run', '33353_2900_EQH_sweep')  # AUG
+work_dir = path.join('/temp/zenzphil/MEPHIT/run', '33353_2900_EQH_sweep')  # AUG
 # work_dir = path.join(environ['MEPHIT_RUN_DIR'], '47046')  # MAST-U
 mephit = Mephit(work_dir, 'mephit_cross_fade_new_int_4_0_D_par.h5')
 mephit_D_40 = Mephit(work_dir, 'mephit_cross_fade_new_int_4_0_D_eresoff_7.h5')
@@ -83,63 +83,48 @@ Bmn = [
     mephit.get_polmodes('MEPHIT full perturbation covariant pol', '/iter/Bmn/coeff_pol', 1.0e-04),
     mephit.get_polmodes('MEPHIT full perturbation tor', '/iter/Bmn/coeff_tor', 1.0e-04),
     mephit.get_polmodes('MEPHIT full perturbation pol', '/iter/Bmn/coeff_pol', 1.0e-04),
-    mephit.get_polmodes('MEPHIT full perturbation rad', '/iter/Bmn/coeff_par', 1.0e-04),
+    mephit.get_polmodes('MEPHIT full perturbation par', '/iter/Bmn/coeff_par', 1.0e-04),
     # gpec.get_polmodes('GPEC full perturbation', sgn_dpsi, 'Jbgradpsi'),
     # gpec.get_polmodes('GPEC vacuum perturbation', sgn_dpsi, 'Jbgradpsi_x'),
     # mars.get_polmodes('MARS vacuum perturbation', 'VACUUM'),
     # mars.get_polmodes('MARS full perturbation', 'PLASMA'),
 ]
-B_equil = {"B0_R":mephit.data['/equil/B0_R'][:],
-           "B0_Z":mephit.data['/equil/B0_Z'][:],
-           "B0_phi":mephit.data['/equil/B0_phi'][:],
-           "R_rect":mephit.data['/equil/rect_R'][:],
-           "Z_rect":mephit.data['/equil/rect_Z'][:],
-           "psirz": mephit.data['/equil/psirz'][:,:],
-           "Z_eqdsk":mephit.data['/equil/Z_eqd'][:],
-           "R_eqdsk":mephit.data['/equil/R_eqd'][:],
-           "psi_eqdsk":mephit.data['/equil/psi_eqd'][:],
-           "q_psi":mephit.data['/equil/qpsi'][:],
-           "R_mesh":mephit.data['/mesh/node_R'][:],
-           "Z_mesh":mephit.data['/mesh/node_Z'][:],
-           "tri": mephit.data['/mesh/tri_node'][:]-1,
-           "Bn_theta": mephit.data['/iter/Bn/comp_theta_covar'][:],
-           "Bn_phi": mephit.data['/iter/Bn/RT0_comp_phi'][:],
-           "psi_mesh": mephit.data['/cache/fs/psi'][:],
-           "rad": mephit.data['/cache/fs_half/rad'][:],
-           "R0": mephit.data['/equil/rcentr'][()],}
+B_equil = {
+    "B0_R": mephit.data['/equil/B0_R'][:],
+    "B0_Z": mephit.data['/equil/B0_Z'][:],
+    "B0_phi": mephit.data['/equil/B0_phi'][:],
+    "R_rect": mephit.data['/equil/rect_R'][:],
+    "Z_rect": mephit.data['/equil/rect_Z'][:],
+    "psirz":  mephit.data['/equil/psirz'][:,:],
+    "Z_eqdsk": mephit.data['/equil/Z_eqd'][:],
+    "R_eqdsk": mephit.data['/equil/R_eqd'][:],
+    "R_mesh": mephit.data['/mesh/node_R'][:],
+    "Z_mesh": mephit.data['/mesh/node_Z'][:],
+    "tri": mephit.data['/mesh/tri_node'][:]-1,
+    "Bn_theta": mephit.data['/iter/Bn/comp_theta_covar'][:],
+    "Bn_phi": mephit.data['/iter/Bn/RT0_comp_phi'][:],
+    "psi_mesh": mephit.data['/cache/fs/psi'][:],
+    "rad": mephit.data['/cache/fs_half/rad'][:],
+    "q": mephit.data['/cache/fs/q'][:],
+    "R0": mephit.data['/equil/rcentr'][()],
+}
 
 Bmn_D_40 = [
     mephit_D_40.get_polmodes('MEPHIT vacuum perturbation', '/iter/Bmn_vac/coeff_rad', conversion),
     mephit_D_40.get_polmodes('MEPHIT full perturbation', '/iter/Bmn/coeff_rad', conversion),
-    # gpec.get_polmodes('GPEC full perturbation', sgn_dpsi, 'Jbgradpsi'),
-    # gpec.get_polmodes('GPEC vacuum perturbation', sgn_dpsi, 'Jbgradpsi_x'),
-    # mars.get_polmodes('MARS vacuum perturbation', 'VACUUM'),
-    # mars.get_polmodes('MARS full perturbation', 'PLASMA'),
 ]
 
 Bmn_H_40 = [
     #mephit_H_40.get_polmodes('MEPHIT vacuum perturbation', '/iter/Bmn_vac/coeff_rad', conversion),
     mephit_H_40.get_polmodes('MEPHIT full perturbation', '/iter/Bmn/coeff_rad', conversion),
-    # gpec.get_polmodes('GPEC full perturbation', sgn_dpsi, 'Jbgradpsi'),
-    # gpec.get_polmodes('GPEC vacuum perturbation', sgn_dpsi, 'Jbgradpsi_x'),
-    # mars.get_polmodes('MARS vacuum perturbation', 'VACUUM'),
-    # mars.get_polmodes('MARS full perturbation', 'PLASMA'),
 ]
 Bmn_ref = [
     #mephit_ref.get_polmodes('MEPHIT vacuum perturbation', '/iter/Bmn_vac/coeff_rad', conversion),
     mephit_ref.get_polmodes('MEPHIT full perturbation', '/iter/Bmn/coeff_rad', conversion),
-    # gpec.get_polmodes('GPEC full perturbation', sgn_dpsi, 'Jbgradpsi'),
-    # gpec.get_polmodes('GPEC vacuum perturbation', sgn_dpsi, 'Jbgradpsi_x'),
-    # mars.get_polmodes('MARS vacuum perturbation', 'VACUUM'),
-    # mars.get_polmodes('MARS full perturbation', 'PLASMA'),
 ]
 Bmn_thin = [
     #mephit_thin.get_polmodes('MEPHIT vacuum perturbation', '/iter/Bmn_vac/coeff_rad', conversion),
     mephit_thin.get_polmodes('MEPHIT full perturbation', '/iter/Bmn/coeff_rad', conversion),
-    # gpec.get_polmodes('GPEC full perturbation', sgn_dpsi, 'Jbgradpsi'),
-    # gpec.get_polmodes('GPEC vacuum perturbation', sgn_dpsi, 'Jbgradpsi_x'),
-    # mars.get_polmodes('MARS vacuum perturbation', 'VACUUM'),
-    # mars.get_polmodes('MARS full perturbation', 'PLASMA'),
 ]
 Bmn_D_05_off = [
     mephit_D_05_off.get_polmodes('MEPHIT full perturbation', '/iter/Bmn/coeff_rad', conversion),
@@ -154,51 +139,13 @@ Bmn_H_05_on = [
     mephit_H_05_on.get_polmodes('MEPHIT full perturbation', '/iter/Bmn/coeff_rad', conversion),
 ]
 
-for polmode in Bmn:
-    polmode['m_range'] = np.arange(min(polmode['var'].keys()), max(polmode['var'].keys()) + 1)
-    polmode['arr'] = np.zeros((polmode['m_range'].size, polmode['rho'][0].size), dtype=complex)
-    for i, m in enumerate(polmode['m_range']):
-        polmode['arr'][i, :] = polmode['var'][m]
-for polmode in Bmn_D_40:
-    polmode['m_range'] = np.arange(min(polmode['var'].keys()), max(polmode['var'].keys()) + 1)
-    polmode['arr'] = np.zeros((polmode['m_range'].size, polmode['rho'][0].size), dtype=complex)
-    for i, m in enumerate(polmode['m_range']):
-        polmode['arr'][i, :] = polmode['var'][m]
-for polmode in Bmn_H_40:
-    polmode['m_range'] = np.arange(min(polmode['var'].keys()), max(polmode['var'].keys()) + 1)
-    polmode['arr'] = np.zeros((polmode['m_range'].size, polmode['rho'][0].size), dtype=complex)
-    for i, m in enumerate(polmode['m_range']):
-        polmode['arr'][i, :] = polmode['var'][m]
-for polmode in Bmn_ref:
-    polmode['m_range'] = np.arange(min(polmode['var'].keys()), max(polmode['var'].keys()) + 1)
-    polmode['arr'] = np.zeros((polmode['m_range'].size, polmode['rho'][0].size), dtype=complex)
-    for i, m in enumerate(polmode['m_range']):
-        polmode['arr'][i, :] = polmode['var'][m]
-for polmode in Bmn_thin:
-    polmode['m_range'] = np.arange(min(polmode['var'].keys()), max(polmode['var'].keys()) + 1)
-    polmode['arr'] = np.zeros((polmode['m_range'].size, polmode['rho'][0].size), dtype=complex)
-    for i, m in enumerate(polmode['m_range']):
-        polmode['arr'][i, :] = polmode['var'][m]
-for polmode in Bmn_D_05_off:
-    polmode['m_range'] = np.arange(min(polmode['var'].keys()), max(polmode['var'].keys()) + 1)
-    polmode['arr'] = np.zeros((polmode['m_range'].size, polmode['rho'][0].size), dtype=complex)
-    for i, m in enumerate(polmode['m_range']):
-        polmode['arr'][i, :] = polmode['var'][m]
-for polmode in Bmn_H_05_off:
-    polmode['m_range'] = np.arange(min(polmode['var'].keys()), max(polmode['var'].keys()) + 1)
-    polmode['arr'] = np.zeros((polmode['m_range'].size, polmode['rho'][0].size), dtype=complex)
-    for i, m in enumerate(polmode['m_range']):
-        polmode['arr'][i, :] = polmode['var'][m]
-for polmode in Bmn_D_05_on:
-    polmode['m_range'] = np.arange(min(polmode['var'].keys()), max(polmode['var'].keys()) + 1)
-    polmode['arr'] = np.zeros((polmode['m_range'].size, polmode['rho'][0].size), dtype=complex)
-    for i, m in enumerate(polmode['m_range']):
-        polmode['arr'][i, :] = polmode['var'][m]
-for polmode in Bmn_H_05_on:
-    polmode['m_range'] = np.arange(min(polmode['var'].keys()), max(polmode['var'].keys()) + 1)
-    polmode['arr'] = np.zeros((polmode['m_range'].size, polmode['rho'][0].size), dtype=complex)
-    for i, m in enumerate(polmode['m_range']):
-        polmode['arr'][i, :] = polmode['var'][m]
+for dataset in [Bmn, Bmn_D_40, Bmn_H_40, Bmn_ref, Bmn_thin, Bmn_D_05_off, Bmn_H_05_off, Bmn_D_05_on, Bmn_H_05_on]:
+    for polmode in dataset:
+        polmode['m_range'] = np.arange(min(polmode['var'].keys()), max(polmode['var'].keys()) + 1)
+        polmode['arr'] = np.zeros((polmode['m_range'].size, polmode['rho'][0].size), dtype=complex)
+        for i, m in enumerate(polmode['m_range']):
+            polmode['arr'][i, :] = polmode['var'][m]
+
 
 # %%
 mephit.close_datafile()
@@ -301,14 +248,8 @@ for m in mephit.post['m_res']:
     psi = Bmn[0]['rho'][m]
     n_points = len(psi)
     ydata = Bmn[1]['var'][m]
-    with open(path.join(work_dir, f'Bmn_psi_{np.abs(m)}_4_0_data.txt'), 'w') as f:
-        # Header
-        header = "psi     B_psi_real     B_psi_imag" + "\n"
-        f.write(header)
-        # Data rows
-        for i in range(n_points):
-            row = [f"{psi[i]:.8e}"] + [f"{np.real(ydata[i]):.8e}"] + [f"{np.imag(ydata[i]):.8e}"]
-            f.write(" ".join(row) + "\n")
+    np.savetxt(f'Bmn_psi_{np.abs(m)}_4_0_data.txt', np.vstack(psi, ydata.real, ydata.imag),
+               fmt='%.8e', header='psi B_psi_real B_psi_imag')
 
     """psi = polmode_list[0][0]['rho'][m]
     n_points = len(psi)
@@ -348,7 +289,7 @@ for m in mephit.post['sgn_m_res'] * np.arange(6):
     fig = plt.figure()
     ax = fig.subplots()
     ax.axhline(0.0, color='k', lw=0.5)
-    for polmode in [Bmn[0],Bmn[1]]:
+    for polmode in [Bmn[0], Bmn[1]]:
         grad = np.full(polmode['var'][m].shape, np.nan, dtype='D')
         grad.real = np.gradient(polmode['var'][m].real, polmode['rho'][m])
         grad.imag = np.gradient(polmode['var'][m].imag, polmode['rho'][m])
@@ -368,43 +309,46 @@ B_equil["h_Z"] = B_equil["B0_Z"] / B_equil["mod_B"]
 B_equil["h_phi"] = B_equil["B0_phi"] / B_equil["mod_B"]
 B_equil["B0_phi_contrav"] = B_equil["B0_phi"] / (B_equil["R_rect"])
 
-interp_psi = RectBivariateSpline(B_equil["Z_eqdsk"], B_equil["R_eqdsk"],  B_equil["psirz"])
+interp_psi = RectBivariateSpline(B_equil["Z_eqdsk"], B_equil["R_eqdsk"], B_equil["psirz"])
 B_equil["psi_rect"] = interp_psi(B_equil["Z_rect"], B_equil["R_rect"])
 
-B_equil["q_RZ_eqdsk"] = np.interp(B_equil["psirz"].flatten(),np.flip(B_equil["psi_eqdsk"]), np.flip(B_equil["q_psi"])).reshape(B_equil["psirz"].shape)
-interp_q = RectBivariateSpline(B_equil["Z_eqdsk"], B_equil["R_eqdsk"],  B_equil["q_RZ_eqdsk"])
+B_equil["q_RZ_eqdsk"] = np.interp(B_equil["psirz"].ravel(),
+                                  np.flip(B_equil["psi_mesh"]),
+                                  np.flip(B_equil["q"])).reshape(B_equil["psirz"].shape)
+interp_q = RectBivariateSpline(B_equil["Z_eqdsk"], B_equil["R_eqdsk"], B_equil["q_RZ_eqdsk"])
 B_equil["q_RZ_rect"] = interp_q(B_equil["Z_rect"], B_equil["R_rect"])
 
-B_equil["B0_theta_contrav"] = B_equil["B0_phi_contrav"]/B_equil["q_RZ_rect"]
-B_equil["h_theta_contrav"] = B_equil["B0_theta_contrav"]/B_equil["mod_B"]
+B_equil["B0_theta_contrav"] = B_equil["B0_phi_contrav"] / B_equil["q_RZ_rect"]
+B_equil["h_theta_contrav"] = B_equil["B0_theta_contrav"] / B_equil["mod_B"]
 
 R, Z = np.meshgrid(B_equil["R_rect"], B_equil["Z_rect"])
 fig, ax = plt.subplots(figsize=(7, 6))
 c = ax.pcolormesh(R, Z, B_equil["mod_B"], shading='nearest', cmap=cc.m_fire_r)
-ax.set_xlabel('R / \si{\cm}')
-ax.set_ylabel('Z / \si{\cm}')
+ax.set_xlabel(r'R / \si{\cm}')
+ax.set_ylabel(r'Z / \si{\cm}')
 ax.set_aspect('equal', 'box')
 cbar = fig.colorbar(c)
-cbar.set_label(r'$\lvert \mathbf{B}_0 \rvert$ / \si{\tesla}', rotation=90)
+cbar.set_label(r'$\lvert \vec{B}_0 \rvert$ / \si{\tesla}', rotation=90)
 fig.savefig(path.join(work_dir, 'B_equil.png'), dpi=150)
 plt.show(block=False)
 
-R_eq,Z_eq = np.meshgrid(B_equil["R_eqdsk"], B_equil["Z_eqdsk"])
+q_levels = np.array([1.0, 2.0, 3.0, 4.0, 7.0])
+q_fmt = {level: f'$q = {int(level)}$' for level in q_levels}
+R_eq, Z_eq = np.meshgrid(B_equil["R_eqdsk"], B_equil["Z_eqdsk"])
 fig, ax = plt.subplots(figsize=(7, 6))
 #ax.contour(R_eq, Z_eq, B_equil["psirz"], levels=20, colors='k')
-ax.contour(R,Z, B_equil["psi_rect"], levels=50, colors='r')
+ax.contour(R, Z, B_equil["psi_rect"], levels=50, colors='r')
 #ax.contour(R_eq, Z_eq, B_equil["psirz"], levels=np.flip(B_equil["psi_eqdsk"]), colors='b', linewidths=2.0)
-q_contour = ax.contour(R_eq, Z_eq, B_equil["q_RZ_eqdsk"], levels=[1.0,2.0,3.0,4.0,7.0], colors='b', linestyles='dashed')
-ax.clabel(q_contour, fmt={1.0: 'q=1', 2.0: 'q=2', 3.0: 'q=3', 4.0: 'q=4', 7.0: 'q=7'}, inline=True, fontsize=8)
-q_contour_rect = ax.contour(R, Z, B_equil["q_RZ_rect"], levels=[1.0,2.0,3.0,4.0,7.0], colors='cyan', linestyles='dashed')
-ax.clabel(q_contour_rect, fmt={1.0: 'q=1', 2.0: 'q=2', 3.0: 'q=3', 4.0: 'q=4', 7.0: 'q=7'}, inline=True, fontsize=8)
-ax.set_xlabel('R / \si{\cm}')
-ax.set_ylabel('Z / \si{\cm}')
+q_contour = ax.contour(R_eq, Z_eq, B_equil["q_RZ_eqdsk"], levels=q_levels, colors='b', linestyles='dashed')
+ax.clabel(q_contour, fmt=q_fmt, inline=True, fontsize=8)
+# q_contour_rect = ax.contour(R, Z, B_equil["q_RZ_rect"], levels=q_levels, colors='cyan', linestyles='dashed')
+# ax.clabel(q_contour_rect, fmt=q_fmt, inline=True, fontsize=8)
+ax.set_xlabel(r'R / \si{\cm}')
+ax.set_ylabel(r'Z / \si{\cm}')
 ax.set_aspect('equal', 'box')
-print(B_equil["q_RZ_eqdsk"])
 
 # %%
-B0_r_spline     = RectBivariateSpline(B_equil["R_rect"], B_equil["Z_rect"], B_equil["h_R"].T)
+B0_R_spline     = RectBivariateSpline(B_equil["R_rect"], B_equil["Z_rect"], B_equil["h_R"].T)
 B0_theta_spline = RectBivariateSpline(B_equil["R_rect"], B_equil["Z_rect"], B_equil["h_theta_contrav"].T)
 B0_phi_spline   = RectBivariateSpline(B_equil["R_rect"], B_equil["Z_rect"], B_equil["h_phi"].T)
 
@@ -412,12 +356,10 @@ def RZ_from_psi_theta(psi, theta, R0=2.0):
     r = np.sqrt(psi)
     R = R0 + r*np.cos(theta)
     Z = r*np.sin(theta)
-    return R,Z
+    return R, Z
 
 # Poloidal mode numbers
-m_modes = np.array([-24,-23,-22,-21,-20,-19,-18,-17,-16,-15,-14,-13,-12,-11,-10,
-                    -9,-8,-7,-6,-5,-4,-3,-2,-1,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,
-                    15,16,17,18,19,20,21,22,23,24])
+m_modes = np.arange(-24, 25)
 n_modes = 2
 
 # 1D flux surface grid
@@ -429,27 +371,27 @@ psi_grid_norm = (psi_grid - psi_grid[0]) / (psi_grid[-1] - psi_grid[0])
 Ntheta = 2048
 theta_grid = np.linspace(0, 2*np.pi, Ntheta, endpoint=False)
 
-B0_r_theta = np.zeros((len(psi_grid), Ntheta))
-B0_theta_theta = np.zeros_like(B0_r_theta)
-B0_phi_theta = np.zeros_like(B0_r_theta)
+B0_R_theta = np.zeros((len(psi_grid), Ntheta))
+B0_theta_theta = np.zeros_like(B0_R_theta)
+B0_phi_theta = np.zeros_like(B0_R_theta)
 
 for i_psi, psi in enumerate(psi_grid_norm):
     for i_theta, theta in enumerate(theta_grid):
-        R,Z = RZ_from_psi_theta(psi, theta)
-        B0_r_theta[i_psi, i_theta] = B0_r_spline.ev(R,Z)
-        B0_theta_theta[i_psi, i_theta] = B0_theta_spline.ev(R,Z)
-        B0_phi_theta[i_psi, i_theta] = B0_phi_spline.ev(R,Z)
+        R, Z = RZ_from_psi_theta(psi, theta)
+        B0_R_theta[i_psi, i_theta] = B0_R_spline.ev(R, Z)
+        B0_theta_theta[i_psi, i_theta] = B0_theta_spline.ev(R, Z)
+        B0_phi_theta[i_psi, i_theta] = B0_phi_spline.ev(R, Z)
 
 # Fourier transform B0 along theta
-B0_r_modes = np.fft.fft(B0_r_theta, axis=1)/Ntheta
-B0_theta_modes = np.fft.fft(B0_theta_theta, axis=1)/Ntheta
-B0_phi_modes = np.fft.fft(B0_phi_theta, axis=1)/Ntheta
+B0_R_modes = np.fft.fft(B0_R_theta, axis=1) / Ntheta
+B0_theta_modes = np.fft.fft(B0_theta_theta, axis=1) / Ntheta
+B0_phi_modes = np.fft.fft(B0_phi_theta, axis=1) / Ntheta
 
 # Map FFT frequencies to poloidal mode numbers
 fft_freqs = np.fft.fftfreq(Ntheta, d=1/Ntheta)
 
 for key in Bmn[2]['var'].keys():
-    Bmn[4]['var'][key]=Bmn[2]['var'][key]/(B_equil["R0"]+B_equil["rad"])
+    Bmn[4]['var'][key] = Bmn[2]['var'][key] / (B_equil["R0"] + B_equil["rad"])
 
 def dict_to_mode_array(mode_dict, m_modes, psi_grid):
     """
@@ -510,7 +452,7 @@ for i in range (15,22):
     plt.plot(Bmn[3]['rho'][i], np.abs(B_parallel_modes[:,i]), label=f'm={m_modes[i]}')
     plt.legend()
     plt.xlabel(r'$\hat{\psi}$')
-    plt.ylabel(r'$\lvert (B^{par}_{n})_{m} \rvert $ / \si{\tesla}')
+    plt.ylabel(r'$\lvert (B^{\parallel}_{n})_{m} \rvert $ / \si{\tesla}')
     plt.legend(loc='upper left')
     #fig.savefig(path.join(work_dir, f'Bmn_par_{np.abs(m_modes[i])}_4_0.pdf'), dpi=150)
 
@@ -531,27 +473,28 @@ plt.show()
 print(len(Bmn[2]['var']))
 for key in Bmn[2]['var'].keys():
     print(Bmn[2]['var'][key].shape)
-    print(B_equil["R0"],B_equil["rad"][1:])
-    Bmn[4]['var'][key]=Bmn[2]['var'][key]/(B_equil["R0"]+B_equil["rad"])
+    print(B_equil["R0"], B_equil["rad"][1:])
+    Bmn[4]['var'][key] = Bmn[2]['var'][key] / (B_equil["R0"] + B_equil["rad"])
 
 for m in mephit.post['m_res']:
     fig = plt.figure()
     ax = fig.subplots()
     ax.axhline(0.0, color='k', lw=0.5)
-    polmode_list = [m
+    polmode_list = [
         (Bmn[4], 'orange', '-', '0.1cm D off'),
         (Bmn[3], 'k', '-', '0.1cm D off'),
     ]
 
     for polmode, color, style, label_suffix in polmode_list:
-        ax.plot(polmode['rho'][m], np.abs(polmode['var'][m]), label=polmode['label'] + ' ' + label_suffix, ls=style, color=color)
+        ax.plot(polmode['rho'][m], np.abs(polmode['var'][m]),
+                label=polmode['label'] + ' ' + label_suffix, ls=style, color=color)
 
     ax.set_xlabel(r'$\hat{\psi}$')
     ax.set_ylabel(r'$\lvert (B^{\theta, \phi}_{n})_{m} \rvert $ / \si{\tesla}')
     ax.set_title(f"$m = {m}$")
     ax.set_ylim(0,0.0005)
     ax.legend(loc='upper left')
-    plt.savefig(path.join(work_dir, f'Bmn_theta_phi_{np.abs(m)}_0_1.pdf'), dpi=150)
+    fig.savefig(path.join(work_dir, f'Bmn_theta_phi_{np.abs(m)}_0_1.pdf'), dpi=150)
     plt.show()
 
 
@@ -565,12 +508,13 @@ for m in mephit.post['m_res']:
     ]
 
     for polmode, color, style, label_suffix in polmode_list:
-        ax.plot(polmode['rho'][m], np.abs(polmode['var'][m]), label=polmode['label'] + ' ' + label_suffix, ls=style, color=color)
+        ax.plot(polmode['rho'][m], np.abs(polmode['var'][m]),
+                label=polmode['label'] + ' ' + label_suffix, ls=style, color=color)
 
     ax.set_xlabel(r'$\hat{\psi}$')
     ax.set_ylabel(r'$\lvert (B^{\theta, \phi}_{n})_{m} \rvert $ / \si{\tesla}')
     ax.set_title(f"$m = {m}$")
-    ax.set_ylim(0,0.0005)
+    ax.set_ylim(0, 0.0005)
     ax.legend(loc='upper left')
     plt.savefig(path.join(work_dir, f'Bmn_par_{np.abs(m)}_0_1.pdf'), dpi=150)
     plt.show()
