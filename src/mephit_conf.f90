@@ -92,8 +92,8 @@ module mephit_conf
     integer :: q_prof = q_prof_rot
 
     !> Source of vacuum field perturbation. Possible values are #vac_src_nemov,
-    !> #vac_src_gpec, #vac_src_fourier, and #vac_src_vecpot (default).
-    integer :: vac_src = vac_src_vecpot
+    !> #vac_src_gpec, #vac_src_fourier (default), and #vac_src_vecpot.
+    integer :: vac_src = vac_src_fourier
 
     !> Method to compute response current. Possible values are #currn_model_mhd (default)
     !> and #currn_model_kilca.
