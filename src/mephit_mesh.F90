@@ -320,6 +320,8 @@ module mephit_mesh
 
     !> Free parameter in the compensated scheme for shielding
     real(dp) :: coeff
+    real(dp) :: psi_min, psi_max
+    integer :: kf_min, kf_max
 
     real(dp), allocatable :: cross_fade(:)
   end type shielding_t
@@ -1204,9 +1206,11 @@ contains
     call compute_sample_jnperp(cache%sample_jnperp)
     call compute_resonant_layer_widths
     do m = mesh%m_res_min, mesh%m_res_max
-      call compute_shielding_auxiliaries(cache%shielding(m), m)
-      call compute_sample_Ires(cache%shielding(m)%sample_Ires, &
-        cache%shielding(m)%GL_weights, cache%GL_order, m)
+      associate (s => cache%shielding(m))
+        call compute_shielding_auxiliaries(s, m)
+        call compute_sample_Ires(s%sample_Ires, s%GL_weights, cache%GL_order, m, &
+                                s%kf_min, s%kf_max, s%psi_min, s%psi_max)
+      end associate
     end do
     call compute_kilca_auxiliaries
     call compute_gpec_jacfac
@@ -1455,17 +1459,26 @@ contains
   subroutine compute_resonant_layer_widths
     use magdata_in_symfluxcoor_mod, only: psisurf, psipol_max, rbeg
     use mephit_conf, only: conf_arr
-    use mephit_util, only: resample1d
+    use mephit_util, only: interp1d, binsearch
     integer :: m
-    real(dp) :: delta(2)
+    real(dp) :: rad_min, rad_max
 
     if (allocated(mesh%Delta_psi_res_curr)) deallocate(mesh%Delta_psi_res_curr)
     allocate(mesh%Delta_psi_res_curr(mesh%m_res_min:mesh%m_res_max))
     do m = mesh%m_res_min, mesh%m_res_max
-      call resample1d(rbeg, psisurf(1:) * psipol_max, &
-        mesh%rad_norm_res(m) * fs%rad(mesh%nflux) + &
-        [-0.5d0, 0.5d0] * conf_arr%Delta_rad_res_curr(m), delta, 3)
-      mesh%Delta_psi_res_curr(m) = abs(delta(2) - delta(1))
+      associate (s => cache%shielding(m))
+        rad_min = max(mesh%rad_norm_res(m) * fs%rad(mesh%nflux) - &
+                      0.5d0 * conf_arr%Delta_rad_res_curr(m), fs%rad(0))
+        rad_max = min(mesh%rad_norm_res(m) * fs%rad(mesh%nflux) + &
+                      0.5d0 * conf_arr%Delta_rad_res_curr(m), fs%rad(mesh%nflux))
+        s%psi_min = interp1d(rbeg, psisurf(1:) * psipol_max, rad_min, 3)
+        s%psi_max = interp1d(rbeg, psisurf(1:) * psipol_max, rad_max, 3)
+        mesh%Delta_psi_res_curr(m) = abs(s%psi_max - s%psi_min)
+        call binsearch(fs%psi, 0, s%psi_min, s%kf_min)
+        call binsearch(fs%psi, 0, s%psi_max, s%kf_max)
+        s%kf_min = max(s%kf_min, 1)
+        s%kf_max = min(s%kf_max, mesh%nflux)
+      end associate
     end do
   end subroutine compute_resonant_layer_widths
 
@@ -2508,7 +2521,8 @@ contains
   end subroutine compute_sample_jnperp
 
   !> Compute fine grid for parallel current sampling points.
-  subroutine compute_sample_Ires(sample_Ires, GL_weights, GL_order, m)
+  subroutine compute_sample_Ires(sample_Ires, GL_weights, GL_order, m, kf_min, kf_max, &
+                                  psi_min, psi_max)
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
     use mephit_conf, only: conf_arr
     use mephit_util, only: pi, binsearch, interp_psi_pol, interp1d
@@ -2517,25 +2531,18 @@ contains
     real(dp), dimension(:), intent(inout), allocatable :: GL_weights
     integer, intent(in) :: GL_order
     integer, intent(in) :: m
-    integer :: nrad, krad, npol, kpol, kf_min, kf_max, kf, kGL
+    integer, intent(in) :: kf_min, kf_max
+    real(dp), intent(in) :: psi_min, psi_max
+    integer :: nrad, krad, npol, kpol, kf, kGL
     real(dp) :: weights(GL_order), points(GL_order), q, dum
     real(dp), allocatable :: theta(:), psi(:)
-    real(dp) :: rad_min, rad_max, psi_min, psi_max, psi_lo, psi_hi
+    real(dp) :: psi_lo, psi_hi
 
     npol = mesh%kp_max(mesh%res_ind(m))
     allocate(theta(npol))
     theta(:) = 2d0 * pi * [(dble(kpol - 1), kpol = 1, npol)] / dble(npol)
     call gauss_legendre_unit_interval(GL_order, points, weights)
 
-    ! TODO: reuse intermediate result from compute_resonant_layer_width
-    rad_min = max(fs%rad(mesh%res_ind(m)) - 0.5d0 * conf_arr%Delta_rad_res_curr(m), fs%rad(0))
-    rad_max = min(fs%rad(mesh%res_ind(m)) + 0.5d0 * conf_arr%Delta_rad_res_curr(m), fs%rad(mesh%nflux))
-    psi_min = interp1d(fs%rad, fs%psi, rad_min, 3)
-    psi_max = interp1d(fs%rad, fs%psi, rad_max, 3)
-    call binsearch(fs%psi, 0, psi_min, kf_min)
-    call binsearch(fs%psi, 0, psi_max, kf_max)
-    kf_min = max(kf_min, 1)
-    kf_max = min(kf_max, mesh%nflux)
     nrad = (kf_max - kf_min + 1) * GL_order
     allocate(psi(nrad))
     if (allocated(GL_weights)) deallocate(GL_weights)

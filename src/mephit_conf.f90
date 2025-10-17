@@ -21,7 +21,7 @@ module mephit_conf
     curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
     q_prof_flux, q_prof_rot, q_prof_geqdsk, &
     vac_src_nemov, vac_src_gpec, vac_src_fourier, vac_src_vecpot, &
-    currn_model_mhd, currn_model_kilca, &
+    currn_model_mhd, currn_model_kilca, currn_model_zero, &
     refinement_scheme_geometric, refinement_scheme_gaussian, &
     transition_func_none, transition_func_heaviside, transition_func_smooth
 
@@ -55,6 +55,7 @@ module mephit_conf
 
   integer, parameter :: currn_model_mhd = 0    !< response current from iMHD model
   integer, parameter :: currn_model_kilca = 1  !< response current from KiLCA model
+  integer, parameter :: currn_model_zero = 2   !< zero response current
 
   integer, parameter :: refinement_scheme_geometric = 0  !< radial refinement via geometric series
   integer, parameter :: refinement_scheme_gaussian = 1   !< radial refinement via sum of Gaussians
