@@ -2522,9 +2522,8 @@ contains
 
   !> Compute fine grid for parallel current sampling points.
   subroutine compute_sample_Ires(sample_Ires, GL_weights, GL_order, m, kf_min, kf_max, &
-                                  psi_min, psi_max)
+                                 psi_min, psi_max)
     use magdata_in_symfluxcoor_mod, only: magdata_in_symfluxcoord_ext
-    use mephit_conf, only: conf_arr
     use mephit_util, only: pi, binsearch, interp_psi_pol, interp1d
     use field_sub, only : field
     type(coord_cache_t), dimension(:, :), intent(inout), allocatable :: sample_Ires

@@ -1379,26 +1379,26 @@ contains
     type(RT0_t), intent(inout) :: jn
     type(L1_t), intent(inout) :: jnpar_B0
     type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
-    integer :: kf, kp, kedge, m
+    integer :: kf, kp, kt, kedge, m
 
     do m = mesh%m_res_min, mesh%m_res_max
       do kf = cache%shielding(m)%kf_min, cache%shielding(m)%kf_max
         ! iterate over poloidal edges
         do kp = 1, mesh%kp_max(kf)
           kedge = mesh%kp_low(kf) + kp - 1
-          jn%DOF(kedge) = (0d0,0d0)
-          jnpar_B0%DOF(kedge+1) = (0d0,0d0)
+          jn%DOF(kedge) = (0d0, 0d0)
+          jnpar_B0%DOF(kedge+1) = (0d0, 0d0)
         end do
       end do
       ! lower bound 1 higher for radial edges
       do kf = cache%shielding(m)%kf_min + 1, cache%shielding(m)%kf_max
         do kt = 1, mesh%kt_max(kf)
           kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
-          jn%DOF(kedge) = (0d0,0d0)
+          jn%DOF(kedge) = (0d0, 0d0)
         end do
       end do
     end do
-    resonant_jmnpar_over_Bmod%coeff(:, :) = (0d0, 0d0)
+    jmnpar_over_Bmod%coeff(:, :) = (0d0, 0d0)
   end subroutine remove_plasma_current_in_res_layer
 
   subroutine perteq_write(name_fmt, comment, &
