@@ -1471,8 +1471,8 @@ contains
                       0.5d0 * conf_arr%Delta_rad_res_curr(m), fs%rad(0))
         rad_max = min(mesh%rad_norm_res(m) * fs%rad(mesh%nflux) + &
                       0.5d0 * conf_arr%Delta_rad_res_curr(m), fs%rad(mesh%nflux))
-        s%psi_min = interp1d(rbeg, psisurf(1:) * psipol_max, rad_min, 3)
-        s%psi_max = interp1d(rbeg, psisurf(1:) * psipol_max, rad_max, 3)
+        s%psi_min = fs%psi(0) + interp1d(rbeg, psisurf(1:) * psipol_max, rad_min, 3)
+        s%psi_max = fs%psi(0) + interp1d(rbeg, psisurf(1:) * psipol_max, rad_max, 3)
         mesh%Delta_psi_res_curr(m) = abs(s%psi_max - s%psi_min)
         call binsearch(fs%psi, 0, s%psi_min, s%kf_min)
         call binsearch(fs%psi, 0, s%psi_max, s%kf_max)
