@@ -256,6 +256,12 @@ module mephit_conf
     !> Free parameters setting the magnitudes of sheet currents. Only applied with refinement. Defaults to 1.
     real(dp), dimension(:), allocatable :: sheet_current_factor
 
+    !> Electron current factor in FLR2 model. Defaults to 1.
+    real(dp), dimension(:), allocatable :: electron_current_factor
+
+    !> Ion current factor in FLR2 model. Defaults to 1.
+    real(dp), dimension(:), allocatable :: ion_current_factor
+
   contains
     procedure :: read => config_delayed_read
     procedure :: export_hdf5 => config_delayed_export_hdf5
@@ -384,8 +390,10 @@ contains
     integer, intent(in) :: m_min, m_max
     integer :: fid
     integer, dimension(m_min:m_max) :: add_fine
-    real(dp), dimension(m_min:m_max) :: Delta_rad_res, Delta_rad_res_curr, refinement, sheet_current_factor
-    namelist /arrays/ Delta_rad_res, Delta_rad_res_curr, add_fine, refinement, sheet_current_factor
+    real(dp), dimension(m_min:m_max) :: Delta_rad_res, Delta_rad_res_curr, refinement, &
+      sheet_current_factor, electron_current_factor, ion_current_factor
+    namelist /arrays/ Delta_rad_res, Delta_rad_res_curr, add_fine, refinement, &
+      sheet_current_factor, electron_current_factor, ion_current_factor
 
     config%m_min = m_min
     config%m_max = m_max
@@ -394,6 +402,8 @@ contains
     add_fine = 0
     refinement = 0d0
     sheet_current_factor = 1d0
+    electron_current_factor = 1d0
+    ion_current_factor = 1d0
     open(newunit = fid, file = filename)
     read(fid, nml = arrays)
     close(fid)
@@ -412,6 +422,12 @@ contains
     if (allocated(config%sheet_current_factor)) deallocate(config%sheet_current_factor)
     allocate(config%sheet_current_factor(m_min:m_max))
     config%sheet_current_factor(:) = sheet_current_factor
+    if (allocated(config%electron_current_factor)) deallocate(config%electron_current_factor)
+    allocate(config%electron_current_factor(m_min:m_max))
+    config%electron_current_factor(:) = electron_current_factor
+    if (allocated(config%ion_current_factor)) deallocate(config%ion_current_factor)
+    allocate(config%ion_current_factor(m_min:m_max))
+    config%ion_current_factor(:) = ion_current_factor
   end subroutine config_delayed_read
 
   subroutine config_delayed_export_hdf5(config, file, dataset)
@@ -441,6 +457,12 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor, &
       lbound(config%sheet_current_factor), ubound(config%sheet_current_factor), &
       comment = 'free parameters setting the magnitudes of sheet currents')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/electron_current_factor', config%electron_current_factor, &
+      lbound(config%electron_current_factor), ubound(config%electron_current_factor), &
+      comment = 'free parameters setting the magnitudes of electron currents')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ion_current_factor', config%ion_current_factor, &
+      lbound(config%ion_current_factor), ubound(config%ion_current_factor), &
+      comment = 'free parameters setting the magnitudes of ion currents')
     call h5_close(h5id_root)
   end subroutine config_delayed_export_hdf5
 
@@ -464,6 +486,8 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/add_fine', config%add_fine)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', config%refinement)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/electron_current_factor', config%electron_current_factor)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/ion_current_factor', config%ion_current_factor)
     call h5_close(h5id_root)
   end subroutine config_delayed_import_hdf5
 
@@ -477,6 +501,8 @@ contains
     if (allocated(config%add_fine)) deallocate(config%add_fine)
     if (allocated(config%refinement)) deallocate(config%refinement)
     if (allocated(config%sheet_current_factor)) deallocate(config%sheet_current_factor)
+    if (allocated(config%electron_current_factor)) deallocate(config%electron_current_factor)
+    if (allocated(config%ion_current_factor)) deallocate(config%ion_current_factor)
   end subroutine config_delayed_deinit
 
   !> Associate logfile and open if necessary.
