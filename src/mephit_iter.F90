@@ -115,11 +115,12 @@ contains
     use mephit_util, only: C_F_string, init_field, geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5, &
       save_symfluxcoord, load_symfluxcoord
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, &
-      datafile, basename_suffix, decorate_filename
+      datafile, basename_suffix, decorate_filename, currn_model_kim
     use mephit_mesh, only: equil, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
       read_profiles, compute_auxiliary_profiles, resample_profiles, write_profiles_hdf5, read_profiles_hdf5
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
     use mephit_flr2, only: flr2_t, flr2_write, flr2_read, flr2_deinit
+    use mephit_kim, only: kim_t, kim_init, kim_deinit
     integer(c_int), intent(in), value :: runmode
     type(c_ptr), intent(in), value :: config
     type(c_ptr), intent(in), value :: suffix
@@ -128,6 +129,7 @@ contains
     logical :: meshing, preconditioner, iterations
     type(fdm_t) :: fdm
     type(flr2_t) :: flr2
+    type(kim_t) :: kim
     type(perteq_t) :: perteq
     type(precond_t) :: precond
 
@@ -203,19 +205,26 @@ contains
         call FDM_write(fdm, datafile, 'iter/FDM')
         call compute_FLR2_coeff(flr2)
         call FLR2_write(flr2, datafile, 'iter/FLR2')
-        call debug_initial_iteration(perteq, fdm, flr2)
-        call precond_compute(precond, perteq, fdm, flr2)
+        if (conf%currn_model == currn_model_kim) then
+          call kim_init(kim, mesh%m_res_min, mesh%m_res_max, mesh%nflux, fs%psi, fs%q)
+        end if
+        call debug_initial_iteration(perteq, fdm, flr2, kim)
+        call precond_compute(precond, perteq, fdm, flr2, kim)
         call precond_write(precond, datafile, 'iter')
       else
         call FDM_read(fdm, datafile, 'iter/FDM')
         call FLR2_read(flr2, datafile, 'iter/FLR2')
+        if (conf%currn_model == currn_model_kim) then
+          call kim_init(kim, mesh%m_res_min, mesh%m_res_max, mesh%nflux, fs%psi, fs%q)
+        end if
         call precond_read(precond, datafile, 'iter')
       end if
       if (iterations) then
-        call perteq_iterate(perteq, precond, fdm, flr2)
+        call perteq_iterate(perteq, precond, fdm, flr2, kim)
       end if
       call FDM_deinit(fdm)
       call FLR2_deinit(flr2)
+      if (conf%currn_model == currn_model_kim) call kim_deinit(kim)
       call precond_deinit(precond)
       call perteq_deinit(perteq)
     end if
@@ -249,7 +258,7 @@ contains
   end subroutine mephit_deinit
 
   subroutine perteq_init(perteq)
-    use mephit_conf, only: conf, currn_model_kilca
+    use mephit_conf, only: conf, currn_model_kilca, currn_model_kim
     use mephit_mesh, only: mesh
     use mephit_pert, only: RT0_init, L1_init
     type(perteq_t), intent(inout) :: perteq
@@ -261,7 +270,7 @@ contains
     call L1_init(perteq%jnpar_B0, mesh%npoint)
     call L1_init(perteq%AnR, mesh%npoint)
     call L1_init(perteq%AnZ, mesh%npoint)
-    if (conf%currn_model == currn_model_kilca) then
+    if (conf%currn_model == currn_model_kilca .or. conf%currn_model == currn_model_kim) then
       allocate(perteq%Phi_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max))
       allocate(perteq%Phi_aligned_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max))
     end if
@@ -284,7 +293,7 @@ contains
 
   subroutine perteq_read(perteq)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
-    use mephit_conf, only: datafile, conf, currn_model_kilca
+    use mephit_conf, only: datafile, conf, currn_model_kilca, currn_model_kim
     use mephit_pert, only: L1_read, RT0_read
     type(perteq_t), intent(inout) :: perteq
     integer(HID_T) :: h5id_root
@@ -296,7 +305,7 @@ contains
     call L1_read(perteq%jnpar_B0, datafile, 'iter/jnpar_Bmod')
     call L1_read(perteq%AnR, datafile, 'iter/AnR')
     call L1_read(perteq%AnZ, datafile, 'iter/AnZ')
-    if (conf%currn_model == currn_model_kilca) then
+    if (conf%currn_model == currn_model_kilca .or. conf%currn_model == currn_model_kim) then
       call h5_open(datafile, h5id_root)
       call h5_get(h5id_root, 'iter/Phi_mn', perteq%Phi_mn)
       call h5_get(h5id_root, 'iter/Phi_aligned_mn', perteq%Phi_aligned_mn)
@@ -385,17 +394,19 @@ contains
       matmul(transpose(conjg(precond%eigvecs(:, 1:precond%nritz))), vec)))
   end function precond_apply
 
-  subroutine precond_compute(precond, perteq, fdm, flr2)
+  subroutine precond_compute(precond, perteq, fdm, flr2, kim)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, logger, datafile, cmplx_fmt, runmode_precon
     use mephit_util, only: arnoldi_break
     use mephit_mesh, only: mesh
     use mephit_pert, only: vac, RT0_init, RT0_deinit, RT0_write, RT0_tor_comp_from_zero_div, RT0_L2int
     use mephit_flr2, only: flr2_t
+    use mephit_kim, only: kim_t
     type(precond_t), intent(inout) :: precond
     type(perteq_t), intent(inout) :: perteq
     type(fdm_t), intent(in) :: fdm
     type(flr2_t), intent(in) :: flr2
+    type(kim_t), intent(in) :: kim
     integer :: i, j, info
     integer(HID_T) :: h5id_root
     complex(dp), allocatable :: start_vector(:), eigvals(:), Yr(:, :)
@@ -408,7 +419,7 @@ contains
       perteq%Bn%DOF(:) = vac%Bn%DOF
       perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
       call compute_presn(perteq, fdm, conf%damp)
-      call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
+      call compute_currn(perteq, fdm, flr2, kim, conf%damp, .false.)
       call compute_magfn(perteq)
       allocate(start_vector, source = perteq%Bn%DOF)
       ! calculate eigenvectors -- system dimension: number of non-redundant edges in core plasma
@@ -477,7 +488,7 @@ contains
         call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
         Bn_prev%DOF(:) = perteq%Bn%DOF
         call compute_presn(perteq, fdm, conf%damp)
-        call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
+        call compute_currn(perteq, fdm, flr2, kim, conf%damp, .false.)
         call compute_magfn(perteq)
         perteq%Bn%DOF(:) = perteq%Bn%DOF - precond_apply(precond, perteq%Bn%DOF - Bn_prev%DOF)
         call RT0_tor_comp_from_zero_div(perteq%Bn)
@@ -497,23 +508,25 @@ contains
       perteq%Bn%DOF(:) = old_val
       call RT0_tor_comp_from_zero_div(perteq%Bn)
       call compute_presn(perteq, fdm, conf%damp)
-      call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
+      call compute_currn(perteq, fdm, flr2, kim, conf%damp, .false.)
       call compute_magfn(perteq)
       new_val(:) = perteq%Bn%DOF
     end subroutine next_iteration_arnoldi
   end subroutine precond_compute
 
-  subroutine perteq_iterate(perteq, precond, fdm, flr2)
+  subroutine perteq_iterate(perteq, precond, fdm, flr2, kim)
     use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use mephit_conf, only: conf, logger, datafile, runmode_single, currn_model_kilca
+    use mephit_conf, only: conf, logger, datafile, runmode_single, currn_model_kilca, currn_model_kim
     use mephit_mesh, only: mesh
     use mephit_pert, only: vac, L1_write, RT0_init, RT0_deinit, RT0_tor_comp_from_zero_div, RT0_L2int
     use mephit_flr2, only: flr2_t
+    use mephit_kim, only: kim_t
     type(perteq_t), intent(inout) :: perteq
     type(precond_t), intent(inout) :: precond
     type(fdm_t), intent(in) :: fdm
     type(flr2_t), intent(in) :: flr2
+    type(kim_t), intent(in) :: kim
     integer :: kiter, niter, maxiter
     integer(HID_T) :: h5id_root
     real(dp), allocatable :: L2int_Bn_diff(:)
@@ -566,7 +579,7 @@ contains
         call perteq_write('("iter/", a, "' // postfix // '")', &
           ' (after iteration)', presn = perteq%pn, presmn = perteq%pn)
       end if
-      call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
+      call compute_currn(perteq, fdm, flr2, kim, conf%damp, .false.)
       call compute_magfn(perteq)
       perteq%Bn%DOF(:) = perteq%Bn%DOF + vac%Bn%DOF
       if (precond%nritz > 0) then
@@ -615,7 +628,7 @@ contains
     call h5_add(h5id_root, 'iter/L2int_Bn_diff', L2int_Bn_diff, &
       lbound(L2int_Bn_diff), ubound(L2int_Bn_diff), &
       comment = 'L2 integral of magnetic field (difference between iterations)', unit = 'Mx')
-    if (conf%currn_model == currn_model_kilca) then
+    if (conf%currn_model == currn_model_kilca .or. conf%currn_model == currn_model_kim) then
       call h5_add(h5id_root, 'iter/Phi_mn', perteq%Phi_mn, &
         lbound(perteq%Phi_mn), ubound(perteq%Phi_mn), &
         comment = 'electric potential perturbation', unit = 'statV')
@@ -639,13 +652,15 @@ contains
     call RT0_deinit(Bn_diff)
   end subroutine perteq_iterate
 
-  subroutine debug_initial_iteration(perteq, fdm, flr2)
+  subroutine debug_initial_iteration(perteq, fdm, flr2, kim)
     use mephit_conf, only: conf
     use mephit_pert, only: vac
     use mephit_flr2, only: flr2_t
+    use mephit_kim, only: kim_t
     type(perteq_t), intent(inout) :: perteq
     type(fdm_t), intent(in) :: fdm
     type(flr2_t), intent(in) :: flr2
+    type(kim_t), intent(in) :: kim
 
     if (conf%debug_initial) then
       perteq%Bn%DOF(:) = vac%Bn%DOF
@@ -660,11 +675,11 @@ contains
       call perteq_write('("debug_MFEM_initial/", a)', &
         ' (initial iteration)', presn = perteq%pn, presmn = perteq%pn)
 #endif
-      call compute_currn(perteq, fdm, flr2, .false., .true.)
+      call compute_currn(perteq, fdm, flr2, kim, .false., .true.)
       perteq%Bn%DOF(:) = vac%Bn%DOF
       perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
       call compute_presn(perteq, fdm, .true.)
-      call compute_currn(perteq, fdm, flr2, .true., .true.)
+      call compute_currn(perteq, fdm, flr2, kim, .true., .true.)
     end if
   end subroutine debug_initial_iteration
 
@@ -1061,16 +1076,18 @@ contains
     deallocate(lorentz, pn, grad_pn, Bn_psi_contravar, jnpar_Bmod, grad_jnpar_Bmod, div_jnperp, div_jnperp_RT0)
   end subroutine debug_MDE
 
-  subroutine compute_currn(perteq, fdm, flr2, apply_damping, debug_initial)
-    use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, currn_model_zero, &
+  subroutine compute_currn(perteq, fdm, flr2, kim, apply_damping, debug_initial)
+    use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, currn_model_zero, currn_model_kim, &
                            logger, datafile
     use mephit_mesh, only: mesh
     use mephit_pert, only: polmodes_t, polmodes_init, polmodes_write, polmodes_deinit, &
       L1_t, L1_init, L1_deinit, RT0_t, RT0_init, RT0_deinit
     use mephit_flr2, only: flr2_t
+    use mephit_kim, only: kim_t, compute_kim_current
     type(perteq_t), intent(inout) :: perteq
     type(fdm_t), intent(in) :: fdm
     type(flr2_t), intent(in) :: flr2
+    type(kim_t), intent(in) :: kim
     logical, intent(in) :: apply_damping
     logical, intent(in) :: debug_initial
     type(polmodes_t) :: resonant_jmnpar_over_Bmod
@@ -1111,6 +1128,9 @@ contains
     case (currn_model_zero)
       call remove_plasma_current_in_res_layer(perteq%jn, perteq%jnpar_B0, &
         resonant_jmnpar_over_Bmod)
+    case (currn_model_kim)
+      call compute_kim_current(perteq%Bn, resonant_jmnpar_over_Bmod, &
+        kim, perteq%Phi_mn, perteq%Phi_aligned_mn)
     case default
       write (logger%msg, '("unknown response current model selection", i0)') conf%currn_model
       if (logger%err) call logger%write_msg
