@@ -524,10 +524,18 @@ contains
 
     ! Boundary conditions: zero misalignment electric field
     ! Phi_aligned = c * E_r * B_r / (B0 * k_parallel)
-    Phi_aligned_lo = clight * mode%Er0_xl(1) * Br_kim(1) / &
-      (mode%B0_xl(1) * mode%kp_xl(1))
-    Phi_aligned_hi = clight * mode%Er0_xl(n) * Br_kim(n) / &
-      (mode%B0_xl(n) * mode%kp_xl(n))
+    if (abs(mode%B0_xl(1) * mode%kp_xl(1)) > 1d-30) then
+      Phi_aligned_lo = clight * mode%Er0_xl(1) * Br_kim(1) / &
+        (mode%B0_xl(1) * mode%kp_xl(1))
+    else
+      Phi_aligned_lo = (0d0, 0d0)
+    end if
+    if (abs(mode%B0_xl(n) * mode%kp_xl(n)) > 1d-30) then
+      Phi_aligned_hi = clight * mode%Er0_xl(n) * Br_kim(n) / &
+        (mode%B0_xl(n) * mode%kp_xl(n))
+    else
+      Phi_aligned_hi = (0d0, 0d0)
+    end if
     rhs(1) = -Phi_aligned_lo
     rhs(n) = -Phi_aligned_hi
 
