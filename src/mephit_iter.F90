@@ -1144,6 +1144,7 @@ contains
     use mephit_util, only: pi, clight, zd_cross
     use mephit_mesh, only: mesh, cache, fs
     use mephit_pert, only: L1_t, L1_interp, RT0_t, RT0_interp
+    use mephit_conf, only: conf
     type(L1_t), intent(in) :: pn
     type(RT0_t), intent(in) :: Bn
     type(fdm_t), intent(in) :: fdm
@@ -1172,7 +1173,7 @@ contains
           B0_grad_B0 = [sum(f%dB0_dR * f%B0), 0d0, sum(f%dB0_dZ * f%B0)]
           inhom(kedge + 1) = (-2d0 / f%Bmod ** 2 * (clight * sum(zd_cross(grad_pn, f%B0) * B0_grad_B0) + &
             sum(B_n * f%B0) * sum(f%j0 * B0_grad_B0) - sum(B_n * B0_grad_B0) * sum(f%j0 * f%B0)) + &
-            sum(grad_BnB0 * f%j0 - B_n * grad_j0B0) + 4d0 * pi * sum(grad_pn * f%j0)) / f%Bmod ** 2
+            sum(grad_BnB0 * f%j0 - B_n * grad_j0B0) - 4d0 * pi * sum(grad_pn * f%j0)) / f%Bmod ** 2
         end associate
       end do
     end do
@@ -1209,7 +1210,7 @@ contains
           call L1_interp(jnpar_B0, ktri, R, Z, B0_jnpar)
           B0_jnpar = B0_jnpar * f%Bmod ** 2
           jn%comp_phi(ktri) = jn%comp_phi(ktri) + mesh%GL2_weights(k) * &
-            (B0_jnpar * f%B0(2) - clight * (grad_pn(3) * f%B0(1) - grad_pn(3) * f%B0(3)) + &
+            (B0_jnpar * f%B0(2) - clight * (grad_pn(3) * f%B0(1) - grad_pn(1) * f%B0(3)) + &
             sum(f%j0 * f%B0) * B_n(2) - sum(B_n * f%B0) * f%j0(2)) / f%Bmod ** 2
         end associate
       end do
