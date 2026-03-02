@@ -56,6 +56,7 @@ module mephit_conf
   integer, parameter :: currn_model_mhd = 0    !< response current from iMHD model
   integer, parameter :: currn_model_kilca = 1  !< response current from KiLCA model
   integer, parameter :: currn_model_zero = 2   !< zero response current
+  integer, parameter :: currn_model_kim = 3    !< response current from KIM integral kernels
 
   integer, parameter :: refinement_scheme_geometric = 0  !< radial refinement via geometric series
   integer, parameter :: refinement_scheme_gaussian = 1   !< radial refinement via sum of Gaussians
@@ -96,8 +97,8 @@ module mephit_conf
     !> #vac_src_gpec, #vac_src_fourier (default), and #vac_src_vecpot.
     integer :: vac_src = vac_src_fourier
 
-    !> Method to compute response current. Possible values are #currn_model_mhd (default)
-    !> and #currn_model_kilca.
+    !> Method to compute response current. Possible values are #currn_model_mhd (default),
+    !> #currn_model_kilca, and #currn_model_kim.
     integer :: currn_model = currn_model_mhd
 
     !> Method used for radial refinement. Possible values are #refinement_scheme_geometric
@@ -224,6 +225,11 @@ module mephit_conf
     !> If non-zero, #n and #r0 are scaled by this factor to approximate the cylindrical
     !> topology assumed in KiLCA.
     integer :: kilca_scale_factor = 0
+
+    !> Path to directory containing KIM kernel data. For text files, expects per-mode
+    !> subdirectories (kim_m6/, kim_m7/, ...). For HDF5, expects per-mode files
+    !> (kim_m6.h5, kim_m7.h5, ...). Only used when currn_model == currn_model_kim.
+    character(len = 1024) :: kim_data_dir = ''
 
     !> Maximum number of eigenvectors to be exported for plotting. Defaults to 10.
     integer :: max_eig_out = 10
