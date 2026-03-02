@@ -93,6 +93,7 @@ set(MEPHIT_FORTRAN_SRC_FILES
   src/mephit_mesh.F90
   src/mephit_pert.f90
   src/mephit_flr2.f90
+  src/mephit_kim.f90
   src/mephit_iter.F90
 )
 set_source_files_properties(src/mephit_test.f90 src/mephit_test_refine.f90 ${MEPHIT_FORTRAN_SRC_FILES}
