@@ -21,7 +21,7 @@ module mephit_conf
     curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
     q_prof_flux, q_prof_rot, q_prof_geqdsk, &
     vac_src_nemov, vac_src_gpec, vac_src_fourier, vac_src_vecpot, &
-    currn_model_mhd, currn_model_kilca, currn_model_zero, &
+    currn_model_mhd, currn_model_kilca, currn_model_zero, currn_model_kim, &
     refinement_scheme_geometric, refinement_scheme_gaussian, &
     transition_func_none, transition_func_heaviside, transition_func_smooth
 
