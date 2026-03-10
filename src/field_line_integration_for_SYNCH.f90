@@ -302,10 +302,10 @@
 !
   implicit none
 !
-  integer, parameter :: ndim = 5
-!
-  double precision, dimension(ndim) :: y,dy
-  double precision :: R,phi,Z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ,   &
+  double precision, intent(in) :: phi
+  double precision, intent(in) :: y(:)
+  double precision, intent(out) :: dy(:)
+  double precision :: R,Z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ,   &
                       dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
 !
   R=y(1)
@@ -334,10 +334,10 @@
 !
   implicit none
 !
-  integer, parameter :: ndim = 5
-!
-  double precision, dimension(ndim) :: y,dy
-  double precision :: R,phi,Z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ,   &
+  double precision, intent(in) :: phi
+  double precision, intent(in) :: y(:)
+  double precision, intent(out) :: dy(:)
+  double precision :: R,Z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ,   &
                       dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
 !
   R=y(1)
