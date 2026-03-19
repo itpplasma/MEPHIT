@@ -230,7 +230,8 @@ contains
     type(kim_mode_t), intent(inout) :: mode
     character(len=*), intent(in) :: h5file
     integer(HID_T) :: h5id
-    integer :: lb1, ub1, lb2, ub2
+    integer :: lb1, ub1, n
+    real(dp), allocatable :: re_part(:,:), im_part(:,:)
 
     call h5_open(h5file, h5id)
 
@@ -245,39 +246,57 @@ contains
     allocate(mode%rg_grid(mode%npts_rg))
     call h5_get(h5id, 'grid/rg_xb', mode%rg_grid)
 
-    ! Kernels (stored as complex in HDF5): query bounds, allocate, then read
-    call h5_get_bounds(h5id, 'kernel/K_rho_phi', lb1, lb2, ub1, ub2)
-    allocate(mode%K_rho_phi(ub1 - lb1 + 1, ub2 - lb2 + 1))
-    call h5_get(h5id, 'kernel/K_rho_phi', mode%K_rho_phi)
+    ! Kernels: KIM stores real and imaginary parts as separate datasets
+    n = mode%npts
+    allocate(re_part(n, n), im_part(n, n))
 
-    allocate(mode%K_rho_B(mode%npts, mode%npts))
-    call h5_get(h5id, 'kernel/K_rho_B', mode%K_rho_B)
+    call h5_get(h5id, 'kernel/K_rho_phi_re', re_part)
+    call h5_get(h5id, 'kernel/K_rho_phi_im', im_part)
+    allocate(mode%K_rho_phi(n, n))
+    mode%K_rho_phi = cmplx(re_part, im_part, dp)
 
-    allocate(mode%K_j_phi(mode%npts, mode%npts))
-    call h5_get(h5id, 'kernel/K_j_phi', mode%K_j_phi)
+    call h5_get(h5id, 'kernel/K_rho_B_re', re_part)
+    call h5_get(h5id, 'kernel/K_rho_B_im', im_part)
+    allocate(mode%K_rho_B(n, n))
+    mode%K_rho_B = cmplx(re_part, im_part, dp)
 
-    allocate(mode%K_j_B(mode%npts, mode%npts))
-    call h5_get(h5id, 'kernel/K_j_B', mode%K_j_B)
+    call h5_get(h5id, 'kernel/K_j_phi_re', re_part)
+    call h5_get(h5id, 'kernel/K_j_phi_im', im_part)
+    allocate(mode%K_j_phi(n, n))
+    mode%K_j_phi = cmplx(re_part, im_part, dp)
 
-    ! Mass matrix and Laplace
-    allocate(mode%mass_matrix(mode%npts, mode%npts))
-    call h5_get(h5id, 'kernel/mass_matrix', mode%mass_matrix)
+    call h5_get(h5id, 'kernel/K_j_B_re', re_part)
+    call h5_get(h5id, 'kernel/K_j_B_im', im_part)
+    allocate(mode%K_j_B(n, n))
+    mode%K_j_B = cmplx(re_part, im_part, dp)
 
-    allocate(mode%laplace(mode%npts, mode%npts))
+    deallocate(re_part, im_part)
+
+    ! Mass matrix (KIM stores as 'mass_matrix.dat') and Laplace
+    allocate(mode%mass_matrix(n, n))
+    call h5_get(h5id, 'kernel/mass_matrix.dat', mode%mass_matrix)
+
+    allocate(mode%laplace(n, n))
     call h5_get(h5id, 'kernel/Laplace_in_FEM', mode%laplace)
 
     ! B_ref
     call h5_get(h5id, 'setup/B_ref', mode%B_ref)
 
-    ! Equilibrium profiles
-    allocate(mode%Er0(mode%npts_rg))
-    call h5_get(h5id, 'backs/Er', mode%Er0)
+    ! Equilibrium profiles: KIM stores E0r and kp on xl_grid (not rg_grid),
+    ! and B0 on a theta grid (not radial). We populate *_xl arrays directly
+    ! so kim_init can skip the rg->xl interpolation step.
+    allocate(mode%Er0_xl(n))
+    call h5_get(h5id, 'backs/E0r', mode%Er0_xl)
 
-    allocate(mode%B0(mode%npts_rg))
-    call h5_get(h5id, 'backs/B0', mode%B0)
+    ! B0 is on the theta grid in KIM output, not radial.
+    ! Use constant |B_ref| approximation (valid for narrow radial domains).
+    ! Must use abs() since B_ref carries the field sign, but B0 here is the
+    ! field magnitude used in j_par/B0 and the Poisson boundary conditions.
+    allocate(mode%B0_xl(n))
+    mode%B0_xl = abs(mode%B_ref)
 
-    allocate(mode%kp(mode%npts_rg))
-    call h5_get(h5id, 'backs/kp', mode%kp)
+    allocate(mode%kp_xl(n))
+    call h5_get(h5id, 'backs/kp', mode%kp_xl)
 
     call h5_close(h5id)
   end subroutine kim_read_mode_hdf5
@@ -286,6 +305,7 @@ contains
 
   subroutine interp_linear(x_src, y_src, x_dst, y_dst)
     ! Linear interpolation from (x_src, y_src) to (x_dst, y_dst)
+    ! with constant extrapolation (clamping) outside the source domain.
     real(dp), intent(in) :: x_src(:), y_src(:)
     real(dp), intent(in) :: x_dst(:)
     real(dp), intent(out) :: y_dst(:)
@@ -296,12 +316,18 @@ contains
     n_dst = size(x_dst)
     j = 1
     do i = 1, n_dst
-      ! Find bracketing interval
-      do while (j < n_src - 1 .and. x_src(j + 1) < x_dst(i))
-        j = j + 1
-      end do
-      t = (x_dst(i) - x_src(j)) / (x_src(j + 1) - x_src(j))
-      y_dst(i) = (1d0 - t) * y_src(j) + t * y_src(j + 1)
+      if (x_dst(i) <= x_src(1)) then
+        y_dst(i) = y_src(1)
+      else if (x_dst(i) >= x_src(n_src)) then
+        y_dst(i) = y_src(n_src)
+      else
+        ! Find bracketing interval
+        do while (j < n_src - 1 .and. x_src(j + 1) < x_dst(i))
+          j = j + 1
+        end do
+        t = (x_dst(i) - x_src(j)) / (x_src(j + 1) - x_src(j))
+        y_dst(i) = (1d0 - t) * y_src(j) + t * y_src(j + 1)
+      end if
     end do
   end subroutine interp_linear
 
@@ -444,24 +470,30 @@ contains
         end if
         call kim_read_mode_hdf5(kim%modes(m), h5_path)
       else
-        write(logger%msg, '("KIM: no data found for mode m = ", i0, &
-          &" in ", a)') m, trim(conf%kim_data_dir)
-        if (logger%err) call logger%write_msg
-        error stop
+        write(logger%msg, '("KIM: no data for mode m = ", i0, &
+          &" in ", a, " - skipping (zero current)")') m, trim(conf%kim_data_dir)
+        if (logger%warn) call logger%write_msg
+        kim%modes(m)%npts = 0
       end if
+
+      ! Skip processing for modes with no data (npts == 0)
+      if (kim%modes(m)%npts == 0) cycle
 
       n = kim%modes(m)%npts
 
-      ! Interpolate profiles from rg_grid to xl_grid
-      allocate(kim%modes(m)%Er0_xl(n))
-      allocate(kim%modes(m)%B0_xl(n))
-      allocate(kim%modes(m)%kp_xl(n))
-      call interp_linear(kim%modes(m)%rg_grid, kim%modes(m)%Er0, &
-        kim%modes(m)%xl_grid, kim%modes(m)%Er0_xl)
-      call interp_linear(kim%modes(m)%rg_grid, kim%modes(m)%B0, &
-        kim%modes(m)%xl_grid, kim%modes(m)%B0_xl)
-      call interp_linear(kim%modes(m)%rg_grid, kim%modes(m)%kp, &
-        kim%modes(m)%xl_grid, kim%modes(m)%kp_xl)
+      ! Interpolate profiles from rg_grid to xl_grid (text format).
+      ! For HDF5, Er0_xl/B0_xl/kp_xl are already populated by the reader.
+      if (.not. allocated(kim%modes(m)%Er0_xl)) then
+        allocate(kim%modes(m)%Er0_xl(n))
+        allocate(kim%modes(m)%B0_xl(n))
+        allocate(kim%modes(m)%kp_xl(n))
+        call interp_linear(kim%modes(m)%rg_grid, kim%modes(m)%Er0, &
+          kim%modes(m)%xl_grid, kim%modes(m)%Er0_xl)
+        call interp_linear(kim%modes(m)%rg_grid, kim%modes(m)%B0, &
+          kim%modes(m)%xl_grid, kim%modes(m)%B0_xl)
+        call interp_linear(kim%modes(m)%rg_grid, kim%modes(m)%kp, &
+          kim%modes(m)%xl_grid, kim%modes(m)%kp_xl)
+      end if
 
       ! Invert mass matrix
       allocate(kim%modes(m)%mass_matrix_inv(n, n))
@@ -507,7 +539,6 @@ contains
   ! === POISSON SOLVER ===
 
   subroutine kim_solve_poisson(mode, Br_kim, Phi_kim)
-    use mephit_util, only: clight
     use sparse_mod, only: sparse_solve_suitesparseComplex_b1
     type(kim_mode_t), intent(in) :: mode
     complex(dp), intent(in) :: Br_kim(:)
@@ -515,6 +546,7 @@ contains
 
     complex(dp) :: rhs(mode%npts)
     complex(dp) :: Phi_aligned_lo, Phi_aligned_hi
+    complex(dp), parameter :: imun = (0d0, 1d0)
     integer :: n
 
     n = mode%npts
@@ -523,15 +555,16 @@ contains
     rhs = -4d0 * pi * matmul(mode%K_rho_B, Br_kim)
 
     ! Boundary conditions: zero misalignment electric field
-    ! Phi_aligned = c * E_r * B_r / (B0 * k_parallel)
+    ! Phi_aligned = i * E_r * B_r / (B0 * k_parallel)
+    ! (KIM convention: com_unit = imaginary unit)
     if (abs(mode%B0_xl(1) * mode%kp_xl(1)) > 1d-30) then
-      Phi_aligned_lo = clight * mode%Er0_xl(1) * Br_kim(1) / &
+      Phi_aligned_lo = imun * mode%Er0_xl(1) * Br_kim(1) / &
         (mode%B0_xl(1) * mode%kp_xl(1))
     else
       Phi_aligned_lo = (0d0, 0d0)
     end if
     if (abs(mode%B0_xl(n) * mode%kp_xl(n)) > 1d-30) then
-      Phi_aligned_hi = clight * mode%Er0_xl(n) * Br_kim(n) / &
+      Phi_aligned_hi = imun * mode%Er0_xl(n) * Br_kim(n) / &
         (mode%B0_xl(n) * mode%kp_xl(n))
     else
       Phi_aligned_hi = (0d0, 0d0)
@@ -596,6 +629,9 @@ contains
     call RT0_poloidal_modes(Bn, Bmn)
 
     do m = mesh%m_res_min, mesh%m_res_max
+      ! Skip modes with no KIM data (zero current contribution)
+      if (kim%modes(m)%npts == 0) cycle
+
       m_res = -equil%cocos%sgn_q * m
 
       ! Extract Bmnpsi_over_B0phi (same as in compute_flr2_current)
