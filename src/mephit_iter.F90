@@ -116,7 +116,7 @@ contains
       save_symfluxcoord, load_symfluxcoord
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, &
       datafile, basename_suffix, decorate_filename, currn_model_kim
-    use mephit_mesh, only: equil, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
+    use mephit_mesh, only: equil, mesh, fs, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
       read_profiles, compute_auxiliary_profiles, resample_profiles, write_profiles_hdf5, read_profiles_hdf5
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
     use mephit_flr2, only: flr2_t, flr2_write, flr2_read, flr2_deinit
