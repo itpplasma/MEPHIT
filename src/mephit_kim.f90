@@ -646,14 +646,17 @@ contains
 
   ! === TOP-LEVEL: CALLED FROM mephit_iter.F90 ===
 
-  subroutine compute_kim_current(Bn, jmnpar_over_Bmod, kim, Phi_mn, Phi_aligned_mn)
-    use mephit_conf, only: conf
+  subroutine compute_kim_current(Bn, jnpar_B0_mhd, jmnpar_over_Bmod, kim, Phi_mn, Phi_aligned_mn)
+    use mephit_conf, only: conf, transition_func_none
     use mephit_util, only: imun, resample1d
-    use mephit_mesh, only: equil, mesh, fs, fs_half, dPhi0_dpsi
-    use mephit_pert, only: polmodes_t, &
-      vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, RT0_poloidal_modes, RT0_t
+    use mephit_mesh, only: equil, mesh, fs, fs_half, dPhi0_dpsi, cache
+    use mephit_pert, only: polmodes_t, polmodes_init, polmodes_deinit, &
+      L1_poloidal_modes, &
+      vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, RT0_poloidal_modes, &
+      RT0_t, L1_t
 
     type(RT0_t), intent(in) :: Bn
+    type(L1_t), intent(in) :: jnpar_B0_mhd
     type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
     type(kim_t), intent(in) :: kim
     complex(dp), intent(out) :: Phi_mn(0:, mesh%m_res_min:)
@@ -663,6 +666,7 @@ contains
     complex(dp) :: Bmnpsi_over_B0phi(1:mesh%nflux)
     real(dp) :: Bmnrho_over_B0theta(1:mesh%nflux), rtemp(1:mesh%nflux)
     type(vec_polmodes_t) :: Bmn
+    type(polmodes_t) :: jmnpar_over_Bmod_mhd
 
     ! KIM grid quantities
     complex(dp), allocatable :: Br_kim(:), Phi_kim(:), jpar_B0_kim(:)
@@ -673,6 +677,12 @@ contains
 
     call vec_polmodes_init(Bmn, conf%m_max, mesh%nflux)
     call RT0_poloidal_modes(Bn, Bmn)
+
+    ! Get MHD baseline current for transition function (same as FLR2 path)
+    if (conf%transition_func /= transition_func_none) then
+      call polmodes_init(jmnpar_over_Bmod_mhd, conf%m_max, mesh%nflux)
+      call L1_poloidal_modes(jnpar_B0_mhd, jmnpar_over_Bmod_mhd)
+    end if
 
     do m = mesh%m_res_min, mesh%m_res_max
       ! Skip modes with no KIM data (zero current contribution)
@@ -734,10 +744,22 @@ contains
       Phi_aligned_mn(1:, m) = imun * Bmnpsi_over_B0phi * &
         fs%q(1:) * dPhi0_dpsi%y(1:) / (m_res + mesh%n * fs%q(1:))
 
+      ! Apply transition function: cross-fade between KIM and MHD current.
+      ! This matches the FLR2 path (mephit_iter.F90 compute_flr2_current).
+      ! Without this, the MHD current would be double-counted at the resonance
+      ! because compute_currn adds resonant_jmnpar_over_Bmod to the MHD baseline.
+      if (conf%transition_func /= transition_func_none) then
+        jmnpar_over_Bmod%coeff(m_res, :) = cache%shielding(m)%cross_fade * &
+          (jmnpar_over_Bmod%coeff(m_res, :) - jmnpar_over_Bmod_mhd%coeff(m_res, :))
+      end if
+
       deallocate(Br_kim, Phi_kim, jpar_B0_kim)
     end do
 
     call vec_polmodes_deinit(Bmn)
+    if (conf%transition_func /= transition_func_none) then
+      call polmodes_deinit(jmnpar_over_Bmod_mhd)
+    end if
   end subroutine compute_kim_current
 
   ! === CLEANUP ===
