@@ -647,7 +647,7 @@ contains
   ! === TOP-LEVEL: CALLED FROM mephit_iter.F90 ===
 
   subroutine compute_kim_current(Bn, jnpar_B0_mhd, jmnpar_over_Bmod, kim, Phi_mn, Phi_aligned_mn)
-    use mephit_conf, only: conf, transition_func_none
+    use mephit_conf, only: conf, logger, transition_func_none
     use mephit_util, only: imun, resample1d
     use mephit_mesh, only: equil, mesh, fs, fs_half, dPhi0_dpsi, cache
     use mephit_pert, only: polmodes_t, polmodes_init, polmodes_deinit, &
@@ -726,15 +726,44 @@ contains
       call kim_compute_current(kim%modes(m), Phi_kim, Br_kim, jpar_B0_kim)
 
       ! Interpolate results back to MEPHIT's flux surface grid.
-      ! Use zero-padding: KIM current/potential is zero outside the
-      ! restricted radial domain around the resonance.
+      ! Use resample1d (cubic Lagrange) for smooth interpolation inside
+      ! the KIM domain, and zero outside.
       block
         complex(dp) :: Phi_back(1:mesh%nflux), jpar_back(1:mesh%nflux)
+        real(dp) :: re_kim(kim%modes(m)%npts), im_kim(kim%modes(m)%npts)
+        real(dp) :: re_back(1:mesh%nflux), im_back(1:mesh%nflux)
+        integer :: kf_lo, kf_hi
 
-        call interp_linear_complex_zeropad(kim%modes(m)%xl_grid, Phi_kim, &
-          kim%modes(m)%r_eff(1:), Phi_back)
-        call interp_linear_complex_zeropad(kim%modes(m)%xl_grid, jpar_B0_kim, &
-          kim%modes(m)%r_eff(1:), jpar_back)
+        ! Find MEPHIT flux surfaces inside the KIM domain
+        kf_lo = 0
+        kf_hi = 0
+        do kf = 1, mesh%nflux
+          if (kim%modes(m)%r_eff(kf) > kim%modes(m)%xl_grid(1) .and. kf_lo == 0) kf_lo = kf
+          if (kim%modes(m)%r_eff(kf) < kim%modes(m)%xl_grid(kim%modes(m)%npts)) kf_hi = kf
+        end do
+
+        Phi_back = (0d0, 0d0)
+        jpar_back = (0d0, 0d0)
+
+        if (kf_lo > 0 .and. kf_hi >= kf_lo) then
+          ! Phi: cubic Lagrange interpolation inside KIM domain
+          re_kim = real(Phi_kim, dp)
+          im_kim = aimag(Phi_kim)
+          call resample1d(kim%modes(m)%xl_grid, re_kim, &
+            kim%modes(m)%r_eff(kf_lo:kf_hi), re_back(kf_lo:kf_hi), 3)
+          call resample1d(kim%modes(m)%xl_grid, im_kim, &
+            kim%modes(m)%r_eff(kf_lo:kf_hi), im_back(kf_lo:kf_hi), 3)
+          Phi_back(kf_lo:kf_hi) = cmplx(re_back(kf_lo:kf_hi), im_back(kf_lo:kf_hi), dp)
+
+          ! j_par/B0: cubic Lagrange interpolation inside KIM domain
+          re_kim = real(jpar_B0_kim, dp)
+          im_kim = aimag(jpar_B0_kim)
+          call resample1d(kim%modes(m)%xl_grid, re_kim, &
+            kim%modes(m)%r_eff(kf_lo:kf_hi), re_back(kf_lo:kf_hi), 3)
+          call resample1d(kim%modes(m)%xl_grid, im_kim, &
+            kim%modes(m)%r_eff(kf_lo:kf_hi), im_back(kf_lo:kf_hi), 3)
+          jpar_back(kf_lo:kf_hi) = cmplx(re_back(kf_lo:kf_hi), im_back(kf_lo:kf_hi), dp)
+        end if
 
         Phi_mn(1:, m) = Phi_back
         jmnpar_over_Bmod%coeff(m_res, 1:) = jpar_back
