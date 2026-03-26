@@ -1129,7 +1129,7 @@ contains
       call remove_plasma_current_in_res_layer(perteq%jn, perteq%jnpar_B0, &
         resonant_jmnpar_over_Bmod)
     case (currn_model_kim)
-      call compute_kim_current(perteq%Bn, resonant_jmnpar_over_Bmod, &
+      call compute_kim_current(perteq%Bn, perteq%jnpar_B0, resonant_jmnpar_over_Bmod, &
         kim, perteq%Phi_mn, perteq%Phi_aligned_mn)
     case default
       write (logger%msg, '("unknown response current model selection", i0)') conf%currn_model
