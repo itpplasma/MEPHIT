@@ -331,6 +331,33 @@ contains
     end do
   end subroutine interp_linear
 
+  subroutine interp_linear_zeropad(x_src, y_src, x_dst, y_dst)
+    ! Linear interpolation with zero-padding outside the source domain.
+    ! The KIM domain should be wide enough that the physical quantity
+    ! (current, potential) naturally decays near the boundaries.
+    real(dp), intent(in) :: x_src(:), y_src(:)
+    real(dp), intent(in) :: x_dst(:)
+    real(dp), intent(out) :: y_dst(:)
+    integer :: i, j, n_src, n_dst
+    real(dp) :: t
+
+    n_src = size(x_src)
+    n_dst = size(x_dst)
+    j = 1
+    do i = 1, n_dst
+      if (x_dst(i) <= x_src(1) .or. x_dst(i) >= x_src(n_src)) then
+        y_dst(i) = 0d0
+      else
+        ! Find bracketing interval
+        do while (j < n_src - 1 .and. x_src(j + 1) < x_dst(i))
+          j = j + 1
+        end do
+        t = (x_dst(i) - x_src(j)) / (x_src(j + 1) - x_src(j))
+        y_dst(i) = (1d0 - t) * y_src(j) + t * y_src(j + 1)
+      end if
+    end do
+  end subroutine interp_linear_zeropad
+
   subroutine interp_linear_complex(x_src, y_src, x_dst, y_dst)
     real(dp), intent(in) :: x_src(:), x_dst(:)
     complex(dp), intent(in) :: y_src(:)
@@ -348,6 +375,25 @@ contains
     y_dst = cmplx(re_dst, im_dst, dp)
     deallocate(re_src, im_src, re_dst, im_dst)
   end subroutine interp_linear_complex
+
+  subroutine interp_linear_complex_zeropad(x_src, y_src, x_dst, y_dst)
+    ! Complex interpolation with zero-padding outside the source domain.
+    real(dp), intent(in) :: x_src(:), x_dst(:)
+    complex(dp), intent(in) :: y_src(:)
+    complex(dp), intent(out) :: y_dst(:)
+    real(dp), allocatable :: re_src(:), im_src(:), re_dst(:), im_dst(:)
+    integer :: n_src, n_dst
+
+    n_src = size(x_src)
+    n_dst = size(x_dst)
+    allocate(re_src(n_src), im_src(n_src), re_dst(n_dst), im_dst(n_dst))
+    re_src = real(y_src, dp)
+    im_src = aimag(y_src)
+    call interp_linear_zeropad(x_src, re_src, x_dst, re_dst)
+    call interp_linear_zeropad(x_src, im_src, x_dst, im_dst)
+    y_dst = cmplx(re_dst, im_dst, dp)
+    deallocate(re_src, im_src, re_dst, im_dst)
+  end subroutine interp_linear_complex_zeropad
 
   ! === DENSE TO SPARSE CONVERSION ===
 
@@ -669,13 +715,15 @@ contains
       ! Compute parallel current density
       call kim_compute_current(kim%modes(m), Phi_kim, Br_kim, jpar_B0_kim)
 
-      ! Interpolate results back to MEPHIT's flux surface grid
+      ! Interpolate results back to MEPHIT's flux surface grid.
+      ! Use zero-padding: KIM current/potential is zero outside the
+      ! restricted radial domain around the resonance.
       block
         complex(dp) :: Phi_back(1:mesh%nflux), jpar_back(1:mesh%nflux)
 
-        call interp_linear_complex(kim%modes(m)%xl_grid, Phi_kim, &
+        call interp_linear_complex_zeropad(kim%modes(m)%xl_grid, Phi_kim, &
           kim%modes(m)%r_eff(1:), Phi_back)
-        call interp_linear_complex(kim%modes(m)%xl_grid, jpar_B0_kim, &
+        call interp_linear_complex_zeropad(kim%modes(m)%xl_grid, jpar_B0_kim, &
           kim%modes(m)%r_eff(1:), jpar_back)
 
         Phi_mn(1:, m) = Phi_back
