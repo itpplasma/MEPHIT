@@ -199,7 +199,7 @@ contains
     psi, qsaf, bcovar_phi, Phi_0, avR2nabpsi2, &
     dens_e, temp_e, temp_i, anu_e, anu_i)
 
-    use mephit_conf, only: logger, conf_arr
+    use mephit_conf, only: logger, conf_arr, conf
     use mephit_util, only: imun, pi, c => clight, e_charge => elem_charge, e_mass => m_e, p_mass => m_p
 
     type(flr2_t), intent(inout) :: flr2
@@ -322,6 +322,16 @@ contains
           * (symbI(1,1)*(A1i(i)+2.d0*A2i(i))+0.5d0*symbI(1,3)*A2i(i))
         Htori = 0.5d0*rho2_factor*e_i*dens_i(i)*Rtor**2/dPhi_0_dpsi(i)     &
           * (A1i(i)+2.5d0*A2i(i))
+
+        ! Apply density rescaling factor (for large-lambda benchmark).
+        ! This scales rho and j_par by the factor while leaving
+        ! susceptibility functions and collision frequencies unchanged.
+        F_me = F_me * conf%density_rescale_factor
+        Gtor_me = Gtor_me * conf%density_rescale_factor
+        Htore = Htore * conf%density_rescale_factor
+        F_mi = F_mi * conf%density_rescale_factor
+        Gtor_mi = Gtor_mi * conf%density_rescale_factor
+        Htori = Htori * conf%density_rescale_factor
 
         F_m = F_me + F_mi
         Gtor_m = Gtor_me + Gtor_mi

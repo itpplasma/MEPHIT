@@ -547,7 +547,8 @@ contains
 
       ! Assemble system matrix A = L + 4*pi * K_rho_phi
       allocate(A_dense(n, n))
-      A_dense = cmplx(kim%modes(m)%laplace, 0d0, dp) + 4d0 * pi * kim%modes(m)%K_rho_phi
+      A_dense = cmplx(kim%modes(m)%laplace, 0d0, dp) + &
+        4d0 * pi * conf%density_rescale_factor * kim%modes(m)%K_rho_phi
 
       ! Apply BC: boundary rows become identity
       A_dense(1, :) = (0d0, 0d0)
@@ -586,6 +587,7 @@ contains
 
   subroutine kim_solve_poisson(mode, Br_kim, Phi_kim)
     use sparse_mod, only: sparse_solve_suitesparseComplex_b1
+    use mephit_conf, only: conf
     type(kim_mode_t), intent(in) :: mode
     complex(dp), intent(in) :: Br_kim(:)
     complex(dp), intent(out) :: Phi_kim(:)
@@ -598,7 +600,7 @@ contains
     n = mode%npts
 
     ! Assemble RHS: b = -4*pi * K_rho_B @ Br_kim
-    rhs = -4d0 * pi * matmul(mode%K_rho_B, Br_kim)
+    rhs = -4d0 * pi * conf%density_rescale_factor * matmul(mode%K_rho_B, Br_kim)
 
     ! Boundary conditions: zero misalignment electric field
     ! Phi_aligned = i * E_r * B_r / (B0 * k_parallel)
@@ -627,6 +629,7 @@ contains
   ! === CURRENT DENSITY ===
 
   subroutine kim_compute_current(mode, Phi_kim, Br_kim, jpar_over_B0)
+    use mephit_conf, only: conf
     type(kim_mode_t), intent(in) :: mode
     complex(dp), intent(in) :: Phi_kim(:), Br_kim(:)
     complex(dp), intent(out) :: jpar_over_B0(:)
@@ -634,8 +637,8 @@ contains
     complex(dp) :: jpar(mode%npts)
     integer :: i
 
-    ! j_par = M^{-1} @ (K_j_phi @ Phi + K_j_B @ Br)
-    jpar = matmul(cmplx(mode%mass_matrix_inv, 0d0, dp), &
+    ! j_par = density_rescale_factor * M^{-1} @ (K_j_phi @ Phi + K_j_B @ Br)
+    jpar = conf%density_rescale_factor * matmul(cmplx(mode%mass_matrix_inv, 0d0, dp), &
       matmul(mode%K_j_phi, Phi_kim) + matmul(mode%K_j_B, Br_kim))
 
     ! j_par / B0

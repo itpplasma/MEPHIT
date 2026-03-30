@@ -101,6 +101,12 @@ module mephit_conf
     !> #currn_model_kilca, and #currn_model_kim.
     integer :: currn_model = currn_model_mhd
 
+    !> Density rescaling factor for benchmarking KIM vs FLR2 in the large Debye
+    !> length limit. Scales charge density and parallel current by this factor
+    !> while leaving susceptibility functions and collision frequencies unchanged.
+    !> Default 1.0 (no rescaling). Set to e.g. 1e-6 for the large-lambda regime.
+    real(dp) :: density_rescale_factor = 1d0
+
     !> Method used for radial refinement. Possible values are #refinement_scheme_geometric
     !> (default) and #refinement_scheme_gaussian.
     integer :: refinement_scheme = refinement_scheme_geometric
@@ -326,6 +332,7 @@ contains
     call h5_add(h5id_root, grp // '/q_prof', config%q_prof)
     call h5_add(h5id_root, grp // '/vac_src', config%vac_src)
     call h5_add(h5id_root, grp // '/currn_model', config%currn_model)
+    call h5_add(h5id_root, grp // '/density_rescale_factor', config%density_rescale_factor)
     call h5_add(h5id_root, grp // '/refinement_scheme', config%refinement_scheme)
     call h5_add(h5id_root, grp // '/nonres', config%nonres)
     call h5_add(h5id_root, grp // '/quad_avg', config%quad_avg)
