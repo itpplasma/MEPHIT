@@ -17,7 +17,7 @@
       END SUBROUTINE odeint_allroutines
 !
 !------------------------------------------------------------------------------
-      module odeint_mod
+      module mephit_odeint_mod
         integer :: kmax=0, kount=0, kmaxx=200, ialloc
         double precision :: dxsav=0.d0
         double precision, dimension(:),   allocatable :: dydx,xp,y,yscal
@@ -27,12 +27,12 @@
         double precision, dimension(:),   allocatable :: yerr,ytemp1
         !$OMP THREADPRIVATE(kmax,kount,kmaxx,ialloc,dxsav,dydx,xp,y,yscal, &
         !$OMP& yp,ak2,ak3,ak4,ak5,ak6,ytemp,yerr,ytemp1)
-      end module odeint_mod
+      end module mephit_odeint_mod
 !
 !------------------------------------------------------------------------------
       SUBROUTINE alloc_odeint(nvar)
 !
-      use odeint_mod
+      use mephit_odeint_mod
 !
       if(ialloc.eq.1) then
         allocate(dydx(nvar),xp(kmaxx),y(nvar))
@@ -52,7 +52,8 @@
       SUBROUTINE odeint(ystart,nvar,x1,x2,eps,h1,hmin,nok,nbad,derivs,
      *rkqs)
 !
-      use odeint_mod, only : kmax,kount,ialloc,dxsav,dydx,xp,y,yscal,yp
+      use mephit_odeint_mod, only : kmax,kount,ialloc,dxsav,
+     *  dydx,xp,y,yscal,yp
 !
       implicit double precision (a-h,o-z)
 !
@@ -126,7 +127,7 @@
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       SUBROUTINE rkck(y,dydx,n,x,h,yout,yerr,derivs)
 !
-      use odeint_mod, only : ak2,ak3,ak4,ak5,ak6,ytemp
+      use mephit_odeint_mod, only : ak2,ak3,ak4,ak5,ak6,ytemp
 !
       implicit double precision (a-h,o-z)
 !
@@ -184,7 +185,7 @@ CU    USES derivs
 !cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc
       SUBROUTINE rkqs(y,dydx,n,x,htry,eps,yscal,hdid,hnext,derivs)
 !
-      use odeint_mod, only : yerr,ytemp1
+      use mephit_odeint_mod, only : yerr,ytemp1
 !
       implicit double precision (a-h,o-z)
 !
