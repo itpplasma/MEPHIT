@@ -259,15 +259,6 @@ module mephit_mesh
       real(c_double), intent(out), dimension(1:order) :: points, weights
     end subroutine gauss_legendre_unit_interval
 
-    subroutine FEM_triangulate_external(npt_inner, npt_outer, node_R, node_Z, R_O, Z_O, fname) &
-      bind(C, name = 'FEM_triangulate_external')
-      use iso_c_binding, only: c_char, c_int, c_double
-      integer(c_int), intent(in), value :: npt_inner, npt_outer
-      real(c_double), intent(in), dimension(1:npt_inner + npt_outer) :: node_R, node_Z
-      real(c_double), intent(in), value :: R_O, Z_O
-      character(c_char), intent(in) :: fname(*)
-    end subroutine FEM_triangulate_external
-
     subroutine Rtree_init(ntri, tri_bb) bind(C, name = 'Rtree_init')
       use iso_c_binding, only: c_int, c_double
       integer(c_int), intent(in), value :: ntri
@@ -3052,7 +3043,7 @@ contains
 #endif
 
   subroutine write_FreeFem_mesh
-    use iso_c_binding, only: c_null_char
+    use mephit_triangulate, only: FEM_triangulate_external
     use mephit_util, only: pi, linspace
     use mephit_conf, only: basename_suffix, decorate_filename
     integer :: fid, kpoi, ktri, kp, kedge, npt_inner, npt_outer
@@ -3109,7 +3100,7 @@ contains
     bdry_R(npt_inner+1:) = R_mid + R_rad * cos(theta)
     bdry_Z(npt_inner+1:) = Z_mid + Z_rad * sin(theta)
     call FEM_triangulate_external(npt_inner, npt_outer, bdry_R, bdry_Z, R_mid, Z_mid, &
-      decorate_filename('outer.msh', '', basename_suffix) // c_null_char)
+      decorate_filename('outer.msh', '', basename_suffix))
     deallocate(bdry_R, bdry_Z, theta)
   end subroutine write_FreeFem_mesh
 

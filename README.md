@@ -12,7 +12,7 @@ Prerequisites from external sources for running MEPHIT are as follows.
 - [SuiteSparse](https://github.com/DrTimothyAldenDavis/SuiteSparse)
 - [GSL](https://www.gnu.org/software/gsl/)
 - [FFTW3](http://fftw.org/)
-- [Triangle](https://www.cs.cmu.edu/~quake/triangle.html)
+- [fortfem](https://github.com/lazy-fortran/fortfem), fetched automatically; its MIT-licensed mesher replaces Shewchuk's Triangle
 - [Boost](https://www.boost.org/)
 - [FreeFem++](https://github.com/FreeFem/FreeFem-sources)
 - [MFEM](https://mfem.org/) is optional
