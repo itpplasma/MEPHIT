@@ -59,7 +59,11 @@ endif()
 cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 find_package(Boost 1.74 REQUIRED)
-find_package(GSL REQUIRED)
+# find_package(FFTW) would clash with the FFTW:: targets that libneo's
+# dependency detection creates, so locate the library and headers directly.
+find_library(FFTW_LIBRARIES NAMES fftw3 REQUIRED)
+find_path(FFTW_INCLUDE_DIRS NAMES fftw3.f03 REQUIRED)
+include_directories(${FFTW_INCLUDE_DIRS})
 
 ### NetCDF
 find_program(NF_CONFIG "nf-config")
@@ -127,6 +131,7 @@ set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
 
 set(MEPHIT_FORTRAN_SRC_FILES
+  src/math_c_api.f90
   src/mephit_conf.f90
   src/mephit_util.f90
   src/mephit_mesh.F90
@@ -175,12 +180,12 @@ set(MEPHIT_LIBS
   hdf5::hdf5_hl
   hdf5::hdf5_fortran
   hdf5::hdf5_hl_fortran
-  GSL::gsl
   BLAS::BLAS
   LAPACK::LAPACK
   ${FFTW_LIBRARIES}
   ${triangle_lib}
   LIBNEO::magfie
+  LIBNEO::math
   LIBNEO::neo
   LIBNEO::hdf5_tools
 )

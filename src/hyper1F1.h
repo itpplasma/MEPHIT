@@ -21,6 +21,8 @@
 extern "C" {
 #endif
 
+void levin_u_sum(const double *terms, int nterms, double *sum, double *abserr);
+
 void hypergeometric1f1_quad(double *b_re, double *b_im, double *z_re, double *z_im, double *f_re, double *f_im);
 
 void hypergeometric1f1_kummer_nmax(double *b_re, double *b_im, double *z_re, double *z_im, double *f_re, double *f_im);
