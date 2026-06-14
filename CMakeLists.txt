@@ -128,7 +128,6 @@ set_source_files_properties(src/external/umf4_f77zwrapper.c PROPERTIES COMPILE_F
 set(COMMON_FORTRAN_SRC_FILES
   src/external/netlib_mod.f90
   src/external/d1mach.f
-  src/fftw3.f90
   src/field_line_integration_for_SYNCH.f90
   src/magdata_in_symfluxcoord.f90
   src/points_2d.f90
@@ -190,7 +189,6 @@ set(MEPHIT_LIBS
   fortnum
   BLAS::BLAS
   LAPACK::LAPACK
-  ${FFTW_LIBRARIES}
   ${triangle_lib}
   LIBNEO::magfie
   LIBNEO::neo
