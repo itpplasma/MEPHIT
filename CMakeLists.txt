@@ -59,7 +59,6 @@ endif()
 cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 find_package(Boost 1.74 REQUIRED)
-find_package(GSL REQUIRED)
 
 ### NetCDF
 find_program(NF_CONFIG "nf-config")
@@ -99,6 +98,17 @@ if(WITH_MFEM)
 endif()
 include(Util)
 find_or_fetch(libneo)
+
+### fortnum: numerical core replacing the former GSL routines. libneo may pull
+### fortnum in transitively, so guard against declaring the target twice.
+include(FetchContent)
+if(NOT TARGET fortnum)
+  FetchContent_Declare(fortnum
+    GIT_REPOSITORY git@github.com:lazy-fortran/fortnum.git
+    GIT_TAG main
+  )
+  FetchContent_MakeAvailable(fortnum)
+endif()
 
 ### Project source files
 # SuiteSparse
@@ -152,7 +162,7 @@ if(WITH_MFEM)
   )
 endif()
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
+	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -I${fortnum_SOURCE_DIR}/include -L${TRIANGLE_LIB_DIR}")
 
 
 ### Define library
@@ -175,7 +185,7 @@ set(MEPHIT_LIBS
   hdf5::hdf5_hl
   hdf5::hdf5_fortran
   hdf5::hdf5_hl_fortran
-  GSL::gsl
+  fortnum
   BLAS::BLAS
   LAPACK::LAPACK
   ${FFTW_LIBRARIES}
