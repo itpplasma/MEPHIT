@@ -59,7 +59,6 @@ endif()
 cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 find_package(Boost 1.74 REQUIRED)
-find_package(GSL REQUIRED)
 
 ### NetCDF
 find_program(NF_CONFIG "nf-config")
@@ -127,7 +126,6 @@ set_source_files_properties(src/external/umf4_f77zwrapper.c PROPERTIES COMPILE_F
 
 set(COMMON_FORTRAN_SRC_FILES
   src/external/netlib_mod.f90
-  src/external/d1mach.f
   src/field_line_integration_for_SYNCH.f90
   src/magdata_in_symfluxcoord.f90
   src/points_2d.f90
@@ -185,7 +183,6 @@ set(MEPHIT_LIBS
   hdf5::hdf5_hl
   hdf5::hdf5_fortran
   hdf5::hdf5_hl_fortran
-  GSL::gsl
   fortnum
   BLAS::BLAS
   LAPACK::LAPACK
