@@ -106,7 +106,7 @@ include(FetchContent)
 if(NOT TARGET fortnum)
   FetchContent_Declare(fortnum
     GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
-    GIT_TAG a7faa3c
+    GIT_TAG v0.1.0
   )
   FetchContent_MakeAvailable(fortnum)
 endif()
