@@ -1,7 +1,11 @@
+# libneo ref and source-dir overrides. Pass via -DLIBNEO_REF=<ref> or -DLIBNEO_PATH=<dir>.
+set(LIBNEO_REF "" CACHE STRING "libneo branch, tag, or SHA to fetch (empty = auto)")
+set(LIBNEO_PATH "" CACHE PATH "local libneo source directory (empty = fetch from git)")
+
 if (DEFINED ENV{CODE})
     message(STATUS "External libraries prebuilt in $CODE=" $ENV{CODE})
     if(EXISTS $ENV{CODE}/libneo/build/)
-        set(LIBNEO_DIR $ENV{CODE}/libneo/build/ CACHE STRING "libneo directory")
+        set(LIBNEO_DIR $ENV{CODE}/libneo/build/ CACHE STRING "libneo pre-built directory")
     endif()
     if(EXISTS $ENV{CODE}/external/fgsl-1.6.0/)
         set(FGSL_DIR $ENV{CODE}/external/fgsl-1.6.0/ CACHE STRING "FGSL directory")

@@ -1,19 +1,23 @@
 include(FetchContent)
 
 function(find_or_fetch DEPENDENCY)
-    if(DEFINED ENV{CODE} AND EXISTS $ENV{CODE}/${DEPENDENCY})
+    string(TOUPPER ${DEPENDENCY} _DEP_UPPER)
+    # -D<DEP>_PATH=<dir> overrides the local source directory.
+    if(DEFINED ${_DEP_UPPER}_PATH AND EXISTS "${${_DEP_UPPER}_PATH}")
+        set(${DEPENDENCY}_SOURCE_DIR "${${_DEP_UPPER}_PATH}")
+        message(STATUS "Using ${DEPENDENCY} source from ${${_DEP_UPPER}_PATH} (cache override)")
+    elseif(DEFINED ENV{CODE} AND EXISTS $ENV{CODE}/${DEPENDENCY})
         set(${DEPENDENCY}_SOURCE_DIR $ENV{CODE}/${DEPENDENCY})
         message(STATUS "Using ${DEPENDENCY} in $ENV{CODE}/${DEPENDENCY}")
     else()
         set(REPO_URL https://github.com/itpplasma/${DEPENDENCY}.git)
-        # <DEP>_BRANCH env overrides the ref so a release can test a candidate.
-        string(TOUPPER ${DEPENDENCY} _DEP_UPPER)
-        if(DEFINED ENV{${_DEP_UPPER}_BRANCH} AND NOT "$ENV{${_DEP_UPPER}_BRANCH}" STREQUAL "")
-            set(REMOTE_BRANCH "$ENV{${_DEP_UPPER}_BRANCH}")
+        # -D<DEP>_REF=<branch|tag|sha> overrides the fetched ref.
+        if(DEFINED ${_DEP_UPPER}_REF AND NOT "${${_DEP_UPPER}_REF}" STREQUAL "")
+            set(REMOTE_BRANCH "${${_DEP_UPPER}_REF}")
         else()
             get_branch_or_main(${REPO_URL} REMOTE_BRANCH)
         endif()
-        message(STATUS "Using ${DEPENDENCY} branch ${REMOTE_BRANCH} from ${REPO_URL}")
+        message(STATUS "Using ${DEPENDENCY} ref ${REMOTE_BRANCH} from ${REPO_URL}")
 
         FetchContent_Declare(
             ${DEPENDENCY}

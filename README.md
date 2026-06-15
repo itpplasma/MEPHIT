@@ -23,7 +23,9 @@ Prerequisites from external sources for running MEPHIT are as follows.
 
 ### Initial build
 
-In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the absolute path of the `build` directory containing the binaries and `MEPHIT_RUN_DIR` points to the absolute path of the `run` directory containing the simulations. If libneo is not in its default location (adjacent to MEPHIT), the environment variable `LIBNEO_DIR` needs to be set to the corresponding build directory as well. At ITPcp, you can refer to the `.gitlab-ci.yml` in [CODE](https://gitlab.tugraz.at/plasma/code).
+In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the absolute path of the `build` directory containing the binaries and `MEPHIT_RUN_DIR` points to the absolute path of the `run` directory containing the simulations. At ITPcp, you can refer to the `.gitlab-ci.yml` in [CODE](https://gitlab.tugraz.at/plasma/code).
+
+To fetch a specific libneo branch, tag, or commit, pass `-DLIBNEO_REF=<ref>` to cmake or `make LIBNEO_REF=<ref>`. To use a local libneo source tree instead of fetching from git, pass `-DLIBNEO_PATH=<dir>` or `make LIBNEO_PATH=<dir>`. Both default to the standard ref resolution when unset.
 
 To build MEPHIT, run:
 
