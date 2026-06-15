@@ -15,7 +15,7 @@ on:
     inputs:
       libneo_ref:
         default: ''
-      # Accepted for a uniform nightly dispatch; MEPHIT CI is build-only, so the
+      # Accepted for a uniform full-ci gate dispatch; MEPHIT CI is build-only, so the
       # build against the candidate libneo is the gate and full changes nothing.
       full:
         default: 'false'
