@@ -23,7 +23,9 @@ Prerequisites from external sources for running MEPHIT are as follows.
 
 ### Initial build
 
-In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the absolute path of the `build` directory containing the binaries and `MEPHIT_RUN_DIR` points to the absolute path of the `run` directory containing the simulations. If libneo is not in its default location (adjacent to MEPHIT), the environment variable `LIBNEO_DIR` needs to be set to the corresponding build directory as well. At ITPcp, you can refer to the `.gitlab-ci.yml` in [CODE](https://gitlab.tugraz.at/plasma/code).
+In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the absolute path of the `build` directory containing the binaries and `MEPHIT_RUN_DIR` points to the absolute path of the `run` directory containing the simulations. At ITPcp, you can refer to the `.gitlab-ci.yml` in [CODE](https://gitlab.tugraz.at/plasma/code).
+
+To fetch a specific libneo branch, tag, or commit, pass `-DLIBNEO_REF=<ref>` to cmake or `make LIBNEO_REF=<ref>`. To use a local libneo source tree instead of fetching from git, pass `-DLIBNEO_PATH=<dir>` or `make LIBNEO_PATH=<dir>`. Both default to the standard ref resolution when unset.
 
 To build MEPHIT, run:
 
@@ -35,7 +37,7 @@ export MEPHIT_RUN_DIR="$(git rev-parse --show-toplevel)/run"
 
 ### Coil geometry
 
-In order to use the default configuration in `mephit.in` (see below) for pre-computed Fourier modes for the vacuum field, i.e., `config%vac_src = 2`, you need to generate a coil file once to be used for `config%coil_file`. **Create a namelist file for `coil_field`, like [libneo](https://github.com/itpplasma/libneo)'s `tools/vacfield_AUG.in`**, and run `$LIBNEO_DIR/vacfield.x`. To generate the coil file for ASDEX Upgrade at ITPcp, run:
+In order to use the default configuration in `mephit.in` (see below) for pre-computed Fourier modes for the vacuum field, i.e., `config%vac_src = 2`, you need to generate a coil file once to be used for `config%coil_file`. **Create a namelist file for `coil_field`, like [libneo](https://github.com/itpplasma/libneo)'s `tools/vacfield_AUG.in`**, and run `vacfield.x`. The build fetches and builds libneo from source, so `vacfield.x` is at `$MEPHIT_DIR/libneo/vacfield.x`; set `LIBNEO_DIR` to that directory. To generate the coil file for ASDEX Upgrade at ITPcp, run:
 
 ```bash
 $LIBNEO_DIR/vacfield.x AUG 16 /proj/plasma/DATA/AUG/COILS/B{u,l}{1..8}n.asc Fourier vacfield_AUG.in $MEPHIT_RUN_DIR/AUG_B_coils.h5
