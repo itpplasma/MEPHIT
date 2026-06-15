@@ -37,7 +37,7 @@ export MEPHIT_RUN_DIR="$(git rev-parse --show-toplevel)/run"
 
 ### Coil geometry
 
-In order to use the default configuration in `mephit.in` (see below) for pre-computed Fourier modes for the vacuum field, i.e., `config%vac_src = 2`, you need to generate a coil file once to be used for `config%coil_file`. **Create a namelist file for `coil_field`, like [libneo](https://github.com/itpplasma/libneo)'s `tools/vacfield_AUG.in`**, and run `$LIBNEO_DIR/vacfield.x`. To generate the coil file for ASDEX Upgrade at ITPcp, run:
+In order to use the default configuration in `mephit.in` (see below) for pre-computed Fourier modes for the vacuum field, i.e., `config%vac_src = 2`, you need to generate a coil file once to be used for `config%coil_file`. **Create a namelist file for `coil_field`, like [libneo](https://github.com/itpplasma/libneo)'s `tools/vacfield_AUG.in`**, and run `vacfield.x`. The build fetches and builds libneo from source, so `vacfield.x` is at `$MEPHIT_DIR/libneo/vacfield.x`; set `LIBNEO_DIR` to that directory. To generate the coil file for ASDEX Upgrade at ITPcp, run:
 
 ```bash
 $LIBNEO_DIR/vacfield.x AUG 16 /proj/plasma/DATA/AUG/COILS/B{u,l}{1..8}n.asc Fourier vacfield_AUG.in $MEPHIT_RUN_DIR/AUG_B_coils.h5

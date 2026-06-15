@@ -6,9 +6,6 @@ function(find_or_fetch DEPENDENCY)
     if(DEFINED ${_DEP_UPPER}_PATH AND EXISTS "${${_DEP_UPPER}_PATH}")
         set(${DEPENDENCY}_SOURCE_DIR "${${_DEP_UPPER}_PATH}")
         message(STATUS "Using ${DEPENDENCY} source from ${${_DEP_UPPER}_PATH} (cache override)")
-    elseif(DEFINED ENV{CODE} AND EXISTS $ENV{CODE}/${DEPENDENCY})
-        set(${DEPENDENCY}_SOURCE_DIR $ENV{CODE}/${DEPENDENCY})
-        message(STATUS "Using ${DEPENDENCY} in $ENV{CODE}/${DEPENDENCY}")
     else()
         set(REPO_URL https://github.com/itpplasma/${DEPENDENCY}.git)
         # -D<DEP>_REF=<branch|tag|sha> overrides the fetched ref.
@@ -28,10 +25,17 @@ function(find_or_fetch DEPENDENCY)
         FetchContent_Populate(${DEPENDENCY})
     endif()
 
+    set(_DEP_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/${DEPENDENCY})
     add_subdirectory(${${DEPENDENCY}_SOURCE_DIR}
-        ${CMAKE_CURRENT_BINARY_DIR}/${DEPENDENCY}
+        ${_DEP_BINARY_DIR}
         EXCLUDE_FROM_ALL
     )
+    # libneo sets CMAKE_RUNTIME_OUTPUT_DIRECTORY to its own binary dir, so its
+    # executables (e.g. vacfield.x) land directly in _DEP_BINARY_DIR. Export it
+    # for runtime helpers and documentation; this replaces the former
+    # $CODE/libneo/build location.
+    set(${_DEP_UPPER}_DIR ${_DEP_BINARY_DIR} CACHE PATH
+        "${DEPENDENCY} build directory (holds built executables)" FORCE)
 endfunction()
 
 
