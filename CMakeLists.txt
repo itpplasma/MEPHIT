@@ -60,6 +60,7 @@ cmake_policy(SET CMP0074 NEW)
 find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 find_package(Boost 1.74 REQUIRED)
 find_package(GSL REQUIRED)
+find_package(FFTW REQUIRED COMPONENTS DOUBLE_LIB)
 
 ### NetCDF
 find_program(NF_CONFIG "nf-config")
@@ -167,6 +168,7 @@ add_library(mephit SHARED
 target_include_directories(mephit PUBLIC
   ${magfie_include_dir}
   ${NETCDF_INCLUDES}
+  ${FFTW_INCLUDE_DIRS}
 )
 set(MEPHIT_LIBS
   hdf5::hdf5

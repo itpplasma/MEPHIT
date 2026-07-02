@@ -1,14 +1,8 @@
-if (DEFINED ENV{CODE})
-    message(STATUS "External libraries prebuilt in $CODE=" $ENV{CODE})
-    if(EXISTS $ENV{CODE}/libneo/build/)
-        set(LIBNEO_DIR $ENV{CODE}/libneo/build/ CACHE STRING "libneo directory")
-    endif()
-    if(EXISTS $ENV{CODE}/external/fgsl-1.6.0/)
-        set(FGSL_DIR $ENV{CODE}/external/fgsl-1.6.0/ CACHE STRING "FGSL directory")
-    endif()
-    if(EXISTS $ENV{CODE}/external/mfem-4.7/build/)
-        set(MFEM_DIR $ENV{CODE}/external/mfem-4.7/build/ CACHE STRING "MFEM directory")
-    endif()
-else()
-    message(STATUS "Downloading and building external libraries")
-endif()
+# Dependency overrides for a hermetic build. With nothing set, libneo, fortfem,
+# and (optionally) MFEM are fetched and built from source.
+#
+#   -DLIBNEO_REF=<ref>   libneo branch, tag, or SHA to fetch (empty = auto)
+#   -DLIBNEO_PATH=<dir>  local libneo source directory (empty = fetch from git)
+#   -DMFEM_DIR=<dir>      prebuilt MFEM directory (see SetupMFEM)
+set(LIBNEO_REF "" CACHE STRING "libneo branch, tag, or SHA to fetch (empty = auto)")
+set(LIBNEO_PATH "" CACHE PATH "local libneo source directory (empty = fetch from git)")
