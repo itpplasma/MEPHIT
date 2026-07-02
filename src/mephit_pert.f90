@@ -103,6 +103,11 @@ module mephit_pert
     !> flux surface.
     complex(dp), allocatable :: coeff_n(:, :)
 
+    !> Component parallel to magnetic field line, indexed by poloidal mode number and flux surface.
+    !>
+    !> For tokamak and KiLCA geometry, this is the physical component parallel to magnetic field line.
+    complex(dp), allocatable :: coeff_par(:, :)
+
     !> Component in poloidal direction, indexed by poloidal mode number and flux surface.
     !>
     !> For tokamak geometry, this is the covariant theta component; for KiLCA geometry,
@@ -642,6 +647,7 @@ contains
     this%nflux = nflux
     allocate(this%coeff_rad(-this%m_max:this%m_max, 1:nflux))
     allocate(this%coeff_n(-this%m_max:this%m_max, 1:nflux))
+    allocate(this%coeff_par(-this%m_max:this%m_max, 1:nflux))
     allocate(this%coeff_pol(-this%m_max:this%m_max, 1:nflux))
     allocate(this%coeff_tor(-this%m_max:this%m_max, 1:nflux))
   end subroutine vec_polmodes_init
@@ -653,6 +659,7 @@ contains
     this%nflux = 0
     if (allocated(this%coeff_rad)) deallocate(this%coeff_rad)
     if (allocated(this%coeff_n)) deallocate(this%coeff_n)
+    if (allocated(this%coeff_par)) deallocate(this%coeff_par)
     if (allocated(this%coeff_pol)) deallocate(this%coeff_pol)
     if (allocated(this%coeff_tor)) deallocate(this%coeff_tor)
   end subroutine vec_polmodes_deinit
@@ -667,6 +674,7 @@ contains
     call h5_open(file, h5id_root)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_rad', vec_polmodes%coeff_rad)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_n', vec_polmodes%coeff_n)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_par', vec_polmodes%coeff_par)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_pol', vec_polmodes%coeff_pol)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/coeff_tor', vec_polmodes%coeff_tor)
     call h5_close(h5id_root)
@@ -709,6 +717,10 @@ contains
       vec_polmodes%coeff_n, lbound(vec_polmodes%coeff_n), ubound(vec_polmodes%coeff_n), &
       comment = 'physical component perpendicular to flux surface of ' // trim(adjustl(comment)), &
       unit = trim(adjustl(unit)))
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_par', &
+      vec_polmodes%coeff_par, lbound(vec_polmodes%coeff_par), ubound(vec_polmodes%coeff_par), &
+      comment = 'physical component parallel to magnetic field of ' // trim(adjustl(comment)), &
+      unit = trim(adjustl(unit)))
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/coeff_tor', &
       vec_polmodes%coeff_tor, lbound(vec_polmodes%coeff_tor), ubound(vec_polmodes%coeff_tor), &
       comment = 'physical phi component of ' // trim(adjustl(comment)), &
@@ -741,7 +753,7 @@ contains
 
   subroutine L1_sum_poloidal_modes(polmodes, elem)
     use mephit_util, only: imun
-    use mephit_mesh, only: mesh, cache
+    use mephit_mesh, only: mesh
     type(polmodes_t), intent(in) :: polmodes
     type(L1_t), intent(inout) :: elem
     integer :: kf, kp, kpoi, m
@@ -752,10 +764,8 @@ contains
     do kf = 1, mesh%nflux
       do kp = 1, mesh%kp_max(kf)
         kpoi = mesh%kp_low(kf) + kp
-        associate (s => cache%sample_polmodes(kpoi))
-          fourier_basis = [(exp(imun * m * s%theta), &
-            m = -polmodes%m_max, polmodes%m_max)]
-        end associate
+        fourier_basis = [(exp(imun * m * mesh%node_theta_flux(kpoi)), &
+          m = -polmodes%m_max, polmodes%m_max)]
         elem%DOF(kpoi) = sum(polmodes%coeff(:, kf) * fourier_basis)
       end do
     end do
@@ -768,11 +778,12 @@ contains
     type(RT0_t), intent(in) :: elem
     type(vec_polmodes_t), intent(inout) :: vec_polmodes
     integer :: kf, kt, ktri, m
-    complex(dp) :: cyl_vec(3), comp_rad, comp_n, comp_pol, comp_tor, &
+    complex(dp) :: cyl_vec(3), comp_rad, comp_n, comp_pol, comp_tor, comp_par, &
       fourier_basis(-vec_polmodes%m_max:vec_polmodes%m_max)
 
     vec_polmodes%coeff_rad(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_n(:, :) = (0d0, 0d0)
+    vec_polmodes%coeff_par(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_pol(:, :) = (0d0, 0d0)
     vec_polmodes%coeff_tor(:, :) = (0d0, 0d0)
     do kf = 1, mesh%nflux
@@ -792,9 +803,12 @@ contains
             comp_pol = cyl_vec(1) * s%dR_dtheta + cyl_vec(3) * s%dZ_dtheta
             comp_tor = cyl_vec(2)
           end if
+          comp_par = (cyl_vec(1) * s%B0_R + cyl_vec(2) * s%B0_phi + cyl_vec(3) * s%B0_Z)/ &
+            hypot(hypot(s%B0_R, s%B0_Z), s%B0_phi)
         end associate
         vec_polmodes%coeff_rad(:, kf) = vec_polmodes%coeff_rad(:, kf) + comp_rad * fourier_basis
         vec_polmodes%coeff_n(:, kf) = vec_polmodes%coeff_n(:, kf) + comp_n * fourier_basis
+        vec_polmodes%coeff_par(:, kf) = vec_polmodes%coeff_par(:, kf) + comp_par * fourier_basis
         vec_polmodes%coeff_pol(:, kf) = vec_polmodes%coeff_pol(:, kf) + comp_pol * fourier_basis
         vec_polmodes%coeff_tor(:, kf) = vec_polmodes%coeff_tor(:, kf) + comp_tor * fourier_basis
       end do
@@ -1034,34 +1048,54 @@ contains
   end subroutine read_Bnvac_GPEC
 
   subroutine compute_Bnvac(Bn)
-    use coil_tools, only: read_currents, read_Bnvac_Fourier
-    use mephit_conf, only: conf, logger, vac_src_nemov, vac_src_gpec, vac_src_fourier
+    use coil_tools, only: read_currents, read_Bnvac_Fourier, read_Anvac_Fourier, &
+      gauged_Anvac_from_Bnvac, sum_coils_gauge_single_mode_Anvac
+    use mephit_conf, only: conf, logger, vac_src_nemov, vac_src_gpec, vac_src_fourier, &
+      vac_src_vecpot
     use mephit_mesh, only: mesh
     type(RT0_t), intent(inout) :: Bn
-    integer :: nR, nZ, kedge, k
+    integer :: nR, nZ, nphi, ncoil, nmax, kedge, k
     real(dp) :: Rmin, Rmax, Zmin, Zmax, edge_perp(3)
     real(dp), dimension(:), allocatable :: Ic
-    complex(dp), dimension(:, :), allocatable :: Bn_R, Bn_Z
+    complex(dp), dimension(:, :), allocatable :: BnR, BnZ, gauged_AnR, gauged_AnZ
+    complex(dp), dimension(:, :, :, :), allocatable :: AnR, Anphi, AnZ, dAnphi_dR, dAnphi_dZ
     complex(dp) :: Bn_splined(3)
 
     ! initialize vacuum field
     select case (conf%vac_src)
     case (vac_src_nemov)
-      call read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
+      call read_Bnvac_Nemov(nR, nZ, Rmin, Rmax, Zmin, Zmax, BnR, BnZ)
+      call gauged_Anvac_from_Bnvac(BnR, BnZ, conf%n, Rmin, Rmax, nR, Zmin, Zmax, nZ, &
+        gauged_AnR, gauged_AnZ)
+      deallocate(BnR, BnZ)
     case (vac_src_gpec)
-      call read_Bnvac_GPEC(nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
+      call read_Bnvac_GPEC(nR, nZ, Rmin, Rmax, Zmin, Zmax, BnR, BnZ)
+      call gauged_Anvac_from_Bnvac(BnR, BnZ, conf%n, Rmin, Rmax, nR, Zmin, Zmax, nZ, &
+        gauged_AnR, gauged_AnZ)
+      deallocate(BnR, BnZ)
     case (vac_src_fourier)
       call read_currents(conf%currents_file, Ic)
       call read_Bnvac_Fourier(conf%coil_file, conf%n, conf%Biot_Savart_prefactor * Ic, &
-        nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
-      deallocate(Ic)
+        nR, nZ, Rmin, Rmax, Zmin, Zmax, BnR, BnZ)
+      call gauged_Anvac_from_Bnvac(BnR, BnZ, conf%n, Rmin, Rmax, nR, Zmin, Zmax, nZ, &
+        gauged_AnR, gauged_AnZ)
+      deallocate(BnR, BnZ, Ic)
+    case (vac_src_vecpot)
+      call read_currents(conf%currents_file, Ic)
+      call read_Anvac_Fourier(conf%coil_file, ncoil, nmax, Rmin, Rmax, Zmin, Zmax, &
+        nR, nphi, nZ, AnR, Anphi, AnZ, dAnphi_dR, dAnphi_dZ)
+      call sum_coils_gauge_single_mode_Anvac(AnR, Anphi, AnZ, dAnphi_dR, dAnphi_dZ, &
+        conf%Biot_Savart_prefactor * Ic, conf%n, Rmin, Rmax, nR, Zmin, Zmax, nZ, &
+        gauged_AnR, gauged_AnZ)
+      deallocate(AnR, Anphi, AnZ, dAnphi_dR, dAnphi_dZ, Ic)
     case default
       write (logger%msg, '("unknown vacuum field source selection", i0)') conf%vac_src
       if (logger%err) call logger%write_msg
       error stop
     end select
-    call vector_potential_single_mode(conf%n, nR, nZ, Rmin, Rmax, Zmin, Zmax, Bn_R, Bn_Z)
-    deallocate(Bn_R, Bn_Z)
+    call vector_potential_single_mode(conf%n, nR, nZ, Rmin, Rmax, Zmin, Zmax, &
+      gauged_AnR, gauged_AnZ)
+    deallocate(gauged_AnR, gauged_AnZ)
     ! project to finite elements
     Bn%DOF = (0d0, 0d0)
     do kedge = 1, mesh%nedge

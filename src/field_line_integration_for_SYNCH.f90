@@ -20,6 +20,7 @@
 !
   use field_eq_mod,  only : icall_eq,nrad,nzet,rad,zet,rtf,btf
   use field_sub, only : psif,dpsidr,dpsidz,d2psidr2,d2psidrdz,d2psidz2
+  use odeint_allroutines_sub, only: odeint_allroutines
   !use theta_rz_mod, only : nsqp,hsqpsi,spllabel
   use rhs_surf_mod, only : dr_dphi, dz_dphi
   use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
@@ -301,10 +302,10 @@
 !
   implicit none
 !
-  integer, parameter :: ndim = 5
-!
-  double precision, dimension(ndim) :: y,dy
-  double precision :: R,phi,Z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ,   &
+  double precision, intent(in) :: phi
+  double precision, intent(in) :: y(:)
+  double precision, intent(out) :: dy(:)
+  double precision :: R,Z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ,   &
                       dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
 !
   R=y(1)
@@ -333,10 +334,10 @@
 !
   implicit none
 !
-  integer, parameter :: ndim = 5
-!
-  double precision, dimension(ndim) :: y,dy
-  double precision :: R,phi,Z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ,   &
+  double precision, intent(in) :: phi
+  double precision, intent(in) :: y(:)
+  double precision, intent(out) :: dy(:)
+  double precision :: R,Z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ,   &
                       dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ
 !
   R=y(1)

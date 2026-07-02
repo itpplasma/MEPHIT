@@ -117,7 +117,7 @@ contains
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, &
       datafile, basename_suffix, decorate_filename
     use mephit_mesh, only: equil, mesh, generate_mesh, mesh_write, mesh_read, write_cache, read_cache, &
-      resample_profiles, write_profiles_hdf5, read_profiles_hdf5
+      read_profiles, compute_auxiliary_profiles, resample_profiles, write_profiles_hdf5, read_profiles_hdf5
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
     use mephit_flr2, only: flr2_t, flr2_write, flr2_read, flr2_deinit
     integer(c_int), intent(in), value :: runmode
@@ -165,6 +165,8 @@ contains
       call save_symfluxcoord(datafile, 'symfluxcoord')
       call mesh_write(mesh, datafile, 'mesh')
       call write_cache
+      call read_profiles
+      call compute_auxiliary_profiles
       call resample_profiles
       call write_profiles_hdf5(datafile, 'equil/profiles')
       if (conf%resonance_sweep > 0) then
@@ -1060,7 +1062,8 @@ contains
   end subroutine debug_MDE
 
   subroutine compute_currn(perteq, fdm, flr2, apply_damping, debug_initial)
-    use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, logger, datafile
+    use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, currn_model_zero, &
+                           logger, datafile
     use mephit_mesh, only: mesh
     use mephit_pert, only: polmodes_t, polmodes_init, polmodes_write, polmodes_deinit, &
       L1_t, L1_init, L1_deinit, RT0_t, RT0_init, RT0_deinit
@@ -1089,12 +1092,25 @@ contains
           ' from iMHD excluding damping', parcurrmn = perteq%jnpar_B0)
       end if
     end if
+
+    ! hack: overwrite to save only last iteration step
+    if (apply_damping) then
+        call perteq_write('("debug_KiLCA_final/", a, "_incl")', &
+          ' from iMHD including damping', parcurrmn = perteq%jnpar_B0)
+      else
+        call perteq_write('("debug_KiLCA_final/", a, "_excl")', &
+          ' from iMHD excluding damping', parcurrmn = perteq%jnpar_B0)
+      end if
+
     select case (conf%currn_model)
     case (currn_model_mhd)
       call compute_shielding_current(perteq%pn, resonant_jmnpar_over_Bmod)
     case (currn_model_kilca)
-      call compute_flr2_current(perteq%Bn, resonant_jmnpar_over_Bmod, &
+      call compute_flr2_current(perteq%Bn, perteq%jnpar_B0, resonant_jmnpar_over_Bmod, &
         flr2, perteq%Phi_mn, perteq%Phi_aligned_mn)
+    case (currn_model_zero)
+      call remove_plasma_current_in_res_layer(perteq%jn, perteq%jnpar_B0, &
+        resonant_jmnpar_over_Bmod)
     case default
       write (logger%msg, '("unknown response current model selection", i0)') conf%currn_model
       if (logger%err) call logger%write_msg
@@ -1105,13 +1121,19 @@ contains
     perteq%jnpar_B0%DOF(:) = perteq%jnpar_B0%DOF + resonant_jnpar_over_Bmod%DOF
     perteq%jn%DOF(:) = perteq%jn%DOF + resonant_jn%DOF
     if (debug_initial) then
-      call polmodes_write(resonant_jmnpar_over_Bmod, datafile, 'debug_KiLCA/jmnpar_Bmod_KiLCA', &
+      call polmodes_write(resonant_jmnpar_over_Bmod, datafile, &
+        'debug_KiLCA/jmnpar_Bmod_KiLCA', &
         'parallel current density from KiLCA', 's^-1')  ! SI: H^-1
       call perteq_write('("debug_KiLCA/", a, "_total")', &
         ' including KiLCA current', parcurrmn = perteq%jnpar_B0)
     end if
     ! hack: overwrite to save only last iteration step
     call debug_MDE("debug_MDE_final", perteq%pn, perteq%Bn, perteq%jn, perteq%jnpar_B0)
+    call polmodes_write(resonant_jmnpar_over_Bmod, datafile, &
+        'debug_KiLCA_final/jmnpar_Bmod_KiLCA', &
+        'parallel current density from KiLCA', 's^-1')  ! SI: H^-1
+    call perteq_write('("debug_KiLCA_final/", a, "_total")', &
+        ' including KiLCA current', parcurrmn = perteq%jnpar_B0)
 
     call polmodes_deinit(resonant_jmnpar_over_Bmod)
     call L1_deinit(resonant_jnpar_over_Bmod)
@@ -1122,6 +1144,7 @@ contains
     use mephit_util, only: pi, clight, zd_cross
     use mephit_mesh, only: mesh, cache, fs
     use mephit_pert, only: L1_t, L1_interp, RT0_t, RT0_interp
+    use mephit_conf, only: conf
     type(L1_t), intent(in) :: pn
     type(RT0_t), intent(in) :: Bn
     type(fdm_t), intent(in) :: fdm
@@ -1150,7 +1173,7 @@ contains
           B0_grad_B0 = [sum(f%dB0_dR * f%B0), 0d0, sum(f%dB0_dZ * f%B0)]
           inhom(kedge + 1) = (-2d0 / f%Bmod ** 2 * (clight * sum(zd_cross(grad_pn, f%B0) * B0_grad_B0) + &
             sum(B_n * f%B0) * sum(f%j0 * B0_grad_B0) - sum(B_n * B0_grad_B0) * sum(f%j0 * f%B0)) + &
-            sum(grad_BnB0 * f%j0 - B_n * grad_j0B0) + 4d0 * pi * sum(grad_pn * f%j0)) / f%Bmod ** 2
+            sum(grad_BnB0 * f%j0 - B_n * grad_j0B0) - 4d0 * pi * sum(grad_pn * f%j0)) / f%Bmod ** 2
         end associate
       end do
     end do
@@ -1187,7 +1210,7 @@ contains
           call L1_interp(jnpar_B0, ktri, R, Z, B0_jnpar)
           B0_jnpar = B0_jnpar * f%Bmod ** 2
           jn%comp_phi(ktri) = jn%comp_phi(ktri) + mesh%GL2_weights(k) * &
-            (B0_jnpar * f%B0(2) - clight * (grad_pn(3) * f%B0(1) - grad_pn(3) * f%B0(3)) + &
+            (B0_jnpar * f%B0(2) - clight * (grad_pn(3) * f%B0(1) - grad_pn(1) * f%B0(3)) + &
             sum(f%j0 * f%B0) * B_n(2) - sum(B_n * f%B0) * f%j0(2)) / f%Bmod ** 2
         end associate
       end do
@@ -1258,7 +1281,7 @@ contains
   subroutine compute_flr2_coeff(flr2)
     use mephit_conf, only: conf
     use mephit_util, only: ev2erg
-    use mephit_mesh, only: equil, mesh, fs, dens_e, temp_e, temp_i, Phi0, dPhi0_dpsi, nu_i, nu_e
+    use mephit_mesh, only: equil, mesh, fs, dens_e, temp_e, temp_i, Phi0, nu_i, nu_e
     use mephit_flr2, only: flr2_t, flr2_init, flr2_coeff
     type(flr2_t), intent(inout) :: flr2
     integer :: m_min, m_max
@@ -1271,14 +1294,15 @@ contains
       dens_e%y(1:), temp_e%y(1:) * ev2erg, temp_i%y(1:) * ev2erg, nu_e%y(1:), nu_i%y(1:))
   end subroutine compute_flr2_coeff
 
-  subroutine compute_flr2_current(Bn, jmnpar_over_Bmod, flr2, Phi_mn, Phi_aligned_mn)
-    use mephit_conf, only: conf
+  subroutine compute_flr2_current(Bn, jnpar_B0_mhd, jmnpar_over_Bmod, flr2, Phi_mn, Phi_aligned_mn)
+    use mephit_conf, only: conf, transition_func_none
     use mephit_util, only: imun, resample1d
-    use mephit_mesh, only: equil, mesh, fs, fs_half, dPhi0_dpsi
-    use mephit_pert, only: polmodes_t, &
+    use mephit_mesh, only: equil, mesh, fs, fs_half, dPhi0_dpsi, cache
+    use mephit_pert, only: polmodes_t, polmodes_init, polmodes_deinit, L1_poloidal_modes, &
       vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, RT0_poloidal_modes
     use mephit_flr2, only: flr2_t, flr2_response_current
     type(RT0_t), intent(in) :: Bn
+    type(L1_t), intent(in) :: jnpar_B0_mhd
     type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
     type(flr2_t), intent(in) :: flr2
     complex(dp), intent(out) :: Phi_mn(0:, mesh%m_res_min:)
@@ -1287,6 +1311,7 @@ contains
     real(dp) :: Bmnrho_over_B0theta(1:mesh%nflux), rtemp(1:mesh%nflux)
     complex(dp) :: Bmnpsi_over_B0phi(1:mesh%nflux)
     type(vec_polmodes_t) :: Bmn
+    type(polmodes_t) :: jmnpar_over_Bmod_mhd
 
     kf_min = 0 ! max(1, mesh%res_ind(mesh%m_res_min) / 4)
     Bmnpsi_over_B0phi(:) = (0d0, 0d0)
@@ -1295,6 +1320,10 @@ contains
     Phi_aligned_mn(:, :) = (0d0, 0d0)
     call vec_polmodes_init(Bmn, conf%m_max, mesh%nflux)
     call RT0_poloidal_modes(Bn, Bmn)
+    if (conf%transition_func /= transition_func_none) then
+      call polmodes_init(jmnpar_over_Bmod_mhd, conf%m_max, mesh%nflux)
+      call L1_poloidal_modes(jnpar_B0_mhd, jmnpar_over_Bmod_mhd)
+    end if
     do m = mesh%m_res_min, mesh%m_res_max
       m_res = -equil%cocos%sgn_q * m
       Bmnrho_over_B0theta(:) = Bmn%coeff_rad(m_res, :)%Re
@@ -1310,8 +1339,15 @@ contains
       Phi_aligned_mn(1:, m) = imun * Bmnpsi_over_B0phi * &
         fs%q(1:) * dPhi0_dpsi%y(1:) / (m_res + mesh%n * fs%q(1:))
       jmnpar_over_Bmod%coeff(m_res, :kf_min) = (0d0, 0d0)  ! suppress spurious current near axis
+      if (conf%transition_func /= transition_func_none) then
+        jmnpar_over_Bmod%coeff(m_res, :) = cache%shielding(m)%cross_fade * &
+          (jmnpar_over_Bmod%coeff(m_res, :) - jmnpar_over_Bmod_mhd%coeff(m_res, :))
+      end if
     end do
     call vec_polmodes_deinit(Bmn)
+    if (conf%transition_func /= transition_func_none) then
+      call polmodes_deinit(jmnpar_over_Bmod_mhd)
+    end if
   end subroutine compute_flr2_current
 
   subroutine compute_shielding_current(pn, jmnpar_over_Bmod)
@@ -1337,6 +1373,34 @@ contains
     end do
     call polmodes_deinit(pmn)
   end subroutine compute_shielding_current
+
+  subroutine remove_plasma_current_in_res_layer(jn, jnpar_B0, jmnpar_over_Bmod)
+    use mephit_mesh, only: cache, mesh
+    use mephit_pert, only: RT0_t, L1_t, polmodes_t
+    type(RT0_t), intent(inout) :: jn
+    type(L1_t), intent(inout) :: jnpar_B0
+    type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
+    integer :: kf, kp, kt, kedge, m
+
+    do m = mesh%m_res_min, mesh%m_res_max
+      do kf = cache%shielding(m)%kf_min, cache%shielding(m)%kf_max
+        ! iterate over poloidal edges
+        do kp = 1, mesh%kp_max(kf)
+          kedge = mesh%kp_low(kf) + kp - 1
+          jn%DOF(kedge) = (0d0, 0d0)
+          jnpar_B0%DOF(kedge+1) = (0d0, 0d0)
+        end do
+      end do
+      ! lower bound 1 higher for radial edges
+      do kf = cache%shielding(m)%kf_min + 1, cache%shielding(m)%kf_max
+        do kt = 1, mesh%kt_max(kf)
+          kedge = mesh%npoint + mesh%kt_low(kf) + kt - 1
+          jn%DOF(kedge) = (0d0, 0d0)
+        end do
+      end do
+    end do
+    jmnpar_over_Bmod%coeff(:, :) = (0d0, 0d0)
+  end subroutine remove_plasma_current_in_res_layer
 
   subroutine perteq_write(name_fmt, comment, &
     presn, presmn, parcurrn, parcurrmn, Ires, currn, currmn, magfn, magfmn)

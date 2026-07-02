@@ -12,6 +12,13 @@ on:
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
+    inputs:
+      libneo_ref:
+        default: ''
+      # Accepted for a uniform full-ci gate dispatch; MEPHIT CI is build-only, so the
+      # build against the candidate libneo is the gate and full changes nothing.
+      full:
+        default: 'false'
 
 env:
   GIT_HTTPS: "true"
@@ -29,4 +36,4 @@ jobs:
         run: setup/debian.sh
 
       - name: Build
-        run: make
+        run: make ${{ inputs.libneo_ref != '' && format('LIBNEO_REF={0}', inputs.libneo_ref) || '' }}

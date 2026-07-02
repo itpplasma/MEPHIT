@@ -20,9 +20,10 @@ module mephit_conf
     pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
     curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
     q_prof_flux, q_prof_rot, q_prof_geqdsk, &
-    vac_src_nemov, vac_src_gpec, vac_src_fourier, &
-    currn_model_mhd, currn_model_kilca, &
-    refinement_scheme_geometric, refinement_scheme_gaussian
+    vac_src_nemov, vac_src_gpec, vac_src_fourier, vac_src_vecpot, &
+    currn_model_mhd, currn_model_kilca, currn_model_zero, &
+    refinement_scheme_geometric, refinement_scheme_gaussian, &
+    transition_func_none, transition_func_heaviside, transition_func_smooth
 
   character(len = *), parameter :: cmplx_fmt = 'es24.16e3, 1x, sp, es24.16e3, s, " i"'
   character(len = *), parameter :: nl_fmt = '"' // new_line('A') // '"'
@@ -50,12 +51,18 @@ module mephit_conf
   integer, parameter :: vac_src_nemov = 0   !< vacuum field perturbation from Viktor Nemov's code
   integer, parameter :: vac_src_gpec = 1    !< vacuum field perturbation from GPEC
   integer, parameter :: vac_src_fourier = 2 !< vacuum field perturbation from precomputed Fourier modes
+  integer, parameter :: vac_src_vecpot = 3  !< vacuum field perturbation from precomputed Fourier modes of vector potential
 
   integer, parameter :: currn_model_mhd = 0    !< response current from iMHD model
   integer, parameter :: currn_model_kilca = 1  !< response current from KiLCA model
+  integer, parameter :: currn_model_zero = 2   !< zero response current
 
   integer, parameter :: refinement_scheme_geometric = 0  !< radial refinement via geometric series
   integer, parameter :: refinement_scheme_gaussian = 1   !< radial refinement via sum of Gaussians
+
+  integer, parameter :: transition_func_none = 0       !< just add current contributions
+  integer, parameter :: transition_func_heaviside = 1  !< sharp transition between current contributions
+  integer, parameter :: transition_func_smooth = 2     !< smooth transition between current contributions
 
   type :: config_t
 
@@ -86,7 +93,7 @@ module mephit_conf
     integer :: q_prof = q_prof_rot
 
     !> Source of vacuum field perturbation. Possible values are #vac_src_nemov,
-    !> #vac_src_gpec, and #vac_src_fourier (default).
+    !> #vac_src_gpec, #vac_src_fourier (default), and #vac_src_vecpot.
     integer :: vac_src = vac_src_fourier
 
     !> Method to compute response current. Possible values are #currn_model_mhd (default)
@@ -186,8 +193,14 @@ module mephit_conf
     !> Defaults to 5.0e+13 cm^-3.
     real(dp) :: dens_max = 5d13
 
+    !> Switch to use fine mesh outside if resonance are too close
+    logical :: diverging_q = .false.
+
     !> Enable damping of the Pfirsch-Schlueter current. Defaults to true.
     logical :: damp = .true.
+
+    !> Transition function between current contributions. Defaults to #transition_func_none.
+    integer :: transition_func = transition_func_none
 
     !> Number of points in sweep over electrical resonance. Defaults to 0 (sweep not performed).
     integer :: resonance_sweep = 0
@@ -231,6 +244,9 @@ module mephit_conf
     !> Width of refined flux surfaces around resonances in cm. Defaults to 0.
     real(dp), dimension(:), allocatable :: Delta_rad_res
 
+    !> Width of integration for parallel current calculation around resonances in cm. Defaults to 0.
+    real(dp), dimension(:), allocatable :: Delta_rad_res_curr
+
     !> Number of additional fine flux surfaces. Defaults to 0.
     integer, dimension(:), allocatable :: add_fine
 
@@ -239,6 +255,12 @@ module mephit_conf
 
     !> Free parameters setting the magnitudes of sheet currents. Only applied with refinement. Defaults to 1.
     real(dp), dimension(:), allocatable :: sheet_current_factor
+
+    !> Electron current factor in FLR2 model. Defaults to 1.
+    real(dp), dimension(:), allocatable :: electron_current_factor
+
+    !> Ion current factor in FLR2 model. Defaults to 1.
+    real(dp), dimension(:), allocatable :: ion_current_factor
 
   contains
     procedure :: read => config_delayed_read
@@ -337,8 +359,12 @@ contains
       comment = 'maximum temperature', unit = 'eV')
     call h5_add(h5id_root, grp // '/dens_max', config%dens_max, &
       comment = 'maximum density', unit = 'cm^-3')
+    call h5_add(h5id_root, grp // '/diverging_q', config%diverging_q, &
+      comment = 'use fine mesh if resonances are too close outside the last refined one')
     call h5_add(h5id_root, grp // '/damp', config%damp, &
       comment = 'enable damping of Pfirsch-Schlueter current')
+    call h5_add(h5id_root, grp // '/transition_func', config%transition_func, &
+      comment = 'transition function between current contributions')
     call h5_add(h5id_root, grp // '/resonance_sweep', config%resonance_sweep, &
       comment = 'number of points for sweep over electrical resonance')
     call h5_add(h5id_root, grp // '/offset_E_r', config%offset_E_r, &
@@ -364,21 +390,29 @@ contains
     integer, intent(in) :: m_min, m_max
     integer :: fid
     integer, dimension(m_min:m_max) :: add_fine
-    real(dp), dimension(m_min:m_max) :: Delta_rad_res, refinement, sheet_current_factor
-    namelist /arrays/ Delta_rad_res, add_fine, refinement, sheet_current_factor
+    real(dp), dimension(m_min:m_max) :: Delta_rad_res, Delta_rad_res_curr, refinement, &
+      sheet_current_factor, electron_current_factor, ion_current_factor
+    namelist /arrays/ Delta_rad_res, Delta_rad_res_curr, add_fine, refinement, &
+      sheet_current_factor, electron_current_factor, ion_current_factor
 
     config%m_min = m_min
     config%m_max = m_max
     Delta_rad_res = 0d0
+    Delta_rad_res_curr = 0d0
     add_fine = 0
     refinement = 0d0
     sheet_current_factor = 1d0
+    electron_current_factor = 1d0
+    ion_current_factor = 1d0
     open(newunit = fid, file = filename)
     read(fid, nml = arrays)
     close(fid)
     if (allocated(config%Delta_rad_res)) deallocate(config%Delta_rad_res)
     allocate(config%Delta_rad_res(m_min:m_max))
     config%Delta_rad_res(:) = Delta_rad_res
+    if (allocated(config%Delta_rad_res_curr)) deallocate(config%Delta_rad_res_curr)
+    allocate(config%Delta_rad_res_curr(m_min:m_max))
+    config%Delta_rad_res_curr(:) = Delta_rad_res_curr
     if (allocated(config%add_fine)) deallocate(config%add_fine)
     allocate(config%add_fine(m_min:m_max))
     config%add_fine(:) = add_fine
@@ -388,6 +422,12 @@ contains
     if (allocated(config%sheet_current_factor)) deallocate(config%sheet_current_factor)
     allocate(config%sheet_current_factor(m_min:m_max))
     config%sheet_current_factor(:) = sheet_current_factor
+    if (allocated(config%electron_current_factor)) deallocate(config%electron_current_factor)
+    allocate(config%electron_current_factor(m_min:m_max))
+    config%electron_current_factor(:) = electron_current_factor
+    if (allocated(config%ion_current_factor)) deallocate(config%ion_current_factor)
+    allocate(config%ion_current_factor(m_min:m_max))
+    config%ion_current_factor(:) = ion_current_factor
   end subroutine config_delayed_read
 
   subroutine config_delayed_export_hdf5(config, file, dataset)
@@ -405,6 +445,9 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res', config%Delta_rad_res, &
       lbound(config%Delta_rad_res), ubound(config%Delta_rad_res), &
       comment = 'width of refined flux surfaces around resonances', unit = 'cm')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res_curr', config%Delta_rad_res_curr, &
+      lbound(config%Delta_rad_res_curr), ubound(config%Delta_rad_res_curr), &
+      comment = 'width of parralel current integration around resonances', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/add_fine', config%add_fine, &
       lbound(config%add_fine), ubound(config%add_fine), &
       comment = 'number of additional fine flux surfaces')
@@ -414,6 +457,12 @@ contains
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor, &
       lbound(config%sheet_current_factor), ubound(config%sheet_current_factor), &
       comment = 'free parameters setting the magnitudes of sheet currents')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/electron_current_factor', config%electron_current_factor, &
+      lbound(config%electron_current_factor), ubound(config%electron_current_factor), &
+      comment = 'free parameters setting the magnitudes of electron currents')
+    call h5_add(h5id_root, trim(adjustl(dataset)) // '/ion_current_factor', config%ion_current_factor, &
+      lbound(config%ion_current_factor), ubound(config%ion_current_factor), &
+      comment = 'free parameters setting the magnitudes of ion currents')
     call h5_close(h5id_root)
   end subroutine config_delayed_export_hdf5
 
@@ -428,13 +477,17 @@ contains
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_min', config%m_min)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/m_max', config%m_max)
     allocate(config%Delta_rad_res(config%m_min:config%m_max))
+    allocate(config%Delta_rad_res_curr(config%m_min:config%m_max))
     allocate(config%add_fine(config%m_min:config%m_max))
     allocate(config%refinement(config%m_min:config%m_max))
     allocate(config%sheet_current_factor(config%m_min:config%m_max))
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res', config%Delta_rad_res)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/Delta_rad_res_curr', config%Delta_rad_res_curr)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/add_fine', config%add_fine)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/refinement', config%refinement)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/sheet_current_factor', config%sheet_current_factor)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/electron_current_factor', config%electron_current_factor)
+    call h5_get(h5id_root, trim(adjustl(dataset)) // '/ion_current_factor', config%ion_current_factor)
     call h5_close(h5id_root)
   end subroutine config_delayed_import_hdf5
 
@@ -444,9 +497,12 @@ contains
     config%m_min = 0
     config%m_max = 0
     if (allocated(config%Delta_rad_res)) deallocate(config%Delta_rad_res)
+    if (allocated(config%Delta_rad_res_curr)) deallocate(config%Delta_rad_res_curr)
     if (allocated(config%add_fine)) deallocate(config%add_fine)
     if (allocated(config%refinement)) deallocate(config%refinement)
     if (allocated(config%sheet_current_factor)) deallocate(config%sheet_current_factor)
+    if (allocated(config%electron_current_factor)) deallocate(config%electron_current_factor)
+    if (allocated(config%ion_current_factor)) deallocate(config%ion_current_factor)
   end subroutine config_delayed_deinit
 
   !> Associate logfile and open if necessary.

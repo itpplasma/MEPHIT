@@ -199,7 +199,7 @@ contains
     psi, qsaf, bcovar_phi, Phi_0, avR2nabpsi2, &
     dens_e, temp_e, temp_i, anu_e, anu_i)
 
-    use mephit_conf, only: logger
+    use mephit_conf, only: logger, conf_arr
     use mephit_util, only: imun, pi, c => clight, e_charge => elem_charge, e_mass => m_e, p_mass => m_p
 
     type(flr2_t), intent(inout) :: flr2
@@ -208,7 +208,6 @@ contains
     real(dp), intent(in) :: am_i, Z_i, Rtor
     real(dp) :: e_e,e_i,omega_E,x_1,x_2,v_T,rho2_factor
     real(dp) :: switch_flr_e,switch_flr_i
-    real(dp) :: switch_cur_e,switch_cur_i
     complex(dp)   :: factor_of_Phi
     complex(dp)   :: F_m,Gtor_m,Htor
     complex(dp)   :: F_me,Gtor_me,Htore
@@ -249,10 +248,6 @@ contains
     switch_flr_e=1.d0
     ! switch for FLR effects in ions (1 - on, 0 - off):
     switch_flr_i=1.d0
-    ! switch for the electron contribution to the parallel current (1 - on, 0 - off):
-    switch_cur_e=1.d0
-    ! switch for the ion contribution to the parallel current (1 - on, 0 - off):
-    switch_cur_i=1.d0
 
     ! electron and ion charges and ion density:
     e_e=-e_charge
@@ -340,8 +335,10 @@ contains
         flr2%a2_in(i, mpol) = -flr2%b2_in(i, mpol) * factor_of_Phi + 4.d0 * pi * Htor
         flr2%a2_out(i, mpol) = (1.d0, 0.d0) + flr2%a2_in(i, mpol)
 
-        flr2%d0(i, mpol) = -(F_me * switch_cur_e + F_mi * switch_cur_i) / bcovar_phi(i)
-        flr2%d2_in(i, mpol) = -(Gtor_me * switch_cur_e + Gtor_mi * switch_cur_i) * avR2nabpsi2(i) / bcovar_phi(i)
+        flr2%d0(i, mpol) = -(F_me * conf_arr%electron_current_factor(abs(mpol)) + &
+          F_mi * conf_arr%ion_current_factor(abs(mpol))) / bcovar_phi(i)
+        flr2%d2_in(i, mpol) = -(Gtor_me * conf_arr%electron_current_factor(abs(mpol)) + &
+          Gtor_mi * conf_arr%ion_current_factor(abs(mpol))) * avR2nabpsi2(i) / bcovar_phi(i)
         flr2%d2_out(i, mpol) = flr2%d2_in(i, mpol)
 
         flr2%c0(i, mpol) = flr2%d0(i, mpol) * factor_of_Phi
