@@ -6,8 +6,7 @@
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <gsl/gsl_errno.h>
-#include <gsl/gsl_integration.h>
+#include "fortnum.h"
 #include "triangle.h"
 #include "mephit_util.h"
 #include "mephit_fem.h"
@@ -232,15 +231,7 @@ void FEM_deinit(void)
 
 void gauss_legendre_unit_interval(int order, double *points, double *weights)
 {
-  gsl_integration_glfixed_table *table;
-  size_t i, n;
-
-  n = (size_t) order;
-  table = gsl_integration_glfixed_table_alloc(n);
-  for (i = 0; i < n; ++i) {
-    gsl_integration_glfixed_point(0.0, 1.0, i, &points[i], &weights[i], table);
-  }
-  gsl_integration_glfixed_table_free(table);
+  fortnum_gauss_legendre_ab(order, 0.0, 1.0, points, weights);
 }
 
 void FEM_triangulate_external(const int npt_inner,
