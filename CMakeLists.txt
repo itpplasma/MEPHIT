@@ -183,7 +183,7 @@ set(MEPHIT_LIBS
   ${FFTW_LIBRARIES}
   ${triangle_lib}
   LIBNEO::magfie
-  LIBNEO::neo
+  LIBNEO::odeint
   LIBNEO::hdf5_tools
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
