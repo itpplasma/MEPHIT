@@ -1,9 +1,10 @@
+load "gmsh"
 string innermeshfile = "core_plasma.msh";
-string outermeshfile = "outer.msh";
+string outermeshfile = "outer_gmsh.msh";
 string meshfile = "maxwell.msh";
 
 mesh Thinner = readmesh(innermeshfile);
-mesh Thouter = readmesh(outermeshfile);
+mesh Thouter = gmshload(outermeshfile);
 int[int] regionmap = [0, 1];
 Thouter = change(Thouter, region = regionmap);
 mesh Thextended = Thinner + Thouter;

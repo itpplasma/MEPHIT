@@ -1,7 +1,8 @@
 load "medit"
+load "gmsh"
 mesh Thinner = readmesh("core_plasma.msh");
 medit("mesh", Thinner);
-mesh Thouter = readmesh("outer.msh");
+mesh Thouter = gmshload("outer_gmsh.msh");
 medit("mesh", Thouter);
 mesh Th = readmesh("maxwell.msh");
 medit("mesh", Th);

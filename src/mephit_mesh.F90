@@ -268,6 +268,14 @@ module mephit_mesh
       character(c_char), intent(in) :: fname(*)
     end subroutine FEM_triangulate_external
 
+    subroutine FEM_triangulate_external_gmsh(npt, node_R, node_Z, fname) &
+      bind(C, name = 'FEM_triangulate_external_gmsh')
+      use iso_c_binding, only: c_char, c_int, c_double
+      integer(c_int), intent(in), value :: npt
+      real(c_double), intent(in), dimension(1:npt) :: node_R, node_Z
+      character(c_char), intent(in) :: fname(*)
+    end subroutine FEM_triangulate_external_gmsh
+
     subroutine Rtree_init(ntri, tri_bb) bind(C, name = 'Rtree_init')
       use iso_c_binding, only: c_int, c_double
       integer(c_int), intent(in), value :: ntri
@@ -3052,13 +3060,12 @@ contains
 #endif
 
   subroutine write_FreeFem_mesh
-    use iso_c_binding, only: c_null_char
+    use iso_c_binding, only: c_null_char, c_int, c_double
     use mephit_util, only: pi, linspace
     use mephit_conf, only: basename_suffix, decorate_filename
-    integer :: fid, kpoi, ktri, kp, kedge, npt_inner, npt_outer
-    real(dp) :: R_min, R_max, R_mid, R_rad, Z_min, Z_max, Z_mid, Z_rad
-    real(dp), parameter :: outer_border_refinement = 0.125d0, outer_box_scale = 2d0
-    real(dp), allocatable :: bdry_R(:), bdry_Z(:), theta(:)
+    integer :: fid, kpoi, ktri, kp, kedge
+    integer(c_int) :: npt
+    real(c_double), allocatable :: bdry_R(:), bdry_Z(:)
 
     open(newunit = fid, file = decorate_filename('core_plasma.msh', '', basename_suffix), &
       status = 'replace', form = 'formatted', action = 'write')
@@ -3090,27 +3097,14 @@ contains
     close(fid)
 
     ! extend mesh
-    R_min = minval(mesh%node_R)
-    R_max = maxval(mesh%node_R)
-    R_mid = 0.5d0 * (R_max + R_min)
-    R_rad = 0.5d0 * (R_max - R_min) * outer_box_scale
-    Z_min = minval(mesh%node_Z)
-    Z_max = maxval(mesh%node_Z)
-    Z_mid = 0.5d0 * (Z_max + Z_min)
-    Z_rad = 0.5d0 * (Z_max - Z_min) * outer_box_scale
-    npt_inner = mesh%kp_max(mesh%nflux)
-    npt_outer = nint(outer_border_refinement * npt_inner)
-    allocate(bdry_R(npt_inner + npt_outer), bdry_Z(npt_inner + npt_outer))
+    npt = mesh%kp_max(mesh%nflux)
+    allocate(bdry_R(npt), bdry_Z(npt))
     kpoi = mesh%kp_low(mesh%nflux) + 1
-    bdry_R(:npt_inner) = mesh%node_R(kpoi:)
-    bdry_Z(:npt_inner) = mesh%node_Z(kpoi:)
-    allocate(theta(npt_outer))
-    theta(:) = linspace(0d0, 2d0 * pi, npt_outer, 0, 1)
-    bdry_R(npt_inner+1:) = R_mid + R_rad * cos(theta)
-    bdry_Z(npt_inner+1:) = Z_mid + Z_rad * sin(theta)
-    call FEM_triangulate_external(npt_inner, npt_outer, bdry_R, bdry_Z, R_mid, Z_mid, &
-      decorate_filename('outer.msh', '', basename_suffix) // c_null_char)
-    deallocate(bdry_R, bdry_Z, theta)
+    bdry_R(:) = mesh%node_R(kpoi:)
+    bdry_Z(:) = mesh%node_Z(kpoi:)
+    call FEM_triangulate_external_gmsh(npt, bdry_R, bdry_Z, &
+      decorate_filename('outer_gmsh.msh', '', basename_suffix) // c_null_char)
+    deallocate(bdry_R, bdry_Z)
   end subroutine write_FreeFem_mesh
 
   subroutine mesh_read(mesh, file, dataset)

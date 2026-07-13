@@ -61,6 +61,7 @@ find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 find_package(Boost 1.74 REQUIRED)
 find_package(GSL REQUIRED)
 find_package(FFTW REQUIRED COMPONENTS DOUBLE_LIB)
+find_package(gmsh REQUIRED)
 
 ### NetCDF
 find_program(NF_CONFIG "nf-config")
@@ -182,6 +183,7 @@ set(MEPHIT_LIBS
   LAPACK::LAPACK
   ${FFTW_LIBRARIES}
   ${triangle_lib}
+  gmsh
   LIBNEO::magfie
   LIBNEO::neo
   LIBNEO::hdf5_tools
