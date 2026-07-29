@@ -68,6 +68,15 @@ module mephit_iter
       integer(c_int), intent(in), value :: tormode, nedge, npoint, runmode
     end subroutine FEM_init
 
+    subroutine FEM_init_fortfem_mesh(npoint, node_R, node_Z, ntri, &
+        tri_node, nedge, edge_node) bind(C, name = 'FEM_init_fortfem_mesh')
+      use iso_c_binding, only: c_double, c_int
+      integer(c_int), intent(in), value :: npoint, ntri, nedge
+      real(c_double), intent(in) :: node_R(1:npoint), node_Z(1:npoint)
+      integer(c_int), intent(in) :: tri_node(1:3, 1:ntri)
+      integer(c_int), intent(in) :: edge_node(1:2, 1:nedge)
+    end subroutine FEM_init_fortfem_mesh
+
     subroutine FEM_extend_mesh() bind(C, name = 'FEM_extend_mesh')
     end subroutine FEM_extend_mesh
 
@@ -176,6 +185,8 @@ contains
       call generate_vacfield(vac)
       call vac_write(vac, datafile, 'vac')
       ! pass effective toroidal mode number and runmode to FreeFem++
+      call FEM_init_fortfem_mesh(mesh%npoint, mesh%node_R, mesh%node_Z, &
+        mesh%ntri, mesh%tri_node, mesh%nedge, mesh%edge_node)
       call FEM_init(mesh%n, mesh%nedge, mesh%npoint, runmode_flags)
       call FEM_extend_mesh
     else
@@ -194,6 +205,8 @@ contains
       call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
       call conf_arr%export_hdf5(datafile, 'config')
       ! pass effective toroidal mode number and runmode to FreeFem++
+      call FEM_init_fortfem_mesh(mesh%npoint, mesh%node_R, mesh%node_Z, &
+        mesh%ntri, mesh%tri_node, mesh%nedge, mesh%edge_node)
       call FEM_init(mesh%n, mesh%nedge, mesh%npoint, runmode)
     end if
     if (preconditioner .or. iterations) then

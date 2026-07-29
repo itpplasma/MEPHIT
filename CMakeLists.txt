@@ -4,9 +4,11 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 ### Define the project
 project(MEPHIT LANGUAGES C CXX Fortran)
+include(CTest)
 
 ### Define options
 option(WITH_MFEM "Compile with MFEM" FALSE)
+option(WITH_FORTFEM "Use FortFEM for supported finite-element operations" FALSE)
 
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
@@ -98,6 +100,10 @@ if(WITH_MFEM)
   include(SetupMFEM)
   add_definitions(-DUSE_MFEM)
 endif()
+if(WITH_FORTFEM)
+  find_package(fortfem CONFIG REQUIRED)
+  add_definitions(-DUSE_FORTFEM)
+endif()
 include(Util)
 find_or_fetch(libneo)
 
@@ -143,6 +149,9 @@ set(MEPHIT_C_SRC_FILES
   src/mephit_fem.c
   src/hyper1F1.c
 )
+if(WITH_FORTFEM)
+  list(APPEND MEPHIT_C_SRC_FILES src/mephit_fortfem.c)
+endif()
 set(MEPHIT_CPP_SRC_FILES
   src/mephit_fem.cpp
 )
@@ -197,6 +206,9 @@ if(WITH_MFEM)
   target_include_directories(mephit PUBLIC ${MFEM_INCLUDE_DIRS})
   target_link_libraries(mephit ${MFEM_LIBRARIES})
 endif()
+if(WITH_FORTFEM)
+  target_link_libraries(mephit fortfem::capi)
+endif()
 
 ### Define executables
 add_executable(mephit_run.x src/mephit_run.c)
@@ -205,6 +217,15 @@ add_executable(mephit_post.x src/mephit_post.f90)
 target_link_libraries(mephit_run.x mephit)
 target_link_libraries(mephit_test.x mephit)
 target_link_libraries(mephit_post.x mephit)
+
+if(WITH_FORTFEM AND BUILD_TESTING)
+  add_executable(test_fortfem_adapter
+    test/test_fortfem_adapter.c
+    src/mephit_fortfem.c)
+  target_include_directories(test_fortfem_adapter PRIVATE src)
+  target_link_libraries(test_fortfem_adapter PRIVATE fortfem::capi m)
+  add_test(NAME fortfem_adapter COMMAND test_fortfem_adapter)
+endif()
 
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)

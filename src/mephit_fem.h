@@ -22,6 +22,13 @@ extern "C" {
 #endif
 
 void FEM_init(const int tormode, const int nedge, const int npoint, const int runmode);
+void FEM_init_fortfem_mesh(const int npoint,
+                           const double *node_R,
+                           const double *node_Z,
+                           const int ntri,
+                           const int *tri_node,
+                           const int nedge,
+                           const int *edge_node);
 void FEM_extend_mesh(void);
 void FEM_compute_magfn(const int nedge,
                        const int npoint,

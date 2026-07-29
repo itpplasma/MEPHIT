@@ -11,6 +11,9 @@
 #include "triangle.h"
 #include "mephit_util.h"
 #include "mephit_fem.h"
+#ifdef USE_FORTFEM
+#include "mephit_fortfem.h"
+#endif
 
 char shared_namedpipe[path_max];
 
@@ -184,6 +187,32 @@ void FEM_init(const int tormode, const int nedge, const int npoint, const int ru
   receive_long0_from_FreeFem(shared_namedpipe, &long_runmode);
 }
 
+void FEM_init_fortfem_mesh(const int npoint,
+                           const double *node_R,
+                           const double *node_Z,
+                           const int ntri,
+                           const int *tri_node,
+                           const int nedge,
+                           const int *edge_node)
+{
+#ifdef USE_FORTFEM
+  const int status = mephit_fortfem_init(
+    npoint, node_R, node_Z, ntri, tri_node, nedge, edge_node);
+  if (status) {
+    errno_msg(exit, __FILE__, __LINE__, EIO,
+              "FortFEM mesh initialization failed with status %i", status);
+  }
+#else
+  (void) npoint;
+  (void) node_R;
+  (void) node_Z;
+  (void) ntri;
+  (void) tri_node;
+  (void) nedge;
+  (void) edge_node;
+#endif
+}
+
 void FEM_extend_mesh(void)
 {
   long int flag = 0L;
@@ -213,6 +242,13 @@ void FEM_compute_magfn(const int nedge,
 
 void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2int)
 {
+#ifdef USE_FORTFEM
+  const int status = mephit_fortfem_l2(nedge, elem, L2int);
+  if (status) {
+    errno_msg(exit, __FILE__, __LINE__, EIO,
+              "FortFEM L2 integration failed with status %i", status);
+  }
+#else
   long int flag = -2L;
   int size = 2 * nedge;
 
@@ -220,6 +256,7 @@ void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2in
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
   send_double1_to_FreeFem(shared_namedpipe, size, (double *) elem);
   receive_double1_from_FreeFem(shared_namedpipe, 1, L2int);
+#endif
 }
 
 void FEM_deinit(void)
@@ -228,6 +265,9 @@ void FEM_deinit(void)
 
   send_long0_to_FreeFem(shared_namedpipe, &flag);
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
+#ifdef USE_FORTFEM
+  mephit_fortfem_deinit();
+#endif
 }
 
 void gauss_legendre_unit_interval(int order, double *points, double *weights)
