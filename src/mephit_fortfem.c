@@ -557,26 +557,12 @@ int mephit_fortfem_solve(
       potential_dofs[extended_dof[edge]];
   }
   for (point = 0; point < point_count; ++point) {
-    int triangle;
-    int containing_triangle = -1;
     fortfem_complex curl;
     fortfem_complex value[2];
 
-    for (triangle = 0; triangle < triangle_count; ++triangle) {
-      if (core_triangles[3 * triangle] == point ||
-          core_triangles[3 * triangle + 1] == point ||
-          core_triangles[3 * triangle + 2] == point) {
-        containing_triangle = triangle;
-        break;
-      }
-    }
-    if (containing_triangle < 0) {
-      return -3;
-    }
-    fortfem_nedelec_evaluate(
-      extended_mesh_handle, containing_triangle,
-      core_vertices[2 * point], core_vertices[2 * point + 1],
-      extended_edge_count, potential_dofs, value, &curl, &status);
+    fortfem_nedelec_evaluate_vertex(
+      extended_mesh_handle, point, extended_edge_count,
+      potential_dofs, value, &curl, &status);
     if (status != 0) {
       return status;
     }
