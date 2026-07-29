@@ -225,6 +225,20 @@ if(WITH_FORTFEM AND BUILD_TESTING)
   target_include_directories(test_fortfem_adapter PRIVATE src)
   target_link_libraries(test_fortfem_adapter PRIVATE fortfem::capi m)
   add_test(NAME fortfem_adapter COMMAND test_fortfem_adapter)
+
+  add_executable(test_fortfem_dispatch
+    test/test_fortfem_dispatch.c)
+  target_include_directories(test_fortfem_dispatch PRIVATE src)
+  target_link_libraries(test_fortfem_dispatch PRIVATE mephit)
+  add_test(NAME fortfem_dispatch COMMAND test_fortfem_dispatch)
+
+  add_test(
+    NAME fortfem_no_daemon
+    COMMAND
+      ${CMAKE_COMMAND}
+      -DMEPHIT_RUN=$<TARGET_FILE:mephit_run.x>
+      -DTEST_TEMP=${PROJECT_BINARY_DIR}
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/test/test_fortfem_no_daemon.cmake)
 endif()
 
 ### Add helper script to binaries

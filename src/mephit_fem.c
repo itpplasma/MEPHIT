@@ -172,6 +172,17 @@ void receive_double1_from_FreeFem(const char *namedpipe, const int size, double 
 
 void FEM_init(const int tormode, const int nedge, const int npoint, const int runmode)
 {
+#ifdef USE_FORTFEM
+  const int status = mephit_fortfem_prepare(tormode);
+
+  (void) nedge;
+  (void) npoint;
+  (void) runmode;
+  if (status) {
+    errno_msg(exit, __FILE__, __LINE__, EIO,
+              "FortFEM solver preparation failed with status %i", status);
+  }
+#else
   long int long_tormode = tormode ? tormode : 2;
   long int long_nedge = nedge;
   long int long_npoint = npoint;
@@ -185,6 +196,7 @@ void FEM_init(const int tormode, const int nedge, const int npoint, const int ru
   receive_long0_from_FreeFem(shared_namedpipe, &long_npoint);
   send_long0_to_FreeFem(shared_namedpipe, &long_runmode);
   receive_long0_from_FreeFem(shared_namedpipe, &long_runmode);
+#endif
 }
 
 void FEM_init_fortfem_mesh(const int npoint,
@@ -215,10 +227,12 @@ void FEM_init_fortfem_mesh(const int npoint,
 
 void FEM_extend_mesh(void)
 {
+#ifndef USE_FORTFEM
   long int flag = 0L;
 
   send_long0_to_FreeFem(shared_namedpipe, &flag);
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
+#endif
 }
 
 void FEM_compute_magfn(const int nedge,
@@ -228,6 +242,15 @@ void FEM_compute_magfn(const int nedge,
                        complex_double *AnR,
                        complex_double *AnZ)
 {
+#ifdef USE_FORTFEM
+  const int status =
+    mephit_fortfem_solve(nedge, npoint, Jn, Bn, AnR, AnZ);
+
+  if (status) {
+    errno_msg(exit, __FILE__, __LINE__, EIO,
+              "FortFEM Maxwell solve failed with status %i", status);
+  }
+#else
   long int flag = -1L;
   int size = 2 * nedge;
 
@@ -238,6 +261,7 @@ void FEM_compute_magfn(const int nedge,
   size = 2 * npoint;
   receive_double1_from_FreeFem(shared_namedpipe, size, (double *) AnR);
   receive_double1_from_FreeFem(shared_namedpipe, size, (double *) AnZ);
+#endif
 }
 
 void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2int)
@@ -261,12 +285,13 @@ void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2in
 
 void FEM_deinit(void)
 {
+#ifdef USE_FORTFEM
+  mephit_fortfem_deinit();
+#else
   long int flag = -3L;
 
   send_long0_to_FreeFem(shared_namedpipe, &flag);
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
-#ifdef USE_FORTFEM
-  mephit_fortfem_deinit();
 #endif
 }
 
