@@ -241,6 +241,15 @@ if(WITH_FORTFEM AND BUILD_TESTING)
   target_link_libraries(test_fortfem_adapter PRIVATE fortfem::capi m)
   add_test(NAME fortfem_adapter COMMAND test_fortfem_adapter)
 
+  add_executable(test_fortfem_production_mesh
+    test/test_fortfem_production_mesh.c
+    src/mephit_fortfem.c)
+  target_include_directories(test_fortfem_production_mesh PRIVATE src)
+  target_link_libraries(test_fortfem_production_mesh PRIVATE fortfem::capi m)
+  add_test(
+    NAME fortfem_production_mesh
+    COMMAND test_fortfem_production_mesh)
+
   add_executable(test_fortfem_dispatch
     test/test_fortfem_dispatch.c)
   target_include_directories(test_fortfem_dispatch PRIVATE src)
