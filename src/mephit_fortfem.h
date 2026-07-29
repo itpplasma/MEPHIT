@@ -17,6 +17,16 @@ int mephit_fortfem_l2(
   const double complex *mephit_dofs,
   double *norm);
 
+int mephit_fortfem_prepare(int toroidal_mode);
+
+int mephit_fortfem_solve(
+  int nedge,
+  int npoint,
+  const double complex *current_dofs,
+  double complex *magnetic_dofs,
+  double complex *potential_R,
+  double complex *potential_Z);
+
 void mephit_fortfem_deinit(void);
 
 #endif
