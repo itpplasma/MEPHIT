@@ -8,7 +8,9 @@
 #include <sys/stat.h>
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_integration.h>
+#ifndef USE_FORTFEM
 #include "triangle.h"
+#endif
 #include "mephit_util.h"
 #include "mephit_fem.h"
 #ifdef USE_FORTFEM
@@ -308,6 +310,7 @@ void gauss_legendre_unit_interval(int order, double *points, double *weights)
   gsl_integration_glfixed_table_free(table);
 }
 
+#ifndef USE_FORTFEM
 void FEM_triangulate_external(const int npt_inner,
                               const int npt_outer,
                               const double *bdry_R,
@@ -391,3 +394,4 @@ void FEM_triangulate_external(const int npt_inner,
   trifree(out.segmentlist);
   trifree(out.edgelist);
 }
+#endif

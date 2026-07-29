@@ -41,6 +41,7 @@ void FEM_deinit(void);
 
 void gauss_legendre_unit_interval(int order, double *points, double *weights);
 
+#ifndef USE_FORTFEM
 void FEM_triangulate_external(const int npt_inner,
                               const int npt_outer,
                               const double *bdry_R,
@@ -48,6 +49,7 @@ void FEM_triangulate_external(const int npt_inner,
                               const double R_mid,
                               const double Z_mid,
                               const char *fname);
+#endif
 void Rtree_init(int ntri, double *tri_bb);
 void Rtree_query(double R, double Z, int *result_size, int **results);
 

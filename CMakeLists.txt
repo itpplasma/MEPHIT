@@ -95,7 +95,9 @@ add_link_options(${NETCDF_FLIBS})
 
 include(ExternalProject)
 include(SetupCODE)
-include(SetupTriangle)
+if(NOT WITH_FORTFEM)
+  include(SetupTriangle)
+endif()
 if(WITH_MFEM)
   include(SetupMFEM)
   add_definitions(-DUSE_MFEM)
@@ -161,8 +163,15 @@ if(WITH_MFEM)
     src/miscellaneous.cpp
   )
 endif()
-set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
+set(MEPHIT_C_DEPENDENCY_FLAGS "-I${SUITESPARSE_INCLUDE_DIRS}")
+if(NOT WITH_FORTFEM)
+  string(APPEND MEPHIT_C_DEPENDENCY_FLAGS
+    " -I${TRIANGLE_INCLUDE_DIR} -L${TRIANGLE_LIB_DIR}")
+endif()
+set_source_files_properties(
+  src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
+  PROPERTIES COMPILE_FLAGS
+    "${CMAKE_C_FLAGS} -DREAL=double ${MEPHIT_C_DEPENDENCY_FLAGS}")
 
 
 ### Define library
@@ -173,14 +182,18 @@ add_library(mephit SHARED
   ${MEPHIT_C_SRC_FILES}
   ${MEPHIT_CPP_SRC_FILES}
 )
-add_dependencies(mephit TRIANGLE)
+if(NOT WITH_FORTFEM)
+  add_dependencies(mephit TRIANGLE)
+endif()
 target_include_directories(mephit PUBLIC
   ${magfie_include_dir}
   ${NETCDF_INCLUDES}
   ${NETCDF_INCLUDES}
-  ${TRIANGLE_INCLUDE_DIR}
   ${FFTW_INCLUDE_DIRS}
 )
+if(NOT WITH_FORTFEM)
+  target_include_directories(mephit PUBLIC ${TRIANGLE_INCLUDE_DIR})
+endif()
 set(MEPHIT_LIBS
   hdf5::hdf5
   hdf5::hdf5_hl
@@ -190,11 +203,13 @@ set(MEPHIT_LIBS
   BLAS::BLAS
   LAPACK::LAPACK
   ${FFTW_LIBRARIES}
-  ${triangle_lib}
   LIBNEO::magfie
   LIBNEO::odeint
   LIBNEO::hdf5_tools
 )
+if(NOT WITH_FORTFEM)
+  list(APPEND MEPHIT_LIBS ${triangle_lib})
+endif()
 target_link_libraries(mephit ${MEPHIT_LIBS})
 if(LEGACY_SUITESPARSE)
   target_link_libraries(mephit ${SUITESPARSE_LIBRARIES})
@@ -239,6 +254,17 @@ if(WITH_FORTFEM AND BUILD_TESTING)
       -DMEPHIT_RUN=$<TARGET_FILE:mephit_run.x>
       -DTEST_TEMP=${PROJECT_BINARY_DIR}
       -P ${CMAKE_CURRENT_SOURCE_DIR}/test/test_fortfem_no_daemon.cmake)
+
+  add_test(
+    NAME fortfem_no_triangle
+    COMMAND
+      ${CMAKE_COMMAND}
+      -DC_COMPILER=${CMAKE_C_COMPILER}
+      -DMEPHIT_INCLUDE=${CMAKE_CURRENT_SOURCE_DIR}/src
+      -DFORTFEM_INCLUDE=$<TARGET_PROPERTY:fortfem::capi,INTERFACE_INCLUDE_DIRECTORIES>
+      -DMEPHIT_FEM_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/mephit_fem.c
+      -DTEST_OBJECT=${PROJECT_BINARY_DIR}/test_fortfem_no_triangle.o
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/test/test_fortfem_no_triangle.cmake)
 endif()
 
 ### Add helper script to binaries
