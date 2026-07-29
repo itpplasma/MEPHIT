@@ -184,7 +184,7 @@ contains
       call vac_init(vac, mesh%nedge, mesh%ntri, mesh%m_res_min, mesh%m_res_max)
       call generate_vacfield(vac)
       call vac_write(vac, datafile, 'vac')
-      ! pass effective toroidal mode number and runmode to FreeFem++
+      ! pass effective toroidal mode number and runmode to the FEM backend
       call FEM_init_fortfem_mesh(mesh%npoint, mesh%node_R, mesh%node_Z, &
         mesh%ntri, mesh%tri_node, mesh%nedge, mesh%edge_node)
       call FEM_init(mesh%n, mesh%nedge, mesh%npoint, runmode_flags)
@@ -204,7 +204,7 @@ contains
       ! reload config parameters here in case they changed since the meshing phase
       call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
       call conf_arr%export_hdf5(datafile, 'config')
-      ! pass effective toroidal mode number and runmode to FreeFem++
+      ! pass effective toroidal mode number and runmode to the FEM backend
       call FEM_init_fortfem_mesh(mesh%npoint, mesh%node_R, mesh%node_Z, &
         mesh%ntri, mesh%tri_node, mesh%nedge, mesh%edge_node)
       call FEM_init(mesh%n, mesh%nedge, mesh%npoint, runmode)
@@ -681,7 +681,7 @@ contains
     end if
   end subroutine debug_initial_iteration
 
-  ! This subroutine calls a C function that pipes the data to/from FreeFem.
+  ! This subroutine calls the selected C finite-element backend.
   subroutine compute_magfn(perteq)
     use mephit_mesh, only: mesh
     use mephit_pert, only: RT0_tor_comp_from_zero_div

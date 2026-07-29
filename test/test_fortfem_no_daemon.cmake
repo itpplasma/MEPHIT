@@ -21,3 +21,21 @@ endforeach()
 if(backend_was_launched)
   message(FATAL_ERROR "FortFEM run launched the external FEM backend")
 endif()
+
+execute_process(
+  COMMAND
+    "${MEPHIT_RUN}" 0
+    "${TEST_TEMP}/fortfem-intentionally-missing.in"
+    "probe"
+    "${TEST_TEMP}"
+  OUTPUT_VARIABLE four_argument_output
+  ERROR_VARIABLE four_argument_error
+  TIMEOUT 10)
+
+string(FIND
+  "${four_argument_output}${four_argument_error}"
+  "FreeFem script file"
+  obsolete_argument_error)
+if(NOT obsolete_argument_error EQUAL -1)
+  message(FATAL_ERROR "FortFEM run still requires a FreeFem script argument")
+endif()

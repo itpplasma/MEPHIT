@@ -66,7 +66,10 @@ extern char shared_namedpipe[path_max];
 
 int main(int argc, char *argv[])
 {
-  char *config = NULL, *suffix = NULL, *tmpdir = NULL, *scriptpath = NULL;
+  char *config = NULL, *suffix = NULL, *tmpdir = NULL;
+#ifndef USE_FORTFEM
+  char *scriptpath = NULL;
+#endif
   int argi = 0, runmode = 0, errno_save;
 #ifndef USE_FORTFEM
   int bytes_written;
@@ -106,6 +109,7 @@ int main(int argc, char *argv[])
   } else {
     errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to temporary directory as fourth argument");
   }
+#ifndef USE_FORTFEM
   // fifth argument
   if (argc > ++argi) {
     if (!strlen(argv[argi])) {
@@ -115,10 +119,10 @@ int main(int argc, char *argv[])
   } else {
     errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to FreeFem script file as fifth argument");
   }
+#endif
   /* TODO: if exclusive flock on mephit.h5 fails, exit with error; else, release acquired lock */
 #ifdef USE_FORTFEM
   (void) tmpdir;
-  (void) scriptpath;
   fem.exited = 1;
 #else
   bytes_written = snprintf(shared_namedpipe, path_max, "%s/MEPHIT_0x%.8x.dat", tmpdir, getpid());
