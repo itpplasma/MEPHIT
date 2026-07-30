@@ -4,11 +4,9 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 ### Define the project
 project(MEPHIT LANGUAGES C CXX Fortran)
-include(CTest)
 
 ### Define options
 option(WITH_MFEM "Compile with MFEM" FALSE)
-option(WITH_FORTFEM "Use FortFEM for supported finite-element operations" FALSE)
 
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
@@ -60,16 +58,10 @@ find_package(FFTW REQUIRED COMPONENTS DOUBLE_LIB)
 
 include(ExternalProject)
 include(SetupCODE)
-if(NOT WITH_FORTFEM)
-  include(SetupTriangle)
-endif()
+include(SetupTriangle)
 if(WITH_MFEM)
   include(SetupMFEM)
   add_definitions(-DUSE_MFEM)
-endif()
-if(WITH_FORTFEM)
-  find_package(fortfem CONFIG REQUIRED)
-  add_definitions(-DUSE_FORTFEM)
 endif()
 include(Util)
 find_or_fetch(libneo)
@@ -116,9 +108,6 @@ set(MEPHIT_C_SRC_FILES
   src/mephit_fem.c
   src/hyper1F1.c
 )
-if(WITH_FORTFEM)
-  list(APPEND MEPHIT_C_SRC_FILES src/mephit_fortfem.c)
-endif()
 set(MEPHIT_CPP_SRC_FILES
   src/mephit_fem.cpp
 )
@@ -128,15 +117,8 @@ if(WITH_MFEM)
     src/miscellaneous.cpp
   )
 endif()
-set(MEPHIT_C_DEPENDENCY_FLAGS "-I${SUITESPARSE_INCLUDE_DIRS}")
-if(NOT WITH_FORTFEM)
-  string(APPEND MEPHIT_C_DEPENDENCY_FLAGS
-    " -I${TRIANGLE_INCLUDE_DIR} -L${TRIANGLE_LIB_DIR}")
-endif()
-set_source_files_properties(
-  src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-  PROPERTIES COMPILE_FLAGS
-    "${CMAKE_C_FLAGS} -DREAL=double ${MEPHIT_C_DEPENDENCY_FLAGS}")
+set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
+	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
 
 
 ### Define library
@@ -147,28 +129,22 @@ add_library(mephit SHARED
   ${MEPHIT_C_SRC_FILES}
   ${MEPHIT_CPP_SRC_FILES}
 )
-if(NOT WITH_FORTFEM)
-  add_dependencies(mephit TRIANGLE)
-endif()
+add_dependencies(mephit TRIANGLE)
 target_include_directories(mephit PUBLIC
   ${magfie_include_dir}
+  ${TRIANGLE_INCLUDE_DIR}
   ${FFTW_INCLUDE_DIRS}
 )
-if(NOT WITH_FORTFEM)
-  target_include_directories(mephit PUBLIC ${TRIANGLE_INCLUDE_DIR})
-endif()
 set(MEPHIT_LIBS
   GSL::gsl
   BLAS::BLAS
   LAPACK::LAPACK
   ${FFTW_LIBRARIES}
+  ${triangle_lib}
   LIBNEO::magfie
   LIBNEO::odeint
   LIBNEO::hdf5_tools
 )
-if(NOT WITH_FORTFEM)
-  list(APPEND MEPHIT_LIBS ${triangle_lib})
-endif()
 target_link_libraries(mephit ${MEPHIT_LIBS})
 if(LEGACY_SUITESPARSE)
   target_link_libraries(mephit ${SUITESPARSE_LIBRARIES})
@@ -180,9 +156,6 @@ if(WITH_MFEM)
   target_include_directories(mephit PUBLIC ${MFEM_INCLUDE_DIRS})
   target_link_libraries(mephit ${MFEM_LIBRARIES})
 endif()
-if(WITH_FORTFEM)
-  target_link_libraries(mephit fortfem::capi)
-endif()
 
 ### Define executables
 add_executable(mephit_run.x src/mephit_run.c)
@@ -192,56 +165,11 @@ target_link_libraries(mephit_run.x mephit)
 target_link_libraries(mephit_test.x mephit)
 target_link_libraries(mephit_post.x mephit)
 
-if(WITH_FORTFEM AND BUILD_TESTING)
-  add_executable(test_fortfem_adapter
-    test/test_fortfem_adapter.c
-    src/mephit_fortfem.c)
-  target_include_directories(test_fortfem_adapter PRIVATE src)
-  target_link_libraries(test_fortfem_adapter PRIVATE fortfem::capi m)
-  add_test(NAME fortfem_adapter COMMAND test_fortfem_adapter)
-
-  add_executable(test_fortfem_production_mesh
-    test/test_fortfem_production_mesh.c
-    src/mephit_fortfem.c)
-  target_include_directories(test_fortfem_production_mesh PRIVATE src)
-  target_link_libraries(test_fortfem_production_mesh PRIVATE fortfem::capi m)
-  add_test(
-    NAME fortfem_production_mesh
-    COMMAND test_fortfem_production_mesh)
-
-  add_executable(test_fortfem_dispatch
-    test/test_fortfem_dispatch.c)
-  target_include_directories(test_fortfem_dispatch PRIVATE src)
-  target_link_libraries(test_fortfem_dispatch PRIVATE mephit)
-  add_test(NAME fortfem_dispatch COMMAND test_fortfem_dispatch)
-
-  add_test(
-    NAME fortfem_no_daemon
-    COMMAND
-      ${CMAKE_COMMAND}
-      -DMEPHIT_RUN=$<TARGET_FILE:mephit_run.x>
-      -DTEST_TEMP=${PROJECT_BINARY_DIR}
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/test/test_fortfem_no_daemon.cmake)
-
-  add_test(
-    NAME fortfem_no_triangle
-    COMMAND
-      ${CMAKE_COMMAND}
-      -DC_COMPILER=${CMAKE_C_COMPILER}
-      -DMEPHIT_INCLUDE=${CMAKE_CURRENT_SOURCE_DIR}/src
-      -DFORTFEM_INCLUDE=$<TARGET_PROPERTY:fortfem::capi,INTERFACE_INCLUDE_DIRECTORIES>
-      -DMEPHIT_FEM_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/mephit_fem.c
-      -DTEST_OBJECT=${PROJECT_BINARY_DIR}/test_fortfem_no_triangle.o
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/test/test_fortfem_no_triangle.cmake)
-endif()
-
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)
-if(NOT WITH_FORTFEM)
-  configure_file(scripts/ff-mephit.bash ${PROJECT_BINARY_DIR}/scripts/ff-mephit.bash COPYONLY)
-  configure_file(scripts/maxwell_daemon.edp ${PROJECT_BINARY_DIR}/scripts/maxwell_daemon.edp COPYONLY)
-  configure_file(scripts/extmesh.edp ${PROJECT_BINARY_DIR}/scripts/extmesh.edp COPYONLY)
-endif()
+configure_file(scripts/ff-mephit.bash ${PROJECT_BINARY_DIR}/scripts/ff-mephit.bash COPYONLY)
+configure_file(scripts/maxwell_daemon.edp ${PROJECT_BINARY_DIR}/scripts/maxwell_daemon.edp COPYONLY)
+configure_file(scripts/extmesh.edp ${PROJECT_BINARY_DIR}/scripts/extmesh.edp COPYONLY)
 configure_file(scripts/mephit.gdb ${PROJECT_BINARY_DIR}/scripts/mephit.gdb COPYONLY)
 configure_file(data/convexwall_asdex.dat ${PROJECT_BINARY_DIR}/data/convexwall_asdex.dat COPYONLY)
 configure_file(data/convexwall_kilca.dat ${PROJECT_BINARY_DIR}/data/convexwall_kilca.dat COPYONLY)

@@ -259,7 +259,6 @@ module mephit_mesh
       real(c_double), intent(out), dimension(1:order) :: points, weights
     end subroutine gauss_legendre_unit_interval
 
-#ifndef USE_FORTFEM
     subroutine FEM_triangulate_external(npt_inner, npt_outer, node_R, node_Z, R_O, Z_O, fname) &
       bind(C, name = 'FEM_triangulate_external')
       use iso_c_binding, only: c_char, c_int, c_double
@@ -268,7 +267,6 @@ module mephit_mesh
       real(c_double), intent(in), value :: R_O, Z_O
       character(c_char), intent(in) :: fname(*)
     end subroutine FEM_triangulate_external
-#endif
 
     subroutine Rtree_init(ntri, tri_bb) bind(C, name = 'Rtree_init')
       use iso_c_binding, only: c_int, c_double
@@ -1200,9 +1198,7 @@ contains
 #ifdef USE_MFEM
     call mesh_write_MFEM
 #endif
-#ifndef USE_FORTFEM
     call write_FreeFem_mesh
-#endif
     call cache_init(cache, 4)
     call cache_equilibrium_field
     call compute_sample_polmodes(cache%sample_polmodes_half, .true.)
@@ -3055,7 +3051,6 @@ contains
   end subroutine mesh_write_MFEM
 #endif
 
-#ifndef USE_FORTFEM
   subroutine write_FreeFem_mesh
     use iso_c_binding, only: c_null_char
     use mephit_util, only: pi, linspace
@@ -3117,7 +3112,6 @@ contains
       decorate_filename('outer.msh', '', basename_suffix) // c_null_char)
     deallocate(bdry_R, bdry_Z, theta)
   end subroutine write_FreeFem_mesh
-#endif
 
   subroutine mesh_read(mesh, file, dataset)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
