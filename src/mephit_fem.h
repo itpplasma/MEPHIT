@@ -54,7 +54,7 @@ typedef void complex_scalar_field(const double R,
 void* MFEM_init(const int tor_mode,
                 const char *mesh_file,
                 const char *edgemap_file);
-void MFEM_compute_magfn(void *mawell_solver,
+void MFEM_compute_magfn(void *maxwell_solver,
                         const int nedge,
                         const complex_double *Jn,
                         complex_double *Bn);

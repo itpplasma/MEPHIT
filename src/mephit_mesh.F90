@@ -3064,8 +3064,8 @@ contains
     end do
     close(fid)
     ! shift indices
-    triangles(:, :) = triangles(:, :) + mesh%npoint - mesh%kp_max(mesh%nflux)
-    segments(:, :) = segments(:, :) + mesh%npoint - mesh%kp_max(mesh%nflux)
+    triangles(:, :) = triangles(:, :) + mesh%npoint - mesh%kp_max(mesh%nflux) - 1
+    segments(:, :) = segments(:, :) + mesh%npoint - mesh%kp_max(mesh%nflux) - 1
     ! write combined mesh
     open(newunit = fid, file = decorate_filename('maxwell.mesh', '', basename_suffix), &
       status = 'replace', form = 'formatted', action = 'write')
