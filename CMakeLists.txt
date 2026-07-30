@@ -6,7 +6,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 project(MEPHIT LANGUAGES C CXX Fortran)
 
 ### Define options
-option(WITH_MFEM "Compile with MFEM" FALSE)
+option(WITH_MFEM_MDE "Compile with MFEM" FALSE)
 
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
@@ -94,9 +94,9 @@ add_link_options(${NETCDF_FLIBS})
 include(ExternalProject)
 include(SetupCODE)
 include(SetupTriangle)
-if(WITH_MFEM)
-  include(SetupMFEM)
-  add_definitions(-DUSE_MFEM)
+include(SetupMFEM)
+if(WITH_MFEM_MDE)
+  add_definitions(-DUSE_MFEM_MDE)
 endif()
 include(Util)
 find_or_fetch(libneo)
@@ -146,7 +146,7 @@ set(MEPHIT_C_SRC_FILES
 set(MEPHIT_CPP_SRC_FILES
   src/mephit_fem.cpp
 )
-if(WITH_MFEM)
+if(WITH_MFEM_MDE)
   set(MEPHIT_CPP_SRC_FILES ${MEPHIT_CPP_SRC_FILES}
     src/magnetic_differential_equation.cpp
     src/miscellaneous.cpp
@@ -192,11 +192,9 @@ if(LEGACY_SUITESPARSE)
 else()
   target_link_libraries(mephit SuiteSparse::umfpack)
 endif()
-if(WITH_MFEM)
-  add_dependencies(mephit MFEM)
-  target_include_directories(mephit PUBLIC ${MFEM_INCLUDE_DIRS})
-  target_link_libraries(mephit ${MFEM_LIBRARIES})
-endif()
+add_dependencies(mephit MFEM)
+target_include_directories(mephit PUBLIC ${MFEM_INCLUDE_DIRS})
+target_link_libraries(mephit ${MFEM_LIBRARIES})
 
 ### Define executables
 add_executable(mephit_run.x src/mephit_run.c)

@@ -51,14 +51,23 @@ typedef void complex_scalar_field(const double R,
                                   const double Z,
                                   complex_double *scalar);
 
-#ifdef USE_MFEM
+void* MFEM_init(const int tor_mode,
+                const char *mesh_file,
+                const char *edgemap_file);
+void MFEM_compute_magfn(void *mawell_solver,
+                        const int nedge,
+                        const complex_double *Jn,
+                        complex_double *Bn);
+void MFEM_deinit(void *maxwell_solver);
+
+#ifdef USE_MFEM_MDE
 int FEM_test(const char *mesh_file,
              const int tor_mode,
              const int n_dof,
              complex_double *dof,
              real_vector_field *unit_B0,
              complex_scalar_field *MDE_inhom);
-#endif  // USE_MFEM
+#endif  // USE_MFEM_MDE
 
 #ifdef __cplusplus
 }

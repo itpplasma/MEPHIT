@@ -1195,10 +1195,8 @@ contains
     call init_flux_variables
     call compare_gpec_coordinates
     call connect_mesh_points
-#ifdef USE_MFEM
-    call mesh_write_MFEM
-#endif
     call write_FreeFem_mesh
+    call mesh_write_MFEM
     call cache_init(cache, 4)
     call cache_equilibrium_field
     call compute_sample_polmodes(cache%sample_polmodes_half, .true.)
@@ -3021,10 +3019,11 @@ contains
     call h5_close(h5id_root)
   end subroutine mesh_write
 
-#ifdef USE_MFEM
   subroutine mesh_write_MFEM
     use mephit_conf, only: basename_suffix, decorate_filename
-    integer :: fid, ktri, kp, kpoi
+    integer :: fid, ktri, kp, kpoi, npoint, ntri, nseg, idum
+    integer, dimension(:, :), allocatable :: triangles, segments
+    real(dp), dimension(:, :), allocatable :: points
 
     open(newunit = fid, file = decorate_filename('core_plasma.mesh', '', basename_suffix), &
       status = 'replace', form = 'formatted', action = 'write')
@@ -3048,8 +3047,57 @@ contains
       write (fid, '(es24.16e3, 1x, es24.16e3)') mesh%node_R(kpoi), mesh%node_Z(kpoi)
     end do
     close(fid)
+
+    ! intermediate step: read external mesh generated for FreeFem
+    open(newunit = fid, file = decorate_filename('outer.msh', '', basename_suffix), &
+      status = 'old', form = 'formatted', action = 'read')
+    read (fid, *) npoint, ntri, nseg
+    allocate(points(2, npoint), triangles(3, ntri), segments(2, nseg))
+    do kpoi = 1, npoint
+      read (fid, *) points(:, kpoi), idum
+    end do
+    do ktri = 1, ntri
+      read (fid, *) triangles(:, ktri), idum
+    end do
+    do kpoi = 1, nseg
+      read (fid, *) segments(:, kpoi), idum
+    end do
+    close(fid)
+    ! shift indices
+    triangles(:, :) = triangles(:, :) + mesh%npoint - mesh%kp_max(mesh%nflux)
+    segments(:, :) = segments(:, :) + mesh%npoint - mesh%kp_max(mesh%nflux)
+    ! write combined mesh
+    open(newunit = fid, file = decorate_filename('maxwell.mesh', '', basename_suffix), &
+      status = 'replace', form = 'formatted', action = 'write')
+    write (fid, '("MFEM mesh v1.0", /)')
+    write (fid, '("dimension", /, "2", /)')
+    write (fid, '("elements", /, i0)') mesh%ntri + ntri
+    do ktri = 1, mesh%ntri
+      ! <element attribute> <geometry type> <vertex indices ...>
+      ! attribute: 1 for plasma core, geometry type: 2 for triangle
+      write (fid, '("1 2", 3(1x, i0))') mesh%tri_node(:, ktri) - 1
+    end do
+    do ktri = 1, ntri
+      ! <element attribute> <geometry type> <vertex indices ...>
+      ! attribute: 2 for surrounding volume, geometry type: 2 for triangle
+      write (fid, '("2 2", 3(1x, i0))') triangles(:, ktri)
+    end do
+    write (fid, '(/, "boundary", /, i0)') nseg - mesh%kp_max(mesh%nflux)
+    do kpoi = mesh%kp_max(mesh%nflux) + 1, nseg
+      ! <boundary element attribute> <geometry type> <vertex indices ...>
+      ! attribute: 2 for surrounding volume, geometry type: 1 for segment
+      write (fid, '("2 1", 2(1x, i0))') segments(:, kpoi)
+    end do
+    write (fid, '(/, "vertices", /, i0, /, "2")') mesh%npoint + npoint - mesh%kp_max(mesh%nflux)
+    do kpoi = 1, mesh%npoint
+      write (fid, '(es24.16e3, 1x, es24.16e3)') mesh%node_R(kpoi), mesh%node_Z(kpoi)
+    end do
+    do kpoi = mesh%kp_max(mesh%nflux) + 1, npoint
+      write (fid, '(es24.16e3, 1x, es24.16e3)') points(:, kpoi)
+    end do
+    close(fid)
+    deallocate(points, triangles, segments)
   end subroutine mesh_write_MFEM
-#endif
 
   subroutine write_FreeFem_mesh
     use iso_c_binding, only: c_null_char

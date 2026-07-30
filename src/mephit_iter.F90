@@ -1,5 +1,6 @@
 module mephit_iter
   use iso_fortran_env, only: dp => real64
+  use iso_c_binding, only: c_ptr
   use mephit_pert, only: L1_t, RT0_t
 
   implicit none
@@ -91,6 +92,7 @@ module mephit_iter
     subroutine FEM_deinit() bind(C, name = 'FEM_deinit')
     end subroutine FEM_deinit
 
+#ifdef USE_MFEM_MDE
     function FEM_test(mesh_file, tor_mode, n_dof, dof, unit_B0, MDE_inhom) &
       bind(C, name = 'FEM_test')
       use iso_c_binding, only: c_int, c_char, c_double_complex, c_funptr
@@ -102,12 +104,39 @@ module mephit_iter
       type(c_funptr), intent(in), value :: MDE_inhom
       integer(c_int) :: FEM_test
     end function FEM_test
-  end interface
+#endif
+
+    function MFEM_init(tor_mode, mesh_file, edgemap_file) result(maxwell_solver) &
+      bind(C, name = 'MFEM_init')
+      use iso_c_binding, only: c_char, c_int, c_ptr
+      integer(c_int), intent(in), value :: tor_mode
+      character(c_char), intent(in) :: mesh_file(*)
+      character(c_char), intent(in) :: edgemap_file(*)
+      type(c_ptr) :: maxwell_solver
+    end function MFEM_init
+
+    subroutine MFEM_compute_magfn(maxwell_solver, nedge, Jn, Bn) &
+      bind(C, name = 'MFEM_compute_magfn')
+      use iso_c_binding, only: c_ptr, c_int, c_double_complex
+      type(c_ptr), intent(in), value :: maxwell_solver
+      integer(c_int), intent(in), value :: nedge
+      complex(c_double_complex), intent(in) :: Jn(1:nedge)
+      complex(c_double_complex), intent(out) :: Bn(1:nedge)
+    end subroutine MFEM_compute_magfn
+
+    subroutine MFEM_deinit(maxwell_solver) bind(C, name = 'MFEM_deinit')
+      use iso_c_binding, only: c_ptr
+      type(c_ptr), intent(in), value :: maxwell_solver
+    end subroutine MFEM_deinit
+
+end interface
+
+  type(c_ptr) :: maxwell_solver
 
 contains
 
   subroutine mephit_run(runmode, config, suffix) bind(C, name = 'mephit_run')
-    use iso_c_binding, only: c_int, c_ptr
+    use iso_c_binding, only: c_int, c_ptr, c_null_char
     use input_files, only: gfile
     use field_sub, only : read_field_input
     use geqdsk_tools, only: geqdsk_read, geqdsk_classify, geqdsk_standardise
@@ -198,6 +227,9 @@ contains
     end if
     if (preconditioner .or. iterations) then
       call perteq_init(perteq)
+      maxwell_solver = MFEM_init(mesh%n, &
+        decorate_filename('maxwell.mesh', '', basename_suffix) // c_null_char, &
+        decorate_filename('edgemap.dat', '', basename_suffix) // c_null_char)
       if (preconditioner) then
         call FDM_compute_matrix(fdm)
         call FDM_write(fdm, datafile, 'iter/FDM')
@@ -218,6 +250,7 @@ contains
       call FLR2_deinit(flr2)
       call precond_deinit(precond)
       call perteq_deinit(perteq)
+      call MFEM_deinit(maxwell_solver)
     end if
     call FEM_deinit
     call mephit_deinit
@@ -553,7 +586,7 @@ contains
       write (postfix, postfix_fmt) kiter
       Bn_prev%DOF(:) = perteq%Bn%DOF
       Bn_prev%comp_phi(:) = perteq%Bn%comp_phi
-#ifdef USE_MFEM
+#ifdef USE_MFEM_MDE
       if (kiter <= 1) then
         call MFEM_test(perteq%pn)
         call perteq_write('("iter/", a, "MFEM_' // postfix // '")', &
@@ -641,6 +674,7 @@ contains
 
   subroutine debug_initial_iteration(perteq, fdm, flr2)
     use mephit_conf, only: conf
+    use mephit_mesh, only: mesh
     use mephit_pert, only: vac
     use mephit_flr2, only: flr2_t
     type(perteq_t), intent(inout) :: perteq
@@ -650,13 +684,13 @@ contains
     if (conf%debug_initial) then
       perteq%Bn%DOF(:) = vac%Bn%DOF
       perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
-#ifdef USE_MFEM
+#ifdef USE_MFEM_MDE
       call MFEM_test(perteq%pn)
       call perteq_write('("debug_MFEM_initial/MFEM_", a)', &
         ' (initial MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
 #endif
       call compute_presn(perteq, fdm, .false.)
-#ifdef USE_MFEM
+#ifdef USE_MFEM_MDE
       call perteq_write('("debug_MFEM_initial/", a)', &
         ' (initial iteration)', presn = perteq%pn, presmn = perteq%pn)
 #endif
@@ -665,6 +699,7 @@ contains
       perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
       call compute_presn(perteq, fdm, .true.)
       call compute_currn(perteq, fdm, flr2, .true., .true.)
+      call MFEM_compute_magfn(maxwell_solver, mesh%nedge, perteq%jn%DOF, perteq%Bn%DOF)
     end if
   end subroutine debug_initial_iteration
 
@@ -722,7 +757,7 @@ contains
     scalar = -dp0_dpsi * (B_n(1) * B_0(3) - B_n(3) * B_0(1)) * R / sqrt(sum(B_0 * B_0))
   end subroutine presn_inhom
 
-#ifdef USE_MFEM
+#ifdef USE_MFEM_MDE
   subroutine MFEM_test(pn)
     use iso_c_binding, only: c_int, c_null_char, c_loc, c_funloc
     use mephit_conf, only: conf, logger, basename_suffix, decorate_filename
