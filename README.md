@@ -16,8 +16,8 @@ Prerequisites from external sources for running MEPHIT are as follows.
 - [Boost](https://www.boost.org/)
 - [FreeFem++](https://github.com/FreeFem/FreeFem-sources)
 - [MFEM](https://mfem.org/) is optional
-- [HDF5](https://www.hdfgroup.org/downloads/hdf5)
-- [NetCDF](https://github.com/Unidata/netcdf-fortran)
+- [zlib](https://zlib.net/) for Fortio's compressed NetCDF-4/HDF5 subset;
+  Fortio itself is fetched transitively through libneo
 - Python 3 including packages listed in [`requirements.txt`](requirements.txt) for plotting
 - [Doxygen](https://doxygen.nl/) and [TeX Live](https://www.tug.org/texlive/) for call graphs
 
@@ -25,7 +25,10 @@ Prerequisites from external sources for running MEPHIT are as follows.
 
 In the following sections, it is assumed that the environment variable `MEPHIT_DIR` points to the absolute path of the `build` directory containing the binaries and `MEPHIT_RUN_DIR` points to the absolute path of the `run` directory containing the simulations. At ITPcp, you can refer to the `.gitlab-ci.yml` in [CODE](https://gitlab.tugraz.at/plasma/code).
 
-To fetch a specific libneo branch, tag, or commit, pass `-DLIBNEO_REF=<ref>` to cmake or `make LIBNEO_REF=<ref>`. To use a local libneo source tree instead of fetching from git, pass `-DLIBNEO_PATH=<dir>` or `make LIBNEO_PATH=<dir>`. Both default to the standard ref resolution when unset.
+The build pins a tested libneo commit. To fetch a different branch, tag, or commit,
+pass `-DLIBNEO_REF=<ref>` to cmake or `make LIBNEO_REF=<ref>`. To use a local libneo
+source tree instead of fetching from git, pass `-DLIBNEO_PATH=<dir>` or
+`make LIBNEO_PATH=<dir>`.
 
 To build MEPHIT, run:
 
