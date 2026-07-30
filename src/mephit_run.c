@@ -66,8 +66,14 @@ extern char shared_namedpipe[path_max];
 
 int main(int argc, char *argv[])
 {
-  char *config = NULL, *suffix = NULL, *tmpdir = NULL, *scriptpath = NULL;
-  int argi = 0, runmode = 0, bytes_written, errno_save;
+  char *config = NULL, *suffix = NULL, *tmpdir = NULL;
+#ifndef USE_FORTFEM
+  char *scriptpath = NULL;
+#endif
+  int argi = 0, runmode = 0, errno_save;
+#ifndef USE_FORTFEM
+  int bytes_written;
+#endif
   struct sigaction infanticide, prev_sigint, prev_sigterm;
 
   // first argument
@@ -103,6 +109,7 @@ int main(int argc, char *argv[])
   } else {
     errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to temporary directory as fourth argument");
   }
+#ifndef USE_FORTFEM
   // fifth argument
   if (argc > ++argi) {
     if (!strlen(argv[argi])) {
@@ -112,7 +119,12 @@ int main(int argc, char *argv[])
   } else {
     errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to FreeFem script file as fifth argument");
   }
+#endif
   /* TODO: if exclusive flock on mephit.h5 fails, exit with error; else, release acquired lock */
+#ifdef USE_FORTFEM
+  (void) tmpdir;
+  fem.exited = 1;
+#else
   bytes_written = snprintf(shared_namedpipe, path_max, "%s/MEPHIT_0x%.8x.dat", tmpdir, getpid());
   if (bytes_written < 0) {
     errno_msg(exit, __FILE__, __LINE__, errno, "Failed to generate FIFO name");
@@ -129,16 +141,19 @@ int main(int argc, char *argv[])
   } else if (fem.pid == (pid_t) -1) {
     errno_msg(exit, __FILE__, __LINE__, errno, "Failed to create child process for FreeFem");
   }
- mephit_fork: mephit.pid = fork();
+#endif
+  mephit.pid = fork();
   if (mephit.pid == (pid_t) 0) {
     gsl_set_error_handler(gsl_errno_msg);
     mephit_run(runmode, config, suffix);
     exit(0);
   } else if (mephit.pid == (pid_t) -1) {
     errno_save = errno;
+#ifndef USE_FORTFEM
     if (kill(fem.pid, SIGTERM)) {
       errno_msg(NULL, __FILE__, __LINE__, errno, "Failed to kill process FreeFem");
     }
+#endif
     errno_msg(exit, __FILE__, __LINE__, errno_save, "Failed to create child process for MEPHIT");
   }
   infanticide.sa_handler = catch_signal;
@@ -182,10 +197,12 @@ int main(int argc, char *argv[])
   if (sigaction(SIGTERM, &prev_sigterm, NULL)) {
     errno_msg(NULL, __FILE__, __LINE__, errno, "Failed to unregister signal handler for SIGTERM");
   }
+#ifndef USE_FORTFEM
   if (unlink(shared_namedpipe)) {
     errno_msg(NULL, __FILE__, __LINE__, errno, "Failed to delete FIFO");
   }
   shared_namedpipe[0] = '\0';
+#endif
 
   if (caught_signal) {
     return 128 + (int) caught_signal;
