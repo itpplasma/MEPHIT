@@ -29,11 +29,6 @@ else ()
   set(CMAKE_C_FLAGS "-O2 -g -march=native -Wconversion -Wfloat-equal -Wshadow -Wredundant-decls -Winline ${WARNING_FLAGS}")
 endif ()
 
-# Prevent linker error with hdf5tools on Ubuntu
-if(NOT CMAKE_SYSTEM_NAME STREQUAL "Darwin")
-  set(CMAKE_EXE_LINKER_FLAGS "-Wl,--copy-dt-needed-entries")
-endif()
-
 ### Define external paths
 if ("${CMAKE_SYSTEM}" MATCHES "Darwin")
   set(tmpdir $TMPDIR)
@@ -59,39 +54,9 @@ else()
 endif()
 
 cmake_policy(SET CMP0074 NEW)
-find_package(HDF5 COMPONENTS C Fortran HL REQUIRED)
 find_package(Boost 1.74 REQUIRED)
 find_package(GSL REQUIRED)
 find_package(FFTW REQUIRED COMPONENTS DOUBLE_LIB)
-
-### NetCDF
-find_program(NF_CONFIG "nf-config")
-
-if (NF_CONFIG)
-execute_process(COMMAND nf-config --includedir
-                OUTPUT_VARIABLE NETCDFINCLUDE_DIR)
-execute_process(COMMAND nc-config --libdir
-				OUTPUT_VARIABLE NETCDFLIB_DIR)
-execute_process(COMMAND nf-config --flibs
-                OUTPUT_VARIABLE NETCDF_FLIBS)
-else()
-message(SEND_ERROR "nf-config not found. Please install libnetcdff-dev")
-endif()
-
-string(STRIP ${NETCDFINCLUDE_DIR} NETCDFINCLUDE_DIR)
-string(STRIP ${NETCDFLIB_DIR} NETCDFLIB_DIR)
-string(STRIP ${NETCDF_FLIBS} NETCDF_FLIBS)
-
-message(STATUS "NetCDF include path: " ${NETCDFINCLUDE_DIR})
-message(STATUS "NetCDF lib path: " ${NETCDFLIB_DIR})
-message(STATUS "NetCDF Fortran libs: " ${NETCDF_FLIBS})
-
-# Replace space by semicolon in the Fortran libs
-string(REPLACE " " ";" NETCDF_FLIBS ${NETCDF_FLIBS})
-
-include_directories(${NETCDFINCLUDE_DIR})
-link_directories(${NETCDFLIB_DIR})
-add_link_options(${NETCDF_FLIBS})
 
 include(ExternalProject)
 include(SetupCODE)
@@ -187,18 +152,12 @@ if(NOT WITH_FORTFEM)
 endif()
 target_include_directories(mephit PUBLIC
   ${magfie_include_dir}
-  ${NETCDF_INCLUDES}
-  ${NETCDF_INCLUDES}
   ${FFTW_INCLUDE_DIRS}
 )
 if(NOT WITH_FORTFEM)
   target_include_directories(mephit PUBLIC ${TRIANGLE_INCLUDE_DIR})
 endif()
 set(MEPHIT_LIBS
-  hdf5::hdf5
-  hdf5::hdf5_hl
-  hdf5::hdf5_fortran
-  hdf5::hdf5_hl_fortran
   GSL::gsl
   BLAS::BLAS
   LAPACK::LAPACK
