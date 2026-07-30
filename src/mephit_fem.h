@@ -22,13 +22,6 @@ extern "C" {
 #endif
 
 void FEM_init(const int tormode, const int nedge, const int npoint, const int runmode);
-void FEM_init_fortfem_mesh(const int npoint,
-                           const double *node_R,
-                           const double *node_Z,
-                           const int ntri,
-                           const int *tri_node,
-                           const int nedge,
-                           const int *edge_node);
 void FEM_extend_mesh(void);
 void FEM_compute_magfn(const int nedge,
                        const int npoint,
@@ -41,7 +34,6 @@ void FEM_deinit(void);
 
 void gauss_legendre_unit_interval(int order, double *points, double *weights);
 
-#ifndef USE_FORTFEM
 void FEM_triangulate_external(const int npt_inner,
                               const int npt_outer,
                               const double *bdry_R,
@@ -49,7 +41,6 @@ void FEM_triangulate_external(const int npt_inner,
                               const double R_mid,
                               const double Z_mid,
                               const char *fname);
-#endif
 void Rtree_init(int ntri, double *tri_bb);
 void Rtree_query(double R, double Z, int *result_size, int **results);
 
