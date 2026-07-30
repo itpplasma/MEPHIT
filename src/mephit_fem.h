@@ -34,13 +34,6 @@ void FEM_deinit(void);
 
 void gauss_legendre_unit_interval(int order, double *points, double *weights);
 
-void FEM_triangulate_external(const int npt_inner,
-                              const int npt_outer,
-                              const double *bdry_R,
-                              const double *bdry_Z,
-                              const double R_mid,
-                              const double Z_mid,
-                              const char *fname);
 void Rtree_init(int ntri, double *tri_bb);
 void Rtree_query(double R, double Z, int *result_size, int **results);
 

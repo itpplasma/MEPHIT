@@ -93,7 +93,7 @@ add_link_options(${NETCDF_FLIBS})
 
 include(ExternalProject)
 include(SetupCODE)
-include(SetupTriangle)
+include(SetupFortfem)
 if(WITH_MFEM)
   include(SetupMFEM)
   add_definitions(-DUSE_MFEM)
@@ -129,6 +129,7 @@ set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
 
 set(MEPHIT_FORTRAN_SRC_FILES
   src/mephit_conf.f90
+  src/mephit_triangulate.f90
   src/mephit_util.f90
   src/mephit_mesh.F90
   src/mephit_pert.f90
@@ -153,7 +154,7 @@ if(WITH_MFEM)
   )
 endif()
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
+	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -I${SUITESPARSE_INCLUDE_DIRS}")
 
 
 ### Define library
@@ -164,12 +165,9 @@ add_library(mephit SHARED
   ${MEPHIT_C_SRC_FILES}
   ${MEPHIT_CPP_SRC_FILES}
 )
-add_dependencies(mephit TRIANGLE)
 target_include_directories(mephit PUBLIC
   ${magfie_include_dir}
   ${NETCDF_INCLUDES}
-  ${NETCDF_INCLUDES}
-  ${TRIANGLE_INCLUDE_DIR}
   ${FFTW_INCLUDE_DIRS}
 )
 set(MEPHIT_LIBS
@@ -181,7 +179,7 @@ set(MEPHIT_LIBS
   BLAS::BLAS
   LAPACK::LAPACK
   ${FFTW_LIBRARIES}
-  ${triangle_lib}
+  fortfem_triangle_compat
   LIBNEO::magfie
   LIBNEO::odeint
   LIBNEO::hdf5_tools
