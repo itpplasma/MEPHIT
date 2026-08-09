@@ -11,6 +11,7 @@
 #include <gsl/gsl_errno.h>
 #include "mephit_util.h"
 
+/*
 static volatile sig_atomic_t caught_signal = 0;
 
 static void catch_signal(int signum)
@@ -60,15 +61,18 @@ void wait_for_exit(child_process_t *child, const char *name)
     }
   }
 }
+*/
 
 extern void mephit_run(const int runmode, const char *config_file, const char *suffix);
+/*
 extern char shared_namedpipe[path_max];
+*/
 
 int main(int argc, char *argv[])
 {
   char *config = NULL, *suffix = NULL, *tmpdir = NULL, *scriptpath = NULL;
   int argi = 0, runmode = 0, bytes_written, errno_save;
-  struct sigaction infanticide, prev_sigint, prev_sigterm;
+  /* struct sigaction infanticide, prev_sigint, prev_sigterm; */
 
   // first argument
   if (argc > ++argi) {
@@ -94,6 +98,7 @@ int main(int argc, char *argv[])
   } else {
     errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected file basename suffix as third argument");
   }
+  /*
   // fourth argument
   if (argc > ++argi) {
     if (!strlen(argv[argi])) {
@@ -112,7 +117,9 @@ int main(int argc, char *argv[])
   } else {
     errno_msg(exit, __FILE__, __LINE__, EINVAL, "Expected path to FreeFem script file as fifth argument");
   }
+  */
   /* TODO: if exclusive flock on mephit.h5 fails, exit with error; else, release acquired lock */
+  /*
   bytes_written = snprintf(shared_namedpipe, path_max, "%s/MEPHIT_0x%.8x.dat", tmpdir, getpid());
   if (bytes_written < 0) {
     errno_msg(exit, __FILE__, __LINE__, errno, "Failed to generate FIFO name");
@@ -132,8 +139,10 @@ int main(int argc, char *argv[])
  mephit_fork: mephit.pid = fork();
   if (mephit.pid == (pid_t) 0) {
     gsl_set_error_handler(gsl_errno_msg);
+    */
     mephit_run(runmode, config, suffix);
     exit(0);
+    /*
   } else if (mephit.pid == (pid_t) -1) {
     errno_save = errno;
     if (kill(fem.pid, SIGTERM)) {
@@ -193,5 +202,6 @@ int main(int argc, char *argv[])
   if (fem.status || mephit.status) {
     return 1;
   }
+  */
   return 0;
 }

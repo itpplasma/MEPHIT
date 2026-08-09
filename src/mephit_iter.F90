@@ -204,9 +204,6 @@ contains
       call vac_init(vac, mesh%nedge, mesh%ntri, mesh%m_res_min, mesh%m_res_max)
       call generate_vacfield(vac)
       call vac_write(vac, datafile, 'vac')
-      ! pass effective toroidal mode number and runmode to FreeFem++
-      call FEM_init(mesh%n, mesh%nedge, mesh%npoint, runmode_flags)
-      call FEM_extend_mesh
     else
       ! initialize equilibrium field
       call read_field_input
@@ -222,8 +219,6 @@ contains
       ! reload config parameters here in case they changed since the meshing phase
       call conf_arr%read(conf%config_file, mesh%m_res_min, mesh%m_res_max)
       call conf_arr%export_hdf5(datafile, 'config')
-      ! pass effective toroidal mode number and runmode to FreeFem++
-      call FEM_init(mesh%n, mesh%nedge, mesh%npoint, runmode)
     end if
     if (preconditioner .or. iterations) then
       call perteq_init(perteq)
@@ -252,7 +247,6 @@ contains
       call perteq_deinit(perteq)
       call MFEM_deinit(maxwell_solver)
     end if
-    call FEM_deinit
     call mephit_deinit
   end subroutine mephit_run
 
@@ -699,7 +693,6 @@ contains
       perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
       call compute_presn(perteq, fdm, .true.)
       call compute_currn(perteq, fdm, flr2, .true., .true.)
-      call MFEM_compute_magfn(maxwell_solver, mesh%nedge, perteq%jn%DOF, perteq%Bn%DOF)
     end if
   end subroutine debug_initial_iteration
 
@@ -709,8 +702,7 @@ contains
     use mephit_pert, only: RT0_tor_comp_from_zero_div
     type(perteq_t), intent(inout) :: perteq
 
-    call FEM_compute_magfn(mesh%nedge, mesh%npoint, perteq%jn%DOF, &
-      perteq%Bn%DOF, perteq%AnR%DOF, perteq%AnZ%DOF)
+    call MFEM_compute_magfn(maxwell_solver, mesh%nedge, perteq%jn%DOF, perteq%Bn%DOF)
     call RT0_tor_comp_from_zero_div(perteq%Bn)
   end subroutine compute_magfn
 

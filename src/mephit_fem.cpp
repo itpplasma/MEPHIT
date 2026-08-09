@@ -149,9 +149,57 @@ extern "C" int FEM_test(const char *mesh_file,
 
 #endif  // USE_MFEM_MDE
 
+/* made with help from ChatGPT */
+
+class FourierGaugedCurlInterpolator : public mfem::DiscreteInterpolator
+{
+private:
+  mfem::real_t n;
+
+public:
+  // factor should be -n for
+  //
+  // B_R = -n A_Z
+  // B_Z =  n A_R
+  //
+  FourierGaugedCurlInterpolator(mfem::real_t tor_mode) : n(-tor_mode) {}
+
+  void AssembleElementMatrix2(
+    const mfem::FiniteElement &dom_fe,
+    const mfem::FiniteElement &ran_fe,
+    mfem::ElementTransformation &Trans,
+    mfem::DenseMatrix &elmat) override
+  {
+    MFEM_VERIFY(dom_fe.GetDim() == 2 &&
+                ran_fe.GetDim() == 2,
+                "FourierGaugedCurlInterpolator: 2D elements required.");
+
+    MFEM_VERIFY(dom_fe.GetMapType() == mfem::FiniteElement::H_CURL,
+                "FourierGaugedCurlInterpolator: domain must be H(curl).");
+
+    MFEM_VERIFY(ran_fe.GetMapType() == mfem::FiniteElement::H_DIV,
+                "FourierGaugedCurlInterpolator: range must be H(div).");
+
+    MFEM_VERIFY(dom_fe.GetDof() == ran_fe.GetDof(),
+                "FourierGaugedCurlInterpolator: incompatible number of DOFs.");
+
+    // Lowest-order ND_1 <-> RT_0:
+    MFEM_VERIFY(dom_fe.GetDof() == 3,
+                "FourierGaugedCurlInterpolator: "
+                "this implementation assumes lowest-order elements.");
+
+    elmat.SetSize(ran_fe.GetDof(), dom_fe.GetDof());
+    elmat = 0.0;
+    for (int i = 0; i < dom_fe.GetDof(); i++) {
+      elmat(i, i) = n;
+    }
+  }
+};
+
 class MaxwellSolver {
 public:
   const double c = 29979245800.0;
+  // current formalism only works in lowest order
   const int order = 0;
   const int n;
   mfem::Mesh mesh;
@@ -243,7 +291,7 @@ void MaxwellSolver::assemble()
   potential.Finalize();
   mfem::VectorFEDomainLFIntegrator* const curr_dens = new mfem::VectorFEDomainLFIntegrator(Jn_interp);
   source.AddDomainIntegrator(curr_dens);
-  rot.AddDomainInterpolator(new mfem::CurlInterpolator());
+  rot.AddDomainInterpolator(new FourierGaugedCurlInterpolator(n));
   rot.Assemble();
   rot.Finalize();
   mfem::Array<int> ess_bdr(mesh.bdr_attributes.Max());
