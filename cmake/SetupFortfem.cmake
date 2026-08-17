@@ -3,7 +3,7 @@
 # commit as of 2026-08-17, pinned so the MEPHIT branch remains reproducible.
 include(FetchContent)
 
-set(FORTFEM_REF "7d1097a7e9ca20ed403afd54f30ef7f0ec01c430" CACHE STRING
+set(FORTFEM_REF "605dc7f056aa9b15cf8e0673eaa13b13ce12a273" CACHE STRING
     "fortfem commit to fetch")
 set(FORTFEM_PATH "" CACHE PATH
     "local fortfem source directory (empty = fetch from git)")
