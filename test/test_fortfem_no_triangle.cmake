@@ -17,6 +17,6 @@ execute_process(
 
 if(NOT compile_status EQUAL 0)
   message(FATAL_ERROR
-    "FortFEM FEM dispatch requires Triangle headers:\n"
+    "FortFEM FEM dispatch must compile without Triangle headers:\n"
     "${compile_output}${compile_error}")
 endif()

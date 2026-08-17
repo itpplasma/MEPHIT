@@ -41,16 +41,18 @@ export MEPHIT_DIR="$(git rev-parse --show-toplevel)/build"
 export MEPHIT_RUN_DIR="$(git rev-parse --show-toplevel)/run"
 ```
 
-To use the native FortFEM backend, install FortFEM's CMake package and
-configure MEPHIT with:
+To use the native FortFEM backend, configure MEPHIT with:
 
 ```bash
 cmake -S . -B build \
-    -DWITH_FORTFEM=ON \
-    -DCMAKE_PREFIX_PATH=/path/to/fortfem/install
+    -DWITH_FORTFEM=ON
 cmake --build build
 ```
 
+The build fetches FortFEM at the pinned revision in
+[`cmake/SetupFortfem.cmake`](cmake/SetupFortfem.cmake). For local development,
+pass `-DFORTFEM_PATH=/path/to/fortfem`; to use an installed package instead,
+pass `-DFORTFEM_FETCH=OFF -DCMAKE_PREFIX_PATH=/path/to/fortfem/install`.
 This configuration does not fetch or link Triangle and does not launch
 FreeFem++. Omitting `WITH_FORTFEM` retains the legacy backend.
 
