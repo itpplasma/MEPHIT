@@ -7,6 +7,7 @@ project(MEPHIT LANGUAGES C CXX Fortran)
 
 ### Define options
 option(WITH_MFEM "Compile with MFEM" FALSE)
+option(MEPHIT_BUILD_TESTING "Build MEPHIT-specific tests" FALSE)
 
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
@@ -58,7 +59,7 @@ find_package(FFTW REQUIRED COMPONENTS DOUBLE_LIB)
 
 include(ExternalProject)
 include(SetupCODE)
-include(SetupTriangle)
+include(SetupDelaunay32)
 if(WITH_MFEM)
   include(SetupMFEM)
   add_definitions(-DUSE_MFEM)
@@ -110,6 +111,7 @@ set(MEPHIT_C_SRC_FILES
 )
 set(MEPHIT_CPP_SRC_FILES
   src/mephit_fem.cpp
+  src/mephit_triangulate.cpp
 )
 if(WITH_MFEM)
   set(MEPHIT_CPP_SRC_FILES ${MEPHIT_CPP_SRC_FILES}
@@ -118,7 +120,7 @@ if(WITH_MFEM)
   )
 endif()
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
+	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${SUITESPARSE_INCLUDE_DIRS}")
 
 
 ### Define library
@@ -129,10 +131,8 @@ add_library(mephit SHARED
   ${MEPHIT_C_SRC_FILES}
   ${MEPHIT_CPP_SRC_FILES}
 )
-add_dependencies(mephit TRIANGLE)
 target_include_directories(mephit PUBLIC
   ${magfie_include_dir}
-  ${TRIANGLE_INCLUDE_DIR}
   ${FFTW_INCLUDE_DIRS}
 )
 set(MEPHIT_LIBS
@@ -140,12 +140,13 @@ set(MEPHIT_LIBS
   BLAS::BLAS
   LAPACK::LAPACK
   ${FFTW_LIBRARIES}
-  ${triangle_lib}
+  delaunay32::delaunay32
   LIBNEO::magfie
   LIBNEO::odeint
   LIBNEO::hdf5_tools
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
+target_compile_features(mephit PRIVATE cxx_std_17)
 if(LEGACY_SUITESPARSE)
   target_link_libraries(mephit ${SUITESPARSE_LIBRARIES})
 else()
@@ -164,6 +165,20 @@ add_executable(mephit_post.x src/mephit_post.f90)
 target_link_libraries(mephit_run.x mephit)
 target_link_libraries(mephit_test.x mephit)
 target_link_libraries(mephit_post.x mephit)
+
+if(MEPHIT_BUILD_TESTING)
+  enable_testing()
+  add_executable(test_delaunay32_mesh
+    test/test_delaunay32_mesh.cpp
+    src/mephit_triangulate.cpp)
+  target_include_directories(test_delaunay32_mesh PRIVATE src)
+  target_link_libraries(test_delaunay32_mesh PRIVATE delaunay32::delaunay32)
+  target_compile_features(test_delaunay32_mesh PRIVATE cxx_std_17)
+  add_test(
+    NAME delaunay32_mesh
+    COMMAND test_delaunay32_mesh
+      ${CMAKE_CURRENT_BINARY_DIR}/delaunay32-test-outer.msh)
+endif()
 
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)
