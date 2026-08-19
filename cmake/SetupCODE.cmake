@@ -5,6 +5,6 @@
 #   -DLIBNEO_PATH=<dir>  local libneo source directory (empty = fetch from git)
 #   -DTRIANGLE_DIR=<dir>  prebuilt Triangle directory (see SetupTriangle)
 #   -DMFEM_DIR=<dir>      prebuilt MFEM directory (see SetupMFEM)
-set(LIBNEO_REF "f3f241dea2c7dc25cf29731bb0a1328ff98f48c8" CACHE STRING
+set(LIBNEO_REF "a4620f8075698dabafd774859e28e0ae92e8f339" CACHE STRING
     "libneo branch, tag, or SHA to fetch")
 set(LIBNEO_PATH "" CACHE PATH "local libneo source directory (empty = fetch from git)")
