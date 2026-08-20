@@ -3108,6 +3108,17 @@ contains
     theta(:) = linspace(0d0, 2d0 * pi, npt_outer, 0, 1)
     bdry_R(npt_inner+1:) = R_mid + R_rad * cos(theta)
     bdry_Z(npt_inner+1:) = Z_mid + Z_rad * sin(theta)
+    ! dump the triangulator input so the annulus meshing problem can be
+    ! reproduced without a MEPHIT build, e.g. for mesher comparisons
+    open(newunit = fid, file = decorate_filename('outer_boundary.dat', '', basename_suffix), &
+      status = 'replace', form = 'formatted', action = 'write')
+    write (fid, '(2(1x, i0))') npt_inner, npt_outer
+    ! 17 significant digits so the dump round-trips the double precision input
+    write (fid, '(2(1x, es24.16e3))') R_mid, Z_mid
+    do kpoi = 1, npt_inner + npt_outer
+      write (fid, '(2(1x, es24.16e3))') bdry_R(kpoi), bdry_Z(kpoi)
+    end do
+    close(fid)
     call FEM_triangulate_external(npt_inner, npt_outer, bdry_R, bdry_Z, R_mid, Z_mid, &
       decorate_filename('outer.msh', '', basename_suffix) // c_null_char)
     deallocate(bdry_R, bdry_Z, theta)
