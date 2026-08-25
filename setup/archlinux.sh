@@ -1,7 +1,7 @@
 #!/bin/bash
 
 sudo -Sy --needed git cmake make ninja patch gcc gcc-fortran \
-    openblas hdf5 netcdf netcdf-fortran suitesparse boost openmpi \
+    openblas zlib suitesparse boost openmpi \
     fftw gsl python python-numpy debugedit fakeroot
 
 pushd /tmp
