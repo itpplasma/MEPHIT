@@ -4,6 +4,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 ### Define the project
 project(MEPHIT LANGUAGES C CXX Fortran)
+include(CTest)
 
 ### Define options
 option(WITH_MFEM "Compile with MFEM" FALSE)
@@ -176,3 +177,13 @@ configure_file(data/convexwall_kilca.dat ${PROJECT_BINARY_DIR}/data/convexwall_k
 configure_file(data/convexwall_mastu.dat ${PROJECT_BINARY_DIR}/data/convexwall_mastu.dat COPYONLY)
 configure_file(data/field_divB0.inp ${PROJECT_BINARY_DIR}/data/field_divB0.inp COPYONLY)
 configure_file(data/preload_for_SYNCH.inp ${PROJECT_BINARY_DIR}/data/preload_for_SYNCH.inp COPYONLY)
+
+if(BUILD_TESTING)
+  add_test(NAME mephit_cli_help
+    COMMAND ${PROJECT_BINARY_DIR}/scripts/mephit.bash --help)
+  set_tests_properties(mephit_cli_help PROPERTIES
+    PASS_REGULAR_EXPRESSION "README.md")
+  add_test(NAME mephit_requires_config COMMAND mephit_test.x)
+  set_tests_properties(mephit_requires_config PROPERTIES
+    WILL_FAIL TRUE)
+endif()
