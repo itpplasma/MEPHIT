@@ -66,6 +66,17 @@ endif()
 include(Util)
 find_or_fetch(libneo)
 
+### fortnum: numerical core replacing the former GSL routines. libneo may pull
+### fortnum in transitively, so guard against declaring the target twice.
+include(FetchContent)
+if(NOT TARGET fortnum)
+  FetchContent_Declare(fortnum
+    GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
+    GIT_TAG 92de6e949a772cfffc73bb5295fe5e2b056b9c18
+  )
+  FetchContent_MakeAvailable(fortnum)
+endif()
+
 ### Project source files
 # SuiteSparse
 set(SUITESPARSE_SRC_FILES
@@ -83,7 +94,6 @@ set_source_files_properties(src/external/umf4_f77zwrapper.c PROPERTIES COMPILE_F
 set(COMMON_FORTRAN_SRC_FILES
   src/external/netlib_mod.f90
   src/external/d1mach.f
-  src/fftw3.f90
   src/field_line_integration_for_SYNCH.f90
   src/magdata_in_symfluxcoord.f90
   src/points_2d.f90
@@ -118,7 +128,7 @@ if(WITH_MFEM)
   )
 endif()
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
+	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -I${fortnum_SOURCE_DIR}/include -L${TRIANGLE_LIB_DIR}")
 
 
 ### Define library
@@ -137,9 +147,9 @@ target_include_directories(mephit PUBLIC
 )
 set(MEPHIT_LIBS
   GSL::gsl
+  fortnum
   BLAS::BLAS
   LAPACK::LAPACK
-  ${FFTW_LIBRARIES}
   ${triangle_lib}
   LIBNEO::magfie
   LIBNEO::odeint
