@@ -1,7 +1,6 @@
 module mephit_pert
 
   use iso_fortran_env, only: dp => real64
-  use iso_c_binding, only: c_int, c_double
 
   implicit none
 
@@ -35,17 +34,6 @@ module mephit_pert
       type(field_cache_t), intent(in) :: f
       complex(dp) :: vector_element_projection
     end function vector_element_projection
-  end interface
-
-  interface
-    function gsl_sf_bessel_icn_array(nmin, nmax, x, result_array) &
-      bind(C, name='gsl_sf_bessel_In_array')
-      import :: c_int, c_double
-      integer(c_int), intent(in), value :: nmin, nmax
-      real(c_double), intent(in), value :: x
-      real(c_double), intent(inout), dimension(nmax - nmin + 1) :: result_array
-      integer(c_int) :: gsl_sf_bessel_icn_array
-    end function gsl_sf_bessel_icn_array
   end interface
 
   type :: L1_t
@@ -1427,21 +1415,21 @@ contains
   !> field
   subroutine kilca_vacuum_fourier(tor_mode, pol_mode, R_0, r, vac_coeff, &
     B_rad, B_pol, B_tor)
-    use mephit_conf, only: logger
     use mephit_util, only: imun
+    use fortnum_special, only: bessel_in_array
     integer, intent(in) :: tor_mode, pol_mode
     real(dp), intent(in) :: R_0, r
     complex(dp), intent(in) :: vac_coeff
     complex(dp), intent(out) :: B_rad, B_pol, B_tor
-    real(c_double) :: I_m(-1:1), k_z_r
-    integer(c_int) :: status
+    real(dp) :: I_n(0:abs(pol_mode) + 1), I_m(-1:1), k_z_r
 
     k_z_r = tor_mode / R_0 * r
-    status = gsl_sf_bessel_icn_array(abs(pol_mode)-1, abs(pol_mode)+1, k_z_r, I_m)
-    if (status /= 0 .and. logger%err) then
-      write (logger%msg, '("gsl_sf_bessel_In_array returned error ", i0)') status
-      call logger%write_msg
-    end if
+    ! fortnum fills I_n(0:nmax) with I_0..I_nmax; recover the order |pol_mode|-1
+    ! (which is -1 for pol_mode = 0) via the symmetry I_{-n}(x) = I_n(x).
+    call bessel_in_array(abs(pol_mode) + 1, k_z_r, I_n)
+    I_m(-1) = I_n(abs(abs(pol_mode) - 1))
+    I_m(0) = I_n(abs(pol_mode))
+    I_m(1) = I_n(abs(pol_mode) + 1)
     B_rad = 0.5d0 * (I_m(-1) + I_m(1)) * vac_coeff
     B_pol = imun * pol_mode / k_z_r * I_m(0) * vac_coeff
     B_tor = imun * I_m(0) * vac_coeff
