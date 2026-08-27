@@ -316,7 +316,11 @@ void MaxwellSolver::compute_magfn(const int nedge, const complex_double* Jn, com
     potential.RecoverFEMSolution(solution, source, An);
     rot.Mult(An, Hdiv_elem);
     for (size_t k = 0; k < nedge; k++) {
-      reinterpret_cast<double*>(Bn)[2 * k + im] = sign_map[k] * Hdiv_elem(edge_map[k]);
+      // multiply by imaginary unit
+      // im == 0:  Im B_n  <-  Re A_n
+      // im == 1:  Re B_n  <- -Im A_n
+      reinterpret_cast<double*>(Bn)[2 * k + (1 - im)] = (1 - 2 * im) *
+        sign_map[k] * Hdiv_elem(edge_map[k]);
     }
   }
 }
