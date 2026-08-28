@@ -302,7 +302,7 @@ void MaxwellSolver::assemble()
 
 void MaxwellSolver::compute_magfn(const int nedge, const complex_double* Jn, complex_double* Bn)
 {
-  for (size_t im = 0; im <= 1; im++) {
+  for (ptrdiff_t im = 0; im <= 1; im++) {
     Hdiv_elem = 0.0;
     for (size_t k = 0; k < nedge; k++) {
       Hdiv_elem(edge_map[k]) = -0.25 * M_PI / c * sign_map[k] *
