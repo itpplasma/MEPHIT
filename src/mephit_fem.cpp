@@ -157,12 +157,8 @@ private:
   mfem::real_t n;
 
 public:
-  // factor should be -n for
-  //
-  // B_R = -n A_Z
-  // B_Z =  n A_R
-  //
-  FourierGaugedCurlInterpolator(mfem::real_t tor_mode) : n(-tor_mode) {}
+  // RT0 rotates the ND1 basis clockwise; compute_magfn() applies the factor i.
+  FourierGaugedCurlInterpolator(mfem::real_t tor_mode) : n(tor_mode) {}
 
   void AssembleElementMatrix2(
     const mfem::FiniteElement &dom_fe,
@@ -257,15 +253,15 @@ void MaxwellSolver::map_edges(const char* edgemap_file)
     if (result != 2) break;
     nedge++;
     mephit_ktri.push_back(ktri - 1);
-    mephit_ke.push_back(abs(ke) - 1);
+    mephit_ke.push_back(ke);
   }
   fclose(file);
   edge_map.resize(nedge),
   sign_map.resize(nedge);
   for (int kedge = 0; kedge < nedge; kedge++) {
     mesh.GetElementEdges(mephit_ktri[kedge], edges, orient);
-    edge_map[kedge] = edges[mephit_ke[kedge]];
-    sign_map[kedge] = orient[mephit_ke[kedge]];
+    edge_map[kedge] = edges[abs(mephit_ke[kedge]) - 1];
+    sign_map[kedge] = (mephit_ke[kedge] > 0) ? 1 : -1;
   }
 }
 
@@ -305,7 +301,7 @@ void MaxwellSolver::compute_magfn(const int nedge, const complex_double* Jn, com
   for (ptrdiff_t im = 0; im <= 1; im++) {
     Hdiv_elem = 0.0;
     for (size_t k = 0; k < nedge; k++) {
-      Hdiv_elem(edge_map[k]) = -0.25 * M_PI / c * sign_map[k] *
+      Hdiv_elem(edge_map[k]) = 4.0 * M_PI / c * sign_map[k] *
         reinterpret_cast<const double*>(Jn)[2 * k + im];
     }
     source.Assemble();
