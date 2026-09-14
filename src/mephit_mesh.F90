@@ -3021,7 +3021,7 @@ contains
 
   subroutine mesh_write_MFEM
     use mephit_conf, only: basename_suffix, decorate_filename
-    integer :: fid, ktri, kp, kpoi, npoint, ntri, nseg, idum
+    integer :: fid, ktri, kp, kpoi, kedge, npoint, ntri, nseg, idum
     integer, dimension(:, :), allocatable :: triangles, segments
     real(dp), dimension(:, :), allocatable :: points
 
@@ -3047,6 +3047,12 @@ contains
       write (fid, '(es24.16e3, 1x, es24.16e3)') mesh%node_R(kpoi), mesh%node_Z(kpoi)
     end do
     close(fid)
+
+    open(newunit = fid, file = decorate_filename('test_edgemap.dat', '', basename_suffix), &
+      status = 'replace', form = 'formatted', action = 'write')
+    do kedge = 1, mesh%nedge
+      write (fid, '(i0, 1x, i0)') mesh%edge_node(:, kedge)
+    end do
 
     ! intermediate step: read external mesh generated for FreeFem
     open(newunit = fid, file = decorate_filename('outer.msh', '', basename_suffix), &

@@ -219,6 +219,7 @@ public:
 
   MaxwellSolver(const char* mesh_file, const int tor_mode);
   void map_edges(const char* edgemap_file);
+  int test_map_edges(const char* test_edgemap_file);
   void assemble();
   void compute_magfn(const int nedge, const complex_double* Jn, complex_double* Bn);
 };
@@ -245,8 +246,12 @@ void MaxwellSolver::map_edges(const char* edgemap_file)
   FILE* file;
   int ktri, ke, result, nedge;
   std::vector<int> mephit_ktri, mephit_ke;
-  mfem::Array<int> edges, orient;
+  mfem::Array<int> edges, cor;
   file = fopen(edgemap_file, "r");
+  if (!file) {
+    perror("failed to open edgemap_file");
+    return;
+  }
   nedge = 0;
   while (!feof(file)) {
     result = fscanf(file, "%d %d", &ktri, &ke);
@@ -256,13 +261,64 @@ void MaxwellSolver::map_edges(const char* edgemap_file)
     mephit_ke.push_back(ke);
   }
   fclose(file);
-  edge_map.resize(nedge),
+  edge_map.resize(nedge);
   sign_map.resize(nedge);
   for (int kedge = 0; kedge < nedge; kedge++) {
-    mesh.GetElementEdges(mephit_ktri[kedge], edges, orient);
+    mesh.GetElementEdges(mephit_ktri[kedge], edges, cor);
     edge_map[kedge] = edges[abs(mephit_ke[kedge]) - 1];
     sign_map[kedge] = (mephit_ke[kedge] > 0) ? 1 : -1;
   }
+}
+
+int MaxwellSolver::test_map_edges(const char* test_edgemap_file)
+{
+  FILE* file;
+  int kpoi_1, kpoi_2, kedge, nedge, result, status;
+  std::vector<std::pair<int, int>> mephit_edge_node;
+  mfem::Array<int> vert;
+  file = fopen(test_edgemap_file, "r");
+  if (!file) {
+    perror("failed to open test_edgemap_file");
+    return 1;
+  }
+  nedge = 0;
+  while (!feof(file)) {
+    result = fscanf(file, "%d %d", &kpoi_1, &kpoi_2);
+    if (result != 2) break;
+    nedge++;
+    mephit_edge_node.push_back(std::pair<int, int>(kpoi_1 - 1, kpoi_2 - 1));
+  }
+  fclose(file);
+  if (nedge != edge_map.size() || nedge != sign_map.size()) {
+    fprintf(stderr, "test_edgemap_file has %d entries, "
+            "but edge_map has %zu and sign_map has %zu.\n",
+            nedge, edge_map.size(), sign_map.size());
+    return 2;
+  }
+  status = 0;
+  for (kedge = 0; kedge < nedge; kedge++) {
+    mesh.GetEdgeVertices(edge_map[kedge], vert);
+    if (sign_map[kedge] < 0) {
+      if (vert[1] != mephit_edge_node[kedge].first ||
+          vert[0] != mephit_edge_node[kedge].second) {
+        status = 3;
+        fprintf(stderr, "MEPHIT edge %d connects %d to %d, "
+                "MFEM edge %d connects %d to %d.\n",
+                kedge, mephit_edge_node[kedge].first, mephit_edge_node[kedge].second,
+                edge_map[kedge], vert[1], vert[0]);
+      }
+    } else {
+      if (vert[0] != mephit_edge_node[kedge].first ||
+          vert[1] != mephit_edge_node[kedge].second) {
+        status = 3;
+        fprintf(stderr, "MEPHIT edge %d connects %d to %d, "
+                "MFEM edge %d connects %d to %d.\n",
+                kedge, mephit_edge_node[kedge].first, mephit_edge_node[kedge].second,
+                edge_map[kedge], vert[0], vert[1]);
+      }
+    }
+  }
+  return status;
 }
 
 void MaxwellSolver::assemble()
@@ -343,4 +399,12 @@ extern "C" void MFEM_deinit(void* maxwell_solver)
     delete static_cast<MaxwellSolver*>(maxwell_solver);
   }
   return;
+}
+
+extern "C" int test_map_edges(void* maxwell_solver, const char* test_edgemap_file)
+{
+  if (maxwell_solver) {
+    return static_cast<MaxwellSolver*>(maxwell_solver)->test_map_edges(test_edgemap_file);
+  }
+  return 1;
 }

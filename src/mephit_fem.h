@@ -59,6 +59,7 @@ void MFEM_compute_magfn(void *maxwell_solver,
                         const complex_double *Jn,
                         complex_double *Bn);
 void MFEM_deinit(void *maxwell_solver);
+int test_map_edges(void* maxwell_solver, const char* test_edgemap_file);
 
 #ifdef USE_MFEM_MDE
 int FEM_test(const char *mesh_file,

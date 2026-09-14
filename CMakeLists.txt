@@ -6,7 +6,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 project(MEPHIT LANGUAGES C CXX Fortran)
 
 ### Define options
-option(WITH_MFEM_MDE "Compile with MFEM" FALSE)
+option(WITH_MFEM_MDE "Use MFEM for MDEs" FALSE)
 
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
@@ -25,6 +25,7 @@ else ()
   set(WARNING_FLAGS "-Wall -Wextra -pedantic -fmax-errors=1 -Wno-unused-label")
   set(LEGACY_FLAGS "-fcheck=no-array-temps")
   set(CMAKE_C_FLAGS "-O2 -g -march=native -Wconversion -Wfloat-equal -Wshadow -Wredundant-decls -Winline ${WARNING_FLAGS}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")
 endif ()
 
 ### Define external paths
@@ -174,3 +175,7 @@ configure_file(data/convexwall_kilca.dat ${PROJECT_BINARY_DIR}/data/convexwall_k
 configure_file(data/convexwall_mastu.dat ${PROJECT_BINARY_DIR}/data/convexwall_mastu.dat COPYONLY)
 configure_file(data/field_divB0.inp ${PROJECT_BINARY_DIR}/data/field_divB0.inp COPYONLY)
 configure_file(data/preload_for_SYNCH.inp ${PROJECT_BINARY_DIR}/data/preload_for_SYNCH.inp COPYONLY)
+
+### Testing
+enable_testing()
+add_subdirectory(test)
