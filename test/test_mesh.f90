@@ -16,7 +16,7 @@ program test_mesh
 
     function test_map_edges(maxwell_solver, test_edgemap_file) result(status) &
       bind(C, name = 'test_map_edges')
-      import, only: c_char, c_int, c_ptr
+      use iso_c_binding, only: c_char, c_int, c_ptr
       type(c_ptr), intent(in), value :: maxwell_solver
       character(c_char), intent(in) :: test_edgemap_file(*)
       integer(c_int) :: status
@@ -32,7 +32,7 @@ program test_mesh
   character(len = *), parameter :: mesh_file = 'core_plasma.mesh', &
     edgemap_file = 'edgemap.dat', test_edgemap_file = 'test_edgemap.dat'
   integer, parameter :: n_tor = 2
-  integer status
+  integer(c_int) :: status
 
   maxwell_solver = MFEM_init(n_tor, mesh_file // c_null_char, edgemap_file // c_null_char)
   status = test_map_edges(maxwell_solver, test_edgemap_file // c_null_char)
