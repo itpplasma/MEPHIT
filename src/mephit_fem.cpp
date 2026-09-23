@@ -222,6 +222,7 @@ public:
   int test_map_edges(const char* test_edgemap_file);
   void assemble();
   void compute_magfn(const int nedge, const complex_double* Jn, complex_double* Bn);
+  double compute_L2int(const int nedge, const complex_double* Bn_diff);
 };
 
 MaxwellSolver::MaxwellSolver(const char* mesh_file, const int tor_mode)
@@ -377,6 +378,23 @@ void MaxwellSolver::compute_magfn(const int nedge, const complex_double* Jn, com
   }
 }
 
+double MaxwellSolver::compute_L2int(const int nedge, const complex_double* Bn_diff)
+{
+  double L2int2 = 0.0;
+  mfem::VectorFunctionCoefficient zero(2,
+      [](const mfem::Vector &X, mfem::Vector &V) { V = 0.0; }
+  );
+  for (ptrdiff_t im = 0; im <= 1; im++) {
+    Hdiv_elem = 0.0;
+    for (size_t k = 0; k < nedge; k++) {
+      Hdiv_elem(edge_map[k]) = sign_map[k] *
+        reinterpret_cast<const double*>(Bn_diff)[2 * k + im];
+    }
+    L2int2 += Hdiv_elem.ComputeL2Error(zero);
+  }
+  return sqrt(L2int2);
+}
+
 extern "C" void* MFEM_init(const int tor_mode, const char* mesh_file, const char* edgemap_file)
 {
   MaxwellSolver* const maxwell_solver = new MaxwellSolver(mesh_file, tor_mode);
@@ -391,6 +409,14 @@ extern "C" void MFEM_compute_magfn(void* maxwell_solver, const int nedge, const 
     static_cast<MaxwellSolver*>(maxwell_solver)->compute_magfn(nedge, Jn, Bn);
   }
   return;
+}
+
+extern "C" double MFEM_compute_L2int(void* maxwell_solver, const int nedge, complex_double* Bn_diff)
+{
+  if (maxwell_solver) {
+    return static_cast<MaxwellSolver*>(maxwell_solver)->compute_L2int(nedge, Bn_diff);
+  }
+  return NAN;
 }
 
 extern "C" void MFEM_deinit(void* maxwell_solver)

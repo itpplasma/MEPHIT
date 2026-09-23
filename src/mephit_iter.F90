@@ -124,6 +124,15 @@ module mephit_iter
       complex(c_double_complex), intent(out) :: Bn(1:nedge)
     end subroutine MFEM_compute_magfn
 
+    function MFEM_compute_L2int(maxwell_solver, nedge, Bn_diff) result(L2int) &
+      bind(C, name = 'MFEM_compute_L2int')
+      use iso_c_binding, only: c_ptr, c_int, c_double, c_double_complex
+      type(c_ptr), intent(in), value :: maxwell_solver
+      integer(c_int), intent(in), value :: nedge
+      complex(c_double_complex), intent(out) :: Bn_diff(1:nedge)
+      real(c_double) :: L2int
+    end function MFEM_compute_L2int
+
     subroutine MFEM_deinit(maxwell_solver) bind(C, name = 'MFEM_deinit')
       use iso_c_binding, only: c_ptr
       type(c_ptr), intent(in), value :: maxwell_solver
