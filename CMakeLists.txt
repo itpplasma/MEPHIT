@@ -118,7 +118,7 @@ if(WITH_MFEM_MDE)
     src/miscellaneous.cpp
   )
 endif()
-set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
+set_source_files_properties(${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
 	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
 
 
@@ -157,7 +157,7 @@ target_include_directories(mephit PUBLIC ${MFEM_INCLUDE_DIRS})
 target_link_libraries(mephit ${MFEM_LIBRARIES})
 
 ### Define executables
-add_executable(mephit_run.x src/mephit_run.c)
+add_executable(mephit_run.x src/mephit_run.f90)
 add_executable(mephit_test.x src/mephit_test.f90)
 add_executable(mephit_post.x src/mephit_post.f90)
 target_link_libraries(mephit_run.x mephit)
@@ -166,10 +166,6 @@ target_link_libraries(mephit_post.x mephit)
 
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)
-configure_file(scripts/ff-mephit.bash ${PROJECT_BINARY_DIR}/scripts/ff-mephit.bash COPYONLY)
-configure_file(scripts/maxwell_daemon.edp ${PROJECT_BINARY_DIR}/scripts/maxwell_daemon.edp COPYONLY)
-configure_file(scripts/extmesh.edp ${PROJECT_BINARY_DIR}/scripts/extmesh.edp COPYONLY)
-configure_file(scripts/mephit.gdb ${PROJECT_BINARY_DIR}/scripts/mephit.gdb COPYONLY)
 configure_file(data/convexwall_asdex.dat ${PROJECT_BINARY_DIR}/data/convexwall_asdex.dat COPYONLY)
 configure_file(data/convexwall_kilca.dat ${PROJECT_BINARY_DIR}/data/convexwall_kilca.dat COPYONLY)
 configure_file(data/convexwall_mastu.dat ${PROJECT_BINARY_DIR}/data/convexwall_mastu.dat COPYONLY)

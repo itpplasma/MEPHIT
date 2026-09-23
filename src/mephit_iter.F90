@@ -7,7 +7,7 @@ module mephit_iter
 
   private
 
-  public :: mephit_run, mephit_deinit, perteq_read
+  public :: mephit_main, mephit_deinit, perteq_read
 
   type :: perteq_t
     !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
@@ -24,9 +24,6 @@ module mephit_iter
 
     !> Parallel current density perturbation in units of statampere cm^-2 G^-1.
     type(L1_t) :: jnpar_B0
-
-    !> Vector potential components for GORILLA
-    type(L1_t) :: AnR, AnZ
 
     !> Poloidal modes of electric potential perturbation in units of statV.
     complex(dp), allocatable :: Phi_mn(:, :)
@@ -64,34 +61,6 @@ module mephit_iter
   end interface
 
   interface
-    subroutine FEM_init(tormode, nedge, npoint, runmode) bind(C, name = 'FEM_init')
-      use iso_c_binding, only: c_int
-      integer(c_int), intent(in), value :: tormode, nedge, npoint, runmode
-    end subroutine FEM_init
-
-    subroutine FEM_extend_mesh() bind(C, name = 'FEM_extend_mesh')
-    end subroutine FEM_extend_mesh
-
-    subroutine FEM_compute_magfn(nedge, npoint, Jn, Bn, AnR, AnZ) bind(C, name = 'FEM_compute_magfn')
-      use iso_c_binding, only: c_int, c_double_complex
-      integer(c_int), intent(in), value :: nedge
-      integer(c_int), intent(in), value :: npoint
-      complex(c_double_complex), intent(in) :: Jn(1:nedge)
-      complex(c_double_complex), intent(out) :: Bn(1:nedge)
-      complex(c_double_complex), intent(out) :: AnR(1:npoint)
-      complex(c_double_complex), intent(out) :: AnZ(1:npoint)
-    end subroutine FEM_compute_magfn
-
-    subroutine FEM_compute_L2int(nedge, elem, L2int) bind(C, name = 'FEM_compute_L2int')
-      use iso_c_binding, only: c_int, c_double_complex, c_double
-      integer(c_int), intent(in), value :: nedge
-      complex(c_double_complex), intent(in) :: elem(1:nedge)
-      real(c_double), intent(out) :: L2int
-    end subroutine FEM_compute_L2int
-
-    subroutine FEM_deinit() bind(C, name = 'FEM_deinit')
-    end subroutine FEM_deinit
-
 #ifdef USE_MFEM_MDE
     function FEM_test(mesh_file, tor_mode, n_dof, dof, unit_B0, MDE_inhom) &
       bind(C, name = 'FEM_test')
@@ -144,13 +113,12 @@ end interface
 
 contains
 
-  subroutine mephit_run(runmode, config, suffix) bind(C, name = 'mephit_run')
-    use iso_c_binding, only: c_int, c_ptr, c_null_char
+  subroutine mephit_main(runmode, config, suffix)
+    use iso_c_binding, only: c_null_char
     use input_files, only: gfile
-    use field_sub, only : read_field_input
+    use field_sub, only: read_field_input
     use geqdsk_tools, only: geqdsk_read, geqdsk_classify, geqdsk_standardise
-    use hdf5_tools, only: h5_init, h5_defer_close, h5overwrite
-    use mephit_util, only: C_F_string, init_field, geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5, &
+    use mephit_util, only: init_field, geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5, &
       save_symfluxcoord, load_symfluxcoord
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, &
       datafile, basename_suffix, decorate_filename
@@ -158,11 +126,10 @@ contains
       read_profiles, compute_auxiliary_profiles, resample_profiles, write_profiles_hdf5, read_profiles_hdf5
     use mephit_pert, only: generate_vacfield, vac, vac_init, vac_write, vac_read
     use mephit_flr2, only: flr2_t, flr2_write, flr2_read, flr2_deinit
-    integer(c_int), intent(in), value :: runmode
-    type(c_ptr), intent(in), value :: config
-    type(c_ptr), intent(in), value :: suffix
-    character(len = 1024) :: config_filename
-    integer(c_int) :: runmode_flags
+    integer, intent(in) :: runmode
+    character(len=*), intent(in) :: config
+    character(len=*), intent(in) :: suffix
+    integer :: runmode_flags
     logical :: meshing, preconditioner, iterations
     type(fdm_t) :: fdm
     type(flr2_t) :: flr2
@@ -179,16 +146,10 @@ contains
       iterations = .true.
       runmode_flags = ior(ior(ishft(1, 0), ishft(1, 1)), ishft(1, 2))
     end if
-    call C_F_string(suffix, basename_suffix)
+    basename_suffix = suffix
     datafile = decorate_filename(datafile, '', basename_suffix)
-    call C_F_string(config, config_filename)
-    call config_read(conf, config_filename)
+    call config_read(conf, config)
     call logger%init('-', conf%log_level, conf%quiet)
-    call h5_init
-    h5overwrite = .true.
-    ! MEPHIT updates one output image through many close/reopen calls.  Keep
-    ! that image in Fortio memory and flush it once during mephit_deinit.
-    h5_defer_close = .true.
     call config_export_hdf5(conf, datafile, 'config')
     if (meshing) then
       ! initialize equilibrium field
@@ -260,11 +221,10 @@ contains
       call MFEM_deinit(maxwell_solver)
     end if
     call mephit_deinit
-  end subroutine mephit_run
+  end subroutine mephit_main
 
   subroutine mephit_deinit
     use magdata_in_symfluxcoor_mod, only: unload_magdata_in_symfluxcoord
-    use hdf5_tools, only: h5_deinit, h5_defer_close
     use geqdsk_tools, only: geqdsk_deinit
     use mephit_conf, only: conf_arr, logger
     use mephit_util, only: deinit_field
@@ -284,8 +244,6 @@ contains
     call geqdsk_deinit(equil)
     call conf_arr%deinit
     call logger%deinit
-    call h5_deinit
-    h5_defer_close = .false.
   end subroutine mephit_deinit
 
   subroutine perteq_init(perteq)
@@ -299,8 +257,6 @@ contains
     call RT0_init(perteq%Bnplas, mesh%nedge, mesh%ntri)
     call RT0_init(perteq%jn, mesh%nedge, mesh%ntri)
     call L1_init(perteq%jnpar_B0, mesh%npoint)
-    call L1_init(perteq%AnR, mesh%npoint)
-    call L1_init(perteq%AnZ, mesh%npoint)
     if (conf%currn_model == currn_model_kilca) then
       allocate(perteq%Phi_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max))
       allocate(perteq%Phi_aligned_mn(0:mesh%nflux, mesh%m_res_min:mesh%m_res_max))
@@ -316,8 +272,6 @@ contains
     call RT0_deinit(perteq%Bnplas)
     call RT0_deinit(perteq%jn)
     call L1_deinit(perteq%jnpar_B0)
-    call L1_deinit(perteq%AnR)
-    call L1_deinit(perteq%AnZ)
     if (allocated(perteq%Phi_mn)) deallocate(perteq%Phi_mn)
     if (allocated(perteq%Phi_aligned_mn)) deallocate(perteq%Phi_aligned_mn)
   end subroutine perteq_deinit
@@ -334,8 +288,6 @@ contains
     call RT0_read(perteq%Bnplas, datafile, 'iter/Bnplas')
     call RT0_read(perteq%jn, datafile, 'iter/jn')
     call L1_read(perteq%jnpar_B0, datafile, 'iter/jnpar_Bmod')
-    call L1_read(perteq%AnR, datafile, 'iter/AnR')
-    call L1_read(perteq%AnZ, datafile, 'iter/AnZ')
     if (conf%currn_model == currn_model_kilca) then
       call h5_open(datafile, h5id_root)
       call h5_get(h5id_root, 'iter/Phi_mn', perteq%Phi_mn)
@@ -665,10 +617,6 @@ contains
     end if
     call h5_close(h5id_root)
     deallocate(L2int_Bn_diff)
-    call L1_write(perteq%AnR, datafile, 'iter/AnR', &
-      'R component of vector potential for GORILLA (full perturbation)', 'G cm')
-    call L1_write(perteq%AnZ, datafile, 'iter/AnZ', &
-      'Z component of vector potential for GORILLA (full perturbation)', 'G cm')
     call perteq_write('("iter/", a)', ' (full perturbation)', &
       perteq%pn, perteq%pn, perteq%jnpar_B0, perteq%jnpar_B0, perteq%jnpar_B0, &
       perteq%jn, perteq%jn, perteq%Bn, perteq%Bn)

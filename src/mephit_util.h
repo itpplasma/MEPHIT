@@ -7,8 +7,6 @@
 #include <stdarg.h>
 #endif
 
-#define path_max 1024
-
 #ifdef __cplusplus
 extern "C" {
 #endif

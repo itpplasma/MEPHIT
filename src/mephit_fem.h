@@ -21,17 +21,6 @@
 extern "C" {
 #endif
 
-void FEM_init(const int tormode, const int nedge, const int npoint, const int runmode);
-void FEM_extend_mesh(void);
-void FEM_compute_magfn(const int nedge,
-                       const int npoint,
-                       const complex_double *Jn,
-                       complex_double *Bn,
-                       complex_double *AnR,
-                       complex_double *AnZ);
-void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2int);
-void FEM_deinit(void);
-
 void gauss_legendre_unit_interval(int order, double *points, double *weights);
 
 void FEM_triangulate_external(const int npt_inner,

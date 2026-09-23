@@ -224,8 +224,6 @@ mephit_run() {
                              $runmode \
                              "$config" \
                              "$suffix" \
-                             "$tmpdir" \
-                             "$scriptdir/ff-mephit.bash" \
                              2>&1 | tee -a "$log"
                     lasterr=$?
                     ;;
@@ -235,8 +233,6 @@ mephit_run() {
                         $runmode \
                         "$config" \
                         "$suffix" \
-                        "$tmpdir" \
-                        "$scriptdir/ff-mephit.bash"
                     lasterr=$?
                     ;;
                 *)
@@ -244,8 +240,6 @@ mephit_run() {
                         $runmode \
                         "$config" \
                         "$suffix" \
-                        "$tmpdir" \
-                        "$scriptdir/ff-mephit.bash" \
                         2>&1 | tee -a "$log"
                     lasterr=$?
                     ;;
