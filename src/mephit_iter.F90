@@ -111,7 +111,7 @@ contains
     use input_files, only: gfile
     use field_sub, only : read_field_input
     use geqdsk_tools, only: geqdsk_read, geqdsk_classify, geqdsk_standardise
-    use hdf5_tools, only: h5_init, h5overwrite
+    use hdf5_tools, only: h5_init, h5_defer_close, h5_truncate_existing, h5_stream_write, h5overwrite
     use mephit_util, only: C_F_string, init_field, geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5, &
       save_symfluxcoord, load_symfluxcoord
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, &
@@ -148,6 +148,12 @@ contains
     call logger%init('-', conf%log_level, conf%quiet)
     call h5_init
     h5overwrite = .true.
+    ! MEPHIT updates one output image through many close/reopen calls.  Keep
+    ! metadata for the deferred image, but stream dataset payloads directly
+    ! to disk so memory use remains comparable to native HDF5.
+    h5_defer_close = .true.
+    h5_truncate_existing = meshing
+    h5_stream_write = meshing
     call config_export_hdf5(conf, datafile, 'config')
     if (meshing) then
       ! initialize equilibrium field
@@ -225,7 +231,7 @@ contains
 
   subroutine mephit_deinit
     use magdata_in_symfluxcoor_mod, only: unload_magdata_in_symfluxcoord
-    use hdf5_tools, only: h5_deinit
+    use hdf5_tools, only: h5_deinit, h5_defer_close, h5_truncate_existing, h5_stream_write
     use geqdsk_tools, only: geqdsk_deinit
     use mephit_conf, only: conf_arr, logger
     use mephit_util, only: deinit_field
@@ -246,6 +252,9 @@ contains
     call conf_arr%deinit
     call logger%deinit
     call h5_deinit
+    h5_defer_close = .false.
+    h5_truncate_existing = .false.
+    h5_stream_write = .false.
   end subroutine mephit_deinit
 
   subroutine perteq_init(perteq)
