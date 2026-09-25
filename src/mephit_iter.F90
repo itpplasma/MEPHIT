@@ -659,11 +659,21 @@ contains
 
   ! This subroutine calls a C function that pipes the data to/from FreeFem.
   subroutine compute_magfn(perteq)
+    use, intrinsic :: ieee_arithmetic, only: ieee_is_nan
+    use mephit_conf, only: logger
     use mephit_mesh, only: mesh
     use mephit_pert, only: RT0_tor_comp_from_zero_div
     type(perteq_t), intent(inout) :: perteq
+    integer :: nan_count
 
     call MFEM_compute_magfn(maxwell_solver, mesh%nedge, perteq%jn%DOF, perteq%Bn%DOF)
+    nan_count = count(ieee_is_nan(perteq%Bn%DOF%Re)) + count(ieee_is_nan(perteq%Bn%DOF%Im))
+    if (nan_count > 0) then
+      if (logger%debug) then
+        write (logger%msg, '("MFEM_compute_magfn returned ", i0, " NAN values.")') nan_count
+        call logger%write_msg
+      end if
+    end if
     call RT0_tor_comp_from_zero_div(perteq%Bn)
   end subroutine compute_magfn
 

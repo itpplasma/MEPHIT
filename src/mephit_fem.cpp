@@ -1,4 +1,6 @@
 #include "mephit_fem.h"
+#pragma STDC FENV_ACCESS ON
+#include <cfenv>
 #include "mfem.hpp"
 #ifdef USE_MFEM_MDE
 #include "magnetic_differential_equation.h"
@@ -355,6 +357,7 @@ void MaxwellSolver::assemble()
 
 void MaxwellSolver::compute_magfn(const int nedge, const complex_double* Jn, complex_double* Bn)
 {
+  std::fenv_t saved;
   for (ptrdiff_t im = 0; im <= 1; im++) {
     Hdiv_elem = 0.0;
     for (size_t k = 0; k < nedge; k++) {
@@ -365,7 +368,12 @@ void MaxwellSolver::compute_magfn(const int nedge, const complex_double* Jn, com
     An = 0.0;
     potential.FormLinearSystem(ess_tdof_list, An, source, lhs, solution, rhs);
     umf.SetOperator(dynamic_cast<mfem::SparseMatrix&>(*lhs));
+
+    // ignore FE_INVALID (and possibly FE_INEXACT) in UMFPack
+    feholdexcept(&saved);
     umf.Mult(rhs, solution);
+    fesetenv(&saved);
+
     potential.RecoverFEMSolution(solution, source, An);
     rot.Mult(An, Hdiv_elem);
     for (size_t k = 0; k < nedge; k++) {

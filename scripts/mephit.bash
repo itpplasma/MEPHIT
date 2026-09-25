@@ -228,7 +228,7 @@ mephit_run() {
                     lasterr=$?
                     ;;
                 '1')
-                    gdb -x "$scriptdir/mephit.gdb" --args \
+                    gdb --args \
                         "$bindir/mephit_run.x" \
                         $runmode \
                         "$config" \
