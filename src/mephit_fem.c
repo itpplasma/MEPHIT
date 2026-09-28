@@ -8,9 +8,14 @@
 #include <sys/stat.h>
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_integration.h>
+#ifndef USE_FORTFEM
 #include "triangle.h"
+#endif
 #include "mephit_util.h"
 #include "mephit_fem.h"
+#ifdef USE_FORTFEM
+#include "mephit_fortfem.h"
+#endif
 
 char shared_namedpipe[path_max];
 
@@ -169,6 +174,17 @@ void receive_double1_from_FreeFem(const char *namedpipe, const int size, double 
 
 void FEM_init(const int tormode, const int nedge, const int npoint, const int runmode)
 {
+#ifdef USE_FORTFEM
+  const int status = mephit_fortfem_prepare(tormode);
+
+  (void) nedge;
+  (void) npoint;
+  (void) runmode;
+  if (status) {
+    errno_msg(exit, __FILE__, __LINE__, EIO,
+              "FortFEM solver preparation failed with status %i", status);
+  }
+#else
   long int long_tormode = tormode ? tormode : 2;
   long int long_nedge = nedge;
   long int long_npoint = npoint;
@@ -182,14 +198,43 @@ void FEM_init(const int tormode, const int nedge, const int npoint, const int ru
   receive_long0_from_FreeFem(shared_namedpipe, &long_npoint);
   send_long0_to_FreeFem(shared_namedpipe, &long_runmode);
   receive_long0_from_FreeFem(shared_namedpipe, &long_runmode);
+#endif
+}
+
+void FEM_init_fortfem_mesh(const int npoint,
+                           const double *node_R,
+                           const double *node_Z,
+                           const int ntri,
+                           const int *tri_node,
+                           const int nedge,
+                           const int *edge_node)
+{
+#ifdef USE_FORTFEM
+  const int status = mephit_fortfem_init(
+    npoint, node_R, node_Z, ntri, tri_node, nedge, edge_node);
+  if (status) {
+    errno_msg(exit, __FILE__, __LINE__, EIO,
+              "FortFEM mesh initialization failed with status %i", status);
+  }
+#else
+  (void) npoint;
+  (void) node_R;
+  (void) node_Z;
+  (void) ntri;
+  (void) tri_node;
+  (void) nedge;
+  (void) edge_node;
+#endif
 }
 
 void FEM_extend_mesh(void)
 {
+#ifndef USE_FORTFEM
   long int flag = 0L;
 
   send_long0_to_FreeFem(shared_namedpipe, &flag);
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
+#endif
 }
 
 void FEM_compute_magfn(const int nedge,
@@ -199,6 +244,15 @@ void FEM_compute_magfn(const int nedge,
                        complex_double *AnR,
                        complex_double *AnZ)
 {
+#ifdef USE_FORTFEM
+  const int status =
+    mephit_fortfem_solve(nedge, npoint, Jn, Bn, AnR, AnZ);
+
+  if (status) {
+    errno_msg(exit, __FILE__, __LINE__, EIO,
+              "FortFEM Maxwell solve failed with status %i", status);
+  }
+#else
   long int flag = -1L;
   int size = 2 * nedge;
 
@@ -209,10 +263,18 @@ void FEM_compute_magfn(const int nedge,
   size = 2 * npoint;
   receive_double1_from_FreeFem(shared_namedpipe, size, (double *) AnR);
   receive_double1_from_FreeFem(shared_namedpipe, size, (double *) AnZ);
+#endif
 }
 
 void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2int)
 {
+#ifdef USE_FORTFEM
+  const int status = mephit_fortfem_l2(nedge, elem, L2int);
+  if (status) {
+    errno_msg(exit, __FILE__, __LINE__, EIO,
+              "FortFEM L2 integration failed with status %i", status);
+  }
+#else
   long int flag = -2L;
   int size = 2 * nedge;
 
@@ -220,14 +282,19 @@ void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2in
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
   send_double1_to_FreeFem(shared_namedpipe, size, (double *) elem);
   receive_double1_from_FreeFem(shared_namedpipe, 1, L2int);
+#endif
 }
 
 void FEM_deinit(void)
 {
+#ifdef USE_FORTFEM
+  mephit_fortfem_deinit();
+#else
   long int flag = -3L;
 
   send_long0_to_FreeFem(shared_namedpipe, &flag);
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
+#endif
 }
 
 void gauss_legendre_unit_interval(int order, double *points, double *weights)
@@ -243,6 +310,7 @@ void gauss_legendre_unit_interval(int order, double *points, double *weights)
   gsl_integration_glfixed_table_free(table);
 }
 
+#ifndef USE_FORTFEM
 void FEM_triangulate_external(const int npt_inner,
                               const int npt_outer,
                               const double *bdry_R,
@@ -326,3 +394,4 @@ void FEM_triangulate_external(const int npt_inner,
   trifree(out.segmentlist);
   trifree(out.edgelist);
 }
+#endif
