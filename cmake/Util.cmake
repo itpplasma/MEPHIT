@@ -98,6 +98,8 @@ function(find_or_fetch DEPENDENCY)
     endif()
 
     set(_DEP_BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/${DEPENDENCY})
+    # Parent CTest enablement must not register unbuilt dependency tests.
+    set(BUILD_TESTING OFF)
     add_subdirectory(${${DEPENDENCY}_SOURCE_DIR}
         ${_DEP_BINARY_DIR}
         EXCLUDE_FROM_ALL
