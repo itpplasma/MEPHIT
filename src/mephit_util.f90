@@ -1,7 +1,6 @@
 module mephit_util
 
   use iso_fortran_env, only: dp => real64
-  use iso_c_binding, only: c_ptr, c_null_ptr, c_double_complex
 
   implicit none
 
@@ -36,9 +35,7 @@ module mephit_util
 
   type :: fft_t
     integer :: N = 0
-    complex(c_double_complex), dimension(:), pointer :: samples => null()
-    complex(c_double_complex), dimension(:), pointer, private :: modes => null()
-    type(c_ptr), private :: plan_p = c_null_ptr, samples_p = c_null_ptr, modes_p = c_null_ptr
+    complex(dp), dimension(:), allocatable :: samples
   contains
     procedure :: init => fft_init
     procedure :: apply => fft_apply
@@ -375,29 +372,21 @@ contains
   end subroutine binsearch
 
   subroutine fft_init(fft, N)
-    use iso_c_binding, only: c_size_t, c_f_pointer
-    use fftw3, only: fftw_alloc_complex, fftw_plan_dft_1d, &
-      FFTW_FORWARD, FFTW_PATIENT, FFTW_DESTROY_INPUT
     class(fft_t), intent(inout) :: fft
     integer, intent(in) :: N
 
     call fft_deinit(fft)
     fft%N = N
-    fft%samples_p = fftw_alloc_complex(int(N, c_size_t))
-    call c_f_pointer(fft%samples_p, fft%samples, [N])
-    fft%modes_p = fftw_alloc_complex(int(N, c_size_t))
-    call c_f_pointer(fft%modes_p, fft%modes, [N])
-    fft%plan_p = fftw_plan_dft_1d(N, fft%samples, fft%modes, &
-      FFTW_FORWARD, ior(FFTW_PATIENT, FFTW_DESTROY_INPUT))
+    allocate(fft%samples(N))
   end subroutine fft_init
 
   subroutine fft_apply(fft, m_min, m_max, modes)
-    use iso_c_binding, only: c_associated
-    use fftw3, only: fftw_execute_dft
     use mephit_conf, only: logger
+    use fortnum_fft, only: fft_c2c
     class(fft_t), intent(inout) :: fft
     integer, intent(in) :: m_min, m_max
     complex(dp), dimension(m_min:), intent(inout) :: modes
+    complex(dp), dimension(:), allocatable :: spectrum
 
     if (ubound(modes, 1) /= m_max) then
       call logger%msg_arg_size('fft_apply', &
@@ -406,44 +395,29 @@ contains
       if (logger%err) call logger%write_msg
       error stop
     end if
-    if (.not. (c_associated(fft%plan_p) .and. &
-      c_associated(fft%modes_p) .and. &
-      c_associated(fft%samples_p))) then
-      logger%msg = 'Attempt to dereference null pointer in fft_apply'
+    if (.not. allocated(fft%samples)) then
+      logger%msg = 'Attempt to use uninitialized samples in fft_apply'
       if (logger%err) call logger%write_msg
       error stop
     end if
-    call fftw_execute_dft(fft%plan_p, fft%samples, fft%modes)
+    ! fft_c2c is in-place; transform a copy so the caller's samples survive.
+    spectrum = fft%samples
+    call fft_c2c(spectrum, -1)
     if (m_min >= 0 .and. m_max >= 0) then
-      modes(:) = fft%modes(m_min+1:m_max+1) / dble(fft%N)
+      modes(:) = spectrum(m_min+1:m_max+1) / dble(fft%N)
     else if (m_min < 0 .and. m_max < 0) then
-      modes(:) = fft%modes(fft%N+m_min+1:fft%N+m_max+1) / dble(fft%N)
+      modes(:) = spectrum(fft%N+m_min+1:fft%N+m_max+1) / dble(fft%N)
     else
-      modes(m_min:-1) = fft%modes(fft%N+m_min+1:fft%N) / dble(fft%N)
-      modes(0:m_max) = fft%modes(:m_max+1) / dble(fft%N)
+      modes(m_min:-1) = spectrum(fft%N+m_min+1:fft%N) / dble(fft%N)
+      modes(0:m_max) = spectrum(:m_max+1) / dble(fft%N)
     end if
   end subroutine fft_apply
 
   subroutine fft_deinit(fft)
-    use iso_c_binding, only: c_associated, c_null_ptr
-    use fftw3, only: fftw_destroy_plan, fftw_free
     class(fft_t), intent(inout) :: fft
 
     fft%N = 0
-    fft%samples => null()
-    fft%modes => null()
-    if (c_associated(fft%plan_p)) then
-      call fftw_destroy_plan(fft%plan_p)
-      fft%plan_p = c_null_ptr
-    end if
-    if (c_associated(fft%modes_p)) then
-      call fftw_free(fft%modes_p)
-      fft%modes_p = c_null_ptr
-    end if
-    if (c_associated(fft%samples_p)) then
-      call fftw_free(fft%samples_p)
-      fft%samples_p = c_null_ptr
-    end if
+    if (allocated(fft%samples)) deallocate(fft%samples)
   end subroutine fft_deinit
 
   !> Transform components of a vector \f$ \vec{v} \f$ from straight cylinder coordinates
