@@ -343,16 +343,16 @@ void MaxwellSolver::assemble()
   potential.AddDomainIntegrator(transverse_curl);
   potential.AddDomainIntegrator(longitudinal_curl);
   potential.Assemble();
-  potential.Finalize();
+  mfem::Array<int> ess_bdr(mesh.bdr_attributes.Max());
+  ess_bdr = 1;
+  Hrot.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
+  potential.FormSystemMatrix(ess_tdof_list, lhs);
+  umf.SetOperator(dynamic_cast<mfem::SparseMatrix&>(*lhs));
   mfem::VectorFEDomainLFIntegrator* const curr_dens = new mfem::VectorFEDomainLFIntegrator(Jn_interp);
   source.AddDomainIntegrator(curr_dens);
   rot.AddDomainInterpolator(new FourierGaugedCurlInterpolator(n));
   rot.Assemble();
   rot.Finalize();
-  mfem::Array<int> ess_bdr(mesh.bdr_attributes.Max());
-  ess_bdr = 1;
-  Hrot.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
-  potential.FormSystemMatrix(ess_tdof_list, lhs);
 }
 
 void MaxwellSolver::compute_magfn(const int nedge, const complex_double* Jn, complex_double* Bn)
@@ -367,7 +367,6 @@ void MaxwellSolver::compute_magfn(const int nedge, const complex_double* Jn, com
     source.Assemble();
     An = 0.0;
     potential.FormLinearSystem(ess_tdof_list, An, source, lhs, solution, rhs);
-    umf.SetOperator(dynamic_cast<mfem::SparseMatrix&>(*lhs));
 
     // ignore FE_INVALID (and possibly FE_INEXACT) in UMFPack
     feholdexcept(&saved);
