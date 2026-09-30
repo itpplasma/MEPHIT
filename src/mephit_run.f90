@@ -1,7 +1,8 @@
 program mephit_run
 
   use mephit_iter, only: mephit_main
-  use hdf5_tools, only: HID_T, h5_init, h5_deinit, h5overwrite, h5_defer_close
+  use hdf5_tools, only: HID_T, h5_init, h5_deinit, h5overwrite, h5_defer_close, &
+    h5_truncate_existing, h5_stream_write
 
   implicit none
 
@@ -16,11 +17,14 @@ program mephit_run
   call h5_init
   h5overwrite = .true.
   ! MEPHIT updates one output image through many close/reopen calls.  Keep
-  ! that image in Fortio memory and flush it once during mephit_deinit.
+  ! metadata for the deferred image, but stream dataset payloads directly
+  ! to disk so memory use remains comparable to native HDF5.
   h5_defer_close = .true.
   call mephit_main(runmode, config, suffix)
   call h5_deinit
   h5_defer_close = .false.
+  h5_truncate_existing = .false.
+  h5_stream_write = .false.
 
 contains
 

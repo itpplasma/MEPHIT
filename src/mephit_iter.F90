@@ -118,6 +118,7 @@ contains
     use input_files, only: gfile
     use field_sub, only: read_field_input
     use geqdsk_tools, only: geqdsk_read, geqdsk_classify, geqdsk_standardise
+    use hdf5_tools, only: h5_truncate_existing, h5_stream_write
     use mephit_util, only: init_field, geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5, &
       save_symfluxcoord, load_symfluxcoord
     use mephit_conf, only: conf, config_read, config_export_hdf5, conf_arr, logger, &
@@ -150,6 +151,8 @@ contains
     datafile = decorate_filename(datafile, '', basename_suffix)
     call config_read(conf, config)
     call logger%init('-', conf%log_level, conf%quiet)
+    h5_truncate_existing = meshing
+    h5_stream_write = meshing
     call config_export_hdf5(conf, datafile, 'config')
     if (meshing) then
       ! initialize equilibrium field
