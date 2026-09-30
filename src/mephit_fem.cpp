@@ -1,7 +1,10 @@
 #include "mephit_fem.h"
 #pragma STDC FENV_ACCESS ON
 #include <cfenv>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wall"
 #include "mfem.hpp"
+#pragma GCC diagnostic pop
 #include "magnetic_differential_equation.h"
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>

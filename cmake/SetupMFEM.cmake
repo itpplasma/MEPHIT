@@ -7,7 +7,7 @@ else()
   message(STATUS "Downloading and building MFEM")
 
   # Define version and URL for MFEM
-  set(MFEM_VERSION 4.7)
+  set(MFEM_VERSION 4.10)
   set(MFEM_URL "https://github.com/mfem/mfem/archive/refs/tags/v${MFEM_VERSION}.tar.gz")
 
   cmake_host_system_information(RESULT NUM_CORES QUERY NUMBER_OF_PHYSICAL_CORES)
@@ -20,7 +20,6 @@ else()
     URL ${MFEM_URL}
     CMAKE_ARGS
       -DMFEM_USE_SUITESPARSE=1
-      -DMFEM_USE_MUMPS=1
       -DCMAKE_CXX_FLAGS=-fPIC
       -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/mfem/install
     DOWNLOAD_EXTRACT_TIMESTAMP TRUE
