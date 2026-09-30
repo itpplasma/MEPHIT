@@ -231,6 +231,9 @@ module mephit_conf
     !> Check mesh in mephit_test.f90 (expensive)
     logical :: check_mesh = .false.
 
+    !> Enable MFEM MDE interface. Defaults to false.
+    logical :: debug_mfem = .false.
+
     real(dp) :: debug_pol_offset = 0.5d0
     logical :: debug_kilca_geom_theta = .false.
     logical :: debug_projection = .false.
@@ -377,6 +380,8 @@ contains
       comment = 'scaling factor used for comparison with results from KiLCA code')
     call h5_add(h5id_root, grp // '/max_eig_out', config%max_eig_out, &
       comment = 'maximum number of eigenvectors exported for plotting')
+    call h5_add(h5id_root, grp // '/debug_MFEM', config%debug_MFEM, &
+      comment = 'enable MFEM MDE interface')
     call h5_add(h5id_root, grp // '/debug_pol_offset', config%debug_pol_offset)
     call h5_add(h5id_root, grp // '/debug_kilca_geom_theta', config%debug_kilca_geom_theta)
     call h5_add(h5id_root, grp // '/debug_projection', config%debug_projection)

@@ -61,7 +61,6 @@ module mephit_iter
   end interface
 
   interface
-#ifdef USE_MFEM_MDE
     function FEM_test(mesh_file, tor_mode, n_dof, dof, unit_B0, MDE_inhom) &
       bind(C, name = 'FEM_test')
       use iso_c_binding, only: c_int, c_char, c_double_complex, c_funptr
@@ -73,7 +72,6 @@ module mephit_iter
       type(c_funptr), intent(in), value :: MDE_inhom
       integer(c_int) :: FEM_test
     end function FEM_test
-#endif
 
     function MFEM_init(tor_mode, mesh_file, edgemap_file) result(maxwell_solver) &
       bind(C, name = 'MFEM_init')
@@ -548,13 +546,11 @@ contains
       write (postfix, postfix_fmt) kiter
       Bn_prev%DOF(:) = perteq%Bn%DOF
       Bn_prev%comp_phi(:) = perteq%Bn%comp_phi
-#ifdef USE_MFEM_MDE
-      if (kiter <= 1) then
+      if (kiter <= 1 .and. conf%debug_mfem) then
         call MFEM_test(perteq%pn)
         call perteq_write('("iter/", a, "MFEM_' // postfix // '")', &
-            ' (after MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
+          ' (after MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
       end if
-#endif
       ! compute B_(n+1) = K * B_n + B_vac ... different from next_iteration_arnoldi
       call compute_presn(perteq, fdm, conf%damp)
       if (kiter <= 1) then
@@ -642,16 +638,16 @@ contains
     if (conf%debug_initial) then
       perteq%Bn%DOF(:) = vac%Bn%DOF
       perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
-#ifdef USE_MFEM_MDE
-      call MFEM_test(perteq%pn)
-      call perteq_write('("debug_MFEM_initial/MFEM_", a)', &
-        ' (initial MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
-#endif
+      if (conf%debug_mfem) then
+        call MFEM_test(perteq%pn)
+        call perteq_write('("debug_MFEM_initial/MFEM_", a)', &
+          ' (initial MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
+      end if
       call compute_presn(perteq, fdm, .false.)
-#ifdef USE_MFEM_MDE
-      call perteq_write('("debug_MFEM_initial/", a)', &
-        ' (initial iteration)', presn = perteq%pn, presmn = perteq%pn)
-#endif
+      if (conf%debug_mfem) then
+        call perteq_write('("debug_MFEM_initial/", a)', &
+          ' (initial iteration)', presn = perteq%pn, presmn = perteq%pn)
+      end if
       call compute_currn(perteq, fdm, flr2, .false., .true.)
       perteq%Bn%DOF(:) = vac%Bn%DOF
       perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
@@ -723,7 +719,6 @@ contains
     scalar = -dp0_dpsi * (B_n(1) * B_0(3) - B_n(3) * B_0(1)) * R / sqrt(sum(B_0 * B_0))
   end subroutine presn_inhom
 
-#ifdef USE_MFEM_MDE
   subroutine MFEM_test(pn)
     use iso_c_binding, only: c_int, c_null_char, c_loc, c_funloc
     use mephit_conf, only: conf, logger, basename_suffix, decorate_filename
@@ -739,7 +734,6 @@ contains
       call logger%write_msg
     end if
   end subroutine MFEM_test
-#endif
 
   subroutine FDM_init(fdm, nnz)
     type(FDM_t), intent(inout) :: fdm

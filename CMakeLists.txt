@@ -5,9 +5,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 ### Define the project
 project(MEPHIT LANGUAGES C CXX Fortran)
 
-### Define options
-option(WITH_MFEM_MDE "Use MFEM for MDEs" FALSE)
-
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
@@ -61,9 +58,6 @@ include(ExternalProject)
 include(SetupCODE)
 include(SetupTriangle)
 include(SetupMFEM)
-if(WITH_MFEM_MDE)
-  add_definitions(-DUSE_MFEM_MDE)
-endif()
 include(Util)
 find_or_fetch(libneo)
 
@@ -111,13 +105,9 @@ set(MEPHIT_C_SRC_FILES
 )
 set(MEPHIT_CPP_SRC_FILES
   src/mephit_fem.cpp
+  src/magnetic_differential_equation.cpp
+  src/miscellaneous.cpp
 )
-if(WITH_MFEM_MDE)
-  set(MEPHIT_CPP_SRC_FILES ${MEPHIT_CPP_SRC_FILES}
-    src/magnetic_differential_equation.cpp
-    src/miscellaneous.cpp
-  )
-endif()
 set_source_files_properties(${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
 	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
 

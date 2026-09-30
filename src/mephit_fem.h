@@ -53,14 +53,12 @@ double MFEM_compute_L2int(void *maxwell_solver,
 void MFEM_deinit(void *maxwell_solver);
 int test_map_edges(void* maxwell_solver, const char* test_edgemap_file);
 
-#ifdef USE_MFEM_MDE
 int FEM_test(const char *mesh_file,
              const int tor_mode,
              const int n_dof,
              complex_double *dof,
              real_vector_field *unit_B0,
              complex_scalar_field *MDE_inhom);
-#endif  // USE_MFEM_MDE
 
 #ifdef __cplusplus
 }

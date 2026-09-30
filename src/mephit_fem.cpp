@@ -2,15 +2,12 @@
 #pragma STDC FENV_ACCESS ON
 #include <cfenv>
 #include "mfem.hpp"
-#ifdef USE_MFEM_MDE
 #include "magnetic_differential_equation.h"
-#endif  // USE_MFEM_MDE
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/index/rtree.hpp>
 #include <cstdio>
 #include <vector>
-#include <map>
 
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
@@ -43,11 +40,8 @@ extern "C" void Rtree_query(double R, double Z, int *result_size, int **results)
   *results = query_results.data();
 }
 
-#ifdef USE_MFEM_MDE
-
 typedef std::map<std::pair<double, double>, size_t> points_2D;
 
-/*
 void count_points_2D(points_2D& assoc, const double R, const double Z)
 {
   auto const key = std::make_pair(R, Z);
@@ -58,7 +52,6 @@ void count_points_2D(points_2D& assoc, const double R, const double Z)
     it->second += 1;
   }
 }
-*/
 
 extern "C" int FEM_test(const char *mesh_file,
                         const int tor_mode,
@@ -76,25 +69,25 @@ extern "C" int FEM_test(const char *mesh_file,
     auto const f_r = [MDE_inhom, &points_lhs](const double R, const double Z) {
       double f[2];
       MDE_inhom(R, Z, reinterpret_cast<complex_double *>(f));
-      /* count_points_2D(points_lhs, R, Z); */
+      count_points_2D(points_lhs, R, Z);
       return f[0];
     };
     auto const f_i = [MDE_inhom, &points_lhs](const double R, const double Z) {
       double f[2];
       MDE_inhom(R, Z, reinterpret_cast<complex_double *>(f));
-      /* count_points_2D(points_lhs, R, Z); */
+      count_points_2D(points_lhs, R, Z);
       return f[1];
     };
     auto const h_phi = [unit_B0, &points_rhs](const double R, const double Z) {
       double h[3];
       unit_B0(R, Z, h);
-      /* count_points_2D(points_rhs, R, Z); */
+      count_points_2D(points_rhs, R, Z);
       return h[2] / R;
     };
     auto const h_t = [unit_B0, &points_rhs](const double R, const double Z) {
       double h[3];
       unit_B0(R, Z, h);
-      /* count_points_2D(points_rhs, R, Z); */
+      count_points_2D(points_rhs, R, Z);
       mfem::Vector h_vec(2);
       h_vec(0) = h[0];
       h_vec(1) = h[1];
@@ -126,7 +119,6 @@ extern "C" int FEM_test(const char *mesh_file,
       reinterpret_cast<double *>(dof)[2 * i] = sol(i);
       reinterpret_cast<double *>(dof)[2 * i + 1] = sol(n_dof + i);
     }
-    /*
     FILE *file;
     file = fopen("lhs.txt", "w");
     if (file != nullptr) {
@@ -142,14 +134,11 @@ extern "C" int FEM_test(const char *mesh_file,
       }
       fclose(file);
     }
-    */
   } catch (...) {
     return 1;
   }
   return 0;
 }
-
-#endif  // USE_MFEM_MDE
 
 /* made with help from ChatGPT */
 
