@@ -72,25 +72,29 @@ void FEM_triangulate_external(const int npt_inner,
   triangulate("BejnpqYz", &in, &out, &vorout);
 
   fid = fopen(fname, "w");
-  fprintf(fid, "%i %i %i\n",
-          out.numberofpoints,
-          out.numberoftriangles,
-          out.numberofsegments);
+  fprintf(fid, "MFEM mesh v1.0\ndimension\n2\n");
+  fprintf(fid, "elements\n%i\n", out.numberoftriangles);
+  for (k = 0; k < out.numberoftriangles; ++k) {
+    // <element attribute> <geometry type> <vertex indices ...>
+    // attribute: 2 for surrounding volume, geometry type: 2 for triangle
+    fprintf(fid, "2 2 %i %i %i\n",
+            out.trianglelist[3 * k],
+            out.trianglelist[3 * k + 1],
+            out.trianglelist[3 * k + 2]);
+  }
+  fprintf(fid, "boundary\n%i\n", out.numberofsegments);
+  for (k = 0; k < out.numberofsegments; ++k) {
+    // <boundary element attribute> <geometry type> <vertex indices ...>
+    // attribute: 2 for surrounding volume, geometry type: 1 for segment
+    fprintf(fid, "2 1 %i %i\n",
+            out.segmentlist[2 * k],
+            out.segmentlist[2 * k + 1]);
+  }
+  fprintf(fid, "vertices\n%i\n2\n", out.numberofpoints);
   for (k = 0; k < out.numberofpoints; ++k) {
-    fprintf(fid, "%.16e %.16e 0\n",
+    fprintf(fid, "%.16e %.16e\n",
             out.pointlist[2 * k],
             out.pointlist[2 * k + 1]);
-  }
-  for (k = 0; k < out.numberoftriangles; ++k) {
-    fprintf(fid, "%i %i %i 1\n",
-            out.trianglelist[3 * k] + 1,
-            out.trianglelist[3 * k + 1] + 1,
-            out.trianglelist[3 * k + 2] + 1);
-  }
-  for (k = 0; k < out.numberofsegments; ++k) {
-    fprintf(fid, "%i %i 2\n",
-            out.segmentlist[2 * k] + 1,
-            out.segmentlist[2 * k + 1] + 1);
   }
   fclose(fid);
 
