@@ -14,8 +14,7 @@ Prerequisites from external sources for running MEPHIT are as follows.
 - [FFTW3](http://fftw.org/)
 - [Triangle](https://www.cs.cmu.edu/~quake/triangle.html)
 - [Boost](https://www.boost.org/)
-- [FreeFem++](https://github.com/FreeFem/FreeFem-sources)
-- [MFEM](https://mfem.org/) is optional
+- [MFEM](https://mfem.org/)
 - [zlib](https://zlib.net/) for Fortio's compressed NetCDF-4/HDF5 subset;
   Fortio itself is fetched transitively through libneo
 - Python 3 including packages listed in [`requirements.txt`](requirements.txt) for plotting

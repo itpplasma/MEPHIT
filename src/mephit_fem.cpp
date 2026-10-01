@@ -1,14 +1,16 @@
 #include "mephit_fem.h"
-#ifdef USE_MFEM
+#pragma STDC FENV_ACCESS ON
+#include <cfenv>
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wall"
 #include "mfem.hpp"
+#pragma GCC diagnostic pop
 #include "magnetic_differential_equation.h"
-#endif  // USE_MFEM
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
 #include <boost/geometry/index/rtree.hpp>
 #include <cstdio>
 #include <vector>
-#include <map>
 
 namespace bg = boost::geometry;
 namespace bgi = boost::geometry::index;
@@ -41,11 +43,8 @@ extern "C" void Rtree_query(double R, double Z, int *result_size, int **results)
   *results = query_results.data();
 }
 
-#ifdef USE_MFEM
-
 typedef std::map<std::pair<double, double>, size_t> points_2D;
 
-/*
 void count_points_2D(points_2D& assoc, const double R, const double Z)
 {
   auto const key = std::make_pair(R, Z);
@@ -56,7 +55,6 @@ void count_points_2D(points_2D& assoc, const double R, const double Z)
     it->second += 1;
   }
 }
-*/
 
 extern "C" int FEM_test(const char *mesh_file,
                         const int tor_mode,
@@ -74,25 +72,25 @@ extern "C" int FEM_test(const char *mesh_file,
     auto const f_r = [MDE_inhom, &points_lhs](const double R, const double Z) {
       double f[2];
       MDE_inhom(R, Z, reinterpret_cast<complex_double *>(f));
-      /* count_points_2D(points_lhs, R, Z); */
+      count_points_2D(points_lhs, R, Z);
       return f[0];
     };
     auto const f_i = [MDE_inhom, &points_lhs](const double R, const double Z) {
       double f[2];
       MDE_inhom(R, Z, reinterpret_cast<complex_double *>(f));
-      /* count_points_2D(points_lhs, R, Z); */
+      count_points_2D(points_lhs, R, Z);
       return f[1];
     };
     auto const h_phi = [unit_B0, &points_rhs](const double R, const double Z) {
       double h[3];
       unit_B0(R, Z, h);
-      /* count_points_2D(points_rhs, R, Z); */
+      count_points_2D(points_rhs, R, Z);
       return h[2] / R;
     };
     auto const h_t = [unit_B0, &points_rhs](const double R, const double Z) {
       double h[3];
       unit_B0(R, Z, h);
-      /* count_points_2D(points_rhs, R, Z); */
+      count_points_2D(points_rhs, R, Z);
       mfem::Vector h_vec(2);
       h_vec(0) = h[0];
       h_vec(1) = h[1];
@@ -124,7 +122,6 @@ extern "C" int FEM_test(const char *mesh_file,
       reinterpret_cast<double *>(dof)[2 * i] = sol(i);
       reinterpret_cast<double *>(dof)[2 * i + 1] = sol(n_dof + i);
     }
-    /*
     FILE *file;
     file = fopen("lhs.txt", "w");
     if (file != nullptr) {
@@ -140,11 +137,299 @@ extern "C" int FEM_test(const char *mesh_file,
       }
       fclose(file);
     }
-    */
   } catch (...) {
     return 1;
   }
   return 0;
 }
 
-#endif  // USE_MFEM
+/* made with help from ChatGPT */
+
+class FourierGaugedCurlInterpolator : public mfem::DiscreteInterpolator
+{
+private:
+  mfem::real_t n;
+
+public:
+  // RT0 rotates the ND1 basis clockwise; compute_magfn() applies the factor i.
+  FourierGaugedCurlInterpolator(mfem::real_t tor_mode) : n(tor_mode) {}
+
+  void AssembleElementMatrix2(
+    const mfem::FiniteElement &dom_fe,
+    const mfem::FiniteElement &ran_fe,
+    mfem::ElementTransformation &Trans,
+    mfem::DenseMatrix &elmat) override
+  {
+    MFEM_VERIFY(dom_fe.GetDim() == 2 &&
+                ran_fe.GetDim() == 2,
+                "FourierGaugedCurlInterpolator: 2D elements required.");
+
+    MFEM_VERIFY(dom_fe.GetMapType() == mfem::FiniteElement::H_CURL,
+                "FourierGaugedCurlInterpolator: domain must be H(curl).");
+
+    MFEM_VERIFY(ran_fe.GetMapType() == mfem::FiniteElement::H_DIV,
+                "FourierGaugedCurlInterpolator: range must be H(div).");
+
+    MFEM_VERIFY(dom_fe.GetDof() == ran_fe.GetDof(),
+                "FourierGaugedCurlInterpolator: incompatible number of DOFs.");
+
+    // Lowest-order ND_1 <-> RT_0:
+    MFEM_VERIFY(dom_fe.GetDof() == 3,
+                "FourierGaugedCurlInterpolator: "
+                "this implementation assumes lowest-order elements.");
+
+    elmat.SetSize(ran_fe.GetDof(), dom_fe.GetDof());
+    elmat = 0.0;
+    for (int i = 0; i < dom_fe.GetDof(); i++) {
+      elmat(i, i) = n;
+    }
+  }
+};
+
+class MaxwellSolver {
+public:
+  const double c = 29979245800.0;
+  // current formalism only works in lowest order
+  const int order = 0;
+  const int n;
+  mfem::Mesh mesh;
+  mfem::RT_FECollection RT0;
+  mfem::ND_FECollection ND1;
+  mfem::FiniteElementSpace Hdiv;
+  mfem::FiniteElementSpace Hrot;
+  mfem::BilinearForm potential;
+  mfem::LinearForm source;
+  mfem::DiscreteLinearOperator rot;
+  mfem::Array<int> ess_tdof_list;
+  mfem::GridFunction Hdiv_elem;
+  mfem::VectorGridFunctionCoefficient Jn_interp;
+  mfem::GridFunction An;
+  mfem::Vector solution;
+  mfem::Vector rhs;
+  mfem::OperatorPtr lhs;
+  mfem::UMFPackSolver umf;
+  std::vector<int> edge_map;
+  std::vector<int> sign_map;
+
+  MaxwellSolver(const char* mesh_file, const int tor_mode);
+  void map_edges(const char* edgemap_file);
+  int test_map_edges(const char* test_edgemap_file);
+  void assemble();
+  void compute_magfn(const int nedge, const complex_double* Jn, complex_double* Bn);
+  double compute_L2int(const int nedge, const complex_double* Bn_diff);
+};
+
+MaxwellSolver::MaxwellSolver(const char* mesh_file, const int tor_mode)
+  : n(tor_mode)
+  // generate_edges = 0, refine = 0, fix_orientation = true
+  // without refinement, local vertex (and thus edge) order is retained
+  , mesh(mesh_file, 0, 0, true)
+  , RT0(order, 2)
+  , ND1(order + 1, 2)
+  , Hdiv(&mesh, &RT0)
+  , Hrot(&mesh, &ND1)
+  , potential(&Hrot)
+  , source(&Hrot)
+  , rot(&Hrot, &Hdiv)
+  , Hdiv_elem(&Hdiv)
+  , Jn_interp(&Hdiv_elem)
+  , An(&Hrot)
+{}
+
+void MaxwellSolver::map_edges(const char* edgemap_file)
+{
+  FILE* file;
+  int ktri, ke, result, nedge;
+  std::vector<int> mephit_ktri, mephit_ke;
+  mfem::Array<int> edges, cor;
+  file = fopen(edgemap_file, "r");
+  if (!file) {
+    perror("failed to open edgemap_file");
+    return;
+  }
+  nedge = 0;
+  while (!feof(file)) {
+    result = fscanf(file, "%d %d", &ktri, &ke);
+    if (result != 2) break;
+    nedge++;
+    mephit_ktri.push_back(ktri - 1);
+    mephit_ke.push_back(ke);
+  }
+  fclose(file);
+  edge_map.resize(nedge);
+  sign_map.resize(nedge);
+  for (int kedge = 0; kedge < nedge; kedge++) {
+    mesh.GetElementEdges(mephit_ktri[kedge], edges, cor);
+    edge_map[kedge] = edges[abs(mephit_ke[kedge]) - 1];
+    sign_map[kedge] = (mephit_ke[kedge] > 0) ? 1 : -1;
+  }
+}
+
+int MaxwellSolver::test_map_edges(const char* test_edgemap_file)
+{
+  FILE* file;
+  int kpoi_1, kpoi_2, kedge, nedge, result, status;
+  std::vector<std::pair<int, int>> mephit_edge_node;
+  mfem::Array<int> vert;
+  file = fopen(test_edgemap_file, "r");
+  if (!file) {
+    perror("failed to open test_edgemap_file");
+    return 1;
+  }
+  nedge = 0;
+  while (!feof(file)) {
+    result = fscanf(file, "%d %d", &kpoi_1, &kpoi_2);
+    if (result != 2) break;
+    nedge++;
+    mephit_edge_node.push_back(std::pair<int, int>(kpoi_1 - 1, kpoi_2 - 1));
+  }
+  fclose(file);
+  if (nedge != edge_map.size() || nedge != sign_map.size()) {
+    fprintf(stderr, "test_edgemap_file has %d entries, "
+            "but edge_map has %zu and sign_map has %zu.\n",
+            nedge, edge_map.size(), sign_map.size());
+    return 2;
+  }
+  status = 0;
+  for (kedge = 0; kedge < nedge; kedge++) {
+    mesh.GetEdgeVertices(edge_map[kedge], vert);
+    if (sign_map[kedge] < 0) {
+      if (vert[1] != mephit_edge_node[kedge].first ||
+          vert[0] != mephit_edge_node[kedge].second) {
+        status = 3;
+        fprintf(stderr, "MEPHIT edge %d connects %d to %d, "
+                "MFEM edge %d connects %d to %d.\n",
+                kedge, mephit_edge_node[kedge].first, mephit_edge_node[kedge].second,
+                edge_map[kedge], vert[1], vert[0]);
+      }
+    } else {
+      if (vert[0] != mephit_edge_node[kedge].first ||
+          vert[1] != mephit_edge_node[kedge].second) {
+        status = 3;
+        fprintf(stderr, "MEPHIT edge %d connects %d to %d, "
+                "MFEM edge %d connects %d to %d.\n",
+                kedge, mephit_edge_node[kedge].first, mephit_edge_node[kedge].second,
+                edge_map[kedge], vert[0], vert[1]);
+      }
+    }
+  }
+  return status;
+}
+
+void MaxwellSolver::assemble()
+{
+  mfem::FunctionCoefficient R(
+    [](const mfem::Vector &X)
+    {
+      return X(0);
+    }
+  );
+  mfem::CurlCurlIntegrator* const transverse_curl = new mfem::CurlCurlIntegrator(R);
+  mfem::FunctionCoefficient n_squared_over_R(
+    [this](const mfem::Vector &X)
+    {
+      return this->n * this->n / X(0);
+    }
+  );
+  mfem::VectorFEMassIntegrator* const longitudinal_curl = new mfem::VectorFEMassIntegrator(n_squared_over_R);
+  potential.AddDomainIntegrator(transverse_curl);
+  potential.AddDomainIntegrator(longitudinal_curl);
+  potential.Assemble();
+  mfem::Array<int> ess_bdr(mesh.bdr_attributes.Max());
+  ess_bdr = 1;
+  Hrot.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
+  potential.FormSystemMatrix(ess_tdof_list, lhs);
+  umf.SetOperator(dynamic_cast<mfem::SparseMatrix&>(*lhs));
+  mfem::VectorFEDomainLFIntegrator* const curr_dens = new mfem::VectorFEDomainLFIntegrator(Jn_interp);
+  source.AddDomainIntegrator(curr_dens);
+  rot.AddDomainInterpolator(new FourierGaugedCurlInterpolator(n));
+  rot.Assemble();
+  rot.Finalize();
+}
+
+void MaxwellSolver::compute_magfn(const int nedge, const complex_double* Jn, complex_double* Bn)
+{
+  std::fenv_t saved;
+  for (ptrdiff_t im = 0; im <= 1; im++) {
+    Hdiv_elem = 0.0;
+    for (size_t k = 0; k < nedge; k++) {
+      Hdiv_elem(edge_map[k]) = 4.0 * M_PI / c * sign_map[k] *
+        reinterpret_cast<const double*>(Jn)[2 * k + im];
+    }
+    source.Assemble();
+    An = 0.0;
+    potential.FormLinearSystem(ess_tdof_list, An, source, lhs, solution, rhs);
+
+    // ignore FE_INVALID (and possibly FE_INEXACT) in UMFPack
+    feholdexcept(&saved);
+    umf.Mult(rhs, solution);
+    fesetenv(&saved);
+
+    potential.RecoverFEMSolution(solution, source, An);
+    rot.Mult(An, Hdiv_elem);
+    for (size_t k = 0; k < nedge; k++) {
+      // multiply by imaginary unit
+      // im == 0:  Im B_n  <-  Re A_n
+      // im == 1:  Re B_n  <- -Im A_n
+      reinterpret_cast<double*>(Bn)[2 * k + (1 - im)] = (1 - 2 * im) *
+        sign_map[k] * Hdiv_elem(edge_map[k]);
+    }
+  }
+}
+
+double MaxwellSolver::compute_L2int(const int nedge, const complex_double* Bn_diff)
+{
+  double L2int2 = 0.0;
+  mfem::VectorFunctionCoefficient zero(2,
+      [](const mfem::Vector &X, mfem::Vector &V) { V = 0.0; }
+  );
+  for (ptrdiff_t im = 0; im <= 1; im++) {
+    Hdiv_elem = 0.0;
+    for (size_t k = 0; k < nedge; k++) {
+      Hdiv_elem(edge_map[k]) = sign_map[k] *
+        reinterpret_cast<const double*>(Bn_diff)[2 * k + im];
+    }
+    L2int2 += Hdiv_elem.ComputeL2Error(zero);
+  }
+  return sqrt(L2int2);
+}
+
+extern "C" void* MFEM_init(const int tor_mode, const char* mesh_file, const char* edgemap_file)
+{
+  MaxwellSolver* const maxwell_solver = new MaxwellSolver(mesh_file, tor_mode);
+  maxwell_solver->map_edges(edgemap_file);
+  maxwell_solver->assemble();
+  return static_cast<void*>(maxwell_solver);
+}
+
+extern "C" void MFEM_compute_magfn(void* maxwell_solver, const int nedge, const complex_double* Jn, complex_double* Bn)
+{
+  if (maxwell_solver) {
+    static_cast<MaxwellSolver*>(maxwell_solver)->compute_magfn(nedge, Jn, Bn);
+  }
+  return;
+}
+
+extern "C" double MFEM_compute_L2int(void* maxwell_solver, const int nedge, complex_double* Bn_diff)
+{
+  if (maxwell_solver) {
+    return static_cast<MaxwellSolver*>(maxwell_solver)->compute_L2int(nedge, Bn_diff);
+  }
+  return NAN;
+}
+
+extern "C" void MFEM_deinit(void* maxwell_solver)
+{
+  if (maxwell_solver) {
+    delete static_cast<MaxwellSolver*>(maxwell_solver);
+  }
+  return;
+}
+
+extern "C" int test_map_edges(void* maxwell_solver, const char* test_edgemap_file)
+{
+  if (maxwell_solver) {
+    return static_cast<MaxwellSolver*>(maxwell_solver)->test_map_edges(test_edgemap_file);
+  }
+  return 1;
+}
