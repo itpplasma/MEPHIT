@@ -104,6 +104,9 @@ module mephit_conf
     !> (default) and #refinement_scheme_gaussian.
     integer :: refinement_scheme = refinement_scheme_geometric
 
+        !> Scale of the Maxwell exterior ellipse relative to the plasma bounding box.
+        real(dp) :: maxwell_outer_scale = 2d0
+
     !> Generate non-resonant vacuum perturbation for testing. Defaults to false.
     logical :: nonres = .false.
 
@@ -291,6 +294,7 @@ contains
 
   !> Read configuration namelist.
   subroutine config_read(config, filename)
+    use maxwell_boundary_m, only: validate_exterior_scale
     type(config_t), intent(inout) :: config
     character(len = *), intent(in) :: filename
     integer :: fid
@@ -299,6 +303,7 @@ contains
     open(newunit = fid, file = filename)
     read(fid, nml = scalars)
     close(fid)
+    call validate_exterior_scale(config%maxwell_outer_scale)
     ! override if erroneously set in namelist
     config%config_file = trim(filename)
   end subroutine config_read
@@ -321,6 +326,7 @@ contains
     call h5_add(h5id_root, grp // '/vac_src', config%vac_src)
     call h5_add(h5id_root, grp // '/currn_model', config%currn_model)
     call h5_add(h5id_root, grp // '/refinement_scheme', config%refinement_scheme)
+        call h5_add(h5id_root, grp//'/maxwell_outer_scale', config%maxwell_outer_scale)
     call h5_add(h5id_root, grp // '/nonres', config%nonres)
     call h5_add(h5id_root, grp // '/quad_avg', config%quad_avg)
     call h5_add(h5id_root, grp // '/m_i', config%m_i, &

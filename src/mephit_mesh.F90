@@ -97,6 +97,9 @@ module mephit_mesh
 
   type :: mesh_t
 
+        !> Effective scale used to generate the Maxwell exterior mesh.
+        real(dp) :: maxwell_outer_scale = 2d0
+
     !> R coordinate of the O point in cm.
     real(dp) :: R_O
 
@@ -2869,6 +2872,8 @@ contains
     end where
     call h5_open_rw(file, h5id_root)
     call h5_create_parent_groups(h5id_root, trim(adjustl(dataset)) // '/')
+        call h5_add(h5id_root, trim(adjustl(dataset))//'/maxwell_outer_scale', &
+                   mesh%maxwell_outer_scale, comment='Effective Maxwell exterior scale')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/R_O', mesh%R_O, &
       comment = 'R coordinate of O point', unit = 'cm')
     call h5_add(h5id_root, trim(adjustl(dataset)) // '/Z_O', mesh%Z_O, &
@@ -3054,12 +3059,14 @@ contains
   subroutine write_FreeFem_mesh
     use iso_c_binding, only: c_null_char
     use mephit_util, only: pi, linspace
-    use mephit_conf, only: basename_suffix, decorate_filename
+        use mephit_conf, only: basename_suffix, decorate_filename, conf
+        use maxwell_boundary_m, only: validate_outer_polygon, validate_exterior_scale
     integer :: fid, kpoi, ktri, kp, kedge, npt_inner, npt_outer
     real(dp) :: R_min, R_max, R_mid, R_rad, Z_min, Z_max, Z_mid, Z_rad
-    real(dp), parameter :: outer_border_refinement = 0.125d0, outer_box_scale = 2d0
+        real(dp), parameter :: outer_border_refinement = 0.125d0
     real(dp), allocatable :: bdry_R(:), bdry_Z(:), theta(:)
 
+        call validate_exterior_scale(conf%maxwell_outer_scale)
     open(newunit = fid, file = decorate_filename('core_plasma.msh', '', basename_suffix), &
       status = 'replace', form = 'formatted', action = 'write')
     write (fid, '(3(1x, i0))') mesh%npoint, mesh%ntri, mesh%kp_max(mesh%nflux) - 1
@@ -3093,11 +3100,11 @@ contains
     R_min = minval(mesh%node_R)
     R_max = maxval(mesh%node_R)
     R_mid = 0.5d0 * (R_max + R_min)
-    R_rad = 0.5d0 * (R_max - R_min) * outer_box_scale
+        R_rad = 0.5d0*(R_max - R_min)*conf%maxwell_outer_scale
     Z_min = minval(mesh%node_Z)
     Z_max = maxval(mesh%node_Z)
     Z_mid = 0.5d0 * (Z_max + Z_min)
-    Z_rad = 0.5d0 * (Z_max - Z_min) * outer_box_scale
+        Z_rad = 0.5d0*(Z_max - Z_min)*conf%maxwell_outer_scale
     npt_inner = mesh%kp_max(mesh%nflux)
     npt_outer = nint(outer_border_refinement * npt_inner)
     allocate(bdry_R(npt_inner + npt_outer), bdry_Z(npt_inner + npt_outer))
@@ -3108,6 +3115,9 @@ contains
     theta(:) = linspace(0d0, 2d0 * pi, npt_outer, 0, 1)
     bdry_R(npt_inner+1:) = R_mid + R_rad * cos(theta)
     bdry_Z(npt_inner+1:) = Z_mid + Z_rad * sin(theta)
+        call validate_outer_polygon(bdry_R(:npt_inner), bdry_Z(:npt_inner), &
+               bdry_R(npt_inner + 1:), bdry_Z(npt_inner + 1:), conf%maxwell_outer_scale)
+        mesh%maxwell_outer_scale = conf%maxwell_outer_scale
     ! dump the triangulator input so the annulus meshing problem can be
     ! reproduced without a MEPHIT build, e.g. for mesher comparisons
     open(newunit = fid, file = decorate_filename('outer_boundary.dat', '', basename_suffix), &
@@ -3127,6 +3137,7 @@ contains
   subroutine mesh_read(mesh, file, dataset)
     use hdf5_tools, only: HID_T, h5_open, h5_get, h5_close
     use mephit_conf, only: conf
+        use maxwell_boundary_m, only: read_mesh_exterior_scale
     type(mesh_t), intent(inout) :: mesh
     character(len = *), intent(in) :: file
     character(len = *), intent(in) :: dataset
@@ -3135,6 +3146,8 @@ contains
 
     call mesh_deinit(mesh)
     call h5_open(file, h5id_root)
+        call read_mesh_exterior_scale(h5id_root, trim(adjustl(dataset)), &
+                                     conf%maxwell_outer_scale, mesh%maxwell_outer_scale)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_O', mesh%R_O)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/Z_O', mesh%Z_O)
     call h5_get(h5id_root, trim(adjustl(dataset)) // '/R_X', mesh%R_X)
