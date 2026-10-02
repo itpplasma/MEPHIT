@@ -733,7 +733,7 @@ contains
 
 #ifdef USE_MFEM
   subroutine MFEM_test(pn)
-    use iso_c_binding, only: c_int, c_null_char, c_loc, c_funloc
+    use iso_c_binding, only: c_int, c_null_char, c_funloc
     use mephit_conf, only: conf, logger, basename_suffix, decorate_filename
     type(L1_t), intent(inout) :: pn
     character(len = 1024) :: mesh_file
