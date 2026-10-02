@@ -93,6 +93,7 @@ set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
 
 set(MEPHIT_FORTRAN_SRC_FILES
+  src/mephit_iteration_state.f90
   src/mephit_conf.f90
   src/mephit_util.f90
   src/mephit_mesh.F90
@@ -164,6 +165,13 @@ add_executable(mephit_post.x src/mephit_post.f90)
 target_link_libraries(mephit_run.x mephit)
 target_link_libraries(mephit_test.x mephit)
 target_link_libraries(mephit_post.x mephit)
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(test_iteration_state test/test_iteration_state.f90)
+  target_link_libraries(test_iteration_state mephit)
+  add_test(NAME iteration_state COMMAND test_iteration_state)
+endif()
 
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)
