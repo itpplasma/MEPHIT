@@ -7,6 +7,7 @@ module mephit_iter
   private
 
   public :: mephit_run, mephit_deinit, perteq_read
+  public :: add_resonant_current
 
   type :: perteq_t
     !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
@@ -1127,8 +1128,8 @@ contains
     end select
     call helical_current_from_parallel_current(resonant_jmnpar_over_Bmod, fdm, &
       resonant_jnpar_over_Bmod, resonant_jn)
-    perteq%jnpar_B0%DOF(:) = perteq%jnpar_B0%DOF + resonant_jnpar_over_Bmod%DOF
-    perteq%jn%DOF(:) = perteq%jn%DOF + resonant_jn%DOF
+    call add_resonant_current(perteq%jnpar_B0, perteq%jn, &
+        resonant_jnpar_over_Bmod, resonant_jn)
     if (debug_initial) then
       call polmodes_write(resonant_jmnpar_over_Bmod, datafile, &
         'debug_KiLCA/jmnpar_Bmod_KiLCA', &
@@ -1225,6 +1226,17 @@ contains
       end do
     end do
   end subroutine current_from_pressure_balance
+
+    pure subroutine add_resonant_current(jpar_over_B, jn, resonant_par, resonant_jn)
+        type(L1_t), intent(inout) :: jpar_over_B
+        type(RT0_t), intent(inout) :: jn
+        type(L1_t), intent(in) :: resonant_par
+        type(RT0_t), intent(in) :: resonant_jn
+
+        jpar_over_B%DOF(:) = jpar_over_B%DOF + resonant_par%DOF
+        jn%DOF(:) = jn%DOF + resonant_jn%DOF
+        jn%comp_phi(:) = jn%comp_phi + resonant_jn%comp_phi
+    end subroutine add_resonant_current
 
   subroutine helical_current_from_parallel_current(jmnpar_over_Bmod, fdm, jnpar_over_Bmod, jn)
     use mephit_util, only: imun
