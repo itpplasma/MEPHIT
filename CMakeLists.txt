@@ -93,6 +93,7 @@ set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
 
 set(MEPHIT_FORTRAN_SRC_FILES
+  src/maxwell_boundary.f90
   src/mephit_conf.f90
   src/mephit_util.f90
   src/mephit_mesh.F90
@@ -164,6 +165,33 @@ add_executable(mephit_post.x src/mephit_post.f90)
 target_link_libraries(mephit_run.x mephit)
 target_link_libraries(mephit_test.x mephit)
 target_link_libraries(mephit_post.x mephit)
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(test_maxwell_boundary test/test_maxwell_boundary.f90)
+  target_link_libraries(test_maxwell_boundary mephit)
+  add_test(NAME maxwell_boundary COMMAND test_maxwell_boundary)
+  file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/maxwell-tests/normal)
+  set_tests_properties(maxwell_boundary PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/maxwell-tests/normal)
+  foreach(probe IN ITEMS near axis nan native-present native-legacy native-new)
+    if(probe STREQUAL "near")
+      set(expected "must strictly contain plasma")
+    elseif(probe STREQUAL "axis")
+      set(expected "exterior crosses R=0")
+    elseif(probe STREQUAL "nan")
+      set(expected "exterior scale must be finite")
+    else()
+      set(expected "scale mismatch: remesh and rebuild preconditioner")
+    endif()
+    add_test(NAME maxwell_reject_${probe} COMMAND ${CMAKE_COMMAND}
+      -DPROGRAM=$<TARGET_FILE:test_maxwell_boundary> -DPROBE=${probe}
+      "-DEXPECTED=${expected}" -P ${CMAKE_SOURCE_DIR}/test/assert_maxwell_rejection.cmake)
+    file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/maxwell-tests/${probe})
+    set_tests_properties(maxwell_reject_${probe} PROPERTIES
+      WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/maxwell-tests/${probe})
+  endforeach()
+endif()
 
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)
