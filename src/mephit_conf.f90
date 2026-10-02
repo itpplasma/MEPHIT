@@ -92,6 +92,10 @@ module mephit_conf
     !> (default), and #q_prof_geqdsk
     integer :: q_prof = q_prof_rot
 
+    !> Opt-in closed plasma boundary at normalized EQDSK poloidal flux.
+    !> Negative disables it (legacy separatrix search); enabled range is (0,1].
+    real(dp) :: closed_boundary_psi = -1d0
+
     !> Source of vacuum field perturbation. Possible values are #vac_src_nemov,
     !> #vac_src_gpec, #vac_src_fourier (default), and #vac_src_vecpot.
     integer :: vac_src = vac_src_fourier
@@ -318,6 +322,7 @@ contains
     call h5_add(h5id_root, grp // '/pres_prof', config%pres_prof)
     call h5_add(h5id_root, grp // '/curr_prof', config%curr_prof)
     call h5_add(h5id_root, grp // '/q_prof', config%q_prof)
+    call h5_add(h5id_root, grp // '/closed_boundary_psi', config%closed_boundary_psi)
     call h5_add(h5id_root, grp // '/vac_src', config%vac_src)
     call h5_add(h5id_root, grp // '/currn_model', config%currn_model)
     call h5_add(h5id_root, grp // '/refinement_scheme', config%refinement_scheme)

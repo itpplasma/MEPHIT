@@ -1811,7 +1811,9 @@ contains
     use mephit_util, only: interp_psi_pol, resample1d, pos_angle, generate_symfluxcoord
     use magdata_in_symfluxcoor_mod, only: nlabel, rbeg, psisurf, psipol_max, qsaf, &
       rsmall, circumf, raxis, zaxis
-    use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, theta0_at_xpoint
+    use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
+      theta0_at_xpoint, use_eqdsk_boundary, target_boundary_flux
+    use field_eq_mod, only: psib
     use points_2d, only: s_min, create_points_2d
 
     integer :: kf, kp
@@ -1821,6 +1823,14 @@ contains
 
     theta0_at_xpoint = .false.
     circ_mesh_scale = conf%kilca_scale_factor
+    use_eqdsk_boundary = conf%closed_boundary_psi >= 0d0
+    if (use_eqdsk_boundary) then
+      if (conf%closed_boundary_psi <= 0d0 .or. conf%closed_boundary_psi > 1d0) &
+        error stop 'closed_boundary_psi must be in (0,1] or negative to disable'
+      if (circ_mesh_scale /= 0) error stop 'Closed EQDSK boundary requires normal geometry'
+      target_boundary_flux = equil%simag + conf%closed_boundary_psi * &
+        (equil%sibry-equil%simag) + psib
+    end if
     if (conf%kilca_scale_factor /= 0) then
       ! calculate maximal extent from magnetic axis
       rad_max = min(equil%rmaxis - equil%rleft, &
