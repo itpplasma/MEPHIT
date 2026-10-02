@@ -9,6 +9,8 @@
     integer :: circ_mesh_scale = 0
     ! set this to true to let theta start at the line between O- and X-Point
     logical :: theta0_at_xpoint = .true.
+    logical :: use_eqdsk_boundary = .false.
+    double precision :: target_boundary_flux = 0.d0
     double precision, dimension(2) :: o_point, x_point, theta_axis
     double precision :: theta0
   end module field_line_integration_mod
@@ -24,7 +26,8 @@
   !use theta_rz_mod, only : nsqp,hsqpsi,spllabel
   use rhs_surf_mod, only : dr_dphi, dz_dphi
   use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
-       theta0_at_xpoint, theta_axis, theta0
+       theta0_at_xpoint, theta_axis, theta0, use_eqdsk_boundary, target_boundary_flux
+  use closed_surface_boundary_m, only: find_closed_boundary
   use magdata_in_symfluxcoor_mod, only: btor, rbig
   use field_sub, only : field_eq
 !
@@ -36,7 +39,7 @@
   integer, parameter :: nstep_min=10   !minimum number of steps
 !
   integer, intent(in) :: nstep,nsurfmax,nlabel,ntheta
-  integer :: i,j,nsurf,nmap,isurf,iter
+  integer :: i,j,nsurf,nmap,isurf,iter,boundary_stat
 !
   double precision, parameter :: pi = 3.14159265358979d0
   double precision, intent(out) :: rmn,rmx,zmn,zmx,raxis,zaxis
@@ -124,6 +127,15 @@
      h = h / dble(circ_mesh_scale)  ! for odeint integration interval
      r_sep = x_point(1)
      nsurf = floor((r_sep - raxis) / hbr) - 1
+  else if (use_eqdsk_boundary) then
+     call find_closed_boundary(midplane_flux, raxis, rmx, target_boundary_flux, &
+                               r_sep, boundary_stat)
+     if (boundary_stat /= 0) error stop 'Closed EQDSK boundary cannot be bracketed'
+     call field_eq(r_sep,ppp,zaxis,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ, &
+                   dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ)
+     if (hypot(Br,Bz) <= 1.d-9*abs(Bp)) &
+        error stop 'Closed boundary requires nonzero poloidal field'
+     x_point = [r_sep,zaxis]
   else
      surf: do isurf=1,nsurfmax
         phi=0.d0
@@ -164,10 +176,16 @@
 !------------------------------------------------------------------------------
 !
 ! Re-define start points step size in R for data storage
-  hbr=hbr*dfloat(nsurf)/dfloat(nlabel)
+  if (use_eqdsk_boundary) then
+     hbr = (r_sep-raxis)/nlabel
+  else
+     hbr=hbr*dfloat(nsurf)/dfloat(nlabel)
+  end if
 !
 ! find x-point
   if (circ_mesh_scale /= 0) then
+  else if (use_eqdsk_boundary) then
+     theta_axis = [r_sep-raxis,0.d0]
   else
      phi = 0.d0
      phiout = h * sigma
@@ -276,6 +294,10 @@
 !
       rrr=ymet(1)
       zzz=ymet(2)
+      if (use_eqdsk_boundary) then
+         if (rrr < rmn .or. rrr > rmx .or. zzz < zmn .or. zzz > zmx) &
+            error stop 'Closed boundary orbit leaves EQDSK rectangle'
+      end if
 !
       call field_eq(rrr,phi,zzz,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ  &
                    ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ)
@@ -289,9 +311,23 @@
   enddo
 !
   print *,'2D functions done'
+  if (use_eqdsk_boundary) then
+     if (hypot(R_st(nlabel,ntheta)-r_sep,Z_st(nlabel,ntheta)-zaxis) > &
+         1.d-6*(r_sep-raxis)) error stop 'Requested boundary orbit does not close'
+     if (abs(psisurf(nlabel)+psi_axis-target_boundary_flux) > &
+         1.d-7*abs(target_boundary_flux-psi_axis)) &
+         error stop 'Closed boundary flux differs from requested EQDSK value'
+  end if
 !
 !-------------------------------------------------------------------------------
 !
+  contains
+    function midplane_flux(r) result(flux)
+      double precision, intent(in) :: r
+      double precision :: flux, brloc, bploc, bzloc, d1,d2,d3,d4,d5,d6,d7,d8,d9
+      call field_eq(r,0.d0,zaxis,brloc,bploc,bzloc,d1,d2,d3,d4,d5,d6,d7,d8,d9)
+      flux = psif
+    end function midplane_flux
   end subroutine field_line_integration_for_SYNCH
 ! -----------------------------------------------------------------
 !
@@ -331,6 +367,8 @@
 !
   use rhs_surf_mod , only: dr_dphi, dz_dphi
   use field_sub, only : field_eq
+  use field_eq_mod, only: rad, zet
+  use field_line_integration_mod, only: use_eqdsk_boundary
 !
   implicit none
 !
@@ -342,6 +380,11 @@
 !
   R=y(1)
   Z=y(2)
+  if (use_eqdsk_boundary) then
+     if (R < minval(rad) .or. R > maxval(rad) .or. &
+         Z < minval(zet) .or. Z > maxval(zet)) &
+         error stop 'Closed-contour ODE evaluation leaves EQDSK rectangle'
+  end if
 !
   call field_eq(R,phi,Z,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ   &
                ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ)

@@ -84,6 +84,7 @@ set(COMMON_FORTRAN_SRC_FILES
   src/external/netlib_mod.f90
   src/external/d1mach.f
   src/fftw3.f90
+  src/closed_surface_boundary.f90
   src/field_line_integration_for_SYNCH.f90
   src/magdata_in_symfluxcoord.f90
   src/points_2d.f90
@@ -164,6 +165,26 @@ add_executable(mephit_post.x src/mephit_post.f90)
 target_link_libraries(mephit_run.x mephit)
 target_link_libraries(mephit_test.x mephit)
 target_link_libraries(mephit_post.x mephit)
+
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(test_closed_surface_boundary test/test_closed_surface_boundary.f90)
+  target_link_libraries(test_closed_surface_boundary mephit)
+  add_test(NAME closed_surface_boundary COMMAND test_closed_surface_boundary)
+  add_executable(test_closed_boundary_geometry test/closed_boundary_field.f90
+    test/test_closed_boundary_geometry.f90 src/closed_surface_boundary.f90
+    src/field_line_integration_for_SYNCH.f90)
+  set_target_properties(test_closed_boundary_geometry PROPERTIES
+    Fortran_MODULE_DIRECTORY ${PROJECT_BINARY_DIR}/closed_boundary_test_modules)
+  target_include_directories(test_closed_boundary_geometry BEFORE PRIVATE
+    ${PROJECT_BINARY_DIR}/closed_boundary_test_modules)
+  target_link_libraries(test_closed_boundary_geometry LIBNEO::odeint)
+  add_test(NAME closed_boundary_geometry COMMAND test_closed_boundary_geometry)
+  add_test(NAME closed_boundary_biased_box COMMAND test_closed_boundary_geometry biased)
+  add_test(NAME closed_boundary_escape_rejected
+    COMMAND ${CMAKE_COMMAND} -DPROGRAM=$<TARGET_FILE:test_closed_boundary_geometry>
+      -P ${CMAKE_CURRENT_SOURCE_DIR}/test/assert_boundary_rejection.cmake)
+endif()
 
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)
