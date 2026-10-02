@@ -6,7 +6,8 @@ module mephit_iter
 
   private
 
-  public :: mephit_run, mephit_deinit, perteq_read
+  public :: mephit_run, mephit_deinit, perteq_read, mde_current_source, &
+    perpendicular_current_divergence
 
   type :: perteq_t
     !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
@@ -989,7 +990,7 @@ contains
   subroutine debug_MDE(group, presn, magfn, currn_perp, currn_par)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: datafile
-    use mephit_util, only: pi, clight, zd_cross
+    use mephit_util, only: clight, zd_cross
     use mephit_mesh, only: mesh, cache, equilibrium_field, curr0_geqdsk
     use mephit_pert, only: L1_t, L1_interp, RT0_t, RT0_interp
     character(len = *), intent(in) :: group
@@ -1035,9 +1036,8 @@ contains
           grad_j0B0 = [sum(dj0_dR * B0 + dB0_dR * j0), 0d0, sum(dj0_dZ * B0 + dB0_dZ * j0)]
           grad_BnB0 = [sum(dBn_dR * B0 + dB0_dR * Bn), sum(dBn_dphi * B0), sum(dBn_dZ * B0 + dB0_dZ * Bn)]
           B0_grad_B0 = [sum(dB0_dR * B0), 0d0, sum(dB0_dZ * B0)]
-          div_jnperp(k) = (-2d0 / Bmod ** 2 * (clight * sum(zd_cross(grad_pn(:, k), B0) * B0_grad_B0) + &
-            sum(Bn * B0) * sum(j0 * B0_grad_B0) - sum(Bn * B0_grad_B0) * sum(j0 * B0)) + &
-            sum(grad_BnB0 * j0 - Bn * grad_j0B0) + 4d0 * pi * sum(grad_pn(:, k) * j0)) / Bmod ** 2
+          div_jnperp(k) = perpendicular_current_divergence(B0, Bmod, j0, &
+            B0_grad_B0, Bn, grad_pn(:, k), grad_j0B0, grad_BnB0)
         end associate
       end do
     end do
@@ -1149,6 +1149,33 @@ contains
     call RT0_deinit(resonant_jn)
   end subroutine compute_currn
 
+  !> Source for B0.grad(J1.B0/B0**2) = -div(J1_perp), in statA cm^-3.
+  !> B0_grad_B0 is grad(B0**2)/2, not the field-line curvature.
+  pure function mde_current_source(B0, Bmod, j0, B0_grad_B0, Bn, &
+      grad_pn, grad_j0B0, grad_BnB0) result(source)
+    use mephit_util, only: pi, clight, zd_cross
+    real(dp), intent(in) :: B0(3), Bmod, j0(3), B0_grad_B0(3), grad_j0B0(3)
+    complex(dp), intent(in) :: Bn(3), grad_pn(3), grad_BnB0(3)
+    complex(dp) :: source
+
+    source = (-2d0 / Bmod ** 2 * (clight * sum(zd_cross(grad_pn, B0) * &
+      B0_grad_B0) + sum(Bn * B0) * sum(j0 * B0_grad_B0) - &
+      sum(Bn * B0_grad_B0) * sum(j0 * B0)) + &
+      sum(grad_BnB0 * j0 - Bn * grad_j0B0) - &
+      4d0 * pi * sum(grad_pn * j0)) / Bmod ** 2
+  end function mde_current_source
+
+  !> Actual divergence of the perpendicular current, for diagnostics.
+  pure function perpendicular_current_divergence(B0, Bmod, j0, B0_grad_B0, &
+      Bn, grad_pn, grad_j0B0, grad_BnB0) result(divergence)
+    real(dp), intent(in) :: B0(3), Bmod, j0(3), B0_grad_B0(3), grad_j0B0(3)
+    complex(dp), intent(in) :: Bn(3), grad_pn(3), grad_BnB0(3)
+    complex(dp) :: divergence
+
+    divergence = -mde_current_source(B0, Bmod, j0, B0_grad_B0, &
+      Bn, grad_pn, grad_j0B0, grad_BnB0)
+  end function perpendicular_current_divergence
+
   subroutine current_from_pressure_balance(pn, Bn, fdm, apply_damping, jnpar_B0, jn)
     use mephit_util, only: pi, clight, zd_cross
     use mephit_mesh, only: mesh, cache, fs
@@ -1180,9 +1207,8 @@ contains
           grad_j0B0 = [sum(f%dj0_dR * f%B0 + f%dB0_dR * f%j0), 0d0, sum(f%dj0_dZ * f%B0 + f%dB0_dZ * f%j0)]
           grad_BnB0 = [sum(dBn_dR * f%B0 + f%dB0_dR * B_n), sum(dBn_dphi * f%B0), sum(dBn_dZ * f%B0 + f%dB0_dZ * B_n)]
           B0_grad_B0 = [sum(f%dB0_dR * f%B0), 0d0, sum(f%dB0_dZ * f%B0)]
-          inhom(kedge + 1) = (-2d0 / f%Bmod ** 2 * (clight * sum(zd_cross(grad_pn, f%B0) * B0_grad_B0) + &
-            sum(B_n * f%B0) * sum(f%j0 * B0_grad_B0) - sum(B_n * B0_grad_B0) * sum(f%j0 * f%B0)) + &
-            sum(grad_BnB0 * f%j0 - B_n * grad_j0B0) - 4d0 * pi * sum(grad_pn * f%j0)) / f%Bmod ** 2
+          inhom(kedge + 1) = mde_current_source(f%B0, f%Bmod, f%j0, &
+            B0_grad_B0, B_n, grad_pn, grad_j0B0, grad_BnB0)
         end associate
       end do
     end do
