@@ -165,6 +165,13 @@ target_link_libraries(mephit_run.x mephit)
 target_link_libraries(mephit_test.x mephit)
 target_link_libraries(mephit_post.x mephit)
 
+include(CTest)
+if(BUILD_TESTING)
+  add_executable(test_eqdsk_current_gradient test/test_eqdsk_current_gradient.f90)
+  target_link_libraries(test_eqdsk_current_gradient mephit)
+  add_test(NAME eqdsk_current_gradient COMMAND test_eqdsk_current_gradient)
+endif()
+
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)
 configure_file(scripts/ff-mephit.bash ${PROJECT_BINARY_DIR}/scripts/ff-mephit.bash COPYONLY)

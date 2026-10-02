@@ -4010,12 +4010,13 @@ contains
     real(dp), intent(in) :: R, psi
     real(dp), intent(in), dimension(3) :: B0, dB0_dR, dB0_dZ
     real(dp), intent(out), dimension(3) :: j0, dj0_dR, dj0_dZ
-    real(dp) :: dp0_dpsi, d2p0_dpsi2, F, dF_dpsi, FdF_dpsi, d2F_dpsi2
+    real(dp) :: dp0_dpsi, d2p0_dpsi2, dF_dpsi, FdF_dpsi, d2F_dpsi2
+    real(dp) :: dFFprime_dpsi
 
     dp0_dpsi = interp1d(equil%psi_eqd, equil%pprime, psi, 3)
     d2p0_dpsi2 = interp1d(equil%psi_eqd, equil%pprime, psi, 3, .true.)
-    F = interp1d(equil%psi_eqd, equil%fpol, psi, 3)
     FdF_dpsi = interp1d(equil%psi_eqd, equil%ffprim, psi, 3)
+    dFFprime_dpsi = interp1d(equil%psi_eqd, equil%ffprim, psi, 3, .true.)
     dF_dpsi = interp1d(equil%psi_eqd, equil%fprime, psi, 3)
     d2F_dpsi2 = interp1d(equil%psi_eqd, equil%fprime, psi, 3, .true.)
     j0(1) = 0.25d0 / pi * clight * dF_dpsi * B0(1)
@@ -4030,9 +4031,9 @@ contains
     dj0_dZ(3) = 0.25d0 / pi * clight * (dF_dpsi * dB0_dZ(3) &
       - R * B0(1) * B0(3) * d2F_dpsi2)
     dj0_dR(2) = clight * (dp0_dpsi + d2p0_dpsi2 * R * R * B0(3) + &
-      0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2 - FdF_dpsi / R))
-    dj0_dZ(2) = clight * (-d2p0_dpsi2 * R * R * B0(1) + &
-      0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2))
+      0.25d0 / pi * (dFFprime_dpsi * B0(3) - FdF_dpsi / R ** 2))
+    dj0_dZ(2) = clight * (-d2p0_dpsi2 * R * R * B0(1) - &
+      0.25d0 / pi * dFFprime_dpsi * B0(1))
   end subroutine curr0_geqdsk
 
   subroutine compute_curr0_geqdsk
