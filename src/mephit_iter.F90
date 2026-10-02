@@ -7,6 +7,7 @@ module mephit_iter
   private
 
   public :: mephit_run, mephit_deinit, perteq_read
+  public :: helical_current_vector
 
   type :: perteq_t
     !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
@@ -1226,6 +1227,17 @@ contains
     end do
   end subroutine current_from_pressure_balance
 
+    pure function helical_current_vector(R, B0, coeff_perp, jpar_over_B) result(jn)
+        ! Physical (R, phi, Z) components. The correction is perpendicular to B0;
+        ! its negative poloidal sign agrees with the FDM equation for coeff_perp.
+        real(dp), intent(in) :: R, B0(3)
+        complex(dp), intent(in) :: coeff_perp, jpar_over_B
+        complex(dp) :: jn(3)
+
+        jn = (jpar_over_B - coeff_perp*R*B0(2))*B0
+        jn(2) = jpar_over_B*B0(2) + coeff_perp*R*(B0(1)**2 + B0(3)**2)
+    end function helical_current_vector
+
   subroutine helical_current_from_parallel_current(jmnpar_over_Bmod, fdm, jnpar_over_Bmod, jn)
     use mephit_util, only: imun
     use mephit_mesh, only: equil, mesh, cache, fs
@@ -1238,6 +1250,7 @@ contains
     real(dp) :: edge_perp(2)
     complex(dp) :: inhom_jnperp(mesh%npoint), coeff_jnperp_interp, jnpar_over_Bmod_interp
     type(L1_t) :: coeff_jnperp
+    complex(dp) :: current_vector(3)
 
     inhom_jnperp(:) = (0d0, 0d0)
     call L1_init(coeff_jnperp, mesh%npoint)
@@ -1267,9 +1280,10 @@ contains
         associate (f => cache%edge_fields(k, kedge), R => mesh%GL_R(k, kedge), Z => mesh%GL_Z(k, kedge))
           call L1_interp(coeff_jnperp, ktri, R, Z, coeff_jnperp_interp)
           call L1_interp(jnpar_over_Bmod, ktri, R, Z, jnpar_over_Bmod_interp)
-          jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k) * R * &
-            (coeff_jnperp_interp * R * f%B0(2) + jnpar_over_Bmod_interp) * &
-            sum([f%B0(1), f%B0(3)] * edge_perp)
+          current_vector = helical_current_vector(R, f%B0, &
+              coeff_jnperp_interp, jnpar_over_Bmod_interp)
+          jn%DOF(kedge) = jn%DOF(kedge) + mesh%GL_weights(k)*R* &
+              sum(current_vector([1, 3])*edge_perp)
         end associate
       end do
     end do
@@ -1279,8 +1293,10 @@ contains
         associate (f => cache%area_fields(k, ktri), R => mesh%GL2_R(k, ktri), Z => mesh%GL2_Z(k, ktri))
           call L1_interp(coeff_jnperp, ktri, R, Z, coeff_jnperp_interp)
           call L1_interp(jnpar_over_Bmod, ktri, R, Z, jnpar_over_Bmod_interp)
-          jn%comp_phi(ktri) = jn%comp_phi(ktri) + mesh%GL2_weights(k) * &
-            (coeff_jnperp_interp * R * (f%B0(1) ** 2 + f%B0(3) ** 2) + jnpar_over_Bmod_interp * f%B0(2))
+          current_vector = helical_current_vector(R, f%B0, &
+              coeff_jnperp_interp, jnpar_over_Bmod_interp)
+          jn%comp_phi(ktri) = jn%comp_phi(ktri) + &
+              mesh%GL2_weights(k)*current_vector(2)
         end associate
       end do
     end do
