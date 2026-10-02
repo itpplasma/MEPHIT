@@ -3062,7 +3062,7 @@ contains
 
     open(newunit = fid, file = decorate_filename('core_plasma.msh', '', basename_suffix), &
       status = 'replace', form = 'formatted', action = 'write')
-    write (fid, '(3(1x, i0))') mesh%npoint, mesh%ntri, mesh%kp_max(mesh%nflux) - 1
+    write (fid, '(3(1x, i0))') mesh%npoint, mesh%ntri, mesh%kp_max(mesh%nflux)
     do kpoi = 1, mesh%npoint
       write (fid, '(2(1x, es23.15e3), 1x, i0)') &
         mesh%node_R(kpoi), mesh%node_Z(kpoi), 0
