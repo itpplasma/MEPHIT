@@ -168,6 +168,12 @@ target_link_libraries(mephit_post.x mephit)
 target_link_libraries(mephit_test_refine.x mephit)
 include(CTest)
 add_test(NAME refine_unit_partition_edge COMMAND mephit_test_refine.x)
+add_executable(test_mesh_quadrature_cache test/test_mesh_quadrature_cache.f90)
+target_link_libraries(test_mesh_quadrature_cache mephit)
+add_test(NAME mesh_quadrature_cache COMMAND test_mesh_quadrature_cache)
+file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/mesh-quadrature-cache)
+set_tests_properties(mesh_quadrature_cache PROPERTIES
+  WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/mesh-quadrature-cache)
 
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)
