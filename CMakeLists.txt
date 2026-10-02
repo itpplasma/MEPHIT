@@ -95,6 +95,7 @@ set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
 
 set(MEPHIT_FORTRAN_SRC_FILES
   src/maxwell_boundary.f90
+  src/mephit_iteration_state.f90
   src/mephit_conf.f90
   src/mephit_util.f90
   src/mephit_mesh.F90
@@ -175,6 +176,9 @@ if(BUILD_TESTING)
   add_executable(test_current_source test/test_current_source.f90)
   target_link_libraries(test_current_source mephit)
   add_test(NAME current_source COMMAND test_current_source)
+  add_executable(test_iteration_state test/test_iteration_state.f90)
+  target_link_libraries(test_iteration_state mephit)
+  add_test(NAME iteration_state COMMAND test_iteration_state)
   add_executable(test_eqdsk_current_gradient test/test_eqdsk_current_gradient.f90)
   target_link_libraries(test_eqdsk_current_gradient mephit)
   add_test(NAME eqdsk_current_gradient COMMAND test_eqdsk_current_gradient)

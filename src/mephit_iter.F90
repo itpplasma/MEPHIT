@@ -127,7 +127,7 @@ contains
     type(c_ptr), intent(in), value :: suffix
     character(len = 1024) :: config_filename
     integer(c_int) :: runmode_flags
-    logical :: meshing, preconditioner, iterations
+    logical :: meshing, preconditioner, iterations, iteration_failed
     type(fdm_t) :: fdm
     type(flr2_t) :: flr2
     type(perteq_t) :: perteq
@@ -204,6 +204,7 @@ contains
       ! pass effective toroidal mode number and runmode to FreeFem++
       call FEM_init(mesh%n, mesh%nedge, mesh%npoint, runmode)
     end if
+    iteration_failed = .false.
     if (preconditioner .or. iterations) then
       call perteq_init(perteq)
       if (preconditioner) then
@@ -220,7 +221,7 @@ contains
         call precond_read(precond, datafile, 'iter')
       end if
       if (iterations) then
-        call perteq_iterate(perteq, precond, fdm, flr2)
+        call perteq_iterate(perteq, precond, fdm, flr2, iteration_failed)
       end if
       call FDM_deinit(fdm)
       call FLR2_deinit(flr2)
@@ -229,6 +230,7 @@ contains
     end if
     call FEM_deinit
     call mephit_deinit
+    if (iteration_failed) error stop 'Original-map iteration did not converge'
   end subroutine mephit_run
 
   subroutine mephit_deinit
@@ -514,141 +516,203 @@ contains
     end subroutine next_iteration_arnoldi
   end subroutine precond_compute
 
-  subroutine perteq_iterate(perteq, precond, fdm, flr2)
-    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
-    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-    use mephit_conf, only: conf, logger, datafile, runmode_single, currn_model_kilca
-    use mephit_mesh, only: mesh
-    use mephit_pert, only: vac, L1_write, RT0_init, RT0_deinit, RT0_tor_comp_from_zero_div, RT0_L2int
-    use mephit_flr2, only: flr2_t
-    type(perteq_t), intent(inout) :: perteq
-    type(precond_t), intent(inout) :: precond
-    type(fdm_t), intent(in) :: fdm
-    type(flr2_t), intent(in) :: flr2
-    integer :: kiter, niter, maxiter
-    integer(HID_T) :: h5id_root
-    real(dp), allocatable :: L2int_Bn_diff(:)
-    real(dp) :: L2int_Bnvac, rel_err
-    type(RT0_t) :: Bn_prev, Bn_diff
-    character(len = 4) :: postfix
-    character(len = *), parameter :: postfix_fmt = "('_', i0.3)"
+    subroutine perteq_iterate(perteq, precond, fdm, flr2, failed)
+        use, intrinsic :: ieee_arithmetic, only: ieee_is_finite, ieee_value, &
+            ieee_quiet_nan
+        use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, &
+            h5_add, h5_close
+        use mephit_conf, only: conf, logger, datafile, runmode_single, currn_model_kilca
+        use mephit_mesh, only: mesh
+        use mephit_pert, only: vac, L1_write, RT0_init, RT0_deinit, &
+            RT0_tor_comp_from_zero_div, RT0_L2int
+        use mephit_flr2, only: flr2_t
+        use mephit_iteration_state, only: select_iteration_state, &
+            relative_iteration_norm, iteration_state_flags, iteration_continue, &
+            iteration_single, iteration_invalid, finite_iteration_field
+        type(perteq_t), intent(inout) :: perteq
+        type(precond_t), intent(inout) :: precond
+        type(fdm_t), intent(in) :: fdm
+        type(flr2_t), intent(in) :: flr2
+        logical, intent(out) :: failed
+        integer :: kiter, niter, maxiter, action, nupdates
+        integer(HID_T) :: h5id_root
+        real(dp), allocatable :: L2int_Bn_diff(:), L2int_Bn_map_residual(:)
+        real(dp) :: L2int_Bnvac, rel_err, map_rel_err
+        type(RT0_t) :: Bn_prev, Bn_diff
+        logical :: single, converged, consistent_state
+        character(len=32) :: reason
+        character(len=4) :: postfix
+        character(len=*), parameter :: postfix_fmt = "('_', i0.3)"
 
-    L2int_Bnvac = RT0_L2int(vac%Bn)
-    write (logger%msg, '("L2int_Bnvac = ", es24.16e3)') L2int_Bnvac
-    if (logger%info) call logger%write_msg
-    call h5_open_rw(datafile, h5id_root)
-    call h5_create_parent_groups(h5id_root, 'iter/')
-    call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int_Bnvac, &
-      comment = 'L2 integral of magnetic field (vacuum)', unit = 'Mx')
-    call h5_close(h5id_root)
-    if (runmode_single == conf%runmode) then
-      maxiter = 0
-    else
-      maxiter = conf%niter
-    end if
-    allocate(L2int_Bn_diff(0:maxiter))
-    L2int_Bn_diff = ieee_value(0d0, ieee_quiet_nan)
-    call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
-    call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
-    perteq%Bn%DOF(:) = vac%Bn%DOF
-    perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
-    call perteq_write('("iter/", a, "_vac")', ' (vacuum)', magfmn = perteq%Bn)
-    if (precond%nritz > 0) then
-      perteq%Bn%DOF(:) = perteq%Bn%DOF - precond_apply(precond, perteq%Bn%DOF)
-      call RT0_tor_comp_from_zero_div(perteq%Bn)
-    end if
-    niter = maxiter
-    do kiter = 0, maxiter
-      write (logger%msg, '("Iteration ", i2, " of ", i2)') kiter, maxiter
-      if (logger%info) call logger%write_msg
-      write (postfix, postfix_fmt) kiter
-      Bn_prev%DOF(:) = perteq%Bn%DOF
-      Bn_prev%comp_phi(:) = perteq%Bn%comp_phi
-#ifdef USE_MFEM
-      if (kiter <= 1) then
-        call MFEM_test(perteq%pn)
-        call perteq_write('("iter/", a, "MFEM_' // postfix // '")', &
-            ' (after MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
-      end if
-#endif
-      ! compute B_(n+1) = K * B_n + B_vac ... different from next_iteration_arnoldi
-      call compute_presn(perteq, fdm, conf%damp)
-      if (kiter <= 1) then
-        call perteq_write('("iter/", a, "' // postfix // '")', &
-          ' (after iteration)', presn = perteq%pn, presmn = perteq%pn)
-      end if
-      call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
-      call compute_magfn(perteq)
-      perteq%Bn%DOF(:) = perteq%Bn%DOF + vac%Bn%DOF
-      if (precond%nritz > 0) then
-        perteq%Bn%DOF(:) = perteq%Bn%DOF - precond_apply(precond, perteq%Bn%DOF - Bn_prev%DOF)
-      end if
-      call RT0_tor_comp_from_zero_div(perteq%Bn)
-      Bn_diff%DOF(:) = perteq%Bn%DOF - Bn_prev%DOF
-      Bn_diff%comp_phi(:) = perteq%Bn%comp_phi - Bn_prev%comp_phi
-      L2int_Bn_diff(kiter) = RT0_L2int(Bn_diff)
-      write (logger%msg, '("L2int_Bn_diff = ", es24.16e3)') L2int_Bn_diff(kiter)
-      if (logger%info) call logger%write_msg
-      if (kiter <= 1) then
-        call perteq_write('("iter/", a, "' // postfix // '")', ' (after iteration)', &
-          parcurrn = perteq%jnpar_B0, currn = perteq%jn, magfn = perteq%Bn)
-        call perteq_write('("iter/", a, "_diff' // postfix // '")', &
-          ' (difference between iterations)', magfn = Bn_diff)
-      else
-        if (L2int_Bn_diff(kiter) < conf%iter_rel_err * L2int_Bnvac) then
-          niter = kiter
-          exit
+        failed = .false.
+        single = runmode_single == conf%runmode
+        call h5_open_rw(datafile, h5id_root)
+        call h5_create_parent_groups(h5id_root, 'iter/')
+        call h5_add(h5id_root, 'iter/converged', .false.)
+        call h5_add(h5id_root, 'iter/consistent_state', .false.)
+        call h5_add(h5id_root, 'iter/reason', 'not-evaluated')
+        call h5_close(h5id_root)
+        if (.not. ieee_is_finite(conf%iter_rel_err)) &
+            error stop 'Nonfinite iteration tolerance'
+        if (conf%iter_rel_err <= 0.0_dp) error stop 'Nonpositive iteration tolerance'
+        if (conf%niter < 0) error stop 'Negative iteration update limit'
+        if (.not. finite_iteration_field(vac%Bn%DOF)) &
+            error stop 'Nonfinite vacuum field'
+        L2int_Bnvac = RT0_L2int(vac%Bn)
+        if (.not. ieee_is_finite(L2int_Bnvac)) &
+            error stop 'Nonfinite vacuum field norm'
+        write (logger%msg, '("L2int_Bnvac = ", es24.16e3)') L2int_Bnvac
+        if (logger%info) call logger%write_msg
+        call h5_open_rw(datafile, h5id_root)
+        call h5_add(h5id_root, 'iter/L2int_Bnvac', L2int_Bnvac, &
+            comment='R-weighted poloidal field norm (vacuum)', unit='Mx')
+        call h5_close(h5id_root)
+        maxiter = conf%niter
+        if (single) maxiter = 0
+        allocate (L2int_Bn_diff(0:maxiter), L2int_Bn_map_residual(0:maxiter))
+        L2int_Bn_diff = ieee_value(0.0_dp, ieee_quiet_nan)
+        L2int_Bn_map_residual = L2int_Bn_diff
+        call RT0_init(Bn_prev, mesh%nedge, mesh%ntri)
+        call RT0_init(Bn_diff, mesh%nedge, mesh%ntri)
+        perteq%Bn%DOF(:) = vac%Bn%DOF
+        perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
+        call perteq_write('("iter/", a, "_vac")', ' (vacuum)', magfmn=perteq%Bn)
+        if (precond%nritz > 0) then
+            perteq%Bn%DOF(:) = perteq%Bn%DOF-precond_apply(precond, perteq%Bn%DOF)
+            call RT0_tor_comp_from_zero_div(perteq%Bn)
         end if
-      end if
-      call perteq_write('("iter/", a, "' // postfix // '")', ' (after iteration)', &
-        presmn = perteq%pn, parcurrmn = perteq%jnpar_B0, Ires = perteq%jnpar_B0, &
-        currmn = perteq%jn, magfmn = perteq%Bn)
-    end do
-    rel_err = L2int_Bn_diff(niter) / L2int_Bnvac
-    write (logger%msg, '("Relative error after ", i0, " iterations: ", es24.16e3)') &
-      niter, rel_err
-    if (logger%info) call logger%write_msg
-    if (maxiter > 0 .and. rel_err >= conf%iter_rel_err) then
-      write (logger%msg, '("Requested relative error ", es24.16e3, ' // &
-        '" could not be reached within the requested ", i0, " iterations")') &
-        conf%iter_rel_err, conf%niter
-      if (logger%warn) call logger%write_msg
-    end if
-    perteq%Bnplas%DOF(:) = perteq%Bn%DOF - vac%Bn%DOF
-    perteq%Bnplas%comp_phi(:) = perteq%Bn%comp_phi - vac%Bn%comp_phi
-    if (conf%kilca_scale_factor /= 0) then
-      call check_furth(perteq%jn, perteq%Bnplas)
-    end if
-    ! save results
-    call h5_open_rw(datafile, h5id_root)
-    call h5_add(h5id_root, 'iter/niter', niter, comment = 'actual number of iterations')
-    call h5_add(h5id_root, 'iter/rel_err', rel_err, comment = 'relative error of iterations')
-    call h5_add(h5id_root, 'iter/L2int_Bn_diff', L2int_Bn_diff, &
-      lbound(L2int_Bn_diff), ubound(L2int_Bn_diff), &
-      comment = 'L2 integral of magnetic field (difference between iterations)', unit = 'Mx')
-    if (conf%currn_model == currn_model_kilca) then
-      call h5_add(h5id_root, 'iter/Phi_mn', perteq%Phi_mn, &
-        lbound(perteq%Phi_mn), ubound(perteq%Phi_mn), &
-        comment = 'electric potential perturbation', unit = 'statV')
-      call h5_add(h5id_root, 'iter/Phi_aligned_mn', perteq%Phi_aligned_mn, &
-        lbound(perteq%Phi_aligned_mn), ubound(perteq%Phi_aligned_mn), &
-        comment = 'aligned electric potential perturbation', unit = 'statV')
-    end if
-    call h5_close(h5id_root)
-    deallocate(L2int_Bn_diff)
-    call L1_write(perteq%AnR, datafile, 'iter/AnR', &
-      'R component of vector potential for GORILLA (full perturbation)', 'G cm')
-    call L1_write(perteq%AnZ, datafile, 'iter/AnZ', &
-      'Z component of vector potential for GORILLA (full perturbation)', 'G cm')
-    call perteq_write('("iter/", a)', ' (full perturbation)', &
-      perteq%pn, perteq%pn, perteq%jnpar_B0, perteq%jnpar_B0, perteq%jnpar_B0, &
-      perteq%jn, perteq%jn, perteq%Bn, perteq%Bn)
-    call perteq_write('("iter/", a, "_plas")', ' (plasma response)', &
-      magfn = perteq%Bnplas, magfmn = perteq%Bnplas)
-
-    call RT0_deinit(Bn_prev)
-    call RT0_deinit(Bn_diff)
-  end subroutine perteq_iterate
+        nupdates = 0
+        do kiter = 0, maxiter
+            write (logger%msg, '("Map evaluation ", i0, " after ", i0, " updates")') &
+                kiter, nupdates
+            if (logger%info) call logger%write_msg
+            write (postfix, postfix_fmt) kiter
+            Bn_prev%DOF(:) = perteq%Bn%DOF
+            Bn_prev%comp_phi(:) = perteq%Bn%comp_phi
+#ifdef USE_MFEM
+            if (kiter <= 1) then
+                call MFEM_test(perteq%pn)
+                call perteq_write('("iter/", a, "MFEM_'//postfix//'")', &
+                    ' (after MFEM iteration)', presn=perteq%pn, presmn=perteq%pn)
+            end if
+#endif
+            ! Pressure, current and vector potential all use this map input.
+            call compute_presn(perteq, fdm, conf%damp)
+            call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
+            call compute_magfn(perteq)
+            perteq%Bn%DOF(:) = perteq%Bn%DOF+vac%Bn%DOF
+            Bn_diff%DOF(:) = perteq%Bn%DOF-Bn_prev%DOF
+            L2int_Bn_map_residual(kiter) = ieee_value(0.0_dp, ieee_quiet_nan)
+            if (finite_iteration_field(Bn_diff%DOF)) then
+                call RT0_tor_comp_from_zero_div(perteq%Bn)
+                Bn_diff%comp_phi(:) = perteq%Bn%comp_phi-Bn_prev%comp_phi
+                L2int_Bn_map_residual(kiter) = RT0_L2int(Bn_diff)
+            end if
+            call select_iteration_state(Bn_prev%DOF, perteq%Bn%DOF, &
+                L2int_Bn_map_residual(kiter), L2int_Bnvac, conf%iter_rel_err, &
+                kiter == maxiter, single, action, map_rel_err)
+            if (action /= iteration_single) perteq%Bn%comp_phi(:) = Bn_prev%comp_phi
+            ! Preserve the old metric as a prospective preconditioned map step.
+            if (action /= iteration_invalid) then
+                if (precond%nritz > 0) then
+                    Bn_diff%DOF(:) = Bn_diff%DOF-precond_apply(precond, Bn_diff%DOF)
+                end if
+                L2int_Bn_diff(kiter) = ieee_value(0.0_dp, ieee_quiet_nan)
+                if (finite_iteration_field(Bn_diff%DOF)) then
+                    call RT0_tor_comp_from_zero_div(Bn_diff)
+                    L2int_Bn_diff(kiter) = RT0_L2int(Bn_diff)
+                end if
+                if (.not. ieee_is_finite(L2int_Bn_diff(kiter))) then
+                    action = iteration_invalid
+                    perteq%Bn%DOF(:) = Bn_prev%DOF
+                    perteq%Bn%comp_phi(:) = Bn_prev%comp_phi
+                end if
+            else
+                L2int_Bn_diff(kiter) = huge(1.0_dp)
+            end if
+            rel_err = relative_iteration_norm(L2int_Bn_diff(kiter), L2int_Bnvac)
+            write (logger%msg, '("Original map residual = ", es24.16e3, &
+                &", preconditioned step = ", es24.16e3)') map_rel_err, rel_err
+            if (logger%info) call logger%write_msg
+            ! Iterative snapshots now store one coherent constitutive input.
+            if (kiter <= 1) then
+                call perteq_write('("iter/", a, "'//postfix//'")', &
+                    ' (map input; mapped field only in single-update mode)', &
+                    presn=perteq%pn, parcurrn=perteq%jnpar_B0, &
+                    currn=perteq%jn, magfn=perteq%Bn)
+                if (action /= iteration_invalid) then
+                    call perteq_write('("iter/", a, "_diff'//postfix//'")', &
+                        ' (prospective preconditioned map step)', magfn=Bn_diff)
+                end if
+            end if
+            call perteq_write('("iter/", a, "'//postfix//'")', ' (map input)', &
+                presmn=perteq%pn, parcurrmn=perteq%jnpar_B0, Ires=perteq%jnpar_B0, &
+                currmn=perteq%jn, magfmn=perteq%Bn)
+            if (action /= iteration_continue) exit
+            perteq%Bn%DOF(:) = Bn_prev%DOF+Bn_diff%DOF
+            call RT0_tor_comp_from_zero_div(perteq%Bn)
+            nupdates = nupdates+1
+        end do
+        niter = min(kiter, maxiter)
+        if (action == iteration_single) nupdates = 1
+        call iteration_state_flags(action, converged, consistent_state, reason)
+        failed = action == iteration_invalid
+        if (.not. single) failed = .not. converged
+        perteq%Bnplas%DOF(:) = perteq%Bn%DOF-vac%Bn%DOF
+        perteq%Bnplas%comp_phi(:) = perteq%Bn%comp_phi-vac%Bn%comp_phi
+        if (conf%kilca_scale_factor /= 0) call check_furth(perteq%jn, perteq%Bnplas)
+        call h5_open_rw(datafile, h5id_root)
+        call h5_add(h5id_root, 'iter/niter', niter, &
+            comment='zero-based final map-evaluation index')
+        call h5_add(h5id_root, 'iter/nupdates', nupdates, &
+            comment='actual field updates; no update on acceptance or exhaustion')
+        call h5_add(h5id_root, 'iter/rel_err', rel_err, &
+            comment='relative preconditioned map-step norm; not acceptance')
+        call h5_add(h5id_root, 'iter/map_rel_err', map_rel_err, &
+            comment='original map residual at constitutive input / vacuum norm')
+        call h5_add(h5id_root, 'iter/converged', converged)
+        call h5_add(h5id_root, 'iter/consistent_state', consistent_state)
+        call h5_add(h5id_root, 'iter/reason', trim(reason))
+        call h5_add(h5id_root, 'iter/metric', 'original-map-input-v1')
+        call h5_add(h5id_root, 'iter/zero_forcing', L2int_Bnvac <= 0.0_dp, &
+            comment='zero forcing admits only exactly zero original residual')
+        call h5_add(h5id_root, 'iter/L2int_Bn_diff', L2int_Bn_diff, &
+            lbound(L2int_Bn_diff), ubound(L2int_Bn_diff), &
+            comment='prospective preconditioned map-step norm', unit='Mx')
+        call h5_add(h5id_root, 'iter/L2int_Bn_map_residual', L2int_Bn_map_residual, &
+            lbound(L2int_Bn_map_residual), ubound(L2int_Bn_map_residual), &
+            comment='original map residual norm at constitutive input', unit='Mx')
+        if (conf%currn_model == currn_model_kilca) then
+            call h5_add(h5id_root, 'iter/Phi_mn', perteq%Phi_mn, &
+                lbound(perteq%Phi_mn), ubound(perteq%Phi_mn), &
+                comment='electric potential at constitutive input', unit='statV')
+            call h5_add(h5id_root, 'iter/Phi_aligned_mn', perteq%Phi_aligned_mn, &
+                lbound(perteq%Phi_aligned_mn), ubound(perteq%Phi_aligned_mn), &
+                comment='aligned electric potential at constitutive input', &
+                unit='statV')
+        end if
+        call h5_close(h5id_root)
+        if (single) then
+            call perteq_write('("iter/", a, "_constitutive_input")', &
+                ' (single-update constitutive input)', magfn=Bn_prev)
+        end if
+        deallocate (L2int_Bn_diff, L2int_Bn_map_residual)
+        call L1_write(perteq%AnR, datafile, 'iter/AnR', &
+            'R potential of plasma current at constitutive input', 'G cm')
+        call L1_write(perteq%AnZ, datafile, 'iter/AnZ', &
+            'Z potential of plasma current at constitutive input', 'G cm')
+        call perteq_write('("iter/", a)', ' (full perturbation)', &
+            perteq%pn, perteq%pn, perteq%jnpar_B0, perteq%jnpar_B0, perteq%jnpar_B0, &
+            perteq%jn, perteq%jn, perteq%Bn, perteq%Bn)
+        call perteq_write('("iter/", a, "_plas")', ' (plasma response)', &
+            magfn=perteq%Bnplas, magfmn=perteq%Bnplas)
+        call RT0_deinit(Bn_prev)
+        call RT0_deinit(Bn_diff)
+        if (failed) then
+            logger%msg = 'Original-map acceptance failed: '//trim(reason)
+            if (logger%err) call logger%write_msg
+        end if
+    end subroutine perteq_iterate
 
   subroutine debug_initial_iteration(perteq, fdm, flr2)
     use mephit_conf, only: conf
