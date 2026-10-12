@@ -100,7 +100,7 @@ set(MEPHIT_FORTRAN_SRC_FILES
   src/mephit_flr2.f90
   src/mephit_iter.F90
 )
-set_source_files_properties(src/mephit_test.f90 ${MEPHIT_FORTRAN_SRC_FILES}
+set_source_files_properties(src/mephit_test.f90 src/mephit_test_refine.f90 ${MEPHIT_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS}")
 
 set(MEPHIT_C_SRC_FILES
@@ -161,9 +161,13 @@ endif()
 add_executable(mephit_run.x src/mephit_run.c)
 add_executable(mephit_test.x src/mephit_test.f90)
 add_executable(mephit_post.x src/mephit_post.f90)
+add_executable(mephit_test_refine.x src/mephit_test_refine.f90)
 target_link_libraries(mephit_run.x mephit)
 target_link_libraries(mephit_test.x mephit)
 target_link_libraries(mephit_post.x mephit)
+target_link_libraries(mephit_test_refine.x mephit)
+include(CTest)
+add_test(NAME refine_unit_partition_edge COMMAND mephit_test_refine.x)
 
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)
