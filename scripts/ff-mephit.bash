@@ -33,6 +33,12 @@ else
     ff_args=( "-nw" "-nowait" "${ff_args[@]}" )
 fi
 ff_script=$scriptdir/maxwell_daemon.edp
+# the MUMPS plugin is optional: without it, drop the load statement and use the default sparse solver
+if ! ($ff_cmd -nw -nowait -check_plugin MUMPS) > /dev/null 2>&1; then
+    echo "$scriptname: FreeFem++ plugin MUMPS not available, using the default sparse solver."
+    ff_script=$(mktemp "${TMPDIR:-/tmp}/maxwell_daemon_XXXXXX.edp")
+    sed -e '/^load "MUMPS"/d' "$scriptdir/maxwell_daemon.edp" > "$ff_script"
+fi
 ff_script_args=( "-P" "$shared_namedpipe" "-S" "$suffix" )
 
 exec $ff_cmd "${ff_args[@]}" "$ff_script" "${ff_script_args[@]}"
