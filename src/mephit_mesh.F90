@@ -1458,19 +1458,49 @@ contains
 
   subroutine compute_resonant_layer_widths
     use magdata_in_symfluxcoor_mod, only: psisurf, psipol_max, rbeg
-    use mephit_conf, only: conf_arr
-    use mephit_util, only: interp1d, binsearch
+    use mephit_conf, only: conf, conf_arr, logger
+    use mephit_util, only: interp1d, binsearch, resample1d, resistive_layer_width, &
+      func1d_t, func1d_read_formatted, func1d_deinit
     integer :: m
-    real(dp) :: rad_min, rad_max
+    real(dp) :: rad_min, rad_max, rad_res, rho_res, qprime_res
+    real(dp) :: Delta_rad(mesh%m_res_min:mesh%m_res_max)
+    real(dp) :: q_prime(0:mesh%nflux)
+    type(func1d_t) :: dens, temp
 
+    Delta_rad(:) = conf_arr%Delta_rad_res_curr(mesh%m_res_min:mesh%m_res_max)
+    if (conf%res_layer_model == 1) then
+      call func1d_read_formatted(dens, conf%dens_file)
+      call func1d_read_formatted(temp, conf%temp_e_file)
+      if (abs(dens%x(ubound(dens%x, 1)) - 1d0) <= 0.05d0) dens%y(:) = dens%y * 1d-6
+      call resample1d(fs%rad, abs(fs%q), fs%rad, q_prime, 3, .true.)
+      do m = mesh%m_res_min, mesh%m_res_max
+        if (Delta_rad(m) /= 0d0) cycle
+        rad_res = mesh%rad_norm_res(m) * fs%rad(mesh%nflux)
+        qprime_res = interp1d(fs%rad, q_prime, rad_res, 3)
+        if (abs(temp%x(ubound(temp%x, 1)) - 1d0) <= 0.05d0) then
+          rho_res = sqrt((mesh%psi_res(m) - fs%psi(0)) / (fs%psi(mesh%nflux) - fs%psi(0)))
+        else
+          rho_res = interp1d(fs%rad, fs%rsmall, rad_res, 3)
+        end if
+        Delta_rad(m) = conf%res_layer_factor * resistive_layer_width( &
+          interp1d(fs%psi, fs%F, mesh%psi_res(m), 3) / mesh%R_O, mesh%R_O, &
+          interp1d(dens%x, dens%y, rho_res, 3), interp1d(temp%x, temp%y, rho_res, 3), &
+          conf%Z_i, conf%m_i, mesh%n, interp1d(fs%rad, abs(fs%q), rad_res, 3), qprime_res)
+        write (logger%msg, '("m = ", i2, ", resistive layer width ", es12.4, " cm")') &
+          m, Delta_rad(m) / conf%res_layer_factor
+        if (logger%info) call logger%write_msg
+      end do
+      call func1d_deinit(dens)
+      call func1d_deinit(temp)
+    end if
     if (allocated(mesh%Delta_psi_res_curr)) deallocate(mesh%Delta_psi_res_curr)
     allocate(mesh%Delta_psi_res_curr(mesh%m_res_min:mesh%m_res_max))
     do m = mesh%m_res_min, mesh%m_res_max
       associate (s => cache%shielding(m))
         rad_min = max(mesh%rad_norm_res(m) * fs%rad(mesh%nflux) - &
-                      0.5d0 * conf_arr%Delta_rad_res_curr(m), fs%rad(0))
+                      0.5d0 * Delta_rad(m), fs%rad(0))
         rad_max = min(mesh%rad_norm_res(m) * fs%rad(mesh%nflux) + &
-                      0.5d0 * conf_arr%Delta_rad_res_curr(m), fs%rad(mesh%nflux))
+                      0.5d0 * Delta_rad(m), fs%rad(mesh%nflux))
         s%psi_min = fs%psi(0) + interp1d(rbeg, psisurf(1:) * psipol_max, rad_min, 3)
         s%psi_max = fs%psi(0) + interp1d(rbeg, psisurf(1:) * psipol_max, rad_max, 3)
         mesh%Delta_psi_res_curr(m) = abs(s%psi_max - s%psi_min)
