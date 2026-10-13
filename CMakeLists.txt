@@ -174,6 +174,15 @@ add_test(NAME mesh_quadrature_cache COMMAND test_mesh_quadrature_cache)
 file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/mesh-quadrature-cache)
 set_tests_properties(mesh_quadrature_cache PROPERTIES
   WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/mesh-quadrature-cache)
+# sheet (shielding) current response against the analytic cylinder; needs FreeFem++,
+# python3 with h5py and scipy, and runs the meshing, one iteration and the sheet phase
+find_program(FREEFEM_EXECUTABLE NAMES FreeFem++ FreeFem++-mpi)
+if(FREEFEM_EXECUTABLE)
+  add_test(NAME sheet_cylinder COMMAND ${CMAKE_SOURCE_DIR}/test/sheet_cylinder/run_test.sh
+    ${PROJECT_BINARY_DIR} ${CMAKE_SOURCE_DIR} ${PROJECT_BINARY_DIR}/sheet-cylinder)
+  set_tests_properties(sheet_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
+    LABELS freefem)
+endif()
 
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)

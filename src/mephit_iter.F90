@@ -125,7 +125,7 @@ contains
     type(c_ptr), intent(in), value :: suffix
     character(len = 1024) :: config_filename
     integer(c_int) :: runmode_flags
-    logical :: meshing, preconditioner, iterations
+    logical :: meshing, preconditioner, iterations, sheet
     type(fdm_t) :: fdm
     type(flr2_t) :: flr2
     type(perteq_t) :: perteq
@@ -134,8 +134,9 @@ contains
     meshing = iand(runmode, ishft(1, 0)) /= 0
     preconditioner = iand(runmode, ishft(1, 1)) /= 0
     iterations = iand(runmode, ishft(1, 2)) /= 0
+    sheet = iand(runmode, ishft(1, 3)) /= 0
     runmode_flags = runmode
-    if (.not. (meshing .or. preconditioner .or. iterations)) then
+    if (.not. (meshing .or. preconditioner .or. iterations .or. sheet)) then
       meshing = .true.
       preconditioner = .true.
       iterations = .true.
@@ -202,7 +203,7 @@ contains
       ! pass effective toroidal mode number and runmode to FreeFem++
       call FEM_init(mesh%n, mesh%nedge, mesh%npoint, runmode)
     end if
-    if (preconditioner .or. iterations) then
+    if (preconditioner .or. iterations .or. sheet) then
       call perteq_init(perteq)
       if (preconditioner) then
         call FDM_compute_matrix(fdm)
@@ -215,10 +216,15 @@ contains
       else
         call FDM_read(fdm, datafile, 'iter/FDM')
         call FLR2_read(flr2, datafile, 'iter/FLR2')
-        call precond_read(precond, datafile, 'iter')
+        if (iterations) call precond_read(precond, datafile, 'iter')
       end if
       if (iterations) then
         call perteq_iterate(perteq, precond, fdm, flr2)
+      else if (sheet) then
+        call perteq_read(perteq)
+      end if
+      if (sheet) then
+        call sheet_response(perteq, fdm, datafile, 'sheet')
       end if
       call FDM_deinit(fdm)
       call FLR2_deinit(flr2)
@@ -300,7 +306,7 @@ contains
 
     call L1_read(perteq%pn, datafile, 'iter/pn')
     call RT0_read(perteq%Bn, datafile, 'iter/Bn')
-    call RT0_read(perteq%Bnplas, datafile, 'iter/Bnplas')
+    call RT0_read(perteq%Bnplas, datafile, 'iter/Bn_plas')
     call RT0_read(perteq%jn, datafile, 'iter/jn')
     call L1_read(perteq%jnpar_B0, datafile, 'iter/jnpar_Bmod')
     call L1_read(perteq%AnR, datafile, 'iter/AnR')
@@ -1382,6 +1388,172 @@ contains
     end do
     call polmodes_deinit(pmn)
   end subroutine compute_shielding_current
+
+  !> Field of each resonant sheet (shielding) current alone, in vacuum.
+  !>
+  !> The sheet current of resonance m is rebuilt from the stored pressure perturbation
+  !> as in compute_shielding_current(), restricted to that resonance, and passed alone to
+  !> the Maxwell solver. Its flux through every resonant surface gives the
+  !> sheet-to-surface inductance; the diagonal is the flux the sheet alone drives through
+  !> its own surface. GPEC (gpout_singfld) defines singflx (Phi_res) and singcur (I_res)
+  !> in the same way, with the free-space surface inductance in place of the Maxwell
+  !> solve. Writes to group `group` of `file`:
+  !> - Phi_mn(m_obs, m_src): coefficient of sqrt_g B.grad psi (as Bmn%coeff_rad) of
+  !>   harmonic -sgn_q m_obs, in the cell holding resonance m_obs, from sheet m_src.
+  !> - singflx(m) = 2 Phi_mn(m, m) / area_norm(m), area_norm = <R |dx/dtheta|>: the peak,
+  !>   area-normalised resonant flux of GPEC Phi_res, in G.
+  !> - Itor_mn(m): harmonic of the toroidal sheet current per radian of theta (statA).
+  !>   The surface current potential kappa of GPEC has harmonic Itor_mn / (i m_res), and
+  !>   singcur(m) = 2 pi n 2 kappa is the peak GPEC I_res, in statA.
+  subroutine sheet_response(perteq, fdm, file, group)
+    use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
+    use mephit_conf, only: conf, conf_arr, logger
+    use mephit_util, only: imun, pi
+    use mephit_mesh, only: equil, mesh, cache
+    use mephit_pert, only: vac, L1_t, L1_init, L1_deinit, RT0_t, RT0_init, RT0_deinit, &
+      polmodes_t, polmodes_init, polmodes_deinit, vec_polmodes_t, vec_polmodes_init, &
+      vec_polmodes_deinit, RT0_poloidal_modes, RT0_tor_comp_from_zero_div, compute_Ires
+    type(perteq_t), intent(in) :: perteq
+    type(fdm_t), intent(in) :: fdm
+    character(len = *), intent(in) :: file
+    character(len = *), intent(in) :: group
+    character(len = len_trim(group)) :: grp
+    integer(HID_T) :: h5id_root
+    integer :: m_src, m_obs, m_res, kf, kt, ktri, k
+    complex(dp) :: fourier_weight
+    integer :: active(mesh%m_res_min:mesh%m_res_max)
+    integer :: m_label(mesh%m_res_min:mesh%m_res_max)
+    real(dp) :: area_norm(mesh%m_res_min:mesh%m_res_max)
+    complex(dp), dimension(mesh%m_res_min:mesh%m_res_max) :: Imn_res, Itor_mn, Itor_mn_lift, &
+      singcur, singflx, Phi_tot, Phi_vac
+    complex(dp) :: Phi_mn(mesh%m_res_min:mesh%m_res_max, mesh%m_res_min:mesh%m_res_max)
+    complex(dp) :: Bmn_rad(mesh%nflux, mesh%m_res_min:mesh%m_res_max)
+    type(polmodes_t) :: jmn_all, jmn_single
+    type(vec_polmodes_t) :: Bmn
+    type(L1_t) :: jnpar, AnR, AnZ
+    type(RT0_t) :: jn, jn_div, Bn
+
+    grp = trim(group)
+    call polmodes_init(jmn_all, conf%m_max, mesh%nflux)
+    call polmodes_init(jmn_single, conf%m_max, mesh%nflux)
+    call vec_polmodes_init(Bmn, conf%m_max, mesh%nflux)
+    call L1_init(jnpar, mesh%npoint)
+    call L1_init(AnR, mesh%npoint)
+    call L1_init(AnZ, mesh%npoint)
+    call RT0_init(jn, mesh%nedge, mesh%ntri)
+    call RT0_init(jn_div, mesh%nedge, mesh%ntri)
+    call RT0_init(Bn, mesh%nedge, mesh%ntri)
+    call compute_shielding_current(perteq%pn, jmn_all)
+    ! flux of the total and vacuum fields at the resonances, and surface normalisation
+    call RT0_poloidal_modes(perteq%Bn, Bmn)
+    do m_obs = mesh%m_res_min, mesh%m_res_max
+      m_label(m_obs) = m_obs
+      m_res = -equil%cocos%sgn_q * m_obs
+      kf = mesh%res_ind(m_obs)
+      Phi_tot(m_obs) = Bmn%coeff_rad(m_res, kf)
+      area_norm(m_obs) = 0d0
+      do kt = 1, mesh%kt_max(kf)
+        associate (s => cache%sample_polmodes_half(mesh%kt_low(kf) + kt))
+          area_norm(m_obs) = area_norm(m_obs) + s%R * hypot(s%dR_dtheta, s%dZ_dtheta)
+        end associate
+      end do
+      area_norm(m_obs) = area_norm(m_obs) / dble(mesh%kt_max(kf))
+    end do
+    call RT0_poloidal_modes(vac%Bn, Bmn)
+    do m_obs = mesh%m_res_min, mesh%m_res_max
+      Phi_vac(m_obs) = Bmn%coeff_rad(-equil%cocos%sgn_q * m_obs, mesh%res_ind(m_obs))
+    end do
+    Phi_mn(:, :) = (0d0, 0d0)
+    Bmn_rad(:, :) = (0d0, 0d0)
+    Imn_res(:) = (0d0, 0d0)
+    Itor_mn(:) = (0d0, 0d0)
+    Itor_mn_lift(:) = (0d0, 0d0)
+    singcur(:) = (0d0, 0d0)
+    singflx(:) = (0d0, 0d0)
+    do m_src = mesh%m_res_min, mesh%m_res_max
+      active(m_src) = merge(1, 0, abs(conf_arr%refinement(m_src)) > 1d0)
+      if (active(m_src) == 0) cycle
+      write (logger%msg, '("Sheet response of resonance m = ", i0)') m_src
+      if (logger%info) call logger%write_msg
+      m_res = -equil%cocos%sgn_q * m_src
+      jmn_single%coeff(:, :) = (0d0, 0d0)
+      jmn_single%coeff(m_res, :) = jmn_all%coeff(m_res, :)
+      jn%DOF(:) = (0d0, 0d0)
+      jn%comp_phi(:) = (0d0, 0d0)
+      call helical_current_from_parallel_current(jmn_single, fdm, jnpar, jn)
+      call FEM_compute_magfn(mesh%nedge, mesh%npoint, jn%DOF, Bn%DOF, AnR%DOF, AnZ%DOF)
+      call RT0_tor_comp_from_zero_div(Bn)
+      call RT0_poloidal_modes(Bn, Bmn)
+      Bmn_rad(:, m_src) = Bmn%coeff_rad(m_res, 1:mesh%nflux)
+      do m_obs = mesh%m_res_min, mesh%m_res_max
+        Phi_mn(m_obs, m_src) = Bmn%coeff_rad(-equil%cocos%sgn_q * m_obs, mesh%res_ind(m_obs))
+      end do
+      call compute_Ires(cache%shielding(m_src)%sample_Ires, cache%shielding(m_src)%GL_weights, &
+        jnpar, m_src, Imn_res(m_src))
+      ! toroidal current per radian of theta, (1 / 2 pi) int j_phi exp(-i m theta) dR dZ,
+      ! with j_phi from zero divergence of the poloidal current that enters the Maxwell
+      ! solve (Itor_mn) and as assembled by the helical lift (Itor_mn_lift)
+      jn_div%DOF(:) = jn%DOF
+      call RT0_tor_comp_from_zero_div(jn_div)
+      do ktri = 1, mesh%ntri
+        fourier_weight = (0d0, 0d0)
+        do k = 1, mesh%GL2_order
+          fourier_weight = fourier_weight + mesh%GL2_weights(k) * &
+            exp(-imun * m_res * cache%area_fields(k, ktri)%theta)
+        end do
+        Itor_mn(m_src) = Itor_mn(m_src) + mesh%area(ktri) * jn_div%comp_phi(ktri) * fourier_weight
+        Itor_mn_lift(m_src) = Itor_mn_lift(m_src) + mesh%area(ktri) * jn%comp_phi(ktri) * &
+          fourier_weight
+      end do
+      Itor_mn(m_src) = Itor_mn(m_src) / (2d0 * pi)
+      Itor_mn_lift(m_src) = Itor_mn_lift(m_src) / (2d0 * pi)
+      singcur(m_src) = 4d0 * pi * mesh%n * Itor_mn(m_src) / (imun * m_res)
+      singflx(m_src) = 2d0 * Phi_mn(m_src, m_src) / area_norm(m_src)
+    end do
+    call polmodes_deinit(jmn_all)
+    call polmodes_deinit(jmn_single)
+    call vec_polmodes_deinit(Bmn)
+    call L1_deinit(jnpar)
+    call L1_deinit(AnR)
+    call L1_deinit(AnZ)
+    call RT0_deinit(jn)
+    call RT0_deinit(jn_div)
+    call RT0_deinit(Bn)
+
+    call h5_open_rw(file, h5id_root)
+    call h5_create_parent_groups(h5id_root, grp // '/')
+    call h5_add(h5id_root, grp // '/m', m_label, lbound(m_label), ubound(m_label), &
+      comment = 'resonance index m (q = m / n), first index of the arrays below')
+    call h5_add(h5id_root, grp // '/active', active, lbound(active), ubound(active), &
+      comment = '1 for resonances with a sheet current (refinement > 1), else 0')
+    call h5_add(h5id_root, grp // '/area_norm', area_norm, lbound(area_norm), ubound(area_norm), &
+      comment = '<R |dx/dtheta|> = surface area / (2 pi)^2 in the resonant cell', unit = 'cm^2')
+    call h5_add(h5id_root, grp // '/Phi_mn', Phi_mn, lbound(Phi_mn), ubound(Phi_mn), &
+      comment = 'resonant flux harmonic (as Bmn coeff_rad) at resonance m_obs (first index) ' // &
+      'of the field of sheet current m_src (second index) alone', unit = 'Mx')
+    call h5_add(h5id_root, grp // '/Phi_tot', Phi_tot, lbound(Phi_tot), ubound(Phi_tot), &
+      comment = 'resonant flux harmonic of the total perturbation field', unit = 'Mx')
+    call h5_add(h5id_root, grp // '/Phi_vac', Phi_vac, lbound(Phi_vac), ubound(Phi_vac), &
+      comment = 'resonant flux harmonic of the vacuum perturbation field', unit = 'Mx')
+    call h5_add(h5id_root, grp // '/Bmn_rad', Bmn_rad, lbound(Bmn_rad), ubound(Bmn_rad), &
+      comment = 'resonant harmonic of sqrt_g B.grad psi of each sheet field alone ' // &
+      '(half-grid flux index, m_src)', unit = 'Mx')
+    call h5_add(h5id_root, grp // '/singflx', singflx, lbound(singflx), ubound(singflx), &
+      comment = 'peak area-normalised flux of the sheet alone, 2 Phi_mn(m, m) / area_norm ' // &
+      '(GPEC Phi_res, singflx)', unit = 'G')
+    call h5_add(h5id_root, grp // '/Imn_res', Imn_res, lbound(Imn_res), ubound(Imn_res), &
+      comment = 'resonant parallel current of the sheet (as iter/Ires)', unit = 'statA')
+    call h5_add(h5id_root, grp // '/Itor_mn', Itor_mn, lbound(Itor_mn), ubound(Itor_mn), &
+      comment = 'harmonic of the toroidal sheet current per radian of theta, ' // &
+      'from zero divergence of the poloidal sheet current', unit = 'statA')
+    call h5_add(h5id_root, grp // '/Itor_mn_lift', Itor_mn_lift, lbound(Itor_mn_lift), &
+      ubound(Itor_mn_lift), comment = 'as Itor_mn, from the toroidal component ' // &
+      'assembled by helical_current_from_parallel_current', unit = 'statA')
+    call h5_add(h5id_root, grp // '/singcur', singcur, lbound(singcur), ubound(singcur), &
+      comment = 'peak sheet current 4 pi n Itor_mn / (i m_res) (GPEC I_res, singcur)', &
+      unit = 'statA')
+    call h5_close(h5id_root)
+  end subroutine sheet_response
 
   subroutine remove_plasma_current_in_res_layer(jn, jnpar_B0, jmnpar_over_Bmod)
     use mephit_mesh, only: cache, mesh
