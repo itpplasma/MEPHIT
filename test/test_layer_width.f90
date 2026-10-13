@@ -22,8 +22,8 @@ program test_layer_width
     ! delta ~ R^(1/3) at fixed B, q'
     w = resistive_layer_width(53000d0, 8d0*620d0, 5d13, 1d3, 1d0, 2.5d0, 3, 3d0, 0.1d0)
     ok = ok .and. abs(w/reference - 2d0) < 1d-9
-    ! a colder, denser layer is wider: eta ~ T^(-3/2)
+    ! a ten times colder layer is wider by (10^1.5 lnL(100 eV)/lnL(1 keV))^(1/3) = 2.993
     w = resistive_layer_width(53000d0, 620d0, 5d13, 100d0, 1d0, 2.5d0, 3, 3d0, 0.1d0)
-    ok = ok .and. w > 3d0*reference
+    ok = ok .and. abs(w/reference - 2.993027948836564d0) < 1d-9
     if (.not. ok) error stop 'resistive layer width test failed'
 end program test_layer_width
