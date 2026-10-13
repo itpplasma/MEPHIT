@@ -186,6 +186,11 @@ if(BUILD_TESTING)
       ${PROJECT_BINARY_DIR} ${CMAKE_SOURCE_DIR} ${PROJECT_BINARY_DIR}/sheet-cylinder)
     set_tests_properties(sheet_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
       LABELS freefem)
+    # boundary sheet of the moved equilibrium current against the analytic cylinder
+    add_test(NAME edge_cylinder COMMAND ${CMAKE_SOURCE_DIR}/test/edge_cylinder/run_test.sh
+      ${PROJECT_BINARY_DIR} ${CMAKE_SOURCE_DIR} ${PROJECT_BINARY_DIR}/edge-cylinder)
+    set_tests_properties(edge_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
+      LABELS freefem)
   endif()
 endif()
 

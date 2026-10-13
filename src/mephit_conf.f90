@@ -202,6 +202,15 @@ module mephit_conf
     !> is cut at an inner flux surface and has no X-point there. Defaults to false.
     logical :: truncate_at_sibry = .false.
 
+    !> Add the surface current of the displaced plasma boundary, \f$ \xi_{n} \vec{j}_{0} \f$,
+    !> where the equilibrium current density jumps to zero at a cut boundary. Its surface
+    !> divergence is closed by a field-aligned surface current. Defaults to false.
+    logical :: edge_moved_current = .false.
+
+    !> Close the plasma current that leaves through the boundary by a field-aligned surface
+    !> current on the boundary instead of passing it to the vacuum region. Defaults to false.
+    logical :: edge_boundary_sheet = .false.
+
     !> Enable damping of the Pfirsch-Schlueter current. Defaults to true.
     logical :: damp = .true.
 
@@ -369,6 +378,10 @@ contains
       comment = 'use fine mesh if resonances are too close outside the last refined one')
     call h5_add(h5id_root, grp // '/truncate_at_sibry', config%truncate_at_sibry, &
       comment = 'limit flux surfaces to the boundary flux SIBRY of the G EQDSK file')
+    call h5_add(h5id_root, grp // '/edge_moved_current', config%edge_moved_current, &
+      comment = 'add surface current xi_n j0 of the displaced plasma boundary')
+    call h5_add(h5id_root, grp // '/edge_boundary_sheet', config%edge_boundary_sheet, &
+      comment = 'close current leaving the plasma by a field-aligned boundary sheet')
     call h5_add(h5id_root, grp // '/damp', config%damp, &
       comment = 'enable damping of Pfirsch-Schlueter current')
     call h5_add(h5id_root, grp // '/transition_func', config%transition_func, &
