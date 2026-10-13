@@ -173,6 +173,9 @@ if(BUILD_TESTING)
   file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/mesh-quadrature-cache)
   set_tests_properties(mesh_quadrature_cache PROPERTIES
     WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/mesh-quadrature-cache)
+  add_executable(test_helical_current test/test_helical_current.f90)
+  target_link_libraries(test_helical_current mephit)
+  add_test(NAME helical_current COMMAND test_helical_current)
 endif()
 
 ### Add helper script to binaries
