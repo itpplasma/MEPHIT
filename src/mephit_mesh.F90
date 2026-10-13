@@ -11,7 +11,7 @@ module mephit_mesh
   ! types and associated procedures
   public :: flux_func_cache, flux_func_cache_init, flux_func_cache_deinit
   public :: mesh_t, mesh_write, mesh_read, mesh_deinit, &
-    generate_mesh, write_cache, read_cache, point_location, mesh_interp_theta_flux
+    generate_mesh, refine_unit_partition, write_cache, read_cache, point_location, mesh_interp_theta_flux
   public :: coord_cache_t, field_cache_t, shielding_t, cache_t, &
     cache_write, cache_read, cache_init, cache_deinit
   public :: read_profiles, compute_auxiliary_profiles, resample_profiles, &
@@ -1695,8 +1695,13 @@ contains
       end if
       if (grow_hi(nref) > 0) then
         grow_hi(nref) = grow_hi(nref) - 1
+      elseif (fine_hi(nref) > 0) then
+        ! resonance close to the edge: clip the fine region to the available space
+        fine_hi(nref) = fine_hi(nref) - 1
       else
-        write (logger%msg, '("refine_unit_partition: refinement failed at interval ", i0)') nref + 1
+        write (logger%msg, '("refine_unit_partition: last resonance at ", es12.5, ' // &
+          '" is too close to the edge (distance ", es12.5, ") for fine separation ", es12.5)') &
+          resonances(nref), 1d0 - resonances(nref), fine_sep(nref)
         if (logger%err) call logger%write_msg
         error stop
       end if
