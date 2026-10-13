@@ -100,7 +100,7 @@ set(MEPHIT_FORTRAN_SRC_FILES
   src/mephit_flr2.f90
   src/mephit_iter.F90
 )
-set_source_files_properties(src/mephit_test.f90 ${MEPHIT_FORTRAN_SRC_FILES}
+set_source_files_properties(src/mephit_test.f90 src/mephit_test_refine.f90 ${MEPHIT_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${WARNING_FLAGS}")
 
 set(MEPHIT_C_SRC_FILES
@@ -161,12 +161,14 @@ endif()
 add_executable(mephit_run.x src/mephit_run.c)
 add_executable(mephit_test.x src/mephit_test.f90)
 add_executable(mephit_post.x src/mephit_post.f90)
+add_executable(mephit_test_refine.x src/mephit_test_refine.f90)
 target_link_libraries(mephit_run.x mephit)
 target_link_libraries(mephit_test.x mephit)
 target_link_libraries(mephit_post.x mephit)
-
+target_link_libraries(mephit_test_refine.x mephit)
 include(CTest)
 if(BUILD_TESTING)
+  add_test(NAME refine_unit_partition_edge COMMAND mephit_test_refine.x)
   add_executable(test_mesh_quadrature_cache test/test_mesh_quadrature_cache.f90)
   target_link_libraries(test_mesh_quadrature_cache mephit)
   add_test(NAME mesh_quadrature_cache COMMAND test_mesh_quadrature_cache)
@@ -176,6 +178,15 @@ if(BUILD_TESTING)
   add_executable(test_helical_current test/test_helical_current.f90)
   target_link_libraries(test_helical_current mephit)
   add_test(NAME helical_current COMMAND test_helical_current)
+  # sheet (shielding) current response against the analytic cylinder; needs FreeFem++,
+  # python3 with h5py and scipy, and runs the meshing, one iteration and the sheet phase
+  find_program(FREEFEM_EXECUTABLE NAMES FreeFem++ FreeFem++-mpi)
+  if(FREEFEM_EXECUTABLE)
+    add_test(NAME sheet_cylinder COMMAND ${CMAKE_SOURCE_DIR}/test/sheet_cylinder/run_test.sh
+      ${PROJECT_BINARY_DIR} ${CMAKE_SOURCE_DIR} ${PROJECT_BINARY_DIR}/sheet-cylinder)
+    set_tests_properties(sheet_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
+      LABELS freefem)
+  endif()
 endif()
 
 ### Add helper script to binaries
@@ -185,6 +196,7 @@ configure_file(scripts/maxwell_daemon.edp ${PROJECT_BINARY_DIR}/scripts/maxwell_
 configure_file(scripts/extmesh.edp ${PROJECT_BINARY_DIR}/scripts/extmesh.edp COPYONLY)
 configure_file(scripts/mephit.gdb ${PROJECT_BINARY_DIR}/scripts/mephit.gdb COPYONLY)
 configure_file(data/convexwall_asdex.dat ${PROJECT_BINARY_DIR}/data/convexwall_asdex.dat COPYONLY)
+configure_file(data/convexwall_iter.dat ${PROJECT_BINARY_DIR}/data/convexwall_iter.dat COPYONLY)
 configure_file(data/convexwall_kilca.dat ${PROJECT_BINARY_DIR}/data/convexwall_kilca.dat COPYONLY)
 configure_file(data/convexwall_mastu.dat ${PROJECT_BINARY_DIR}/data/convexwall_mastu.dat COPYONLY)
 configure_file(data/field_divB0.inp ${PROJECT_BINARY_DIR}/data/field_divB0.inp COPYONLY)

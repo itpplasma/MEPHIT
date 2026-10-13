@@ -60,7 +60,7 @@ The general syntax is:
 
 ```text
 $MEPHIT_DIR/scripts/mephit.bash init { -c | --config } <config> { -g | --g-eqdsk } <gfile>
-    { -d | --device } { asdex | kilca | mastu } <working_directory> ...
+    { -d | --device } { asdex | iter | kilca | mastu } <working_directory> ...
 ```
 
 This copies the `<config>`, `<gfile>`, and other necessary files to each given `<working_directory>`, specifically:
@@ -69,7 +69,7 @@ This copies the `<config>`, `<gfile>`, and other necessary files to each given `
 - [`field_divB0.inp`](data/field_divB0.inp), which is modified to point to `<gfile>` and `convexwall_$device.dat`, and
 - `preload_for_SYNCH.inp`, which contains the configuration for the [field line integration](src/preload_for_SYNCH.f90) and doesn't need to be changed.
 
-The `<config>` file and some sample gfiles can be taken from a list of templates `mephit_<gfile>.in` in the `data` directory, e.g. [`data/mephit_g33353_2900_EQH.in`](data/mephit_g33353_2900.in). Currently, only geometry files for ASDEX Upgrade, MAST Upgrade, and KiLCA (large aspect ratio) are available.
+The `<config>` file and some sample gfiles can be taken from a list of templates `mephit_<gfile>.in` in the `data` directory, e.g. [`data/mephit_g33353_2900_EQH.in`](data/mephit_g33353_2900.in). Currently, only geometry files for ASDEX Upgrade, ITER, MAST Upgrade, and KiLCA (large aspect ratio) are available. For ITER, the convex wall is the hull of the first-wall limiter of the ITER TC24 gfile (a proxy for the first wall), and [`data/mephit_iter_tc24.in`](data/mephit_iter_tc24.in) and [`data/vacfield_ITER_BL2.in`](data/vacfield_ITER_BL2.in) are the config and coil-grid templates for the 27 `bl2` ELM coils (GPEC `coil/iter_bl2{u,m,l}.dat`, one-winding, currents in ampere-turns, hence `Biot_Savart_prefactor = 0.1`).
 
 At ITPcp, you can reproduce the “standard” test case via:
 
@@ -84,13 +84,15 @@ The config file `mephit.in` needs do be adapated for each simulation:
 - In the `arrays` namelist, array indices must be within the range of `m_res_min` and `m_res_max`, the minimal and maximal poloidal mode numbers for which resonances occur.
 - For ASDEX Upgrade and MAST Upgrade, the data files containing coil currents and kinetic profiles must be supplied. See [the provided example](data/mephit_g33353_2900_EQH.in).
 - For KiLCA, the requested poloidal mode must be set in `config%kilca_pol_mode`. For `config%kilca_scale_factor`, a value of `1000` yields reasonable results. Last but not least, the HDF5 output of the KiLCA vacuum run has to provied via `config%kilca_vac_output`. See [the provided example](data/mephit_g000001.0001_TCFP_hip.in).
+- For an equilibrium that is cut at an inner flux surface and has no X-point there (e.g. the ITER TC24 gfile cut at s_pol = 0.997), set `config%truncate_at_sibry = .true.`. Otherwise the flux surfaces extend to the outermost closed surface inside the gfile box, not to `SIBRY`.
+- The profile files `config%dens_file`, `temp_e_file`, `temp_i_file` and `E_r_file` are read in every run, also for ideal MHD (`currn_model = 0`), where they are not used.
 - Some more options, mostly for debugging, are given in [`mephit_conf`](src/mephit_conf.f90).
 
 The general syntax is:
 
 ```text
 $MEPHIT_DIR/scripts/mephit.bash run [-m | --meshing] [-p | --preconditioner] [-i | --iterations]
-    [--debug | --memcheck | --test] [<working_directory_or_file> ...]
+    [-s | --sheet] [--debug | --memcheck | --test] [<working_directory_or_file> ...]
 ```
 
 Simulations consist of three phases:
@@ -99,7 +101,7 @@ Simulations consist of three phases:
 2. construction of preconditioner,
 3. preconditioned iterations.
 
-Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default. For testing and debugging, there are additionally three mutually exclusive flags:
+Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default. The optional phase `--sheet` (not run by default) post-processes a finished run: it rebuilds each resonant sheet (shielding) current from the stored pressure perturbation, solves for its field alone and writes the group `sheet` of `mephit.h5`. Its `singflx` and `singcur` follow GPEC's `Phi_res` and `I_res` (peak amplitude, flux normalised by the surface area) in gauss and statampere; see `sheet_response` in [`mephit_iter`](src/mephit_iter.F90). It appends to `mephit.h5`, so run it on a copy of a run directory that must stay unchanged. For testing and debugging, there are additionally three mutually exclusive flags:
 
 - `--debug` starts a [GDB](https://www.gnu.org/software/gdb) session, using [a script](scripts/mephit.gdb) to navigate to the entry point of the main Fortran subroutine,
 - `--memcheck` runs [Valgrind's Memcheck](https://valgrind.org/info/tools.html#memcheck),

@@ -196,6 +196,12 @@ module mephit_conf
     !> Switch to use fine mesh outside if resonance are too close
     logical :: diverging_q = .false.
 
+    !> Limit the flux surfaces to those inside the boundary flux SIBRY of the G EQDSK file.
+    !> By default the outermost closed surface inside the computational box is used, which
+    !> equals the separatrix of a diverted equilibrium. Set this for an equilibrium that
+    !> is cut at an inner flux surface and has no X-point there. Defaults to false.
+    logical :: truncate_at_sibry = .false.
+
     !> Enable damping of the Pfirsch-Schlueter current. Defaults to true.
     logical :: damp = .true.
 
@@ -361,6 +367,8 @@ contains
       comment = 'maximum density', unit = 'cm^-3')
     call h5_add(h5id_root, grp // '/diverging_q', config%diverging_q, &
       comment = 'use fine mesh if resonances are too close outside the last refined one')
+    call h5_add(h5id_root, grp // '/truncate_at_sibry', config%truncate_at_sibry, &
+      comment = 'limit flux surfaces to the boundary flux SIBRY of the G EQDSK file')
     call h5_add(h5id_root, grp // '/damp', config%damp, &
       comment = 'enable damping of Pfirsch-Schlueter current')
     call h5_add(h5id_root, grp // '/transition_func', config%transition_func, &

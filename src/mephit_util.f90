@@ -152,6 +152,8 @@ contains
       nspl, nlabel, ntheta, twopi, h_theta, &
       rmn, rmx, zmn, zmx, raxis, zaxis, h_theta, psipol_max, psitor_max, &
       rbeg, rsmall, qsaf, psisurf, phitor, circumf, R_st, Z_st, bmod_st, sqgnorm_st
+    use mephit_conf, only: conf
+    use field_line_integration_mod, only: truncate_at_sibry
     real(dp), dimension(:, :), allocatable :: R_transp, Z_transp, bmod_transp, sqgnorm_transp
     integer :: fid, nstep, nsurfmax, k
 
@@ -166,6 +168,7 @@ contains
     read (fid, *) nsurfmax
     close(fid)
     call unload_magdata_in_symfluxcoord
+    truncate_at_sibry = conf%truncate_at_sibry
     allocate(rbeg(nlabel), rsmall(nlabel), qsaf(nlabel), psisurf(0:nlabel), phitor(0:nlabel), circumf(nlabel))
     allocate(R_transp(nlabel, ntheta), Z_transp(nlabel, ntheta), bmod_transp(nlabel, ntheta), sqgnorm_transp(nlabel, ntheta))
     call field_line_integration_for_SYNCH(nstep, nsurfmax, nlabel, ntheta, &
