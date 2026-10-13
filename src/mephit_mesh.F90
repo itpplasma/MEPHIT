@@ -1931,11 +1931,14 @@ contains
       mesh%node_theta_flux(mesh%kp_low(kf) + 1) = 0d0
       mesh%node_theta_geom(mesh%kp_low(kf) + 1) = 0d0
     end do
-    ! reposition closest point exactly to X point
-    kp = minloc(hypot(mesh%node_R((mesh%kp_low(mesh%nflux) + 1):) - mesh%R_X, &
-      mesh%node_Z((mesh%kp_low(mesh%nflux) + 1):) - mesh%Z_X), 1)
-    mesh%node_R(mesh%kp_low(mesh%nflux) + kp) = mesh%R_X
-    mesh%node_Z(mesh%kp_low(mesh%nflux) + kp) = mesh%Z_X
+    ! reposition closest point exactly to X point; a boundary cut at SIBRY has no X point
+    ! on it, and the X point of the uncut equilibrium lies off the boundary
+    if (.not. conf%truncate_at_sibry) then
+      kp = minloc(hypot(mesh%node_R((mesh%kp_low(mesh%nflux) + 1):) - mesh%R_X, &
+        mesh%node_Z((mesh%kp_low(mesh%nflux) + 1):) - mesh%Z_X), 1)
+      mesh%node_R(mesh%kp_low(mesh%nflux) + kp) = mesh%R_X
+      mesh%node_Z(mesh%kp_low(mesh%nflux) + kp) = mesh%Z_X
+    end if
     mesh%R_min = minval(mesh%node_R)
     mesh%R_max = maxval(mesh%node_R)
     mesh%Z_min = minval(mesh%node_Z)
