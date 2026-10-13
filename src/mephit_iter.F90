@@ -1542,7 +1542,8 @@ contains
       comment = 'peak area-normalised flux of the sheet alone, 2 Phi_mn(m, m) / area_norm ' // &
       '(GPEC Phi_res, singflx)', unit = 'G')
     call h5_add(h5id_root, grp // '/Imn_res', Imn_res, lbound(Imn_res), ubound(Imn_res), &
-      comment = 'resonant parallel current of the sheet (as iter/Ires)', unit = 'statA')
+      comment = 'resonant parallel current of the sheet (as iter/Ires; zero unless ' // &
+      'Delta_rad_res_curr > 0 sets the sampling width)', unit = 'statA')
     call h5_add(h5id_root, grp // '/Itor_mn', Itor_mn, lbound(Itor_mn), ubound(Itor_mn), &
       comment = 'harmonic of the toroidal sheet current per radian of theta, ' // &
       'from zero divergence of the poloidal sheet current', unit = 'statA')
