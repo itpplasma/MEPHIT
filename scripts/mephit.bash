@@ -88,7 +88,7 @@ mephit_init() {
         anyerr+=1
     else
         case "$device" in
-            asdex|kilca|mastu)
+            asdex|iter|kilca|mastu)
                 convexwall=$datadir/convexwall_$device.dat
                 ;;
             *)
@@ -272,7 +272,7 @@ datadir=$(realpath -m "$scriptdir/../data")
 if [ -d "@tmpdir@" ]; then
     tmpdir=@tmpdir@
 else
-    tmpdir=/tmp
+    tmpdir=${TMPDIR:-/tmp}
 fi
 
 set -m
