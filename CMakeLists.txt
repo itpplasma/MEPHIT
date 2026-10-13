@@ -167,6 +167,12 @@ target_link_libraries(mephit_post.x mephit)
 
 include(CTest)
 if(BUILD_TESTING)
+  add_executable(test_mesh_quadrature_cache test/test_mesh_quadrature_cache.f90)
+  target_link_libraries(test_mesh_quadrature_cache mephit)
+  add_test(NAME mesh_quadrature_cache COMMAND test_mesh_quadrature_cache)
+  file(MAKE_DIRECTORY ${PROJECT_BINARY_DIR}/mesh-quadrature-cache)
+  set_tests_properties(mesh_quadrature_cache PROPERTIES
+    WORKING_DIRECTORY ${PROJECT_BINARY_DIR}/mesh-quadrature-cache)
   add_executable(test_helical_current test/test_helical_current.f90)
   target_link_libraries(test_helical_current mephit)
   add_test(NAME helical_current COMMAND test_helical_current)
