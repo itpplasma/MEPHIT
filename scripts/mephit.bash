@@ -125,8 +125,9 @@ mephit_run() {
     meshing=0
     preconditioner=0
     iterations=0
+    sheet=0
     debug=0
-    TEMP=$(getopt -o 'mpi' --long 'meshing,preconditioner,iterations,debug,memcheck,test' -n "$scriptname" -- "$@")
+    TEMP=$(getopt -o 'mpis' --long 'meshing,preconditioner,iterations,sheet,debug,memcheck,test' -n "$scriptname" -- "$@")
     eval set -- "$TEMP"
     unset TEMP
     while true; do
@@ -143,6 +144,12 @@ mephit_run() {
                 ;;
             '-i'|'--iterations')
                 iterations=1
+                shift
+                continue
+                ;;
+            '-s'|'--sheet')
+                # field of each resonant sheet current alone, from a finished run
+                sheet=1
                 shift
                 continue
                 ;;
@@ -171,13 +178,13 @@ mephit_run() {
                 ;;
         esac
     done
-    if [ $meshing -eq 0 ] && [ $preconditioner -eq 0 ] && [ $iterations -eq 0 ]; then
+    if [ $meshing -eq 0 ] && [ $preconditioner -eq 0 ] && [ $iterations -eq 0 ] && [ $sheet -eq 0 ]; then
         # if no options are set, default to go through all phases
         meshing=1
         preconditioner=1
         iterations=1
     fi
-    runmode=$(( iterations << 2 | preconditioner << 1 | meshing << 0 ))
+    runmode=$(( sheet << 3 | iterations << 2 | preconditioner << 1 | meshing << 0 ))
 
     # default to current directory if none is given on the command line
     arglist=( "$(pwd)" )

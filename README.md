@@ -92,7 +92,7 @@ The general syntax is:
 
 ```text
 $MEPHIT_DIR/scripts/mephit.bash run [-m | --meshing] [-p | --preconditioner] [-i | --iterations]
-    [--debug | --memcheck | --test] [<working_directory_or_file> ...]
+    [-s | --sheet] [--debug | --memcheck | --test] [<working_directory_or_file> ...]
 ```
 
 Simulations consist of three phases:
@@ -101,7 +101,7 @@ Simulations consist of three phases:
 2. construction of preconditioner,
 3. preconditioned iterations.
 
-Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default. For testing and debugging, there are additionally three mutually exclusive flags:
+Each phase can be run separately by specifying the corresponding command line switch; if none are given, all phases are run by default. The optional phase `--sheet` (not run by default) post-processes a finished run: it rebuilds each resonant sheet (shielding) current from the stored pressure perturbation, solves for its field alone and writes the group `sheet` of `mephit.h5`. Its `singflx` and `singcur` follow GPEC's `Phi_res` and `I_res` (peak amplitude, flux normalised by the surface area) in gauss and statampere; see `sheet_response` in [`mephit_iter`](src/mephit_iter.F90). It appends to `mephit.h5`, so run it on a copy of a run directory that must stay unchanged. For testing and debugging, there are additionally three mutually exclusive flags:
 
 - `--debug` starts a [GDB](https://www.gnu.org/software/gdb) session, using [a script](scripts/mephit.gdb) to navigate to the entry point of the main Fortran subroutine,
 - `--memcheck` runs [Valgrind's Memcheck](https://valgrind.org/info/tools.html#memcheck),
