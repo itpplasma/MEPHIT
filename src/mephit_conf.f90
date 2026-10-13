@@ -211,6 +211,16 @@ module mephit_conf
     !> current on the boundary instead of passing it to the vacuum region. Defaults to false.
     logical :: edge_boundary_sheet = .false.
 
+    !> Model for the width of the resonant layer, which sets the Pfirsch-Schlueter damping
+    !> for every mode with `Delta_rad_res_curr(m) = 0`. 0 (default) keeps the manual
+    !> widths. 1 uses the resistive width of the Alfven resonance,
+    !> \f$ \delta = [\eta / (\mu_{0} \, d\omega_{A} / dx)]^{1/3} \f$ with Spitzer
+    !> resistivity from `temp_e_file`/`dens_file` (see #mephit_util::resistive_layer_width).
+    integer :: res_layer_model = 0
+
+    !> Factor multiplying the model width to give `Delta_rad_res_curr`. Defaults to 1.
+    real(dp) :: res_layer_factor = 1d0
+
     !> Enable damping of the Pfirsch-Schlueter current. Defaults to true.
     logical :: damp = .true.
 
@@ -382,6 +392,10 @@ contains
       comment = 'add surface current xi_n j0 of the displaced plasma boundary')
     call h5_add(h5id_root, grp // '/edge_boundary_sheet', config%edge_boundary_sheet, &
       comment = 'close current leaving the plasma by a field-aligned boundary sheet')
+    call h5_add(h5id_root, grp // '/res_layer_model', config%res_layer_model, &
+      comment = 'resonant layer width model (0: manual, 1: resistive Alfven resonance)')
+    call h5_add(h5id_root, grp // '/res_layer_factor', config%res_layer_factor, &
+      comment = 'factor applied to the modelled resonant layer width')
     call h5_add(h5id_root, grp // '/damp', config%damp, &
       comment = 'enable damping of Pfirsch-Schlueter current')
     call h5_add(h5id_root, grp // '/transition_func', config%transition_func, &

@@ -178,6 +178,9 @@ if(BUILD_TESTING)
   add_executable(test_helical_current test/test_helical_current.f90)
   target_link_libraries(test_helical_current mephit)
   add_test(NAME helical_current COMMAND test_helical_current)
+  add_executable(test_layer_width test/test_layer_width.f90)
+  target_link_libraries(test_layer_width mephit)
+  add_test(NAME layer_width COMMAND test_layer_width)
   # sheet (shielding) current response against the analytic cylinder; needs FreeFem++,
   # python3 with h5py and scipy, and runs the meshing, one iteration and the sheet phase
   find_program(FREEFEM_EXECUTABLE NAMES FreeFem++ FreeFem++-mpi)
