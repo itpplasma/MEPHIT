@@ -181,6 +181,9 @@ if(BUILD_TESTING)
   add_executable(test_layer_width test/test_layer_width.f90)
   target_link_libraries(test_layer_width mephit)
   add_test(NAME layer_width COMMAND test_layer_width)
+  add_executable(test_resonant_current test/test_resonant_current.f90)
+  target_link_libraries(test_resonant_current mephit)
+  add_test(NAME resonant_current COMMAND test_resonant_current)
   # sheet (shielding) current response against the analytic cylinder; needs FreeFem++,
   # python3 with h5py and scipy, and runs the meshing, one iteration and the sheet phase
   find_program(FREEFEM_EXECUTABLE NAMES FreeFem++ FreeFem++-mpi)

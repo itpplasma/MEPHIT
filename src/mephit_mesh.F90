@@ -12,6 +12,7 @@ module mephit_mesh
   public :: flux_func_cache, flux_func_cache_init, flux_func_cache_deinit
   public :: mesh_t, mesh_write, mesh_read, mesh_deinit, &
     generate_mesh, refine_unit_partition, write_cache, read_cache, point_location, mesh_interp_theta_flux
+  public :: point_location_current
   public :: coord_cache_t, field_cache_t, shielding_t, cache_t, &
     cache_write, cache_read, cache_init, cache_deinit
   public :: read_profiles, compute_auxiliary_profiles, resample_profiles, &
@@ -2611,7 +2612,7 @@ contains
           ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
           call magdata_in_symfluxcoord_ext(2, dum, psi(krad) - fs%psi(0), theta(kpol), &
             q, dum, s%sqrt_g, dum, dum, s%R, dum, s%dR_dtheta, s%Z, dum, s%dZ_dtheta)
-          s%ktri = point_location(s%R, s%Z)
+          s%ktri = point_location_current(s%R, s%Z, s%psi)
           call field(s%R, 0d0, s%Z, s%B0_R, s%B0_phi, s%B0_Z, &
             dum, dum, dum, dum, dum, dum, dum, dum, dum)
           ! sqrt_g misses a factor of q and the signs of dpsi_drad and B0_phi
@@ -2671,6 +2672,47 @@ contains
       end if
     end do
   end function point_location
+
+  !> Locate physical current quadrature points up to the curved LCFS.
+  !> The mesh boundary consists of straight chords. In the gap between a chord
+  !> and the LCFS, extend the adjacent L1 element to the physical sampling point,
+  !> keeping its flux coordinate, area measure and quadrature weight unchanged.
+  function point_location_current(R, Z, psi) result(location)
+    real(dp), intent(in) :: R, Z, psi
+    integer :: location
+    integer :: kedge, nodes(2), ktri, closest
+    real(dp) :: edge(2), offset(2), fraction, length2, distance2, best_distance2
+
+    location = point_location(R, Z)
+    if (location > 0) return
+    ! Only the outermost flux cell can need this boundary extension.
+    if (psi < minval(fs%psi(mesh%nflux-1:mesh%nflux))) return
+    if (psi > maxval(fs%psi(mesh%nflux-1:mesh%nflux))) return
+    closest = -1
+    best_distance2 = huge(1.0_dp)
+    do kedge = mesh%kp_low(mesh%nflux), &
+        mesh%kp_low(mesh%nflux)+mesh%kp_max(mesh%nflux)-1
+        nodes = mesh%edge_node(:, kedge)
+        edge = [mesh%node_R(nodes(2))-mesh%node_R(nodes(1)), &
+            mesh%node_Z(nodes(2))-mesh%node_Z(nodes(1))]
+        offset = [R-mesh%node_R(nodes(1)), Z-mesh%node_Z(nodes(1))]
+        length2 = sum(edge**2)
+        fraction = max(0.0_dp, min(1.0_dp, sum(offset*edge)/length2))
+        distance2 = sum((offset-fraction*edge)**2)
+        if (distance2 < best_distance2) then
+            best_distance2 = distance2
+            closest = kedge
+        end if
+    end do
+    if (closest < 0) return
+    ktri = mesh%edge_tri(1, closest)
+    nodes = mesh%edge_node(:, closest)
+    length2 = (mesh%node_R(nodes(2))-mesh%node_R(nodes(1)))**2 &
+        +(mesh%node_Z(nodes(2))-mesh%node_Z(nodes(1)))**2
+    ! Do not extrapolate farther than the adjacent triangle's normal height.
+    if (best_distance2*length2 > (2.0_dp*mesh%area(ktri))**2) return
+    location = ktri
+  end function point_location_current
 
   function point_location_geom(R, Z, hint_psi) result(location)
     use mephit_util, only: interp_psi_pol, binsearch, pos_angle
