@@ -168,6 +168,18 @@ target_link_libraries(mephit_post.x mephit)
 target_link_libraries(mephit_test_refine.x mephit)
 include(CTest)
 if(BUILD_TESTING)
+  find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  add_executable(test_process_supervisor
+    src/mephit_run.c src/mephit_util.c test/test_process_stub.c)
+  target_include_directories(test_process_supervisor PRIVATE src)
+  target_link_libraries(test_process_supervisor GSL::gsl)
+  add_executable(test_pipe_client test/test_pipe_client.c)
+  target_include_directories(test_pipe_client PRIVATE src)
+  target_link_libraries(test_pipe_client mephit)
+  add_test(NAME freefem_failure COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/test/test_freefem_failure.py
+    $<TARGET_FILE:test_process_supervisor> $<TARGET_FILE:test_pipe_client>)
+  set_tests_properties(freefem_failure PROPERTIES TIMEOUT 30)
   add_test(NAME refine_unit_partition_edge COMMAND mephit_test_refine.x)
   add_executable(test_mesh_quadrature_cache test/test_mesh_quadrature_cache.f90)
   target_link_libraries(test_mesh_quadrature_cache mephit)
