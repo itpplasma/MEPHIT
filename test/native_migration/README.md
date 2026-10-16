@@ -63,3 +63,5 @@ open and then receive EOF. The adapter now acknowledges the first two replies;
 the last reply retains the existing next-request turnaround. The delayed peer
 regression reproduces the vulnerable interleaving independently, and the actual
 BinaryIO regression runs 100 scalar/vector cycles. This changes framing only.
+
+Measured results and validation limits are in [results.md](results.md).

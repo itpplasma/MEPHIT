@@ -1,0 +1,220 @@
+{
+  "schema": "mephit-native-migration-measurements-v1",
+  "date_utc": "2026-10-16T13:11:26.868601+00:00",
+  "baseline_revision": "43876ad29a6f4ace8346856fc0d03268c8dfc1e4",
+  "native_revision": "83674ec5e9d4319a8c820028014b623f90fbd613",
+  "fortsparse_revision": "a96033efac8279851588bf11fcf0d52ff860de3f",
+  "freefem_minimal_revision": "754dae8ae8f858784ad46b2f46dfd7862829cb5a",
+  "host": "AMD Ryzen 9 5950X 16-Core Processor; Linux; GNU 16.2.1; OpenBLAS 0.3.34",
+  "threads": {
+    "OMP_NUM_THREADS": 2,
+    "OPENBLAS_NUM_THREADS": 1
+  },
+  "memory_scope": "per-process own post-exec VmHWM KiB; simultaneous aggregate unknown",
+  "unit_fixture": "1000 iterations: real/complex scalar and 2-RHS, n=3, real nnz=4 / complex nnz=9; known-x gate 2e-14",
+  "application_fixture": "unchanged public edge_cylinder; 154 surfaces, 63989 core mesh points, Maxwell n=194499; 2% displacement / 3% current and field gates",
+  "comparison": "old default whole workflow to new default; MPI/MUMPS FreeFem to serial/native FreeFem; not an isolated factor comparison",
+  "profiles": {
+    "legacy": {
+      "runtime": "stock MPI/MUMPS",
+      "with_mfem": false,
+      "application_repetitions": 1,
+      "status": "pass",
+      "workflow": {
+        "wall_s": 89.22,
+        "user_s": 64.13,
+        "system_s": 28.86,
+        "exit": 0,
+        "cpu_s": 92.99,
+        "aggregate_peak_rss_kib": null
+      },
+      "components": {
+        "iteration_mephit": {
+          "wall_s": 13.253455438,
+          "user_s": 8.396476,
+          "system_s": 0.434484,
+          "cpu_s": 8.83096,
+          "own_postexec_vmhwm_kib": 933380
+        },
+        "iteration_freefem": {
+          "wall_s": 10.60781473,
+          "user_s": 4.030299,
+          "system_s": 2.411098,
+          "cpu_s": 6.441397,
+          "own_postexec_vmhwm_kib": 300596
+        },
+        "sheet_mephit": {
+          "wall_s": 75.087954611,
+          "user_s": 45.906407,
+          "system_s": 21.834647,
+          "cpu_s": 67.741054,
+          "own_postexec_vmhwm_kib": 2529548
+        },
+        "sheet_freefem": {
+          "wall_s": 66.124272399,
+          "user_s": 4.94822,
+          "system_s": 2.87954,
+          "cpu_s": 7.82776,
+          "own_postexec_vmhwm_kib": 301792
+        }
+      },
+      "short_probe": {
+        "repetitions": 3,
+        "status": "pass",
+        "raw": [
+          {
+            "cpu_s": 0.06446,
+            "own_postexec_vmhwm_kib": 18912,
+            "wall_s": 0.06
+          },
+          {
+            "cpu_s": 0.064251,
+            "own_postexec_vmhwm_kib": 19020,
+            "wall_s": 0.06
+          },
+          {
+            "cpu_s": 0.066176,
+            "own_postexec_vmhwm_kib": 18964,
+            "wall_s": 0.06
+          }
+        ],
+        "median": {
+          "cpu_s": 0.06446,
+          "own_postexec_vmhwm_kib": 18964,
+          "wall_s": 0.06
+        }
+      },
+      "scientific_check_output": "8/9 Testing: edge_cylinder\n8/9 Test: edge_cylinder\nCommand: \"/var/tmp/mephit-native-baseline-src/test/edge_cylinder/run_test.sh\" \"/var/tmp/mephit-native-baseline-build\" \"/var/tmp/mephit-native-baseline-src\" \"/var/tmp/mephit-native-baseline-build/edge-cylinder\"\nDirectory: /var/tmp/mephit-native-baseline-build\n\"edge_cylinder\" start time: Oct 16 14:52 CEST\nOutput:"
+    },
+    "native-stock": {
+      "runtime": "stock serial/native",
+      "with_mfem": false,
+      "application_repetitions": 1,
+      "status": "pass",
+      "workflow": {
+        "wall_s": 110.42,
+        "user_s": 84.73,
+        "system_s": 27.69,
+        "exit": 0,
+        "cpu_s": 112.42,
+        "aggregate_peak_rss_kib": null
+      },
+      "components": {
+        "iteration_mephit": {
+          "wall_s": 21.531947588,
+          "user_s": 8.320977,
+          "system_s": 0.427959,
+          "cpu_s": 8.748936,
+          "own_postexec_vmhwm_kib": 930188
+        },
+        "iteration_freefem": {
+          "wall_s": 21.465674709,
+          "user_s": 12.354784,
+          "system_s": 2.11963,
+          "cpu_s": 14.474414,
+          "own_postexec_vmhwm_kib": 496316
+        },
+        "sheet_mephit": {
+          "wall_s": 88.048252721,
+          "user_s": 49.950016,
+          "system_s": 22.1135,
+          "cpu_s": 72.063516,
+          "own_postexec_vmhwm_kib": 2460512
+        },
+        "sheet_freefem": {
+          "wall_s": 81.701568137,
+          "user_s": 13.578617,
+          "system_s": 2.612305,
+          "cpu_s": 16.190922,
+          "own_postexec_vmhwm_kib": 496420
+        }
+      },
+      "short_probe": {
+        "repetitions": 3,
+        "status": "pass",
+        "raw": [
+          {
+            "cpu_s": 0.018844,
+            "own_postexec_vmhwm_kib": 6532,
+            "wall_s": 0.01
+          },
+          {
+            "cpu_s": 0.019085,
+            "own_postexec_vmhwm_kib": 6560,
+            "wall_s": 0.01
+          },
+          {
+            "cpu_s": 0.018559,
+            "own_postexec_vmhwm_kib": 6536,
+            "wall_s": 0.01
+          }
+        ],
+        "median": {
+          "cpu_s": 0.018844,
+          "own_postexec_vmhwm_kib": 6536,
+          "wall_s": 0.01
+        }
+      },
+      "scientific_check_output": "16/16 Testing: edge_cylinder\n16/16 Test: edge_cylinder\nCommand: \"/home/ert/code/worktrees/mephit-native-fortsparse/test/edge_cylinder/run_test.sh\" \"/var/tmp/mephit-native-fortsparse-build\" \"/home/ert/code/worktrees/mephit-native-fortsparse\" \"/var/tmp/mephit-native-fortsparse-build/edge-cylinder\"\nDirectory: /var/tmp/mephit-native-fortsparse-build\n\"edge_cylinder\" start time: Oct 16 15:06 CEST\nOutput:"
+    },
+    "native-minimal-mfem": {
+      "runtime": "minimal serial/native",
+      "with_mfem": true,
+      "application_repetitions": 1,
+      "status": "pass",
+      "workflow": {
+        "wall_s": 119.48,
+        "user_s": 93.52,
+        "system_s": 28.17,
+        "exit": 0,
+        "cpu_s": 121.69,
+        "aggregate_peak_rss_kib": null
+      },
+      "components": {
+        "iteration_mephit": {
+          "wall_s": 28.997120149,
+          "user_s": 15.642073,
+          "system_s": 0.552874,
+          "cpu_s": 16.194947,
+          "own_postexec_vmhwm_kib": 1273260
+        },
+        "iteration_freefem": {
+          "wall_s": 28.938456386,
+          "user_s": 12.752479,
+          "system_s": 2.142263,
+          "cpu_s": 14.894742,
+          "own_postexec_vmhwm_kib": 495832
+        },
+        "sheet_mephit": {
+          "wall_s": 89.598401104,
+          "user_s": 50.680499,
+          "system_s": 22.429963,
+          "cpu_s": 73.110462,
+          "own_postexec_vmhwm_kib": 2460884
+        },
+        "sheet_freefem": {
+          "wall_s": 83.15199101,
+          "user_s": 13.894696,
+          "system_s": 2.600615,
+          "cpu_s": 16.495311,
+          "own_postexec_vmhwm_kib": 495820
+        }
+      },
+      "scientific_check_output": "17/17 Testing: edge_cylinder\n17/17 Test: edge_cylinder\nCommand: \"/home/ert/code/worktrees/mephit-native-fortsparse/test/edge_cylinder/run_test.sh\" \"/var/tmp/mephit-native-mfem-build\" \"/home/ert/code/worktrees/mephit-native-fortsparse\" \"/var/tmp/mephit-native-mfem-build/edge-cylinder\"\nDirectory: /var/tmp/mephit-native-mfem-build\n\"edge_cylinder\" start time: Oct 16 15:08 CEST\nOutput:"
+    }
+  },
+  "excluded_attempt": {
+    "status": "failed",
+    "native_revision": "d9d45d26a91f8ea3f6aa10952bca249c2f52304d",
+    "wall_s": 98.49,
+    "user_s": 79.47,
+    "system_s": 21.26,
+    "cause": "FIFO EOF before scientific checker; independent old-library vector framing reproducer returns 1; corrected by two acknowledgments",
+    "performance_claim": "none"
+  },
+  "input_sha256": {
+    "test/edge_cylinder/mephit.in": "96c908dd8cc8523a9d009fff9c7181250dd8fa28828a9edcc420040ec85004d7",
+    "test/edge_cylinder/check.py": "0479c5f99ad3e248fc77a85f1b04a7c6362c9f2f41908d7cb6ca214fdc4920d9",
+    "data/g000001.0001_TCFP_hip": "19782085dcb016656775a4889ebc4c03fcacda188dd24d0ab3397eb499e3cb16"
+  }
+}
