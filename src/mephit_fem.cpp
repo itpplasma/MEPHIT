@@ -2,6 +2,7 @@
 #ifdef USE_MFEM
 #include "mfem.hpp"
 #include "magnetic_differential_equation.h"
+#include "mephit_native_mfem.h"
 #endif  // USE_MFEM
 #include <boost/geometry.hpp>
 #include <boost/geometry/geometries/point_xy.hpp>
@@ -107,14 +108,8 @@ extern "C" int FEM_test(const char *mesh_file,
     mfem::FiniteElementSpace U(&mesh, &u_coll);
     mfem::SparseMatrix Sys = mde::construct_mde_matrix(U, h_t, h_phi, tor_mode, quadrature_order);
     mfem::Vector rhs = mde::construct_mde_rhs(U, h_t, h_phi, f_r, f_i, tor_mode, quadrature_order);
-    // solve system
-    // construct solver
-    // If MFEM was compiled with SuiteSparse, use UMFPACK to solve the system.
-    mfem::UMFPackSolver umf_solver;
-    umf_solver.Control[UMFPACK_ORDERING] = UMFPACK_ORDERING_METIS;
-    umf_solver.SetOperator(Sys);
     mfem::Vector sol(rhs.Size());
-    umf_solver.Mult(rhs, sol);
+    mephit::solve_native(Sys, rhs, sol);
     if (n_dof != U.GetVSize()) {
       const int dof_mesh = U.GetVSize();
       fprintf(stderr, "Mismatch of vector sizes: n_dof = %i, GetVSize() -> %i.\n", n_dof, dof_mesh);
@@ -141,7 +136,11 @@ extern "C" int FEM_test(const char *mesh_file,
       fclose(file);
     }
     */
+  } catch (const std::exception &error) {
+    fprintf(stderr, "FEM solve failed: %s\n", error.what());
+    return 1;
   } catch (...) {
+    fprintf(stderr, "FEM solve failed: unknown exception\n");
     return 1;
   }
   return 0;
