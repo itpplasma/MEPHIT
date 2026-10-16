@@ -141,6 +141,9 @@ endif()
 
 ### Define executables
 add_executable(mephit_run.x src/mephit_run.c)
+# This executable always starts the native FreeFem daemon. The dependency is
+# required even though the upstream optional module is excluded from ALL.
+add_dependencies(mephit_run.x fortsparse_freefem)
 add_executable(mephit_test.x src/mephit_test.f90)
 add_executable(mephit_post.x src/mephit_post.f90)
 add_executable(mephit_test_refine.x src/mephit_test_refine.f90)
