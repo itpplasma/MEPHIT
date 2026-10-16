@@ -74,3 +74,10 @@ helper that MEPHIT does not call, documentation, and FreeFem SDK configuration
 header portability (`FreeFEM-config.h` in Ubuntu 4.13, `config.h` in 4.17).
 Existing numerical factor/solve routines are unchanged. Affected consumer
 checks and linkage were repeated after the pin; no new head timing is inferred.
+
+Ubuntu CI additionally exposed packaged BinaryIO/idp files outside the compiled
+FreeFem search paths. Matching-prefix resource discovery now configures those
+paths explicitly for launchers and tests. Stock/minimal affected FreeFem checks
+pass again; the actual official Ubuntu 4.13 BinaryIO runtime also passes the
+100-cycle exchange check with its packaged idp/plugin paths. No equations or
+numerical options change, and the earlier timing checkpoint remains explicit.

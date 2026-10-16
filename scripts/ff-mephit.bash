@@ -27,7 +27,8 @@ fi
 ff_script=$scriptdir/maxwell_daemon.edp
 # The real Maxwell factors are always project-owned native FortSparse.
 # Missing/incompatible plugin is a hard load error; no external fallback.
-export FF_LOADPATH="$scriptdir;${FF_LOADPATH:-}"
+export FF_LOADPATH="$scriptdir;@MEPHIT_FREEFEM_PLUGIN_DIR@;${FF_LOADPATH:-}"
+export FF_INCLUDEPATH="@MEPHIT_FREEFEM_IDP_DIR@;${FF_INCLUDEPATH:-}"
 ff_script_args=( "-P" "$shared_namedpipe" "-S" "$suffix" )
 
 # Keep daemon diagnostics independently readable, including binary/NUL messages.

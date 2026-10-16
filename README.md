@@ -127,6 +127,12 @@ At ITPcp, you can reproduce the “standard” test case via:
 $MEPHIT_DIR/scripts/mephit.bash init -c data/mephit_g33353_2900_EQH.in -g /proj/plasma/DATA/BALANCE/EQUI/33353/g33353.2900_EQH_MARKL -d asdex $MEPHIT_RUN_DIR/33353_2900_EQH
 ```
 
+The configured SDK/runtime also supplies `BinaryIO.so` and `getARGV.idp`.
+CMake resolves both for that prefix and records the paths in the launcher and
+tests, including Debian/Ubuntu's split plugin/include layout. Nonstandard
+layouts can set `FREEFEM_BINARYIO_DIR` and `FREEFEM_IDP_DIR` explicitly; these
+must belong to the selected interpreter/SDK.
+
 ## Running simulations
 
 The config file `mephit.in` needs do be adapated for each simulation:

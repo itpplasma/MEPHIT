@@ -224,6 +224,7 @@
     "minimal_runtime_sparse_factor_closure": "vendor-free: interpreter, BinaryIO, module, libmephit",
     "executed_kernel_source_diff": "native/generated kernels, C ABI/header and solver source unchanged since measured a96033e",
     "other_source_changes": "additive explicit symmetry helper unused by MEPHIT; SDK config-header portability; documentation",
-    "head_timings": "not measured; above timing and resource records remain exact earlier checkpoint"
+    "head_timings": "not measured; above timing and resource records remain exact earlier checkpoint",
+    "runtime_resource_layouts": "stock 4.17 and minimal 4.17 FreeFem checks pass; actual Ubuntu 4.13 packaged BinaryIO 100-cycle exchange passes with resolved plugin/idp paths"
   }
 }
