@@ -1,6 +1,6 @@
 # The application selects project-owned native factors only. Dense BLAS/LAPACK
 # remain allowed; sparse-library factorization and helper fallbacks do not.
-set(FORTSPARSE_REF "a96033efac8279851588bf11fcf0d52ff860de3f" CACHE STRING
+set(FORTSPARSE_REF "19f9b4734a8e67faf05dac41bb19a2f8821eaaae" CACHE STRING
     "Pinned FortSparse revision")
 set(FORTSPARSE_PATH "" CACHE PATH "Optional local FortSparse source override")
 

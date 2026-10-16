@@ -66,3 +66,11 @@ the framing race without changing equations, Richardson corrections or gates.
 Raw failed/successful receipts, artifact hashes, full check output and runtime
 closure are retained in the task's `consumer-migrations/mephit` evidence bundle;
 no generated HDF5 output or private fixture is committed.
+
+The final dependency pin is `19f9b4734a8e67faf05dac41bb19a2f8821eaaae`.
+The CPU/RSS tables above remain the exact `83674ec` / `a96033e` measured
+checkpoint. Later upstream differences are an explicit symmetry-normalization
+helper that MEPHIT does not call, documentation, and FreeFem SDK configuration
+header portability (`FreeFEM-config.h` in Ubuntu 4.13, `config.h` in 4.17).
+Existing numerical factor/solve routines are unchanged. Affected consumer
+checks and linkage were repeated after the pin; no new head timing is inferred.

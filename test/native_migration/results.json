@@ -216,5 +216,14 @@
     "test/edge_cylinder/mephit.in": "96c908dd8cc8523a9d009fff9c7181250dd8fa28828a9edcc420040ec85004d7",
     "test/edge_cylinder/check.py": "0479c5f99ad3e248fc77a85f1b04a7c6362c9f2f41908d7cb6ca214fdc4920d9",
     "data/g000001.0001_TCFP_hip": "19782085dcb016656775a4889ebc4c03fcacda188dd24d0ab3397eb499e3cb16"
+  },
+  "postmeasurement_validation": {
+    "fortsparse_revision": "19f9b4734a8e67faf05dac41bb19a2f8821eaaae",
+    "stock_focused_tests": "10/10 pass",
+    "minimal_mfem_focused_tests": "11/11 pass",
+    "minimal_runtime_sparse_factor_closure": "vendor-free: interpreter, BinaryIO, module, libmephit",
+    "executed_kernel_source_diff": "native/generated kernels, C ABI/header and solver source unchanged since measured a96033e",
+    "other_source_changes": "additive explicit symmetry helper unused by MEPHIT; SDK config-header portability; documentation",
+    "head_timings": "not measured; above timing and resource records remain exact earlier checkpoint"
   }
 }
