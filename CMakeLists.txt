@@ -200,6 +200,11 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/test/test_freefem_failure.py
     $<TARGET_FILE:test_process_supervisor> $<TARGET_FILE:test_pipe_client>)
   set_tests_properties(freefem_failure PROPERTIES TIMEOUT 30)
+  add_test(NAME freefem_protocol COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/test/test_freefem_protocol.py
+    $<TARGET_FILE:test_pipe_client> ${FREEFEM_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/test/test_freefem_protocol.edp)
+  set_tests_properties(freefem_protocol PROPERTIES TIMEOUT 20)
   add_test(NAME refine_unit_partition_edge COMMAND mephit_test_refine.x)
   add_executable(test_mesh_quadrature_cache test/test_mesh_quadrature_cache.f90)
   target_link_libraries(test_mesh_quadrature_cache mephit)

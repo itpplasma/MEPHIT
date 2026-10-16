@@ -118,7 +118,7 @@ varf rhsIm([dumx, dumy], [wx, wy]) =
   int2d(Th)(4.0 * pi / c * (wx * ImJR + wy * ImJZ))
   + on(2, dumx = 0, dumy = 0);
 state = 0;
-int loopcount = 0;
+int loopcount = 0, acknowledged = 0;
 while (state != -3) {
   LoadFlag(state, datapipe);
   flag(state, datapipe);
@@ -180,8 +180,10 @@ while (state != -3) {
     // output
     serializeRT0(ReBR, ImBR);
     SaveVec(edgedata, datapipe);
+    LoadFlag(acknowledged, datapipe);
     serializeP1(ReP1AR, ImP1AR);
     SaveVec(pointdata, datapipe);
+    LoadFlag(acknowledged, datapipe);
     serializeP1(ReP1AZ, ImP1AZ);
     SaveVec(pointdata, datapipe);
   } else if (state == -2) {

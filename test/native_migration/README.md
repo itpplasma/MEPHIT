@@ -50,8 +50,16 @@ A FreeFem 4.17 prefix without external sparse solver libraries was built from
 commit `754dae8ae8f858784ad46b2f46dfd7862829cb5a`. Its core configure guards
 include `--disable-system-umfpack --disable-umfpack --without-petsc
 --without-petsc_complex --without-mpi`, with MUMPS, SuperLU and automatic
-third-party downloads disabled. The exact tested provisioning recipe and
-artifact hashes accompany the migration results. The interpreter may retain
+third-party downloads disabled. The [tested provisioning recipe](minimal-freefem.md) and artifact hashes
+accompany the migration results. The interpreter may retain
 dense BLAS/LAPACK, ARPACK, HDF5 and transitive MPI dependencies; the guarantee
 concerns external sparse factors. Configure both the explicit executable and
 matching SDK tool paths; the launcher resolves no substitute at runtime.
+
+The first native cylinder attempt exposed an existing BinaryIO framing race:
+three consecutive vector replies reopened one FIFO without acknowledgment.
+A receiver could reopen the next header while the previous writer remained
+open and then receive EOF. The adapter now acknowledges the first two replies;
+the last reply retains the existing next-request turnaround. The delayed peer
+regression reproduces the vulnerable interleaving independently, and the actual
+BinaryIO regression runs 100 scalar/vector cycles. This changes framing only.

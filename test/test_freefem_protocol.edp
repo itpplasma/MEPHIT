@@ -1,0 +1,25 @@
+load "BinaryIO"
+include "getARGV.idp"
+string reply = getARGV("-P", "");
+string request = reply;
+int value, state, ack;
+for (int k = 0; k < 4; ++k) {
+  LoadFlag(value, request);
+  flag(value, reply);
+}
+real[int] data(4), integral(1);
+integral[0] = 7.25;
+while (true) {
+  LoadFlag(state, request);
+  flag(state, reply);
+  if (state == -3) break;
+  LoadVec(data, request);
+  if (state == -1) {
+    for (int k = 0; k < 3; ++k) {
+      SaveVec(data, reply);
+      if (k < 2) LoadFlag(ack, request);
+    }
+  } else {
+    SaveVec(integral, reply);
+  }
+}
