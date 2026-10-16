@@ -1,4 +1,4 @@
-load "MUMPS"
+load "fortsparse_native"
 
 include "extmesh.edp"
 real[int] bb(4);

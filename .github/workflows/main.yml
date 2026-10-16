@@ -15,8 +15,8 @@ on:
     inputs:
       libneo_ref:
         default: ''
-      # Accepted for a uniform full-ci gate dispatch; MEPHIT CI is build-only, so the
-      # build against the candidate libneo is the gate and full changes nothing.
+      # Accepted for a uniform full-ci dispatch. The build and focused native
+      # sparse checks run for each candidate; full does not expand that scope.
       full:
         default: 'false'
 
@@ -37,3 +37,6 @@ jobs:
 
       - name: Build
         run: make ${{ inputs.libneo_ref != '' && format('LIBNEO_REF={0}', inputs.libneo_ref) || '' }}
+
+      - name: Native sparse and FreeFem correctness checks
+        run: ctest --test-dir build -R '^(native_(sparse|freefem)_|freefem_(failure|protocol)$)' --output-on-failure -j 2
