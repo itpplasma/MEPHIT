@@ -4,10 +4,9 @@ name: CI
 
 # Controls when the workflow will run
 on:
-  # Triggers the workflow on push or pull request events but only for the "main" branch
-  push:
-    branches: [ "main" ]
+  # Pull requests and the merge queue; main itself is not re-tested on push
   pull_request:
+  merge_group:
 
   # Allows you to run this workflow manually from the Actions tab
   workflow_dispatch:
