@@ -3,13 +3,12 @@
   Both Kummer series and continued fractions are used.
 */
 
+#include <float.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
 
-#include <gsl/gsl_errno.h>
-#include <gsl/gsl_integration.h>
-#include <gsl/gsl_sum.h>
+#include "fortnum.h"
 
 #include "hyper1F1.h"
 
@@ -51,30 +50,18 @@ void hypergeometric1f1_quad(double *b_re, double *b_im,
                             double *f_re, double *f_im)
 {
   // computes function 1F1(a,b,z) for a = 1 and complex b & z by quadrature
-  // must be optimized: avoid memory allocation!
-
-  gsl_set_error_handler_off();
 
   complex_double b = CMPLX(*b_re, *b_im), z = CMPLX(*z_re, *z_im);
 
-  size_t limit = 100;
   double epsabs = 1.0e-12, epsrel = 1.0e-12, err;
-
-  gsl_integration_workspace *w = gsl_integration_workspace_alloc(limit);
 
   struct quad_params qp = {b, z, 0};
 
-  gsl_function F;
-  F.function = &exp1mt;
-  F.params = &qp;
-
   qp.part = 0;
-  gsl_integration_qag(&F, 0.0, 1.0, epsabs, epsrel, limit, GSL_INTEG_GAUSS21, w, f_re, &err);
+  fortnum_integrate_qag(&exp1mt, 0.0, 1.0, epsabs, epsrel, 21, f_re, &err, &qp);
 
   qp.part = 1;
-  gsl_integration_qag(&F, 0.0, 1.0, epsabs, epsrel, limit, GSL_INTEG_GAUSS21, w, f_im, &err);
-
-  gsl_integration_workspace_free(w);
+  fortnum_integrate_qag(&exp1mt, 0.0, 1.0, epsabs, epsrel, 21, f_im, &err, &qp);
 }
 
 /*******************************************************************/
@@ -305,23 +292,19 @@ void hypergeometric1f1_kummer_modified_0_accel(double *b_re, double *b_im,
     t_im[n] = cimag(term[n]);
   }
 
-  gsl_sum_levin_u_workspace *w = gsl_sum_levin_u_alloc((size_t) N);
-
   double err;
 
-  gsl_sum_levin_u_accel(t_re, (size_t) N, w, f_re, &err);
+  fortnum_levin_u_accel(t_re, N, f_re, &err);
   if (err > 1.0e-16) {
-    fprintf(stdout, "\nerr = %.16le sum_re = %.16le using %ld terms",
-            err, *f_re, w->terms_used);
+    fprintf(stdout, "\nerr = %.16le sum_re = %.16le using %d terms",
+            err, *f_re, N);
   }
 
-  gsl_sum_levin_u_accel(t_im, (size_t) N, w, f_im, &err);
+  fortnum_levin_u_accel(t_im, N, f_im, &err);
   if (err > 1.0e-16) {
-    fprintf(stdout, "\nerr = %.16le sum_im = %.16le using %ld terms",
-            err, *f_im, w->terms_used);
+    fprintf(stdout, "\nerr = %.16le sum_im = %.16le using %d terms",
+            err, *f_im, N);
   }
-
-  gsl_sum_levin_u_free(w);
 }
 
 /*******************************************************************/
