@@ -8,8 +8,6 @@ module load mkl
 module load fftw-serial
 module load boost
 module load gsl
-module load metis
-export METIS_DIR=$METIS_HOME
 module load anaconda/3/2023.03
 
 export CC=`which gcc`

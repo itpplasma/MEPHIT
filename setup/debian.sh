@@ -2,6 +2,6 @@
 
 sudo apt-get update -y && sudo apt-get install -y -q --no-install-recommends \
     cmake make ninja-build git gfortran gcc patch libgsl-dev \
-    libopenblas-dev libsuitesparse-dev libmetis-dev zlib1g-dev \
-    libboost-dev libfftw3-dev \
+    libopenblas-dev libsuitesparse-dev zlib1g-dev \
+    libboost-dev libfftw3-dev freefem++ libfreefem++-dev \
     openmpi-bin libopenmpi-dev python3 python3-dev python3-pip python3-numpy

@@ -6,15 +6,16 @@ Prerequisites from external sources for running MEPHIT are as follows.
 
 - current GNU/Linux environment (Bash, coreutils, getopt, ...)
 - current Fortran compiler (tested with `gfortran` >= 13.1.0)
-- [CMake](https://cmake.org/)
+- [CMake](https://cmake.org/) >= 3.22
 - [libneo](https://github.com/itpplasma/libneo)
 - [LAPACK](https://www.netlib.org/lapack/)
-- [SuiteSparse](https://github.com/DrTimothyAldenDavis/SuiteSparse)
+- [FortSparse](https://github.com/lazy-fortran/fortsparse), fetched at a pinned revision
+- [AMD](https://github.com/DrTimothyAldenDavis/SuiteSparse/tree/dev/AMD) ordering headers/library (BSD); no external sparse factors
 - [GSL](https://www.gnu.org/software/gsl/)
 - [FFTW3](http://fftw.org/)
 - [Triangle](https://www.cs.cmu.edu/~quake/triangle.html)
 - [Boost](https://www.boost.org/)
-- [FreeFem++](https://github.com/FreeFem/FreeFem-sources)
+- [FreeFem++](https://github.com/FreeFem/FreeFem-sources), including its plugin SDK (`ff-c++` and headers)
 - [MFEM](https://mfem.org/) is optional
 - [zlib](https://zlib.net/) for Fortio's compressed NetCDF-4/HDF5 subset;
   Fortio itself is fetched transitively through libneo
@@ -29,6 +30,55 @@ The build pins a tested libneo commit. To fetch a different branch, tag, or comm
 pass `-DLIBNEO_REF=<ref>` to cmake or `make LIBNEO_REF=<ref>`. To use a local libneo
 source tree instead of fetching from git, pass `-DLIBNEO_PATH=<dir>` or
 `make LIBNEO_PATH=<dir>`.
+
+Sparse solves use FortSparse's native general LU exclusively in the Fortran
+FDM solver, the optional MFEM path and the real FreeFem Maxwell daemon.
+The build pins FortSparse commit
+`1cc17e31a01f5fa3ec5db58f5f399e2f7eb97955`; `FORTSPARSE_PATH` selects a local
+source tree and `FORTSPARSE_REF` overrides the fetched revision. SuperLU,
+UMFPACK helpers and MUMPS are disabled, with no factorization fallback. Dense
+BLAS/LAPACK remain dependencies. MFEM is built serially without external sparse
+factorization libraries; prebuilt MFEM configurations with those libraries are
+rejected. More than one MPI process is unsupported by the MFEM adapter.
+
+The existing Fortran `sparse_solve` APIs and factor/solve/free lifecycle remain.
+Method 3 (default) disables refinement; method 2 enables original-matrix
+refinement. Historical `sparse_solve_suitesparse` names remain compatibility
+aliases to native code. Both MFEM solves enable refinement, as their previous
+solver did. AMD ordering replaces the previous MFEM METIS ordering;
+this migration makes no performance claim. Matrix assembly, RHS definitions and
+normal-operation solve conventions are unchanged. Factorization or solve errors
+fail explicitly. The legacy Fortran interface still owns one retained factor at
+a time and is not reentrant.
+
+FortSparse owns the optional `fortsparse_native` FreeFem module, built from
+the installed SDK compile definitions, while
+linking FortSparse directly without the SDK tool's external solver link flags.
+Unused UMFPACK/CHOLMOD SDK adapters are excluded from the plugin headers;
+SDK ABI definitions are preserved. AMD supplies only the ordering permutation.
+The launcher uses the exact configured serial `FREEFEM_EXECUTABLE`, loads the
+native plugin and has no
+MUMPS/UMFPACK fallback. Its retained real factors support normal/transpose
+solves; the existing three Maxwell Richardson corrections are unchanged. The
+installed FreeFem executable may itself contain unused external solver code;
+linkage checks apply to the MEPHIT library and native plugin. The daemon must
+successfully load this plugin. For standalone `electrostatics.edp` use the build's
+`scripts` directory in `FF_LOADPATH` as the launcher does.
+
+For full runtime independence, provide a FreeFem runtime/SDK built without
+external sparse solvers, then configure both `FREEFEM_EXECUTABLE` and
+`FREEFEM_CXX_EXECUTABLE` to that prefix's `bin/FreeFem++` and `bin/ff-c++`.
+A stock interpreter with unused vendor libraries remains valid for native factor
+execution. The verified minimal-runtime recipe and migration measurement scope
+are described in [test/native_migration](test/native_migration/README.md).
+
+Focused checks after building are `ctest --test-dir build -R '^native_sparse_'`
+plus `ctest --test-dir build -R '^native_freefem_'`; with `WITH_MFEM=ON`,
+run `ctest --test-dir build -R '^native_mfem_adapter$'`.
+These cover independent known solutions, retained factors, input/singular
+failures, and actual shared-library linkage. They do not replace scientific
+cylinder regression or qualify other configurations. The matched migration
+measurement recipe is in [test/native_migration](test/native_migration/README.md).
 
 To build MEPHIT, run:
 
@@ -76,6 +126,12 @@ At ITPcp, you can reproduce the “standard” test case via:
 ```bash
 $MEPHIT_DIR/scripts/mephit.bash init -c data/mephit_g33353_2900_EQH.in -g /proj/plasma/DATA/BALANCE/EQUI/33353/g33353.2900_EQH_MARKL -d asdex $MEPHIT_RUN_DIR/33353_2900_EQH
 ```
+
+The configured SDK/runtime also supplies `BinaryIO.so` and `getARGV.idp`.
+CMake resolves both for that prefix and records the paths in the launcher and
+tests, including Debian/Ubuntu's split plugin/include layout. Nonstandard
+layouts can set `FREEFEM_BINARYIO_DIR` and `FREEFEM_IDP_DIR` explicitly; these
+must belong to the selected interpreter/SDK.
 
 ## Running simulations
 

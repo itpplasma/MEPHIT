@@ -159,6 +159,17 @@ void FEM_extend_mesh(void)
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
 }
 
+/* BinaryIO closes each vector stream. Acknowledge its complete consumption
+ * before the daemon opens the next reply. The final reply instead uses the
+ * existing next-request turnaround, so no adjacent acknowledgment/request
+ * writes can race with a still-open reader. */
+static void receive_reply_vector(int size, double *data)
+{
+  const long int acknowledged = 0;
+  receive_double1_from_FreeFem(shared_namedpipe, size, data);
+  send_long0_to_FreeFem(shared_namedpipe, &acknowledged);
+}
+
 void FEM_compute_magfn(const int nedge,
                        const int npoint,
                        const complex_double *Jn,
@@ -172,9 +183,9 @@ void FEM_compute_magfn(const int nedge,
   send_long0_to_FreeFem(shared_namedpipe, &flag);
   receive_long0_from_FreeFem(shared_namedpipe, &flag);
   send_double1_to_FreeFem(shared_namedpipe, size, (double *) Jn);
-  receive_double1_from_FreeFem(shared_namedpipe, size, (double *) Bn);
+  receive_reply_vector(size, (double *) Bn);
   size = 2 * npoint;
-  receive_double1_from_FreeFem(shared_namedpipe, size, (double *) AnR);
+  receive_reply_vector(size, (double *) AnR);
   receive_double1_from_FreeFem(shared_namedpipe, size, (double *) AnZ);
 }
 

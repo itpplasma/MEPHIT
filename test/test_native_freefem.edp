@@ -1,0 +1,14 @@
+load "BinaryIO"
+load "fortsparse_native"
+real[int,int] dense=[[4.,0.,-1.],[2.,3.,0.],[0.,-2.,5.]];
+matrix A=dense;
+set(A,solver=sparsesolver);
+real[int] b=[3.5,-4.,6.5], solution=A^-1*b;
+assert(abs(solution[0]-1.)<2e-14 && abs(solution[1]+2.)<2e-14 && abs(solution[2]-.5)<2e-14);
+b=2.*b; solution=A^-1*b;
+assert(abs(solution[0]-2.)<4e-14 && abs(solution[1]+4.)<4e-14 && abs(solution[2]-1.)<4e-14);
+real[int] bt=[0.,-7.,1.5]; solution=A'^-1*bt;
+assert(abs(solution[0]-1.)<2e-14 && abs(solution[1]+2.)<2e-14 && abs(solution[2]-.5)<2e-14);
+A(0,0)=8.; b=[7.5,-4.,6.5]; solution=A^-1*b;
+assert(abs(solution[0]-1.)<2e-14 && abs(solution[1]+2.)<2e-14 && abs(solution[2]-.5)<2e-14);
+cout << "PASS FREEFEM NATIVE N/T REUSE/UPDATE" << endl;

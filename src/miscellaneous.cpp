@@ -3,6 +3,7 @@
 //
 
 #include "miscellaneous.h"
+#include "mephit_native_mfem.h"
 #include <random>
 
 double utility::mfem_helper::evaluate_bilinear_form(const mfem::SparseMatrix &A, const mfem::Vector &u,
@@ -104,16 +105,7 @@ mfem::Vector utility::mfem_helper::solve_penalty(const mfem::SparseMatrix &A, co
     P.Finalize();
     mfem::Vector sol(rhs.Size());
 
-    //construct solver
-#ifndef MFEM_USE_SUITESPARSE
-    throw std::runtime_error("solver not available. Recopile mfem!");
-#else
-    // If MFEM was compiled with SuiteSparse, use UMFPACK to solve the system.
-    mfem::UMFPackSolver umf_solver;
-    umf_solver.Control[UMFPACK_ORDERING] = UMFPACK_ORDERING_METIS;
-    umf_solver.SetOperator(P);
-    umf_solver.Mult(b, sol);
-#endif
+    mephit::solve_native(P, b, sol);
 
     return sol;
 }
