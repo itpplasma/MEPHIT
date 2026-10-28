@@ -210,6 +210,9 @@ if(BUILD_TESTING)
     set_tests_properties(edge_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
       LABELS freefem)
   endif()
+  add_executable(test_resonant_current_assembly test/test_resonant_current_assembly.f90)
+  target_link_libraries(test_resonant_current_assembly mephit)
+  add_test(NAME resonant_current_assembly COMMAND test_resonant_current_assembly)
 endif()
 
 ### Add helper script to binaries
