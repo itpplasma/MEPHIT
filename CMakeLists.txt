@@ -4,7 +4,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 ### Define the project
 project(MEPHIT LANGUAGES C CXX Fortran)
-include(CTest)
 
 ### Define options
 option(WITH_MFEM "Compile with MFEM" FALSE)
@@ -238,49 +237,48 @@ if(BUILD_TESTING)
     set_tests_properties(edge_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
       LABELS freefem)
   endif()
-endif()
+  if(WITH_FORTFEM)
+    add_executable(test_fortfem_adapter
+      test/test_fortfem_adapter.c
+      src/mephit_fortfem.c)
+    target_include_directories(test_fortfem_adapter PRIVATE src)
+    target_link_libraries(test_fortfem_adapter PRIVATE fortfem::capi m)
+    add_test(NAME fortfem_adapter COMMAND test_fortfem_adapter)
 
-if(WITH_FORTFEM AND BUILD_TESTING)
-  add_executable(test_fortfem_adapter
-    test/test_fortfem_adapter.c
-    src/mephit_fortfem.c)
-  target_include_directories(test_fortfem_adapter PRIVATE src)
-  target_link_libraries(test_fortfem_adapter PRIVATE fortfem::capi m)
-  add_test(NAME fortfem_adapter COMMAND test_fortfem_adapter)
+    add_executable(test_fortfem_production_mesh
+      test/test_fortfem_production_mesh.c
+      src/mephit_fortfem.c)
+    target_include_directories(test_fortfem_production_mesh PRIVATE src)
+    target_link_libraries(test_fortfem_production_mesh PRIVATE fortfem::capi m)
+    add_test(
+      NAME fortfem_production_mesh
+      COMMAND test_fortfem_production_mesh)
 
-  add_executable(test_fortfem_production_mesh
-    test/test_fortfem_production_mesh.c
-    src/mephit_fortfem.c)
-  target_include_directories(test_fortfem_production_mesh PRIVATE src)
-  target_link_libraries(test_fortfem_production_mesh PRIVATE fortfem::capi m)
-  add_test(
-    NAME fortfem_production_mesh
-    COMMAND test_fortfem_production_mesh)
+    add_executable(test_fortfem_dispatch
+      test/test_fortfem_dispatch.c)
+    target_include_directories(test_fortfem_dispatch PRIVATE src)
+    target_link_libraries(test_fortfem_dispatch PRIVATE mephit)
+    add_test(NAME fortfem_dispatch COMMAND test_fortfem_dispatch)
 
-  add_executable(test_fortfem_dispatch
-    test/test_fortfem_dispatch.c)
-  target_include_directories(test_fortfem_dispatch PRIVATE src)
-  target_link_libraries(test_fortfem_dispatch PRIVATE mephit)
-  add_test(NAME fortfem_dispatch COMMAND test_fortfem_dispatch)
+    add_test(
+      NAME fortfem_no_daemon
+      COMMAND
+        ${CMAKE_COMMAND}
+        -DMEPHIT_RUN=$<TARGET_FILE:mephit_run.x>
+        -DTEST_TEMP=${PROJECT_BINARY_DIR}
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/test_fortfem_no_daemon.cmake)
 
-  add_test(
-    NAME fortfem_no_daemon
-    COMMAND
-      ${CMAKE_COMMAND}
-      -DMEPHIT_RUN=$<TARGET_FILE:mephit_run.x>
-      -DTEST_TEMP=${PROJECT_BINARY_DIR}
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/test/test_fortfem_no_daemon.cmake)
-
-  add_test(
-    NAME fortfem_no_triangle
-    COMMAND
-      ${CMAKE_COMMAND}
-      -DC_COMPILER=${CMAKE_C_COMPILER}
-      -DMEPHIT_INCLUDE=${CMAKE_CURRENT_SOURCE_DIR}/src
-      -DFORTFEM_INCLUDE=$<TARGET_PROPERTY:fortfem::capi,INTERFACE_INCLUDE_DIRECTORIES>
-      -DMEPHIT_FEM_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/mephit_fem.c
-      -DTEST_OBJECT=${PROJECT_BINARY_DIR}/test_fortfem_no_triangle.o
-      -P ${CMAKE_CURRENT_SOURCE_DIR}/test/test_fortfem_no_triangle.cmake)
+    add_test(
+      NAME fortfem_no_triangle
+      COMMAND
+        ${CMAKE_COMMAND}
+        -DC_COMPILER=${CMAKE_C_COMPILER}
+        -DMEPHIT_INCLUDE=${CMAKE_CURRENT_SOURCE_DIR}/src
+        -DFORTFEM_INCLUDE=$<TARGET_PROPERTY:fortfem::capi,INTERFACE_INCLUDE_DIRECTORIES>
+        -DMEPHIT_FEM_SOURCE=${CMAKE_CURRENT_SOURCE_DIR}/src/mephit_fem.c
+        -DTEST_OBJECT=${PROJECT_BINARY_DIR}/test_fortfem_no_triangle.o
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/test/test_fortfem_no_triangle.cmake)
+  endif()
 endif()
 
 ### Add helper script to binaries
