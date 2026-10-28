@@ -93,6 +93,7 @@ set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
 
 set(MEPHIT_FORTRAN_SRC_FILES
+  src/mephit_iteration_state.f90
   src/mephit_conf.f90
   src/mephit_util.f90
   src/mephit_mesh.F90
@@ -210,6 +211,9 @@ if(BUILD_TESTING)
     set_tests_properties(edge_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
       LABELS freefem)
   endif()
+  add_executable(test_iteration_state test/test_iteration_state.f90)
+  target_link_libraries(test_iteration_state mephit)
+  add_test(NAME iteration_state COMMAND test_iteration_state)
 endif()
 
 ### Add helper script to binaries

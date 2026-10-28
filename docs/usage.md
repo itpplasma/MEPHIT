@@ -149,6 +149,34 @@ For each `mephit*.in`, with `*` a possible suffix:
   FreeFem++,
 - `fglut_dump*`: FreeFem++ graphics, viewable with `ffglut`.
 
+## Iteration acceptance and output state
+
+Iterative runs accept the field supplied to the pressure, current and Maxwell
+calculations when its original map residual, `K B + Bvac - B`, passes
+`iter_rel_err`. The accepted field and saved pressure/current share that input.
+The residual uses the existing R-weighted poloidal field norm and vacuum norm;
+the toroidal component is reconstructed from discrete zero divergence. With
+zero vacuum norm, acceptance requires an exactly zero original residual.
+
+`iter/map_rel_err`, `iter/converged` and `iter/reason` record acceptance.
+`iter/rel_err` remains the relative preconditioned map-step norm, including the
+prospective step at the accepted input. `iter/L2int_Bn_map_residual` stores the
+original residual history, while `iter/L2int_Bn_diff` stores the step history.
+`iter/nupdates` counts updates actually performed; `iter/niter` is the final
+zero-based map-evaluation index. An exhausted run saves its last evaluated
+input and coherent pressure/current with `converged=false`, then exits
+unsuccessfully after normal solver cleanup. No update is made beyond the limit.
+When iterations and the sheet phase run together, a non-converged iteration
+skips the sheet phase.
+
+The explicit single-update mode retains one mapped field and pressure/current
+from its input. It writes `iter/Bn_constitutive_input`, `consistent_state=false`,
+`converged=false` and `reason=single-update`. This output is a one-map diagnostic.
+Iterative final outputs have `consistent_state=true`; the vector potentials
+describe the plasma current at their constitutive input. The difference between
+their mapped magnetic field plus vacuum and the accepted field is the recorded
+original residual. `iter/metric=original-map-input-v1` identifies this contract.
+
 ## Plotting
 
 Install the plotting package `mephit_plot` from the repository root:
