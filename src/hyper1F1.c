@@ -296,13 +296,13 @@ void hypergeometric1f1_kummer_modified_0_accel(double *b_re, double *b_im,
 
   fortnum_levin_u_accel(t_re, N, f_re, &err);
   if (err > 1.0e-16) {
-    fprintf(stdout, "\nerr = %.16le sum_re = %.16le using %d terms",
+    fprintf(stdout, "\nerr = %.16le sum_re = %.16le from %d supplied terms",
             err, *f_re, N);
   }
 
   fortnum_levin_u_accel(t_im, N, f_im, &err);
   if (err > 1.0e-16) {
-    fprintf(stdout, "\nerr = %.16le sum_im = %.16le using %d terms",
+    fprintf(stdout, "\nerr = %.16le sum_im = %.16le from %d supplied terms",
             err, *f_im, N);
   }
 }
