@@ -1,0 +1,63 @@
+! MEPHIT template for ITER (TC24 setup), n = 3, ideal MHD, 27 bl2 ELM coils.
+! Single iteration (runmode 0) to test meshing, vacuum field read and one response step;
+! use runmode 2 and niter 75 for production.  Lengths in cm, fields in gauss.
+&scalars
+   config%log_level = 4
+   ! the TC24 gfile is cut at an inner flux surface (no X-point): stop at SIBRY
+   config%truncate_at_sibry = .true.
+   ! 0: single iteration, 1: direct iterations, 2: preconditioned iterations
+   config%runmode = 0
+   config%pres_prof = 2
+   config%curr_prof = 2
+   config%q_prof = 1
+   config%refinement_scheme = 0
+   ! 0: iMHD
+   config%currn_model = 0
+   ! 2: pre-computed Fourier modes of the Biot-Savart field
+   config%vac_src = 2
+   ! coil files carry 1 winding (4th header field = 1.00) and the current file
+   ! is in ampere-turns, so only A -> statA/c_0 = 0.1 remains (AUG: 5 * 0.1)
+   config%Biot_Savart_prefactor = 1.0d-1
+   config%coil_file = 'ITER_BL2_coils.h5'
+   config%currents_file = 'tc24_bl2_n3_phi000.dat'
+   config%n = 3
+   ! n.dat, Te.dat, Ti.dat and Er.dat are read even for ideal MHD (currn_model = 0), but not used
+   config%niter = 1
+   config%iter_rel_err = 1d-9
+   config%nkrylov = 100
+   config%ritz_threshold = 0.5d0
+   config%ritz_rel_err = 1d-9
+   ! cm; AUG uses 1 cm for a = 50 cm, so a = 200 cm suggests about 4 cm
+   config%max_Delta_rad = 4.0d0
+   config%pol_max = 0
+   config%pol_min = 0
+   config%ignore_q1_res = .true.
+   config%damp = .true.
+   config%max_eig_out = 10
+   config%m_max = 24
+/
+&arrays
+   ! resonances m = 4..10 (q = 4/3 .. 10/3) for a surface cut at s_pol = 0.997; widths in cm are first guesses
+   ! scaled by a_ITER/a_AUG = 4 from the AUG sample, to be tuned
+   refinement(4) = 1.5d0
+   refinement(5) = 1.5d0
+   refinement(6) = 1.5d0
+   refinement(7) = 1.5d0
+   refinement(8) = 1.5d0
+   refinement(9) = 1.5d0
+   refinement(10) = 1.5d0
+   add_fine(4) = 4
+   add_fine(5) = 4
+   add_fine(6) = 4
+   add_fine(7) = 4
+   add_fine(8) = 4
+   add_fine(9) = 4
+   add_fine(10) = 2
+   Delta_rad_res(4) = 0.06d0
+   Delta_rad_res(5) = 0.06d0
+   Delta_rad_res(6) = 0.06d0
+   Delta_rad_res(7) = 0.06d0
+   Delta_rad_res(8) = 0.06d0
+   Delta_rad_res(9) = 0.1d0
+   Delta_rad_res(10) = 0.2d0
+/

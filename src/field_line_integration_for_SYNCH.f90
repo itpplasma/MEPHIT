@@ -9,6 +9,9 @@
     integer :: circ_mesh_scale = 0
     ! set this to true to let theta start at the line between O- and X-Point
     logical :: theta0_at_xpoint = .true.
+    ! stop the scan of flux surfaces at the boundary flux of the equilibrium (SIBRY)
+    ! instead of the outermost closed surface inside the computational box
+    logical :: truncate_at_sibry = .false.
     double precision, dimension(2) :: o_point, x_point, theta_axis
     double precision :: theta0
   end module field_line_integration_mod
@@ -18,13 +21,13 @@
                                               rbeg,rsmall,qsaf,psisurf,phitor, &
                                               circumf,R_st,Z_st,bmod_st,sqgnorm_st)
 !
-  use field_eq_mod,  only : icall_eq,nrad,nzet,rad,zet,rtf,btf
+  use field_eq_mod,  only : icall_eq,nrad,nzet,rad,zet,rtf,btf,psi_sep
   use field_sub, only : psif,dpsidr,dpsidz,d2psidr2,d2psidrdz,d2psidz2
   use odeint_allroutines_sub, only: odeint_allroutines
   !use theta_rz_mod, only : nsqp,hsqpsi,spllabel
   use rhs_surf_mod, only : dr_dphi, dz_dphi
   use field_line_integration_mod, only: circ_mesh_scale, o_point, x_point, &
-       theta0_at_xpoint, theta_axis, theta0
+       theta0_at_xpoint, theta_axis, theta0, truncate_at_sibry
   use magdata_in_symfluxcoor_mod, only: btor, rbig
   use field_sub, only : field_eq
 !
@@ -126,6 +129,15 @@
      nsurf = floor((r_sep - raxis) / hbr) - 1
   else
      surf: do isurf=1,nsurfmax
+        if (truncate_at_sibry) then
+           ! psif is counted from the axis, so psif / psi_sep is the normalized poloidal flux
+           call field_eq(raxis+hbr*isurf,0.d0,zaxis,Br,Bp,Bz,dBrdR,dBrdp,dBrdZ  &
+                        ,dBpdR,dBpdp,dBpdZ,dBzdR,dBzdp,dBzdZ)
+           if (psif / psi_sep .ge. 1.d0) then
+              nsurf=isurf-1
+              exit surf
+           endif
+        endif
         phi=0.d0
         phiout=h
         ymet(1)=raxis+hbr*isurf
