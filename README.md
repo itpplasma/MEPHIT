@@ -34,7 +34,7 @@ source tree instead of fetching from git, pass `-DLIBNEO_PATH=<dir>` or
 Sparse solves use FortSparse's native general LU exclusively in the Fortran
 FDM solver, the optional MFEM path and the real FreeFem Maxwell daemon.
 The build pins FortSparse commit
-`1cc17e31a01f5fa3ec5db58f5f399e2f7eb97955`; `FORTSPARSE_PATH` selects a local
+`d5ab98a8b5d12550eb9aacf795eba97d782f1735`; `FORTSPARSE_PATH` selects a local
 source tree and `FORTSPARSE_REF` overrides the fetched revision. SuperLU,
 UMFPACK helpers and MUMPS are disabled, with no factorization fallback. Dense
 BLAS/LAPACK remain dependencies. MFEM is built serially without external sparse
