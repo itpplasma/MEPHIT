@@ -13,10 +13,31 @@
 
 char shared_namedpipe[path_max];
 
+static void pipe_transfer(int fd, void *data, ssize_t size, int writing,
+                          const char *namedpipe)
+{
+  ssize_t total = 0;
+  while (total < size) {
+    ssize_t transferred = writing
+      ? write(fd, (char *) data + total, (size_t) (size - total))
+      : read(fd, (char *) data + total, (size_t) (size - total));
+    if (transferred < 0 && errno == EINTR) {
+      continue;
+    }
+    if (transferred <= 0) {
+      errno_msg(_exit, __FILE__, __LINE__, transferred < 0 ? errno : EIO,
+                "FreeFem communication failed while %s pipe %s (%li/%li bytes); "
+                "check the FreeFem log and supervisor exit status",
+                writing ? "writing" : "reading", namedpipe, (long) total, (long) size);
+    }
+    total += transferred;
+  }
+}
+
 void send_long0_to_FreeFem(const char *namedpipe, const long int *long0)
 {
   int fd;
-  ssize_t bytes_written, total_bytes_written, bytes_expected;
+  ssize_t bytes_expected;
 
   if (!(namedpipe && strlen(namedpipe))) {
     errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for namedpipe");
@@ -29,16 +50,7 @@ void send_long0_to_FreeFem(const char *namedpipe, const long int *long0)
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to open pipe %s for writing", namedpipe);
   }
   bytes_expected = (ssize_t) sizeof(long int);
-  total_bytes_written = (ssize_t) 0;
-  do {
-    bytes_written = write(fd, (char *) long0 + total_bytes_written,
-                          (size_t) (bytes_expected - total_bytes_written));
-    if (bytes_written < (ssize_t) 0) {
-      errno_msg(_exit, __FILE__, __LINE__, errno ? errno : EIO,
-                "Failed to write to pipe %s", namedpipe);
-    }
-    total_bytes_written += bytes_written;
-  } while (total_bytes_written < bytes_expected);
+  pipe_transfer(fd, (void *) long0, bytes_expected, 1, namedpipe);
   if (close(fd)) {
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to close write end of pipe %s", namedpipe);
   }
@@ -47,7 +59,7 @@ void send_long0_to_FreeFem(const char *namedpipe, const long int *long0)
 void receive_long0_from_FreeFem(const char *namedpipe, long int *long0)
 {
   int fd;
-  ssize_t bytes_read, total_bytes_read, bytes_expected;
+  ssize_t bytes_expected;
 
   if (!(namedpipe && strlen(namedpipe))) {
     errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for namedpipe");
@@ -60,16 +72,7 @@ void receive_long0_from_FreeFem(const char *namedpipe, long int *long0)
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to open pipe %s for reading", namedpipe);
   }
   bytes_expected = (ssize_t) sizeof(long int);
-  total_bytes_read = (ssize_t) 0;
-  do {
-    bytes_read = read(fd, (char *) long0 + total_bytes_read,
-                      (size_t) (bytes_expected - total_bytes_read));
-    if (bytes_read < (ssize_t) 0) {
-      errno_msg(_exit, __FILE__, __LINE__, errno ? errno : EIO,
-                "Failed to read from pipe %s", namedpipe);
-    }
-    total_bytes_read += bytes_read;
-  } while (total_bytes_read < bytes_expected);
+  pipe_transfer(fd, (void *) long0, bytes_expected, 0, namedpipe);
   if (close(fd)) {
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to close read end of pipe %s", namedpipe);
   }
@@ -79,7 +82,7 @@ void send_double1_to_FreeFem(const char *namedpipe, const int size, const double
 {
   long int announced_size = size;
   int fd;
-  ssize_t bytes_written, total_bytes_written, bytes_expected;
+  ssize_t bytes_expected;
 
   if (!(namedpipe && strlen(namedpipe))) {
     errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for namedpipe");
@@ -92,27 +95,9 @@ void send_double1_to_FreeFem(const char *namedpipe, const int size, const double
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to open pipe %s for writing", namedpipe);
   }
   bytes_expected = (ssize_t) sizeof(long int);
-  total_bytes_written = (ssize_t) 0;
-  do {
-    bytes_written = write(fd, (char *) &announced_size + total_bytes_written,
-                          (size_t) (bytes_expected - total_bytes_written));
-    if (bytes_written < (ssize_t) 0) {
-      errno_msg(_exit, __FILE__, __LINE__, errno ? errno : EIO,
-                "Failed to write to pipe %s", namedpipe);
-    }
-    total_bytes_written += bytes_written;
-  } while (total_bytes_written < bytes_expected);
+  pipe_transfer(fd, (void *) &announced_size, bytes_expected, 1, namedpipe);
   bytes_expected = (ssize_t) ((unsigned) size * sizeof(double));
-  total_bytes_written = (ssize_t) 0;
-  do {
-    bytes_written = write(fd, (char *) double1 + total_bytes_written,
-                          (size_t) (bytes_expected - total_bytes_written));
-    if (bytes_written < (ssize_t) 0) {
-      errno_msg(_exit, __FILE__, __LINE__, errno ? errno : EIO,
-                "Failed to write to pipe %s", namedpipe);
-    }
-    total_bytes_written += bytes_written;
-  } while (total_bytes_written < bytes_expected);
+  pipe_transfer(fd, (void *) double1, bytes_expected, 1, namedpipe);
   if (close(fd)) {
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to close write end of pipe %s", namedpipe);
   }
@@ -122,7 +107,7 @@ void receive_double1_from_FreeFem(const char *namedpipe, const int size, double 
 {
   long int announced_size;
   int fd;
-  ssize_t bytes_read, total_bytes_read, bytes_expected;
+  ssize_t bytes_expected;
 
   if (!(namedpipe && strlen(namedpipe))) {
     errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for namedpipe");
@@ -135,32 +120,14 @@ void receive_double1_from_FreeFem(const char *namedpipe, const int size, double 
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to open pipe %s for reading", namedpipe);
   }
   bytes_expected = (ssize_t) sizeof(long int);
-  total_bytes_read = (ssize_t) 0;
-  do {
-    bytes_read = read(fd, (char *) &announced_size + total_bytes_read,
-                      (size_t) (bytes_expected - total_bytes_read));
-    if (bytes_read < (ssize_t) 0) {
-      errno_msg(_exit, __FILE__, __LINE__, errno ? errno : EIO,
-                "Failed to read from pipe %s", namedpipe);
-    }
-    total_bytes_read += bytes_read;
-  } while (total_bytes_read < bytes_expected);
+  pipe_transfer(fd, (void *) &announced_size, bytes_expected, 0, namedpipe);
   if (announced_size != size) {
     errno_msg(_exit, __FILE__, __LINE__, EIO,
               "Pipe %s contains %li double precision values, expected %i",
               namedpipe, announced_size, size);
   }
   bytes_expected = (ssize_t) ((unsigned) size * sizeof(double));
-  total_bytes_read = (ssize_t) 0;
-  do {
-    bytes_read = read(fd, (char *) double1 + total_bytes_read,
-                      (size_t) (bytes_expected - total_bytes_read));
-    if (bytes_read < (ssize_t) 0) {
-      errno_msg(_exit, __FILE__, __LINE__, errno ? errno : EIO,
-                "Failed to read from pipe %s", namedpipe);
-    }
-    total_bytes_read += bytes_read;
-  } while (total_bytes_read < bytes_expected);
+  pipe_transfer(fd, (void *) double1, bytes_expected, 0, namedpipe);
   if (close(fd)) {
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to close read end of pipe %s", namedpipe);
   }

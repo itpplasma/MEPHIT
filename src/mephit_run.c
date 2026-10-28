@@ -29,7 +29,7 @@ static child_process_t mephit;
 
 void wait_for_exit(child_process_t *child, const char *name)
 {
-  siginfo_t siginfo;
+  siginfo_t siginfo = {0};
 
   if (!child || child->exited) {
     return;
@@ -130,6 +130,8 @@ int main(int argc, char *argv[])
   }
  mephit_fork: mephit.pid = fork();
   if (mephit.pid == (pid_t) 0) {
+    // Turn a closed FreeFem pipe into a diagnostic instead of bare SIGPIPE.
+    signal(SIGPIPE, SIG_IGN);
     mephit_run(runmode, config, suffix);
     exit(0);
   } else if (mephit.pid == (pid_t) -1) {
@@ -164,14 +166,21 @@ int main(int argc, char *argv[])
     wait_for_exit(&fem, "FreeFem");
     wait_for_exit(&mephit, "MEPHIT");
     if (fem.exited && fem.status && !mephit.exited) {
+      fprintf(stderr, "FreeFem failed; stopping MEPHIT. See freefem%s.log "
+                      "and the preceding FreeFem exit status.\n", suffix);
       if (kill(mephit.pid, SIGTERM)) {
         errno_msg(NULL, __FILE__, __LINE__, errno, "Failed to terminate process MEPHIT");
       }
     }
     if (mephit.exited && mephit.status && !fem.exited) {
+      fprintf(stderr, "MEPHIT failed; stopping FreeFem. "
+                      "See the preceding MEPHIT diagnostic.\n");
       if (kill(fem.pid, SIGTERM)) {
         errno_msg(NULL, __FILE__, __LINE__, errno, "Failed to terminate process FreeFem");
       }
+    }
+    if (!(fem.exited && mephit.exited)) {
+      usleep(10000);
     }
   } while (!(fem.exited && mephit.exited));
   if (sigaction(SIGINT, &prev_sigint, NULL)) {

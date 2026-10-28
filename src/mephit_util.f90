@@ -15,7 +15,7 @@ module mephit_util
   public :: init_field, deinit_field, generate_symfluxcoord, load_symfluxcoord, save_symfluxcoord, &
     geqdsk_scale, geqdsk_export_hdf5, geqdsk_import_hdf5, &
     straight_cyl2bent_cyl, bent_cyl2straight_cyl, zd_cross, dd_cross, &
-    interp_psi_pol, interp1d, resample1d, pos_angle, linspace, &
+    interp_psi_pol, interp1d, resample1d, resistive_layer_width, pos_angle, linspace, &
     binsearch, interleave, heapsort_real, heapsort_complex, complex_abs_asc, complex_abs_desc, &
     arnoldi_break, hessenberg_eigvals, hessenberg_eigvecs, &
     C_F_string
@@ -149,6 +149,8 @@ contains
       nspl, nlabel, ntheta, twopi, h_theta, &
       rmn, rmx, zmn, zmx, raxis, zaxis, h_theta, psipol_max, psitor_max, &
       rbeg, rsmall, qsaf, psisurf, phitor, circumf, R_st, Z_st, bmod_st, sqgnorm_st
+    use mephit_conf, only: conf
+    use field_line_integration_mod, only: truncate_at_sibry
     real(dp), dimension(:, :), allocatable :: R_transp, Z_transp, bmod_transp, sqgnorm_transp
     integer :: fid, nstep, nsurfmax, k
 
@@ -163,6 +165,7 @@ contains
     read (fid, *) nsurfmax
     close(fid)
     call unload_magdata_in_symfluxcoord
+    truncate_at_sibry = conf%truncate_at_sibry
     allocate(rbeg(nlabel), rsmall(nlabel), qsaf(nlabel), psisurf(0:nlabel), phitor(0:nlabel), circumf(nlabel))
     allocate(R_transp(nlabel, ntheta), Z_transp(nlabel, ntheta), bmod_transp(nlabel, ntheta), sqgnorm_transp(nlabel, ntheta))
     call field_line_integration_for_SYNCH(nstep, nsurfmax, nlabel, ntheta, &
@@ -770,6 +773,48 @@ contains
     call plag_coeff(n_lag + 1, 1, resampled_x, sample_x(k_lo:k_hi), lag_coeff)
     resampled_y = sum(sample_y(k_lo:k_hi) * lag_coeff(kder, :))
   end function interp1d
+
+  !> Resistive width of the Alfven resonance at a rational surface in cm.
+  !>
+  !> The Alfven frequency of a mode with toroidal number n varies linearly across the
+  !> rational surface, \f$ \omega_{A}' = n (q'/q) v_{A,\varphi} / R_{0} \f$, and the
+  !> resonance is smoothed over \f$ \delta = (D_{\eta} / \omega_{A}')^{1/3} \f$ with the
+  !> magnetic diffusivity \f$ D_{\eta} = \eta / \mu_{0} \f$. The resistivity is the
+  !> parallel Spitzer value \f$ \eta = 5.2 \cdot 10^{-5} Z \ln\Lambda \, T_{e}^{-3/2} \f$
+  !> \f$ \Omega \, \mathrm{m} \f$ (T_e in eV) and \f$ \ln\Lambda = 24 - \ln(\sqrt{n_e} / T_e) \f$
+  !> (NRL Plasma Formulary, n_e in cm^-3). The ion mass density is \f$ n_e m_i / Z_i \f$.
+  !> This is the S^{-1/3} scaling of the resistive layer used in MARS-F.
+  function resistive_layer_width(B_tor, R_O, n_e, T_e, Z_i, m_i, n, q, dq_drad) &
+    result(width)
+    !> toroidal field in G
+    real(dp), intent(in) :: B_tor
+    !> major radius in cm
+    real(dp), intent(in) :: R_O
+    !> electron density in cm^-3
+    real(dp), intent(in) :: n_e
+    !> electron temperature in eV
+    real(dp), intent(in) :: T_e
+    !> ion charge number
+    real(dp), intent(in) :: Z_i
+    !> ion mass in proton masses
+    real(dp), intent(in) :: m_i
+    !> toroidal mode number
+    integer, intent(in) :: n
+    !> safety factor at the rational surface
+    real(dp), intent(in) :: q
+    !> radial derivative of the safety factor in cm^-1
+    real(dp), intent(in) :: dq_drad
+    real(dp) :: width
+    real(dp), parameter :: mu0 = 4d-7 * pi
+    real(dp) :: rho, v_A, omega_A_prime, eta, lnLambda
+
+    rho = n_e * 1d6 * m_i * m_p * 1d-3 / Z_i
+    v_A = B_tor * 1d-4 / sqrt(mu0 * rho)
+    omega_A_prime = dble(n) * abs(dq_drad * 1d2 / q) * v_A / (R_O * 1d-2)
+    lnLambda = 24d0 - log(sqrt(n_e) / T_e)
+    eta = 5.2d-5 * Z_i * lnLambda / T_e ** 1.5d0
+    width = 1d2 * (eta / mu0 / omega_A_prime) ** (1d0 / 3d0)
+  end function resistive_layer_width
 
   !> 1D piecewise Lagrange polynomial resampler
   subroutine resample1d(sample_x, sample_y, resampled_x, resampled_y, n_lag, deriv)

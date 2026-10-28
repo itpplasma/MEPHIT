@@ -3,7 +3,7 @@ BUILD_NINJA := $(BUILD_DIR)/build.ninja
 
 # Prevent ambient shell variables from silently altering which libneo is fetched.
 # unexport stops them reaching cmake via the child environment.
-unexport LIBNEO_REF LIBNEO_PATH LIBNEO_BRANCH LIBNEO_DIR
+unexport LIBNEO_REF LIBNEO_PATH
 
 # Forward only an explicitly passed command-line value, e.g. make LIBNEO_REF=main.
 # $(origin ...) == "command line" only when the user typed it on the make invocation;
