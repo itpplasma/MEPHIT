@@ -53,8 +53,6 @@ endif()
 
 cmake_policy(SET CMP0074 NEW)
 find_package(Boost 1.74 REQUIRED)
-find_package(GSL REQUIRED)
-find_package(FFTW REQUIRED COMPONENTS DOUBLE_LIB)
 
 include(ExternalProject)
 include(SetupCODE)
@@ -63,6 +61,28 @@ if(WITH_MFEM)
   include(SetupMFEM)
   add_definitions(-DUSE_MFEM)
 endif()
+### fortnum: numerical core replacing the former GSL and FFTW routines.
+### Declare it before libneo so that this pin is the one that is built; libneo
+### skips its own fortnum fetch when the target already exists and also reads
+### FORTNUM_REF. Keep the pin on fortnum main and in step with libneo's fpm.toml.
+set(FORTNUM_REF "1a52e13c5e28b09d083947a6ec7e8a1dcf9d502e" CACHE STRING
+  "fortnum branch, tag, or SHA to fetch")
+include(FetchContent)
+if(NOT TARGET fortnum)
+  FetchContent_Declare(fortnum
+    GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
+    GIT_TAG ${FORTNUM_REF}
+  )
+  FetchContent_MakeAvailable(fortnum)
+endif()
+# fortnum's C header lives in <source>/include; its target only exports the
+# Fortran module directory, so derive the header path from the target.
+get_target_property(FORTNUM_TARGET_SOURCE_DIR fortnum SOURCE_DIR)
+get_filename_component(FORTNUM_C_INCLUDE_DIR "${FORTNUM_TARGET_SOURCE_DIR}/../include" ABSOLUTE)
+if(NOT EXISTS "${FORTNUM_C_INCLUDE_DIR}/fortnum.h")
+  message(FATAL_ERROR "fortnum.h not found in ${FORTNUM_C_INCLUDE_DIR}")
+endif()
+
 include(Util)
 find_or_fetch(libneo)
 
@@ -82,8 +102,6 @@ set_source_files_properties(src/external/umf4_f77zwrapper.c PROPERTIES COMPILE_F
 
 set(COMMON_FORTRAN_SRC_FILES
   src/external/netlib_mod.f90
-  src/external/d1mach.f
-  src/fftw3.f90
   src/field_line_integration_for_SYNCH.f90
   src/magdata_in_symfluxcoord.f90
   src/points_2d.f90
@@ -118,7 +136,7 @@ if(WITH_MFEM)
   )
 endif()
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
+	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -I${FORTNUM_C_INCLUDE_DIR} -L${TRIANGLE_LIB_DIR}")
 
 
 ### Define library
@@ -133,13 +151,11 @@ add_dependencies(mephit TRIANGLE)
 target_include_directories(mephit PUBLIC
   ${magfie_include_dir}
   ${TRIANGLE_INCLUDE_DIR}
-  ${FFTW_INCLUDE_DIRS}
 )
 set(MEPHIT_LIBS
-  GSL::gsl
+  fortnum
   BLAS::BLAS
   LAPACK::LAPACK
-  ${FFTW_LIBRARIES}
   ${triangle_lib}
   LIBNEO::magfie
   LIBNEO::odeint
@@ -172,7 +188,6 @@ if(BUILD_TESTING)
   add_executable(test_process_supervisor
     src/mephit_run.c src/mephit_util.c test/test_process_stub.c)
   target_include_directories(test_process_supervisor PRIVATE src)
-  target_link_libraries(test_process_supervisor GSL::gsl)
   add_executable(test_pipe_client test/test_pipe_client.c)
   target_include_directories(test_pipe_client PRIVATE src)
   target_link_libraries(test_pipe_client mephit)

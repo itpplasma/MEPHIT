@@ -7,8 +7,6 @@
 - [CMake](https://cmake.org/) and Ninja
 - [LAPACK](https://www.netlib.org/lapack/) and BLAS
 - [SuiteSparse](https://github.com/DrTimothyAldenDavis/SuiteSparse)
-- [GSL](https://www.gnu.org/software/gsl/)
-- [FFTW3](http://fftw.org/)
 - [Boost](https://www.boost.org/) (1.74 or newer)
 - [FreeFem++](https://github.com/FreeFem/FreeFem-sources)
 - [zlib](https://zlib.net/) for Fortio's compressed NetCDF-4/HDF5 subset
@@ -21,6 +19,9 @@
 The following are fetched and built by CMake:
 
 - [libneo](https://github.com/itpplasma/libneo), which in turn fetches Fortio,
+- [fortnum](https://github.com/lazy-fortran/fortnum), the numerical library
+  (special functions, quadrature, FFT) that replaces GSL and FFTW, pinned by
+  `FORTNUM_REF` in `CMakeLists.txt`,
 - [Triangle](https://www.cs.cmu.edu/~quake/triangle.html), unless
   `TRIANGLE_DIR` points to an existing build.
 

@@ -35,8 +35,8 @@ contains
 !  minimization without derivatives, prentice-hall, inc. (1973).        
 !                                                                       
       double precision  a,b,c,d,e,eps,fa,fb,fc,tol1,xm,p,q,r,s 
-      double precision  dabs, d1mach 
-   10 eps = d1mach(4) 
+      double precision  dabs
+   10 eps = epsilon(1.0d0)
       tol1 = eps+1.0d0 
 !                                                                       
       a=ax 
