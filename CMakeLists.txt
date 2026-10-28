@@ -210,6 +210,9 @@ if(BUILD_TESTING)
     set_tests_properties(edge_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
       LABELS freefem)
   endif()
+  add_executable(test_current_source test/test_current_source.f90)
+  target_link_libraries(test_current_source mephit)
+  add_test(NAME current_source COMMAND test_current_source)
 endif()
 
 ### Add helper script to binaries
