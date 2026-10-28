@@ -1,5 +1,5 @@
 ### Basic settings
-cmake_minimum_required(VERSION 3.13.4)
+cmake_minimum_required(VERSION 3.22)
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 ### Define the project
@@ -42,14 +42,8 @@ endif ()
 find_package(BLAS REQUIRED)
 find_package(LAPACK REQUIRED)
 
-find_package(SuiteSparse)
-if(SUITESPARSE_FOUND)
-  set(LEGACY_SUITESPARSE ON)
-  message(STATUS "SuiteSparse found.")
-else()
-  message(STATUS "SuiteSparse not found. Trying new cmake search.")
-  find_package(UMFPACK REQUIRED)
-endif()
+include(SetupFortSparse)
+include(SetupFreeFemNative)
 
 cmake_policy(SET CMP0074 NEW)
 find_package(Boost 1.74 REQUIRED)
@@ -61,25 +55,11 @@ include(SetupCODE)
 include(SetupTriangle)
 if(WITH_MFEM)
   include(SetupMFEM)
-  add_definitions(-DUSE_MFEM)
 endif()
 include(Util)
 find_or_fetch(libneo)
 
 ### Project source files
-# SuiteSparse
-set(SUITESPARSE_SRC_FILES
-  src/external/umf4_f77wrapper.c
-  src/external/umf4_f77zwrapper.c
-)
-if(LEGACY_SUITESPARSE)
-  set(SUITESPARSE_FLAGS "-I${SUITESPARSE_INCLUDE_DIRS}")
-else()
-  set(SUITESPARSE_FLAGS "")
-endif()
-set_source_files_properties(src/external/umf4_f77wrapper.c  PROPERTIES COMPILE_FLAGS "${SUITESPARSE_FLAGS} -DDLONG")
-set_source_files_properties(src/external/umf4_f77zwrapper.c PROPERTIES COMPILE_FLAGS "${SUITESPARSE_FLAGS} -DZLONG")
-
 set(COMMON_FORTRAN_SRC_FILES
   src/external/netlib_mod.f90
   src/external/d1mach.f
@@ -87,7 +67,6 @@ set(COMMON_FORTRAN_SRC_FILES
   src/field_line_integration_for_SYNCH.f90
   src/magdata_in_symfluxcoord.f90
   src/points_2d.f90
-  src/sparse_mod.f90
 )
 set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
@@ -115,15 +94,20 @@ if(WITH_MFEM)
   set(MEPHIT_CPP_SRC_FILES ${MEPHIT_CPP_SRC_FILES}
     src/magnetic_differential_equation.cpp
     src/miscellaneous.cpp
+    src/mephit_native_mfem.cpp
   )
 endif()
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
+	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -L${TRIANGLE_LIB_DIR}")
 
 
 ### Define library
+add_library(mephit_sparse STATIC src/sparse_mod.f90)
+set_target_properties(mephit_sparse PROPERTIES POSITION_INDEPENDENT_CODE ON)
+target_include_directories(mephit_sparse PUBLIC ${CMAKE_Fortran_MODULE_DIRECTORY})
+target_link_libraries(mephit_sparse PUBLIC fortsparse)
+
 add_library(mephit SHARED
-  ${SUITESPARSE_SRC_FILES}
   ${COMMON_FORTRAN_SRC_FILES}
   ${MEPHIT_FORTRAN_SRC_FILES}
   ${MEPHIT_C_SRC_FILES}
@@ -136,6 +120,7 @@ target_include_directories(mephit PUBLIC
   ${FFTW_INCLUDE_DIRS}
 )
 set(MEPHIT_LIBS
+  mephit_sparse
   GSL::gsl
   BLAS::BLAS
   LAPACK::LAPACK
@@ -146,12 +131,9 @@ set(MEPHIT_LIBS
   LIBNEO::hdf5_tools
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
-if(LEGACY_SUITESPARSE)
-  target_link_libraries(mephit ${SUITESPARSE_LIBRARIES})
-else()
-  target_link_libraries(mephit SuiteSparse::umfpack)
-endif()
 if(WITH_MFEM)
+  target_compile_features(mephit PRIVATE cxx_std_17)
+  target_compile_definitions(mephit PRIVATE USE_MFEM)
   add_dependencies(mephit MFEM)
   target_include_directories(mephit PUBLIC ${MFEM_INCLUDE_DIRS})
   target_link_libraries(mephit ${MFEM_LIBRARIES})
@@ -159,6 +141,9 @@ endif()
 
 ### Define executables
 add_executable(mephit_run.x src/mephit_run.c)
+# This executable always starts the native FreeFem daemon. The dependency is
+# required even though the upstream optional module is excluded from ALL.
+add_dependencies(mephit_run.x fortsparse_freefem)
 add_executable(mephit_test.x src/mephit_test.f90)
 add_executable(mephit_post.x src/mephit_post.f90)
 add_executable(mephit_test_refine.x src/mephit_test_refine.f90)
@@ -169,6 +154,44 @@ target_link_libraries(mephit_test_refine.x mephit)
 include(CTest)
 if(BUILD_TESTING)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
+  add_executable(test_native_sparse test/test_native_sparse.f90)
+  target_link_libraries(test_native_sparse PRIVATE mephit_sparse)
+  add_test(NAME native_sparse_adapter COMMAND test_native_sparse)
+  add_test(NAME native_sparse_matched_probe COMMAND test_native_sparse matched)
+  set_tests_properties(native_sparse_matched_probe PROPERTIES TIMEOUT 3
+    ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+  set_tests_properties(native_sparse_adapter PROPERTIES TIMEOUT 1
+    ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+  add_test(NAME native_sparse_failures COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/test/test_native_sparse.py $<TARGET_FILE:test_native_sparse>)
+  set_tests_properties(native_sparse_failures PROPERTIES TIMEOUT 1
+    ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+  add_test(NAME native_sparse_linkage COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/test/test_native_sparse.py --linkage $<TARGET_FILE:mephit>)
+  set_tests_properties(native_sparse_linkage PROPERTIES TIMEOUT 1)
+  add_test(NAME native_freefem_adapter COMMAND ${FREEFEM_EXECUTABLE} -nw -nowait
+    ${CMAKE_SOURCE_DIR}/test/test_native_freefem.edp)
+  set_tests_properties(native_freefem_adapter PROPERTIES TIMEOUT 2
+    ENVIRONMENT "FF_LOADPATH=${PROJECT_BINARY_DIR}/scripts;OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+  add_test(NAME native_freefem_singular COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/test/test_native_sparse.py --freefem-singular
+    ${FREEFEM_EXECUTABLE} ${CMAKE_SOURCE_DIR}/test/test_native_freefem_singular.edp)
+  set_tests_properties(native_freefem_singular PROPERTIES TIMEOUT 2
+    ENVIRONMENT "FF_LOADPATH=${PROJECT_BINARY_DIR}/scripts;OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+  add_test(NAME native_freefem_linkage COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/test/test_native_sparse.py --linkage $<TARGET_FILE:fortsparse_freefem>)
+  set_tests_properties(native_freefem_linkage PROPERTIES TIMEOUT 1)
+  if(WITH_MFEM)
+    add_executable(test_native_mfem test/test_native_mfem.cpp
+      src/mephit_native_mfem.cpp src/miscellaneous.cpp)
+    target_compile_features(test_native_mfem PRIVATE cxx_std_17)
+    add_dependencies(test_native_mfem MFEM)
+    target_include_directories(test_native_mfem PRIVATE src ${MFEM_INCLUDE_DIRS})
+    target_link_libraries(test_native_mfem PRIVATE fortsparse ${MFEM_LIBRARIES})
+    add_test(NAME native_mfem_adapter COMMAND test_native_mfem)
+    set_tests_properties(native_mfem_adapter PROPERTIES TIMEOUT 1
+      ENVIRONMENT "OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
+  endif()
   add_executable(test_process_supervisor
     src/mephit_run.c src/mephit_util.c test/test_process_stub.c)
   target_include_directories(test_process_supervisor PRIVATE src)
@@ -180,6 +203,14 @@ if(BUILD_TESTING)
     ${CMAKE_SOURCE_DIR}/test/test_freefem_failure.py
     $<TARGET_FILE:test_process_supervisor> $<TARGET_FILE:test_pipe_client>)
   set_tests_properties(freefem_failure PROPERTIES TIMEOUT 30)
+  add_test(NAME freefem_protocol COMMAND ${Python3_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/test/test_freefem_protocol.py
+    $<TARGET_FILE:test_pipe_client> ${FREEFEM_EXECUTABLE}
+    ${CMAKE_SOURCE_DIR}/test/test_freefem_protocol.edp)
+  set_tests_properties(freefem_protocol PROPERTIES TIMEOUT 20)
+  set_tests_properties(native_freefem_adapter native_freefem_singular freefem_protocol
+    PROPERTIES ENVIRONMENT
+    "FF_LOADPATH=${PROJECT_BINARY_DIR}/scripts\;${MEPHIT_FREEFEM_PLUGIN_DIR};FF_INCLUDEPATH=${MEPHIT_FREEFEM_IDP_DIR};OMP_NUM_THREADS=1;OPENBLAS_NUM_THREADS=1")
   add_test(NAME refine_unit_partition_edge COMMAND mephit_test_refine.x)
   add_executable(test_mesh_quadrature_cache test/test_mesh_quadrature_cache.f90)
   target_link_libraries(test_mesh_quadrature_cache mephit)
@@ -214,7 +245,7 @@ endif()
 
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)
-configure_file(scripts/ff-mephit.bash ${PROJECT_BINARY_DIR}/scripts/ff-mephit.bash COPYONLY)
+configure_file(scripts/ff-mephit.bash ${PROJECT_BINARY_DIR}/scripts/ff-mephit.bash @ONLY)
 configure_file(scripts/maxwell_daemon.edp ${PROJECT_BINARY_DIR}/scripts/maxwell_daemon.edp COPYONLY)
 configure_file(scripts/extmesh.edp ${PROJECT_BINARY_DIR}/scripts/extmesh.edp COPYONLY)
 configure_file(scripts/mephit.gdb ${PROJECT_BINARY_DIR}/scripts/mephit.gdb COPYONLY)
