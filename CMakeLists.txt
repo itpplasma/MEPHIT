@@ -211,10 +211,6 @@ if(BUILD_TESTING)
     set_tests_properties(edge_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
       LABELS freefem)
   endif()
-endif()
-
-include(CTest)
-if(BUILD_TESTING)
   add_executable(test_maxwell_boundary test/test_maxwell_boundary.f90)
   target_link_libraries(test_maxwell_boundary mephit)
   add_test(NAME maxwell_boundary COMMAND test_maxwell_boundary)
