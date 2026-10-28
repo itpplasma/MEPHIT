@@ -25,8 +25,9 @@ may change.
 ## Building
 
 Requirements: GNU/Linux, a recent GNU Fortran/C/C++ toolchain, CMake, Ninja,
-BLAS/LAPACK, SuiteSparse, GSL, FFTW3, Boost and FreeFem++. libneo and Triangle
-are fetched and built automatically. Package lists for Debian/Ubuntu and Arch
+BLAS/LAPACK, SuiteSparse, GSL, FFTW3, Boost and FreeFem++ (legacy backend;
+the optional FortFEM backend, `-DWITH_FORTFEM=ON`, needs neither FreeFem++ nor
+Triangle). libneo and Triangle are fetched and built automatically. Package lists for Debian/Ubuntu and Arch
 Linux are in [setup/](setup/).
 
 ```bash

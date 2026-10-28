@@ -142,12 +142,12 @@ For each `mephit*.in`, with `*` a possible suffix:
 
 - `mephit*.h5`: all relevant numerical results,
 - `mephit*.log`: the text output also shown on screen,
-- `core_plasma*.msh`, `outer*.msh`, `maxwell*.msh`: meshes for the core
-  plasma, for the surrounding elliptical boundary where boundary conditions are
-  imposed, and for the union of both, for use with FreeFem++,
-- `edgemap*.dat`: mapping of edge degrees of freedom between MEPHIT and
-  FreeFem++,
-- `fglut_dump*`: FreeFem++ graphics, viewable with `ffglut`.
+- legacy-backend runs also produce `core_plasma*.msh`, `outer*.msh` and
+  `maxwell*.msh` (meshes for the core plasma, for the surrounding elliptical
+  boundary where boundary conditions are imposed, and for the union of both,
+  for use with FreeFem++), `edgemap*.dat` (mapping of edge degrees of freedom
+  between MEPHIT and FreeFem++) and `fglut_dump*` (FreeFem++ graphics, viewable
+  with `ffglut`).
 
 ## Plotting
 

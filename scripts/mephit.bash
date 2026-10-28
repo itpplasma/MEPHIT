@@ -232,7 +232,7 @@ mephit_run() {
                              "$config" \
                              "$suffix" \
                              "$tmpdir" \
-                             "$scriptdir/ff-mephit.bash" \
+                             "${fem_backend_args[@]}" \
                              2>&1 | tee -a "$log"
                     lasterr=$?
                     ;;
@@ -243,7 +243,7 @@ mephit_run() {
                         "$config" \
                         "$suffix" \
                         "$tmpdir" \
-                        "$scriptdir/ff-mephit.bash"
+                        "${fem_backend_args[@]}"
                     lasterr=$?
                     ;;
                 *)
@@ -252,7 +252,7 @@ mephit_run() {
                         "$config" \
                         "$suffix" \
                         "$tmpdir" \
-                        "$scriptdir/ff-mephit.bash" \
+                        "${fem_backend_args[@]}" \
                         2>&1 | tee -a "$log"
                     lasterr=$?
                     ;;
@@ -276,6 +276,10 @@ scriptdir=$(dirname "$0")
 scriptdir=$(realpath "$scriptdir")
 bindir=$(realpath -m "$scriptdir/../bin")
 datadir=$(realpath -m "$scriptdir/../data")
+fem_backend_args=()
+if [ "@WITH_FORTFEM@" != "ON" ]; then
+    fem_backend_args=( "$scriptdir/ff-mephit.bash" )
+fi
 if [ -d "@tmpdir@" ]; then
     tmpdir=@tmpdir@
 else

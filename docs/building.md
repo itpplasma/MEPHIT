@@ -10,7 +10,8 @@
 - [GSL](https://www.gnu.org/software/gsl/)
 - [FFTW3](http://fftw.org/)
 - [Boost](https://www.boost.org/) (1.74 or newer)
-- [FreeFem++](https://github.com/FreeFem/FreeFem-sources)
+- [FreeFem++](https://github.com/FreeFem/FreeFem-sources), only for the legacy
+  finite-element backend
 - [zlib](https://zlib.net/) for Fortio's compressed NetCDF-4/HDF5 subset
 - Python 3 with the packages in [requirements.txt](../requirements.txt) for
   plotting
@@ -22,7 +23,9 @@ The following are fetched and built by CMake:
 
 - [libneo](https://github.com/itpplasma/libneo), which in turn fetches Fortio,
 - [Triangle](https://www.cs.cmu.edu/~quake/triangle.html), unless
-  `TRIANGLE_DIR` points to an existing build.
+  `TRIANGLE_DIR` points to an existing build (legacy backend only),
+- [FortFEM](https://github.com/lazy-fortran/fortfem) for the optional native
+  finite-element backend (see below).
 
 The scripts in [setup/](../setup/) install the system packages on Debian/Ubuntu
 (`debian.sh`) and Arch Linux (`archlinux.sh`), and load modules on the MPCDF
@@ -50,6 +53,23 @@ these only when given on the command line, not from the environment.
 
 libneo's tools are built as part of MEPHIT; in particular `vacfield.x`, used
 to precompute coil fields, is at `build/libneo/vacfield.x`.
+
+### FortFEM backend
+
+To use the native FortFEM backend, configure MEPHIT with:
+
+```bash
+cmake -S . -B build \
+    -DWITH_FORTFEM=ON
+cmake --build build
+```
+
+The build fetches FortFEM at the pinned revision in
+[`cmake/SetupFortfem.cmake`](../cmake/SetupFortfem.cmake). For local development,
+pass `-DFORTFEM_PATH=/path/to/fortfem`; to use an installed package instead,
+pass `-DFORTFEM_FETCH=OFF -DCMAKE_PREFIX_PATH=/path/to/fortfem/install`.
+This configuration does not fetch or link Triangle and does not launch
+FreeFem++. Omitting `WITH_FORTFEM` retains the legacy backend.
 
 ### MFEM
 
