@@ -61,19 +61,30 @@ if(WITH_MFEM)
   include(SetupMFEM)
   add_definitions(-DUSE_MFEM)
 endif()
-include(Util)
-find_or_fetch(libneo)
-
-### fortnum: numerical core replacing the former GSL routines. libneo may pull
-### fortnum in transitively, so guard against declaring the target twice.
+### fortnum: numerical core replacing the former GSL and FFTW routines.
+### Declare it before libneo so that this pin is the one that is built; libneo
+### skips its own fortnum fetch when the target already exists and also reads
+### FORTNUM_REF. Keep the pin on fortnum main and in step with libneo's fpm.toml.
+set(FORTNUM_REF "1a52e13c5e28b09d083947a6ec7e8a1dcf9d502e" CACHE STRING
+  "fortnum branch, tag, or SHA to fetch")
 include(FetchContent)
 if(NOT TARGET fortnum)
   FetchContent_Declare(fortnum
     GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
-    GIT_TAG 92de6e949a772cfffc73bb5295fe5e2b056b9c18
+    GIT_TAG ${FORTNUM_REF}
   )
   FetchContent_MakeAvailable(fortnum)
 endif()
+# fortnum's C header lives in <source>/include; its target only exports the
+# Fortran module directory, so derive the header path from the target.
+get_target_property(FORTNUM_TARGET_SOURCE_DIR fortnum SOURCE_DIR)
+get_filename_component(FORTNUM_C_INCLUDE_DIR "${FORTNUM_TARGET_SOURCE_DIR}/../include" ABSOLUTE)
+if(NOT EXISTS "${FORTNUM_C_INCLUDE_DIR}/fortnum.h")
+  message(FATAL_ERROR "fortnum.h not found in ${FORTNUM_C_INCLUDE_DIR}")
+endif()
+
+include(Util)
+find_or_fetch(libneo)
 
 ### Project source files
 # SuiteSparse
@@ -125,7 +136,7 @@ if(WITH_MFEM)
   )
 endif()
 set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -I${fortnum_SOURCE_DIR}/include -L${TRIANGLE_LIB_DIR}")
+	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -I${FORTNUM_C_INCLUDE_DIR} -L${TRIANGLE_LIB_DIR}")
 
 
 ### Define library
