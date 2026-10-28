@@ -11,7 +11,8 @@ module mephit_mesh
   ! types and associated procedures
   public :: flux_func_cache, flux_func_cache_init, flux_func_cache_deinit
   public :: mesh_t, mesh_write, mesh_read, mesh_deinit, &
-    generate_mesh, write_cache, read_cache, point_location, mesh_interp_theta_flux
+    generate_mesh, refine_unit_partition, write_cache, read_cache, point_location, mesh_interp_theta_flux
+  public :: point_location_current
   public :: coord_cache_t, field_cache_t, shielding_t, cache_t, &
     cache_write, cache_read, cache_init, cache_deinit
   public :: read_profiles, compute_auxiliary_profiles, resample_profiles, &
@@ -1458,19 +1459,49 @@ contains
 
   subroutine compute_resonant_layer_widths
     use magdata_in_symfluxcoor_mod, only: psisurf, psipol_max, rbeg
-    use mephit_conf, only: conf_arr
-    use mephit_util, only: interp1d, binsearch
+    use mephit_conf, only: conf, conf_arr, logger
+    use mephit_util, only: interp1d, binsearch, resample1d, resistive_layer_width, &
+      func1d_t, func1d_read_formatted, func1d_deinit
     integer :: m
-    real(dp) :: rad_min, rad_max
+    real(dp) :: rad_min, rad_max, rad_res, rho_res, qprime_res
+    real(dp) :: Delta_rad(mesh%m_res_min:mesh%m_res_max)
+    real(dp) :: q_prime(0:mesh%nflux)
+    type(func1d_t) :: dens, temp
 
+    Delta_rad(:) = conf_arr%Delta_rad_res_curr(mesh%m_res_min:mesh%m_res_max)
+    if (conf%res_layer_model == 1) then
+      call func1d_read_formatted(dens, conf%dens_file)
+      call func1d_read_formatted(temp, conf%temp_e_file)
+      if (abs(dens%x(ubound(dens%x, 1)) - 1d0) <= 0.05d0) dens%y(:) = dens%y * 1d-6
+      call resample1d(fs%rad, abs(fs%q), fs%rad, q_prime, 3, .true.)
+      do m = mesh%m_res_min, mesh%m_res_max
+        if (Delta_rad(m) /= 0d0) cycle
+        rad_res = mesh%rad_norm_res(m) * fs%rad(mesh%nflux)
+        qprime_res = interp1d(fs%rad, q_prime, rad_res, 3)
+        if (abs(temp%x(ubound(temp%x, 1)) - 1d0) <= 0.05d0) then
+          rho_res = sqrt((mesh%psi_res(m) - fs%psi(0)) / (fs%psi(mesh%nflux) - fs%psi(0)))
+        else
+          rho_res = interp1d(fs%rad, fs%rsmall, rad_res, 3)
+        end if
+        Delta_rad(m) = conf%res_layer_factor * resistive_layer_width( &
+          interp1d(fs%psi, fs%F, mesh%psi_res(m), 3) / mesh%R_O, mesh%R_O, &
+          interp1d(dens%x, dens%y, rho_res, 3), interp1d(temp%x, temp%y, rho_res, 3), &
+          conf%Z_i, conf%m_i, mesh%n, interp1d(fs%rad, abs(fs%q), rad_res, 3), qprime_res)
+        write (logger%msg, '("m = ", i2, ", resistive layer width ", es12.4, " cm")') &
+          m, Delta_rad(m) / conf%res_layer_factor
+        if (logger%info) call logger%write_msg
+      end do
+      call func1d_deinit(dens)
+      call func1d_deinit(temp)
+    end if
     if (allocated(mesh%Delta_psi_res_curr)) deallocate(mesh%Delta_psi_res_curr)
     allocate(mesh%Delta_psi_res_curr(mesh%m_res_min:mesh%m_res_max))
     do m = mesh%m_res_min, mesh%m_res_max
       associate (s => cache%shielding(m))
         rad_min = max(mesh%rad_norm_res(m) * fs%rad(mesh%nflux) - &
-                      0.5d0 * conf_arr%Delta_rad_res_curr(m), fs%rad(0))
+                      0.5d0 * Delta_rad(m), fs%rad(0))
         rad_max = min(mesh%rad_norm_res(m) * fs%rad(mesh%nflux) + &
-                      0.5d0 * conf_arr%Delta_rad_res_curr(m), fs%rad(mesh%nflux))
+                      0.5d0 * Delta_rad(m), fs%rad(mesh%nflux))
         s%psi_min = fs%psi(0) + interp1d(rbeg, psisurf(1:) * psipol_max, rad_min, 3)
         s%psi_max = fs%psi(0) + interp1d(rbeg, psisurf(1:) * psipol_max, rad_max, 3)
         mesh%Delta_psi_res_curr(m) = abs(s%psi_max - s%psi_min)
@@ -1695,8 +1726,13 @@ contains
       end if
       if (grow_hi(nref) > 0) then
         grow_hi(nref) = grow_hi(nref) - 1
+      elseif (fine_hi(nref) > 0) then
+        ! resonance close to the edge: clip the fine region to the available space
+        fine_hi(nref) = fine_hi(nref) - 1
       else
-        write (logger%msg, '("refine_unit_partition: refinement failed at interval ", i0)') nref + 1
+        write (logger%msg, '("refine_unit_partition: last resonance at ", es12.5, ' // &
+          '" is too close to the edge (distance ", es12.5, ") for fine separation ", es12.5)') &
+          resonances(nref), 1d0 - resonances(nref), fine_sep(nref)
         if (logger%err) call logger%write_msg
         error stop
       end if
@@ -1926,11 +1962,14 @@ contains
       mesh%node_theta_flux(mesh%kp_low(kf) + 1) = 0d0
       mesh%node_theta_geom(mesh%kp_low(kf) + 1) = 0d0
     end do
-    ! reposition closest point exactly to X point
-    kp = minloc(hypot(mesh%node_R((mesh%kp_low(mesh%nflux) + 1):) - mesh%R_X, &
-      mesh%node_Z((mesh%kp_low(mesh%nflux) + 1):) - mesh%Z_X), 1)
-    mesh%node_R(mesh%kp_low(mesh%nflux) + kp) = mesh%R_X
-    mesh%node_Z(mesh%kp_low(mesh%nflux) + kp) = mesh%Z_X
+    ! reposition closest point exactly to X point; a boundary cut at SIBRY has no X point
+    ! on it, and the X point of the uncut equilibrium lies off the boundary
+    if (.not. conf%truncate_at_sibry) then
+      kp = minloc(hypot(mesh%node_R((mesh%kp_low(mesh%nflux) + 1):) - mesh%R_X, &
+        mesh%node_Z((mesh%kp_low(mesh%nflux) + 1):) - mesh%Z_X), 1)
+      mesh%node_R(mesh%kp_low(mesh%nflux) + kp) = mesh%R_X
+      mesh%node_Z(mesh%kp_low(mesh%nflux) + kp) = mesh%Z_X
+    end if
     mesh%R_min = minval(mesh%node_R)
     mesh%R_max = maxval(mesh%node_R)
     mesh%Z_min = minval(mesh%node_Z)
@@ -2573,7 +2612,7 @@ contains
           ! psi is shifted by -psi_axis in magdata_in_symfluxcoor_mod
           call magdata_in_symfluxcoord_ext(2, dum, psi(krad) - fs%psi(0), theta(kpol), &
             q, dum, s%sqrt_g, dum, dum, s%R, dum, s%dR_dtheta, s%Z, dum, s%dZ_dtheta)
-          s%ktri = point_location(s%R, s%Z)
+          s%ktri = point_location_current(s%R, s%Z, s%psi)
           call field(s%R, 0d0, s%Z, s%B0_R, s%B0_phi, s%B0_Z, &
             dum, dum, dum, dum, dum, dum, dum, dum, dum)
           ! sqrt_g misses a factor of q and the signs of dpsi_drad and B0_phi
@@ -2633,6 +2672,47 @@ contains
       end if
     end do
   end function point_location
+
+  !> Locate physical current quadrature points up to the curved LCFS.
+  !> The mesh boundary consists of straight chords. In the gap between a chord
+  !> and the LCFS, extend the adjacent L1 element to the physical sampling point,
+  !> keeping its flux coordinate, area measure and quadrature weight unchanged.
+  function point_location_current(R, Z, psi) result(location)
+    real(dp), intent(in) :: R, Z, psi
+    integer :: location
+    integer :: kedge, nodes(2), ktri, closest
+    real(dp) :: edge(2), offset(2), fraction, length2, distance2, best_distance2
+
+    location = point_location(R, Z)
+    if (location > 0) return
+    ! Only the outermost flux cell can need this boundary extension.
+    if (psi < minval(fs%psi(mesh%nflux-1:mesh%nflux))) return
+    if (psi > maxval(fs%psi(mesh%nflux-1:mesh%nflux))) return
+    closest = -1
+    best_distance2 = huge(1.0_dp)
+    do kedge = mesh%kp_low(mesh%nflux), &
+        mesh%kp_low(mesh%nflux)+mesh%kp_max(mesh%nflux)-1
+        nodes = mesh%edge_node(:, kedge)
+        edge = [mesh%node_R(nodes(2))-mesh%node_R(nodes(1)), &
+            mesh%node_Z(nodes(2))-mesh%node_Z(nodes(1))]
+        offset = [R-mesh%node_R(nodes(1)), Z-mesh%node_Z(nodes(1))]
+        length2 = sum(edge**2)
+        fraction = max(0.0_dp, min(1.0_dp, sum(offset*edge)/length2))
+        distance2 = sum((offset-fraction*edge)**2)
+        if (distance2 < best_distance2) then
+            best_distance2 = distance2
+            closest = kedge
+        end if
+    end do
+    if (closest < 0) return
+    ktri = mesh%edge_tri(1, closest)
+    nodes = mesh%edge_node(:, closest)
+    length2 = (mesh%node_R(nodes(2))-mesh%node_R(nodes(1)))**2 &
+        +(mesh%node_Z(nodes(2))-mesh%node_Z(nodes(1)))**2
+    ! Do not extrapolate farther than the adjacent triangle's normal height.
+    if (best_distance2*length2 > (2.0_dp*mesh%area(ktri))**2) return
+    location = ktri
+  end function point_location_current
 
   function point_location_geom(R, Z, hint_psi) result(location)
     use mephit_util, only: interp_psi_pol, binsearch, pos_angle
@@ -3108,6 +3188,17 @@ contains
     theta(:) = linspace(0d0, 2d0 * pi, npt_outer, 0, 1)
     bdry_R(npt_inner+1:) = R_mid + R_rad * cos(theta)
     bdry_Z(npt_inner+1:) = Z_mid + Z_rad * sin(theta)
+    ! dump the triangulator input so the annulus meshing problem can be
+    ! reproduced without a MEPHIT build, e.g. for mesher comparisons
+    open(newunit = fid, file = decorate_filename('outer_boundary.dat', '', basename_suffix), &
+      status = 'replace', form = 'formatted', action = 'write')
+    write (fid, '(2(1x, i0))') npt_inner, npt_outer
+    ! 17 significant digits so the dump round-trips the double precision input
+    write (fid, '(2(1x, es24.16e3))') R_mid, Z_mid
+    do kpoi = 1, npt_inner + npt_outer
+      write (fid, '(2(1x, es24.16e3))') bdry_R(kpoi), bdry_Z(kpoi)
+    end do
+    close(fid)
     call FEM_triangulate_external(npt_inner, npt_outer, bdry_R, bdry_Z, R_mid, Z_mid, &
       decorate_filename('outer.msh', '', basename_suffix) // c_null_char)
     deallocate(bdry_R, bdry_Z, theta)
@@ -3179,8 +3270,8 @@ contains
     allocate(mesh%GL_R(mesh%GL_order, mesh%nedge))
     allocate(mesh%GL_Z(mesh%GL_order, mesh%nedge))
     allocate(mesh%GL2_weights(mesh%GL2_order))
-    allocate(mesh%GL2_R(mesh%GL2_order, mesh%nedge))
-    allocate(mesh%GL2_Z(mesh%GL2_order, mesh%nedge))
+    allocate(mesh%GL2_R(mesh%GL2_order, mesh%ntri))
+    allocate(mesh%GL2_Z(mesh%GL2_order, mesh%ntri))
     allocate(mesh%gpec_jacfac(mesh%nflux))
     allocate(mesh%avg_R2gradpsi2(0:mesh%nflux))
     allocate(mesh%area(mesh%ntri))
