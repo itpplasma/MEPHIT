@@ -196,6 +196,31 @@ module mephit_conf
     !> Switch to use fine mesh outside if resonance are too close
     logical :: diverging_q = .false.
 
+    !> Limit the flux surfaces to those inside the boundary flux SIBRY of the G EQDSK file.
+    !> By default the outermost closed surface inside the computational box is used, which
+    !> equals the separatrix of a diverted equilibrium. Set this for an equilibrium that
+    !> is cut at an inner flux surface and has no X-point there. Defaults to false.
+    logical :: truncate_at_sibry = .false.
+
+    !> Add the surface current of the displaced plasma boundary, \f$ \xi_{n} \vec{j}_{0} \f$,
+    !> where the equilibrium current density jumps to zero at a cut boundary. Its surface
+    !> divergence is closed by a field-aligned surface current. Defaults to false.
+    logical :: edge_moved_current = .false.
+
+    !> Close the plasma current that leaves through the boundary by a field-aligned surface
+    !> current on the boundary instead of passing it to the vacuum region. Defaults to false.
+    logical :: edge_boundary_sheet = .false.
+
+    !> Model for the width of the resonant layer, which sets the Pfirsch-Schlueter damping
+    !> for every mode with `Delta_rad_res_curr(m) = 0`. 0 (default) keeps the manual
+    !> widths. 1 uses the resistive width of the Alfven resonance,
+    !> \f$ \delta = [\eta / (\mu_{0} \, d\omega_{A} / dx)]^{1/3} \f$ with Spitzer
+    !> resistivity from `temp_e_file`/`dens_file` (see #mephit_util::resistive_layer_width).
+    integer :: res_layer_model = 0
+
+    !> Factor multiplying the model width to give `Delta_rad_res_curr`. Defaults to 1.
+    real(dp) :: res_layer_factor = 1d0
+
     !> Enable damping of the Pfirsch-Schlueter current. Defaults to true.
     logical :: damp = .true.
 
@@ -361,6 +386,16 @@ contains
       comment = 'maximum density', unit = 'cm^-3')
     call h5_add(h5id_root, grp // '/diverging_q', config%diverging_q, &
       comment = 'use fine mesh if resonances are too close outside the last refined one')
+    call h5_add(h5id_root, grp // '/truncate_at_sibry', config%truncate_at_sibry, &
+      comment = 'limit flux surfaces to the boundary flux SIBRY of the G EQDSK file')
+    call h5_add(h5id_root, grp // '/edge_moved_current', config%edge_moved_current, &
+      comment = 'add surface current xi_n j0 of the displaced plasma boundary')
+    call h5_add(h5id_root, grp // '/edge_boundary_sheet', config%edge_boundary_sheet, &
+      comment = 'close current leaving the plasma by a field-aligned boundary sheet')
+    call h5_add(h5id_root, grp // '/res_layer_model', config%res_layer_model, &
+      comment = 'resonant layer width model (0: manual, 1: resistive Alfven resonance)')
+    call h5_add(h5id_root, grp // '/res_layer_factor', config%res_layer_factor, &
+      comment = 'factor applied to the modelled resonant layer width')
     call h5_add(h5id_root, grp // '/damp', config%damp, &
       comment = 'enable damping of Pfirsch-Schlueter current')
     call h5_add(h5id_root, grp // '/transition_func', config%transition_func, &
