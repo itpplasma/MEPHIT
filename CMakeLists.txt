@@ -210,10 +210,6 @@ if(BUILD_TESTING)
     set_tests_properties(edge_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
       LABELS freefem)
   endif()
-endif()
-
-include(CTest)
-if(BUILD_TESTING)
   add_executable(test_eqdsk_current_gradient test/test_eqdsk_current_gradient.f90)
   target_link_libraries(test_eqdsk_current_gradient mephit)
   add_test(NAME eqdsk_current_gradient COMMAND test_eqdsk_current_gradient)
