@@ -193,6 +193,9 @@ if(BUILD_TESTING)
   add_executable(test_resonant_current_assembly test/test_resonant_current_assembly.f90)
   target_link_libraries(test_resonant_current_assembly mephit)
   add_test(NAME resonant_current_assembly COMMAND test_resonant_current_assembly)
+  add_executable(test_current_source test/test_current_source.f90)
+  target_link_libraries(test_current_source mephit)
+  add_test(NAME current_source COMMAND test_current_source)
 endif()
 
 ### Add helper script to binaries
