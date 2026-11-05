@@ -190,6 +190,9 @@ if(BUILD_TESTING)
   add_executable(test_eqdsk_current_gradient test/test_eqdsk_current_gradient.f90)
   target_link_libraries(test_eqdsk_current_gradient mephit)
   add_test(NAME eqdsk_current_gradient COMMAND test_eqdsk_current_gradient)
+  add_executable(test_resonant_current_assembly test/test_resonant_current_assembly.f90)
+  target_link_libraries(test_resonant_current_assembly mephit)
+  add_test(NAME resonant_current_assembly COMMAND test_resonant_current_assembly)
 endif()
 
 ### Add helper script to binaries
