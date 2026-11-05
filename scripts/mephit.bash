@@ -231,19 +231,15 @@ mephit_run() {
                              $runmode \
                              "$config" \
                              "$suffix" \
-                             "$tmpdir" \
-                             "$scriptdir/ff-mephit.bash" \
                              2>&1 | tee -a "$log"
-                    lasterr=$?
+                    lasterr=${PIPESTATUS[0]}
                     ;;
                 '1')
-                    gdb -x "$scriptdir/mephit.gdb" --args \
+                    gdb --args \
                         "$bindir/mephit_run.x" \
                         $runmode \
                         "$config" \
-                        "$suffix" \
-                        "$tmpdir" \
-                        "$scriptdir/ff-mephit.bash"
+                        "$suffix"
                     lasterr=$?
                     ;;
                 *)
@@ -251,10 +247,8 @@ mephit_run() {
                         $runmode \
                         "$config" \
                         "$suffix" \
-                        "$tmpdir" \
-                        "$scriptdir/ff-mephit.bash" \
                         2>&1 | tee -a "$log"
-                    lasterr=$?
+                    lasterr=${PIPESTATUS[0]}
                     ;;
             esac
             if [ "$lasterr" -ne 0 ]; then

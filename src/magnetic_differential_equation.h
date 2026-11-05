@@ -5,7 +5,10 @@
 #ifndef PHYSIC_MASTER_THESIS_MAGNETIC_DIFFERENTIAL_EQUATION_H
 #define PHYSIC_MASTER_THESIS_MAGNETIC_DIFFERENTIAL_EQUATION_H
 
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wall"
 #include "mfem.hpp"
+#pragma GCC diagnostic pop
 
 #include <functional>
 
