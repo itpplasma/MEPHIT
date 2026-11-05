@@ -2106,8 +2106,9 @@ contains
                     mat(:, 2) = mesh%node_Z(nodes(1:3)) - mesh%node_Z(nodes(4))
                     mat(:, 3) = mat(:, 1) * mat(:, 1) + mat(:, 2) * mat(:, 2)
                     mesh%orient(ktri) = 0d0 >= &
-                        mat(1, 1) * mat(2, 2) * mat(3, 3) + mat(1, 2) * mat(2, 3) * mat(3, 1) + mat(1, 3) * mat(2, 1) * mat(3, 2) - &
-                        mat(3, 1) * mat(2, 2) * mat(1, 3) - mat(3, 2) * mat(2, 3) * mat(1, 1) - mat(3, 3) * mat(2, 1) * mat(1, 2)
+                        mat(1, 1) * mat(2, 2) * mat(3, 3) + mat(1, 2) * mat(2, 3) * mat(3, 1) &
+                        + mat(1, 3) * mat(2, 1) * mat(3, 2) - mat(3, 1) * mat(2, 2) * mat(1, 3) &
+                        - mat(3, 2) * mat(2, 3) * mat(1, 1) - mat(3, 3) * mat(2, 1) * mat(1, 2)
                 else
                     ! the last edge is already fixed, so we ignore the Delaunay condition
                     if (kp_lo == 1 .and. kp_hi == mesh%kp_max(kf)) then
