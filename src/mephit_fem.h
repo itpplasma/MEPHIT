@@ -21,17 +21,6 @@
 extern "C" {
 #endif
 
-void FEM_init(const int tormode, const int nedge, const int npoint, const int runmode);
-void FEM_extend_mesh(void);
-void FEM_compute_magfn(const int nedge,
-                       const int npoint,
-                       const complex_double *Jn,
-                       complex_double *Bn,
-                       complex_double *AnR,
-                       complex_double *AnZ);
-void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2int);
-void FEM_deinit(void);
-
 void gauss_legendre_unit_interval(int order, double *points, double *weights);
 
 void FEM_triangulate_external(const int npt_inner,
@@ -51,14 +40,25 @@ typedef void complex_scalar_field(const double R,
                                   const double Z,
                                   complex_double *scalar);
 
-#ifdef USE_MFEM
+void* MFEM_init(const int tor_mode,
+                const char *mesh_file,
+                const char *edgemap_file);
+void MFEM_compute_magfn(void *maxwell_solver,
+                        const int nedge,
+                        const complex_double *Jn,
+                        complex_double *Bn);
+double MFEM_compute_L2int(void *maxwell_solver,
+                          const int nedge,
+                          complex_double *Bn_diff);
+void MFEM_deinit(void *maxwell_solver);
+int test_map_edges(void* maxwell_solver, const char* test_edgemap_file);
+
 int FEM_test(const char *mesh_file,
              const int tor_mode,
              const int n_dof,
              complex_double *dof,
              real_vector_field *unit_B0,
              complex_scalar_field *MDE_inhom);
-#endif  // USE_MFEM
 
 #ifdef __cplusplus
 }

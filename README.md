@@ -17,7 +17,7 @@ may change.
   libneo's `vacfield.x`), from GPEC, or from other sources.
 - Plasma response currents from ideal MHD or from the KiLCA kinetic model.
 - Self-consistent field by fixed-point iteration between response current and
-  Maxwell solver (FreeFem++, optionally MFEM), accelerated by a preconditioner
+  Maxwell solver (MFEM), accelerated by a preconditioner
   built from dominant eigenvalues found with the Arnoldi method.
 - Optional post-processing of the resonant sheet currents and their fields.
 - Results in HDF5 (`mephit.h5`), with Python plotting routines (`mephit_plot`).
@@ -25,7 +25,7 @@ may change.
 ## Building
 
 Requirements: GNU/Linux, a recent GNU Fortran/C/C++ toolchain, CMake, Ninja,
-BLAS/LAPACK, SuiteSparse, GSL, FFTW3, Boost and FreeFem++. libneo and Triangle
+BLAS/LAPACK, SuiteSparse, GSL, FFTW3 and Boost. libneo, Triangle and MFEM
 are fetched and built automatically. Package lists for Debian/Ubuntu and Arch
 Linux are in [setup/](setup/).
 

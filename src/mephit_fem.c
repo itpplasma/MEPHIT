@@ -2,200 +2,11 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <gsl/gsl_errno.h>
 #include <gsl/gsl_integration.h>
 #include "triangle.h"
 #include "mephit_util.h"
 #include "mephit_fem.h"
-
-char shared_namedpipe[path_max];
-
-static void pipe_transfer(int fd, void *data, ssize_t size, int writing,
-                          const char *namedpipe)
-{
-  ssize_t total = 0;
-  while (total < size) {
-    ssize_t transferred = writing
-      ? write(fd, (char *) data + total, (size_t) (size - total))
-      : read(fd, (char *) data + total, (size_t) (size - total));
-    if (transferred < 0 && errno == EINTR) {
-      continue;
-    }
-    if (transferred <= 0) {
-      errno_msg(_exit, __FILE__, __LINE__, transferred < 0 ? errno : EIO,
-                "FreeFem communication failed while %s pipe %s (%li/%li bytes); "
-                "check the FreeFem log and supervisor exit status",
-                writing ? "writing" : "reading", namedpipe, (long) total, (long) size);
-    }
-    total += transferred;
-  }
-}
-
-void send_long0_to_FreeFem(const char *namedpipe, const long int *long0)
-{
-  int fd;
-  ssize_t bytes_expected;
-
-  if (!(namedpipe && strlen(namedpipe))) {
-    errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for namedpipe");
-  }
-  if (!long0) {
-    errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL value for long0");
-  }
-  fd = open(namedpipe, O_WRONLY);
-  if (fd < 0) {
-    errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to open pipe %s for writing", namedpipe);
-  }
-  bytes_expected = (ssize_t) sizeof(long int);
-  pipe_transfer(fd, (void *) long0, bytes_expected, 1, namedpipe);
-  if (close(fd)) {
-    errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to close write end of pipe %s", namedpipe);
-  }
-}
-
-void receive_long0_from_FreeFem(const char *namedpipe, long int *long0)
-{
-  int fd;
-  ssize_t bytes_expected;
-
-  if (!(namedpipe && strlen(namedpipe))) {
-    errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for namedpipe");
-  }
-  if (!long0) {
-    errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL value for long0");
-  }
-  fd = open(namedpipe, O_RDONLY);
-  if (fd < 0) {
-    errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to open pipe %s for reading", namedpipe);
-  }
-  bytes_expected = (ssize_t) sizeof(long int);
-  pipe_transfer(fd, (void *) long0, bytes_expected, 0, namedpipe);
-  if (close(fd)) {
-    errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to close read end of pipe %s", namedpipe);
-  }
-}
-
-void send_double1_to_FreeFem(const char *namedpipe, const int size, const double *double1)
-{
-  long int announced_size = size;
-  int fd;
-  ssize_t bytes_expected;
-
-  if (!(namedpipe && strlen(namedpipe))) {
-    errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for namedpipe");
-  }
-  if (!double1) {
-    errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL value for double1");
-  }
-  fd = open(namedpipe, O_WRONLY);
-  if (fd < 0) {
-    errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to open pipe %s for writing", namedpipe);
-  }
-  bytes_expected = (ssize_t) sizeof(long int);
-  pipe_transfer(fd, (void *) &announced_size, bytes_expected, 1, namedpipe);
-  bytes_expected = (ssize_t) ((unsigned) size * sizeof(double));
-  pipe_transfer(fd, (void *) double1, bytes_expected, 1, namedpipe);
-  if (close(fd)) {
-    errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to close write end of pipe %s", namedpipe);
-  }
-}
-
-void receive_double1_from_FreeFem(const char *namedpipe, const int size, double *double1)
-{
-  long int announced_size;
-  int fd;
-  ssize_t bytes_expected;
-
-  if (!(namedpipe && strlen(namedpipe))) {
-    errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL or empty value for namedpipe");
-  }
-  if (!double1) {
-    errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL value for double1");
-  }
-  fd = open(namedpipe, O_RDONLY);
-  if (fd < 0) {
-    errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to open pipe %s for reading", namedpipe);
-  }
-  bytes_expected = (ssize_t) sizeof(long int);
-  pipe_transfer(fd, (void *) &announced_size, bytes_expected, 0, namedpipe);
-  if (announced_size != size) {
-    errno_msg(_exit, __FILE__, __LINE__, EIO,
-              "Pipe %s contains %li double precision values, expected %i",
-              namedpipe, announced_size, size);
-  }
-  bytes_expected = (ssize_t) ((unsigned) size * sizeof(double));
-  pipe_transfer(fd, (void *) double1, bytes_expected, 0, namedpipe);
-  if (close(fd)) {
-    errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to close read end of pipe %s", namedpipe);
-  }
-}
-
-void FEM_init(const int tormode, const int nedge, const int npoint, const int runmode)
-{
-  long int long_tormode = tormode ? tormode : 2;
-  long int long_nedge = nedge;
-  long int long_npoint = npoint;
-  long int long_runmode = runmode ? runmode : (1 << 0 | 1 << 1 | 1 << 2);
-
-  send_long0_to_FreeFem(shared_namedpipe, &long_tormode);
-  receive_long0_from_FreeFem(shared_namedpipe, &long_tormode);
-  send_long0_to_FreeFem(shared_namedpipe, &long_nedge);
-  receive_long0_from_FreeFem(shared_namedpipe, &long_nedge);
-  send_long0_to_FreeFem(shared_namedpipe, &long_npoint);
-  receive_long0_from_FreeFem(shared_namedpipe, &long_npoint);
-  send_long0_to_FreeFem(shared_namedpipe, &long_runmode);
-  receive_long0_from_FreeFem(shared_namedpipe, &long_runmode);
-}
-
-void FEM_extend_mesh(void)
-{
-  long int flag = 0L;
-
-  send_long0_to_FreeFem(shared_namedpipe, &flag);
-  receive_long0_from_FreeFem(shared_namedpipe, &flag);
-}
-
-void FEM_compute_magfn(const int nedge,
-                       const int npoint,
-                       const complex_double *Jn,
-                       complex_double *Bn,
-                       complex_double *AnR,
-                       complex_double *AnZ)
-{
-  long int flag = -1L;
-  int size = 2 * nedge;
-
-  send_long0_to_FreeFem(shared_namedpipe, &flag);
-  receive_long0_from_FreeFem(shared_namedpipe, &flag);
-  send_double1_to_FreeFem(shared_namedpipe, size, (double *) Jn);
-  receive_double1_from_FreeFem(shared_namedpipe, size, (double *) Bn);
-  size = 2 * npoint;
-  receive_double1_from_FreeFem(shared_namedpipe, size, (double *) AnR);
-  receive_double1_from_FreeFem(shared_namedpipe, size, (double *) AnZ);
-}
-
-void FEM_compute_L2int(const int nedge, const complex_double *elem, double *L2int)
-{
-  long int flag = -2L;
-  int size = 2 * nedge;
-
-  send_long0_to_FreeFem(shared_namedpipe, &flag);
-  receive_long0_from_FreeFem(shared_namedpipe, &flag);
-  send_double1_to_FreeFem(shared_namedpipe, size, (double *) elem);
-  receive_double1_from_FreeFem(shared_namedpipe, 1, L2int);
-}
-
-void FEM_deinit(void)
-{
-  long int flag = -3L;
-
-  send_long0_to_FreeFem(shared_namedpipe, &flag);
-  receive_long0_from_FreeFem(shared_namedpipe, &flag);
-}
 
 void gauss_legendre_unit_interval(int order, double *points, double *weights)
 {
@@ -261,25 +72,29 @@ void FEM_triangulate_external(const int npt_inner,
   triangulate("BejnpqYz", &in, &out, &vorout);
 
   fid = fopen(fname, "w");
-  fprintf(fid, "%i %i %i\n",
-          out.numberofpoints,
-          out.numberoftriangles,
-          out.numberofsegments);
+  fprintf(fid, "MFEM mesh v1.0\ndimension\n2\n");
+  fprintf(fid, "elements\n%i\n", out.numberoftriangles);
+  for (k = 0; k < out.numberoftriangles; ++k) {
+    // <element attribute> <geometry type> <vertex indices ...>
+    // attribute: 2 for surrounding volume, geometry type: 2 for triangle
+    fprintf(fid, "2 2 %i %i %i\n",
+            out.trianglelist[3 * k],
+            out.trianglelist[3 * k + 1],
+            out.trianglelist[3 * k + 2]);
+  }
+  fprintf(fid, "boundary\n%i\n", out.numberofsegments);
+  for (k = 0; k < out.numberofsegments; ++k) {
+    // <boundary element attribute> <geometry type> <vertex indices ...>
+    // attribute: 2 for surrounding volume, geometry type: 1 for segment
+    fprintf(fid, "2 1 %i %i\n",
+            out.segmentlist[2 * k],
+            out.segmentlist[2 * k + 1]);
+  }
+  fprintf(fid, "vertices\n%i\n2\n", out.numberofpoints);
   for (k = 0; k < out.numberofpoints; ++k) {
-    fprintf(fid, "%.16e %.16e 0\n",
+    fprintf(fid, "%.16e %.16e\n",
             out.pointlist[2 * k],
             out.pointlist[2 * k + 1]);
-  }
-  for (k = 0; k < out.numberoftriangles; ++k) {
-    fprintf(fid, "%i %i %i 1\n",
-            out.trianglelist[3 * k] + 1,
-            out.trianglelist[3 * k + 1] + 1,
-            out.trianglelist[3 * k + 2] + 1);
-  }
-  for (k = 0; k < out.numberofsegments; ++k) {
-    fprintf(fid, "%i %i 2\n",
-            out.segmentlist[2 * k] + 1,
-            out.segmentlist[2 * k + 1] + 1);
   }
   fclose(fid);
 
