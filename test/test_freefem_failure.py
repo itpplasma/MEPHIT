@@ -5,6 +5,7 @@ import struct
 import subprocess
 import sys
 import tempfile
+import time
 
 
 def run(command):
@@ -45,6 +46,20 @@ with tempfile.TemporaryDirectory() as directory:
         if not succeeds:
             assert "FreeFem communication failed" in result.stderr, result.stderr
 
+    # The writer of the first message closes only after the client has read it
+    # and reopened the FIFO for the second message, as FreeFem's SaveVec may.
+    fifo = root / "stale_fifo"
+    os.mkfifo(fifo)
+    reader = subprocess.Popen([client, "scalars", str(fifo)], stderr=subprocess.PIPE,
+                              text=True)
+    with fifo.open("wb", buffering=0) as writer:
+        writer.write(struct.pack("@l", 42))
+        time.sleep(0.5)
+    with fifo.open("wb", buffering=0) as writer:
+        writer.write(struct.pack("@l", 43))
+    _, error = reader.communicate(timeout=5)
+    assert reader.returncode == 0, (reader.returncode, error)
+
     fifo = root / "broken_fifo"
     os.mkfifo(fifo)
     writer = subprocess.Popen([client, "write", str(fifo)], stderr=subprocess.PIPE,
@@ -54,4 +69,4 @@ with tempfile.TemporaryDirectory() as directory:
     _, error = writer.communicate(timeout=5)
     assert writer.returncode == 1, (writer.returncode, error)
     assert "FreeFem communication failed while writing" in error, error
-print("supervisor exits/signals, valid/truncated transfers, broken pipe: PASS")
+print("supervisor exits/signals, valid/truncated transfers, stale FIFO writer, broken pipe: PASS")

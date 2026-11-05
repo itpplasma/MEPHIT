@@ -35,6 +35,39 @@ static void pipe_transfer(int fd, void *data, ssize_t size, int writing,
   }
 }
 
+/* Opens namedpipe for reading and reads the first size bytes of a message. When
+ * FreeFem sends several messages in a row, this open can attach to the writer of
+ * the previous message just before it closes; the read then sees end of file
+ * without data, and reopening waits for the writer of this message. */
+static int open_and_read_start(const char *namedpipe, void *data, ssize_t size)
+{
+  struct stat st;
+  ssize_t transferred;
+  int fd;
+
+  for (;;) {
+    fd = open(namedpipe, O_RDONLY);
+    if (fd < 0) {
+      errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to open pipe %s for reading", namedpipe);
+    }
+    do {
+      transferred = read(fd, data, (size_t) size);
+    } while (transferred < 0 && errno == EINTR);
+    if (transferred == 0 && !fstat(fd, &st) && S_ISFIFO(st.st_mode)) {
+      if (close(fd)) {
+        errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to close read end of pipe %s", namedpipe);
+      }
+      continue;
+    }
+    if (transferred <= 0) {
+      pipe_transfer(fd, data, size, 0, namedpipe);
+    } else if (transferred < size) {
+      pipe_transfer(fd, (char *) data + transferred, size - transferred, 0, namedpipe);
+    }
+    return fd;
+  }
+}
+
 void send_long0_to_FreeFem(const char *namedpipe, const long int *long0)
 {
   int fd;
@@ -68,12 +101,8 @@ void receive_long0_from_FreeFem(const char *namedpipe, long int *long0)
   if (!long0) {
     errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL value for long0");
   }
-  fd = open(namedpipe, O_RDONLY);
-  if (fd < 0) {
-    errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to open pipe %s for reading", namedpipe);
-  }
   bytes_expected = (ssize_t) sizeof(long int);
-  pipe_transfer(fd, (void *) long0, bytes_expected, 0, namedpipe);
+  fd = open_and_read_start(namedpipe, (void *) long0, bytes_expected);
   if (close(fd)) {
     errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to close read end of pipe %s", namedpipe);
   }
@@ -116,12 +145,8 @@ void receive_double1_from_FreeFem(const char *namedpipe, const int size, double 
   if (!double1) {
     errno_msg(_exit, __FILE__, __LINE__, EINVAL, "NULL value for double1");
   }
-  fd = open(namedpipe, O_RDONLY);
-  if (fd < 0) {
-    errno_msg(_exit, __FILE__, __LINE__, errno, "Failed to open pipe %s for reading", namedpipe);
-  }
   bytes_expected = (ssize_t) sizeof(long int);
-  pipe_transfer(fd, (void *) &announced_size, bytes_expected, 0, namedpipe);
+  fd = open_and_read_start(namedpipe, (void *) &announced_size, bytes_expected);
   if (announced_size != size) {
     errno_msg(_exit, __FILE__, __LINE__, EIO,
               "Pipe %s contains %li double precision values, expected %i",
