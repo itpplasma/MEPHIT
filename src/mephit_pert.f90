@@ -141,6 +141,15 @@ module mephit_pert
 
 contains
 
+  ! Kept out of the interpolators: gfortran saves and restores the floating-point
+  ! environment on every entry to a procedure that uses ieee_arithmetic.
+  function quiet_nan() result(nan)
+    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
+    real(dp) :: nan
+
+    nan = ieee_value(1d0, ieee_quiet_nan)
+  end function quiet_nan
+
   subroutine L1_init(this, npoint)
     type(L1_t), intent(inout) :: this
     integer, intent(in) :: npoint
@@ -193,7 +202,6 @@ contains
   end subroutine L1_read
 
   subroutine L1_interp(elem, ktri, R, Z, val, grad_val)
-    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use mephit_conf, only: logger
     use mephit_util, only: imun
     use mephit_mesh, only: mesh
@@ -213,7 +221,7 @@ contains
       end if
     end if
     if (ktri <= 0 .or. ktri > mesh%ntri) then
-      nan = ieee_value(1d0, ieee_quiet_nan)
+      nan = quiet_nan()
       val = cmplx(nan, nan, dp)
       if (present(grad_val)) then
         grad_val(:) = cmplx(nan, nan, dp)
@@ -255,7 +263,6 @@ contains
   end subroutine RT0_deinit
 
   subroutine RT0_interp(elem, ktri, R, Z, vec, dvec_dR, dvec_dphi, dvec_dZ)
-    use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
     use mephit_conf, only: logger
     use mephit_util, only: imun
     use mephit_mesh, only: mesh
@@ -295,7 +302,7 @@ contains
       end if
     end if
     if (ktri <= 0 .or. ktri > mesh%ntri) then
-      nan = ieee_value(1d0, ieee_quiet_nan)
+      nan = quiet_nan()
       vec(:) = cmplx(nan, nan, dp)
       if (present(dvec_dR)) then
         dvec_dR(:) = cmplx(nan, nan, dp)
