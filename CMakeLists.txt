@@ -65,6 +65,11 @@ if(WITH_MFEM)
 endif()
 include(Util)
 find_or_fetch(libneo)
+# libneo is EXCLUDE_FROM_ALL, but coil files need its vacfield.x (docs/usage.md).
+if(TARGET vacfield.x)
+  add_custom_target(libneo_vacfield ALL)
+  add_dependencies(libneo_vacfield vacfield.x)
+endif()
 
 ### Project source files
 # SuiteSparse
