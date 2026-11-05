@@ -17,6 +17,12 @@ int main(int argc, char **argv)
     receive_long0_from_FreeFem(argv[2], &value);
     return value == 42 ? 0 : 3;
   }
+  if (!strcmp(argv[1], "scalars")) {
+    receive_long0_from_FreeFem(argv[2], &value);
+    if (value != 42) return 3;
+    receive_long0_from_FreeFem(argv[2], &value);
+    return value == 43 ? 0 : 3;
+  }
   if (!strcmp(argv[1], "vector")) {
     receive_double1_from_FreeFem(argv[2], 2, data);
     return memcmp(data, expected, sizeof(expected)) == 0 ? 0 : 3;
