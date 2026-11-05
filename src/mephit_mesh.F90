@@ -2042,6 +2042,7 @@ contains
         integer :: kf, kp, kp_lo, kp_hi, kt, ktri, ktri_adj, kedge, nodes(4), k
         real(dp) :: mat(3, 3), points(mesh%GL_order), points2(3, mesh%GL2_order)
         logical :: theta2pi
+        real(dp) :: area_sign
 
         allocate(mesh%tri_node(3, mesh%ntri))
         allocate(mesh%tri_node_F(mesh%ntri))
@@ -2159,6 +2160,19 @@ contains
                 end if
             end do
         end do
+        ! Node positions come from the flux-label interpolation of preload_for_SYNCH.inp; where
+        ! adjacent surfaces are closer than its error they cross and FreeFem fails later (Bamg 899).
+        area_sign = sign(1d0, signed_area(mesh%tri_node(:, 1)))
+        do ktri = 1, mesh%ntri
+            if (area_sign * signed_area(mesh%tri_node(:, ktri)) <= 0d0) then
+                write (logger%msg, '("Inverted triangle ", i0, " at R = ", es12.5, ", Z = ", es12.5, ' // &
+                    '": flux surfaces are not nested there; increase nlabel and ntheta in preload_for_SYNCH.inp ' // &
+                    'or widen Delta_rad_res near the boundary")') ktri, mesh%node_R(mesh%tri_node(1, ktri)), &
+                    mesh%node_Z(mesh%tri_node(1, ktri))
+                if (logger%err) call logger%write_msg
+                error stop
+            end if
+        end do
         ! set theta = 2 pi exactly
         where (mesh%tri_theta_extent(2, :) < epsilon(1d0))
             mesh%tri_theta_extent(2, :) = 2d0 * pi
@@ -2219,6 +2233,13 @@ contains
                 mesh%GL2_Z(k, ktri) = sum(mesh%node_Z(mesh%tri_node(:, ktri)) * points2(:, k))
             end do
         end do
+    contains
+        pure function signed_area(tri) result(a)
+            integer, intent(in) :: tri(3)
+            real(dp) :: a
+            a = (mesh%node_R(tri(2)) - mesh%node_R(tri(1))) * (mesh%node_Z(tri(3)) - mesh%node_Z(tri(1))) - &
+                (mesh%node_R(tri(3)) - mesh%node_R(tri(1))) * (mesh%node_Z(tri(2)) - mesh%node_Z(tri(1)))
+        end function signed_area
     end subroutine connect_mesh_points
 
     pure elemental function upper_branch(angle)
