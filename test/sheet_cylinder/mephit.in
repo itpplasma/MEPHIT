@@ -1,0 +1,34 @@
+! Cylinder test of the sheet response (mephit.bash run --sheet): KiLCA geometry
+! (TCFP_hip scaled by kilca_scale_factor), n = 2, single resonance m = 4 (q = 2).
+! The vacuum field comes from a synthetic KiLCA file; any vacuum amplitude works because
+! the test compares the sheet field with the analytic field of the same sheet current.
+&scalars
+   config%log_level = 3
+   config%runmode = 0
+   config%pres_prof = 2
+   config%curr_prof = 2
+   config%q_prof = 1
+   config%refinement_scheme = 0
+   config%currn_model = 0
+   config%vac_src = 2
+   config%dens_file = 'n.dat'
+   config%temp_e_file = 'Te.dat'
+   config%temp_i_file = 'Ti.dat'
+   config%E_r_file = 'Er.dat'
+   config%n = 2
+   config%niter = 1
+   config%max_Delta_rad = 0.45d0
+   config%pol_max = 0
+   config%pol_min = 0
+   config%ignore_q1_res = .true.
+   config%damp = .true.
+   config%debug_initial = .false.
+   config%m_max = 12
+   config%kilca_pol_mode = 4
+   config%kilca_scale_factor = 1000
+   config%kilca_vac_output = 'kilca_vac.h5'
+/
+&arrays
+   refinement(4) = 1.414213562373095d0
+   Delta_rad_res(4) = 0.1125d0
+/

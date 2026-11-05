@@ -819,13 +819,13 @@ contains
   subroutine compute_Ires(sample_Ires, GL_weights, jnpar_Bmod, m, Ires)
     use mephit_conf, only: logger
     use mephit_util, only: imun
-    use mephit_mesh, only: coord_cache_t, equil
+    use mephit_mesh, only: coord_cache_t, equil, point_location_current
     type(coord_cache_t), intent(in) :: sample_Ires(:, :)
     real(dp), intent(in) :: GL_weights(:)
     type(L1_t), intent(in) :: jnpar_Bmod
     integer, intent(in) :: m
     complex(dp), intent(out) :: Ires
-    integer :: nrad, npol, krad, kpol
+    integer :: nrad, npol, krad, kpol, ktri
     complex(dp) :: jn_par, jmn_par
 
     if (size(GL_weights) /= size(sample_Ires, 2)) then
@@ -842,7 +842,10 @@ contains
       jmn_par = (0d0, 0d0)
       do kpol = 1, npol
         associate (s => sample_Ires(kpol, krad))
-          call L1_interp(jnpar_Bmod, s%ktri, s%R, s%Z, jn_par)
+          ktri = s%ktri
+          ! Older caches may contain points in the curved LCFS / mesh chord gap.
+          if (ktri < 1) ktri = point_location_current(s%R, s%Z, s%psi)
+          call L1_interp(jnpar_Bmod, ktri, s%R, s%Z, jn_par)
           jn_par = jn_par * sqrt(s%B0_R ** 2 + s%B0_phi ** 2 + s%B0_Z ** 2)
           ! jmn_par includes the area differential
           jmn_par = jmn_par + s%sqrt_g / s%R * jn_par * &

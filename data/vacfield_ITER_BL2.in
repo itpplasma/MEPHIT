@@ -1,0 +1,18 @@
+! Grid for libneo vacfield.x (Fourier mode), lengths in cm, for the ITER TC24 plasma box.
+! vacfield.x GPEC 3 $GPECHOME/coil/iter_bl2{u,m,l}.dat Fourier vacfield_ITER_BL2.in ITER_BL2_coils.h5
+&coil_field
+  Rmin = 410.0d0
+  Rmax = 835.0d0
+  Zmin = -355.0d0
+  Zmax = 415.0d0
+  nR = 213
+  nZ = 385
+  nphi = 256
+  nmax = 12
+  ! unused by the Fourier output (unit current per coil); MEPHIT applies
+  ! config%Biot_Savart_prefactor instead
+  prefactor = 1.0e-1
+  min_distance = 0.0
+  max_eccentricity = 1.0
+  use_convex_wall = .false.
+/
