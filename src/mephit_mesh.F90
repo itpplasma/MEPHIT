@@ -2387,7 +2387,12 @@ contains
     s%coeff = clight * mesh%n / (4d0 * pi * mesh%R_O) * &
       abs(dq_dpsi / (fs_half%q(kf) * fs_half%dp_dpsi(kf))) / &
       (mesh%n * abs(fs%q(kf) - fs%q(kf - 1)))
-    normalized_distance(:) = abs(fs%psi - mesh%psi_res(m)) / mesh%Delta_psi_res_curr(m) * 2d0
+    ! a zero-width current layer has no transition region
+    if (mesh%Delta_psi_res_curr(m) > 0d0) then
+      normalized_distance(:) = abs(fs%psi - mesh%psi_res(m)) / mesh%Delta_psi_res_curr(m) * 2d0
+    else
+      normalized_distance(:) = huge(1d0)
+    end if
     s%cross_fade(:) = 0d0
     select case (conf%transition_func)
     case (transition_func_none)
