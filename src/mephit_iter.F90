@@ -1455,7 +1455,7 @@ contains
     end subroutine edge_sheet_current
 
     subroutine compute_flr2_coeff(flr2)
-        use mephit_conf, only: conf
+        use mephit_conf, only: conf, currn_model_kilca
         use mephit_util, only: ev2erg
         use mephit_mesh, only: equil, mesh, fs, dens_e, temp_e, temp_i, Phi0, nu_i, nu_e
         use mephit_flr2, only: flr2_t, flr2_init, flr2_coeff
@@ -1465,6 +1465,8 @@ contains
         m_min = min(-equil%cocos%sgn_q * mesh%m_res_min, -equil%cocos%sgn_q * mesh%m_res_max)
         m_max = max(-equil%cocos%sgn_q * mesh%m_res_min, -equil%cocos%sgn_q * mesh%m_res_max)
         call flr2_init(flr2, mesh%nflux, m_min, m_max)
+        ! only the KiLCA current model uses these, and they divide by omega_E, which may vanish otherwise
+        if (conf%currn_model /= currn_model_kilca) return
         call flr2_coeff(flr2, m_min, m_max, mesh%n, mesh%nflux, conf%m_i, conf%Z_i, &
             mesh%R_O, fs%psi(1:), fs%q(1:), fs%F(1:), Phi0%y(1:), mesh%avg_R2gradpsi2(1:), &
             dens_e%y(1:), temp_e%y(1:) * ev2erg, temp_i%y(1:) * ev2erg, nu_e%y(1:), nu_i%y(1:))
