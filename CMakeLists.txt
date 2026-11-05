@@ -5,9 +5,6 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 ### Define the project
 project(MEPHIT LANGUAGES C CXX Fortran)
 
-### Define options
-option(WITH_MFEM "Compile with MFEM" FALSE)
-
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
 set(LIBRARY_OUTPUT_PATH ${PROJECT_BINARY_DIR}/lib)
@@ -25,6 +22,7 @@ else ()
   set(WARNING_FLAGS "-Wall -Wextra -pedantic -fmax-errors=1 -Wno-unused-label")
   set(LEGACY_FLAGS "-fcheck=no-array-temps")
   set(CMAKE_C_FLAGS "-O2 -g -march=native -Wconversion -Wfloat-equal -Wshadow -Wredundant-decls -Winline ${WARNING_FLAGS}")
+  set(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS}")
 endif ()
 
 ### Define external paths
@@ -59,10 +57,7 @@ find_package(FFTW REQUIRED COMPONENTS DOUBLE_LIB)
 include(ExternalProject)
 include(SetupCODE)
 include(SetupTriangle)
-if(WITH_MFEM)
-  include(SetupMFEM)
-  add_definitions(-DUSE_MFEM)
-endif()
+include(SetupMFEM)
 include(Util)
 find_or_fetch(libneo)
 
@@ -110,14 +105,10 @@ set(MEPHIT_C_SRC_FILES
 )
 set(MEPHIT_CPP_SRC_FILES
   src/mephit_fem.cpp
+  src/magnetic_differential_equation.cpp
+  src/miscellaneous.cpp
 )
-if(WITH_MFEM)
-  set(MEPHIT_CPP_SRC_FILES ${MEPHIT_CPP_SRC_FILES}
-    src/magnetic_differential_equation.cpp
-    src/miscellaneous.cpp
-  )
-endif()
-set_source_files_properties(src/mephit_run.c ${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
+set_source_files_properties(${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
 	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
 
 
@@ -151,14 +142,12 @@ if(LEGACY_SUITESPARSE)
 else()
   target_link_libraries(mephit SuiteSparse::umfpack)
 endif()
-if(WITH_MFEM)
-  add_dependencies(mephit MFEM)
-  target_include_directories(mephit PUBLIC ${MFEM_INCLUDE_DIRS})
-  target_link_libraries(mephit ${MFEM_LIBRARIES})
-endif()
+add_dependencies(mephit MFEM)
+target_include_directories(mephit PUBLIC ${MFEM_INCLUDE_DIRS})
+target_link_libraries(mephit ${MFEM_LIBRARIES})
 
 ### Define executables
-add_executable(mephit_run.x src/mephit_run.c)
+add_executable(mephit_run.x src/mephit_run.f90)
 add_executable(mephit_test.x src/mephit_test.f90)
 add_executable(mephit_post.x src/mephit_post.f90)
 add_executable(mephit_test_refine.x src/mephit_test_refine.f90)
@@ -169,17 +158,6 @@ target_link_libraries(mephit_test_refine.x mephit)
 include(CTest)
 if(BUILD_TESTING)
   find_package(Python3 COMPONENTS Interpreter REQUIRED)
-  add_executable(test_process_supervisor
-    src/mephit_run.c src/mephit_util.c test/test_process_stub.c)
-  target_include_directories(test_process_supervisor PRIVATE src)
-  target_link_libraries(test_process_supervisor GSL::gsl)
-  add_executable(test_pipe_client test/test_pipe_client.c)
-  target_include_directories(test_pipe_client PRIVATE src)
-  target_link_libraries(test_pipe_client mephit)
-  add_test(NAME freefem_failure COMMAND ${Python3_EXECUTABLE}
-    ${CMAKE_SOURCE_DIR}/test/test_freefem_failure.py
-    $<TARGET_FILE:test_process_supervisor> $<TARGET_FILE:test_pipe_client>)
-  set_tests_properties(freefem_failure PROPERTIES TIMEOUT 30)
   add_test(NAME refine_unit_partition_edge COMMAND mephit_test_refine.x)
   add_executable(test_mesh_quadrature_cache test/test_mesh_quadrature_cache.f90)
   target_link_libraries(test_mesh_quadrature_cache mephit)
@@ -196,31 +174,30 @@ if(BUILD_TESTING)
   add_executable(test_resonant_current test/test_resonant_current.f90)
   target_link_libraries(test_resonant_current mephit)
   add_test(NAME resonant_current COMMAND test_resonant_current)
-  # sheet (shielding) current response against the analytic cylinder; needs FreeFem++,
+  # sheet (shielding) current response against the analytic cylinder; needs
   # python3 with h5py and scipy, and runs the meshing, one iteration and the sheet phase
-  find_program(FREEFEM_EXECUTABLE NAMES FreeFem++ FreeFem++-mpi)
-  if(FREEFEM_EXECUTABLE)
+  if(TRUE)
     add_test(NAME sheet_cylinder COMMAND ${CMAKE_SOURCE_DIR}/test/sheet_cylinder/run_test.sh
       ${PROJECT_BINARY_DIR} ${CMAKE_SOURCE_DIR} ${PROJECT_BINARY_DIR}/sheet-cylinder)
     set_tests_properties(sheet_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
-      LABELS freefem)
+      LABELS cylinder)
     # boundary sheet of the moved equilibrium current against the analytic cylinder
     add_test(NAME edge_cylinder COMMAND ${CMAKE_SOURCE_DIR}/test/edge_cylinder/run_test.sh
       ${PROJECT_BINARY_DIR} ${CMAKE_SOURCE_DIR} ${PROJECT_BINARY_DIR}/edge-cylinder)
     set_tests_properties(edge_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
-      LABELS freefem)
+      LABELS cylinder)
   endif()
 endif()
 
 ### Add helper script to binaries
 configure_file(scripts/mephit.bash ${PROJECT_BINARY_DIR}/scripts/mephit.bash @ONLY)
-configure_file(scripts/ff-mephit.bash ${PROJECT_BINARY_DIR}/scripts/ff-mephit.bash COPYONLY)
-configure_file(scripts/maxwell_daemon.edp ${PROJECT_BINARY_DIR}/scripts/maxwell_daemon.edp COPYONLY)
-configure_file(scripts/extmesh.edp ${PROJECT_BINARY_DIR}/scripts/extmesh.edp COPYONLY)
-configure_file(scripts/mephit.gdb ${PROJECT_BINARY_DIR}/scripts/mephit.gdb COPYONLY)
 configure_file(data/convexwall_asdex.dat ${PROJECT_BINARY_DIR}/data/convexwall_asdex.dat COPYONLY)
 configure_file(data/convexwall_iter.dat ${PROJECT_BINARY_DIR}/data/convexwall_iter.dat COPYONLY)
 configure_file(data/convexwall_kilca.dat ${PROJECT_BINARY_DIR}/data/convexwall_kilca.dat COPYONLY)
 configure_file(data/convexwall_mastu.dat ${PROJECT_BINARY_DIR}/data/convexwall_mastu.dat COPYONLY)
 configure_file(data/field_divB0.inp ${PROJECT_BINARY_DIR}/data/field_divB0.inp COPYONLY)
 configure_file(data/preload_for_SYNCH.inp ${PROJECT_BINARY_DIR}/data/preload_for_SYNCH.inp COPYONLY)
+
+### Testing
+enable_testing()
+add_subdirectory(test)
