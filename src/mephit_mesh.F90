@@ -2671,6 +2671,8 @@ contains
         allocate(mesh%damping(0:mesh%nflux))
         mesh%damping(:) = 0d0
         do m = mesh%m_res_min, mesh%m_res_max
+            ! a zero-width layer contributes nothing, but 0 * exp(-0 / 0) is NaN at the resonance
+            if (mesh%Delta_psi_res_curr(m) <= 0d0) cycle
             mesh%damping(:) = mesh%damping + q_prime / fs%q * mesh%Delta_psi_res_curr(m) * &
                 exp(-(fs%psi - mesh%psi_res(m)) ** 2 / mesh%Delta_psi_res_curr(m) ** 2) * mesh%n
         end do
