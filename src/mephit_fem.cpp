@@ -234,6 +234,8 @@ MaxwellSolver::MaxwellSolver(const char* mesh_file, const int tor_mode)
   , Hdiv_elem(&Hdiv)
   , Jn_interp(&Hdiv_elem)
   , An(&Hrot)
+  // 32-bit UMFPACK indices overflow on fine meshes ("out of memory" well below the RAM limit)
+  , umf(true)
 {}
 
 void MaxwellSolver::map_edges(const char* edgemap_file)
