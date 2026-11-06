@@ -510,7 +510,8 @@ contains
     subroutine perteq_iterate(perteq, precond, fdm, flr2)
         use ieee_arithmetic, only: ieee_value, ieee_quiet_nan
         use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
-        use mephit_conf, only: conf, logger, datafile, runmode_single, currn_model_kilca
+        use mephit_conf, only: conf, logger, datafile, runmode_single, runmode_gmres, &
+            currn_model_kilca
         use mephit_mesh, only: mesh
         use mephit_pert, only: vac, L1_write, RT0_init, RT0_deinit, RT0_tor_comp_from_zero_div, RT0_L2int
         use mephit_flr2, only: flr2_t
@@ -546,64 +547,68 @@ contains
         perteq%Bn%DOF(:) = vac%Bn%DOF
         perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
         call perteq_write('("iter/", a, "_vac")', ' (vacuum)', magfmn = perteq%Bn)
-        if (precond%nritz > 0) then
-            perteq%Bn%DOF(:) = perteq%Bn%DOF - precond_apply(precond, perteq%Bn%DOF)
-            call RT0_tor_comp_from_zero_div(perteq%Bn)
-        end if
-        niter = maxiter
-        do kiter = 0, maxiter
-            write (logger%msg, '("Iteration ", i2, " of ", i2)') kiter, maxiter
-            if (logger%info) call logger%write_msg
-            write (postfix, postfix_fmt) kiter
-            Bn_prev%DOF(:) = perteq%Bn%DOF
-            Bn_prev%comp_phi(:) = perteq%Bn%comp_phi
-            if (kiter <= 1 .and. conf%debug_mfem) then
-                call MFEM_test(perteq%pn)
-                call perteq_write('("iter/", a, "MFEM_' // postfix // '")', &
-                    ' (after MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
-            end if
-            ! compute B_(n+1) = K * B_n + B_vac ... different from next_iteration_arnoldi
-            call compute_presn(perteq, fdm, conf%damp)
-            if (kiter <= 1) then
-                call perteq_write('("iter/", a, "' // postfix // '")', &
-                    ' (after iteration)', presn = perteq%pn, presmn = perteq%pn)
-            end if
-            call compute_currn(perteq, fdm, flr2, conf%damp, .false., .true.)
-            call compute_magfn(perteq)
-            perteq%Bn%DOF(:) = perteq%Bn%DOF + vac%Bn%DOF
+        if (runmode_gmres == conf%runmode) then
+            call perteq_solve_gmres(perteq, fdm, flr2, niter, rel_err)
+        else
             if (precond%nritz > 0) then
-                perteq%Bn%DOF(:) = perteq%Bn%DOF - precond_apply(precond, perteq%Bn%DOF - Bn_prev%DOF)
+                perteq%Bn%DOF(:) = perteq%Bn%DOF - precond_apply(precond, perteq%Bn%DOF)
+                call RT0_tor_comp_from_zero_div(perteq%Bn)
             end if
-            call RT0_tor_comp_from_zero_div(perteq%Bn)
-            Bn_diff%DOF(:) = perteq%Bn%DOF - Bn_prev%DOF
-            Bn_diff%comp_phi(:) = perteq%Bn%comp_phi - Bn_prev%comp_phi
-            L2int_Bn_diff(kiter) = RT0_L2int(Bn_diff)
-            write (logger%msg, '("L2int_Bn_diff = ", es24.16e3)') L2int_Bn_diff(kiter)
-            if (logger%info) call logger%write_msg
-            if (kiter <= 1) then
-                call perteq_write('("iter/", a, "' // postfix // '")', ' (after iteration)', &
-                    parcurrn = perteq%jnpar_B0, currn = perteq%jn, magfn = perteq%Bn)
-                call perteq_write('("iter/", a, "_diff' // postfix // '")', &
-                    ' (difference between iterations)', magfn = Bn_diff)
-            else
-                if (L2int_Bn_diff(kiter) < conf%iter_rel_err * L2int_Bnvac) then
-                    niter = kiter
-                    exit
+            niter = maxiter
+            do kiter = 0, maxiter
+                write (logger%msg, '("Iteration ", i2, " of ", i2)') kiter, maxiter
+                if (logger%info) call logger%write_msg
+                write (postfix, postfix_fmt) kiter
+                Bn_prev%DOF(:) = perteq%Bn%DOF
+                Bn_prev%comp_phi(:) = perteq%Bn%comp_phi
+                if (kiter <= 1 .and. conf%debug_mfem) then
+                    call MFEM_test(perteq%pn)
+                    call perteq_write('("iter/", a, "MFEM_' // postfix // '")', &
+                        ' (after MFEM iteration)', presn = perteq%pn, presmn = perteq%pn)
                 end if
+                ! compute B_(n+1) = K * B_n + B_vac ... different from next_iteration_arnoldi
+                call compute_presn(perteq, fdm, conf%damp)
+                if (kiter <= 1) then
+                    call perteq_write('("iter/", a, "' // postfix // '")', &
+                        ' (after iteration)', presn = perteq%pn, presmn = perteq%pn)
+                end if
+                call compute_currn(perteq, fdm, flr2, conf%damp, .false., .true.)
+                call compute_magfn(perteq)
+                perteq%Bn%DOF(:) = perteq%Bn%DOF + vac%Bn%DOF
+                if (precond%nritz > 0) then
+                    perteq%Bn%DOF(:) = perteq%Bn%DOF - precond_apply(precond, perteq%Bn%DOF - Bn_prev%DOF)
+                end if
+                call RT0_tor_comp_from_zero_div(perteq%Bn)
+                Bn_diff%DOF(:) = perteq%Bn%DOF - Bn_prev%DOF
+                Bn_diff%comp_phi(:) = perteq%Bn%comp_phi - Bn_prev%comp_phi
+                L2int_Bn_diff(kiter) = RT0_L2int(Bn_diff)
+                write (logger%msg, '("L2int_Bn_diff = ", es24.16e3)') L2int_Bn_diff(kiter)
+                if (logger%info) call logger%write_msg
+                if (kiter <= 1) then
+                    call perteq_write('("iter/", a, "' // postfix // '")', ' (after iteration)', &
+                        parcurrn = perteq%jnpar_B0, currn = perteq%jn, magfn = perteq%Bn)
+                    call perteq_write('("iter/", a, "_diff' // postfix // '")', &
+                        ' (difference between iterations)', magfn = Bn_diff)
+                else
+                    if (L2int_Bn_diff(kiter) < conf%iter_rel_err * L2int_Bnvac) then
+                        niter = kiter
+                        exit
+                    end if
+                end if
+                call perteq_write('("iter/", a, "' // postfix // '")', ' (after iteration)', &
+                    presmn = perteq%pn, parcurrmn = perteq%jnpar_B0, Ires = perteq%jnpar_B0, &
+                    currmn = perteq%jn, magfmn = perteq%Bn)
+            end do
+            rel_err = L2int_Bn_diff(niter) / L2int_Bnvac
+            write (logger%msg, '("Relative error after ", i0, " iterations: ", es24.16e3)') &
+                niter, rel_err
+            if (logger%info) call logger%write_msg
+            if (maxiter > 0 .and. rel_err >= conf%iter_rel_err) then
+                write (logger%msg, '("Requested relative error ", es24.16e3, ' // &
+                    '" could not be reached within the requested ", i0, " iterations")') &
+                    conf%iter_rel_err, conf%niter
+                if (logger%warn) call logger%write_msg
             end if
-            call perteq_write('("iter/", a, "' // postfix // '")', ' (after iteration)', &
-                presmn = perteq%pn, parcurrmn = perteq%jnpar_B0, Ires = perteq%jnpar_B0, &
-                currmn = perteq%jn, magfmn = perteq%Bn)
-        end do
-        rel_err = L2int_Bn_diff(niter) / L2int_Bnvac
-        write (logger%msg, '("Relative error after ", i0, " iterations: ", es24.16e3)') &
-            niter, rel_err
-        if (logger%info) call logger%write_msg
-        if (maxiter > 0 .and. rel_err >= conf%iter_rel_err) then
-            write (logger%msg, '("Requested relative error ", es24.16e3, ' // &
-                '" could not be reached within the requested ", i0, " iterations")') &
-                conf%iter_rel_err, conf%niter
-            if (logger%warn) call logger%write_msg
         end if
         perteq%Bnplas%DOF(:) = perteq%Bn%DOF - vac%Bn%DOF
         perteq%Bnplas%comp_phi(:) = perteq%Bn%comp_phi - vac%Bn%comp_phi
@@ -636,6 +641,62 @@ contains
         call RT0_deinit(Bn_prev)
         call RT0_deinit(Bn_diff)
     end subroutine perteq_iterate
+
+    !> Solves (I - K) B = B_vac for the total field B with GMRES, K being one
+    !> pressure, current and field step. Stops on the true residual.
+    subroutine perteq_solve_gmres(perteq, fdm, flr2, niter, rel_err)
+        use fortnum_krylov, only: complex_gmres_operator, KRYLOV_OK
+        use mephit_conf, only: conf, logger
+        use mephit_pert, only: vac, RT0_tor_comp_from_zero_div
+        use mephit_flr2, only: flr2_t
+        type(perteq_t), intent(inout) :: perteq
+        type(fdm_t), intent(in) :: fdm
+        type(flr2_t), intent(in) :: flr2
+        integer, intent(out) :: niter
+        real(dp), intent(out) :: rel_err
+        complex(dp), allocatable :: rhs(:), x(:)
+        integer :: info, napply
+        real(dp) :: res
+
+        allocate(rhs, source = vac%Bn%DOF)
+        allocate(x, source = vac%Bn%DOF)
+        napply = 0
+        call complex_gmres_operator(apply_I_minus_K, rhs, x, conf%iter_rel_err, &
+            conf%niter, conf%niter, info, niter, res)
+        rel_err = res / max(norm2(abs(rhs)), 1d0)
+        write (logger%msg, '("GMRES: status ", i0, ", ", i0, " iterations, ", i0, ' // &
+            '" K applications, relative residual ", es24.16e3)') info, niter, napply, rel_err
+        if (logger%info) call logger%write_msg
+        if (info /= KRYLOV_OK) then
+            write (logger%msg, '("GMRES did not reach the relative residual ", es24.16e3)') &
+                conf%iter_rel_err
+            if (logger%warn) call logger%write_msg
+        end if
+        ! pressure and current consistent with the returned field
+        perteq%Bn%DOF(:) = x
+        call RT0_tor_comp_from_zero_div(perteq%Bn)
+        call compute_presn(perteq, fdm, conf%damp)
+        call compute_currn(perteq, fdm, flr2, conf%damp, .false., .true.)
+        call compute_magfn(perteq)
+        perteq%Bn%DOF(:) = perteq%Bn%DOF + vac%Bn%DOF
+        call RT0_tor_comp_from_zero_div(perteq%Bn)
+        deallocate(rhs, x)
+
+    contains
+
+        subroutine apply_I_minus_K(input, output)
+            complex(dp), intent(in) :: input(:)
+            complex(dp), intent(out) :: output(:)
+
+            perteq%Bn%DOF(:) = input
+            call RT0_tor_comp_from_zero_div(perteq%Bn)
+            call compute_presn(perteq, fdm, conf%damp)
+            call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
+            call compute_magfn(perteq)
+            output(:) = input - perteq%Bn%DOF
+            napply = napply + 1
+        end subroutine apply_I_minus_K
+    end subroutine perteq_solve_gmres
 
     subroutine debug_initial_iteration(perteq, fdm, flr2)
         use mephit_conf, only: conf
