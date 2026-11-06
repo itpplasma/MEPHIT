@@ -901,8 +901,46 @@ contains
         deallocate(a, b, b_damped, a_jnperp, b_jnperp)
     end subroutine FDM_compute_matrix
 
+    !> Each flux surface of the FDM matrix is cyclic bidiagonal,
+    !> d_k x_k + e_k x_(k+1) = r_k with x_(n+1) = x_1, so it is solved by one forward
+    !> recursion x_k = alpha_k + beta_k x_1 and the closing row, without factorisation.
+    !> For the undamped operators |d_k| = |e_k|, so the recursion only rotates phases.
+    subroutine FDM_cyclic_solve(aval, x)
+        use mephit_mesh, only: mesh
+        complex(dp), intent(in) :: aval(:)
+        complex(dp), intent(inout) :: x(:)
+        complex(dp), allocatable :: d(:), e(:), alpha(:), beta(:)
+        complex(dp) :: t
+        integer :: kf, kp, n, k0
+
+        !$omp parallel do schedule(dynamic) private(kf, kp, n, k0, d, e, alpha, beta, t)
+        do kf = 1, mesh%nflux
+            n = mesh%kp_max(kf)
+            k0 = mesh%kp_low(kf)
+            allocate(d(n), e(n), alpha(n), beta(n))
+            ! layout of FDM_compute_matrix: diagonal of row k0 at 2 k0 - 1, its cyclic
+            ! partner e_n at 2 k0; for kp >= 2 the diagonal at 2 kedge, e_(kp-1) at 2 kedge - 1
+            d(1) = aval(2 * k0 - 1)
+            e(n) = aval(2 * k0)
+            do kp = 2, n
+                d(kp) = aval(2 * (k0 + kp - 1))
+                e(kp - 1) = aval(2 * (k0 + kp - 1) - 1)
+            end do
+            alpha(1) = (0d0, 0d0)
+            beta(1) = (1d0, 0d0)
+            do kp = 1, n - 1
+                alpha(kp + 1) = (x(k0 + kp - 1) - d(kp) * alpha(kp)) / e(kp)
+                beta(kp + 1) = -d(kp) * beta(kp) / e(kp)
+            end do
+            t = (x(k0 + n - 1) - d(n) * alpha(n)) / (d(n) * beta(n) + e(n))
+            x(k0:k0 + n - 1) = alpha + beta * t
+            deallocate(d, e, alpha, beta)
+        end do
+        !$omp end parallel do
+    end subroutine FDM_cyclic_solve
+
     subroutine FDM_solve(fdm, aval, inhom, solution)
-        use sparse_mod, only: sparse_solve, sparse_matmul
+        use sparse_mod, only: sparse_matmul
         use mephit_conf, only: logger
         use mephit_mesh, only: mesh
         type(FDM_t), intent(in) :: fdm
@@ -935,7 +973,7 @@ contains
         end if
         ndim = mesh%npoint - 1
         solution(:) = inhom
-        call sparse_solve(ndim, ndim, fdm%nnz, fdm%irow, fdm%icol, aval, solution(2:))
+        call FDM_cyclic_solve(aval, solution(2:))
         ! first point on axis - average over enclosing flux surface
         solution(1) = sum(solution(2:mesh%kp_max(1) + 1)) / dble(mesh%kp_max(1))
         ! check relative error
