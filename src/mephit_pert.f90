@@ -735,8 +735,23 @@ contains
     call h5_close(h5id_root)
   end subroutine vec_polmodes_write
 
+  ! powers of exp(i theta) instead of 2 m_max + 1 calls to exp
+  pure subroutine fourier_basis_fill(basis, m_max, theta)
+    integer, intent(in) :: m_max
+    complex(dp), intent(out) :: basis(-m_max:m_max)
+    real(dp), intent(in) :: theta
+    complex(dp) :: z
+    integer :: m
+
+    z = cmplx(cos(theta), sin(theta), dp)
+    basis(0) = (1d0, 0d0)
+    do m = 1, m_max
+      basis(m) = basis(m - 1) * z
+      basis(-m) = conjg(basis(m))
+    end do
+  end subroutine fourier_basis_fill
+
   subroutine L1_poloidal_modes(elem, polmodes)
-    use mephit_util, only: imun
     use mephit_mesh, only: mesh, cache
     type(L1_t), intent(in) :: elem
     type(polmodes_t), intent(inout) :: polmodes
@@ -749,8 +764,8 @@ contains
       do kp = 1, mesh%kp_max(kf)
         kpoi = mesh%kp_low(kf) + kp
         associate (s => cache%sample_polmodes(kpoi))
-          fourier_basis = [(exp(-imun * m * s%theta), &
-            m = -polmodes%m_max, polmodes%m_max)] / mesh%kp_max(kf)
+          call fourier_basis_fill(fourier_basis, polmodes%m_max, -s%theta)
+          fourier_basis = fourier_basis / mesh%kp_max(kf)
           call L1_interp(elem, s%ktri, s%R, s%Z, comp)
         end associate
         polmodes%coeff(:, kf) = polmodes%coeff(:, kf) + comp * fourier_basis
@@ -759,7 +774,6 @@ contains
   end subroutine L1_poloidal_modes
 
   subroutine L1_sum_poloidal_modes(polmodes, elem)
-    use mephit_util, only: imun
     use mephit_mesh, only: mesh
     type(polmodes_t), intent(in) :: polmodes
     type(L1_t), intent(inout) :: elem
@@ -771,8 +785,7 @@ contains
     do kf = 1, mesh%nflux
       do kp = 1, mesh%kp_max(kf)
         kpoi = mesh%kp_low(kf) + kp
-        fourier_basis = [(exp(imun * m * mesh%node_theta_flux(kpoi)), &
-          m = -polmodes%m_max, polmodes%m_max)]
+        call fourier_basis_fill(fourier_basis, polmodes%m_max, mesh%node_theta_flux(kpoi))
         elem%DOF(kpoi) = sum(polmodes%coeff(:, kf) * fourier_basis)
       end do
     end do
@@ -780,7 +793,7 @@ contains
 
   subroutine RT0_poloidal_modes(elem, vec_polmodes)
     use mephit_conf, only: conf
-    use mephit_util, only: imun, bent_cyl2straight_cyl
+    use mephit_util, only: bent_cyl2straight_cyl
     use mephit_mesh, only: equil, mesh, cache
     type(RT0_t), intent(in) :: elem
     type(vec_polmodes_t), intent(inout) :: vec_polmodes
@@ -797,8 +810,8 @@ contains
       do kt = 1, mesh%kt_max(kf)
         ktri = mesh%kt_low(kf) + kt
         associate (s => cache%sample_polmodes_half(ktri))
-          fourier_basis = [(exp(-imun * m * s%theta), &
-            m = -vec_polmodes%m_max, vec_polmodes%m_max)] / mesh%kt_max(kf)
+          call fourier_basis_fill(fourier_basis, vec_polmodes%m_max, -s%theta)
+          fourier_basis = fourier_basis / mesh%kt_max(kf)
           call RT0_interp(elem, s%ktri, s%R, s%Z, cyl_vec)
           if (conf%kilca_scale_factor /= 0) then
             call bent_cyl2straight_cyl(cyl_vec(1), cyl_vec(2), cyl_vec(3), &
@@ -1222,7 +1235,6 @@ contains
   subroutine debug_Bmnvac
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
     use mephit_conf, only: conf, datafile
-    use mephit_util, only: imun
     use mephit_mesh, only: equil, mesh, cache
     character(len = *), parameter :: dataset = 'vac/Bn'
     integer :: kf, kt, ktri, m
@@ -1237,8 +1249,8 @@ contains
       do kt = 1, mesh%kt_max(kf)
         ktri = mesh%kt_low(kf) + kt
         associate (s => cache%sample_polmodes_half(ktri))
-          fourier_basis = [(exp(-imun * m * s%theta), &
-            m = -conf%m_max, conf%m_max)] / mesh%kt_max(kf)
+          call fourier_basis_fill(fourier_basis, conf%m_max, -s%theta)
+          fourier_basis = fourier_basis / mesh%kt_max(kf)
           call spline_bn(conf%n, s%R, s%Z, Bn_R, Bn_phi, Bn_Z)
           Bn_contradenspsi = s%sqrt_g * (Bn_R * s%B0_Z - Bn_Z * s%B0_R) * s%R
           Bn_n = (Bn_R * s%B0_Z - Bn_Z * s%B0_R) / hypot(s%B0_R, s%B0_Z) * equil%cocos%sgn_dpsi
