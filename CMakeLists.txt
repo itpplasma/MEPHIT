@@ -66,6 +66,15 @@ if(TARGET vacfield.x)
   add_dependencies(libneo_vacfield vacfield.x)
 endif()
 
+include(FetchContent)
+if(NOT TARGET fortnum)
+  FetchContent_Declare(fortnum
+    GIT_REPOSITORY https://github.com/lazy-fortran/fortnum.git
+    GIT_TAG 19d2dbd36ae6765ccf28e15840b5b3dd8743bade
+  )
+  FetchContent_MakeAvailable(fortnum)
+endif()
+
 ### Project source files
 # SuiteSparse
 set(SUITESPARSE_SRC_FILES
@@ -140,6 +149,7 @@ set(MEPHIT_LIBS
   LIBNEO::magfie
   LIBNEO::odeint
   LIBNEO::hdf5_tools
+  fortnum
 )
 target_link_libraries(mephit ${MEPHIT_LIBS})
 if(LEGACY_SUITESPARSE)
