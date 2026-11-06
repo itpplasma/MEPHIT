@@ -16,7 +16,7 @@ module mephit_conf
   ! module variables
   public :: conf, conf_arr, logger
   public :: longlines, cmplx_fmt, nl_fmt, basename_suffix, datafile, &
-    runmode_single, runmode_direct, runmode_precon, &
+    runmode_single, runmode_direct, runmode_precon, runmode_gmres, &
     pres_prof_eps, pres_prof_par, pres_prof_geqdsk, &
     curr_prof_ps, curr_prof_rot, curr_prof_geqdsk, &
     q_prof_flux, q_prof_rot, q_prof_geqdsk, &
@@ -35,6 +35,7 @@ module mephit_conf
   integer, parameter :: runmode_single = 0 !< single iteration mode
   integer, parameter :: runmode_direct = 1 !< direct iteration mode
   integer, parameter :: runmode_precon = 2 !< preconditioned iteration mode
+  integer, parameter :: runmode_gmres = 3 !< GMRES on (I - K) B = B_vac
 
   integer, parameter :: pres_prof_eps = 0    !< pressure profile from EPS paper
   integer, parameter :: pres_prof_par = 1    !< parabolic pressure profile
@@ -77,7 +78,7 @@ module mephit_conf
     logical :: quiet = .false.
 
     !> Kind of iterations to run. Possible values are #runmode_single, #runmode_direct,
-    !> and #runmode_precon (default).
+    !> #runmode_precon (default) and #runmode_gmres.
     integer :: runmode = runmode_precon
 
     !> Source of pressure profile. Possible values are #pres_prof_eps, #pres_prof_par,
