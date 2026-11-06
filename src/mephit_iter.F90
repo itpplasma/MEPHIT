@@ -568,7 +568,7 @@ contains
                 call perteq_write('("iter/", a, "' // postfix // '")', &
                     ' (after iteration)', presn = perteq%pn, presmn = perteq%pn)
             end if
-            call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
+            call compute_currn(perteq, fdm, flr2, conf%damp, .false., .true.)
             call compute_magfn(perteq)
             perteq%Bn%DOF(:) = perteq%Bn%DOF + vac%Bn%DOF
             if (precond%nritz > 0) then
@@ -1066,7 +1066,7 @@ contains
         deallocate(lorentz, pn, grad_pn, Bn_psi_contravar, jnpar_Bmod, grad_jnpar_Bmod, div_jnperp, div_jnperp_RT0)
     end subroutine debug_MDE
 
-    subroutine compute_currn(perteq, fdm, flr2, apply_damping, debug_initial)
+    subroutine compute_currn(perteq, fdm, flr2, apply_damping, debug_initial, write_final)
         use mephit_conf, only: conf, currn_model_kilca, currn_model_mhd, currn_model_zero, &
             logger, datafile
         use mephit_mesh, only: mesh
@@ -1078,11 +1078,15 @@ contains
         type(flr2_t), intent(in) :: flr2
         logical, intent(in) :: apply_damping
         logical, intent(in) :: debug_initial
+        logical, intent(in), optional :: write_final
+        logical :: write_diag
         type(polmodes_t) :: resonant_jmnpar_over_Bmod
         type(L1_t) :: resonant_jnpar_over_Bmod
         type(RT0_t) :: resonant_jn, edge_jn
         complex(dp), allocatable :: xi_n(:)
 
+        write_diag = .false.
+        if (present(write_final)) write_diag = write_final
         call polmodes_init(resonant_jmnpar_over_Bmod, conf%m_max, mesh%nflux)
         call L1_init(resonant_jnpar_over_Bmod, mesh%npoint)
         call RT0_init(resonant_jn, mesh%nedge, mesh%ntri)
@@ -1109,13 +1113,15 @@ contains
             end if
         end if
 
-        ! hack: overwrite to save only last iteration step
-        if (apply_damping) then
-            call perteq_write('("debug_KiLCA_final/", a, "_incl")', &
-                ' from iMHD including damping', parcurrmn = perteq%jnpar_B0)
-        else
-            call perteq_write('("debug_KiLCA_final/", a, "_excl")', &
-                ' from iMHD excluding damping', parcurrmn = perteq%jnpar_B0)
+        ! diagnostics of the converged state only, not of every operator application
+        if (write_diag) then
+            if (apply_damping) then
+                call perteq_write('("debug_KiLCA_final/", a, "_incl")', &
+                    ' from iMHD including damping', parcurrmn = perteq%jnpar_B0)
+            else
+                call perteq_write('("debug_KiLCA_final/", a, "_excl")', &
+                    ' from iMHD excluding damping', parcurrmn = perteq%jnpar_B0)
+            end if
         end if
 
         select case (conf%currn_model)
@@ -1143,13 +1149,14 @@ contains
             call perteq_write('("debug_KiLCA/", a, "_total")', &
                 ' including KiLCA current', parcurrmn = perteq%jnpar_B0)
         end if
-        ! hack: overwrite to save only last iteration step
-        call debug_MDE("debug_MDE_final", perteq%pn, perteq%Bn, perteq%jn, perteq%jnpar_B0)
-        call polmodes_write(resonant_jmnpar_over_Bmod, datafile, &
-            'debug_KiLCA_final/jmnpar_Bmod_KiLCA', &
-            'parallel current density from KiLCA', 's^-1') ! SI: H^-1
-        call perteq_write('("debug_KiLCA_final/", a, "_total")', &
-            ' including KiLCA current', parcurrmn = perteq%jnpar_B0)
+        if (write_diag) then
+            call debug_MDE("debug_MDE_final", perteq%pn, perteq%Bn, perteq%jn, perteq%jnpar_B0)
+            call polmodes_write(resonant_jmnpar_over_Bmod, datafile, &
+                'debug_KiLCA_final/jmnpar_Bmod_KiLCA', &
+                'parallel current density from KiLCA', 's^-1') ! SI: H^-1
+            call perteq_write('("debug_KiLCA_final/", a, "_total")', &
+                ' including KiLCA current', parcurrmn = perteq%jnpar_B0)
+        end if
 
         call polmodes_deinit(resonant_jmnpar_over_Bmod)
         call L1_deinit(resonant_jnpar_over_Bmod)
