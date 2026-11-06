@@ -198,11 +198,10 @@ public:
   mfem::FiniteElementSpace Hdiv;
   mfem::FiniteElementSpace Hrot;
   mfem::BilinearForm potential;
-  mfem::LinearForm source;
+  mfem::MixedBilinearForm source;
   mfem::DiscreteLinearOperator rot;
   mfem::Array<int> ess_tdof_list;
   mfem::GridFunction Hdiv_elem;
-  mfem::VectorGridFunctionCoefficient Jn_interp;
   mfem::GridFunction An;
   mfem::Vector solution;
   mfem::Vector rhs;
@@ -229,10 +228,9 @@ MaxwellSolver::MaxwellSolver(const char* mesh_file, const int tor_mode)
   , Hdiv(&mesh, &RT0)
   , Hrot(&mesh, &ND1)
   , potential(&Hrot)
-  , source(&Hrot)
+  , source(&Hdiv, &Hrot)
   , rot(&Hrot, &Hdiv)
   , Hdiv_elem(&Hdiv)
-  , Jn_interp(&Hdiv_elem)
   , An(&Hrot)
   // 32-bit UMFPACK indices overflow on fine meshes ("out of memory" well below the RAM limit)
   , umf(true)
@@ -342,8 +340,12 @@ void MaxwellSolver::assemble()
   Hrot.GetEssentialTrueDofs(ess_bdr, ess_tdof_list);
   potential.FormSystemMatrix(ess_tdof_list, lhs);
   umf.SetOperator(dynamic_cast<mfem::SparseMatrix&>(*lhs));
-  mfem::VectorFEDomainLFIntegrator* const curr_dens = new mfem::VectorFEDomainLFIntegrator(Jn_interp);
-  source.AddDomainIntegrator(curr_dens);
+  // the right-hand side is linear in the RT0 current, so its matrix is assembled once
+  source.AddDomainIntegrator(new mfem::VectorFEMassIntegrator());
+  source.Assemble();
+  source.Finalize();
+  rhs.SetSize(Hrot.GetTrueVSize());
+  solution.SetSize(Hrot.GetTrueVSize());
   rot.AddDomainInterpolator(new FourierGaugedCurlInterpolator(n));
   rot.Assemble();
   rot.Finalize();
@@ -358,16 +360,16 @@ void MaxwellSolver::compute_magfn(const int nedge, const complex_double* Jn, com
       Hdiv_elem(edge_map[k]) = 4.0 * M_PI / c * sign_map[k] *
         reinterpret_cast<const double*>(Jn)[2 * k + im];
     }
-    source.Assemble();
-    An = 0.0;
-    potential.FormLinearSystem(ess_tdof_list, An, source, lhs, solution, rhs);
+    source.Mult(Hdiv_elem, rhs);
+    // homogeneous Dirichlet condition, as eliminated from lhs in assemble()
+    rhs.SetSubVector(ess_tdof_list, 0.0);
 
     // ignore FE_INVALID (and possibly FE_INEXACT) in UMFPack
     feholdexcept(&saved);
     umf.Mult(rhs, solution);
     fesetenv(&saved);
 
-    potential.RecoverFEMSolution(solution, source, An);
+    An = solution;
     rot.Mult(An, Hdiv_elem);
     for (size_t k = 0; k < nedge; k++) {
       // multiply by imaginary unit
