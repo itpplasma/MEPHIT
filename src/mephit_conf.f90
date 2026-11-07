@@ -218,6 +218,17 @@ module mephit_conf
     !> Defaults to false.
     logical :: bordered_shielding = .false.
 
+    !> Layer response of the bordered solve. 0 (default): ideal, the resonant flux
+    !> vanishes. 1: constant-psi resistive-inertial layer, which relates the jump of the
+    !> outer radial flux derivative across the resonance to the resonant flux,
+    !> \f$ r_{s} \Delta = 2.124 \, \gamma^{5/4} \tau_{R}^{3/4} \tau_{H}^{1/2} \f$ with
+    !> \f$ \gamma = i n \Omega_{E} \f$ from `E_r_file`, Spitzer resistivity and the density
+    !> from `dens_file` (Furth, Killeen and Rosenbluth 1963; Fitzpatrick 1998).
+    integer :: layer_model = 0
+
+    !> Factor multiplying the E x B rotation frequency in the layer response. Defaults to 1.
+    real(dp) :: layer_omega_factor = 1d0
+
     !> Model for the width of the resonant layer, which sets the Pfirsch-Schlueter damping
     !> for every mode with `Delta_rad_res_curr(m) = 0`. 0 (default) keeps the manual
     !> widths. 1 uses the resistive width of the Alfven resonance,
@@ -404,6 +415,10 @@ contains
       comment = 'close current leaving the plasma by a field-aligned boundary sheet')
     call h5_add(h5id_root, grp // '/bordered_shielding', config%bordered_shielding, &
       comment = 'sheet currents as unknowns with vanishing resonant flux (runmode 3)')
+    call h5_add(h5id_root, grp // '/layer_model', config%layer_model, &
+      comment = 'layer response of the bordered solve (0: ideal, 1: resistive-inertial)')
+    call h5_add(h5id_root, grp // '/layer_omega_factor', config%layer_omega_factor, &
+      comment = 'factor on the E x B rotation frequency in the layer response')
     call h5_add(h5id_root, grp // '/res_layer_model', config%res_layer_model, &
       comment = 'resonant layer width model (0: manual, 1: resistive Alfven resonance)')
     call h5_add(h5id_root, grp // '/res_layer_factor', config%res_layer_factor, &

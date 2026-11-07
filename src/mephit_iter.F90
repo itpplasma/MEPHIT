@@ -728,6 +728,7 @@ contains
         real(dp), intent(out) :: rel_err
         complex(dp), allocatable :: rhs(:), x(:)
         real(dp), dimension(mesh%m_res_min:mesh%m_res_max) :: scale_I, scale_C
+        complex(dp), dimension(mesh%m_res_min:mesh%m_res_max) :: coupling, delta_psi, jump
         logical :: active(mesh%m_res_min:mesh%m_res_max)
         complex(dp) :: flux_res(mesh%m_res_min:mesh%m_res_max)
         type(RT0_t) :: B_in
@@ -742,6 +743,9 @@ contains
         sheet_given = .true.
         norm_vac = max(norm2(abs(vac%Bn%DOF)), tiny(1d0))
         ! one amplitude per active resonance, scaled so that its field has the norm of B_vac
+        coupling(:) = (0d0, 0d0)
+        delta_psi(:) = (0d0, 0d0)
+        jump(:) = (0d0, 0d0)
         do m = mesh%m_res_min, mesh%m_res_max
             active(m) = abs(conf_arr%refinement(m)) > 1d0
             scale_I(m) = 1d0
@@ -756,6 +760,15 @@ contains
             call compute_magfn(perteq)
             scale_I(m) = norm_vac / max(norm2(abs(perteq%Bn%DOF)), tiny(1d0))
             scale_C(m) = norm_vac / max(abs(resonant_flux(vac%Bn, m)), tiny(1d0))
+            if (conf%layer_model == 1) then
+                ! jump of d Phi_m / d psi across the unit sheet, outside its support (cells kf +- 1)
+                jump(m) = sheet_flux_jump(perteq%Bn, m)
+                delta_psi(m) = resistive_inertial_delta(m)
+                if (abs(delta_psi(m)) > tiny(1d0)) coupling(m) = jump(m) / delta_psi(m)
+                write (logger%msg, '("Resonance m = ", i0, ": layer Delta_psi ", 2es12.4, ' // &
+                    '" Mx^-1, sheet jump per amplitude ", 2es12.4)') m, delta_psi(m), jump(m)
+                if (logger%info) call logger%write_msg
+            end if
         end do
         allocate(rhs(nb + size(scale_I)), x(nb + size(scale_I)))
         rhs(:) = (0d0, 0d0)
@@ -790,6 +803,12 @@ contains
         perteq%Bn%DOF(:) = perteq%Bn%DOF + vac%Bn%DOF
         call RT0_tor_comp_from_zero_div(perteq%Bn)
         call h5_open_rw(datafile, h5id_root)
+        if (conf%layer_model == 1) then
+            call h5_add(h5id_root, 'iter/layer_delta_psi', delta_psi, lbound(delta_psi), ubound(delta_psi), &
+                comment = 'layer response: jump of d Phi_m / d psi over Phi_m', unit = 'Mx^-1')
+            call h5_add(h5id_root, 'iter/sheet_jump', jump, lbound(jump), ubound(jump), &
+                comment = 'jump of d Phi_m / d psi across the sheet per unit amplitude', unit = 's')
+        end if
         call h5_add(h5id_root, 'iter/sheet_amplitude', sheet_amplitude, &
             lbound(sheet_amplitude), ubound(sheet_amplitude), &
             comment = 'parallel current density over |B| of the sheet current in the resonant cell, ' // &
@@ -825,8 +844,12 @@ contains
             B_in%DOF(:) = input(1:nb)
             do k = 1, size(input) - nb
                 m = mesh%m_res_min + k - 1
-                if (active(m)) then
-                    output(nb + k) = scale_C(m) * resonant_flux(B_in, m)
+                if (active(m) .and. conf%layer_model == 1 .and. abs(delta_psi(m)) <= tiny(1d0)) then
+                    ! no layer response: the sheet current vanishes and the field penetrates
+                    output(nb + k) = input(nb + k)
+                else if (active(m)) then
+                    output(nb + k) = scale_C(m) * (resonant_flux(B_in, m) - &
+                        coupling(m) * sheet_amplitude(m))
                 else
                     output(nb + k) = input(nb + k)
                 end if
@@ -835,20 +858,78 @@ contains
         end subroutine apply_bordered
     end subroutine perteq_solve_bordered
 
-    !> Resonant flux harmonic sqrt_g B . grad psi of harmonic -sgn_q m in the cell holding
-    !> resonance m, as Bmn%coeff_rad and sheet/Phi_tot. Needs only the poloidal DOFs.
-    function resonant_flux(Bn, m) result(flux)
+    !> Jump of d Phi_m / d psi of the resonant harmonic across the sheet of resonance m,
+    !> from one-sided differences in the cells kf +- 2 and kf +- 3, outside the support of
+    !> the sheet (the hat functions of the nodes bracketing the resonant cell kf).
+    function sheet_flux_jump(Bn, m) result(jump)
+        use mephit_mesh, only: mesh, fs_half
+        type(RT0_t), intent(in) :: Bn
+        integer, intent(in) :: m
+        complex(dp) :: jump
+        integer :: kf
+
+        kf = mesh%res_ind(m)
+        jump = (cell_flux(Bn, m, kf + 3) - cell_flux(Bn, m, kf + 2)) / &
+            (fs_half%psi(kf + 3) - fs_half%psi(kf + 2)) - &
+            (cell_flux(Bn, m, kf - 2) - cell_flux(Bn, m, kf - 3)) / &
+            (fs_half%psi(kf - 2) - fs_half%psi(kf - 3))
+    end function sheet_flux_jump
+
+    !> Layer response r_s Delta = 2.124 gamma^(5/4) tau_R^(3/4) tau_H^(1/2) of the
+    !> constant-psi resistive-inertial layer (Furth, Killeen and Rosenbluth 1963) with
+    !> gamma = i n Omega_E in the frame of the plasma, converted to the flux label:
+    !> Delta_psi = Delta / (d psi / d r). tau_R = mu0 r_s^2 / eta with parallel Spitzer
+    !> resistivity, tau_H = |q| R_0 / (n |s| v_A) with the shear s = r q' / q.
+    function resistive_inertial_delta(m) result(delta_psi)
+        use mephit_conf, only: conf, logger
+        use mephit_util, only: interp1d, imun, pi, clight, m_p
+        use mephit_mesh, only: mesh, fs, dens_e, temp_e, dPhi0_dpsi
+        integer, intent(in) :: m
+        complex(dp) :: delta_psi
+        real(dp), parameter :: mu0 = 4d-7 * pi
+        real(dp) :: psi_res, r_s, q, dq_dr, dpsi_dr, n_e, T_e, B_tor, rho, v_A, eta, &
+            lnLambda, tau_R, tau_H, omega_E, shear
+        complex(dp) :: gamma
+
+        psi_res = mesh%psi_res(m)
+        r_s = interp1d(fs%psi, fs%rsmall, psi_res, 3)
+        q = abs(interp1d(fs%psi, fs%q, psi_res, 3))
+        dq_dr = interp1d(fs%rsmall, abs(fs%q), r_s, 3, .true.)
+        dpsi_dr = interp1d(fs%rsmall, fs%psi, r_s, 3, .true.)
+        n_e = interp1d(fs%psi, dens_e%y, psi_res, 3)
+        T_e = interp1d(fs%psi, temp_e%y, psi_res, 3)
+        B_tor = abs(interp1d(fs%psi, fs%F, psi_res, 3)) / mesh%R_O
+        omega_E = conf%layer_omega_factor * clight * interp1d(fs%psi, dPhi0_dpsi%y, psi_res, 3)
+        ! SI from here on
+        rho = n_e * 1d6 * conf%m_i * m_p * 1d-3 / conf%Z_i
+        v_A = B_tor * 1d-4 / sqrt(mu0 * rho)
+        lnLambda = 24d0 - log(sqrt(n_e) / T_e)
+        eta = 5.2d-5 * conf%Z_i * lnLambda / T_e ** 1.5d0
+        shear = r_s * dq_dr / q
+        tau_R = mu0 * (r_s * 1d-2) ** 2 / eta
+        tau_H = q * mesh%R_O * 1d-2 / (dble(mesh%n) * abs(shear) * v_A)
+        gamma = imun * dble(mesh%n) * omega_E
+        ! a static layer has no response; the complex power of zero is undefined
+        delta_psi = (0d0, 0d0)
+        if (abs(gamma) > 0d0) delta_psi = 2.124d0 * gamma ** 1.25d0 * tau_R ** 0.75d0 * sqrt(tau_H) / &
+            (r_s * 1d-2) * 1d-2 / dpsi_dr
+        write (logger%msg, '("Resonance m = ", i0, ": tau_R ", es10.3, " s, tau_H ", es10.3, ' // &
+            '" s, Omega_E ", es11.3, " rad/s, S ", es10.3)') m, tau_R, tau_H, omega_E, tau_R / tau_H
+        if (logger%info) call logger%write_msg
+    end function resistive_inertial_delta
+
+    !> Flux harmonic sqrt_g B . grad psi of harmonic -sgn_q m in cell kf (as Bmn%coeff_rad).
+    function cell_flux(Bn, m, kf) result(flux)
         use mephit_util, only: imun
         use mephit_mesh, only: equil, mesh, cache
         use mephit_pert, only: RT0_interp
         type(RT0_t), intent(in) :: Bn
-        integer, intent(in) :: m
+        integer, intent(in) :: m, kf
         complex(dp) :: flux
         complex(dp) :: cyl_vec(3)
-        integer :: kf, kt, m_res
+        integer :: kt, m_res
 
         m_res = -equil%cocos%sgn_q * m
-        kf = mesh%res_ind(m)
         flux = (0d0, 0d0)
         do kt = 1, mesh%kt_max(kf)
             associate (s => cache%sample_polmodes_half(mesh%kt_low(kf) + kt))
@@ -858,6 +939,17 @@ contains
             end associate
         end do
         flux = flux / dble(mesh%kt_max(kf))
+    end function cell_flux
+
+    !> Resonant flux harmonic sqrt_g B . grad psi of harmonic -sgn_q m in the cell holding
+    !> resonance m, as Bmn%coeff_rad and sheet/Phi_tot. Needs only the poloidal DOFs.
+    function resonant_flux(Bn, m) result(flux)
+        use mephit_mesh, only: mesh
+        type(RT0_t), intent(in) :: Bn
+        integer, intent(in) :: m
+        complex(dp) :: flux
+
+        flux = cell_flux(Bn, m, mesh%res_ind(m))
     end function resonant_flux
 
     subroutine debug_initial_iteration(perteq, fdm, flr2)
