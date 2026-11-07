@@ -212,6 +212,12 @@ module mephit_conf
     !> current on the boundary instead of passing it to the vacuum region. Defaults to false.
     logical :: edge_boundary_sheet = .false.
 
+    !> Solve for the shielding sheet current of each resonance as an additional unknown,
+    !> constrained by a vanishing resonant flux harmonic in the resonant cell, instead of
+    !> estimating it from the jump of the pressure perturbation (runmode 3 only).
+    !> Defaults to false.
+    logical :: bordered_shielding = .false.
+
     !> Model for the width of the resonant layer, which sets the Pfirsch-Schlueter damping
     !> for every mode with `Delta_rad_res_curr(m) = 0`. 0 (default) keeps the manual
     !> widths. 1 uses the resistive width of the Alfven resonance,
@@ -396,6 +402,8 @@ contains
       comment = 'add surface current xi_n j0 of the displaced plasma boundary')
     call h5_add(h5id_root, grp // '/edge_boundary_sheet', config%edge_boundary_sheet, &
       comment = 'close current leaving the plasma by a field-aligned boundary sheet')
+    call h5_add(h5id_root, grp // '/bordered_shielding', config%bordered_shielding, &
+      comment = 'sheet currents as unknowns with vanishing resonant flux (runmode 3)')
     call h5_add(h5id_root, grp // '/res_layer_model', config%res_layer_model, &
       comment = 'resonant layer width model (0: manual, 1: resistive Alfven resonance)')
     call h5_add(h5id_root, grp // '/res_layer_factor', config%res_layer_factor, &

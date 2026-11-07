@@ -112,6 +112,12 @@ module mephit_iter
 
     type(c_ptr) :: maxwell_solver
 
+    !> Sheet-current amplitudes (parallel current density over |B| of the resonant harmonic
+    !> in the resonant cell) when they are unknowns of the bordered solve; then
+    !> compute_shielding_current() returns them instead of the pressure-jump estimate.
+    logical :: sheet_given = .false.
+    complex(dp), allocatable :: sheet_amplitude(:)
+
 contains
 
     subroutine mephit_main(runmode, config, suffix)
@@ -547,7 +553,9 @@ contains
         perteq%Bn%DOF(:) = vac%Bn%DOF
         perteq%Bn%comp_phi(:) = vac%Bn%comp_phi
         call perteq_write('("iter/", a, "_vac")', ' (vacuum)', magfmn = perteq%Bn)
-        if (runmode_gmres == conf%runmode) then
+        if (runmode_gmres == conf%runmode .and. conf%bordered_shielding) then
+            call perteq_solve_bordered(perteq, fdm, flr2, niter, rel_err)
+        else if (runmode_gmres == conf%runmode) then
             call perteq_solve_gmres(perteq, fdm, flr2, niter, rel_err)
         else
             if (precond%nritz > 0) then
@@ -697,6 +705,160 @@ contains
             napply = napply + 1
         end subroutine apply_I_minus_K
     end subroutine perteq_solve_gmres
+
+    !> Solves the perturbed equilibrium with one sheet-current amplitude I_m per resonance
+    !> as additional unknown,
+    !>   B - K(B, I) = B_vac,   Phi_m(B) = 0,
+    !> where K(B, I) is the field of the pressure-driven current of B plus the sheet
+    !> currents I and Phi_m is the resonant flux harmonic in the resonant cell (as
+    !> sheet/Phi_tot). Ideal shielding then holds exactly instead of through the jump of
+    !> the pressure perturbation across one cell. Amplitudes and constraint rows are scaled
+    !> to the norm of B_vac.
+    subroutine perteq_solve_bordered(perteq, fdm, flr2, niter, rel_err)
+        use fortnum_krylov, only: complex_gmres_operator, KRYLOV_OK
+        use hdf5_tools, only: HID_T, h5_open_rw, h5_add, h5_close
+        use mephit_conf, only: conf, conf_arr, logger, datafile
+        use mephit_mesh, only: mesh
+        use mephit_pert, only: vac, RT0_init, RT0_deinit, RT0_tor_comp_from_zero_div
+        use mephit_flr2, only: flr2_t
+        type(perteq_t), intent(inout) :: perteq
+        type(fdm_t), intent(in) :: fdm
+        type(flr2_t), intent(in) :: flr2
+        integer, intent(out) :: niter
+        real(dp), intent(out) :: rel_err
+        complex(dp), allocatable :: rhs(:), x(:)
+        real(dp), dimension(mesh%m_res_min:mesh%m_res_max) :: scale_I, scale_C
+        logical :: active(mesh%m_res_min:mesh%m_res_max)
+        complex(dp) :: flux_res(mesh%m_res_min:mesh%m_res_max)
+        type(RT0_t) :: B_in
+        integer :: nb, m, info, napply
+        integer(HID_T) :: h5id_root
+        real(dp) :: res, norm_vac
+
+        nb = mesh%nedge
+        call RT0_init(B_in, mesh%nedge, mesh%ntri)
+        if (allocated(sheet_amplitude)) deallocate(sheet_amplitude)
+        allocate(sheet_amplitude(mesh%m_res_min:mesh%m_res_max))
+        sheet_given = .true.
+        norm_vac = max(norm2(abs(vac%Bn%DOF)), tiny(1d0))
+        ! one amplitude per active resonance, scaled so that its field has the norm of B_vac
+        do m = mesh%m_res_min, mesh%m_res_max
+            active(m) = abs(conf_arr%refinement(m)) > 1d0
+            scale_I(m) = 1d0
+            scale_C(m) = 1d0
+            if (.not. active(m)) cycle
+            sheet_amplitude(:) = (0d0, 0d0)
+            sheet_amplitude(m) = (1d0, 0d0)
+            perteq%Bn%DOF(:) = (0d0, 0d0)
+            call RT0_tor_comp_from_zero_div(perteq%Bn)
+            call compute_presn(perteq, fdm, conf%damp)
+            call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
+            call compute_magfn(perteq)
+            scale_I(m) = norm_vac / max(norm2(abs(perteq%Bn%DOF)), tiny(1d0))
+            scale_C(m) = norm_vac / max(abs(resonant_flux(vac%Bn, m)), tiny(1d0))
+        end do
+        allocate(rhs(nb + size(scale_I)), x(nb + size(scale_I)))
+        rhs(:) = (0d0, 0d0)
+        rhs(1:nb) = vac%Bn%DOF
+        x(:) = rhs
+        napply = 0
+        call complex_gmres_operator(apply_bordered, rhs, x, conf%iter_rel_err, &
+            conf%niter, conf%niter, info, niter, res)
+        rel_err = res / norm2(abs(rhs))
+        write (logger%msg, '("Bordered GMRES: status ", i0, ", ", i0, " iterations, ", i0, ' // &
+            '" K applications, relative residual ", es24.16e3)') info, niter, napply, rel_err
+        if (logger%info) call logger%write_msg
+        if (info /= KRYLOV_OK) then
+            write (logger%msg, '("Bordered GMRES did not reach the relative residual ", es24.16e3)') &
+                conf%iter_rel_err
+            if (logger%warn) call logger%write_msg
+        end if
+        ! pressure, current and field consistent with the returned field and amplitudes
+        call set_amplitudes(x(nb + 1:))
+        perteq%Bn%DOF(:) = x(1:nb)
+        call RT0_tor_comp_from_zero_div(perteq%Bn)
+        do m = mesh%m_res_min, mesh%m_res_max
+            flux_res(m) = resonant_flux(perteq%Bn, m)
+            write (logger%msg, '("Resonance m = ", i0, ": sheet amplitude ", 2es12.4, ' // &
+                '", resonant flux / vacuum ", es12.4)') m, sheet_amplitude(m), &
+                abs(flux_res(m)) / max(abs(resonant_flux(vac%Bn, m)), tiny(1d0))
+            if (logger%info) call logger%write_msg
+        end do
+        call compute_presn(perteq, fdm, conf%damp)
+        call compute_currn(perteq, fdm, flr2, conf%damp, .false., .true.)
+        call compute_magfn(perteq)
+        perteq%Bn%DOF(:) = perteq%Bn%DOF + vac%Bn%DOF
+        call RT0_tor_comp_from_zero_div(perteq%Bn)
+        call h5_open_rw(datafile, h5id_root)
+        call h5_add(h5id_root, 'iter/sheet_amplitude', sheet_amplitude, &
+            lbound(sheet_amplitude), ubound(sheet_amplitude), &
+            comment = 'parallel current density over |B| of the sheet current in the resonant cell, ' // &
+            'bordered solve', unit = 's^-1')
+        call h5_close(h5id_root)
+        call RT0_deinit(B_in)
+        deallocate(rhs, x)
+
+    contains
+
+        subroutine set_amplitudes(y)
+            complex(dp), intent(in) :: y(:)
+            integer :: k, m
+
+            do k = 1, size(y)
+                m = mesh%m_res_min + k - 1
+                sheet_amplitude(m) = merge(y(k) * scale_I(m), (0d0, 0d0), active(m))
+            end do
+        end subroutine set_amplitudes
+
+        subroutine apply_bordered(input, output)
+            complex(dp), intent(in) :: input(:)
+            complex(dp), intent(out) :: output(:)
+            integer :: k, m
+
+            call set_amplitudes(input(nb + 1:))
+            perteq%Bn%DOF(:) = input(1:nb)
+            call RT0_tor_comp_from_zero_div(perteq%Bn)
+            call compute_presn(perteq, fdm, conf%damp)
+            call compute_currn(perteq, fdm, flr2, conf%damp, .false.)
+            call compute_magfn(perteq)
+            output(1:nb) = input(1:nb) - perteq%Bn%DOF
+            B_in%DOF(:) = input(1:nb)
+            do k = 1, size(input) - nb
+                m = mesh%m_res_min + k - 1
+                if (active(m)) then
+                    output(nb + k) = scale_C(m) * resonant_flux(B_in, m)
+                else
+                    output(nb + k) = input(nb + k)
+                end if
+            end do
+            napply = napply + 1
+        end subroutine apply_bordered
+    end subroutine perteq_solve_bordered
+
+    !> Resonant flux harmonic sqrt_g B . grad psi of harmonic -sgn_q m in the cell holding
+    !> resonance m, as Bmn%coeff_rad and sheet/Phi_tot. Needs only the poloidal DOFs.
+    function resonant_flux(Bn, m) result(flux)
+        use mephit_util, only: imun
+        use mephit_mesh, only: equil, mesh, cache
+        use mephit_pert, only: RT0_interp
+        type(RT0_t), intent(in) :: Bn
+        integer, intent(in) :: m
+        complex(dp) :: flux
+        complex(dp) :: cyl_vec(3)
+        integer :: kf, kt, m_res
+
+        m_res = -equil%cocos%sgn_q * m
+        kf = mesh%res_ind(m)
+        flux = (0d0, 0d0)
+        do kt = 1, mesh%kt_max(kf)
+            associate (s => cache%sample_polmodes_half(mesh%kt_low(kf) + kt))
+                call RT0_interp(Bn, s%ktri, s%R, s%Z, cyl_vec)
+                flux = flux + s%sqrt_g * (cyl_vec(1) * s%B0_Z - cyl_vec(3) * s%B0_R) * s%R * &
+                    exp(-imun * m_res * s%theta)
+            end associate
+        end do
+        flux = flux / dble(mesh%kt_max(kf))
+    end function resonant_flux
 
     subroutine debug_initial_iteration(perteq, fdm, flr2)
         use mephit_conf, only: conf
@@ -1650,9 +1812,13 @@ contains
             m_res = -equil%cocos%sgn_q * m
             if (abs(conf_arr%refinement(m)) > 1d0) then
                 kf = mesh%res_ind(m)
-                jmnpar_over_Bmod%coeff(m_res, kf-1:kf) = &
-                    (pmn%coeff(m_res, kf) - pmn%coeff(m_res, kf-1)) * &
-                    cache%shielding(m)%coeff * conf_arr%sheet_current_factor(m)
+                if (sheet_given) then
+                    jmnpar_over_Bmod%coeff(m_res, kf-1:kf) = sheet_amplitude(m)
+                else
+                    jmnpar_over_Bmod%coeff(m_res, kf-1:kf) = &
+                        (pmn%coeff(m_res, kf) - pmn%coeff(m_res, kf-1)) * &
+                        cache%shielding(m)%coeff * conf_arr%sheet_current_factor(m)
+                end if
             end if
         end do
         call polmodes_deinit(pmn)
