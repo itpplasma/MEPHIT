@@ -729,6 +729,8 @@ contains
         complex(dp), allocatable :: rhs(:), x(:)
         real(dp), dimension(mesh%m_res_min:mesh%m_res_max) :: scale_I, scale_C
         complex(dp), dimension(mesh%m_res_min:mesh%m_res_max) :: coupling, delta_psi, jump
+        complex(dp) :: unit_flux(mesh%nflux, mesh%m_res_min:mesh%m_res_max)
+        integer :: kc
         logical :: active(mesh%m_res_min:mesh%m_res_max)
         complex(dp) :: flux_res(mesh%m_res_min:mesh%m_res_max)
         type(RT0_t) :: B_in
@@ -746,6 +748,7 @@ contains
         coupling(:) = (0d0, 0d0)
         delta_psi(:) = (0d0, 0d0)
         jump(:) = (0d0, 0d0)
+        unit_flux(:, :) = (0d0, 0d0)
         do m = mesh%m_res_min, mesh%m_res_max
             active(m) = abs(conf_arr%refinement(m)) > 1d0
             scale_I(m) = 1d0
@@ -760,6 +763,9 @@ contains
             call compute_magfn(perteq)
             scale_I(m) = norm_vac / max(norm2(abs(perteq%Bn%DOF)), tiny(1d0))
             scale_C(m) = norm_vac / max(abs(resonant_flux(vac%Bn, m)), tiny(1d0))
+            do kc = 1, mesh%nflux
+                unit_flux(kc, m) = cell_flux(perteq%Bn, m, kc)
+            end do
             if (conf%layer_model == 1) then
                 ! jump of d Phi_m / d psi across the unit sheet, outside its support (cells kf +- 1)
                 jump(m) = sheet_flux_jump(perteq%Bn, m)
@@ -809,6 +815,8 @@ contains
             call h5_add(h5id_root, 'iter/sheet_jump', jump, lbound(jump), ubound(jump), &
                 comment = 'jump of d Phi_m / d psi across the sheet per unit amplitude', unit = 's')
         end if
+        call h5_add(h5id_root, 'iter/sheet_unit_flux', unit_flux, lbound(unit_flux), ubound(unit_flux), &
+            comment = 'resonant flux harmonic per cell of the field of a unit sheet amplitude', unit = 'Mx s')
         call h5_add(h5id_root, 'iter/sheet_amplitude', sheet_amplitude, &
             lbound(sheet_amplitude), ubound(sheet_amplitude), &
             comment = 'parallel current density over |B| of the sheet current in the resonant cell, ' // &
