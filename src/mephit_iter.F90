@@ -882,14 +882,16 @@ contains
     !> resistivity, tau_H = |q| R_0 / (n |s| v_A) with the shear s = r q' / q.
     function resistive_inertial_delta(m) result(delta_psi)
         use mephit_conf, only: conf, logger
-        use mephit_util, only: interp1d, imun, pi, clight, m_p
+        use mephit_util, only: interp1d, imun, pi, clight, m_p, func1d_t, func1d_read_formatted, &
+            func1d_deinit
         use mephit_mesh, only: mesh, fs, dens_e, temp_e, dPhi0_dpsi
         integer, intent(in) :: m
         complex(dp) :: delta_psi
         real(dp), parameter :: mu0 = 4d-7 * pi
         real(dp) :: psi_res, r_s, q, dq_dr, dpsi_dr, n_e, T_e, B_tor, rho, v_A, eta, &
-            lnLambda, tau_R, tau_H, omega_E, shear
+            lnLambda, tau_R, tau_H, omega_E, shear, rho_res
         complex(dp) :: gamma
+        type(func1d_t) :: omega_prof
 
         psi_res = mesh%psi_res(m)
         r_s = interp1d(fs%psi, fs%rsmall, psi_res, 3)
@@ -899,12 +901,23 @@ contains
         n_e = interp1d(fs%psi, dens_e%y, psi_res, 3)
         T_e = interp1d(fs%psi, temp_e%y, psi_res, 3)
         B_tor = abs(interp1d(fs%psi, fs%F, psi_res, 3)) / mesh%R_O
-        omega_E = conf%layer_omega_factor * clight * interp1d(fs%psi, dPhi0_dpsi%y, psi_res, 3)
+        if (len_trim(conf%layer_omega_file) > 0) then
+            call func1d_read_formatted(omega_prof, conf%layer_omega_file)
+            if (abs(omega_prof%x(ubound(omega_prof%x, 1)) - 1d0) <= 0.05d0) then
+                rho_res = sqrt((psi_res - fs%psi(0)) / (fs%psi(mesh%nflux) - fs%psi(0)))
+            else
+                rho_res = r_s
+            end if
+            omega_E = conf%layer_omega_factor * interp1d(omega_prof%x, omega_prof%y, rho_res, 3)
+            call func1d_deinit(omega_prof)
+        else
+            omega_E = conf%layer_omega_factor * clight * interp1d(fs%psi, dPhi0_dpsi%y, psi_res, 3)
+        end if
         ! SI from here on
         rho = n_e * 1d6 * conf%m_i * m_p * 1d-3 / conf%Z_i
         v_A = B_tor * 1d-4 / sqrt(mu0 * rho)
         lnLambda = 24d0 - log(sqrt(n_e) / T_e)
-        eta = 5.2d-5 * conf%Z_i * lnLambda / T_e ** 1.5d0
+        eta = conf%layer_eta_factor * 5.2d-5 * conf%Z_i * lnLambda / T_e ** 1.5d0
         shear = r_s * dq_dr / q
         tau_R = mu0 * (r_s * 1d-2) ** 2 / eta
         tau_H = q * mesh%R_O * 1d-2 / (dble(mesh%n) * abs(shear) * v_A)

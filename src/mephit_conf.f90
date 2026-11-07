@@ -226,8 +226,16 @@ module mephit_conf
     !> from `dens_file` (Furth, Killeen and Rosenbluth 1963; Fitzpatrick 1998).
     integer :: layer_model = 0
 
-    !> Factor multiplying the E x B rotation frequency in the layer response. Defaults to 1.
+    !> Factor multiplying the rotation frequency in the layer response. Defaults to 1.
     real(dp) :: layer_omega_factor = 1d0
+
+    !> Rotation frequency of the layer in rad/s as (rho, Omega), with the abscissa as in
+    !> `dens_file`. If empty (default), the E x B frequency from `E_r_file` is used.
+    character(len = 1024) :: layer_omega_file = ''
+
+    !> Factor multiplying the parallel Spitzer resistivity in the layer response, e.g. to
+    !> use another Z_eff or the transverse value. Defaults to 1.
+    real(dp) :: layer_eta_factor = 1d0
 
     !> Model for the width of the resonant layer, which sets the Pfirsch-Schlueter damping
     !> for every mode with `Delta_rad_res_curr(m) = 0`. 0 (default) keeps the manual
@@ -418,7 +426,9 @@ contains
     call h5_add(h5id_root, grp // '/layer_model', config%layer_model, &
       comment = 'layer response of the bordered solve (0: ideal, 1: resistive-inertial)')
     call h5_add(h5id_root, grp // '/layer_omega_factor', config%layer_omega_factor, &
-      comment = 'factor on the E x B rotation frequency in the layer response')
+      comment = 'factor on the rotation frequency in the layer response')
+    call h5_add(h5id_root, grp // '/layer_eta_factor', config%layer_eta_factor, &
+      comment = 'factor on the parallel Spitzer resistivity in the layer response')
     call h5_add(h5id_root, grp // '/res_layer_model', config%res_layer_model, &
       comment = 'resonant layer width model (0: manual, 1: resistive Alfven resonance)')
     call h5_add(h5id_root, grp // '/res_layer_factor', config%res_layer_factor, &
