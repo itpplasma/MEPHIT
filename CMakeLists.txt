@@ -201,6 +201,11 @@ if(BUILD_TESTING)
       ${PROJECT_BINARY_DIR} ${CMAKE_SOURCE_DIR} ${PROJECT_BINARY_DIR}/edge-cylinder)
     set_tests_properties(edge_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
       LABELS cylinder)
+    # bordered shielding solve: exact ideal shielding and the resistive layer response
+    add_test(NAME bordered_cylinder COMMAND ${CMAKE_SOURCE_DIR}/test/bordered_cylinder/run_test.sh
+      ${PROJECT_BINARY_DIR} ${CMAKE_SOURCE_DIR} ${PROJECT_BINARY_DIR}/bordered-cylinder)
+    set_tests_properties(bordered_cylinder PROPERTIES SKIP_RETURN_CODE 77 TIMEOUT 1800
+      LABELS cylinder)
   endif()
   add_executable(test_eqdsk_current_gradient test/test_eqdsk_current_gradient.f90)
   target_link_libraries(test_eqdsk_current_gradient mephit)
