@@ -4,6 +4,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 ### Define the project
 project(MEPHIT LANGUAGES C CXX Fortran)
+include(${PROJECT_SOURCE_DIR}/cmake/ItpDeps.cmake)
 
 ### Define options
 option(WITH_MFEM "Compile with MFEM" FALSE)
@@ -63,8 +64,8 @@ if(WITH_MFEM)
   include(SetupMFEM)
   add_definitions(-DUSE_MFEM)
 endif()
-include(Util)
-find_or_fetch(libneo)
+# ItpDeps adds libneo without its tests (cmake/ItpDeps.cmake).
+itp_add_dependency(libneo REF ${MEPHIT_LIBNEO_REF} TARGET LIBNEO::magfie)
 
 ### Project source files
 # SuiteSparse
