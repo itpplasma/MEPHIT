@@ -17,9 +17,9 @@ shows a complete setup.
 The default configuration (`config%vac_src = 2`) uses precomputed Fourier
 modes of the vacuum field, read from the file given in `config%coil_file`.
 Generate this file once with libneo's `vacfield.x`, which is built at
-`$MEPHIT_DIR/libneo/vacfield.x`. It needs a namelist file for `coil_field`,
+`$MEPHIT_DIR/_deps/libneo-build/vacfield.x`. It needs a namelist file for `coil_field`,
 such as libneo's `tools/vacfield_AUG.in`. With
-`LIBNEO_DIR=$MEPHIT_DIR/libneo`, the ASDEX Upgrade coil file is generated at
+`LIBNEO_DIR=$MEPHIT_DIR/_deps/libneo-build`, the ASDEX Upgrade coil file is generated at
 ITPcp with
 
 ```bash
