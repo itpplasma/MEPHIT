@@ -10,12 +10,12 @@ unexport LIBNEO_REF LIBNEO_PATH
 # "environment" (ambient shell) is deliberately excluded.
 _LIBNEO_REF_FLAG :=
 ifeq ($(origin LIBNEO_REF),command line)
-  _LIBNEO_REF_FLAG := -DLIBNEO_REF=$(LIBNEO_REF)
+  _LIBNEO_REF_FLAG := -DITP_LIBNEO_REF=$(LIBNEO_REF)
 endif
 
 _LIBNEO_PATH_FLAG :=
 ifeq ($(origin LIBNEO_PATH),command line)
-  _LIBNEO_PATH_FLAG := -DLIBNEO_PATH=$(LIBNEO_PATH)
+  _LIBNEO_PATH_FLAG := -DFETCHCONTENT_SOURCE_DIR_LIBNEO=$(LIBNEO_PATH)
 endif
 
 .PHONY: all ninja test install clean

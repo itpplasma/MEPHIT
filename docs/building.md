@@ -42,14 +42,16 @@ make clean      # remove build/
 
 ### libneo version
 
-The build pins a tested libneo commit (see `cmake/SetupCODE.cmake`). To fetch
-a different branch, tag or commit, pass `-DLIBNEO_REF=<ref>` to CMake or
+The build pins a tested libneo commit (see `cmake/SetupCODE.cmake`) and adds
+it through [ItpDeps](https://github.com/itpplasma/cmake-deps). To fetch a
+different branch, tag or commit, pass `-DITP_LIBNEO_REF=<ref>` to CMake or
 `make LIBNEO_REF=<ref>`. To use a local libneo source tree instead, pass
-`-DLIBNEO_PATH=<dir>` or `make LIBNEO_PATH=<dir>`. The `Makefile` forwards
+`-DFETCHCONTENT_SOURCE_DIR_LIBNEO=<dir>` or `make LIBNEO_PATH=<dir>`. The `Makefile` forwards
 these only when given on the command line, not from the environment.
 
-libneo's tools are built as part of MEPHIT; in particular `vacfield.x`, used
-to precompute coil fields, is at `build/libneo/vacfield.x`.
+libneo's tools are built on request; `vacfield.x`, used to precompute coil
+fields, is built with `cmake --build build --target vacfield.x` into
+`build/_deps/libneo-build/vacfield.x`.
 
 ### MFEM
 
