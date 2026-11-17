@@ -61,6 +61,11 @@ contains
     allocate(flr2%d2_in(npoi, m_min:m_max))
     allocate(flr2%d2_out(npoi, m_min:m_max))
     allocate(flr2%d0(npoi, m_min:m_max))
+    flr2%psi(:) = 0d0
+    flr2%a2_in(:, :) = (0d0, 0d0); flr2%a2_out(:, :) = (0d0, 0d0); flr2%a0(:, :) = (0d0, 0d0)
+    flr2%b2_in(:, :) = (0d0, 0d0); flr2%b2_out(:, :) = (0d0, 0d0); flr2%b0(:, :) = (0d0, 0d0)
+    flr2%c2_in(:, :) = (0d0, 0d0); flr2%c2_out(:, :) = (0d0, 0d0); flr2%c0(:, :) = (0d0, 0d0)
+    flr2%d2_in(:, :) = (0d0, 0d0); flr2%d2_out(:, :) = (0d0, 0d0); flr2%d0(:, :) = (0d0, 0d0)
   end subroutine flr2_init
 
   subroutine flr2_deinit(flr2)
