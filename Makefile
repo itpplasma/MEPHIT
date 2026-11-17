@@ -22,7 +22,7 @@ endif
 all: ninja
 
 $(BUILD_NINJA):
-	cmake --preset default -DCMAKE_COLOR_DIAGNOSTICS=ON $(_LIBNEO_REF_FLAG) $(_LIBNEO_PATH_FLAG)
+	cmake --preset default -DCMAKE_COLOR_DIAGNOSTICS=ON -DCMAKE_EXPORT_COMPILE_COMMANDS=ON $(_LIBNEO_REF_FLAG) $(_LIBNEO_PATH_FLAG)
 
 ninja: $(BUILD_NINJA)
 	cmake --build --preset default

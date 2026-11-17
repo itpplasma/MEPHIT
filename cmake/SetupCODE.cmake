@@ -8,3 +8,7 @@
 set(LIBNEO_REF "94f59c176714c8598ca1b43607a353b29a2ca2a7" CACHE STRING
     "libneo branch, tag, or SHA to fetch")
 set(LIBNEO_PATH "" CACHE PATH "local libneo source directory (empty = fetch from git)")
+# The fortio pinned by that libneo stops on any HDF5 dataset above 2 GiB because
+# it never completes a short POSIX write; libneo adopted this fortio later.
+set(FORTIO_REF "314872622fb28c259fb3c11fd200f67e7dc96227" CACHE STRING
+    "fortio SHA that libneo builds against")
