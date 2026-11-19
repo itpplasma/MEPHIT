@@ -1399,8 +1399,8 @@ contains
     real(dp), dimension(:), intent(in) :: psi_sample
     real(dp), dimension(:), intent(in) :: q_sample
     real(dp), dimension(:), intent(in) :: rad_norm_sample
-    real(dp) :: psi_min, psi_max
-    integer :: m
+    real(dp) :: psi_min, psi_max, dq_lo, dq_hi
+    integer :: m, k, k_res
 
     if (size(psi_sample) /= size(q_sample)) then
       call logger%msg_arg_size('compute_resonance_positions', 'size(psi_sample)', &
@@ -1414,8 +1414,6 @@ contains
       if (logger%err) call logger%write_msg
       error stop
     end if
-    psi_min = minval(psi_sample)
-    psi_max = maxval(psi_sample)
     mesh%m_res_min = ceiling(minval(abs(q_sample)) * dble(mesh%n))
     if (conf%ignore_q1_res) then
       mesh%m_res_min = max(mesh%m_res_min, conf%n + 1)
@@ -1438,6 +1436,25 @@ contains
     logger%msg = 'resonance positions:'
     if (logger%debug) call logger%write_msg
     do m = mesh%m_res_min, mesh%m_res_max
+      ! |q| can be non-monotonic near the axis (q0 close to 1), so zeroin over the whole
+      ! range may lack a sign change: bracket the outermost crossing instead
+      k_res = 0
+      do k = 1, size(q_sample) - 1
+        dq_lo = abs(q_sample(k)) - dble(m) / dble(mesh%n)
+        dq_hi = abs(q_sample(k + 1)) - dble(m) / dble(mesh%n)
+        if (dq_lo * dq_hi > 0d0) cycle
+        if (k_res > 0) then
+          if (rad_norm_sample(k) < rad_norm_sample(k_res)) cycle
+        end if
+        k_res = k
+      end do
+      if (k_res == 0) then
+        write (logger%msg, '("no resonance found for m = ", i0)') m
+        if (logger%err) call logger%write_msg
+        error stop
+      end if
+      psi_min = min(psi_sample(k_res), psi_sample(k_res + 1))
+      psi_max = max(psi_sample(k_res), psi_sample(k_res + 1))
       mesh%psi_res(m) = zeroin(psi_min, psi_max, q_interp_resonant, 1d-9)
       mesh%rad_norm_res(m) = interp1d(psi_sample, rad_norm_sample, mesh%psi_res(m), 3)
       write (logger%msg, '("m = ", i2, ", psi = ", es24.16e3, ", rad = ", f19.16)') &
