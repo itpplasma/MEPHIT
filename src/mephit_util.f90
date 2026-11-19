@@ -835,7 +835,7 @@ contains
     real(dp) :: rho, v_A, omega_A_prime, eta, lnLambda
 
     rho = n_e * 1d6 * m_i * m_p * 1d-3 / Z_i
-    v_A = B_tor * 1d-4 / sqrt(mu0 * rho)
+    v_A = abs(B_tor) * 1d-4 / sqrt(mu0 * rho) ! the field sign is a convention
     omega_A_prime = dble(n) * abs(dq_drad * 1d2 / q) * v_A / (R_O * 1d-2)
     lnLambda = 24d0 - log(sqrt(n_e) / T_e)
     eta = 5.2d-5 * Z_i * lnLambda / T_e ** 1.5d0
