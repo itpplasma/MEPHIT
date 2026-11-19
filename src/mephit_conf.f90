@@ -126,7 +126,9 @@ module mephit_conf
     !> File containing coil geometries. Defaults to 'AUG_B_coils.h5'.
     character(len = 1024) :: coil_file = 'AUG_B_coils.h5'
 
-    !> File containing equilibrium density profile. Defaults to 'n.dat'.
+    !> File containing equilibrium density profile. Defaults to 'n.dat'. Profiles whose
+    !> abscissa ends at 1 are on rho_pol with the density in m^-3, all others on the minor
+    !> radius in cm with the density in cm^-3.
     character(len = 1024) :: dens_file = 'n.dat'
 
     !> File containing equilibrium electron temperature profile. Defaults to 'Te.dat'.
@@ -212,11 +214,13 @@ module mephit_conf
     logical :: edge_boundary_sheet = .false.
 
     !> Model for the width of the resonant layer, which sets the Pfirsch-Schlueter damping
-    !> for every mode with `Delta_rad_res_curr(m) = 0`. 0 (default) keeps the manual
-    !> widths. 1 uses the resistive width of the Alfven resonance,
+    !> and the layer of #currn_model_zero for every mode with `Delta_rad_res_curr(m) = 0`.
+    !> 1 (default) uses the resistive width of the Alfven resonance,
     !> \f$ \delta = [\eta / (\mu_{0} \, d\omega_{A} / dx)]^{1/3} \f$ with Spitzer
     !> resistivity from `temp_e_file`/`dens_file` (see #mephit_util::resistive_layer_width).
-    integer :: res_layer_model = 0
+    !> 0 keeps the manual widths `Delta_rad_res_curr`. A zero width where the layer is used
+    !> stops the run: it leaves the resonant current undamped.
+    integer :: res_layer_model = 1
 
     !> Factor multiplying the model width to give `Delta_rad_res_curr`. Defaults to 1.
     real(dp) :: res_layer_factor = 1d0

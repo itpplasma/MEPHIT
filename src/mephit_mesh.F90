@@ -13,7 +13,7 @@ module mephit_mesh
   public :: mesh_t, mesh_write, mesh_read, mesh_deinit, &
     generate_mesh, refine_unit_partition, write_cache, read_cache, point_location, mesh_interp_theta_flux
   public :: point_location_current
-  public :: warn_undamped_resonances
+  public :: zero_width_resonance
   public :: coord_cache_t, field_cache_t, shielding_t, cache_t, &
     cache_write, cache_read, cache_init, cache_deinit
   public :: read_profiles, compute_auxiliary_profiles, resample_profiles, &
@@ -1458,7 +1458,7 @@ contains
 
   subroutine compute_resonant_layer_widths
     use magdata_in_symfluxcoor_mod, only: psisurf, psipol_max, rbeg
-    use mephit_conf, only: conf, conf_arr, logger
+    use mephit_conf, only: conf, conf_arr, logger, currn_model_zero
     use mephit_util, only: interp1d, binsearch, resample1d, resistive_layer_width, &
       func1d_t, func1d_read_formatted, func1d_deinit
     integer :: m
@@ -1471,7 +1471,13 @@ contains
     if (conf%res_layer_model == 1) then
       call func1d_read_formatted(dens, conf%dens_file)
       call func1d_read_formatted(temp, conf%temp_e_file)
-      if (abs(dens%x(ubound(dens%x, 1)) - 1d0) <= 0.05d0) dens%y(:) = dens%y * 1d-6
+      if (abs(dens%x(ubound(dens%x, 1)) - 1d0) <= 0.05d0) then
+        dens%y(:) = dens%y * 1d-6
+        logger%msg = 'resistive layer width: density in m^-3 on rho_pol'
+      else
+        logger%msg = 'resistive layer width: density in cm^-3 on the minor radius'
+      end if
+      if (logger%info) call logger%write_msg
       call resample1d(fs%rad, abs(fs%q), fs%rad, q_prime, 3, .true.)
       do m = mesh%m_res_min, mesh%m_res_max
         if (Delta_rad(m) /= 0d0) cycle
@@ -1493,7 +1499,14 @@ contains
       call func1d_deinit(dens)
       call func1d_deinit(temp)
     end if
-    call warn_undamped_resonances(conf%damp, mesh%m_res_min, Delta_rad)
+    m = zero_width_resonance(conf%damp .or. conf%currn_model == currn_model_zero, &
+      mesh%m_res_min, Delta_rad)
+    if (m >= mesh%m_res_min) then
+      write (logger%msg, '("resonant layer width is zero for m = ", i0, ": set ", &
+        &"Delta_rad_res_curr(m) > 0 or res_layer_model = 1 (damp or currn_model = 2 need it)")') m
+      if (logger%err) call logger%write_msg
+      error stop
+    end if
     if (allocated(mesh%Delta_psi_res_curr)) deallocate(mesh%Delta_psi_res_curr)
     allocate(mesh%Delta_psi_res_curr(mesh%m_res_min:mesh%m_res_max))
     do m = mesh%m_res_min, mesh%m_res_max
@@ -1513,23 +1526,23 @@ contains
     end do
   end subroutine compute_resonant_layer_widths
 
-  !> Warn for every resonance where `damp` is set but the current width is zero.
-  !> The damping factor scales with the width, so such a resonance stays undamped.
-  subroutine warn_undamped_resonances(damp, m_res_min, Delta_rad)
-    use mephit_conf, only: logger
-    logical, intent(in) :: damp
+  !> First mode number with a zero resonant layer width where the layer is used (damping
+  !> or #currn_model_zero), or `m_res_min - 1` if there is none. The damping factor and the
+  !> removed layer current scale with the width, so a zero width silently gives the
+  !> undamped ideal current.
+  pure function zero_width_resonance(layer_used, m_res_min, Delta_rad) result(m_zero)
+    logical, intent(in) :: layer_used
     integer, intent(in) :: m_res_min
     real(dp), intent(in) :: Delta_rad(m_res_min:)
-    integer :: m
+    integer :: m_zero
 
-    if (.not. damp) return
-    do m = m_res_min, ubound(Delta_rad, 1)
-      if (Delta_rad(m) > 0d0) cycle
-      write (logger%msg, '("Warning: damp = .true. but Delta_rad_res_curr = 0 for m = ", i0, &
-        &", the current at this resonance is not damped")') m
-      if (logger%warn) call logger%write_msg
+    m_zero = m_res_min - 1
+    if (.not. layer_used) return
+    do m_zero = m_res_min, ubound(Delta_rad, 1)
+      if (.not. (Delta_rad(m_zero) > 0d0)) return
     end do
-  end subroutine warn_undamped_resonances
+    m_zero = m_res_min - 1
+  end function zero_width_resonance
 
   subroutine refine_unit_partition_gaussian(nref, coarse_sep, refinement, resonances, widths, nflux, partition)
     use mephit_conf, only: logger
