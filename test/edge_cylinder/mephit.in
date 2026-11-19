@@ -21,7 +21,8 @@
    config%pol_max = 0
    config%pol_min = 0
    config%ignore_q1_res = .true.
-   config%damp = .true.
+   ! the analytic reference is the undamped ideal response
+   config%damp = .false.
    config%debug_initial = .false.
    config%m_max = 12
    config%edge_moved_current = .true.
