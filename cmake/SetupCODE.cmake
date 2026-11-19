@@ -5,7 +5,7 @@
 #   -DLIBNEO_PATH=<dir>  local libneo source directory (empty = fetch from git)
 #   -DTRIANGLE_DIR=<dir>  prebuilt Triangle directory (see SetupTriangle)
 #   -DMFEM_DIR=<dir>      prebuilt MFEM directory (see SetupMFEM)
-set(LIBNEO_REF "94f59c176714c8598ca1b43607a353b29a2ca2a7" CACHE STRING
+set(LIBNEO_REF "aac3f9ef324d5ebab5a4ead26c504cd6548c1bee" CACHE STRING
     "libneo branch, tag, or SHA to fetch")
 set(LIBNEO_PATH "" CACHE PATH "local libneo source directory (empty = fetch from git)")
 # The fortio pinned by that libneo stops on any HDF5 dataset above 2 GiB because
