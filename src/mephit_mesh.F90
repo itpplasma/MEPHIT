@@ -1052,8 +1052,8 @@ contains
     call h5_add(h5id_root, grp // '/GL_weights', shielding%GL_weights, &
       lbound(shielding%GL_weights), ubound(shielding%GL_weights), &
       unit = 'Mx', comment = 'G-L quadrature weights including psi interval')
-    call h5_add(h5id_root, grp // '/coeff', shielding%coeff, unit = 'g^-1 cm s', &
-      comment = 'coefficient in the compensated scheme for shielding')
+    call h5_add(h5id_root, grp // '/coeff_dp', shielding%coeff, unit = 'statA G^-2 cm^-4', &
+      comment = 'coefficient of the jump in p_n / (dp0/dpsi) in the compensated scheme for shielding')
     call h5_add(h5id_root, grp // '/cross_fade', shielding%cross_fade, &
       lbound(shielding%cross_fade), ubound(shielding%cross_fade), &
       unit = '1', comment = 'Transition function between current components')
@@ -1071,7 +1071,7 @@ contains
 
     grp = trim(group)
     call h5_open(file, h5id_root)
-    call h5_get(h5id_root, grp // '/coeff', shielding%coeff)
+    call h5_get(h5id_root, grp // '/coeff_dp', shielding%coeff)
     call h5_get(h5id_root, grp // '/cross_fade', shielding%cross_fade)
     call h5_get_bounds(h5id_root, grp // '/sample_Ires/R', lb1, lb2, ub1, ub2)
     if (allocated(shielding%GL_weights)) deallocate(shielding%GL_weights)
@@ -2430,12 +2430,19 @@ contains
     type(shielding_t), intent(inout) :: s
     integer, intent(in) :: m
     integer :: kf
-    real(dp) :: dq_dpsi, normalized_distance(0:mesh%nflux)
+    real(dp) :: dq_dpsi, sgn_dp, normalized_distance(0:mesh%nflux)
 
     kf = mesh%res_ind(m)
     dq_dpsi = interp1d(equil%psi_eqd, equil%qpsi, fs_half%psi(kf), 3, .true.)
+    ! compute_shielding_current() passes p_n / (dp0/dpsi), which carries the sign of
+    ! dp0/dpsi. At zero pressure, take p falling where |q| rises.
+    if (fs_half%dp_dpsi(kf) /= 0d0) then
+      sgn_dp = sign(1d0, fs_half%dp_dpsi(kf))
+    else
+      sgn_dp = -sign(1d0, dq_dpsi / fs_half%q(kf))
+    end if
     s%coeff = clight * mesh%n / (4d0 * pi * mesh%R_O) * &
-      abs(dq_dpsi / (fs_half%q(kf) * fs_half%dp_dpsi(kf))) / &
+      sgn_dp * abs(dq_dpsi / fs_half%q(kf)) / &
       (mesh%n * abs(fs%q(kf) - fs%q(kf - 1)))
     ! a zero-width current layer has no transition region
     if (mesh%Delta_psi_res_curr(m) > 0d0) then
