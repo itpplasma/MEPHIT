@@ -15,6 +15,10 @@ module mephit_iter
     !> Pressure perturbation \f$ p_{n} \f$ in dyn cm^-1.
     type(L1_t) :: pn
 
+    !> \f$ p_{n} \f$ for unit \f$ dp_{0}/d\psi \f$ in G cm^2, which defines the sheet
+    !> current also at zero pressure.
+    type(L1_t) :: pn_per_dp
+
     !> Perturbation field in units of Gauss.
     type(RT0_t) :: Bn
 
@@ -264,6 +268,7 @@ contains
     type(perteq_t), intent(inout) :: perteq
 
     call L1_init(perteq%pn, mesh%npoint)
+    call L1_init(perteq%pn_per_dp, mesh%npoint)
     call RT0_init(perteq%Bn, mesh%nedge, mesh%ntri)
     call RT0_init(perteq%Bnplas, mesh%nedge, mesh%ntri)
     call RT0_init(perteq%jn, mesh%nedge, mesh%ntri)
@@ -279,6 +284,7 @@ contains
     type(perteq_t), intent(inout) :: perteq
 
     call L1_deinit(perteq%pn)
+    call L1_deinit(perteq%pn_per_dp)
     call RT0_deinit(perteq%Bn)
     call RT0_deinit(perteq%Bnplas)
     call RT0_deinit(perteq%jn)
@@ -295,6 +301,7 @@ contains
     integer(HID_T) :: h5id_root
 
     call L1_read(perteq%pn, datafile, 'iter/pn')
+    call L1_read(perteq%pn_per_dp, datafile, 'iter/pn_per_dp')
     call RT0_read(perteq%Bn, datafile, 'iter/Bn')
     call RT0_read(perteq%Bnplas, datafile, 'iter/Bn_plas')
     call RT0_read(perteq%jn, datafile, 'iter/jn')
@@ -629,6 +636,8 @@ contains
     call perteq_write('("iter/", a)', ' (full perturbation)', &
       perteq%pn, perteq%pn, perteq%jnpar_B0, perteq%jnpar_B0, perteq%jnpar_B0, &
       perteq%jn, perteq%jn, perteq%Bn, perteq%Bn)
+    call L1_write(perteq%pn_per_dp, datafile, 'iter/pn_per_dp', &
+      'pressure for unit dp0/dpsi (full perturbation)', 'G cm^2')
     call perteq_write('("iter/", a, "_plas")', ' (plasma response)', &
       magfn = perteq%Bnplas, magfmn = perteq%Bnplas)
 
@@ -955,10 +964,27 @@ contains
   end subroutine FDM_solve
 
   subroutine compute_presn(perteq, fdm, apply_damping)
-    use mephit_mesh, only: fs, mesh, cache
+    use mephit_mesh, only: fs, mesh
     type(perteq_t), intent(inout) :: perteq
     logical, intent(in) :: apply_damping
     type(FDM_t), intent(in) :: fdm
+    integer :: kf
+
+    call solve_MDE_Bn(perteq%Bn, fdm, apply_damping, fs%dp_dpsi(1:), perteq%pn%DOF)
+    call solve_MDE_Bn(perteq%Bn, fdm, apply_damping, [(1d0, kf = 1, mesh%nflux)], &
+      perteq%pn_per_dp%DOF)
+  end subroutine compute_presn
+
+  !> Solves B0 . grad x = -dp_dpsi B_n . grad psi on every flux surface. The MDE couples
+  !> points only within one flux surface, so the solution is linear in dp_dpsi(kf).
+  subroutine solve_MDE_Bn(Bn, fdm, apply_damping, dp_dpsi, solution)
+    use mephit_mesh, only: mesh, cache
+    use mephit_pert, only: RT0_t
+    type(RT0_t), intent(in) :: Bn
+    type(FDM_t), intent(in) :: fdm
+    logical, intent(in) :: apply_damping
+    real(dp), intent(in) :: dp_dpsi(:)
+    complex(dp), intent(out) :: solution(:)
     complex(dp), dimension(mesh%npoint) :: inhom
     integer :: kf, kp, kedge
 
@@ -968,19 +994,19 @@ contains
         kedge = mesh%kp_low(kf) + kp - 1
         ! use midpoint of poloidal edge
         associate (f => cache%mid_fields(kedge))
-          inhom(kedge + 1) = -fs%dp_dpsi(kf) * perteq%Bn%DOF(kedge) * &
+          inhom(kedge + 1) = -dp_dpsi(kf) * Bn%DOF(kedge) * &
             (f%B0(1) * mesh%edge_R(kedge) + f%B0(3) * mesh%edge_Z(kedge)) / &
             (mesh%edge_R(kedge) ** 2 + mesh%edge_Z(kedge) ** 2)
         end associate
       end do
     end do
     if (apply_damping) then
-      call FDM_solve(fdm, fdm%aval_MDE_damped, inhom, perteq%pn%DOF)
+      call FDM_solve(fdm, fdm%aval_MDE_damped, inhom, solution)
     else
-      call FDM_solve(fdm, fdm%aval_MDE, inhom, perteq%pn%DOF)
+      call FDM_solve(fdm, fdm%aval_MDE, inhom, solution)
     end if
-    perteq%pn%DOF(1) = (0d0, 0d0)
-  end subroutine compute_presn
+    solution(1) = (0d0, 0d0)
+  end subroutine solve_MDE_Bn
 
   subroutine debug_MDE(group, presn, magfn, currn_perp, currn_par)
     use hdf5_tools, only: HID_T, h5_open_rw, h5_create_parent_groups, h5_add, h5_close
@@ -1120,7 +1146,7 @@ contains
 
     select case (conf%currn_model)
     case (currn_model_mhd)
-      call compute_shielding_current(perteq%pn, resonant_jmnpar_over_Bmod)
+      call compute_shielding_current(perteq%pn_per_dp, resonant_jmnpar_over_Bmod)
     case (currn_model_kilca)
       call compute_flr2_current(perteq%Bn, perteq%jnpar_B0, resonant_jmnpar_over_Bmod, &
         flr2, perteq%Phi_mn, perteq%Phi_aligned_mn)
@@ -1502,18 +1528,18 @@ contains
     end if
   end subroutine compute_flr2_current
 
-  subroutine compute_shielding_current(pn, jmnpar_over_Bmod)
+  subroutine compute_shielding_current(pn_per_dp, jmnpar_over_Bmod)
     use mephit_conf, only: conf, conf_arr
     use mephit_mesh, only: equil, mesh, cache
     use mephit_pert, only: L1_t, polmodes_t, polmodes_init, polmodes_deinit, L1_poloidal_modes
-    type(L1_t), intent(in) :: pn
+    type(L1_t), intent(in) :: pn_per_dp
     type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
     type(polmodes_t) :: pmn
     integer :: m, m_res, kf
 
     jmnpar_over_Bmod%coeff(:, :) = (0d0, 0d0)
     call polmodes_init(pmn, conf%m_max, mesh%nflux)
-    call L1_poloidal_modes(pn, pmn)
+    call L1_poloidal_modes(pn_per_dp, pmn)
     do m = mesh%m_res_min, mesh%m_res_max
       m_res = -equil%cocos%sgn_q * m
       if (abs(conf_arr%refinement(m)) > 1d0) then
@@ -1578,7 +1604,7 @@ contains
     call RT0_init(jn, mesh%nedge, mesh%ntri)
     call RT0_init(jn_div, mesh%nedge, mesh%ntri)
     call RT0_init(Bn, mesh%nedge, mesh%ntri)
-    call compute_shielding_current(perteq%pn, jmn_all)
+    call compute_shielding_current(perteq%pn_per_dp, jmn_all)
     ! flux of the total and vacuum fields at the resonances, and surface normalisation
     call RT0_poloidal_modes(perteq%Bn, Bmn)
     do m_obs = mesh%m_res_min, mesh%m_res_max
