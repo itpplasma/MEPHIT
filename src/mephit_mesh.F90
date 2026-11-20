@@ -4224,10 +4224,11 @@ contains
       + R * B0(3) * B0(3) * d2F_dpsi2)
     dj0_dZ(3) = 0.25d0 / pi * clight * (dF_dpsi * dB0_dZ(3) &
       - R * B0(1) * B0(3) * d2F_dpsi2)
+    ! d(F F')/dpsi enters with dpsi/dR = R B_Z and dpsi/dZ = -R B_R, like p''
     dj0_dR(2) = clight * (dp0_dpsi + d2p0_dpsi2 * R * R * B0(3) + &
-      0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2 - FdF_dpsi / R))
-    dj0_dZ(2) = clight * (-d2p0_dpsi2 * R * R * B0(1) + &
-      0.25d0 / (pi * R) * (dF_dpsi ** 2 + F * d2F_dpsi2))
+      0.25d0 / pi * (dF_dpsi ** 2 + F * d2F_dpsi2) * B0(3) - 0.25d0 / (pi * R * R) * FdF_dpsi)
+    dj0_dZ(2) = clight * (-d2p0_dpsi2 * R * R * B0(1) - &
+      0.25d0 / pi * (dF_dpsi ** 2 + F * d2F_dpsi2) * B0(1))
   end subroutine curr0_geqdsk
 
   subroutine compute_curr0_geqdsk
