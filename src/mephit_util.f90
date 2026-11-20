@@ -1155,7 +1155,7 @@ contains
         converged(:k - 1) = abs(progression(:k - 1, k) - progression(:k - 1, k - 1)) / &
           abs(progression(:k - 1, k - 1)) < tol
       end if
-      if (all(pack(converged, selection))) exit
+      if (k > nmin .and. all(pack(converged, selection))) exit
     end do
     k = min(k, nkrylov)  ! k = nkrylov + 1 unless the loop exits early
     nritz = count(selection)
