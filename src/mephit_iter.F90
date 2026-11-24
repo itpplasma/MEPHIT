@@ -1354,7 +1354,7 @@ contains
       call resample1d(fs_half%psi, Bmnrho_over_B0theta / fs_half%q * &
         equil%cocos%sgn_dpsi, fs%psi(1:), rtemp, 3)
       Bmnpsi_over_B0phi%Im = rtemp
-      call flr2_response_current(flr2, 1, m_res, mesh%nflux, &
+      call flr2_response_current(flr2, nint(conf%switch_Phi), m_res, mesh%nflux, &
         Bmnpsi_over_B0phi, jmnpar_over_Bmod%coeff(m_res, 1:), Phi_mn(1:, m))
       Phi_aligned_mn(1:, m) = imun * Bmnpsi_over_B0phi * &
         fs%q(1:) * dPhi0_dpsi%y(1:) / (m_res + mesh%n * fs%q(1:))

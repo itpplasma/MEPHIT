@@ -107,6 +107,26 @@ module mephit_conf
     !> Default 1.0 (no rescaling). Set to e.g. 1e-6 for the large-lambda regime.
     real(dp) :: density_rescale_factor = 1d0
 
+    !> FLR2 physics switches (real, 1.0 = on, 0.0 = off), mirroring the standalone
+    !> KiLCA-FLR2 config_switches module. All default to 1.0, reproducing the
+    !> previous hardwired behavior. switch_potential_* gate the ion/electron terms
+    !> in the FLR2 Poisson equation for Phi; switch_cur_* gate them in the parallel
+    !> current (multiplying alongside the per-mode *_current_factor arrays);
+    !> switch_flr_* gate the rho^2 (finite-Larmor-radius) corrections.
+    !> Used to build the electron-only, zero-FLR FLR2 benchmark against KIM.
+    real(dp) :: switch_flr_e = 1d0
+    real(dp) :: switch_flr_i = 1d0
+    real(dp) :: switch_cur_e = 1d0
+    real(dp) :: switch_cur_i = 1d0
+    real(dp) :: switch_potential_e = 1d0
+    real(dp) :: switch_potential_i = 1d0
+
+    !> Include the perturbed electrostatic potential Phi in the parallel response
+    !> current (1.0) or set it to zero (0.0). Applies to both FLR2 (maps to the
+    !> isw_Phi_m switch in flr2_response_current) and KIM (scales the solved
+    !> Phi before it enters j = M^-1 (K_j_phi Phi + K_j_B Br)). Default 1.0.
+    real(dp) :: switch_Phi = 1d0
+
     !> Method used for radial refinement. Possible values are #refinement_scheme_geometric
     !> (default) and #refinement_scheme_gaussian.
     integer :: refinement_scheme = refinement_scheme_geometric
@@ -333,6 +353,13 @@ contains
     call h5_add(h5id_root, grp // '/vac_src', config%vac_src)
     call h5_add(h5id_root, grp // '/currn_model', config%currn_model)
     call h5_add(h5id_root, grp // '/density_rescale_factor', config%density_rescale_factor)
+    call h5_add(h5id_root, grp // '/switch_flr_e', config%switch_flr_e)
+    call h5_add(h5id_root, grp // '/switch_flr_i', config%switch_flr_i)
+    call h5_add(h5id_root, grp // '/switch_cur_e', config%switch_cur_e)
+    call h5_add(h5id_root, grp // '/switch_cur_i', config%switch_cur_i)
+    call h5_add(h5id_root, grp // '/switch_potential_e', config%switch_potential_e)
+    call h5_add(h5id_root, grp // '/switch_potential_i', config%switch_potential_i)
+    call h5_add(h5id_root, grp // '/switch_Phi', config%switch_Phi)
     call h5_add(h5id_root, grp // '/refinement_scheme', config%refinement_scheme)
     call h5_add(h5id_root, grp // '/nonres', config%nonres)
     call h5_add(h5id_root, grp // '/quad_avg', config%quad_avg)
