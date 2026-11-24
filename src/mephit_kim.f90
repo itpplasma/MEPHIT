@@ -38,8 +38,31 @@ module mephit_kim
     real(dp), allocatable :: dr_dpsi_pol(:) ! Jacobian dr/dpsi_pol on MEPHIT grid
   end type kim_mode_t
 
+  !> KIM forced-periodicity response of one poloidal mode to a unit radial field.
+  !>
+  !> KIM solves on a periodic window around the resonance in the effective radius
+  !> r_eff = sqrt(2 |psi_tor| / B_ref), with the flux-surface geometry of this
+  !> equilibrium (field magnitude F / R_O, k_parallel = (m + n q) / (q R_O), E x B
+  !> frequency from MEPHIT's Phi0, and the radial metric <R^2 |grad psi|^2>
+  !> (dr_eff/dpsi)^2 / R_O^2 of FLR2's Poisson equation). The response is linear
+  !> in the radial field B_r, which KIM takes constant across the window.
+  type :: kim_periodic_mode_t
+    integer :: npts = 0
+    real(dp), allocatable :: r(:)        !< window grid in r_eff [cm]
+    complex(dp), allocatable :: jpar(:)  !< parallel current per unit B_r [statA cm^-2 G^-1]
+    complex(dp), allocatable :: Phi(:)   !< potential per unit B_r [statV G^-1]
+    real(dp) :: r_res = 0d0              !< resonant radius found by KIM [cm]
+    real(dp) :: r_asis_min = 0d0         !< inner edge of the unmodified window core [cm]
+    real(dp) :: r_asis_max = 0d0         !< outer edge of the unmodified window core [cm]
+    real(dp) :: B_ref = 0d0              !< field defining r_eff [G]
+    real(dp), allocatable :: r_eff(:)    !< r_eff on MEPHIT flux surfaces [cm]
+    real(dp), allocatable :: dr_dpsi(:)  !< |d r_eff / d psi| on MEPHIT flux surfaces
+  end type kim_periodic_mode_t
+
   type :: kim_t
     type(kim_mode_t), allocatable :: modes(:)
+    type(kim_periodic_mode_t), allocatable :: periodic_modes(:)
+    logical :: periodic = .false.
     integer :: m_min = 0, m_max = 0
   end type kim_t
 
@@ -524,7 +547,7 @@ contains
   ! === INITIALIZATION ===
 
   subroutine kim_init(kim, m_res_min, m_res_max, nflux, psi_pol, q_prof)
-    use mephit_conf, only: conf, logger
+    use mephit_conf, only: conf, logger, kim_coupling_kernel, kim_coupling_periodic
     type(kim_t), intent(inout) :: kim
     integer, intent(in) :: m_res_min, m_res_max, nflux
     real(dp), intent(in) :: psi_pol(0:)  ! poloidal flux on MEPHIT flux surfaces
@@ -540,7 +563,6 @@ contains
 
     kim%m_min = m_res_min
     kim%m_max = m_res_max
-    allocate(kim%modes(m_res_min:m_res_max))
 
     ! Compute toroidal flux on MEPHIT grid (mode-independent)
     psi_tor(0) = 0d0
@@ -548,6 +570,19 @@ contains
       psi_tor(kf) = psi_tor(kf - 1) + &
         0.5d0 * (q_prof(kf - 1) + q_prof(kf)) * (psi_pol(kf) - psi_pol(kf - 1))
     end do
+
+    select case (conf%kim_coupling)
+    case (kim_coupling_periodic)
+      call kim_init_periodic(kim, nflux, q_prof, psi_tor)
+      return
+    case (kim_coupling_kernel)
+      kim%periodic = .false.
+    case default
+      write (logger%msg, '("unknown kim_coupling selection ", i0)') conf%kim_coupling
+      if (logger%err) call logger%write_msg
+      error stop
+    end select
+    allocate(kim%modes(m_res_min:m_res_max))
 
     do m = m_res_min, m_res_max
       write(m_str, '(i0)') m
@@ -641,6 +676,193 @@ contains
     end do
   end subroutine kim_init
 
+  !> Read the periodic KIM responses kim_periodic_m<m>.h5 and map MEPHIT's flux
+  !> surfaces to the effective radius used for them.
+  subroutine kim_init_periodic(kim, nflux, q_prof, psi_tor)
+    use mephit_conf, only: conf, logger
+    use hdf5_tools, only: HID_T, h5_open, h5_close, h5_get
+    type(kim_t), intent(inout) :: kim
+    integer, intent(in) :: nflux
+    real(dp), intent(in) :: q_prof(0:), psi_tor(0:)
+
+    integer(HID_T) :: h5id
+    character(len=2048) :: h5_path
+    character(len=16) :: m_str
+    logical :: h5_exists
+    integer :: m, kf, n
+    real(dp), allocatable :: re_part(:), im_part(:)
+
+    kim%periodic = .true.
+    allocate(kim%periodic_modes(kim%m_min:kim%m_max))
+    do m = kim%m_min, kim%m_max
+      write (m_str, '(i0)') m
+      h5_path = trim(conf%kim_data_dir) // '/kim_periodic_m' // trim(m_str) // '.h5'
+      inquire(file = trim(h5_path), exist = h5_exists)
+      if (.not. h5_exists) then
+        write (logger%msg, '("KIM: no periodic response for m = ", i0, " in ", a, &
+          &" - skipping (zero current)")') m, trim(conf%kim_data_dir)
+        if (logger%warn) call logger%write_msg
+        cycle
+      end if
+      associate (pm => kim%periodic_modes(m))
+        call h5_open(trim(h5_path), h5id)
+        call h5_get(h5id, 'npts', n)
+        pm%npts = n
+        allocate(pm%r(n), pm%jpar(n), pm%Phi(n), re_part(n), im_part(n))
+        call h5_get(h5id, 'r', pm%r)
+        call h5_get(h5id, 'jpar_re', re_part)
+        call h5_get(h5id, 'jpar_im', im_part)
+        pm%jpar = cmplx(re_part, im_part, dp)
+        call h5_get(h5id, 'Phi_re', re_part)
+        call h5_get(h5id, 'Phi_im', im_part)
+        pm%Phi = cmplx(re_part, im_part, dp)
+        call h5_get(h5id, 'r_res', pm%r_res)
+        call h5_get(h5id, 'r_asis_min', pm%r_asis_min)
+        call h5_get(h5id, 'r_asis_max', pm%r_asis_max)
+        call h5_get(h5id, 'B_ref', pm%B_ref)
+        call h5_close(h5id)
+        deallocate(re_part, im_part)
+        if (any(pm%r(2:) <= pm%r(:n - 1))) then
+          write (logger%msg, '("KIM: window grid of m = ", i0, " is not increasing")') m
+          if (logger%err) call logger%write_msg
+          error stop
+        end if
+
+        ! r_eff = sqrt(2 |psi_tor| / B_ref), hence |dr_eff/dpsi| = |q| / (B_ref r_eff)
+        allocate(pm%r_eff(0:nflux), pm%dr_dpsi(0:nflux))
+        pm%r_eff(:) = sqrt(2d0 * abs(psi_tor) / abs(pm%B_ref))
+        pm%dr_dpsi(0) = 0d0
+        do kf = 1, nflux
+          pm%dr_dpsi(kf) = abs(q_prof(kf)) / (abs(pm%B_ref) * pm%r_eff(kf))
+        end do
+        if (logger%info) then
+          write (logger%msg, '("KIM periodic m = ", i0, ": ", i0, " points, r_res = ", &
+            &es12.5, " cm, core [", es12.5, ", ", es12.5, "] cm")') &
+            m, n, pm%r_res, pm%r_asis_min, pm%r_asis_max
+          call logger%write_msg
+        end if
+      end associate
+    end do
+  end subroutine kim_init_periodic
+
+  !> Parallel current of the resonant harmonics from the periodic KIM response.
+  !>
+  !> KIM's drive is the radial field-line excursion (B_r / B_0) d/dr of the
+  !> equilibrium. Along a field line of this equilibrium, d r_eff / d phi =
+  !> (dr_eff/dpsi) B^psi / B^phi, and KIM's cylinder has dz = R_O dphi, so the
+  !> FLR2 drive B^psi / B^phi corresponds to
+  !>
+  !>   B_r / B_0 = (B^psi / B^phi) |dr_eff/dpsi| / R_O.
+  !>
+  !> KIM's response is per unit B_r with B_0 = F / R_O, so j_par / B_0 is the
+  !> response times (B^psi / B^phi) |dr_eff/dpsi| / R_O; B_0 cancels. KIM takes
+  !> B_r constant over its window (constant-psi approximation); evaluating the
+  !> product with the local B_r keeps the B_r gradient term outside the layer.
+  !> The current is set only inside the unmodified window core.
+  subroutine compute_kim_periodic_current(Bn, jnpar_B0_mhd, jmnpar_over_Bmod, kim, &
+    Phi_mn, Phi_aligned_mn)
+    use mephit_conf, only: conf, logger, transition_func_none
+    use mephit_util, only: imun, resample1d
+    use mephit_mesh, only: equil, mesh, fs, fs_half, dPhi0_dpsi, cache
+    use mephit_pert, only: polmodes_t, polmodes_init, polmodes_deinit, &
+      L1_poloidal_modes, vec_polmodes_t, vec_polmodes_init, vec_polmodes_deinit, &
+      RT0_poloidal_modes, RT0_t, L1_t
+
+    type(RT0_t), intent(in) :: Bn
+    type(L1_t), intent(in) :: jnpar_B0_mhd
+    type(polmodes_t), intent(inout) :: jmnpar_over_Bmod
+    type(kim_t), intent(in) :: kim
+    complex(dp), intent(out) :: Phi_mn(0:, mesh%m_res_min:)
+    complex(dp), intent(out) :: Phi_aligned_mn(0:, mesh%m_res_min:)
+
+    integer :: m, m_res, kf, kf_lo, kf_hi
+    real(dp) :: rtemp(1:mesh%nflux), Bmnrho_over_B0theta(1:mesh%nflux)
+    complex(dp) :: Bmnpsi_over_B0phi(1:mesh%nflux), drive(1:mesh%nflux)
+    real(dp), allocatable :: re_resp(:), im_resp(:)
+    type(vec_polmodes_t) :: Bmn
+    type(polmodes_t) :: jmnpar_over_Bmod_mhd
+
+    jmnpar_over_Bmod%coeff(:, :) = (0d0, 0d0)
+    Phi_mn(:, :) = (0d0, 0d0)
+    Phi_aligned_mn(:, :) = (0d0, 0d0)
+    call vec_polmodes_init(Bmn, conf%m_max, mesh%nflux)
+    call RT0_poloidal_modes(Bn, Bmn)
+    if (conf%transition_func /= transition_func_none) then
+      call polmodes_init(jmnpar_over_Bmod_mhd, conf%m_max, mesh%nflux)
+      call L1_poloidal_modes(jnpar_B0_mhd, jmnpar_over_Bmod_mhd)
+    end if
+
+    do m = mesh%m_res_min, mesh%m_res_max
+      if (kim%periodic_modes(m)%npts == 0) cycle
+      associate (pm => kim%periodic_modes(m))
+        m_res = -equil%cocos%sgn_q * m
+
+        ! B^psi / B^phi exactly as handed to FLR2 (compute_flr2_current)
+        Bmnrho_over_B0theta(:) = Bmn%coeff_rad(m_res, :)%Re
+        call resample1d(fs_half%psi, Bmnrho_over_B0theta / fs_half%q * &
+          equil%cocos%sgn_dpsi, fs%psi(1:), rtemp, 3)
+        Bmnpsi_over_B0phi%Re = rtemp
+        Bmnrho_over_B0theta(:) = Bmn%coeff_rad(m_res, :)%Im
+        call resample1d(fs_half%psi, Bmnrho_over_B0theta / fs_half%q * &
+          equil%cocos%sgn_dpsi, fs%psi(1:), rtemp, 3)
+        Bmnpsi_over_B0phi%Im = rtemp
+        drive(:) = Bmnpsi_over_B0phi * pm%dr_dpsi(1:) / mesh%R_O
+        if (logger%debug) then
+          ! B_r handed to KIM against the B^psi / <|grad psi|> of the kernel coupling
+          kf = mesh%res_ind(m)
+          write (logger%msg, '("KIM periodic m = ", i0, ": B_r(res) = ", 2es12.4, &
+            &" G, coeff_rad / gpec_jacfac = ", 2es12.4, " G")') m, &
+            drive(kf) * abs(fs%F(kf)) / mesh%R_O, &
+            Bmn%coeff_rad(m_res, kf) / mesh%gpec_jacfac(kf)
+          call logger%write_msg
+        end if
+
+        ! flux surfaces inside the unmodified window core (r_eff is monotonic)
+        kf_lo = 0
+        kf_hi = -1
+        do kf = 1, mesh%nflux
+          if (pm%r_eff(kf) >= pm%r_asis_min .and. pm%r_eff(kf) <= pm%r_asis_max) then
+            if (kf_lo == 0) kf_lo = kf
+            kf_hi = kf
+          end if
+        end do
+        if (kf_lo > 0) then
+          allocate(re_resp(kf_lo:kf_hi), im_resp(kf_lo:kf_hi))
+          call resample1d(pm%r, real(pm%jpar, dp), pm%r_eff(kf_lo:kf_hi), re_resp, 3)
+          call resample1d(pm%r, aimag(pm%jpar), pm%r_eff(kf_lo:kf_hi), im_resp, 3)
+          jmnpar_over_Bmod%coeff(m_res, kf_lo:kf_hi) = &
+            cmplx(re_resp, im_resp, dp) * drive(kf_lo:kf_hi)
+          call resample1d(pm%r, real(pm%Phi, dp), pm%r_eff(kf_lo:kf_hi), re_resp, 3)
+          call resample1d(pm%r, aimag(pm%Phi), pm%r_eff(kf_lo:kf_hi), im_resp, 3)
+          ! B_r = B_0 (B_r / B_0) with B_0 = F / R_O
+          Phi_mn(kf_lo:kf_hi, m) = cmplx(re_resp, im_resp, dp) * drive(kf_lo:kf_hi) * &
+            abs(fs%F(kf_lo:kf_hi)) / mesh%R_O
+          deallocate(re_resp, im_resp)
+        end if
+
+        Phi_aligned_mn(1:, m) = imun * Bmnpsi_over_B0phi * &
+          fs%q(1:) * dPhi0_dpsi%y(1:) / (m_res + mesh%n * fs%q(1:))
+
+        if (conf%transition_func /= transition_func_none) then
+          if (any(cache%shielding(m)%cross_fade(1:) > 0d0 .and. &
+            (pm%r_eff(1:) < pm%r_asis_min .or. pm%r_eff(1:) > pm%r_asis_max))) then
+            write (logger%msg, '("KIM periodic m = ", i0, ": current region extends ", &
+              &"beyond the window core [", es12.5, ", ", es12.5, "] cm")') &
+              m, pm%r_asis_min, pm%r_asis_max
+            if (logger%warn) call logger%write_msg
+          end if
+          jmnpar_over_Bmod%coeff(m_res, :) = cache%shielding(m)%cross_fade * &
+            (jmnpar_over_Bmod%coeff(m_res, :) - jmnpar_over_Bmod_mhd%coeff(m_res, :))
+        end if
+      end associate
+    end do
+
+    call vec_polmodes_deinit(Bmn)
+    if (conf%transition_func /= transition_func_none) then
+      call polmodes_deinit(jmnpar_over_Bmod_mhd)
+    end if
+  end subroutine compute_kim_periodic_current
+
   ! === POISSON SOLVER ===
 
   subroutine kim_solve_poisson(mode, Br_kim, Phi_kim)
@@ -731,6 +953,12 @@ contains
 
     ! KIM grid quantities
     complex(dp), allocatable :: Br_kim(:), Phi_kim(:), jpar_B0_kim(:)
+
+    if (kim%periodic) then
+      call compute_kim_periodic_current(Bn, jnpar_B0_mhd, jmnpar_over_Bmod, kim, &
+        Phi_mn, Phi_aligned_mn)
+      return
+    end if
 
     jmnpar_over_Bmod%coeff(:, :) = (0d0, 0d0)
     Phi_mn(:, :) = (0d0, 0d0)
@@ -902,6 +1130,8 @@ contains
       end do
       deallocate(kim%modes)
     end if
+    if (allocated(kim%periodic_modes)) deallocate(kim%periodic_modes)
+    kim%periodic = .false.
     kim%m_min = 0
     kim%m_max = 0
   end subroutine kim_deinit
