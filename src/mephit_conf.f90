@@ -22,6 +22,7 @@ module mephit_conf
     q_prof_flux, q_prof_rot, q_prof_geqdsk, &
     vac_src_nemov, vac_src_gpec, vac_src_fourier, vac_src_vecpot, &
     currn_model_mhd, currn_model_kilca, currn_model_zero, currn_model_kim, &
+    kim_coupling_kernel, kim_coupling_periodic, &
     refinement_scheme_geometric, refinement_scheme_gaussian, &
     transition_func_none, transition_func_heaviside, transition_func_smooth
 
@@ -57,6 +58,9 @@ module mephit_conf
   integer, parameter :: currn_model_kilca = 1  !< response current from KiLCA model
   integer, parameter :: currn_model_zero = 2   !< zero response current
   integer, parameter :: currn_model_kim = 3    !< response current from KIM integral kernels
+
+  integer, parameter :: kim_coupling_kernel = 0    !< KIM response matrices on a global radial grid
+  integer, parameter :: kim_coupling_periodic = 1  !< KIM forced-periodicity response per unit B_r
 
   integer, parameter :: refinement_scheme_geometric = 0  !< radial refinement via geometric series
   integer, parameter :: refinement_scheme_gaussian = 1   !< radial refinement via sum of Gaussians
@@ -286,6 +290,13 @@ module mephit_conf
     !> (kim_m6.h5, kim_m7.h5, ...). Only used when currn_model == currn_model_kim.
     character(len = 1024) :: kim_data_dir = ''
 
+    !> Form of the KIM data in #kim_data_dir. With #kim_coupling_periodic (default),
+    !> files kim_periodic_m6.h5, ... hold KIM's forced-periodicity response to a
+    !> unit radial field on the flux-surface geometry of this equilibrium. With
+    !> #kim_coupling_kernel, files kim_m6.h5, ... (or directories) hold the
+    !> response matrices of KIM's global electrostatic solver.
+    integer :: kim_coupling = kim_coupling_periodic
+
     !> Maximum number of eigenvectors to be exported for plotting. Defaults to 10.
     integer :: max_eig_out = 10
 
@@ -447,6 +458,8 @@ contains
       comment = 'enable damping of Pfirsch-Schlueter current')
     call h5_add(h5id_root, grp // '/transition_func', config%transition_func, &
       comment = 'transition function between current contributions')
+    call h5_add(h5id_root, grp // '/kim_coupling', config%kim_coupling, &
+      comment = 'form of the KIM data: 0 response matrices, 1 periodic response')
     call h5_add(h5id_root, grp // '/resonance_sweep', config%resonance_sweep, &
       comment = 'number of points for sweep over electrical resonance')
     call h5_add(h5id_root, grp // '/offset_E_r', config%offset_E_r, &
