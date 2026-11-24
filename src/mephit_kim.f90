@@ -395,6 +395,64 @@ contains
     deallocate(re_src, im_src, re_dst, im_dst)
   end subroutine interp_linear_complex_zeropad
 
+  ! === GAUSSIAN TAPER FOR KIM DOMAIN BOUNDARIES ===
+
+  subroutine gaussian_taper(f, r_eff, kf_lo, kf_hi, nflux)
+    ! Apply a Gaussian window to the values near the KIM domain boundaries
+    ! so the current smoothly fades to zero instead of dropping abruptly.
+    ! Uses a Gaussian with sigma = 1/3 of the distance from resonance to
+    ! the boundary, applied to the outermost 20% of the domain on each side.
+    complex(dp), intent(inout) :: f(:)
+    real(dp), intent(in) :: r_eff(:)
+    integer, intent(in) :: kf_lo, kf_hi, nflux
+
+    integer :: kf, kf_peak, n_taper
+    real(dp) :: r_center, r_lo, r_hi, sigma, w
+    real(dp) :: abs_peak
+
+    if (kf_lo <= 0 .or. kf_hi < kf_lo) return
+
+    ! Find peak of |f| -> r_center (resonance location)
+    kf_peak = kf_lo
+    abs_peak = abs(f(kf_lo))
+    do kf = kf_lo + 1, kf_hi
+      if (abs(f(kf)) > abs_peak) then
+        abs_peak = abs(f(kf))
+        kf_peak = kf
+      end if
+    end do
+    if (abs_peak < 1d-30) return
+    r_center = r_eff(kf_peak)
+
+    r_lo = r_eff(kf_lo)
+    r_hi = r_eff(kf_hi)
+
+    ! Taper the inner boundary region: fade the existing values
+    ! using a Gaussian window centered at the boundary
+    sigma = abs(r_center - r_lo) / 3d0
+    if (sigma > 1d-10) then
+      ! Taper outermost 20% of inner side
+      n_taper = max(1, (kf_peak - kf_lo) / 5)
+      do kf = kf_lo, kf_lo + n_taper - 1
+        w = exp(-0.5d0 * ((r_eff(kf) - r_lo) / sigma)**2)
+        ! w=1 at r_lo (boundary), decays inward — we want the reverse:
+        ! fade TO zero at the boundary
+        w = 1d0 - exp(-0.5d0 * ((r_eff(kf) - r_lo) / (0.3d0 * sigma))**2)
+        f(kf) = f(kf) * w
+      end do
+    end if
+
+    ! Taper the outer boundary region
+    sigma = abs(r_hi - r_center) / 3d0
+    if (sigma > 1d-10) then
+      n_taper = max(1, (kf_hi - kf_peak) / 5)
+      do kf = kf_hi - n_taper + 1, kf_hi
+        w = 1d0 - exp(-0.5d0 * ((r_eff(kf) - r_hi) / (0.3d0 * sigma))**2)
+        f(kf) = f(kf) * w
+      end do
+    end if
+  end subroutine gaussian_taper
+
   ! === DENSE TO SPARSE CONVERSION ===
 
   subroutine dense_to_csc(A, n, threshold, val, row_idx, col_ptr, nnz)
@@ -706,16 +764,21 @@ contains
       allocate(Br_kim(kim%modes(m)%npts), Phi_kim(kim%modes(m)%npts), &
         jpar_B0_kim(kim%modes(m)%npts))
 
-      ! Transform B^psi to B^r and interpolate to KIM grid
-      ! B^r on MEPHIT = dr/dpsi_pol * Bmnpsi_over_B0phi * B0^phi
-      ! where B0^phi = F/R, using F/R_O as cylindrical approximation
+      ! Physical radial field harmonic for the KAMEL kernel (absolute Gauss).
+      ! Br = coeff_rad / gpec_jacfac = (sqrt_g B^psi) / <sqrt_g |grad psi|> =
+      ! B^psi / |grad psi| = physical perpendicular field -- the same
+      ! metric-correct normalization MEPHIT uses for the GPEC resonant field.
+      ! The previous ad-hoc dr_dpsi_pol*F/R_O conversion mis-normalized Br by
+      ! ~R_O (verified against gpec_jacfac), inflating the KIM current ~100x.
       block
+        real(dp) :: Br_re(1:mesh%nflux), Br_im(1:mesh%nflux), tmp(mesh%nflux)
         complex(dp) :: Br_mephit(1:mesh%nflux)
 
-        do kf = 1, mesh%nflux
-          Br_mephit(kf) = kim%modes(m)%dr_dpsi_pol(kf) * Bmnpsi_over_B0phi(kf) * &
-            fs%F(kf) / mesh%R_O
-        end do
+        tmp = Bmn%coeff_rad(m_res, :)%re / mesh%gpec_jacfac(:)
+        call resample1d(fs_half%psi, tmp, fs%psi(1:), Br_re, 3)
+        tmp = Bmn%coeff_rad(m_res, :)%im / mesh%gpec_jacfac(:)
+        call resample1d(fs_half%psi, tmp, fs%psi(1:), Br_im, 3)
+        Br_mephit = cmplx(Br_re, Br_im, dp)
 
         ! Interpolate from MEPHIT's r_eff to KIM's xl_grid
         call interp_linear_complex(kim%modes(m)%r_eff(1:), Br_mephit, &
@@ -724,6 +787,11 @@ contains
 
       ! Solve Poisson equation
       call kim_solve_poisson(kim%modes(m), Br_kim, Phi_kim)
+
+      ! Optionally drop the perturbed electrostatic potential from the current
+      ! (conf%switch_Phi = 0), leaving j = M^-1 K_j_B Br. Symmetric to FLR2's
+      ! isw_Phi_m = 0. Default switch_Phi = 1 keeps Phi.
+      Phi_kim = conf%switch_Phi * Phi_kim
 
       ! Compute parallel current density
       call kim_compute_current(kim%modes(m), Phi_kim, Br_kim, jpar_B0_kim)

@@ -248,11 +248,9 @@ contains
     allocate(dens_i(npoi),dPhi_0_dpsi(npoi),derpar(npoi))
     allocate(A1e(npoi),A2e(npoi),A1i(npoi),A2i(npoi))
 
-    ! For playing around:
-    ! switch for FLR effects in electrons (1 - on, 0 - off):
-    switch_flr_e=1.d0
-    ! switch for FLR effects in ions (1 - on, 0 - off):
-    switch_flr_i=1.d0
+    ! FLR effect switches (1 - on, 0 - off), from config (default 1.0):
+    switch_flr_e = conf%switch_flr_e
+    switch_flr_i = conf%switch_flr_i
 
     ! electron and ion charges and ion density:
     e_e=-e_charge
@@ -338,9 +336,12 @@ contains
         Gtor_mi = Gtor_mi * conf%density_rescale_factor
         Htori = Htori * conf%density_rescale_factor
 
-        F_m = F_me + F_mi
-        Gtor_m = Gtor_me + Gtor_mi
-        Htor = Htore + Htori
+        ! Potential (Poisson) contributions gated by switch_potential_* (default 1.0).
+        ! Note: the standalone KiLCA-FLR2 defaults switch_potential_i to 0.0; here it
+        ! defaults to 1.0 to preserve MEPHIT's existing physical FLR2 baseline.
+        F_m = F_me * conf%switch_potential_e + F_mi * conf%switch_potential_i
+        Gtor_m = Gtor_me * conf%switch_potential_e + Gtor_mi * conf%switch_potential_i
+        Htor = Htore * conf%switch_potential_e + Htori * conf%switch_potential_i
 
         flr2%b0(i, mpol) = -4.d0 * pi * (mpol + qsaf(i) * ntor) * F_m / (qsaf(i) * omega_E * avR2nabpsi2(i))
         flr2%b2_in(i, mpol) = -4.d0 * pi * (mpol + qsaf(i) * ntor) * Gtor_m / (qsaf(i) * omega_E)
@@ -350,10 +351,10 @@ contains
         flr2%a2_in(i, mpol) = -flr2%b2_in(i, mpol) * factor_of_Phi + 4.d0 * pi * Htor
         flr2%a2_out(i, mpol) = (1.d0, 0.d0) + flr2%a2_in(i, mpol)
 
-        flr2%d0(i, mpol) = -(F_me * conf_arr%electron_current_factor(abs(mpol)) + &
-          F_mi * conf_arr%ion_current_factor(abs(mpol))) / bcovar_phi(i)
-        flr2%d2_in(i, mpol) = -(Gtor_me * conf_arr%electron_current_factor(abs(mpol)) + &
-          Gtor_mi * conf_arr%ion_current_factor(abs(mpol))) * avR2nabpsi2(i) / bcovar_phi(i)
+        flr2%d0(i, mpol) = -(F_me * conf%switch_cur_e * conf_arr%electron_current_factor(abs(mpol)) + &
+          F_mi * conf%switch_cur_i * conf_arr%ion_current_factor(abs(mpol))) / bcovar_phi(i)
+        flr2%d2_in(i, mpol) = -(Gtor_me * conf%switch_cur_e * conf_arr%electron_current_factor(abs(mpol)) + &
+          Gtor_mi * conf%switch_cur_i * conf_arr%ion_current_factor(abs(mpol))) * avR2nabpsi2(i) / bcovar_phi(i)
         flr2%d2_out(i, mpol) = flr2%d2_in(i, mpol)
 
         flr2%c0(i, mpol) = flr2%d0(i, mpol) * factor_of_Phi
