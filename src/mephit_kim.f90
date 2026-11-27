@@ -57,6 +57,9 @@ module mephit_kim
     real(dp) :: B_ref = 0d0              !< field defining r_eff [G]
     real(dp), allocatable :: r_eff(:)    !< r_eff on MEPHIT flux surfaces [cm]
     real(dp), allocatable :: dr_dpsi(:)  !< |d r_eff / d psi| on MEPHIT flux surfaces
+    integer :: kf_lo = 0, kf_hi = -1     !< flux surfaces inside the window core
+    complex(dp), allocatable :: jpar_fs(:)  !< hat-weighted average of jpar on flux surfaces
+    complex(dp), allocatable :: Phi_fs(:)   !< hat-weighted average of Phi on flux surfaces
   end type kim_periodic_mode_t
 
   type :: kim_t
@@ -735,6 +738,7 @@ contains
         do kf = 1, nflux
           pm%dr_dpsi(kf) = abs(q_prof(kf)) / (abs(pm%B_ref) * pm%r_eff(kf))
         end do
+        call periodic_response_on_flux_surfaces(pm, nflux)
         if (logger%info) then
           write (logger%msg, '("KIM periodic m = ", i0, ": ", i0, " points, r_res = ", &
             &es12.5, " cm, core [", es12.5, ", ", es12.5, "] cm")') &
@@ -744,6 +748,94 @@ contains
       end associate
     end do
   end subroutine kim_init_periodic
+
+  !> KIM's response on the flux surfaces inside the window core.
+  !>
+  !> The resonant current has a spike of width ~ 2 pi / k_max, comparable to the
+  !> flux-surface spacing near the outer resonances. Point values would make the
+  !> layer current depend on where the spike falls between surfaces. Each surface
+  !> instead gets the average weighted with its hat function in r_eff, so the
+  !> piecewise-linear current on the surfaces has the integral of KIM's current.
+  subroutine periodic_response_on_flux_surfaces(pm, nflux)
+    type(kim_periodic_mode_t), intent(inout) :: pm
+    integer, intent(in) :: nflux
+
+    integer :: kf
+    real(dp) :: a, c
+
+    pm%kf_lo = 0
+    pm%kf_hi = -1
+    do kf = 1, nflux
+      if (pm%r_eff(kf) >= pm%r_asis_min .and. pm%r_eff(kf) <= pm%r_asis_max) then
+        if (pm%kf_lo == 0) pm%kf_lo = kf
+        pm%kf_hi = kf
+      end if
+    end do
+    if (pm%kf_lo == 0) return
+    allocate(pm%jpar_fs(pm%kf_lo:pm%kf_hi), pm%Phi_fs(pm%kf_lo:pm%kf_hi))
+    do kf = pm%kf_lo, pm%kf_hi
+      a = pm%r_eff(kf - 1)
+      c = pm%r_eff(min(kf + 1, nflux))
+      pm%jpar_fs(kf) = hat_average(pm%r, pm%jpar, a, pm%r_eff(kf), c)
+      pm%Phi_fs(kf) = hat_average(pm%r, pm%Phi, a, pm%r_eff(kf), c)
+    end do
+  end subroutine periodic_response_on_flux_surfaces
+
+  !> Average of the piecewise-linear f(r) weighted with the hat function that is
+  !> 1 at b and 0 at a and c (a = b or b = c gives a half hat), restricted to the
+  !> grid r. Exact: f times the hat is quadratic between breakpoints (Simpson).
+  function hat_average(r, f, a, b, c) result(avg)
+    real(dp), intent(in) :: r(:), a, b, c
+    complex(dp), intent(in) :: f(:)
+    complex(dp) :: avg
+
+    real(dp), allocatable :: x(:)
+    real(dp) :: lo, hi, xm, dx, weight
+    complex(dp) :: moment
+    integer :: k
+
+    lo = max(a, r(1))
+    hi = min(c, r(size(r)))
+    if (b > lo .and. b < hi) then
+      x = [lo, pack(r, r > lo .and. r < b), b, pack(r, r > b .and. r < hi), hi]
+    else
+      x = [lo, pack(r, r > lo .and. r < hi), hi]
+    end if
+    moment = (0d0, 0d0)
+    weight = 0d0
+    do k = 1, size(x) - 1
+      dx = x(k + 1) - x(k)
+      if (dx <= 0d0) cycle
+      xm = 0.5d0 * (x(k) + x(k + 1))
+      moment = moment + dx / 6d0 * (hat(x(k)) * interp(x(k)) + &
+        4d0 * hat(xm) * interp(xm) + hat(x(k + 1)) * interp(x(k + 1)))
+      weight = weight + dx / 6d0 * (hat(x(k)) + 4d0 * hat(xm) + hat(x(k + 1)))
+    end do
+    avg = moment / weight
+
+  contains
+
+    real(dp) function hat(xx)
+      real(dp), intent(in) :: xx
+      if (xx < b) then
+        hat = (xx - a) / (b - a)
+      else if (xx > b) then
+        hat = (c - xx) / (c - b)
+      else
+        hat = 1d0
+      end if
+    end function hat
+
+    complex(dp) function interp(xx)
+      real(dp), intent(in) :: xx
+      integer :: i
+      real(dp) :: t
+      i = min(max(count(r <= xx), 1), size(r) - 1)
+      t = (xx - r(i)) / (r(i + 1) - r(i))
+      interp = (1d0 - t) * f(i) + t * f(i + 1)
+    end function interp
+
+  end function hat_average
 
   !> Parallel current of the resonant harmonics from the periodic KIM response.
   !>
@@ -778,7 +870,6 @@ contains
     integer :: m, m_res, kf, kf_lo, kf_hi
     real(dp) :: rtemp(1:mesh%nflux), Bmnrho_over_B0theta(1:mesh%nflux)
     complex(dp) :: Bmnpsi_over_B0phi(1:mesh%nflux), drive(1:mesh%nflux)
-    real(dp), allocatable :: re_resp(:), im_resp(:)
     type(vec_polmodes_t) :: Bmn
     type(polmodes_t) :: jmnpar_over_Bmod_mhd
 
@@ -817,27 +908,13 @@ contains
           call logger%write_msg
         end if
 
-        ! flux surfaces inside the unmodified window core (r_eff is monotonic)
-        kf_lo = 0
-        kf_hi = -1
-        do kf = 1, mesh%nflux
-          if (pm%r_eff(kf) >= pm%r_asis_min .and. pm%r_eff(kf) <= pm%r_asis_max) then
-            if (kf_lo == 0) kf_lo = kf
-            kf_hi = kf
-          end if
-        end do
+        kf_lo = pm%kf_lo
+        kf_hi = pm%kf_hi
         if (kf_lo > 0) then
-          allocate(re_resp(kf_lo:kf_hi), im_resp(kf_lo:kf_hi))
-          call resample1d(pm%r, real(pm%jpar, dp), pm%r_eff(kf_lo:kf_hi), re_resp, 3)
-          call resample1d(pm%r, aimag(pm%jpar), pm%r_eff(kf_lo:kf_hi), im_resp, 3)
-          jmnpar_over_Bmod%coeff(m_res, kf_lo:kf_hi) = &
-            cmplx(re_resp, im_resp, dp) * drive(kf_lo:kf_hi)
-          call resample1d(pm%r, real(pm%Phi, dp), pm%r_eff(kf_lo:kf_hi), re_resp, 3)
-          call resample1d(pm%r, aimag(pm%Phi), pm%r_eff(kf_lo:kf_hi), im_resp, 3)
+          jmnpar_over_Bmod%coeff(m_res, kf_lo:kf_hi) = pm%jpar_fs * drive(kf_lo:kf_hi)
           ! B_r = B_0 (B_r / B_0) with B_0 = F / R_O
-          Phi_mn(kf_lo:kf_hi, m) = cmplx(re_resp, im_resp, dp) * drive(kf_lo:kf_hi) * &
+          Phi_mn(kf_lo:kf_hi, m) = pm%Phi_fs * drive(kf_lo:kf_hi) * &
             abs(fs%F(kf_lo:kf_hi)) / mesh%R_O
-          deallocate(re_resp, im_resp)
         end if
 
         ! As FLR2 (progonka computes the current only on interior points), the
