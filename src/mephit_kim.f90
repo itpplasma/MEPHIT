@@ -840,6 +840,15 @@ contains
           deallocate(re_resp, im_resp)
         end if
 
+        ! As FLR2 (progonka computes the current only on interior points), the
+        ! layer current vanishes on the first and last flux surface. KIM's
+        ! window has no boundary at the plasma edge, and the current of a
+        ! resonance next to it would otherwise reach the last surface in full.
+        jmnpar_over_Bmod%coeff(m_res, 1) = (0d0, 0d0)
+        jmnpar_over_Bmod%coeff(m_res, mesh%nflux) = (0d0, 0d0)
+        Phi_mn(1, m) = (0d0, 0d0)
+        Phi_mn(mesh%nflux, m) = (0d0, 0d0)
+
         Phi_aligned_mn(1:, m) = imun * Bmnpsi_over_B0phi * &
           fs%q(1:) * dPhi0_dpsi%y(1:) / (m_res + mesh%n * fs%q(1:))
 
