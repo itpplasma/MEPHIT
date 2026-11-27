@@ -797,9 +797,9 @@ contains
     lo = max(a, r(1))
     hi = min(c, r(size(r)))
     if (b > lo .and. b < hi) then
-      x = [lo, pack(r, r > lo .and. r < b), b, pack(r, r > b .and. r < hi), hi]
+      allocate(x, source = [lo, pack(r, r > lo .and. r < b), b, pack(r, r > b .and. r < hi), hi])
     else
-      x = [lo, pack(r, r > lo .and. r < hi), hi]
+      allocate(x, source = [lo, pack(r, r > lo .and. r < hi), hi])
     end if
     moment = (0d0, 0d0)
     weight = 0d0
