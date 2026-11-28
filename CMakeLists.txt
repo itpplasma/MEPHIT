@@ -88,6 +88,7 @@ set_source_files_properties(${COMMON_FORTRAN_SRC_FILES}
   PROPERTIES COMPILE_FLAGS "${CMAKE_Fortran_FLAGS} ${LEGACY_FLAGS}")
 
 set(MEPHIT_FORTRAN_SRC_FILES
+  src/mephit_iteration_state.f90
   src/mephit_conf.f90
   src/mephit_util.f90
   src/mephit_mesh.F90
@@ -203,6 +204,9 @@ if(BUILD_TESTING)
   add_executable(test_resonant_current_assembly test/test_resonant_current_assembly.f90)
   target_link_libraries(test_resonant_current_assembly mephit)
   add_test(NAME resonant_current_assembly COMMAND test_resonant_current_assembly)
+  add_executable(test_iteration_state test/test_iteration_state.f90)
+  target_link_libraries(test_iteration_state mephit)
+  add_test(NAME iteration_state COMMAND test_iteration_state)
 endif()
 
 ### Add helper script to binaries

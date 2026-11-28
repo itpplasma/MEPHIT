@@ -149,6 +149,20 @@ For each `mephit*.in`, with `*` a possible suffix:
   FreeFem++,
 - `fglut_dump*`: FreeFem++ graphics, viewable with `ffglut`.
 
+### Iteration acceptance
+
+An iterative run accepts the field $B$ that entered the pressure, current and
+Maxwell calculations once the residual of the original map, $K B + B_\mathrm{vac}
+- B$, is below `iter_rel_err` relative to the vacuum field, both in the
+R-weighted poloidal field norm. The saved pressure and current belong to that
+field. `iter/map_rel_err`, `iter/converged` and `iter/reason` record the
+acceptance, and `iter/L2int_Bn_map_residual` the residual history.
+`iter/rel_err` and `iter/L2int_Bn_diff` keep the norm of the preconditioned
+step. A run that reaches `niter` without convergence saves its last input with
+`converged = false` and exits with an error. The single-update mode keeps its
+mapped field, writes the input field to `iter/Bn_constitutive_input` and sets
+`consistent_state = false`.
+
 ## Plotting
 
 Install the plotting package `mephit_plot` from the repository root:
