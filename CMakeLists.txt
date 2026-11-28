@@ -51,8 +51,6 @@ endif()
 
 cmake_policy(SET CMP0074 NEW)
 find_package(Boost 1.74 REQUIRED)
-find_package(GSL REQUIRED)
-find_package(FFTW REQUIRED COMPONENTS DOUBLE_LIB)
 
 include(ExternalProject)
 include(SetupCODE)
@@ -60,6 +58,14 @@ include(SetupTriangle)
 include(SetupMFEM)
 include(Util)
 find_or_fetch(libneo)
+# fortnum, which replaces the former GSL and FFTW routines, comes with libneo.
+# Its target exports only the Fortran module directory, so derive the path of
+# its C header from the target.
+get_target_property(FORTNUM_TARGET_SOURCE_DIR fortnum SOURCE_DIR)
+get_filename_component(FORTNUM_C_INCLUDE_DIR "${FORTNUM_TARGET_SOURCE_DIR}/../include" ABSOLUTE)
+if(NOT EXISTS "${FORTNUM_C_INCLUDE_DIR}/fortnum.h")
+  message(FATAL_ERROR "fortnum.h not found in ${FORTNUM_C_INCLUDE_DIR}")
+endif()
 
 ### Project source files
 # SuiteSparse
@@ -77,8 +83,6 @@ set_source_files_properties(src/external/umf4_f77zwrapper.c PROPERTIES COMPILE_F
 
 set(COMMON_FORTRAN_SRC_FILES
   src/external/netlib_mod.f90
-  src/external/d1mach.f
-  src/fftw3.f90
   src/field_line_integration_for_SYNCH.f90
   src/magdata_in_symfluxcoord.f90
   src/points_2d.f90
@@ -109,7 +113,7 @@ set(MEPHIT_CPP_SRC_FILES
   src/miscellaneous.cpp
 )
 set_source_files_properties(${MEPHIT_C_SRC_FILES} ${MEPHIT_CPP_SRC_FILES}
-	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -L${TRIANGLE_LIB_DIR}")
+	PROPERTIES COMPILE_FLAGS "${CMAKE_C_FLAGS} -DREAL=double -I${TRIANGLE_INCLUDE_DIR} -I${SUITESPARSE_INCLUDE_DIRS} -I${FORTNUM_C_INCLUDE_DIR} -L${TRIANGLE_LIB_DIR}")
 
 
 ### Define library
@@ -124,13 +128,11 @@ add_dependencies(mephit TRIANGLE)
 target_include_directories(mephit PUBLIC
   ${magfie_include_dir}
   ${TRIANGLE_INCLUDE_DIR}
-  ${FFTW_INCLUDE_DIRS}
 )
 set(MEPHIT_LIBS
-  GSL::gsl
+  fortnum
   BLAS::BLAS
   LAPACK::LAPACK
-  ${FFTW_LIBRARIES}
   ${triangle_lib}
   LIBNEO::magfie
   LIBNEO::odeint
