@@ -25,7 +25,7 @@ may change.
 ## Building
 
 Requirements: GNU/Linux, a recent GNU Fortran/C/C++ toolchain, CMake, Ninja,
-BLAS/LAPACK, SuiteSparse, GSL, FFTW3 and Boost. libneo, Triangle and MFEM
+BLAS/LAPACK, SuiteSparse and Boost. libneo, fortnum, Triangle and MFEM
 are fetched and built automatically. Package lists for Debian/Ubuntu and Arch
 Linux are in [setup/](setup/).
 
