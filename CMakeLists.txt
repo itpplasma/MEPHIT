@@ -4,6 +4,7 @@ set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} ${CMAKE_SOURCE_DIR}/cmake)
 
 ### Define the project
 project(MEPHIT LANGUAGES C CXX Fortran)
+include(${PROJECT_SOURCE_DIR}/cmake/ItpDeps.cmake)
 
 ### Specify paths
 set(EXECUTABLE_OUTPUT_PATH ${PROJECT_BINARY_DIR}/bin)
@@ -58,8 +59,8 @@ include(ExternalProject)
 include(SetupCODE)
 include(SetupTriangle)
 include(SetupMFEM)
-include(Util)
-find_or_fetch(libneo)
+# ItpDeps adds libneo without its tests (cmake/ItpDeps.cmake).
+itp_add_dependency(libneo REF ${MEPHIT_LIBNEO_REF} TARGET LIBNEO::magfie)
 # libneo is EXCLUDE_FROM_ALL, but coil files need its vacfield.x (docs/usage.md).
 if(TARGET vacfield.x)
   add_custom_target(libneo_vacfield ALL)
